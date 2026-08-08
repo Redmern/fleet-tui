@@ -673,11 +673,23 @@ public class HomePathTests
     [Fact]
     public void Contract_leaves_a_path_outside_home_alone()
     {
-        var path = Path.Combine(Path.GetTempPath(), "elsewhere");
+        // NOT Path.GetTempPath(): on Windows that is
+        // C:\Users\<user>\AppData\Local\Temp, which IS under home. Contract would
+        // correctly return a "~" path and the test would assert the wrong thing.
+        var root = Path.GetPathRoot(Environment.CurrentDirectory)
+                   ?? Path.DirectorySeparatorChar.ToString();
+        var path = Path.Combine(root, "fleet-outside-home");
+
         Assert.Equal(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)), HomePath.Contract(path));
     }
 }
 ```
+
+Worth adding alongside these, and done during implementation: `Sanitize` cannot
+produce a path traversal (`..`, `../../etc`, `C:\Windows` all lose every
+separator and dot), `Contract` reduces the home directory itself to `~`, and
+`Expand` leaves both a tilde-free path and a directory genuinely named
+`~backup` alone.
 
 - [ ] **Step 2: Run to confirm they fail**
 
