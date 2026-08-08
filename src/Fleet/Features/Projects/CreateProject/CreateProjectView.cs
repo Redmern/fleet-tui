@@ -45,15 +45,37 @@ public static class CreateProjectView
 
         void Submit()
         {
-            var outcome = handler.Handle(new CreateProjectCommand(nameField.Text, rootField.Text));
+            var reply = handler.Handle(new CreateProjectCommand(nameField.Text, rootField.Text));
 
-            if (!outcome.Succeeded)
+            // The root does not exist. Creating directories on disk should not
+            // happen on a typo, so ask before re-submitting with permission.
+            if (reply.Status == CreateProjectStatus.NeedsRootConfirmation)
             {
-                error.Text = "! " + outcome.Error;
+                var answer = MessageBox.Query(
+                    app,
+                    "Create directory?",
+                    $"{reply.RootToCreate}\n\ndoes not exist. Create it?\n"
+                        + "Any missing parent directories are created too.",
+                    "No",
+                    "Yes");
+
+                if (answer != 1)
+                {
+                    error.Text = "! Cancelled - the root directory was not created.";
+                    return;
+                }
+
+                reply = handler.Handle(
+                    new CreateProjectCommand(nameField.Text, rootField.Text, CreateRoot: true));
+            }
+
+            if (reply.Status != CreateProjectStatus.Created)
+            {
+                error.Text = "! " + reply.Error;
                 return;   // stay open so the entry can be corrected
             }
 
-            created = outcome.Value;
+            created = reply.Project;
             app.RequestStop(window);
         }
 

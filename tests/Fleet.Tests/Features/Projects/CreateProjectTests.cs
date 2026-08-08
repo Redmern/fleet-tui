@@ -15,13 +15,15 @@ public sealed class CreateProjectTests : ConfigHomeFixture
         return dir;
     }
 
+    private string AMissingRoot(string name = "missing") => Path.Combine(ConfigHome, name);
+
     [Fact]
     public void Creates_and_returns_the_saved_project()
     {
-        var result = Handler().Handle(new CreateProjectCommand("My Backend", ARoot()));
+        var reply = Handler().Handle(new CreateProjectCommand("My Backend", ARoot()));
 
-        Assert.True(result.Succeeded);
-        Assert.Equal("MyBackend", result.Value.Name);
+        Assert.Equal(CreateProjectStatus.Created, reply.Status);
+        Assert.Equal("MyBackend", reply.Project!.Name);
     }
 
     [Fact]
@@ -34,9 +36,12 @@ public sealed class CreateProjectTests : ConfigHomeFixture
 
     [Fact]
     public void Rejects_a_blank_name()
-        => Assert.Contains(
-            "name is required",
-            Handler().Handle(new CreateProjectCommand("  ", ARoot())).Error);
+    {
+        var reply = Handler().Handle(new CreateProjectCommand("  ", ARoot()));
+
+        Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
+        Assert.Contains("name is required", reply.Error);
+    }
 
     [Fact]
     public void Rejects_a_blank_root()
@@ -51,17 +56,109 @@ public sealed class CreateProjectTests : ConfigHomeFixture
             Handler().Handle(new CreateProjectCommand("...", ARoot())).Error);
 
     [Fact]
-    public void Rejects_a_root_that_does_not_exist()
-        => Assert.Contains(
-            "does not exist",
-            Handler().Handle(
-                new CreateProjectCommand("x", Path.Combine(ConfigHome, "nope"))).Error);
-
-    [Fact]
     public void Nothing_is_saved_when_validation_fails()
     {
         Handler().Handle(new CreateProjectCommand("...", ARoot()));
 
         Assert.Empty(new JsonProjectStore().List());
+    }
+
+    // --- missing root directory --------------------------------------------
+
+    [Fact]
+    public void A_missing_root_asks_for_confirmation_rather_than_failing()
+    {
+        var missing = AMissingRoot();
+
+        var reply = Handler().Handle(new CreateProjectCommand("backend", missing));
+
+        Assert.Equal(CreateProjectStatus.NeedsRootConfirmation, reply.Status);
+        Assert.Equal(Path.GetFullPath(missing), reply.RootToCreate);
+        Assert.Null(reply.Error);
+    }
+
+    [Fact]
+    public void Asking_for_confirmation_does_not_create_anything()
+    {
+        var missing = AMissingRoot();
+
+        Handler().Handle(new CreateProjectCommand("backend", missing));
+
+        Assert.False(Directory.Exists(missing));
+        Assert.Empty(new JsonProjectStore().List());
+    }
+
+    [Fact]
+    public void Confirming_creates_the_root_and_the_project()
+    {
+        var missing = AMissingRoot();
+
+        var reply = Handler().Handle(
+            new CreateProjectCommand("backend", missing, CreateRoot: true));
+
+        Assert.Equal(CreateProjectStatus.Created, reply.Status);
+        Assert.True(Directory.Exists(missing));
+        Assert.Equal(Path.GetFullPath(missing), reply.Project!.Root);
+    }
+
+    [Fact]
+    public void Confirming_creates_missing_parent_directories_too()
+    {
+        var nested = Path.Combine(ConfigHome, "a", "b", "c");
+
+        var reply = Handler().Handle(new CreateProjectCommand("deep", nested, CreateRoot: true));
+
+        Assert.Equal(CreateProjectStatus.Created, reply.Status);
+        Assert.True(Directory.Exists(nested));
+    }
+
+    [Fact]
+    public void An_existing_root_never_asks_for_confirmation()
+        => Assert.Equal(
+            CreateProjectStatus.Created,
+            Handler().Handle(new CreateProjectCommand("backend", ARoot())).Status);
+
+    [Fact]
+    public void A_relative_root_is_reported_as_a_full_path_in_the_confirmation()
+    {
+        var reply = Handler().Handle(new CreateProjectCommand("backend", "some-relative-dir"));
+
+        Assert.Equal(CreateProjectStatus.NeedsRootConfirmation, reply.Status);
+        Assert.True(Path.IsPathFullyQualified(reply.RootToCreate!));
+    }
+
+    [Fact]
+    public void A_name_is_still_validated_before_offering_to_create_a_directory()
+    {
+        // Order matters: a rejected name must not produce a prompt offering to
+        // create a directory that would then be unusable.
+        var reply = Handler().Handle(new CreateProjectCommand("...", AMissingRoot()));
+
+        Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
+    }
+
+    [Fact]
+    public void A_path_the_filesystem_refuses_is_rejected_when_creation_is_attempted()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;   // "|" is a legal filename character on Unix
+        }
+
+        // Path.GetFullPath does NOT validate characters on modern .NET, so an
+        // illegal path gets as far as the confirmation prompt. It is Directory
+        // .CreateDirectory that refuses, and that failure must surface as a
+        // rejection with a reason rather than as an unhandled exception.
+        const string illegal = "C:\\bad|path";
+
+        Assert.Equal(
+            CreateProjectStatus.NeedsRootConfirmation,
+            Handler().Handle(new CreateProjectCommand("backend", illegal)).Status);
+
+        var reply = Handler().Handle(
+            new CreateProjectCommand("backend", illegal, CreateRoot: true));
+
+        Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
+        Assert.Contains("Could not create", reply.Error);
     }
 }
