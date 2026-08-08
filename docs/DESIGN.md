@@ -1102,7 +1102,10 @@ now drops bindings for actions fleet no longer has, and the lookup is a
 ### The dashboard's two sections are tabs — 2026-08-09
 
 Agents first and selected on open, Repositories second, switched with `h` / `l`
-or the arrow keys. Counts live in the titles (`Repositories (1)`) because a tab
+or the arrow keys. Movement **clamps at the ends, it does not wrap**: with two
+tabs, wrapping makes `h` and `l` do the identical thing from either position, so
+`h` never behaves as "left" and reads as a dead key. Clamping is also what vim
+does with `h` at column 0. Counts live in the titles (`Repositories (1)`) because a tab
 hides the other section entirely — without them the dashboard can only answer
 "how many agents?" by switching away from what you are reading.
 

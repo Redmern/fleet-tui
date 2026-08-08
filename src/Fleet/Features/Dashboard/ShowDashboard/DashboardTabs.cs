@@ -11,5 +11,5 @@ public static class DashboardTabs
     public static string Agents(int count) => $"Agents ({count})";
 
     public static int Step(int current, int delta, int count) =>
-        count <= 0 ? 0 : ((current + delta) % count + count) % count;
+        count <= 0 ? 0 : Math.Clamp(current + delta, 0, count - 1);
 }

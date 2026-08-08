@@ -126,8 +126,9 @@ rebind anything, later changes to fleet's defaults will not reach you.
 ## The dashboard
 
 Two tabs, **Agents** and **Repositories**, switched with `h` / `l` or the arrow
-keys. Agents is the one showing on open. Each title carries its count, so the tab
-you are not looking at still tells you what is in it.
+keys. Agents is the one showing on open. Movement stops at the ends rather than
+wrapping, so `h` always means left and `l` always means right. Each title carries
+its count, so the tab you are not looking at still tells you what is in it.
 
 ```
 ╭┤ fleet — techweb ├──────────────────────────╮

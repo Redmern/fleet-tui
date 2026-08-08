@@ -20,12 +20,27 @@ public class DashboardTabsTests
 
     [Theory]
     [InlineData(0, 1, 1)]
-    [InlineData(1, 1, 0)]
-    [InlineData(0, -1, 1)]
     [InlineData(1, -1, 0)]
-    public void Stepping_past_either_end_wraps_around(int current, int delta, int expected)
+    public void Stepping_moves_one_tab_in_the_direction_asked(
+        int current, int delta, int expected)
     {
         Assert.Equal(expected, DashboardTabs.Step(current, delta, 2));
+    }
+
+    [Theory]
+    [InlineData(1, 1, 1)]
+    [InlineData(0, -1, 0)]
+    public void Stepping_past_an_end_stays_put_so_h_and_l_mean_left_and_right(
+        int current, int delta, int expected)
+    {
+        Assert.Equal(expected, DashboardTabs.Step(current, delta, 2));
+    }
+
+    [Fact]
+    public void Wrapping_would_make_h_and_l_identical_with_only_two_tabs()
+    {
+        Assert.NotEqual(DashboardTabs.Step(0, -1, 2), DashboardTabs.Step(0, 1, 2));
+        Assert.NotEqual(DashboardTabs.Step(1, -1, 2), DashboardTabs.Step(1, 1, 2));
     }
 
     [Fact]
