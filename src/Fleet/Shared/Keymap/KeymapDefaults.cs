@@ -4,7 +4,7 @@ namespace Fleet.Shared.Keymap;
 
 public static class KeymapDefaults
 {
-    public const string Prefix = "Ctrl+S";
+    public const string Prefix = "Ctrl+s";
 
     public static IReadOnlyDictionary<FleetAction, string> Bindings { get; } =
         new Dictionary<FleetAction, string>
@@ -41,21 +41,22 @@ public static class KeymapDefaults
         FleetAction.PageUp,
     ];
 
-    public static string Describe(FleetAction action) => action switch
-    {
-        FleetAction.OpenMenu => "Open the fleet menu",
-        FleetAction.NewProject => "New project",
-        FleetAction.OpenProject => "Open selection",
-        FleetAction.AddRepository => "Add repository",
-        FleetAction.Refresh => "Refresh",
-        FleetAction.EditKeybinds => "Keybinds",
-        FleetAction.Close => "Close this pane",
-        FleetAction.MoveDown => "Move down",
-        FleetAction.MoveUp => "Move up",
-        FleetAction.MoveFirst => "Jump to first",
-        FleetAction.MoveLast => "Jump to last",
-        FleetAction.PageDown => "Page down",
-        FleetAction.PageUp => "Page up",
-        _ => action.ToString(),
-    };
+    public static string Describe(FleetAction action) =>
+        action switch
+        {
+            FleetAction.OpenMenu => "Open the fleet menu",
+            FleetAction.NewProject => "New project",
+            FleetAction.OpenProject => "Open selection",
+            FleetAction.AddRepository => "Add repository",
+            FleetAction.Refresh => "Refresh",
+            FleetAction.EditKeybinds => "Keybinds",
+            FleetAction.Close => "Close this pane",
+            FleetAction.MoveDown => "Move down",
+            FleetAction.MoveUp => "Move up",
+            FleetAction.MoveFirst => "Jump to first",
+            FleetAction.MoveLast => "Jump to last",
+            FleetAction.PageDown => "Page down",
+            FleetAction.PageUp => "Page up",
+            _ => action.ToString(),
+        };
 }

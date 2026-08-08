@@ -12,7 +12,7 @@ public static class AddRepositoryView
     {
         AddRepositoryCommand? result = null;
 
-        var window = FleetTheme.Modal("Add repository", 78, 13);
+        var window = FleetTheme.Overlay("Add repository");
 
         var clone = FleetTheme.Toggle(1, 1, "Clone from a URL instead of creating a new repository");
         var nameField = FleetTheme.Field(11, 3);

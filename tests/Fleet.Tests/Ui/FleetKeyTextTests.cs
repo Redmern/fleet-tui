@@ -1,3 +1,4 @@
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 
@@ -54,7 +55,7 @@ public class FleetKeyTextTests
     {
         var keymap = Keymap.Default;
 
-        Assert.Equal("Ctrl+S", keymap.PrefixText);
+        Assert.Equal(KeymapDefaults.Prefix, keymap.PrefixText);
         Assert.Equal("ctrl+s", keymap.PrefixDisplay);
     }
 

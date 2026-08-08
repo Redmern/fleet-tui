@@ -1,4 +1,5 @@
 using Fleet.Platform.Storage;
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
 
@@ -14,7 +15,7 @@ public sealed class JsonKeymapStoreTests : ConfigHomeFixture
     {
         var config = Store.Load();
 
-        Assert.Equal("Ctrl+S", config.Prefix);
+        Assert.Equal(KeymapDefaults.Prefix, config.Prefix);
         Assert.Equal("Space", config.Bindings[FleetAction.OpenMenu]);
     }
 
@@ -53,7 +54,7 @@ public sealed class JsonKeymapStoreTests : ConfigHomeFixture
         FleetPaths.EnsureDirs();
         File.WriteAllText(FleetPaths.KeymapFile, "{ not json");
 
-        Assert.Equal("Ctrl+S", Store.Load().Prefix);
+        Assert.Equal(KeymapDefaults.Prefix, Store.Load().Prefix);
     }
 
     [Fact]

@@ -13,7 +13,7 @@ public static class CreateProjectView
     {
         Project? created = null;
 
-        var window = FleetTheme.Modal("New project", 74, 11);
+        var window = FleetTheme.Overlay("New project");
 
         var nameField = FleetTheme.Field(11, 1);
         var rootField = FleetTheme.Field(11, 3);
