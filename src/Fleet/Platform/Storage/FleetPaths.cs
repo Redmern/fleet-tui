@@ -26,6 +26,8 @@ public static class FleetPaths
 
     public static string LogFile => Path.Combine(Config, "fleet.log");
 
+    public static string KeymapFile => Path.Combine(Config, "keybinds.json");
+
     public static void EnsureDirs()
     {
         Directory.CreateDirectory(Projects);

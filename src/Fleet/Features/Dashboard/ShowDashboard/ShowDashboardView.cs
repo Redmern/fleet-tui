@@ -1,30 +1,34 @@
 using System.Collections.ObjectModel;
-using Fleet.Features.Dashboard.ShowDashboard.Enums;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
-using Fleet.Ui.Constants;
+using Fleet.Ui.Enums;
 using Terminal.Gui.App;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
-using Terminal.Gui.Views;
 
 namespace Fleet.Features.Dashboard.ShowDashboard;
 
 public static class ShowDashboardView
 {
-    public static void Show(IApplication app, string projectName, DashboardCallbacks callbacks)
+    public static void Show(
+        IApplication app, string projectName, Keymap keymap, DashboardCallbacks callbacks)
     {
         var window = FleetTheme.Screen($"fleet — {projectName}");
+        var prefix = new PrefixRecognizer(keymap);
 
         var repoHeader = FleetTheme.SectionHeader(1, 0, "Repositories");
         var repoList = FleetTheme.Rows(1, 1, Dim.Percent(45));
 
         var agentHeader = FleetTheme.SectionHeader(1, Pos.Bottom(repoList) + 1, "Agents");
-        var agentList = FleetTheme.Rows(1, Pos.Bottom(agentHeader), Dim.Fill(2));
+        var agentList = FleetTheme.Rows(1, Pos.Bottom(agentHeader), Dim.Fill(3));
         agentList.SetSource(new ObservableCollection<string>(
             ["(no agents - spawning agents arrives in phase 2)"]));
 
-        FleetKeys.ApplyMotions(repoList);
-        FleetKeys.ApplyMotions(agentList);
+        var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
+
+        FleetKeys.ApplyMotions(repoList, keymap);
+        FleetKeys.ApplyMotions(agentList, keymap);
 
         async Task RefreshAsync()
         {
@@ -45,24 +49,60 @@ public static class ShowDashboardView
             await RefreshAsync().ConfigureAwait(true);
         }
 
-        void Keys(object? sender, Terminal.Gui.Input.Key key)
+        void Dispatch(FleetAction action)
         {
-            switch (DashboardKeys.For(key))
+            switch (action)
             {
-                case DashboardAction.Quit:
+                case FleetAction.Close:
                     app.RequestStop(window);
-                    key.Handled = true;
                     break;
 
-                case DashboardAction.Add:
+                case FleetAction.AddRepository:
                     _ = AddAsync();
-                    key.Handled = true;
                     break;
 
-                case DashboardAction.Refresh:
+                case FleetAction.Refresh:
                     _ = RefreshAsync();
-                    key.Handled = true;
                     break;
+
+                case FleetAction.EditKeybinds:
+                    callbacks.EditKeybinds();
+                    break;
+
+                case FleetAction.OpenMenu:
+                    Dispatch(callbacks.ShowMenu());
+                    break;
+            }
+        }
+
+        void Keys(object? sender, Key key)
+        {
+            var result = prefix.Feed(key);
+
+            if (result.Handled)
+            {
+                key.Handled = true;
+
+                status.Text = result.Outcome switch
+                {
+                    PrefixOutcome.Armed => $"{keymap.PrefixText} ...",
+                    _ => string.Empty,
+                };
+
+                if (result.Outcome == PrefixOutcome.Action)
+                {
+                    Dispatch(result.Action);
+                }
+
+                return;
+            }
+
+            var direct = keymap.ActionFor(key);
+
+            if (direct is FleetAction.Close or FleetAction.AddRepository or FleetAction.Refresh)
+            {
+                Dispatch(direct);
+                key.Handled = true;
             }
         }
 
@@ -74,7 +114,8 @@ public static class ShowDashboardView
             repoList,
             agentHeader,
             agentList,
-            FleetTheme.HintBar(FleetHints.Dashboard));
+            status,
+            FleetTheme.HintBar(FleetHintText.Dashboard(keymap)));
 
         _ = RefreshAsync();
 

@@ -7,4 +7,5 @@ namespace Fleet.Platform.Storage;
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ProjectFile))]
+[JsonSerializable(typeof(KeymapFile))]
 public partial class FleetJsonContext : JsonSerializerContext;

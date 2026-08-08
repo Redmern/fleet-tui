@@ -2,10 +2,13 @@ using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Diagnostics.RunDoctor;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
+using Fleet.Features.Menu.EditKeybinds;
+using Fleet.Features.Menu.ShowMenu;
 using Fleet.Features.Projects.CreateProject;
 using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.PickProject;
+using Fleet.Features.Projects.PickProject.Models;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Platform.Git;
@@ -17,8 +20,10 @@ using Fleet.Platform.Mux.WezTerm;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Git;
+using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects;
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Terminal.Gui.App;
 
@@ -42,6 +47,8 @@ public static class Program
 
     private static IGitRunner NewGit() => new GitRunner();
 
+    private static IKeymapStore NewKeymapStore() => new JsonKeymapStore();
+
     private static IMuxDriver NewMux(IFleetLog log, out string chosen, out string? unsupported)
     {
         chosen = DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath));
@@ -60,14 +67,28 @@ public static class Program
 
         Ports.Projects.Models.Project? project;
 
+        var keymapStore = NewKeymapStore();
+
         using (IApplication app = Application.Create().Init())
         {
             FleetTheme.Register();
 
+            var keymap = new Keymap(keymapStore.Load());
+
             project = PickProjectView.Show(
                 app,
+                keymap,
                 new PickProjectHandler(store),
-                createProject: () => CreateProjectView.Show(app, creator));
+                new PickProjectCallbacks(
+                    CreateProject: () => CreateProjectView.Show(app, creator),
+                    ShowMenu: () => Menu(app, keymap,
+                    [
+                        FleetAction.NewProject,
+                        FleetAction.OpenProject,
+                        FleetAction.EditKeybinds,
+                        FleetAction.Close,
+                    ]),
+                    EditKeybinds: () => EditKeybindsView.Show(app, keymapStore, keymap)));
         }
 
         if (project is null)
@@ -121,10 +142,14 @@ public static class Program
         var lister = new ListRepositoriesHandler(git);
         var adder = new AddRepositoryHandler(git);
 
+        var keymapStore = NewKeymapStore();
+
         using IApplication app = Application.Create().Init();
         FleetTheme.Register();
 
-        ShowDashboardView.Show(app, project.Name, new DashboardCallbacks(
+        var keymap = new Keymap(keymapStore.Load());
+
+        ShowDashboardView.Show(app, project.Name, keymap, new DashboardCallbacks(
             LoadRepositories: async () =>
                 (await lister.HandleAsync(project.Root).ConfigureAwait(false))
                     .Select(r => (r.Name, r.DefaultBranch))
@@ -141,9 +166,26 @@ public static class Program
 
                 var outcome = await adder.HandleAsync(request).ConfigureAwait(false);
                 return outcome.Succeeded ? null : outcome.Error;
-            }));
+            },
+
+            ShowMenu: () => Menu(app, keymap,
+            [
+                FleetAction.AddRepository,
+                FleetAction.Refresh,
+                FleetAction.EditKeybinds,
+                FleetAction.Close,
+            ]),
+
+            EditKeybinds: () => EditKeybindsView.Show(app, keymapStore, keymap)));
 
         return 0;
+    }
+
+    private static FleetAction Menu(
+        IApplication app, Keymap keymap, IReadOnlyList<FleetAction> actions)
+    {
+        var handler = new ShowMenuHandler(keymap);
+        return ShowMenuView.Show(app, keymap, handler.Items(actions));
     }
 
     private static async Task<int> DoctorAsync()
