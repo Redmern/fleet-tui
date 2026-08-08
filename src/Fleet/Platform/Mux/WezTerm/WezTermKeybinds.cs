@@ -52,11 +52,13 @@ public static class WezTermKeybinds
         sb.AppendLine("    for _, p in ipairs(tab:panes()) do");
         sb.AppendLine("      local vars = p:get_user_vars()");
         sb.AppendLine($"      if vars and vars['{WezTermUserVars.FleetVar}'] then");
+        sb.AppendLine("        wezterm.log_info('fleet: dashboard pane found, menu enabled')");
         sb.AppendLine("        return true");
         sb.AppendLine("      end");
         sb.AppendLine("    end");
         sb.AppendLine("  end");
         sb.AppendLine();
+        sb.AppendLine("  wezterm.log_info('fleet: no dashboard pane in this window, forwarding the key')");
         sb.AppendLine("  return false");
         sb.AppendLine("end");
         sb.AppendLine();
