@@ -137,13 +137,35 @@ $running = @(Get-Process fleet -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -eq $BinPath })
 
 if ($running.Count -gt 0) {
-    $running | Stop-Process -Force
-    Start-Sleep -Milliseconds 300
+    foreach ($p in $running) {
+        try { $p.Kill(); $p.WaitForExit(3000) | Out-Null } catch { }
+    }
     Write-Warn2 "stopped $($running.Count) running fleet process(es) to replace the binary"
 }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-Copy-Item (Join-Path $publishDir 'fleet.exe') $BinPath -Force
+
+# Windows releases the file lock slightly after the process dies, and a pane may
+# spawn a new fleet at any moment, so the copy is retried rather than assumed.
+$copied = $false
+foreach ($attempt in 1..10) {
+    try {
+        Copy-Item (Join-Path $publishDir 'fleet.exe') $BinPath -Force -ErrorAction Stop
+        $copied = $true
+        break
+    }
+    catch {
+        Get-Process fleet -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -eq $BinPath } |
+            ForEach-Object { try { $_.Kill() } catch { } }
+        Start-Sleep -Milliseconds 400
+    }
+}
+
+if (-not $copied) {
+    throw "could not replace $BinPath - close any running fleet panes and retry"
+}
+
 Write-Ok "installed $BinPath"
 
 Add-ToUserPath $InstallDir

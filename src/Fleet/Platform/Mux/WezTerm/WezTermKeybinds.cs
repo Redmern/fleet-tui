@@ -43,6 +43,13 @@ public static class WezTermKeybinds
         sb.AppendLine("  return config");
         sb.AppendLine("end");
         sb.AppendLine();
+        sb.AppendLine("-- Compatibility with the predecessor's call shape. A .wezterm.lua written for");
+        sb.AppendLine("-- the old Go fleet calls fleet.setup(config, opts); its pcall guards only the");
+        sb.AppendLine("-- require, so a module without setup would fail the whole config at load.");
+        sb.AppendLine("function M.setup(config, _opts)");
+        sb.AppendLine("  return M.apply(config)");
+        sb.AppendLine("end");
+        sb.AppendLine();
         sb.AppendLine("return M");
 
         return sb.ToString();

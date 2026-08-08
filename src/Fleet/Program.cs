@@ -1,3 +1,4 @@
+using System.Text;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Diagnostics.RunDoctor;
@@ -199,14 +200,6 @@ public static class Program
             ? store.Load(named)
             : new ResolveProjectHandler(store).ForDirectory(Environment.CurrentDirectory);
 
-        if (project is null)
-        {
-            Console.Error.WriteLine(
-                "fleet menu: no project for this directory. " +
-                "Run it inside a project, or pass --project <name>.");
-            return 1;
-        }
-
         var keymapStore = NewKeymapStore();
         var git = NewGit();
         var adder = new AddRepositoryHandler(git);
@@ -215,6 +208,12 @@ public static class Program
         FleetTheme.Register();
 
         var keymap = new Keymap(keymapStore.Load());
+
+        if (project is null)
+        {
+            NoProjectHere(app, store);
+            return 1;
+        }
 
         var chosen = Menu(app, keymap,
         [
@@ -245,6 +244,35 @@ public static class Program
         }
 
         return 0;
+    }
+
+    private static void NoProjectHere(IApplication app, IProjectStore store)
+    {
+        var known = store.List();
+
+        var message = new StringBuilder();
+        message.AppendLine("This directory is not inside a saved fleet project:");
+        message.AppendLine();
+        message.AppendLine(Environment.CurrentDirectory);
+        message.AppendLine();
+
+        if (known.Count == 0)
+        {
+            message.Append("No projects are saved yet. Run 'fleet' to create one.");
+        }
+        else
+        {
+            message.AppendLine("Known projects:");
+
+            foreach (var p in known)
+            {
+                message.AppendLine($"  {p.Name}  ->  {p.Root}");
+            }
+
+            message.Append("Open a pane inside one of those, or run 'fleet menu --project <name>'.");
+        }
+
+        FleetDialog.Error(app, "No fleet project here", message.ToString());
     }
 
     private static int ApplyKeybinds()

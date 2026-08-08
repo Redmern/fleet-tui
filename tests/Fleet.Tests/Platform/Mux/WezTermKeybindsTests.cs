@@ -67,4 +67,12 @@ public class WezTermKeybindsTests
         Assert.Contains("return M", lua);
         Assert.Contains("overwritten", lua);
     }
+
+    [Fact]
+    public void The_module_also_exposes_setup_for_configs_written_against_the_predecessor()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+
+        Assert.Contains("function M.setup(config, _opts)", lua);
+    }
 }
