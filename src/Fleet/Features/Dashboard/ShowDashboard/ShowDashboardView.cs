@@ -38,7 +38,7 @@ public static class ShowDashboardView
 
             if (error is not null)
             {
-                MessageBox.ErrorQuery(app, "Could not add repository", error, "OK");
+                FleetDialog.Error(app, "Could not add repository", error);
             }
 
             await RefreshAsync().ConfigureAwait(true);

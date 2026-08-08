@@ -132,7 +132,15 @@ public class SliceBoundaryTests
     [Fact]
     public void No_slice_styles_itself()
     {
-        var banned = new[] { "SchemeName =", "new Scheme", "SchemeManager", "BorderStyle =" };
+        var banned = new[]
+        {
+            "SchemeName =",
+            "new Scheme",
+            "SchemeManager",
+            "BorderStyle =",
+            "ShadowStyle =",
+            "MessageBox",
+        };
 
         var violations = CsFiles(FeaturesDir)
             .Select(f => (File: f, Text: File.ReadAllText(f)))

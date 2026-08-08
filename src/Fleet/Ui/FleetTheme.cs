@@ -72,12 +72,40 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Screen,
     };
 
+    public static Button Primary(Pos x, Pos y, string text) => new()
+    {
+        X = x,
+        Y = y,
+        Text = text,
+        IsDefault = true,
+        ShadowStyle = ShadowStyles.None,
+        SchemeName = FleetSchemes.Accent,
+    };
+
+    public static Button Secondary(Pos x, Pos y, string text) => new()
+    {
+        X = x,
+        Y = y,
+        Text = text,
+        ShadowStyle = ShadowStyles.None,
+        SchemeName = FleetSchemes.Screen,
+    };
+
     public static Label ErrorText(Pos x, Pos y) => new()
     {
         X = x,
         Y = y,
         Width = Dim.Fill(2),
         Text = string.Empty,
+        SchemeName = FleetSchemes.Error,
+    };
+
+    public static Label ErrorLine(Pos x, Pos y, string text) => new()
+    {
+        X = x,
+        Y = y,
+        Width = Dim.Fill(2),
+        Text = text,
         SchemeName = FleetSchemes.Error,
     };
 

@@ -4,7 +4,6 @@ using Fleet.Ports.Projects.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Terminal.Gui.App;
-using Terminal.Gui.Views;
 
 namespace Fleet.Features.Projects.CreateProject;
 
@@ -26,15 +25,18 @@ public static class CreateProjectView
 
             if (reply.Status == CreateProjectStatus.NeedsRootConfirmation)
             {
-                var answer = MessageBox.Query(
+                var confirmed = FleetDialog.Confirm(
                     app,
                     "Create directory?",
-                    $"{reply.RootToCreate}\n\ndoes not exist. Create it?\n"
-                        + "Any missing parent directories are created too.",
-                    "No",
-                    "Yes");
+                    [
+                        reply.RootToCreate ?? string.Empty,
+                        string.Empty,
+                        "does not exist. Create it?",
+                        "Any missing parent directories are created too.",
+                    ],
+                    confirmText: "Create");
 
-                if (answer != 1)
+                if (!confirmed)
                 {
                     error.Text = "Cancelled — the root directory was not created.";
                     return;

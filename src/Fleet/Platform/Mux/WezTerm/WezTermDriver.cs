@@ -69,12 +69,6 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         if (options.NewWindow)
         {
             args.Add("--new-window");
-
-            if (!string.IsNullOrEmpty(options.SessionName))
-            {
-                args.Add("--workspace");
-                args.Add(options.SessionName);
-            }
         }
 
         if (options.Args.Count > 0)
