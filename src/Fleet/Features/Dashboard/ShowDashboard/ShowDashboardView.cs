@@ -97,12 +97,12 @@ public static class ShowDashboardView
                 return;
             }
 
-            var direct = keymap.ActionFor(key);
+            var direct = DashboardKeys.For(key, keymap);
 
-            if (direct is FleetAction.Close or FleetAction.AddRepository or FleetAction.Refresh)
+            if (direct.Consume)
             {
-                Dispatch(direct);
                 key.Handled = true;
+                Dispatch(direct.Action);
             }
         }
 
