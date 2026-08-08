@@ -176,12 +176,14 @@ public static class ShowDashboardView
             return true;
         }
 
-        repoList.KeyDown += Keys;
-        agentList.KeyDown += Keys;
+        window.KeyDownNotHandled += Keys;
 
         app.AddTimeout(TimeSpan.FromMilliseconds(200), Pump);
 
         window.Add(tabs, status, FleetTheme.HintBar(FleetHintText.Dashboard(keymap)));
+
+        tabs.Value = agentTab;
+        agentList.SetFocus();
 
         _ = RefreshAsync();
 
