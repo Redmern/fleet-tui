@@ -86,6 +86,20 @@ public sealed class AddRepositoryHandler(IGitRunner git)
             effective = head.Ok && head.Out.Length > 0 ? head.Out : "main";
         }
 
+        var known = await git
+            .RunAsync(container, ["rev-parse", "--verify", "--quiet", $"refs/heads/{effective}"],
+                null, ct)
+            .ConfigureAwait(false);
+
+        if (!known.Ok)
+        {
+            Discard(container);
+            return Fail($"The cloned repository has no branch named '{effective}'.");
+        }
+
+        await Run(container, ["symbolic-ref", "HEAD", $"refs/heads/{effective}"], ct)
+            .ConfigureAwait(false);
+
         await AddWorktreeAsync(container, effective, ct).ConfigureAwait(false);
 
         return Result<Repository>.Ok(new Repository(name, container, effective));
@@ -141,6 +155,33 @@ public sealed class AddRepositoryHandler(IGitRunner git)
     }
 
     private static Result<Repository> Fail(string reason) => Result<Repository>.Fail(reason);
+
+    private static void Discard(string container)
+    {
+        if (!Directory.Exists(container))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(
+                container, "*", SearchOption.AllDirectories))
+            {
+                var attributes = File.GetAttributes(file);
+
+                if (attributes.HasFlag(FileAttributes.ReadOnly))
+                {
+                    File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                }
+            }
+
+            Directory.Delete(container, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
 
     private sealed class GitFailedException(string verb, GitResult result)
         : Exception($"git {verb}: {result.Message}");

@@ -126,6 +126,64 @@ public sealed class AddRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Cloning_records_the_requested_branch_as_the_repository_head()
+    {
+        await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin", "main"));
+        var origin = Path.Combine(_root, "origin");
+
+        await Git.RunAsync(Path.Combine(origin, "main"), ["branch", "develop"]);
+
+        var dest = Path.Combine(_root, "dest");
+        Directory.CreateDirectory(dest);
+
+        var result = await Handler().HandleAsync(
+            AddRepositoryCommand.CloneFrom(dest, "backend", origin, "develop"));
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var container = Path.Combine(dest, "backend");
+
+        Assert.Equal(
+            "develop",
+            (await Git.RunAsync(container, ["symbolic-ref", "--short", "HEAD"])).Out);
+
+        Assert.Equal("develop", result.Value.DefaultBranch);
+    }
+
+    [Fact]
+    public async Task A_cloned_repository_lists_with_the_branch_that_was_asked_for()
+    {
+        await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin", "main"));
+        await Git.RunAsync(Path.Combine(_root, "origin", "main"), ["branch", "develop"]);
+
+        var dest = Path.Combine(_root, "dest");
+        Directory.CreateDirectory(dest);
+
+        await Handler().HandleAsync(
+            AddRepositoryCommand.CloneFrom(dest, "backend", Path.Combine(_root, "origin"), "develop"));
+
+        var repos = await new ListRepositoriesHandler(new GitRunner()).HandleAsync(dest);
+
+        Assert.Equal("develop", Assert.Single(repos).DefaultBranch);
+    }
+
+    [Fact]
+    public async Task Cloning_with_a_branch_the_remote_lacks_fails_and_leaves_nothing_behind()
+    {
+        await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin", "main"));
+
+        var dest = Path.Combine(_root, "dest");
+        Directory.CreateDirectory(dest);
+
+        var result = await Handler().HandleAsync(
+            AddRepositoryCommand.CloneFrom(dest, "backend", Path.Combine(_root, "origin"), "nope"));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("no branch named 'nope'", result.Error);
+        Assert.False(Directory.Exists(Path.Combine(dest, "backend")));
+    }
+
+    [Fact]
     public async Task Cloning_a_bad_url_fails_with_gits_own_message()
     {
         var result = await Handler().HandleAsync(
