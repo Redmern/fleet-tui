@@ -1022,6 +1022,44 @@ This is on top of the already-known repaint-on-dismiss heuristic, and it is why
 the mux-intercepts-prefix option remains materially cheaper: tmux and WezTerm
 already contain input parsers.
 
+## Settled: how the fleet menu is reached
+
+**The multiplexer intercepts the prefix; the menu is a WezTerm overlay.**
+
+`fleet apply-keybinds` generates `~/.wezterm/fleet.lua` from the current keymap.
+It binds the prefix chord to a WezTerm `InputSelector` — a centred overlay drawn
+on top of the window, with fuzzy filtering — whose entries are fleet actions.
+Choosing one opens `fleet menu --action <id>` in a split, where fleet's own
+themed views do the work.
+
+Why this and not fleet owning the pane:
+
+- It works in **any** pane, including one running only claude, because WezTerm
+  claims the key before the pane's program sees it. This is exactly how tmux's
+  prefix works.
+- It needs no PTY, no VT input parser, and no repaint heuristic — the three costs
+  the spikes measured.
+- tmux gets the same behaviour later via `bind-key`, so the approach generalises.
+
+Accepted trade-off: the overlay is drawn and styled by WezTerm, not `FleetTheme`.
+Fleet's styling resumes in the split that follows. A floating centred OS window
+would keep every pixel under `FleetTheme` but takes focus and appears in the
+taskbar.
+
+A single chord, not a leader: WezTerm supports one `leader` and a user may
+already have one (this machine uses `CTRL+s` for a tmux mode), so fleet inserts
+into `config.keys` instead. Default prefix is `Ctrl+Space`.
+
+**The `embedded` driver is parked, not cancelled.** Everything the spikes proved
+still holds if headless Windows ever forces it: RoyalApps PTY and hand-written
+ConPTY are both NativeAOT-clean, and the remaining work is the input parser and
+the repaint heuristic. The spikes stay in `spikes/` as evidence.
+
+**Trap worth remembering:** a saved `keybinds.json` overrides `KeymapDefaults`
+entirely. Once a user rebinds anything, the editor persists the whole keymap, so
+later changes to the shipped defaults never reach them. Changing a default is not
+enough to fix an existing install.
+
 ## Still to verify
 - Terminal.Gui v2 AOT on a real **Linux** runner. Windows is now proven; the CI
   matrix answers Linux on first push.
