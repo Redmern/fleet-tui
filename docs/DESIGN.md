@@ -1,0 +1,793 @@
+# fleet — design
+
+**Status:** design complete. One decision is deliberately deferred (agent state
+storage, settled at M2) and three items remain to verify before the code they
+gate is written.
+**Date:** 2026-08-08
+
+A TUI orchestration tool for AI work across projects that span one or more
+repositories. Neovim is the editor. Claude Code is the agent. A third attempt at
+the idea behind [`Redmern/fleet`](https://github.com/Redmern/fleet) (tmux, Linux,
+bash + Python) and `fleet-win` (WezTerm, Windows, Go) — this time built once, for
+both, with the multiplexer behind an interface.
+
+## Goal
+
+Get the core feature right before the surface area grows. `fleet-win` reached 48
+commands; this one starts from the smallest thing that actually orchestrates
+agents and grows from there.
+
+## Deployment targets
+
+All four must work:
+
+| Target | Notes |
+|---|---|
+| Windows, native | Real `nvim.exe`, Windows git, no WSL |
+| Windows, headless | Over SSH into Windows, no GUI |
+| Linux, native | Desktop or VM |
+| Linux, headless | Over SSH, detach and reattach expected |
+
+## Decision: the multiplexer is swappable
+
+No single multiplexer covers that matrix.
+
+| Candidate | Gap |
+|---|---|
+| tmux | No Win32 build. Needs WSL, MSYS2, or Cygwin — excluded by "native Windows". |
+| WezTerm | Native on both, but its CLI needs a running GUI. Excluded by headless. |
+| Zellij | No native Windows support. |
+
+So fleet does not pick one. Every multiplexer action goes through an
+`IMuxDriver` interface with swappable implementations:
+
+| Driver | Role | Covers | Cost |
+|---|---|---|---|
+| `wezterm` | **base** | Windows native (GUI), Linux native (GUI) | Low — `fleet-win` has a working reference |
+| `tmux` | **fallback** | SSH, headless Linux, WSL, MSYS2, and anywhere WezTerm is absent | Low — richest CLI of the three |
+| `embedded` | last resort | Headless Windows, and anywhere with no mux at all | High — this is writing a multiplexer |
+| `fake` | tests | — | Low, and it pays for itself immediately |
+
+WezTerm is the daily driver on both operating systems; the machine runs Linux
+with a GUI, so there is no platform split. tmux exists so fleet still works with
+no WezTerm — over SSH, on a headless box, or on a machine that never installed
+it.
+
+The `embedded` driver is an attach-model daemon: it owns the PTYs, outlives its
+clients, and attaches one pane at a time as fullscreen raw passthrough.
+Deliberately no tiling and no terminal emulator — attach/detach and tiling are
+separable, and tiling is the expensive half. Tiling forces a VT emulator, and a
+VT emulator is what mangles Neovim (truecolor, undercurl, SGR mouse, bracketed
+paste, focus events, kitty keyboard protocol).
+
+**Build order:** `fake`, then `wezterm`, then `tmux`, then `embedded`. WezTerm
+first because it is the daily driver and `fleet-win` supplies a debugged
+reference, so it is the shortest path to a fleet worth using. tmux second, early
+enough that whatever it reveals about the interface is still cheap to fix.
+`embedded` last, and only for headless Windows.
+
+## The interface
+
+Vocabulary first, because the three multiplexers disagree on names:
+
+| fleet | tmux | WezTerm | embedded |
+|---|---|---|---|
+| Session | session | workspace | session |
+| Window | window | tab | window |
+| Pane | pane | pane | pane |
+
+```csharp
+// Opaque by design: tmux "%12", wezterm "7", embedded "p3".
+public readonly record struct PaneId(string Value);
+
+[Flags]
+public enum MuxCaps
+{
+    None    = 0,
+    Split   = 1 << 0,
+    Zoom    = 1 << 1,
+    Detach  = 1 << 2,  // client can leave; panes keep running
+    Persist = 1 << 3,  // panes survive the mux client exiting
+    Popup   = 1 << 4,  // tmux display-popup; nothing else has it
+}
+
+public interface IMuxDriver
+{
+    string Name { get; }
+    MuxCaps Caps { get; }
+    Task<bool> IsAvailableAsync(CancellationToken ct = default);
+
+    Task<IReadOnlyList<Pane>> ListPanesAsync(CancellationToken ct = default);
+    Task<Pane?> GetPaneAsync(PaneId id, CancellationToken ct = default);
+
+    Task<IReadOnlyList<string>> ListSessionsAsync(CancellationToken ct = default);
+    Task<bool> SessionExistsAsync(string name, CancellationToken ct = default);
+    Task RenameSessionAsync(string oldName, string newName, CancellationToken ct = default);
+
+    Task<PaneId> SpawnAsync(SpawnOptions opts, CancellationToken ct = default);
+    Task<PaneId> SplitAsync(SplitOptions opts, CancellationToken ct = default);
+    Task KillPaneAsync(PaneId id, CancellationToken ct = default);
+    Task KillWindowAsync(PaneId id, CancellationToken ct = default);
+    Task KillWindowAndWaitAsync(PaneId id, TimeSpan timeout, CancellationToken ct = default);
+
+    Task SendTextAsync(PaneId id, string text, bool literal, CancellationToken ct = default);
+    Task<string> CaptureTextAsync(PaneId id, CancellationToken ct = default);
+
+    Task FocusPaneAsync(PaneId id, CancellationToken ct = default);
+    Task FocusWindowAsync(PaneId id, CancellationToken ct = default);
+    Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default);
+    Task ZoomAsync(PaneId id, bool on, CancellationToken ct = default);
+
+    Task AttachAsync(PaneId id, CancellationToken ct = default);
+    PaneId? CurrentPane { get; }
+}
+```
+
+Three corrections against `fleet-win`'s `internal/mux`, each forced by tmux:
+
+- `PaneId` wraps a string, not an `int`. tmux ids look like `%12`. An `int` bakes
+  WezTerm's numbering into the interface.
+- `Attach` is a first-class verb. tmux: `tmux attach -t`. WezTerm: activate the
+  tab, since the GUI is already in front of you. Embedded: begin raw
+  passthrough. It genuinely unifies.
+- `Caps` for progressive enhancement. Command code targets the lowest common
+  denominator and consults `Caps` only where a feature is optional. `Popup`
+  exists on tmux alone, so nothing depends on it — modals are drawn in-process,
+  the way `fleet-win` had to.
+
+`literal` on `SendTextAsync` is not cosmetic: the permission-mode cycle sends
+CSI Z (Shift+Tab), and bracketed paste would wrap it so the agent never sees a
+keypress. Prose wants paste mode; control sequences want literal.
+
+Preserved from `fleet-win`: the fail-silent contract lives in the driver layer,
+enforced once instead of at every call site. An unreachable mux surfaces as an
+empty result rather than an exception escaping into command code.
+
+### Driver selection
+
+Two separate decisions, often conflated:
+
+**Adopt** — if fleet starts inside an existing multiplexer it must use that one,
+whatever the preference order says. Otherwise you sit in a tmux pane while fleet
+spawns WezTerm tabs. This is correctness, not taste.
+
+**Launch** — only when nothing is around fleet does preference apply.
+
+```
+FLEET_MUX set          -> that                     (override)
+TMUX set               -> tmux                     (adopt)
+WEZTERM_PANE set       -> wezterm                  (adopt)
+otherwise:                                         (launch)
+    wezterm present AND GUI reachable  -> wezterm  (base)
+    tmux present                       -> tmux     (fallback)
+    otherwise                          -> embedded (last resort)
+```
+
+*GUI reachable* — Linux: `DISPLAY` or `WAYLAND_DISPLAY` set. Windows:
+`SSH_CONNECTION` unset.
+
+No OS sniffing anywhere. Two behaviours fall out of this for free:
+
+- SSH into the Linux box drops to tmux automatically, because neither display
+  variable survives the hop.
+- fleet running inside tmux under MSYS2 on Windows adopts tmux, with no special
+  case.
+
+Because WezTerm is the base on both operating systems, `wezterm/fleet.lua` — tab
+glyphs, toast notifications, keybindings — is load-bearing on Linux too, not
+just Windows. One Lua config, both platforms.
+
+**Settled (2026-08-08):** `wezterm-mux-server` does *not* remove the need for
+`embedded`. Control works headless — `wezterm cli --prefer-mux` talks to a
+background mux server — but the only frontend that renders panes is the GUI, so
+on a headless box you could drive panes and never see them. Details in the
+verification log.
+
+Worth keeping, though: the `wezterm` driver's control path does not require a
+GUI. Against a `wezterm-mux-server --daemonize`, an agent spawned from a Claude
+Code hook or from cron with no GUI running still works; you attach and view it
+later.
+
+## Stack
+
+**C# on .NET 10, NativeAOT.** Chosen for maintainer fluency. Speed is not a
+factor either way — nothing here is CPU-bound; it is process spawning, byte
+copying, and JSON. The real costs are distribution and library depth, and they
+are addressed below rather than avoided.
+
+| Concern | Choice | Note |
+|---|---|---|
+| Runtime | .NET 10, NativeAOT | ~10 ms cold start. Matters: Claude Code hooks invoke `fleet` per tool use, and JIT startup at ~60 ms would be felt |
+| Build | GitHub Actions matrix, `windows-latest` + `ubuntu-latest` | **NativeAOT cannot cross-compile between operating systems.** Each target builds on its own runner |
+| TUI | Terminal.Gui v2 (`2.4.17`) | AOT verified — see below |
+| Rich CLI output | Spectre.Console | Non-interactive commands. `Terminal.Gui.Interop.Spectre` bridges the two |
+| JSON | `System.Text.Json` with source generators | Reflection-based serialization is not AOT-safe |
+| Config | TOML via Tomlyn, or plain JSON | One `harness.d/<name>.toml` per agent CLI. JSON drops a dependency and an AOT risk; decide when the harness format is designed |
+| IPC | `NamedPipeServerStream` / `UnixDomainSocketEndPoint` | Both BCL, no P/Invoke. C# is genuinely better than Go here |
+| Signals | `PosixSignalRegistration` | BCL. Covers `SIGWINCH` |
+| PTY | `Porta.Pty` — pending an AOT spike | See below |
+| git | Shell out to `git` | No library. Same choice `fleet-win` made |
+
+### PTY
+
+The `embedded` driver needs a pseudo-terminal on both platforms. The hard part
+is Unix, not Windows: **`fork` is unsafe in the .NET runtime**, and `posix_spawn`
+cannot issue the `ioctl(TIOCSCTTY)` that gives the child a controlling terminal
+in the window between fork and exec. Any solution has to get the fork out of
+managed code.
+
+`Porta.Pty` (MIT, `tomlm/Porta.Pty`, v1.0.7, ~92k downloads) does exactly that.
+It ships a native C shim, `libporta_pty`, that performs `forkpty()` + `execvp()`
+in native code specifically so no managed .NET code runs in the forked child.
+Windows uses ConPTY; Linux and macOS use POSIX PTY.
+
+```
+PtyProvider.SpawnAsync(PtyOptions, CancellationToken) -> IPtyConnection
+IPtyConnection { ReaderStream, WriterStream, Resize(cols, rows),
+                 ProcessExited, ExitCode }
+```
+
+Not yet cleared, and a spike must settle it before the `embedded` driver starts:
+
+| Signal | Reading |
+|---|---|
+| Targets netstandard2.0, depends on `Vanara.PInvoke.Kernel32` | AOT behaviour of that P/Invoke layer is untested |
+| No NativeAOT or trimming statement anywhere | Unknown, not known-good |
+| 24 stars, one maintainer, last push 2026-02-20 | Bus factor 1, on the riskiest component |
+
+Fallbacks if the spike fails:
+
+- `RoyalApps.RoyalTerminal.Terminal.Pty.{Platform,Unix,Windows}` — MIT, from
+  RoyalApps, pushed 2026-08-03, platform-split. Newer and more actively
+  developed, but v0.5.0 and ~4k downloads.
+- `Microsoft.Windows.Console.ConPTY` (Microsoft, Windows-only, preview) paired
+  with a hand-written Unix side and a small helper binary for the controlling
+  terminal.
+- `Quick.PtyNet` is a fork of the defunct `Pty.Net`. 6 stars, no declared
+  license. Not viable.
+
+### Remaining P/Invoke
+
+Even with `Porta.Pty`, terminal *mode* handling stays ours. Confined to
+`Fleet.Pty`.
+
+*Windows raw mode* — `GetConsoleMode` / `SetConsoleMode`. Set
+`ENABLE_VIRTUAL_TERMINAL_INPUT` and `ENABLE_VIRTUAL_TERMINAL_PROCESSING`; clear
+`ENABLE_LINE_INPUT`, `ENABLE_ECHO_INPUT`, `ENABLE_PROCESSED_INPUT`.
+
+*Unix raw mode* — `tcgetattr`, `cfmakeraw`, `tcsetattr`.
+
+*Resize* — `Porta.Pty`'s `Resize` covers the child side. Reading the client's own
+size on `SIGWINCH` uses `PosixSignalRegistration` plus `ioctl(TIOCGWINSZ)`.
+
+### Relationship to fleet-win
+
+`fleet-win` is Go and shares no code with this. It is **reference material**:
+a working WezTerm driver, a hook reporter with correct subagent filtering, a
+worktree layout, a harness format, and a set of debugged traps worth carrying
+over by hand —
+
+- `activate-tab` takes `--tab-id`, not `--pane-id`; passing the latter alone
+  makes WezTerm reject the call outright and silently breaks every jump.
+- WezTerm reports cwd as a `file://` URL — `file:///C:/repos/x` on Windows, where
+  the leading slash must be dropped, and `file:///home/red/x` on Unix, where it
+  must be kept.
+- WezTerm numbers panes from 0, so a "no pane" sentinel cannot be 0.
+- Killing a tab returns before its processes exit. On Windows a process holding
+  the worktree as its cwd locks it, so an immediate `git worktree remove` fails
+  with "Permission denied". Wait for the panes to actually disappear, then wait
+  a little longer.
+
+`wezterm/fleet.lua` and `nvim/fleet.lua` are the only files that port across
+directly, being Lua. Both need review against the current Neovim config.
+
+## Projects, repos, and agents
+
+Driver-independent. This is the domain model; nothing here knows what a
+multiplexer is.
+
+### Project
+
+A project is a **name pointing at a root folder whose children are
+repositories** — not a repository itself. Multi-repo is the default case rather
+than a feature bolted on later.
+
+`Environment.SpecialFolder.ApplicationData` resolves to `%APPDATA%` on Windows
+and honours `XDG_CONFIG_HOME` on Linux, so one BCL call covers both platforms.
+
+### Repo layouts — detected, not configured
+
+| Layout | Shape | Worktree policy |
+|---|---|---|
+| Plain | `<root>/<repo>/.git` | Edited in place. fleet imposes no worktree |
+| Bare container | `<root>/<repo>` is bare | Worktrees are its children |
+| Worktree container | `<root>/<repo>/<branch>/.git` | Sibling checkouts |
+
+Discovery: a child of the root counts as a repo if it has `.git`, **or if any of
+its own children does**. That second clause is what makes both container layouts
+work.
+
+Branch names are slugged for use as directory names and window titles —
+`feature/foo` becomes `feature_foo`.
+
+### Repo resolution
+
+Exact case-insensitive match first, then unique substring, so `techweb` resolves
+`AZ-ALZ-TechWeb-Backend-V2`. **Ambiguity is an error, not a pick.** The bash
+original silently took the last match; that spawns an agent against the wrong
+repository and is expensive to notice.
+
+### Agent identity
+
+An agent is `(repo, branch, harness)` bound to a worktree directory.
+
+**Identity is the worktree path, never the pane id.** Pane ids are transient and
+driver-specific — a `PaneId` from the `wezterm` driver is meaningless to `tmux`.
+Keying on the path is what makes restore-after-terminal-close possible, and it is
+why swapping drivers does not touch agent state.
+
+**One agent is bound to exactly one repository.** Work spanning several repos in
+a project is several agents plus the orchestrator coordinating them. Accepted
+consequence: no single agent ever sees the whole cross-repo change. The
+alternative — a task owning several worktrees at once — was considered and
+rejected as too much state for the value.
+
+### Worktree planning
+
+Planning is a pure function of `(repoBase, branch)` and does no more than stat
+the filesystem. It yields the target directory, whether it must still be
+created, and the anchor checkout that `git worktree add` runs from. A plain repo
+plans to itself with nothing to create.
+
+### Four traps to transcribe with tests
+
+These are already-paid-for bugs in `fleet-win`'s `gitx`. Port them deliberately.
+
+**1. Base-ref selection.** Prefer the *local* branch when it is ahead of or
+diverged from origin; use origin only when origin is ahead or equal. Cutting a
+new agent's branch from a stale `origin/<base>` silently reverts unpushed local
+merges, and every agent spawned afterwards rebuilds work that already exists.
+
+**2. Default branch.** `origin/HEAD` → the anchor's own `HEAD` → `"main"`.
+Jumping straight from `origin/HEAD` to a hardcoded `main` is wrong for any repo
+with no remote, and for any repo whose trunk is still `master`.
+
+**3. Dirty check.** Ignore `.fleet/` — fleet writes the ready marker, the
+generated launch script and the agent settings there, all untracked, so counting
+them makes every fleet-spawned worktree permanently dirty and impossible to reap
+without a force flag. And **verify `.git` exists at the directory first**:
+`git status` walks *up* until it finds a repository, so a half-removed worktree
+reports whatever encloses it. A teardown decision made on another repo's
+cleanliness deletes the wrong thing.
+
+**4. Teardown order.** Check dirty (ignoring `.fleet/`) → `git worktree remove
+--force` → `git worktree prune`. The force flag is needed because git's own
+check does *not* ignore `.fleet/` and would refuse on files fleet itself wrote.
+Never delete `.fleet/` first: a removal that then fails — a live agent still
+holding the directory on Windows — leaves the worktree in place with its
+done-marker destroyed, silently invisible to reaping. Removal runs from the main
+worktree, resolved via `git rev-parse --git-common-dir`, because the worktree's
+parent directory is the container and not a repository at all.
+
+### State on disk
+
+Two kinds, both under the config directory:
+
+- **Projects** — `projects/<name>.json`. Name and root, home contracted to `~`
+  so a project is portable between machines.
+- **Sessions** — `sessions/<session>.json`. The project root, the saved agent
+  records, and which pane holds the dashboard.
+
+An agent record carries enough to respawn it: worktree directory, repo, branch,
+whether the repo was bare, base ref, harness.
+
+JSON with a version field and a source-generated `JsonSerializerContext`, not
+`fleet-win`'s hand-parsed two-line YAML and tab-separated records. That format
+existed to share a config directory with the bash original; this project shares
+no code or config with either predecessor, so the compatibility constraint is
+gone and AOT-safe serialization is worth more.
+
+Recording rather than detecting is deliberate. `fleet-win` tried to find the
+dashboard by matching pane titles and failed, because WezTerm reports the
+foreground process and the dashboard is launched by typing into a shell — so the
+title stays the shell's and the search never matches.
+
+## Process model (the `embedded` driver only)
+
+The `tmux` and `wezterm` drivers delegate process supervision and persistence to
+the multiplexer itself and run no daemon. Everything in this section applies to
+`embedded` alone.
+
+```
+  fleet (client)                 fleetd (daemon)              children
+  -------------                  ---------------              --------
+  Terminal.Gui dash --socket-->  session registry     --pty-->  nvim
+  raw-mode attach   <-stream-->  pane table                     claude
+  fleet CLI verbs   --socket-->  PTY owner + ring buf           shell
+```
+
+### fleetd
+
+One daemon per user per machine. It owns every PTY and outlives all clients —
+that single property is what buys detach and reattach.
+
+Spawning it detached is platform-specific and easy to get subtly wrong: on
+Windows, `CreateProcess` with `DETACHED_PROCESS` and no inherited handles; on
+Unix, `setsid` with stdio redirected away from the parent's terminal. Double-fork
+daemonization is not safe in .NET.
+
+### Transport
+
+`\\.\pipe\fleet` on Windows, `$XDG_RUNTIME_DIR/fleet/<name>.sock` on Linux.
+ndjson control frames plus a raw byte stream for attach. Both sides are BCL
+types; this is the cheapest part of the driver.
+
+### Panes
+
+Everything is a pane, Neovim included. This is the driver's private
+representation; it satisfies the interface's `Pane` but carries more:
+
+```
+Pane { Id, Kind: Editor|Agent|Shell, Cwd, Argv, Pty, Ring, Status }
+```
+
+Consequence worth wanting: the editor session survives a dropped SSH connection
+the same way the agents do.
+
+### Attach
+
+Fullscreen raw passthrough. The client puts its console in raw mode, copies
+stdin to the PTY and PTY to stdout verbatim, and forwards resize events. Nothing
+in the path parses the stream, so Neovim gets truecolor, SGR mouse, kitty
+keyboard, and undercurl intact.
+
+### Repaint on attach — known soft spot
+
+The daemon keeps a per-pane ring buffer of recent output. On attach it replays
+the ring, then pokes a resize so full-screen applications redraw themselves.
+
+This is a heuristic, not a screen model. tmux instead runs a headless terminal
+emulator per pane and dumps exact screen state on attach. If replay proves
+unreliable, that is the upgrade — and it is the same component tiling would
+later need, so the work would not be wasted.
+
+## Agent status and data flow
+
+No screen scraping. Claude Code hooks report status to fleet directly, which
+works the same whatever the mux is. `CaptureTextAsync` stays in the interface
+regardless, as the fallback for harnesses with no hook system.
+
+### Two daemons, not one
+
+`fleet-win` uses one word for two different requirements, and separating them
+matters:
+
+- A **state daemon** holds agent state between hook invocations, because hooks
+  fire in short-lived processes. `fleet-win` needs this even with WezTerm as the
+  mux.
+- A **PTY daemon** owns processes and outlives clients. Only `embedded` needs
+  this.
+
+Collapsing them would make `wezterm` and `tmux` inherit a background process they
+have no use for.
+
+### The hook contract — fixed
+
+Independent of where state is stored.
+
+| State | Reported by | Severity |
+|---|---|---|
+| `Blocked` | PermissionRequest, Notification | 3 — worth interrupting a human for |
+| `Stalled` | **never reported** — derived | 2 |
+| `Working` | UserPromptSubmit, PreToolUse | 1 |
+| `Idle` | Stop, SessionStart | 0 |
+| `Unknown` | no report exists | −1 |
+
+Three pure rules on top, unit-testable with no terminal and no filesystem:
+
+- **Aggregate** — several sessions sharing one pane collapse to the highest
+  severity. One session on a permission prompt is the thing you need to know,
+  even if another is mid-flight.
+- **Derive** — `Working` past the stall threshold (default 600 s) presents as
+  `Stalled`. Kept separate from storage so the raw reported state is what
+  persists and presentation is computed.
+- **MoreUrgent** — severity descending, then age descending. This is the
+  dashboard sort order.
+
+Invariant, carried from `herdr` through `fleet-win`: **subagent hook events must
+never mark the parent pane done.**
+
+A report also carries the harness's own transcript path, which is what makes cost
+computable without asking the agent anything.
+
+Correction against `fleet-win`: reports key on the **worktree directory**, not
+the pane id. The hook runs inside the agent process with its cwd at the worktree,
+so that is always available; a pane id may not be. This also matches agent
+identity in the section above.
+
+### Storage — deliberately deferred
+
+Two candidates:
+
+- **Daemonless files.** `fleet hook` writes one small file per agent,
+  atomically; readers aggregate on read. No background process for `wezterm` or
+  `tmux` at all, and fail-silent by construction — a missing file is an unknown
+  agent, not an error path. The dashboard polls. `state.json` for the WezTerm Lua
+  module needs a designated writer.
+- **One `fleetd`, PTY half conditional.** Push notifications and a single writer
+  for `state.json`, at the cost of a background process and its lifecycle on
+  every driver.
+
+Deferred until the `wezterm` driver is working and real usage can settle it. Kept
+reversible by a seam, so the hook contract above is not blocked on the decision:
+
+```csharp
+public interface IAgentStateStore
+{
+    Task ReportAsync(AgentReport report, CancellationToken ct = default);
+    Task<Snapshot> GetSnapshotAsync(CancellationToken ct = default);
+}
+```
+
+`fleet hook` calls only `ReportAsync`. The dashboard calls only
+`GetSnapshotAsync`. `FileAgentStateStore` and `DaemonAgentStateStore` are then a
+same-day swap.
+
+## Error handling
+
+The predecessor's first invariant was **fail silent**: every call out to the mux,
+git, nvim or the agent CLI degrades rather than errors. If the terminal is
+closed, the daemon down, or nvim missing, each command falls back to a working
+subset. In bash that was `2>/dev/null` and `|| true`; in Go it was deliberate
+error swallowing at the call site.
+
+C# inverts the default. Exceptions propagate unless stopped, which is exactly
+backwards for this invariant, and a statically-typed rewrite of permissive shell
+code is precisely where it gets lost.
+
+**Enforce it once, with a decorator.** `FailSilentDriver` wraps any `IMuxDriver`,
+catches expected failures, returns empty results, and records what it swallowed.
+Command code is only ever handed the wrapped instance. This is the C# equivalent
+of `fleet-win`'s single-package chokepoint, and it means the invariant is one
+class to review rather than a habit to maintain at every call site.
+
+Three carve-outs, because "swallow everything" is its own bug:
+
+**Programmer errors still throw.** A malformed argument or a null where one is
+impossible is not a degraded terminal. Catch the expected failure types, not
+`Exception`.
+
+**Destructive operations are loud.** `git worktree remove` failing must surface.
+A teardown that silently "succeeds" while the worktree is still on disk — and its
+done-marker already destroyed — is how state diverges from reality. Fail-silent
+covers *reads* and *presentation*, never *destruction*.
+
+**Silent is not invisible.** Everything swallowed goes to a rotating log, and
+`fleet doctor` reports it. Otherwise the invariant turns a broken install into a
+mystery.
+
+## Testing
+
+The predecessor had no tests; that is the one quality win available for free
+here, and it is available because most of fleet is not about terminals at all.
+
+**Pure, no terminal or filesystem needed** — harness parsing, branch slugging,
+repo-layout detection, repo-name resolution including the ambiguity error, state
+aggregation, stall derivation, urgency sort, cost summing, home contraction and
+expansion. Test these as they are written.
+
+**Against real git fixtures** — base-ref selection above all. Build a temp repo,
+create genuine local/origin divergence, and assert that a local branch ahead of
+origin is preferred. This is the trap that silently reverts unpushed merges, and
+it cannot be caught by a unit test over mocks.
+
+**Against the `fake` driver** — all command behaviour. Spawn, send, kill, jump,
+teardown, restore. No terminal on either OS, so it runs anywhere and it is why
+`fake` is first in the build order rather than an afterthought.
+
+**Genuinely integration, on a CI matrix** — the PTY layer and the attach loop.
+ConPTY and `openpty` cannot be faked into telling the truth, and neither can raw
+mode. `windows-latest` and `ubuntu-latest`.
+
+**AOT smoke test** — publish NativeAOT on both runners and run `fleet --help` and
+`fleet doctor`. This is exactly what Terminal.Gui does upstream to keep AOT from
+regressing, and it is the only thing that will catch a trimming break introduced
+by a dependency bump.
+
+`fleet doctor` remains the end-to-end smoke test, and must pass before any phase
+counts as done.
+
+## Layout — vertical slices
+
+One folder per behaviour, holding everything needed to read or change it. Chosen
+over layer projects because this codebase will be read and edited largely by an
+LLM, and the two properties that matters most for that are **context locality**
+— a change means reading one folder — and a **visible call graph**, where every
+call is traceable by reading source rather than by guessing what a framework
+does at runtime.
+
+```
+fleet.sln
+src/Fleet/                            one project, AOT-published as `fleet`
+  Program.cs                          composition root — the ONLY file naming a Platform type
+  Shared/                             pure, no I/O: Result, ProjectName, HomePath
+  Ports/                              interfaces and the types crossing them
+    IFleetLog, Git/IGitRunner, Projects/IProjectStore, Mux/IMuxDriver
+  Platform/                           every implementation that touches the outside world
+    Logging/, Storage/, Git/, Mux/{DriverSelector, FailSilentDriver, Fake/, WezTerm/}
+  Features/
+    Projects/{PickProject, CreateProject, OpenProject}/
+    Repositories/{BranchSlug.cs, AddRepository, ListRepositories}/
+    Dashboard/ShowDashboard/
+    Diagnostics/RunDoctor/
+tests/Fleet.Tests/                    mirrors the slice tree
+  Architecture/SliceBoundaryTests.cs
+```
+
+Later phases add slices rather than projects: `Features/Agents/{NewAgent, SendToAgent,
+ReapAgent}/`, and `Platform/Mux/Tmux/`, `Platform/Mux/Embedded/`, `Platform/Pty/`.
+
+### Rules, enforced by test not by discipline
+
+1. A slice never references another slice. Where two slices must cooperate, the
+   composition root passes a callback — `PickProject` takes a `Func<Project?>`
+   rather than knowing `CreateProject` exists.
+2. `Features/` never references `Platform/`. Only `Ports/` and `Shared/`.
+3. Only `Program.cs` may name a `Platform` type.
+4. `Ports/` depends on nothing but `Shared/`.
+5. Sharing *within* an area is allowed and lives in the area root. Sharing
+   *across* areas goes to `Shared/` and must be pure.
+
+`SliceBoundaryTests` checks all four by scanning source text — chosen over
+reflection because it catches references inside method bodies, which signature
+reflection misses, and needs no IL parsing. Known gap: a violation written
+without naming the namespace slips past.
+
+### Supporting patterns
+
+`Result<T>` for expected failures, so failure is in the signature rather than
+hidden at a throw site; exceptions reserved for defects. Sealed records and no
+inheritance, for a flat reading graph. Constructor injection only — no service
+locator, no static mutable state, so any file is comprehensible alone. Four
+ports total for all I/O, each with a fake.
+
+### Rejected
+
+**MediatR or any reflection-based dispatch** — two independent reasons. It breaks
+NativeAOT (`IL2026`/`IL3050`, which `IsAotCompatible` promotes to build errors),
+and it hides the call graph behind runtime resolution. Handlers are called
+directly, by name.
+
+**Repository pattern over git** — git *is* the store; a wrapper adding no
+behaviour is a layer to read past. **DDD aggregates and domain events** — no
+invariant here needs a consistency boundary. **Layer projects** (Core /
+Application / Infrastructure / UI) — directly opposed to slicing; one behaviour
+would touch four projects. **AutoMapper and convention magic** — reflection,
+AOT-hostile, invisible behaviour.
+
+### The tradeoff, stated
+
+Project references enforce dependency direction at compile time; namespaces do
+not. Collapsing to one source project trades that compile-time guarantee for a
+test-time one. Worth it because six projects for a phase-1 TUI is ceremony, and a
+violation caught by `dotnet test` is caught before it lands. If the architecture
+tests prove insufficient, splitting `Platform` into its own project restores
+compile-time enforcement mechanically.
+
+## MVP
+
+Eight commands. `fleet-win` reached 48; this is the subset that makes the first
+build worth using rather than a step toward one.
+
+> **Phase 1 is specified separately.** `docs/phase1.md` is the spec and
+> `docs/PHASE1-PLAN.md` the implementation plan. Phase 1 narrows this MVP — a
+> project picker instead of `fleet up`, bare repositories only, no agents yet —
+> and the plan records every delta against this document.
+
+| Command | Does |
+|---|---|
+| `doctor` | Verify the environment and report which driver was selected and why. The end-to-end smoke test |
+| `up <project>` | Boot a project: resolve the root, create or adopt a session |
+| `new <repo> <branch>` | Plan and create the worktree, spawn a window with an nvim pane and a claude pane |
+| `ls` | List agents with state and age |
+| `dash` | The Terminal.Gui dashboard: every agent sorted by urgency, jump on Enter |
+| `send <agent> <text>` | Message a running agent |
+| `reap <agent>` | Tear down: kill the window, remove the worktree, forget the record |
+| `restore` | Rebuild the session from saved records after the terminal closed |
+
+### Milestones
+
+| # | Lands | Why here |
+|---|---|---|
+| M0 | Solution skeleton, `fake` driver, pure logic under test, CI matrix with the AOT smoke test | Nothing else is verifiable until the harness exists |
+| M1 | `wezterm` driver, `doctor`, `up`, `new` | First real output: an agent on its own worktree with nvim and claude side by side |
+| M2 | Hook reporter, `FileAgentStateStore`, `ls` | Makes state real, and settles the deferred storage question with evidence |
+| M3 | `dash` | The product shape |
+| M4 | `send`, `reap`, `restore` | Full lifecycle. Ship point |
+| M5 | `tmux` driver | Proves the abstraction against a second real backend. SSH and headless Linux start working |
+
+### Explicitly not in v1
+
+`orchestrator` and `dispatch`, cost tracking, the write guard, keybinding
+management, `browser`, `fan`, `watch`, the `embedded` driver, and tiling. Each is
+a deliberate deferral, not an oversight — the design leaves room for all of them,
+and none is needed to find out whether the core loop is good.
+
+## Open — not yet designed
+
+- **Agent state storage.** Daemonless files versus a state daemon. Deliberately
+  deferred behind `IAgentStateStore` until the `wezterm` driver is working; M2 is
+  where the evidence arrives.
+
+## Verification log
+
+**2026-08-08 — Terminal.Gui v2 under NativeAOT: cleared.**
+
+The repository is `tui-cs/Terminal.Gui` (moved from `gui-cs`): 11.1k stars, last
+push 2026-08-01, 51 open issues, not archived. Stable `2.4.17` on NuGet, with
+`2.4.18-develop.*` prereleases — v2 is shipped, not a preview.
+
+AOT is enforced in CI rather than merely claimed: #5251 added an AOT smoke test,
+#5255 extended it to Windows and explicit clone paths, #4102 added AOT test
+variants, #5402 restored AOT validation after examples moved out. Most
+convincing, #5561 reported an AOT/trim regression (`IL2026`/`IL3050` from an
+unannotated `TypeDescriptor.GetConverter`) and #5562 fixed it the same day. AOT
+breakage is treated as a bug.
+
+Also found: `Terminal.Gui.Interop.Spectre` (#5391–#5393) provides `SpectreView`,
+rendering any Spectre.Console `IRenderable` inside Terminal.Gui — the two stack
+choices compose officially.
+
+Watch: #5607, "Conhost crashes on Windows 10", open. Windows console path.
+
+**2026-08-08 — `wezterm-mux-server` headless attach: does not exist.** Checked
+against the installed `wezterm 20260117-154428-05343b38`.
+
+Control, headless: **works.** `wezterm cli --prefer-mux` is documented as
+*"Prefer connecting to a background mux server. The default is to prefer
+connecting to a running wezterm gui instance"*, and `--no-auto-start` implies it
+will otherwise start one. `wezterm-mux-server` ships in the install and takes
+`--daemonize`.
+
+Attach, headless: **does not exist.** `wezterm connect` is a GUI client and only
+a GUI client — every option is a windowing-system option: `--class` (*"Under X11
+and Windows this changes the window class. Under Wayland this changes the
+app_id"*), `--position` (screen coordinates, named monitors), `--new-tab`
+(*"When spawning into an existing GUI instance"*). No text-mode flag exists.
+`wezterm-mux-server --help` exposes only `--daemonize` and config options — no
+frontend. `wezterm cli proxy` is *"start rpc proxy pipe"* and takes no arguments:
+transport plumbing for SSH domains, not a human client.
+
+So on a headless box fleet could drive panes and never see them. **`embedded`
+remains required for headless Windows**, and the `Porta.Pty` AOT gate stands.
+
+Salvaged: the `wezterm` driver's control path does not require a GUI. Worth
+using — agents spawned from a hook or cron with no GUI up still work.
+
+Risk noted: `wezterm cli` self-describes as *"Interact with experimental mux
+server"*.
+
+**2026-08-08 — `Pty.Net`: does not exist on NuGet.** The earlier plan named it;
+that was wrong. It survives only as the `Quick.PtyNet` fork (6 stars, no declared
+license), which is too thin to depend on. Replaced by `Porta.Pty`, which still
+needs an AOT spike — see the PTY section.
+
+## Still to verify
+
+- `Porta.Pty` under NativeAOT on both Windows and Linux, including its
+  `Vanara.PInvoke.Kernel32` dependency. Gate for the `embedded` driver.
+- Terminal.Gui v2 AOT on a real Linux runner, not just per upstream CI.
+- Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
+  source-generated context.
+
+## Parked
+
+- `DeBlasis.GhosttyVt` — a Ghostty VT binding on NuGet. Irrelevant now, but it
+  is the component tiling would need if the `embedded` driver ever grows past
+  fullscreen attach.
+
+## Notes
+
+- `C:\repos\fleet` is not yet a git repository, so this document is uncommitted.
+- Neovim config lives at `%LOCALAPPDATA%\nvim`, is itself a git repo, and has a
+  `bootstrap.sh` — portability there needs confirming, not assuming.
