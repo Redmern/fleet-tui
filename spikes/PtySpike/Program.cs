@@ -1,21 +1,26 @@
+using System.Runtime.Versioning;
 using System.Text;
-using Porta.Pty;
 
 namespace PtySpike;
 
 public static class Program
 {
     private static volatile bool _menuOpen;
-    private static volatile bool _childExited;
 
     public static async Task<int> Main(string[] args)
     {
         var mode = args.Length > 0 ? args[0] : "--help";
 
+        if (mode != "--scan" && mode != "--help" && !OperatingSystem.IsWindows())
+        {
+            Console.Error.WriteLine("this spike covers ConPTY, so it is Windows only");
+            return 2;
+        }
+
         return mode switch
         {
-            "--echo" => await EchoAsync().ConfigureAwait(false),
             "--scan" => Scan(),
+            "--echo" => await EchoAsync().ConfigureAwait(false),
             "--attach" => await AttachAsync(args[1..]).ConfigureAwait(false),
             _ => Help(),
         };
@@ -24,11 +29,11 @@ public static class Program
     private static int Help()
     {
         Console.WriteLine("""
-            ptyspike - answers three questions about fleet owning a child terminal
+            ptyspike - hand-written ConPTY, no third-party dependencies
 
-              --scan            prefix detection over a synthetic byte stream (no PTY)
-              --echo            spawn a child on a PTY and read its output (no raw mode)
-              --attach <cmd>    raw passthrough with ctrl+s space overlay, then repaint
+              --scan            prefix detection over a synthetic byte stream
+              --echo            spawn a child on a real ConPTY and read its output
+              --attach <cmd>    raw passthrough, ctrl+s space overlay, then repaint
 
             examples:
               ptyspike --attach nvim
@@ -40,6 +45,7 @@ public static class Program
     private static int Scan()
     {
         var scanner = new PrefixScanner();
+
         var script = new (string Name, byte[] Bytes)[]
         {
             ("plain text", "hi"u8.ToArray()),
@@ -58,62 +64,112 @@ public static class Program
         return 0;
     }
 
+    [SupportedOSPlatform("windows")]
     private static async Task<int> EchoAsync()
     {
-        var shell = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh";
-        var line = OperatingSystem.IsWindows()
-            ? new[] { "cmd.exe", "/c", "echo hello-from-pty" }
-            : ["/bin/sh", "-c", "echo hello-from-pty"];
+        Console.WriteLine("spawning a child on a hand-written ConPTY...");
 
-        var options = new PtyOptions
-        {
-            Name = "ptyspike",
-            Cols = 80,
-            Rows = 24,
-            Cwd = Environment.CurrentDirectory,
-            App = shell,
-            CommandLine = line,
-            Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color" },
-        };
+        ConPty.Trace = line => Console.WriteLine($"  trace           {line}");
 
-        Console.WriteLine("spawning a child on a PTY...");
+        using var connection = ConPty.Spawn(
+            "cmd.exe /c echo hello-from-conpty & ping -n 3 127.0.0.1",
+            Environment.CurrentDirectory,
+            80,
+            24);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        var connection = await PtyProvider.SpawnAsync(options, cts.Token).ConfigureAwait(false);
+        Console.WriteLine($"  pid              {connection.Pid}");
 
-        Console.WriteLine($"  pid            {connection.Pid}");
-
-        var buffer = new byte[4096];
         var text = new StringBuilder();
-        var deadline = DateTime.UtcNow.AddSeconds(5);
 
-        while (DateTime.UtcNow < deadline)
+        var reader = Task.Run(() =>
         {
-            var read = await connection.ReaderStream.ReadAsync(buffer, cts.Token)
-                .ConfigureAwait(false);
+            var buffer = new byte[4096];
 
-            if (read <= 0)
+            while (true)
             {
-                break;
-            }
+                int read;
 
-            text.Append(Encoding.UTF8.GetString(buffer, 0, read));
+                try
+                {
+                    read = connection.ReaderStream.Read(buffer, 0, buffer.Length);
+                }
+                catch (Exception e) when (e is IOException or ObjectDisposedException)
+                {
+                    return;
+                }
 
-            if (text.ToString().Contains("hello-from-pty", StringComparison.Ordinal))
-            {
-                break;
+                if (read <= 0)
+                {
+                    return;
+                }
+
+                lock (text)
+                {
+                    text.Append(Encoding.UTF8.GetString(buffer, 0, read));
+                }
             }
+        });
+
+        await Task.WhenAny(reader, Task.Delay(TimeSpan.FromSeconds(3))).ConfigureAwait(false);
+
+        string captured;
+        lock (text)
+        {
+            captured = text.ToString();
         }
 
-        connection.Kill();
+        var saw = captured.Contains("hello-from-conpty", StringComparison.Ordinal);
 
-        var saw = text.ToString().Contains("hello-from-pty", StringComparison.Ordinal);
-        Console.WriteLine($"  saw child output  {(saw ? "YES" : "NO")}");
-        Console.WriteLine($"  raw bytes         {text.Length}");
+        Console.WriteLine($"  saw child output {(saw ? "YES" : "NO")}");
+        Console.WriteLine($"  bytes captured   {captured.Length}");
+        Console.WriteLine($"  child exited     {connection.HasExited}");
+        Console.WriteLine($"  resize accepted  {TryResize(connection)}");
+        Console.WriteLine($"  preview          {Preview(captured)}");
+
+        connection.Kill();
 
         return saw ? 0 : 1;
     }
 
+    private static string Preview(string text)
+    {
+        if (text.Length == 0)
+        {
+            return "(nothing captured)";
+        }
+
+        var slice = text.Length > 180 ? text[..180] : text;
+        var sb = new StringBuilder();
+
+        foreach (var c in slice)
+        {
+            sb.Append(c switch
+            {
+                '' => "<ESC>",
+                '\r' => "<CR>",
+                '\n' => "<LF>",
+                _ => c < ' ' ? $"<{(int)c:X2}>" : c.ToString(),
+            });
+        }
+
+        return sb.ToString();
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static string TryResize(ConPtyConnection connection)
+    {
+        try
+        {
+            connection.Resize(100, 30);
+            return "YES";
+        }
+        catch (Exception e)
+        {
+            return $"NO ({e.GetType().Name})";
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
     private static async Task<int> AttachAsync(string[] command)
     {
         if (command.Length == 0)
@@ -124,21 +180,11 @@ public static class Program
 
         var size = TerminalSize();
 
-        var options = new PtyOptions
-        {
-            Name = "ptyspike",
-            Cols = size.Cols,
-            Rows = size.Rows,
-            Cwd = Environment.CurrentDirectory,
-            App = command[0],
-            CommandLine = command,
-            Environment = new Dictionary<string, string> { ["TERM"] = "xterm-256color" },
-        };
-
-        var connection = await PtyProvider.SpawnAsync(options, CancellationToken.None)
-            .ConfigureAwait(false);
-
-        connection.ProcessExited += (_, _) => _childExited = true;
+        using var connection = ConPty.Spawn(
+            string.Join(' ', command),
+            Environment.CurrentDirectory,
+            size.Cols,
+            size.Rows);
 
         using var raw = new ConsoleRawMode();
 
@@ -149,7 +195,7 @@ public static class Program
         {
             var buffer = new byte[8192];
 
-            while (!_childExited)
+            while (true)
             {
                 int read;
 
@@ -157,7 +203,7 @@ public static class Program
                 {
                     read = await connection.ReaderStream.ReadAsync(buffer).ConfigureAwait(false);
                 }
-                catch (IOException)
+                catch (Exception e) when (e is IOException or ObjectDisposedException)
                 {
                     break;
                 }
@@ -180,7 +226,7 @@ public static class Program
         var scanner = new PrefixScanner();
         var single = new byte[1];
 
-        while (!_childExited)
+        while (!connection.HasExited)
         {
             var read = await stdin.ReadAsync(single).ConfigureAwait(false);
 
@@ -206,14 +252,15 @@ public static class Program
             }
         }
 
-        await pump.ConfigureAwait(false);
         connection.Kill();
+        await pump.ConfigureAwait(false);
 
         return 0;
     }
 
+    [SupportedOSPlatform("windows")]
     private static async Task ShowOverlayAsync(
-        Stream stdout, Stream stdin, IPtyConnection connection)
+        Stream stdout, Stream stdin, ConPtyConnection connection)
     {
         _menuOpen = true;
 
@@ -226,23 +273,24 @@ public static class Program
         _menuOpen = false;
 
         connection.Resize(Math.Max(size.Cols - 1, 2), Math.Max(size.Rows - 1, 2));
-        await Task.Delay(40).ConfigureAwait(false);
+        await Task.Delay(50).ConfigureAwait(false);
         connection.Resize(size.Cols, size.Rows);
     }
 
     private static string Panel(int cols, int rows)
     {
-        var width = Math.Min(cols - 2, 60);
+        var width = Math.Min(cols - 2, 62);
+
         var lines = new[]
         {
-            "fleet menu (spike)",
+            " fleet menu (spike)",
             string.Empty,
-            "  a   Add repository",
-            "  r   Refresh",
-            "  k   Keybinds",
-            "  q   Close pane",
+            "   a   Add repository",
+            "   r   Refresh",
+            "   k   Keybinds",
+            "   q   Close pane",
             string.Empty,
-            "  press any key to dismiss and repaint the child",
+            "   any key dismisses, then the child repaints",
         };
 
         var top = Math.Max((rows - lines.Length - 2) / 2, 1);
@@ -257,10 +305,9 @@ public static class Program
 
         for (var i = 0; i < lines.Length; i++)
         {
+            var text = lines[i].Length > width - 2 ? lines[i][..(width - 2)] : lines[i];
             sb.Append($"[{top + i + 1};{left}H");
-            sb.Append('│');
-            sb.Append(lines[i].PadRight(width - 2)[..(width - 2)]);
-            sb.Append('│');
+            sb.Append('│').Append(text.PadRight(width - 2)).Append('│');
         }
 
         sb.Append($"[{top + lines.Length + 1};{left}H");

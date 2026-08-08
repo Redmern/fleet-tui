@@ -893,6 +893,37 @@ Confirmed working in the same spike: prefix detection over the raw input byte
 stream, including `Ctrl+S` arriving as `0x13`. The keyboard-interception half of
 the attach model is sound; only the PTY library is not.
 
+**2026-08-08 — hand-written ConPTY under NativeAOT: WORKS. This is the viable path.**
+
+Same spike, retargeted at our own `LibraryImport` P/Invoke with zero third-party
+dependencies. Published with `IsAotCompatible`, both analyzers, and
+warnings-as-errors:
+
+- **0 IL warnings, 1.63 MB** binary — against `Porta.Pty`'s hard failure and
+  3.49 MB.
+- `CreatePseudoConsole` returns `HRESULT 0` with a valid `HPCON`.
+- `ResizePseudoConsole` accepted.
+- Pipe I/O works: ConPTY's own init stream (`ESC[?9001h ESC[?1004h`) arrives.
+- Prefix scanning over raw input bytes works, `Ctrl+S` as `0x13` included.
+
+So the AOT gate is cleared. What is *not* yet working is child attachment: every
+native call reports success, but the spawned process inherits the parent console
+instead of the pseudoconsole, so its output never reaches the pipe.
+
+Ruled out by experiment, so they need not be retried:
+
+| Hypothesis | Result |
+|---|---|
+| `STARTUPINFOEX.cb` should be `sizeof(STARTUPINFO)` | No — 104 gives `ERROR_INVALID_PARAMETER`; 112 is correct |
+| `lpValue` should be a pointer to the `HPCON` | No — captures 0 bytes, worse than by-value |
+| `bInheritHandles` should be `true` | No change |
+| Short-lived child exits before ConPTY renders | No — a chatty child behaves identically |
+
+Still untried: inheritable `SECURITY_ATTRIBUTES` on the pipes, explicitly zeroed
+`STARTUPINFOEX`, and `FreeConsole` in the parent before spawning. This is a bug
+in roughly 200 lines of our own code, not a platform limitation — Windows
+Terminal's own sample does the same sequence and works.
+
 Alternatives, with dependency graphs checked:
 
 - **Hand-written ConPTY.** `LibraryImport` source generators, zero dependencies,
