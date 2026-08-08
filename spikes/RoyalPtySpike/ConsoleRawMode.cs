@@ -15,10 +15,14 @@ public sealed class ConsoleRawMode : IDisposable
     private const uint EnableVirtualTerminalProcessing = 0x0004;
     private const uint DisableNewlineAutoReturn = 0x0008;
 
+    private const uint Utf8CodePage = 65001;
+
     private readonly IntPtr _in;
     private readonly IntPtr _out;
     private readonly uint _originalIn;
     private readonly uint _originalOut;
+    private readonly uint _originalOutputCp;
+    private readonly uint _originalInputCp;
     private readonly bool _active;
 
     public ConsoleRawMode()
@@ -36,6 +40,12 @@ public sealed class ConsoleRawMode : IDisposable
             return;
         }
 
+        _originalOutputCp = GetConsoleOutputCP();
+        _originalInputCp = GetConsoleCP();
+
+        SetConsoleOutputCP(Utf8CodePage);
+        SetConsoleCP(Utf8CodePage);
+
         var rawIn = _originalIn;
         rawIn &= ~(EnableProcessedInput | EnableLineInput | EnableEchoInput);
         rawIn |= EnableVirtualTerminalInput;
@@ -47,15 +57,35 @@ public sealed class ConsoleRawMode : IDisposable
 
     public bool Active => _active;
 
+    public string Describe()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return "not windows";
+        }
+
+        return $"active={_active} outputCP={GetConsoleOutputCP()} inputCP={GetConsoleCP()} " +
+               $"wasOutputCP={_originalOutputCp}";
+    }
+
     public void Dispose()
     {
-        if (!_active || !OperatingSystem.IsWindows())
+        if (!OperatingSystem.IsWindows())
         {
             return;
         }
 
-        SetConsoleMode(_in, _originalIn);
-        SetConsoleMode(_out, _originalOut);
+        if (_originalOutputCp != 0)
+        {
+            SetConsoleOutputCP(_originalOutputCp);
+            SetConsoleCP(_originalInputCp);
+        }
+
+        if (_active)
+        {
+            SetConsoleMode(_in, _originalIn);
+            SetConsoleMode(_out, _originalOut);
+        }
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -66,4 +96,16 @@ public sealed class ConsoleRawMode : IDisposable
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint GetConsoleOutputCP();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint GetConsoleCP();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetConsoleOutputCP(uint wCodePageID);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetConsoleCP(uint wCodePageID);
 }

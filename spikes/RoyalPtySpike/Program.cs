@@ -15,9 +15,47 @@ public static class Program
         return mode switch
         {
             "--echo" => await EchoAsync().ConfigureAwait(false),
+            "--keys" => await KeysAsync().ConfigureAwait(false),
             "--attach" => await AttachAsync(args[1..]).ConfigureAwait(false),
             _ => Help(),
         };
+    }
+
+    private static async Task<int> KeysAsync()
+    {
+        Console.WriteLine("press keys to see the bytes fleet would receive. ctrl+q quits.");
+        Console.WriteLine();
+
+        using var raw = new ConsoleRawMode();
+        Console.WriteLine($"raw mode: {raw.Describe()}");
+        Console.WriteLine();
+
+        var stdin = Console.OpenStandardInput();
+        var buffer = new byte[64];
+
+        while (true)
+        {
+            var read = await stdin.ReadAsync(buffer).ConfigureAwait(false);
+
+            if (read <= 0)
+            {
+                break;
+            }
+
+            var hex = string.Join(" ", buffer.Take(read).Select(b => b.ToString("X2")));
+            var chars = string.Join(
+                string.Empty,
+                buffer.Take(read).Select(b => b >= 0x20 && b < 0x7f ? ((char)b).ToString() : "."));
+
+            Console.Write($"  {read,2} byte(s)  {hex,-40}  {chars}\r\n");
+
+            if (buffer[0] == 0x11)
+            {
+                break;
+            }
+        }
+
+        return 0;
     }
 
     private static int Help()
@@ -26,6 +64,7 @@ public static class Program
             royalptyspike - RoyalApps PTY under NativeAOT
 
               --echo            spawn a child, confirm its output arrives
+              --keys            show the raw bytes each keypress delivers
               --attach <cmd>    raw passthrough with a ctrl+s space overlay
             """);
         return 0;
