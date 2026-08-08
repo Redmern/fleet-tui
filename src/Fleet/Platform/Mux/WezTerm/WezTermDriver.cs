@@ -44,7 +44,17 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
     public async Task<IReadOnlyList<Pane>> ListPanesAsync(CancellationToken ct = default)
     {
         var json = await _cli.RunAsync(["list", "--format", "json"], ct).ConfigureAwait(false);
+        return ParsePanes(json);
+    }
 
+    /// <summary>
+    /// Maps `wezterm cli list --format json` onto panes.
+    ///
+    /// Separated from the process call so it can be tested against real captured
+    /// output — otherwise nothing would catch a renamed field until runtime.
+    /// </summary>
+    public static IReadOnlyList<Pane> ParsePanes(string json)
+    {
         var rows = JsonSerializer.Deserialize(json, WezTermJsonContext.Default.WezTermPaneJsonArray)
                    ?? [];
 

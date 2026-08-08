@@ -772,11 +772,46 @@ that was wrong. It survives only as the `Quick.PtyNet` fork (6 stars, no declare
 license), which is too thin to depend on. Replaced by `Porta.Pty`, which still
 needs an AOT spike — see the PTY section.
 
+**2026-08-08 — Terminal.Gui v2.4.17 under NativeAOT on Windows: cleared, by
+building it.** `dotnet publish -c Release` with `IsAotCompatible`,
+`EnableTrimAnalyzer` and `EnableAotAnalyzer` on and `TreatWarningsAsErrors`
+produced zero `IL2026`/`IL3050` warnings, and the resulting `fleet.exe` runs
+`--help` and `doctor` correctly. Binary size 20.25 MB with Terminal.Gui in use,
+against a 1.0 MB baseline without it.
+
+**2026-08-08 — Terminal.Gui v2.4 API differs substantially from what was
+assumed.** Four corrections, all found by compiling rather than by reading:
+
+- Namespaces are split: `Terminal.Gui.App` (Application), `.Views` (Window,
+  Dialog, ListView, TextField, Button, Label, FrameView, CheckBox, MessageBox),
+  `.ViewBase` (View, Dim, Pos), `.Input` (Key), `.Drawing` (LineStyle, Scheme).
+  A bare `using Terminal.Gui;` compiles nothing.
+- **The static `Application` facade is `[Obsolete]`** — "The legacy static
+  Application object is going away." The instance model is
+  `IApplication app = Application.Create().Init()`, disposed to shut down.
+  `ApplicationImpl` is internal, so `Application.Create()` is the only entry.
+  `MessageBox.ErrorQuery` now takes the `IApplication` as its first argument.
+- **There is no `RadioGroup`**, and no `Colors`/`ColorScheme` — the latter
+  replaced by `Scheme` / `SchemeManager` and `View.SchemeName`.
+- `CommandEventArgs` carries only `Context`, with **no `Cancel`**. A `Dialog`'s
+  own button handling therefore cannot be suppressed when validation fails, so
+  fleet's modals are plain `Window`s, which close only when told to.
+- `ListView.SelectedItem` is `int?`; activation is `Activated`, not
+  `OpenSelectedItem`.
+
+**2026-08-08 — the WezTerm JSON contract is confirmed against real output.**
+`wezterm cli list --format json` on 20260117-154428-05343b38 emits exactly the
+field names `WezTermPaneJson` declares. `WezTermDriver.ParsePanes` is public and
+tested against captured output, so a renamed field fails a test rather than
+surfacing at runtime. Note `cwd` arrives with a trailing slash
+(`file:///C:/repos/fleet/`).
+
 ## Still to verify
 
 - `Porta.Pty` under NativeAOT on both Windows and Linux, including its
   `Vanara.PInvoke.Kernel32` dependency. Gate for the `embedded` driver.
-- Terminal.Gui v2 AOT on a real Linux runner, not just per upstream CI.
+- Terminal.Gui v2 AOT on a real **Linux** runner. Windows is now proven; the CI
+  matrix answers Linux on first push.
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
 
