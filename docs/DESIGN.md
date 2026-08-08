@@ -990,6 +990,38 @@ retries. Filtering publish output to `IL` warnings hides that error and yields a
 stale binary that looks freshly built. Kill running instances first, and check
 the timestamp.
 
+**2026-08-08 — owning a pane requires a VT *input* parser, not a byte check.**
+
+Traced from a real `--attach nvim` run. Once the child is running, stdin no longer
+delivers single bytes:
+
+```
+ESC [ 13;28;13;0;0;1 _      win32-input-mode key event
+ESC [ <0;33;14 M            SGR mouse report
+```
+
+nvim requests win32-input-mode and mouse tracking (ConPTY advertises the former
+with `ESC[?9001h`), so the terminal re-encodes **all** input. `ctrl+space` is
+`0x00` only while no child has switched modes; under nvim it becomes a `CSI … _`
+sequence. A single-byte prefix scanner cannot work.
+
+Consequences for the `embedded` driver, all newly known:
+
+1. Prefix detection needs a real VT input parser — at minimum recognising
+   `CSI … _` win32-input-mode events and `CSI … M/m` mouse reports, passing
+   everything else through untouched.
+2. The parser must be transparent: anything fleet does not claim has to reach the
+   child byte-for-byte, or nvim's own keys break.
+3. A cheaper interim option exists: fleet controls the child's output stream, so
+   it can **filter the mode-setting requests it cannot yet handle** — strip
+   `ESC[?9001h` and the mouse-enable sequences — and input stays legacy
+   single-byte. The cost is that the child loses enhanced key reporting and mouse
+   support while that filter is in place.
+
+This is on top of the already-known repaint-on-dismiss heuristic, and it is why
+the mux-intercepts-prefix option remains materially cheaper: tmux and WezTerm
+already contain input parsers.
+
 ## Still to verify
 - Terminal.Gui v2 AOT on a real **Linux** runner. Windows is now proven; the CI
   matrix answers Linux on first push.

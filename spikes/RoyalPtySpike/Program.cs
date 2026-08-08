@@ -186,15 +186,22 @@ public static class Program
         var cols = Math.Max(Console.WindowWidth, 20);
         var rows = Math.Max(Console.WindowHeight, 5);
 
+        SpikeLog.Start($"attach {string.Join(' ', command)}  cols={cols} rows={rows}");
+
         using var pty = new DefaultPtyFactory().Create();
         using var raw = new ConsoleRawMode();
+
+        SpikeLog.Write($"raw mode: {raw.Describe()}");
 
         var stdout = Console.OpenStandardOutput();
         var stdin = Console.OpenStandardInput();
         var menuOpen = false;
+        var fromChild = 0L;
 
         pty.DataReceived += (buffer, count) =>
         {
+            Interlocked.Add(ref fromChild, count);
+
             if (menuOpen)
             {
                 return;
@@ -204,15 +211,31 @@ public static class Program
             stdout.Flush();
         };
 
-        pty.ProcessExited += _ => _exited = true;
+        pty.ProcessExited += code =>
+        {
+            _exited = true;
+            SpikeLog.Write($"child exited code={code} totalBytesFromChild={fromChild}");
+        };
 
-        pty.Start(
-            command[0],
-            cols,
-            rows,
-            Environment.CurrentDirectory,
-            new Dictionary<string, string> { ["TERM"] = "xterm-256color" },
-            command[1..]);
+        try
+        {
+            pty.Start(
+                command[0],
+                cols,
+                rows,
+                Environment.CurrentDirectory,
+                new Dictionary<string, string> { ["TERM"] = "xterm-256color" },
+                command[1..]);
+
+            SpikeLog.Write(
+                $"pty started: impl={pty.GetType().Name} pid={pty.ChildPid} running={pty.IsRunning}");
+        }
+        catch (Exception e)
+        {
+            SpikeLog.Write($"pty.Start FAILED: {e.GetType().Name}: {e.Message}");
+            Console.Error.WriteLine($"pty.Start failed: {e.Message}");
+            return 1;
+        }
 
         var prefixByte = PrefixByte();
         var scanner = new PrefixScanner(prefixByte);
@@ -227,6 +250,7 @@ public static class Program
             await stdout.FlushAsync().ConfigureAwait(false);
         }
 
+        SpikeLog.Write($"prefix byte = 0x{prefixByte:X2}; entering input loop");
         await StatusAsync($"ptyspike: prefix=0x{prefixByte:X2} waiting").ConfigureAwait(false);
 
         while (!_exited)
@@ -235,10 +259,14 @@ public static class Program
 
             if (read <= 0)
             {
+                SpikeLog.Write($"stdin read returned {read}; leaving loop");
                 break;
             }
 
-            switch (scanner.Feed(single[0]))
+            var outcome = scanner.Feed(single[0]);
+            SpikeLog.Write($"key 0x{single[0]:X2} -> {outcome} (armed={scanner.Armed})");
+
+            switch (outcome)
             {
                 case ScanOutcome.Forward:
                     pty.Write(single, 0, 1);
@@ -253,13 +281,16 @@ public static class Program
                     var panel = Encoding.UTF8.GetBytes(Overlay.Panel(cols, rows));
                     await stdout.WriteAsync(panel).ConfigureAwait(false);
                     await stdout.FlushAsync().ConfigureAwait(false);
+                    SpikeLog.Write($"overlay drawn, {panel.Length} bytes written to stdout");
 
                     await stdin.ReadAsync(single).ConfigureAwait(false);
+                    SpikeLog.Write($"overlay dismissed by 0x{single[0]:X2}");
                     menuOpen = false;
 
                     pty.Resize(Math.Max(cols - 1, 2), Math.Max(rows - 1, 2));
                     await Task.Delay(50).ConfigureAwait(false);
                     pty.Resize(cols, rows);
+                    SpikeLog.Write("resize poke sent; child should repaint");
                     break;
             }
         }
