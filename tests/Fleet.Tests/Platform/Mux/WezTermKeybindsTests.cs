@@ -61,6 +61,24 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
+    public void The_menu_is_scoped_to_windows_that_contain_a_fleet_pane()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+
+        Assert.Contains("local function has_fleet_pane(window)", lua);
+        Assert.Contains("get_user_vars()", lua);
+        Assert.Contains("if not has_fleet_pane(window) then", lua);
+    }
+
+    [Fact]
+    public void Without_a_fleet_pane_the_chord_is_forwarded_to_the_pane()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+
+        Assert.Contains("act.SendKey { key = ' ', mods = 'CTRL' }", lua);
+    }
+
+    [Fact]
     public void The_module_exposes_apply_and_warns_it_is_generated()
     {
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");

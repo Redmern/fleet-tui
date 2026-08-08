@@ -149,6 +149,8 @@ public static class Program
 
         var keymapStore = NewKeymapStore();
 
+        WezTermUserVars.MarkDashboard();
+
         using IApplication app = Application.Create().Init();
         FleetTheme.Register();
 
