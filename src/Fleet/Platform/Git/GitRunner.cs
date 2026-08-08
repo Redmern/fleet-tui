@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Fleet.Ports.Git;
+using Fleet.Ports.Git.Models;
 
 namespace Fleet.Platform.Git;
 
@@ -34,8 +35,6 @@ public sealed class GitRunner(string executable = "git") : IGitRunner
         }
         catch (System.ComponentModel.Win32Exception e)
         {
-            // git missing from PATH is reported as a result, not an exception:
-            // doctor needs to say so rather than crash.
             return new GitResult(127, string.Empty, e.Message);
         }
 
@@ -45,8 +44,6 @@ public sealed class GitRunner(string executable = "git") : IGitRunner
             process.StandardInput.Close();
         }
 
-        // Both streams must be drained concurrently with the wait, or a command
-        // producing more output than the pipe buffer deadlocks.
         var stdout = process.StandardOutput.ReadToEndAsync(ct);
         var stderr = process.StandardError.ReadToEndAsync(ct);
         await process.WaitForExitAsync(ct).ConfigureAwait(false);

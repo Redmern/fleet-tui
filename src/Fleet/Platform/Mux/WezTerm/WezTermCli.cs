@@ -1,15 +1,10 @@
 using System.Diagnostics;
-using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Exceptions;
 
 namespace Fleet.Platform.Mux.WezTerm;
 
-/// <summary>Runs `wezterm cli ...` with a bounded timeout.</summary>
 public sealed class WezTermCli(string executable = "wezterm")
 {
-    /// <summary>
-    /// WezTerm answers in single-digit milliseconds. Anything slower means the mux
-    /// is wedged, and degrading beats hanging a dashboard refresh.
-    /// </summary>
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(5);
 
     public async Task<string> RunAsync(IReadOnlyList<string> args, CancellationToken ct = default)
@@ -42,8 +37,6 @@ public sealed class WezTermCli(string executable = "wezterm")
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(Timeout);
 
-        // Drained concurrently with the wait: a command producing more output than
-        // the pipe buffer would otherwise deadlock.
         var stdout = process.StandardOutput.ReadToEndAsync(deadline.Token);
         var stderr = process.StandardError.ReadToEndAsync(deadline.Token);
 
@@ -81,7 +74,6 @@ public sealed class WezTermCli(string executable = "wezterm")
         catch (Exception e)
             when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            // Already gone.
         }
     }
 }

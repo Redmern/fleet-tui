@@ -1,15 +1,11 @@
 using Fleet.Features.Repositories;
 using Fleet.Features.Repositories.AddRepository;
+using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Platform.Git;
 
 namespace Fleet.Tests.Features.Repositories;
 
-/// <summary>
-/// These run real git against temp directories. Mocks would prove nothing here:
-/// the whole point is that the plumbing sequence for an empty bare repository
-/// actually works.
-/// </summary>
 public sealed class AddRepositoryTests : IDisposable
 {
     private readonly string _root =
@@ -28,7 +24,6 @@ public sealed class AddRepositoryTests : IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Leftover temp directories are not worth failing a test over.
         }
     }
 
@@ -91,7 +86,6 @@ public sealed class AddRepositoryTests : IDisposable
     [Fact]
     public async Task Cloning_a_url_creates_the_default_branch_worktree()
     {
-        // An origin to clone from: a bare repo that already has one commit.
         await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin.git", "main"));
         var origin = Path.Combine(_root, "origin.git");
 

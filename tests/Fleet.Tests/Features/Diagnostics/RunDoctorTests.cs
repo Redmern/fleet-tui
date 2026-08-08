@@ -1,19 +1,14 @@
 using Fleet.Features.Diagnostics.RunDoctor;
+using Fleet.Features.Diagnostics.RunDoctor.Models;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports;
 using Fleet.Ports.Projects;
+using Fleet.Ports.Projects.Models;
 
 namespace Fleet.Tests.Features.Diagnostics;
 
 public class RunDoctorTests
 {
-    private static RunDoctorHandler Handler(
-        bool muxAvailable = true, string? git = "git version 2.52.0") =>
-        new(new FakeMuxDriver { Available = muxAvailable },
-            new EmptyStore(),
-            new NullLog(),
-            () => Task.FromResult(git));
-
     [Fact]
     public async Task Reports_healthy_when_the_mux_answers_and_git_is_present()
     {
@@ -27,7 +22,8 @@ public class RunDoctorTests
     [Fact]
     public async Task Reports_a_problem_when_the_mux_is_unreachable()
     {
-        var report = await Handler(muxAvailable: false).HandleAsync(new RunDoctorCommand("fake", null));
+        var report = await Handler(muxAvailable: false)
+            .HandleAsync(new RunDoctorCommand("fake", null));
 
         Assert.False(report.Healthy);
         Assert.Contains(report.Problems, p => p.Contains("multiplexer"));
@@ -61,11 +57,22 @@ public class RunDoctorTests
         Assert.Equal(3, report.Problems.Count);
     }
 
+    private static RunDoctorHandler Handler(
+        bool muxAvailable = true, string? git = "git version 2.52.0") =>
+        new(new FakeMuxDriver { Available = muxAvailable },
+            new EmptyStore(),
+            new NullLog(),
+            () => Task.FromResult(git));
+
     private sealed class NullLog : IFleetLog
     {
-        public void Swallowed(Exception e) { }
+        public void Swallowed(Exception e)
+        {
+        }
 
-        public void Write(string line) { }
+        public void Write(string line)
+        {
+        }
 
         public IReadOnlyList<string> Tail(int lines) => [];
     }
@@ -76,8 +83,12 @@ public class RunDoctorTests
 
         public IReadOnlyList<Project> List() => [];
 
-        public void Save(Project project) { }
+        public void Save(Project project)
+        {
+        }
 
-        public void Remove(string name) { }
+        public void Remove(string name)
+        {
+        }
     }
 }

@@ -1,8 +1,8 @@
 using Fleet.Features.Projects.OpenProject;
+using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Fake;
-using Fleet.Ports.Mux;
-using Fleet.Ports.Projects;
+using Fleet.Ports.Projects.Models;
 
 namespace Fleet.Tests.Features.Projects;
 

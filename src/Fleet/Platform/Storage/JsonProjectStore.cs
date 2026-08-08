@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Fleet.Platform.Storage.Models;
 using Fleet.Ports.Projects;
+using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 
 namespace Fleet.Platform.Storage;
@@ -54,8 +56,6 @@ public sealed class JsonProjectStore : IProjectStore
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
-            // One corrupt or locked file must not look like a missing project to
-            // the caller and must not hide every other project from List().
             return null;
         }
     }
@@ -88,7 +88,6 @@ public sealed class JsonProjectStore : IProjectStore
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Removing a project that is already gone is not a failure.
         }
     }
 

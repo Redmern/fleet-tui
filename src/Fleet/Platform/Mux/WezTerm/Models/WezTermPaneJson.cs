@@ -1,8 +1,7 @@
 using System.Text.Json.Serialization;
 
-namespace Fleet.Platform.Mux.WezTerm;
+namespace Fleet.Platform.Mux.WezTerm.Models;
 
-/// <summary>One row of `wezterm cli list --format json`.</summary>
 public sealed class WezTermPaneJson
 {
     [JsonPropertyName("window_id")]
@@ -29,6 +28,3 @@ public sealed class WezTermPaneJson
     [JsonPropertyName("is_active")]
     public bool IsActive { get; set; }
 }
-
-[JsonSerializable(typeof(WezTermPaneJson[]))]
-public partial class WezTermJsonContext : JsonSerializerContext;

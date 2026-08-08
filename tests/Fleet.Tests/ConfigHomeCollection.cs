@@ -1,22 +1,11 @@
 namespace Fleet.Tests;
 
-/// <summary>
-/// Serializes every test class that redirects FLEET_CONFIG_HOME.
-///
-/// Environment variables are process-global, and xunit runs test classes in
-/// parallel by default, so without this two classes pointing the config
-/// directory at different temp folders would interfere non-deterministically.
-/// </summary>
 [CollectionDefinition(Name)]
 public sealed class ConfigHomeCollection
 {
     public const string Name = "config-home";
 }
 
-/// <summary>
-/// Redirects FLEET_CONFIG_HOME at a fresh temp directory for the life of one
-/// test class, and removes it afterwards.
-/// </summary>
 public abstract class ConfigHomeFixture : IDisposable
 {
     protected ConfigHomeFixture()
@@ -46,7 +35,6 @@ public abstract class ConfigHomeFixture : IDisposable
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // A leftover temp directory is not worth failing a test over.
         }
     }
 }

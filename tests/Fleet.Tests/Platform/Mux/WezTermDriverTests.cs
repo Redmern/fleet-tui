@@ -1,14 +1,10 @@
 using Fleet.Platform.Mux.WezTerm;
+using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Tests.Platform.Mux;
 
 public class WezTermDriverTests
 {
-    /// <summary>
-    /// Captured verbatim from `wezterm cli list --format json` on
-    /// wezterm 20260117-154428-05343b38, trimmed to two panes. Includes the fields
-    /// fleet ignores, because silently depending on their absence would be a lie.
-    /// </summary>
     private const string RealOutput = """
         [
           {
@@ -65,8 +61,6 @@ public class WezTermDriverTests
     [Fact]
     public void ParsePanes_treats_the_tab_as_the_window()
     {
-        // WezTerm's "tab" is fleet's "window": one project per tab, split into a
-        // harness pane and a dashboard pane. Both panes above share tab 58.
         var panes = WezTermDriver.ParsePanes(RealOutput);
 
         Assert.Single(panes.Select(p => p.WindowId).Distinct());
@@ -87,8 +81,8 @@ public class WezTermDriverTests
     {
         var panes = WezTermDriver.ParsePanes(RealOutput);
 
-        Assert.Equal("~/repos/fleet", panes[0].Title);   // tab_title was ""
-        Assert.Equal("backend", panes[1].Title);         // tab_title was set
+        Assert.Equal("~/repos/fleet", panes[0].Title);
+        Assert.Equal("backend", panes[1].Title);
     }
 
     [Fact]

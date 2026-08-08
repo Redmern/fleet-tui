@@ -1,4 +1,4 @@
-using Fleet.Shared;
+using Fleet.Shared.Results;
 
 namespace Fleet.Tests.Shared;
 

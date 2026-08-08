@@ -2,29 +2,19 @@ using System.Reflection;
 
 namespace Fleet.Tests.Architecture;
 
-/// <summary>
-/// The layout rules from docs/PHASE1-PLAN.md, enforced mechanically.
-///
-/// Scans source text rather than using reflection: a reference inside a method
-/// body is caught, which a signature-level reflection check would miss, and no
-/// fragile IL parsing is needed.
-///
-/// Known gap, stated rather than hidden: a violation written without naming the
-/// namespace — a same-namespace type, or a global using — slips past. If that
-/// ever happens in practice, add NetArchTest.Rules alongside these rather than
-/// replacing them.
-/// </summary>
 public class SliceBoundaryTests
 {
     private const string PlatformNamespace = "Fleet.Platform";
     private const string FeaturesNamespace = "Fleet.Features";
+    private const string PortsNamespace = "Fleet.Ports";
+    private const string UiNamespace = "Fleet.Ui";
 
     private static string RepoRoot { get; } =
         typeof(SliceBoundaryTests).Assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => a.Key == "RepoRoot")?.Value
         ?? throw new InvalidOperationException(
-            "RepoRoot assembly metadata is missing — see Fleet.Tests.csproj");
+            "RepoRoot assembly metadata is missing - see Fleet.Tests.csproj");
 
     private static string SrcDir => Path.Combine(RepoRoot, "src", "Fleet");
 
@@ -103,7 +93,22 @@ public class SliceBoundaryTests
     public void Ports_depend_on_nothing_but_Shared()
     {
         var violations = CsFiles(Path.Combine(SrcDir, "Ports"))
-            .Where(f => Mentions(PlatformNamespace)(f) || Mentions(FeaturesNamespace)(f))
+            .Where(f => Mentions(PlatformNamespace)(f)
+                     || Mentions(FeaturesNamespace)(f)
+                     || Mentions(UiNamespace)(f))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Ui_depends_on_nothing_but_Shared()
+    {
+        var violations = CsFiles(Path.Combine(SrcDir, "Ui"))
+            .Where(f => Mentions(PlatformNamespace)(f)
+                     || Mentions(FeaturesNamespace)(f)
+                     || Mentions(PortsNamespace)(f))
             .Select(Relative)
             .ToList();
 
@@ -116,38 +121,14 @@ public class SliceBoundaryTests
         var violations = CsFiles(Path.Combine(SrcDir, "Shared"))
             .Where(f => Mentions(PlatformNamespace)(f)
                      || Mentions(FeaturesNamespace)(f)
-                     || Mentions("Fleet.Ports")(f)
-                     || Mentions("Fleet.Ui")(f))
+                     || Mentions(PortsNamespace)(f)
+                     || Mentions(UiNamespace)(f))
             .Select(Relative)
             .ToList();
 
         Assert.Empty(violations);
     }
 
-    /// <summary>
-    /// Ui/ is the styling system: presentation shared by every slice. It may use
-    /// Shared, and nothing else inside Fleet — a theme that knew about a slice, a
-    /// port or an adapter would stop being reusable and start being a dependency
-    /// cycle waiting to happen.
-    /// </summary>
-    [Fact]
-    public void Ui_depends_on_nothing_but_Shared()
-    {
-        var violations = CsFiles(Path.Combine(SrcDir, "Ui"))
-            .Where(f => Mentions(PlatformNamespace)(f)
-                     || Mentions(FeaturesNamespace)(f)
-                     || Mentions("Fleet.Ports")(f))
-            .Select(Relative)
-            .ToList();
-
-        Assert.Empty(violations);
-    }
-
-    /// <summary>
-    /// The point of the styling system: no view sets its own colours or border
-    /// style. If a slice reaches for a palette or a scheme directly, the
-    /// application drifts out of visual step one dialog at a time.
-    /// </summary>
     [Fact]
     public void No_slice_styles_itself()
     {
@@ -162,18 +143,42 @@ public class SliceBoundaryTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void No_source_file_contains_a_comment()
+    {
+        var violations = new List<string>();
+
+        foreach (var file in CsFiles(SrcDir))
+        {
+            var lineNumber = 0;
+
+            foreach (var line in File.ReadLines(file))
+            {
+                lineNumber++;
+                var trimmed = line.TrimStart();
+
+                if (trimmed.StartsWith("//", StringComparison.Ordinal)
+                    || trimmed.StartsWith("/*", StringComparison.Ordinal))
+                {
+                    violations.Add($"{Relative(file)}:{lineNumber}");
+                }
+            }
+        }
+
+        Assert.Empty(violations);
+    }
+
     private static Func<string, bool> Mentions(string ns) =>
         file => File.ReadAllText(file).Contains(ns, StringComparison.Ordinal);
 
     private static IReadOnlyList<string> CsFiles(string dir) =>
         Directory.Exists(dir)
             ? Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories)
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                            StringComparison.OrdinalIgnoreCase))
+                .ToList()
             : [];
 
-    /// <summary>
-    /// Features/&lt;Area&gt;/&lt;Slice&gt;/... — null for a file sitting above
-    /// slice level, which is the area-shared case and is allowed.
-    /// </summary>
     private static (string Area, string Slice)? SliceOf(string file)
     {
         var parts = Path.GetRelativePath(FeaturesDir, file).Replace('\\', '/').Split('/');

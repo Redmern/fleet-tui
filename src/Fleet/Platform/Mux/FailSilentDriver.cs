@@ -1,26 +1,10 @@
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
+using Fleet.Ports.Mux.Exceptions;
+using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Platform.Mux;
 
-/// <summary>
-/// Enforces fleet's fail-silent invariant once, instead of at every call site.
-///
-/// Reads degrade to empty results and writes become no-ops when the multiplexer
-/// is unreachable. C# propagates exceptions by default, which is exactly
-/// backwards for this invariant, so command code is only ever handed a wrapped
-/// driver.
-///
-/// Three carve-outs, because "swallow everything" is its own bug:
-/// <list type="bullet">
-///   <item>Only expected failure types are caught. A programmer error still
-///   propagates: a bad argument is a defect, not a closed terminal.</item>
-///   <item>Everything swallowed is reported to <paramref name="onSwallowed"/>, so
-///   silent never means invisible.</item>
-///   <item>Destructive operations must NOT be routed through this. A teardown
-///   that silently "succeeds" while the worktree is still on disk is how state
-///   diverges from reality.</item>
-/// </list>
-/// </summary>
 public sealed class FailSilentDriver(IMuxDriver inner, Action<Exception> onSwallowed) : IMuxDriver
 {
     public string Name => inner.Name;

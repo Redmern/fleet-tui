@@ -1,5 +1,8 @@
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
+using Fleet.Ports.Mux.Exceptions;
+using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Tests.Platform.Mux;
 

@@ -1,21 +1,11 @@
 using Fleet.Features.Projects.PickProject;
 using Fleet.Ports.Projects;
+using Fleet.Ports.Projects.Models;
 
 namespace Fleet.Tests.Features.Projects;
 
 public class PickProjectTests
 {
-    private sealed class StubStore(params Project[] projects) : IProjectStore
-    {
-        public Project? Load(string name) => projects.FirstOrDefault(p => p.Name == name);
-
-        public IReadOnlyList<Project> List() => projects;
-
-        public void Save(Project project) => throw new NotSupportedException();
-
-        public void Remove(string name) => throw new NotSupportedException();
-    }
-
     [Fact]
     public void With_no_saved_projects_only_the_new_entry_is_offered()
     {
@@ -56,5 +46,16 @@ public class PickProjectTests
         var entries = new PickProjectHandler(new StubStore(project)).Entries();
 
         Assert.Same(project, entries[0].Project);
+    }
+
+    private sealed class StubStore(params Project[] projects) : IProjectStore
+    {
+        public Project? Load(string name) => projects.FirstOrDefault(p => p.Name == name);
+
+        public IReadOnlyList<Project> List() => projects;
+
+        public void Save(Project project) => throw new NotSupportedException();
+
+        public void Remove(string name) => throw new NotSupportedException();
     }
 }

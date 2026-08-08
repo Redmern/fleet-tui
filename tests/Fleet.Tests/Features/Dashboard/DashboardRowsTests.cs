@@ -1,4 +1,5 @@
 using Fleet.Features.Dashboard.ShowDashboard;
+using Fleet.Features.Dashboard.ShowDashboard.Models;
 
 namespace Fleet.Tests.Features.Dashboard;
 

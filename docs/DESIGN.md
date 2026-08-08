@@ -806,6 +806,69 @@ tested against captured output, so a renamed field fails a test rather than
 surfacing at runtime. Note `cwd` arrives with a trailing slash
 (`file:///C:/repos/fleet/`).
 
+## Non-obvious behaviour
+
+The codebase carries no comments by project convention, enforced by
+`SliceBoundaryTests.No_source_file_contains_a_comment`. Everything that would
+have been a comment lives here instead.
+
+**Terminal.Gui v2.4 traps**
+
+- `Enter` raises `Accepting` (`Command.Accept`). `Activated` is a *different*
+  command and is not raised by Enter. Wiring `Activated` meant nothing could be
+  opened from the picker.
+- A parent `Window`'s `KeyDown` does not fire for keys the focused child claims
+  through its own key bindings. Handlers belong on the focused view, or on
+  `KeyDownNotHandled`. This is why `q` did nothing.
+- The static `Application` facade is `[Obsolete]`. Use
+  `IApplication app = Application.Create().Init()`; `ApplicationImpl` is
+  internal. `MessageBox.Query`/`ErrorQuery` take the `IApplication` first and
+  return `int?`.
+- `CommandEventArgs` has no `Cancel`, so a `Dialog`'s button handling cannot be
+  suppressed on failed validation. fleet's modals are plain `Window`s, which
+  close only when told — that is what lets a rejected entry stay on screen.
+- No `RadioGroup` exists; `CheckBox.Value` is a `CheckState`. No
+  `Colors`/`ColorScheme`; use `Scheme`, `SchemeManager` and `View.SchemeName`.
+- `ListView.SelectedItem` is `int?`. Motion commands are bound via
+  `View.KeyBindings.Add(key, Command.Down)` and friends.
+- `Terminal.Gui.Drawing.Attribute` collides with `System.Attribute` under
+  `ImplicitUsings`; alias it.
+
+**WezTerm driver**
+
+- `activate-tab` takes `--tab-id`, not `--pane-id`.
+- `cwd` arrives as a `file://` URL: `file:///C:/repos/x` on Windows, where the
+  leading slash before the drive letter must be dropped, and `file:///home/red/x`
+  on Unix, where it must be kept. It also has a trailing slash.
+- WezTerm numbers panes from 0, so "no pane" cannot be 0. `PaneId.None` is empty.
+- `--workspace` is rejected unless combined with `--new-window`.
+- A WezTerm "tab" is what fleet calls a window.
+
+**Git**
+
+- `git worktree add` fails on a freshly `init --bare` repository because there is
+  no HEAD commit. `AddRepositoryHandler` seeds one with plumbing: `mktree` on
+  empty stdin, `commit-tree`, `update-ref`, `symbolic-ref`. Chosen over
+  `worktree add --orphan`, which needs git 2.42+.
+- Both git output streams must be drained concurrently with the wait, or a
+  command producing more than the pipe buffer deadlocks.
+
+**Platform**
+
+- `Path.GetTempPath()` on Windows is inside the user profile, so it is not a
+  valid "outside home" fixture.
+- `Path.GetFullPath` does not validate characters on modern .NET; an illegal path
+  is only refused by `Directory.CreateDirectory`.
+- Records reserve the member name `Clone` (CS8859) — hence `CloneFrom`.
+- `IsAotCompatible` must not be set repository-wide: xunit is reflection-based,
+  and with `TreatWarningsAsErrors` it would fail the test build. It lives in
+  `src/Fleet/Fleet.csproj` alone.
+- NativeAOT on Windows needs `vswhere` on `PATH`; `install.ps1` adds it.
+- Windows locks a running executable, so `install.ps1` stops running `fleet`
+  processes before replacing the binary.
+- `FailSilentDriver` catches only expected failure types, and `IsAvailableAsync`
+  returning `false` is an answer rather than a swallowed failure.
+
 ## Still to verify
 
 - `Porta.Pty` under NativeAOT on both Windows and Linux, including its

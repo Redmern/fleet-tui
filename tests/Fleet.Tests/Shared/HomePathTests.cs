@@ -24,11 +24,6 @@ public class HomePathTests
     [Fact]
     public void Contract_leaves_a_path_outside_home_alone()
     {
-        // Not Path.GetTempPath(): on Windows that is
-        // C:\Users\<user>\AppData\Local\Temp, which IS under home, so Contract
-        // would correctly return a "~" path and the test would be asserting the
-        // wrong thing. Anchor off the filesystem root instead — outside home on
-        // both platforms.
         var root = Path.GetPathRoot(Environment.CurrentDirectory)
                    ?? Path.DirectorySeparatorChar.ToString();
         var path = Path.Combine(root, "fleet-outside-home");

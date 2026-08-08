@@ -1,16 +1,11 @@
 using System.Collections.Concurrent;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
+using Fleet.Ports.Mux.Exceptions;
+using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Platform.Mux.Fake;
 
-/// <summary>
-/// Deterministic in-memory multiplexer. Pane ids are sequential ("p1", "p2", ...)
-/// and window ids likewise ("w1", "w2", ...), so assertions can be written
-/// against them.
-///
-/// Built before any real driver, because it is what makes every slice testable
-/// with no terminal on either operating system.
-/// </summary>
 public sealed class FakeMuxDriver : IMuxDriver
 {
     private readonly ConcurrentDictionary<string, Entry> _panes = new();
@@ -21,7 +16,6 @@ public sealed class FakeMuxDriver : IMuxDriver
 
     public MuxCaps Caps => MuxCaps.Split | MuxCaps.Zoom | MuxCaps.Persist;
 
-    /// <summary>Set to false to simulate a multiplexer that is not installed or not running.</summary>
     public bool Available { get; set; } = true;
 
     public PaneId CurrentPane { get; set; } = PaneId.None;
@@ -96,11 +90,9 @@ public sealed class FakeMuxDriver : IMuxDriver
         return Task.CompletedTask;
     }
 
-    /// <summary>Test helper: the command line a pane was created with.</summary>
     public IReadOnlyList<string> ArgsFor(PaneId id) =>
         _panes.TryGetValue(id.Value, out var e) ? e.Args : [];
 
-    /// <summary>Test helper: the title a pane's window was last given.</summary>
     public string TitleOf(PaneId id) =>
         _panes.TryGetValue(id.Value, out var e) ? e.Pane.Title : string.Empty;
 

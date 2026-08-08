@@ -18,7 +18,6 @@ public sealed class FileLog : IFleetLog
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // Logging must never be the thing that breaks a command.
         }
     }
 

@@ -1,4 +1,6 @@
 using Fleet.Features.Projects.CreateProject;
+using Fleet.Features.Projects.CreateProject.Enums;
+using Fleet.Features.Projects.CreateProject.Models;
 using Fleet.Platform.Storage;
 
 namespace Fleet.Tests.Features.Projects;
@@ -62,8 +64,6 @@ public sealed class CreateProjectTests : ConfigHomeFixture
 
         Assert.Empty(new JsonProjectStore().List());
     }
-
-    // --- missing root directory --------------------------------------------
 
     [Fact]
     public void A_missing_root_asks_for_confirmation_rather_than_failing()
@@ -130,8 +130,6 @@ public sealed class CreateProjectTests : ConfigHomeFixture
     [Fact]
     public void A_name_is_still_validated_before_offering_to_create_a_directory()
     {
-        // Order matters: a rejected name must not produce a prompt offering to
-        // create a directory that would then be unusable.
         var reply = Handler().Handle(new CreateProjectCommand("...", AMissingRoot()));
 
         Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
@@ -142,13 +140,9 @@ public sealed class CreateProjectTests : ConfigHomeFixture
     {
         if (!OperatingSystem.IsWindows())
         {
-            return;   // "|" is a legal filename character on Unix
+            return;
         }
 
-        // Path.GetFullPath does NOT validate characters on modern .NET, so an
-        // illegal path gets as far as the confirmation prompt. It is Directory
-        // .CreateDirectory that refuses, and that failure must surface as a
-        // rejection with a reason rather than as an unhandled exception.
         const string illegal = "C:\\bad|path";
 
         Assert.Equal(

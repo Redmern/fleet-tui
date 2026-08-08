@@ -1,5 +1,6 @@
 using Fleet.Platform.Storage;
 using Fleet.Ports.Projects;
+using Fleet.Ports.Projects.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 

@@ -1,9 +1,5 @@
 namespace Fleet.Shared;
 
-/// <summary>
-/// Stores paths under the home directory as "~/..." so a saved project is
-/// portable between machines and user profiles.
-/// </summary>
 public static class HomePath
 {
     public static string Contract(string path)
@@ -31,8 +27,6 @@ public static class HomePath
 
     public static string Expand(string path)
     {
-        // Only a leading "~" followed by a separator counts, so a directory
-        // genuinely named "~backup" is left alone.
         if (path != "~" && !path.StartsWith("~/") && !path.StartsWith("~\\"))
         {
             return path;
@@ -47,7 +41,6 @@ public static class HomePath
         return path == "~" ? home : Path.Combine(home, path[2..]);
     }
 
-    // Windows paths are case-insensitive; Linux paths are not.
     private static StringComparison Comparison =>
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 

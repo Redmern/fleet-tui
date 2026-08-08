@@ -1,17 +1,10 @@
+using Fleet.Features.Repositories.ListRepositories.Models;
 using Fleet.Ports.Git;
 
 namespace Fleet.Features.Repositories.ListRepositories;
 
-public sealed record RepositorySummary(string Name, string Path, string DefaultBranch);
-
 public sealed class ListRepositoriesHandler(IGitRunner git)
 {
-    /// <summary>
-    /// Bare containers directly under the project root, sorted by name.
-    ///
-    /// Anything that is not a bare repository is skipped rather than reported: a
-    /// stray directory in a project root is normal, not an error.
-    /// </summary>
     public async Task<IReadOnlyList<RepositorySummary>> HandleAsync(
         string projectRoot, CancellationToken ct = default)
     {

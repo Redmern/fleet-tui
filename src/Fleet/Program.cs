@@ -1,13 +1,18 @@
 using Fleet.Features.Dashboard.ShowDashboard;
+using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Diagnostics.RunDoctor;
+using Fleet.Features.Diagnostics.RunDoctor.Models;
 using Fleet.Features.Projects.CreateProject;
 using Fleet.Features.Projects.OpenProject;
+using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.PickProject;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Platform.Git;
 using Fleet.Platform.Logging;
 using Fleet.Platform.Mux;
+using Fleet.Platform.Mux.Constants;
+using Fleet.Platform.Mux.Models;
 using Fleet.Platform.Mux.WezTerm;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
@@ -19,11 +24,6 @@ using Terminal.Gui.App;
 
 namespace Fleet;
 
-/// <summary>
-/// The composition root: the only file permitted to name a Fleet.Platform type,
-/// and the only place slices are wired to one another. Everything arrives by
-/// constructor or callback, so no slice needs a service locator to find anything.
-/// </summary>
 public static class Program
 {
     public static async Task<int> Main(string[] args) =>
@@ -36,48 +36,34 @@ public static class Program
             var verb => Unknown(verb),
         };
 
-    // --- adapters ----------------------------------------------------------
-
     private static IFleetLog NewLog() => new FileLog();
 
     private static IProjectStore NewProjectStore() => new JsonProjectStore();
 
     private static IGitRunner NewGit() => new GitRunner();
 
-    /// <summary>
-    /// Resolves the driver and wraps it, so no slice ever sees a raw one.
-    ///
-    /// Phase 1 implements wezterm only. tmux and embedded are reported as
-    /// unsupported rather than silently substituted.
-    /// </summary>
     private static IMuxDriver NewMux(IFleetLog log, out string chosen, out string? unsupported)
     {
         chosen = DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath));
 
-        unsupported = chosen == DriverSelector.WezTerm
+        unsupported = chosen == DriverNames.WezTerm
             ? null
             : $"the '{chosen}' driver is not implemented yet (phase 1 ships wezterm only)";
 
         return new FailSilentDriver(new WezTermDriver(), log.Swallowed);
     }
 
-    // --- commands ----------------------------------------------------------
-
     private static async Task<int> PickAndOpenAsync()
     {
         var store = NewProjectStore();
         var creator = new CreateProjectHandler(store);
 
-        Ports.Projects.Project? project;
+        Ports.Projects.Models.Project? project;
 
-        // Application.Create().Init() is Terminal.Gui v2's instance model; the
-        // static Application facade is marked obsolete. Disposing shuts it down.
         using (IApplication app = Application.Create().Init())
         {
             FleetTheme.Register();
 
-            // The picker never names the CreateProject slice: it asks for a project
-            // through this callback, and only this file knows both slices exist.
             project = PickProjectView.Show(
                 app,
                 new PickProjectHandler(store),
@@ -86,7 +72,7 @@ public static class Program
 
         if (project is null)
         {
-            return 0;   // quitting the picker is not a failure
+            return 0;
         }
 
         var log = NewLog();
@@ -101,9 +87,6 @@ public static class Program
         var result = await new OpenProjectHandler(mux).HandleAsync(new OpenProjectCommand(
                 project,
                 Harness: "claude",
-
-                // This binary, not the literal "fleet": during development nothing
-                // by that name resolves on PATH.
                 FleetExecutable: Environment.ProcessPath ?? "fleet"))
             .ConfigureAwait(false);
 
@@ -142,23 +125,23 @@ public static class Program
         FleetTheme.Register();
 
         ShowDashboardView.Show(app, project.Name, new DashboardCallbacks(
-                LoadRepositories: async () =>
-                    (await lister.HandleAsync(project.Root).ConfigureAwait(false))
-                        .Select(r => (r.Name, r.DefaultBranch))
-                        .ToList(),
+            LoadRepositories: async () =>
+                (await lister.HandleAsync(project.Root).ConfigureAwait(false))
+                    .Select(r => (r.Name, r.DefaultBranch))
+                    .ToList(),
 
-                AddRepository: async () =>
+            AddRepository: async () =>
+            {
+                var request = AddRepositoryView.Show(app, project.Root);
+
+                if (request is null)
                 {
-                    var request = AddRepositoryView.Show(app, project.Root);
+                    return null;
+                }
 
-                    if (request is null)
-                    {
-                        return null;   // cancelled
-                    }
-
-                    var outcome = await adder.HandleAsync(request).ConfigureAwait(false);
-                    return outcome.Succeeded ? null : outcome.Error;
-                }));
+                var outcome = await adder.HandleAsync(request).ConfigureAwait(false);
+                return outcome.Succeeded ? null : outcome.Error;
+            }));
 
         return 0;
     }
@@ -209,8 +192,6 @@ public static class Program
         Console.WriteLine(report.Healthy ? "OK" : $"{report.Problems.Count} problem(s)");
         return report.Healthy ? 0 : 1;
     }
-
-    // --- helpers -----------------------------------------------------------
 
     private static string? ValueOf(string[] args, string flag)
     {

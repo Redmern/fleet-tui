@@ -1,4 +1,5 @@
 using Fleet.Platform.Mux;
+using Fleet.Platform.Mux.Models;
 
 namespace Fleet.Tests.Platform.Mux;
 

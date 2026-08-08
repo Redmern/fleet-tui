@@ -1,6 +1,9 @@
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
+using Fleet.Ports.Mux.Exceptions;
+using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Tests.Platform.Mux;
 
@@ -17,15 +20,11 @@ public class FailSilentDriverTests
         Assert.Equal(PaneId.None, await mux.SplitAsync(
             new SplitOptions(new PaneId("p1"), SplitDirection.Right)));
 
-        // Writes must not throw.
         await mux.SetTitleAsync(new PaneId("p1"), "x");
         await mux.FocusPaneAsync(new PaneId("p1"));
 
         Assert.Equal(5, swallowed.Count);
 
-        // Not counted above, deliberately: asking whether the mux is available and
-        // being told "no" is an answer, not a failure. It reports false without
-        // throwing, so there is nothing to swallow.
         Assert.False(await mux.IsAvailableAsync());
         Assert.Equal(5, swallowed.Count);
     }

@@ -1,5 +1,8 @@
 using System.Text.Json;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
+using Fleet.Ports.Mux.Exceptions;
+using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Platform.Mux.WezTerm;
 
@@ -11,14 +14,6 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
 
     public MuxCaps Caps => MuxCaps.Split | MuxCaps.Zoom | MuxCaps.Persist;
 
-    /// <summary>
-    /// The pane fleet is running in, read from WEZTERM_PANE.
-    ///
-    /// Absent is <see cref="PaneId.None"/> and NOT pane 0: WezTerm numbers panes
-    /// from zero, so the first pane of a fresh window really is 0. Treating 0 as
-    /// "no pane" breaks hooks and doctor, but only on a freshly started terminal —
-    /// which is exactly when it is least expected.
-    /// </summary>
     public PaneId CurrentPane
     {
         get
@@ -26,6 +21,20 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             var raw = Environment.GetEnvironmentVariable("WEZTERM_PANE");
             return string.IsNullOrWhiteSpace(raw) ? PaneId.None : new PaneId(raw.Trim());
         }
+    }
+
+    public static IReadOnlyList<Pane> ParsePanes(string json)
+    {
+        var rows = JsonSerializer.Deserialize(json, WezTermJsonContext.Default.WezTermPaneJsonArray)
+                   ?? [];
+
+        return rows.Select(r => new Pane(
+            Id: new PaneId(r.PaneId.ToString()),
+            WindowId: r.TabId.ToString(),
+            SessionName: r.Workspace,
+            Title: string.IsNullOrEmpty(r.TabTitle) ? r.Title : r.TabTitle,
+            Cwd: CwdUrl.Normalize(r.Cwd),
+            IsActive: r.IsActive)).ToList();
     }
 
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
@@ -47,29 +56,6 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         return ParsePanes(json);
     }
 
-    /// <summary>
-    /// Maps `wezterm cli list --format json` onto panes.
-    ///
-    /// Separated from the process call so it can be tested against real captured
-    /// output — otherwise nothing would catch a renamed field until runtime.
-    /// </summary>
-    public static IReadOnlyList<Pane> ParsePanes(string json)
-    {
-        var rows = JsonSerializer.Deserialize(json, WezTermJsonContext.Default.WezTermPaneJsonArray)
-                   ?? [];
-
-        return rows.Select(r => new Pane(
-            Id: new PaneId(r.PaneId.ToString()),
-
-            // WezTerm's "tab" is the unit fleet treats as a window: one project per
-            // tab, split into a harness pane and a dashboard pane.
-            WindowId: r.TabId.ToString(),
-            SessionName: r.Workspace,
-            Title: string.IsNullOrEmpty(r.TabTitle) ? r.Title : r.TabTitle,
-            Cwd: CwdUrl.Normalize(r.Cwd),
-            IsActive: r.IsActive)).ToList();
-    }
-
     public async Task<PaneId> SpawnAsync(SpawnOptions options, CancellationToken ct = default)
     {
         var args = new List<string> { "spawn" };
@@ -84,8 +70,6 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         {
             args.Add("--new-window");
 
-            // wezterm rejects --workspace combined with a tab spawn, so it is only
-            // passed alongside --new-window.
             if (!string.IsNullOrEmpty(options.SessionName))
             {
                 args.Add("--workspace");
