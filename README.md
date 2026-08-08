@@ -102,7 +102,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `j` / `k` | move down / up |
 | `g` / `G` | first / last |
 | `ctrl+d` / `ctrl+u` | page down / up |
-| `l` or `enter` | open the selection |
+| `h` / `l` | previous / next tab (dashboard) |
+| `l` or `enter` | open the selection (picker) |
 | `n` | new project (picker) |
 | `r` | refresh (dashboard) |
 | `q` | close the pane |
@@ -112,11 +113,24 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 Adding a repository has no bare key on purpose — it lives in the menu only, so
 the dashboard's letters stay free for navigation.
 
+`l` deliberately means two things: next tab in the dashboard, open the selection
+in the picker. Each view resolves keys against its own set of actions, so a
+shared key is never ambiguous.
+
 Every one of these is configurable through **Keybinds** in the menu, including
 the prefix. Changes are saved to `%APPDATA%\fleet\keybinds.json`.
 
 Note that a saved keymap overrides the shipped defaults completely. Once you
 rebind anything, later changes to fleet's defaults will not reach you.
+
+## The dashboard
+
+Two tabs, **Repositories** and **Agents**, switched with `h` / `l` or the arrow
+keys. Each title carries its count, so the tab you are not looking at still tells
+you what is in it.
+
+Escape is swallowed here: the pane closes on `q` or through the menu, never by
+cancelling out of it.
 
 ## Projects and repositories
 

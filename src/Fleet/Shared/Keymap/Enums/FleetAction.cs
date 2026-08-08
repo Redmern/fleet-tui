@@ -16,4 +16,6 @@ public enum FleetAction
     MoveLast,
     PageDown,
     PageUp,
+    PrevTab,
+    NextTab,
 }

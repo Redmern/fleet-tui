@@ -1,0 +1,29 @@
+using Fleet.Features.Dashboard.ShowDashboard;
+
+namespace Fleet.Tests.Features.Dashboard;
+
+public class DashboardTabsTests
+{
+    [Fact]
+    public void A_tab_title_carries_its_count_because_the_other_tab_is_hidden()
+    {
+        Assert.Equal("Repositories (2)", DashboardTabs.Repositories(2));
+        Assert.Equal("Agents (0)", DashboardTabs.Agents(0));
+    }
+
+    [Theory]
+    [InlineData(0, 1, 1)]
+    [InlineData(1, 1, 0)]
+    [InlineData(0, -1, 1)]
+    [InlineData(1, -1, 0)]
+    public void Stepping_past_either_end_wraps_around(int current, int delta, int expected)
+    {
+        Assert.Equal(expected, DashboardTabs.Step(current, delta, 2));
+    }
+
+    [Fact]
+    public void Stepping_with_no_tabs_stays_put_rather_than_dividing_by_zero()
+    {
+        Assert.Equal(0, DashboardTabs.Step(0, 1, 0));
+    }
+}

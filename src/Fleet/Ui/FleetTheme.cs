@@ -58,6 +58,32 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Screen,
     };
 
+    public static Tabs TabStrip(Pos x, Pos y, Dim height) => new()
+    {
+        X = x,
+        Y = y,
+        Width = Dim.Fill(),
+        Height = height,
+        TabLineStyle = Border,
+        SchemeName = FleetSchemes.Screen,
+    };
+
+    public static View TabPage(string title) => new()
+    {
+        Title = $" {title} ",
+        Width = Dim.Fill(),
+        Height = Dim.Fill(),
+        SchemeName = FleetSchemes.Screen,
+    };
+
+    public static void RetitleTab(View tab, string title)
+    {
+        tab.Title = $" {title} ";
+        tab.SetNeedsLayout();
+        tab.SuperView?.SetNeedsLayout();
+        tab.SuperView?.SetNeedsDraw();
+    }
+
     public static Label Caption(Pos x, Pos y, string text) => new()
     {
         X = x,

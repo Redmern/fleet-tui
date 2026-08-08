@@ -23,7 +23,7 @@ public static class FleetHintText
         string.Join(
             "   ",
             Motions(keymap),
-            "tab pane",
+            $"{keymap.DisplayFor(FleetAction.PrevTab)}/{keymap.DisplayFor(FleetAction.NextTab)} tab",
             $"{keymap.DisplayFor(FleetAction.Refresh)} refresh",
             $"{keymap.DisplayFor(FleetAction.Close)} close",
             Menu(keymap));

@@ -1099,6 +1099,37 @@ directly, so it would have thrown `KeyNotFoundException` on load. `MergedOverDef
 now drops bindings for actions fleet no longer has, and the lookup is a
 `TryGetValue`. Any future retired action is safe by the same route.
 
+### The dashboard's two sections are tabs — 2026-08-09
+
+`Terminal.Gui.Views.Tabs` (v2's replacement for `TabView`) holds one `View` per
+section; the selected tab is whichever subview has focus, and `Tabs.Value` sets
+it programmatically. Switching is `h` / `l` plus the arrow keys.
+
+Three things this cost, all found by driving a real dashboard through
+`wezterm cli spawn` + `get-text` rather than by reading the API:
+
+1. **A changed `Title` does not repaint the tab header.** Neither
+   `SetNeedsDraw()` on the container nor on the tab's `Border` was enough — the
+   header span and offsets are recomputed during layout, so the title only
+   appeared after some *other* event forced one (pressing `l` fixed it, which is
+   what gave the diagnosis). `FleetTheme.RetitleTab` sets the title and calls
+   `SetNeedsLayout()` on both the tab and its container.
+2. **The title padding lives in one place.** `TabPage` writes `" {title} "`;
+   assigning `Title` directly elsewhere silently lost the spaces and the tab
+   visibly changed width. `RetitleTab` is the only supported way to change it.
+3. **Counts in the titles** (`Repositories (1)`) exist because a tab hides the
+   other section entirely. Without them the dashboard can only answer "how many
+   agents?" by switching away from what you are reading.
+
+**Keys are now resolved against a scope.** `h`/`l` for tabs put `l` on both
+`NextTab` and `OpenProject`, repeating the `k` = `MoveUp`/`EditKeybinds`
+collision from the day before. Rather than avoid shared keys, `Keymap.ActionFor`
+gained an overload taking the caller's list of candidate actions and resolving in
+that order. The dashboard asks for `Close, Refresh, PrevTab, NextTab`; the picker
+asks for its own. A shared key is now deterministic by construction instead of
+depending on dictionary enumeration order, and vim-style keys can mean different
+things in different views — which is the point of them.
+
 **The `embedded` driver is parked, not cancelled.** Everything the spikes proved
 still holds if headless Windows ever forces it: RoyalApps PTY and hand-written
 ConPTY are both NativeAOT-clean, and the remaining work is the input parser and

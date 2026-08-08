@@ -21,6 +21,8 @@ public static class KeymapDefaults
             [FleetAction.MoveLast] = "G",
             [FleetAction.PageDown] = "Ctrl+D",
             [FleetAction.PageUp] = "Ctrl+U",
+            [FleetAction.PrevTab] = "h",
+            [FleetAction.NextTab] = "l",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -37,6 +39,8 @@ public static class KeymapDefaults
         FleetAction.MoveLast,
         FleetAction.PageDown,
         FleetAction.PageUp,
+        FleetAction.PrevTab,
+        FleetAction.NextTab,
     ];
 
     public static string Describe(FleetAction action) =>
@@ -55,6 +59,8 @@ public static class KeymapDefaults
             FleetAction.MoveLast => "Jump to last",
             FleetAction.PageDown => "Page down",
             FleetAction.PageUp => "Page up",
+            FleetAction.PrevTab => "Previous tab",
+            FleetAction.NextTab => "Next tab",
             _ => action.ToString(),
         };
 }

@@ -53,6 +53,19 @@ public sealed class Keymap
         return FleetAction.None;
     }
 
+    public FleetAction ActionFor(Key key, IReadOnlyList<FleetAction> scope)
+    {
+        foreach (var action in scope)
+        {
+            if (_keys.TryGetValue(action, out var bound) && bound == key)
+            {
+                return action;
+            }
+        }
+
+        return FleetAction.None;
+    }
+
     private static Key Parse(string text, string fallback)
     {
         try

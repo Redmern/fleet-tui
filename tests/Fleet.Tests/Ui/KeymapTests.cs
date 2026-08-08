@@ -63,6 +63,24 @@ public class KeymapTests
     }
 
     [Fact]
+    public void A_scope_decides_which_action_a_shared_key_means()
+    {
+        FleetAction[] dashboard = [FleetAction.NextTab];
+        FleetAction[] picker = [FleetAction.OpenProject];
+
+        Assert.Equal(FleetAction.NextTab, Keymap.Default.ActionFor(Key.L, dashboard));
+        Assert.Equal(FleetAction.OpenProject, Keymap.Default.ActionFor(Key.L, picker));
+    }
+
+    [Fact]
+    public void A_key_outside_the_scope_resolves_to_nothing()
+    {
+        FleetAction[] scope = [FleetAction.Close];
+
+        Assert.Equal(FleetAction.None, Keymap.Default.ActionFor(Key.J, scope));
+    }
+
+    [Fact]
     public void A_custom_binding_overrides_the_default()
     {
         var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.Close, "x"));

@@ -43,6 +43,28 @@ public class DashboardKeysTests
         Assert.False(DashboardKeys.For(Key.A, Map).Consume);
     }
 
+    [Fact]
+    public void Tabs_are_switched_with_h_and_l()
+    {
+        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.H, Map).Action);
+        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map).Action);
+    }
+
+    [Fact]
+    public void The_arrow_keys_switch_tabs_too()
+    {
+        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.CursorLeft, Map).Action);
+        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.CursorRight, Map).Action);
+    }
+
+    [Fact]
+    public void The_next_tab_key_wins_over_open_project_which_shares_it()
+    {
+        Assert.Equal(Map.KeyFor(FleetAction.OpenProject), Map.KeyFor(FleetAction.NextTab));
+
+        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map).Action);
+    }
+
     [Theory]
     [InlineData("J")]
     [InlineData("K")]
