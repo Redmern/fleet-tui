@@ -1101,25 +1101,35 @@ now drops bindings for actions fleet no longer has, and the lookup is a
 
 ### The dashboard's two sections are tabs — 2026-08-09
 
-`Terminal.Gui.Views.Tabs` (v2's replacement for `TabView`) holds one `View` per
-section; the selected tab is whichever subview has focus, and `Tabs.Value` sets
-it programmatically. Switching is `h` / `l` plus the arrow keys.
+Agents first and selected on open, Repositories second, switched with `h` / `l`
+or the arrow keys. Counts live in the titles (`Repositories (1)`) because a tab
+hides the other section entirely — without them the dashboard can only answer
+"how many agents?" by switching away from what you are reading.
 
-Three things this cost, all found by driving a real dashboard through
-`wezterm cli spawn` + `get-text` rather than by reading the API:
+**Rendered by `FleetTabBar`, not `Terminal.Gui.Views.Tabs`.** The widget was
+tried first and rejected on looks: it draws a full bordered box for the tab strip
+*inside* the window's own border, which is the panel-in-panel the UI is supposed
+to avoid. `FleetTabBar` is a plain row of `Label`s plus a rule under the selected
+one — the active label takes the section scheme, the others the hint scheme, and
+the content lists are swapped with `Visible`. Every cell is under `FleetTheme`.
 
-1. **A changed `Title` does not repaint the tab header.** Neither
-   `SetNeedsDraw()` on the container nor on the tab's `Border` was enough — the
-   header span and offsets are recomputed during layout, so the title only
-   appeared after some *other* event forced one (pressing `l` fixed it, which is
-   what gave the diagnosis). `FleetTheme.RetitleTab` sets the title and calls
-   `SetNeedsLayout()` on both the tab and its container.
-2. **The title padding lives in one place.** `TabPage` writes `" {title} "`;
-   assigning `Title` directly elsewhere silently lost the spaces and the tab
-   visibly changed width. `RetitleTab` is the only supported way to change it.
-3. **Counts in the titles** (`Repositories (1)`) exist because a tab hides the
-   other section entirely. Without them the dashboard can only answer "how many
-   agents?" by switching away from what you are reading.
+The widget also had a repaint trap worth recording in case it comes back: setting
+a tab's `Title` does not repaint its header. The header span and offsets are
+recomputed during *layout*, so `SetNeedsDraw()` on the container or on the tab's
+`Border` leaves the old text until some unrelated event forces a layout. Pressing
+a key fixed the display, which is what gave the diagnosis. `FleetTabBar` sidesteps
+this by owning its own arrangement.
+
+**Keys must be bound at the window, not the list.** The handler was originally on
+each `ListView`'s `KeyDown`. As soon as the lists sat inside tab containers focus
+could land on a container instead, so no list raised `KeyDown`: Escape fell
+through to `Window`'s default and closed the pane, and `h`/`l` reached nothing.
+`window.KeyDownNotHandled` fires wherever focus sits while still letting the
+focused list consume its own motions first.
+
+This regression is why a live check that "passed" is not proof: the first
+`wezterm cli` run happened to leave focus on the list, so it saw none of it. A
+UI check has to name the focus it is testing under, or it is testing luck.
 
 **Keys are now resolved against a scope.** `h`/`l` for tabs put `l` on both
 `NextTab` and `OpenProject`, repeating the `k` = `MoveUp`/`EditKeybinds`

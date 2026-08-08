@@ -5,6 +5,13 @@ namespace Fleet.Tests.Features.Dashboard;
 public class DashboardTabsTests
 {
     [Fact]
+    public void Agents_is_the_first_tab_so_it_is_the_one_showing_on_open()
+    {
+        Assert.Equal(0, DashboardTabs.AgentsTab);
+        Assert.Equal(1, DashboardTabs.RepositoriesTab);
+    }
+
+    [Fact]
     public void A_tab_title_carries_its_count_because_the_other_tab_is_hidden()
     {
         Assert.Equal("Repositories (2)", DashboardTabs.Repositories(2));

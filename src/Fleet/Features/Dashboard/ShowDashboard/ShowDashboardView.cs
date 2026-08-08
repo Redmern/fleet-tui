@@ -17,29 +17,34 @@ public static class ShowDashboardView
         var window = FleetTheme.Screen($"fleet — {projectName}");
         var prefix = new PrefixRecognizer(keymap);
 
-        var repoList = FleetTheme.Rows(0, 0, Dim.Fill());
-        var agentList = FleetTheme.Rows(0, 0, Dim.Fill());
+        var tabBar = FleetTheme.TabBar(1, 0,
+            [DashboardTabs.Agents(0), DashboardTabs.Repositories(0)]);
+
+        var agentList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
+        var repoList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
 
         agentList.SetSource(new ObservableCollection<string>(
             ["(no agents - spawning agents arrives in phase 2)"]));
 
-        var repoTab = FleetTheme.TabPage(DashboardTabs.Repositories(0));
-        repoTab.Add(repoList);
-
-        var agentTab = FleetTheme.TabPage(DashboardTabs.Agents(0));
-        agentTab.Add(agentList);
-
-        var tabs = FleetTheme.TabStrip(0, 0, Dim.Fill(2));
-        tabs.Add(repoTab);
-        tabs.Add(agentTab);
-
-        View[] pages = [repoTab, agentTab];
-        var lists = new[] { repoList, agentList };
+        var lists = new[] { agentList, repoList };
 
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
 
-        FleetKeys.ApplyMotions(repoList, keymap);
         FleetKeys.ApplyMotions(agentList, keymap);
+        FleetKeys.ApplyMotions(repoList, keymap);
+
+        void ShowTab(int index)
+        {
+            tabBar.Select(index);
+
+            for (var i = 0; i < lists.Length; i++)
+            {
+                lists[i].Visible = i == index;
+            }
+
+            lists[index].SetFocus();
+            window.SetNeedsDraw();
+        }
 
         async Task RefreshAsync()
         {
@@ -47,7 +52,7 @@ public static class ShowDashboardView
             var rows = DashboardRows.ForRepositories(repositories).Select(r => r.Text).ToList();
 
             repoList.SetSource(new ObservableCollection<string>(rows));
-            FleetTheme.RetitleTab(repoTab, DashboardTabs.Repositories(rows.Count));
+            tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(rows.Count));
         }
 
         var busy = false;
@@ -87,15 +92,6 @@ public static class ShowDashboardView
             }
         }
 
-        void SelectTab(int delta)
-        {
-            var current = Math.Max(0, Array.IndexOf(pages, tabs.Value));
-            var next = DashboardTabs.Step(current, delta, pages.Length);
-
-            tabs.Value = pages[next];
-            lists[next].SetFocus();
-        }
-
         void Dispatch(FleetAction action)
         {
             switch (action)
@@ -117,11 +113,11 @@ public static class ShowDashboardView
                     break;
 
                 case FleetAction.PrevTab:
-                    SelectTab(-1);
+                    ShowTab(DashboardTabs.Step(tabBar.Selected, -1, tabBar.Count));
                     break;
 
                 case FleetAction.NextTab:
-                    SelectTab(1);
+                    ShowTab(DashboardTabs.Step(tabBar.Selected, 1, tabBar.Count));
                     break;
 
                 case FleetAction.OpenMenu:
@@ -180,10 +176,14 @@ public static class ShowDashboardView
 
         app.AddTimeout(TimeSpan.FromMilliseconds(200), Pump);
 
-        window.Add(tabs, status, FleetTheme.HintBar(FleetHintText.Dashboard(keymap)));
+        window.Add(
+            tabBar.Root,
+            agentList,
+            repoList,
+            status,
+            FleetTheme.HintBar(FleetHintText.Dashboard(keymap)));
 
-        tabs.Value = agentTab;
-        agentList.SetFocus();
+        ShowTab(DashboardTabs.AgentsTab);
 
         _ = RefreshAsync();
 

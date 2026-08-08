@@ -2,6 +2,10 @@ namespace Fleet.Features.Dashboard.ShowDashboard;
 
 public static class DashboardTabs
 {
+    public const int AgentsTab = 0;
+
+    public const int RepositoriesTab = 1;
+
     public static string Repositories(int count) => $"Repositories ({count})";
 
     public static string Agents(int count) => $"Agents ({count})";

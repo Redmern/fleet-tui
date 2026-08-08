@@ -125,9 +125,16 @@ rebind anything, later changes to fleet's defaults will not reach you.
 
 ## The dashboard
 
-Two tabs, **Repositories** and **Agents**, switched with `h` / `l` or the arrow
-keys. Each title carries its count, so the tab you are not looking at still tells
-you what is in it.
+Two tabs, **Agents** and **Repositories**, switched with `h` / `l` or the arrow
+keys. Agents is the one showing on open. Each title carries its count, so the tab
+you are not looking at still tells you what is in it.
+
+```
+╭┤ fleet — techweb ├──────────────────────────╮
+│ Agents (0)    Repositories (1)              │
+│ ══════════                                  │
+│ (no agents - spawning agents arrives in ph… │
+```
 
 Escape is swallowed here: the pane closes on `q` or through the menu, never by
 cancelling out of it.
