@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Fleet.Features.Dashboard.ShowDashboard.Enums;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -46,20 +47,22 @@ public static class ShowDashboardView
 
         void Keys(object? sender, Terminal.Gui.Input.Key key)
         {
-            if (key == FleetKeys.Quit || key == FleetKeys.Cancel)
+            switch (DashboardKeys.For(key))
             {
-                app.RequestStop(window);
-                key.Handled = true;
-            }
-            else if (key == FleetKeys.Add)
-            {
-                _ = AddAsync();
-                key.Handled = true;
-            }
-            else if (key == FleetKeys.Refresh)
-            {
-                _ = RefreshAsync();
-                key.Handled = true;
+                case DashboardAction.Quit:
+                    app.RequestStop(window);
+                    key.Handled = true;
+                    break;
+
+                case DashboardAction.Add:
+                    _ = AddAsync();
+                    key.Handled = true;
+                    break;
+
+                case DashboardAction.Refresh:
+                    _ = RefreshAsync();
+                    key.Handled = true;
+                    break;
             }
         }
 

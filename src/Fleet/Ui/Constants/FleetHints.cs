@@ -6,7 +6,7 @@ public static class FleetHints
 
     public const string Picker = $"{Motions}   l/enter open   n new   q/esc quit";
 
-    public const string Dashboard = $"{Motions}   a add repo   r refresh   q/esc quit";
+    public const string Dashboard = $"{Motions}   tab pane   a add repo   r refresh   q close";
 
     public const string Form = "tab field   enter confirm   esc cancel";
 
