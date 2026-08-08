@@ -35,18 +35,20 @@ public sealed class AddRepositoryHandler(IGitRunner git)
             return Fail($"{command.ProjectRoot} does not exist.");
         }
 
-        var bare = Path.Combine(command.ProjectRoot, name);
-        if (Directory.Exists(bare))
+        var container = Path.Combine(command.ProjectRoot, name);
+        if (Directory.Exists(container))
         {
-            return Fail($"{bare} already exists.");
+            return Fail($"{container} already exists.");
         }
+
+        var gitDir = Path.Combine(name, ".git");
 
         try
         {
             return command.Kind == AddRepositoryKind.CreateNew
-                ? await CreateNewAsync(command.ProjectRoot, bare, name, branch, ct)
+                ? await CreateNewAsync(command.ProjectRoot, container, gitDir, name, branch, ct)
                     .ConfigureAwait(false)
-                : await CloneAsync(command.ProjectRoot, bare, name, url, branch, ct)
+                : await CloneAsync(command.ProjectRoot, container, gitDir, name, url, branch, ct)
                     .ConfigureAwait(false);
         }
         catch (GitFailedException e)
@@ -56,52 +58,55 @@ public sealed class AddRepositoryHandler(IGitRunner git)
     }
 
     private async Task<Result<Repository>> CreateNewAsync(
-        string projectRoot, string bare, string name, string branch, CancellationToken ct)
+        string projectRoot, string container, string gitDir, string name, string branch,
+        CancellationToken ct)
     {
-        await Run(projectRoot, ["init", "--bare", "--initial-branch", branch, name], ct)
+        await Run(projectRoot, ["init", "--bare", "--initial-branch", branch, gitDir], ct)
             .ConfigureAwait(false);
 
-        await SeedInitialCommitAsync(bare, branch, ct).ConfigureAwait(false);
-        await AddWorktreeAsync(bare, branch, ct).ConfigureAwait(false);
+        await SeedInitialCommitAsync(container, branch, ct).ConfigureAwait(false);
+        await AddWorktreeAsync(container, branch, ct).ConfigureAwait(false);
 
-        return Result<Repository>.Ok(new Repository(name, bare, branch));
+        return Result<Repository>.Ok(new Repository(name, container, branch));
     }
 
     private async Task<Result<Repository>> CloneAsync(
-        string projectRoot, string bare, string name, string url, string branch,
-        CancellationToken ct)
+        string projectRoot, string container, string gitDir, string name, string url,
+        string branch, CancellationToken ct)
     {
-        await Run(projectRoot, ["clone", "--bare", url, name], ct).ConfigureAwait(false);
+        await Run(projectRoot, ["clone", "--bare", url, gitDir], ct).ConfigureAwait(false);
 
         var effective = branch;
         if (effective.Length == 0)
         {
             var head = await git
-                .RunAsync(bare, ["symbolic-ref", "--short", "HEAD"], null, ct)
+                .RunAsync(container, ["symbolic-ref", "--short", "HEAD"], null, ct)
                 .ConfigureAwait(false);
 
             effective = head.Ok && head.Out.Length > 0 ? head.Out : "main";
         }
 
-        await AddWorktreeAsync(bare, effective, ct).ConfigureAwait(false);
+        await AddWorktreeAsync(container, effective, ct).ConfigureAwait(false);
 
-        return Result<Repository>.Ok(new Repository(name, bare, effective));
+        return Result<Repository>.Ok(new Repository(name, container, effective));
     }
 
-    private async Task AddWorktreeAsync(string bare, string branch, CancellationToken ct)
+    private async Task AddWorktreeAsync(string container, string branch, CancellationToken ct)
     {
-        var dir = Path.Combine(bare, BranchSlug.Of(branch));
-        if (Directory.Exists(dir))
+        var slug = BranchSlug.Of(branch);
+
+        if (Directory.Exists(Path.Combine(container, slug)))
         {
             return;
         }
 
-        await Run(bare, ["worktree", "add", dir, branch], ct).ConfigureAwait(false);
+        await Run(container, ["worktree", "add", slug, branch], ct).ConfigureAwait(false);
     }
 
-    private async Task SeedInitialCommitAsync(string bare, string branch, CancellationToken ct)
+    private async Task SeedInitialCommitAsync(
+        string container, string branch, CancellationToken ct)
     {
-        var tree = await git.RunAsync(bare, ["mktree"], stdin: string.Empty, ct)
+        var tree = await git.RunAsync(container, ["mktree"], stdin: string.Empty, ct)
             .ConfigureAwait(false);
 
         if (!tree.Ok)
@@ -110,7 +115,7 @@ public sealed class AddRepositoryHandler(IGitRunner git)
         }
 
         var commit = await git
-            .RunAsync(bare, ["commit-tree", tree.Out, "-m", "Initial commit"], null, ct)
+            .RunAsync(container, ["commit-tree", tree.Out, "-m", "Initial commit"], null, ct)
             .ConfigureAwait(false);
 
         if (!commit.Ok)
@@ -118,10 +123,10 @@ public sealed class AddRepositoryHandler(IGitRunner git)
             throw new GitFailedException("commit-tree", commit);
         }
 
-        await Run(bare, ["update-ref", $"refs/heads/{branch}", commit.Out], ct)
+        await Run(container, ["update-ref", $"refs/heads/{branch}", commit.Out], ct)
             .ConfigureAwait(false);
 
-        await Run(bare, ["symbolic-ref", "HEAD", $"refs/heads/{branch}"], ct)
+        await Run(container, ["symbolic-ref", "HEAD", $"refs/heads/{branch}"], ct)
             .ConfigureAwait(false);
     }
 

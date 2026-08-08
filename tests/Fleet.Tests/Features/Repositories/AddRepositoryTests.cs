@@ -32,7 +32,7 @@ public sealed class AddRepositoryTests : IDisposable
     private static GitRunner Git => new();
 
     [Fact]
-    public async Task Creating_a_new_repo_produces_a_bare_repo_with_a_default_branch_worktree()
+    public async Task A_new_repo_puts_the_bare_clone_in_dot_git_beside_the_worktree()
     {
         var result = await Handler().HandleAsync(
             AddRepositoryCommand.CreateNew(_root, "widgets", "main"));
@@ -40,14 +40,38 @@ public sealed class AddRepositoryTests : IDisposable
         Assert.True(result.Succeeded, result.Error);
         Assert.Equal("widgets", result.Value.Name);
 
-        var bare = Path.Combine(_root, "widgets");
-        var worktree = Path.Combine(bare, "main");
+        var container = Path.Combine(_root, "widgets");
+        var worktree = Path.Combine(container, "main");
 
+        Assert.True(Directory.Exists(Path.Combine(container, ".git")));
         Assert.True(Directory.Exists(worktree));
         Assert.True(File.Exists(Path.Combine(worktree, ".git")));
+        Assert.Equal(container, result.Value.Path);
 
-        Assert.Equal("true", (await Git.RunAsync(bare, ["rev-parse", "--is-bare-repository"])).Out);
-        Assert.Equal("main", (await Git.RunAsync(worktree, ["rev-parse", "--abbrev-ref", "HEAD"])).Out);
+        Assert.Equal(
+            "true",
+            (await Git.RunAsync(container, ["rev-parse", "--is-bare-repository"])).Out);
+
+        Assert.Equal(
+            "main",
+            (await Git.RunAsync(worktree, ["rev-parse", "--abbrev-ref", "HEAD"])).Out);
+    }
+
+    [Fact]
+    public async Task Git_internals_do_not_sit_beside_the_worktrees()
+    {
+        await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "widgets", "main"));
+
+        var entries = Directory.GetFileSystemEntries(Path.Combine(_root, "widgets"))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.Equal(2, entries.Count);
+        Assert.Contains(".git", entries);
+        Assert.Contains("main", entries);
+        Assert.DoesNotContain("objects", entries);
+        Assert.DoesNotContain("refs", entries);
+        Assert.DoesNotContain("packed-refs", entries);
     }
 
     [Fact]
@@ -84,20 +108,21 @@ public sealed class AddRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task Cloning_a_url_creates_the_default_branch_worktree()
+    public async Task Cloning_a_url_produces_the_same_layout()
     {
-        await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin.git", "main"));
-        var origin = Path.Combine(_root, "origin.git");
+        await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin", "develop"));
+        var origin = Path.Combine(_root, "origin");
 
         var dest = Path.Combine(_root, "dest");
         Directory.CreateDirectory(dest);
 
         var result = await Handler().HandleAsync(
-            AddRepositoryCommand.CloneFrom(dest, "widgets", origin, "main"));
+            AddRepositoryCommand.CloneFrom(dest, "backend", origin, "develop"));
 
         Assert.True(result.Succeeded, result.Error);
-        Assert.Equal("main", result.Value.DefaultBranch);
-        Assert.True(Directory.Exists(Path.Combine(dest, "widgets", "main")));
+        Assert.Equal("develop", result.Value.DefaultBranch);
+        Assert.True(Directory.Exists(Path.Combine(dest, "backend", ".git")));
+        Assert.True(Directory.Exists(Path.Combine(dest, "backend", "develop")));
     }
 
     [Fact]
