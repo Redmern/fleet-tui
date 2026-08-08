@@ -14,6 +14,7 @@ using Fleet.Ports;
 using Fleet.Ports.Git;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects;
+using Fleet.Ui;
 using Terminal.Gui.App;
 
 namespace Fleet;
@@ -73,6 +74,8 @@ public static class Program
         // static Application facade is marked obsolete. Disposing shuts it down.
         using (IApplication app = Application.Create().Init())
         {
+            FleetTheme.Register();
+
             // The picker never names the CreateProject slice: it asks for a project
             // through this callback, and only this file knows both slices exist.
             project = PickProjectView.Show(
@@ -136,6 +139,7 @@ public static class Program
         var adder = new AddRepositoryHandler(git);
 
         using IApplication app = Application.Create().Init();
+        FleetTheme.Register();
 
         ShowDashboardView.Show(app, project.Name, new DashboardCallbacks(
                 LoadRepositories: async () =>

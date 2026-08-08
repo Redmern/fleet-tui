@@ -1,10 +1,9 @@
 using System.Collections.ObjectModel;
 using Fleet.Ports.Projects;
+using Fleet.Ui;
 using Terminal.Gui.App;
-using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
-using Terminal.Gui.Views;
 
 namespace Fleet.Features.Projects.PickProject;
 
@@ -24,28 +23,21 @@ public static class PickProjectView
         Project? chosen = null;
         var entries = picker.Entries();
 
-        var list = new ListView
-        {
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(1),
-        };
+        var window = FleetTheme.Screen("fleet — open a project");
 
+        var panel = FleetTheme.Panel("Projects");
+        panel.X = 0;
+        panel.Y = 0;
+        panel.Width = Dim.Fill();
+        panel.Height = Dim.Fill(4);
+
+        var list = FleetTheme.Rows();
         list.SetSource(new ObservableCollection<string>(entries.Select(e => e.Label).ToList()));
+        panel.Add(list);
 
-        var window = new Window
-        {
-            Title = "fleet - open a project",
-            BorderStyle = LineStyle.Rounded,
-        };
-
-        var hint = new Label
-        {
-            X = 0,
-            Y = Pos.AnchorEnd(1),
-            Text = "enter open    n new    q quit",
-        };
+        var open = FleetTheme.Primary(1, Pos.AnchorEnd(3), "_Open");
+        var newProject = FleetTheme.Secondary(14, Pos.AnchorEnd(3), "_New project");
+        var quit = FleetTheme.Secondary(32, Pos.AnchorEnd(3), "_Quit");
 
         void Accept()
         {
@@ -57,14 +49,7 @@ public static class PickProjectView
 
             if (entries[index].IsNew)
             {
-                var created = createProject();
-                if (created is null)
-                {
-                    return;   // cancelled; stay in the picker
-                }
-
-                chosen = created;
-                app.RequestStop(window);
+                NewProject();
                 return;
             }
 
@@ -72,9 +57,36 @@ public static class PickProjectView
             app.RequestStop(window);
         }
 
-        list.Activated += (_, _) => Accept();
+        void NewProject()
+        {
+            var created = createProject();
+            if (created is null)
+            {
+                return;   // cancelled; stay in the picker
+            }
 
-        window.KeyDown += (_, key) =>
+            chosen = created;
+            app.RequestStop(window);
+        }
+
+        // Enter raises Accepting, NOT Activated. Activated is a different command
+        // (Command.Activate); wiring it meant Enter never reached this handler and
+        // no project could be opened.
+        list.Accepting += (_, e) =>
+        {
+            Accept();
+            e.Handled = true;
+        };
+
+        open.Accepting += (_, _) => Accept();
+        newProject.Accepting += (_, _) => NewProject();
+        quit.Accepting += (_, _) => app.RequestStop(window);
+
+        // KeyDownNotHandled, not KeyDown: the focused ListView consumes keys via
+        // its own bindings first, so a KeyDown handler on the window never saw
+        // these. This fires only for keys nothing else claimed, which is also why
+        // typing into a field cannot trigger a shortcut.
+        window.KeyDownNotHandled += (_, key) =>
         {
             if (key == Key.Q || key == Key.Esc)
             {
@@ -83,13 +95,13 @@ public static class PickProjectView
             }
             else if (key == Key.N)
             {
-                list.SelectedItem = entries.Count - 1;
-                Accept();
+                NewProject();
                 key.Handled = true;
             }
         };
 
-        window.Add(list, hint);
+        window.Add(panel, open, newProject, quit, FleetTheme.HintBar(
+            "enter / o  open      n  new project      q  quit      tab  move focus"));
 
         try
         {

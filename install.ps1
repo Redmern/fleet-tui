@@ -129,6 +129,19 @@ Write-Ok "published to $publishDir"
 
 Write-Step 'Installing'
 
+# Windows holds an exclusive lock on a running executable, so a copy over the
+# installed binary fails with "being used by another process" while any fleet is
+# open. Stop them first and say so, rather than failing halfway through an
+# install.
+$running = @(Get-Process fleet -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -eq $BinPath })
+
+if ($running.Count -gt 0) {
+    $running | Stop-Process -Force
+    Start-Sleep -Milliseconds 300
+    Write-Warn2 "stopped $($running.Count) running fleet process(es) to replace the binary"
+}
+
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item (Join-Path $publishDir 'fleet.exe') $BinPath -Force
 Write-Ok "installed $BinPath"

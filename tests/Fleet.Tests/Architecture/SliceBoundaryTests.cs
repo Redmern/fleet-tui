@@ -116,8 +116,47 @@ public class SliceBoundaryTests
         var violations = CsFiles(Path.Combine(SrcDir, "Shared"))
             .Where(f => Mentions(PlatformNamespace)(f)
                      || Mentions(FeaturesNamespace)(f)
+                     || Mentions("Fleet.Ports")(f)
+                     || Mentions("Fleet.Ui")(f))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
+    /// <summary>
+    /// Ui/ is the styling system: presentation shared by every slice. It may use
+    /// Shared, and nothing else inside Fleet — a theme that knew about a slice, a
+    /// port or an adapter would stop being reusable and start being a dependency
+    /// cycle waiting to happen.
+    /// </summary>
+    [Fact]
+    public void Ui_depends_on_nothing_but_Shared()
+    {
+        var violations = CsFiles(Path.Combine(SrcDir, "Ui"))
+            .Where(f => Mentions(PlatformNamespace)(f)
+                     || Mentions(FeaturesNamespace)(f)
                      || Mentions("Fleet.Ports")(f))
             .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
+    /// <summary>
+    /// The point of the styling system: no view sets its own colours or border
+    /// style. If a slice reaches for a palette or a scheme directly, the
+    /// application drifts out of visual step one dialog at a time.
+    /// </summary>
+    [Fact]
+    public void No_slice_styles_itself()
+    {
+        var banned = new[] { "SchemeName =", "new Scheme", "SchemeManager", "BorderStyle =" };
+
+        var violations = CsFiles(FeaturesDir)
+            .Select(f => (File: f, Text: File.ReadAllText(f)))
+            .Where(x => banned.Any(b => x.Text.Contains(b, StringComparison.Ordinal)))
+            .Select(x => Relative(x.File))
             .ToList();
 
         Assert.Empty(violations);

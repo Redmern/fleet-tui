@@ -1,7 +1,6 @@
+using Fleet.Ui;
 using Terminal.Gui.App;
-using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
-using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Fleet.Features.Repositories.AddRepository;
@@ -18,29 +17,21 @@ public static class AddRepositoryView
     {
         AddRepositoryCommand? result = null;
 
+        var window = FleetTheme.Modal("Add repository", 78, 15);
+
         // A CheckBox rather than a radio group: Terminal.Gui v2.4 has no
         // RadioGroup, and the choice is binary anyway.
-        var clone = new CheckBox { X = 1, Y = 1, Text = "Clone from a URL" };
+        var clone = FleetTheme.Toggle(1, 1, "Clone from a _URL instead of creating a new repository");
 
-        var nameField = new TextField { X = 10, Y = 3, Width = Dim.Fill(2) };
-        var urlField = new TextField { X = 10, Y = 5, Width = Dim.Fill(2), Enabled = false };
-        var branchField = new TextField { X = 10, Y = 7, Width = Dim.Fill(2), Text = "main" };
-        var error = new Label { X = 1, Y = 9, Width = Dim.Fill(2), Text = string.Empty };
+        var nameField = FleetTheme.Field(11, 3);
+        var urlField = FleetTheme.Field(11, 5);
+        var branchField = FleetTheme.Field(11, 7, "main");
 
+        urlField.Enabled = false;
         clone.ValueChanged += (_, _) => urlField.Enabled = clone.Value == CheckState.Checked;
 
-        var window = new Window
-        {
-            Title = "Add repository",
-            X = Pos.Center(),
-            Y = Pos.Center(),
-            Width = 76,
-            Height = 15,
-            BorderStyle = LineStyle.Rounded,
-        };
-
-        var add = new Button { X = 1, Y = 11, Text = "Add", IsDefault = true };
-        var cancel = new Button { X = 9, Y = 11, Text = "Cancel" };
+        var add = FleetTheme.Primary(1, 9, "_Add");
+        var cancel = FleetTheme.Secondary(10, 9, "Cancel");
 
         add.Accepting += (_, _) =>
         {
@@ -54,7 +45,7 @@ public static class AddRepositoryView
 
         cancel.Accepting += (_, _) => app.RequestStop(window);
 
-        window.KeyDown += (_, key) =>
+        window.KeyDownNotHandled += (_, key) =>
         {
             if (key == Key.Esc)
             {
@@ -65,15 +56,15 @@ public static class AddRepositoryView
 
         window.Add(
             clone,
-            new Label { X = 1, Y = 3, Text = "Name:" },
+            FleetTheme.Caption(1, 3, "Name:"),
             nameField,
-            new Label { X = 1, Y = 5, Text = "URL:" },
+            FleetTheme.Caption(1, 5, "URL:"),
             urlField,
-            new Label { X = 1, Y = 7, Text = "Branch:" },
+            FleetTheme.Caption(1, 7, "Branch:"),
             branchField,
-            error,
             add,
-            cancel);
+            cancel,
+            FleetTheme.HintBar("space  toggle clone      enter  add      esc  cancel"));
 
         app.Run(window);
         window.Dispose();

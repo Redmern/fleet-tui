@@ -1,6 +1,6 @@
 using Fleet.Ports.Projects;
+using Fleet.Ui;
 using Terminal.Gui.App;
-using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -26,22 +26,14 @@ public static class CreateProjectView
     {
         Project? created = null;
 
-        var nameField = new TextField { X = 10, Y = 1, Width = Dim.Fill(2) };
-        var rootField = new TextField { X = 10, Y = 3, Width = Dim.Fill(2) };
-        var error = new Label { X = 1, Y = 5, Width = Dim.Fill(2), Text = string.Empty };
+        var window = FleetTheme.Modal("New project", 74, 13);
 
-        var window = new Window
-        {
-            Title = "New project",
-            X = Pos.Center(),
-            Y = Pos.Center(),
-            Width = 72,
-            Height = 11,
-            BorderStyle = LineStyle.Rounded,
-        };
+        var nameField = FleetTheme.Field(11, 1);
+        var rootField = FleetTheme.Field(11, 3);
+        var error = FleetTheme.ErrorText(1, 5);
 
-        var create = new Button { X = 1, Y = 7, Text = "Create", IsDefault = true };
-        var cancel = new Button { X = 12, Y = 7, Text = "Cancel" };
+        var create = FleetTheme.Primary(1, 7, "_Create");
+        var cancel = FleetTheme.Secondary(13, 7, "Cancel");
 
         void Submit()
         {
@@ -61,7 +53,7 @@ public static class CreateProjectView
 
                 if (answer != 1)
                 {
-                    error.Text = "! Cancelled - the root directory was not created.";
+                    error.Text = "Cancelled — the root directory was not created.";
                     return;
                 }
 
@@ -71,7 +63,7 @@ public static class CreateProjectView
 
             if (reply.Status != CreateProjectStatus.Created)
             {
-                error.Text = "! " + reply.Error;
+                error.Text = reply.Error ?? "Unknown error.";
                 return;   // stay open so the entry can be corrected
             }
 
@@ -82,7 +74,7 @@ public static class CreateProjectView
         create.Accepting += (_, _) => Submit();
         cancel.Accepting += (_, _) => app.RequestStop(window);
 
-        window.KeyDown += (_, key) =>
+        window.KeyDownNotHandled += (_, key) =>
         {
             if (key == Key.Esc)
             {
@@ -92,13 +84,14 @@ public static class CreateProjectView
         };
 
         window.Add(
-            new Label { X = 1, Y = 1, Text = "Name:" },
+            FleetTheme.Caption(1, 1, "Name:"),
             nameField,
-            new Label { X = 1, Y = 3, Text = "Root:" },
+            FleetTheme.Caption(1, 3, "Root:"),
             rootField,
             error,
             create,
-            cancel);
+            cancel,
+            FleetTheme.HintBar("enter  create      esc  cancel      tab  move focus"));
 
         app.Run(window);
         window.Dispose();

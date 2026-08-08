@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
+using Fleet.Ui;
 using Terminal.Gui.App;
-using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -20,55 +20,27 @@ public static class ShowDashboardView
 {
     public static void Show(IApplication app, string projectName, DashboardCallbacks callbacks)
     {
-        var window = new Window
-        {
-            Title = $"fleet - {projectName}",
-            BorderStyle = LineStyle.Rounded,
-        };
+        var window = FleetTheme.Screen($"fleet — {projectName}");
 
-        var repoFrame = new FrameView
-        {
-            Title = "Repositories",
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill(),
-            Height = Dim.Percent(45),
-        };
+        var repoPanel = FleetTheme.Panel("Repositories");
+        repoPanel.X = 0;
+        repoPanel.Y = 0;
+        repoPanel.Width = Dim.Fill();
+        repoPanel.Height = Dim.Percent(45);
 
-        var repoList = new ListView
-        {
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(),
-        };
+        var repoList = FleetTheme.Rows();
+        repoPanel.Add(repoList);
 
-        repoFrame.Add(repoList);
+        var agentPanel = FleetTheme.Panel("Agents");
+        agentPanel.X = 0;
+        agentPanel.Y = Pos.Bottom(repoPanel);
+        agentPanel.Width = Dim.Fill();
+        agentPanel.Height = Dim.Fill(4);
+        agentPanel.Add(FleetTheme.Caption(1, 1, "No agents yet — spawning agents arrives in phase 2."));
 
-        var agentFrame = new FrameView
-        {
-            Title = "Agents",
-            X = 0,
-            Y = Pos.Bottom(repoFrame),
-            Width = Dim.Fill(),
-            Height = Dim.Fill(2),
-        };
-
-        agentFrame.Add(new Label
-        {
-            X = 1,
-            Y = 1,
-            Text = "No agents yet - spawning agents arrives in phase 2.",
-        });
-
-        var addButton = new Button { X = 1, Y = Pos.AnchorEnd(2), Text = "Add repository" };
-
-        var hint = new Label
-        {
-            X = 1,
-            Y = Pos.AnchorEnd(1),
-            Text = "a add    r refresh    q quit",
-        };
+        var add = FleetTheme.Primary(1, Pos.AnchorEnd(3), "_Add repository");
+        var refresh = FleetTheme.Secondary(20, Pos.AnchorEnd(3), "_Refresh");
+        var quit = FleetTheme.Secondary(33, Pos.AnchorEnd(3), "_Quit");
 
         async Task RefreshAsync()
         {
@@ -91,11 +63,13 @@ public static class ShowDashboardView
             await RefreshAsync().ConfigureAwait(true);
         }
 
-        addButton.Accepting += (_, _) => _ = AddAsync();
+        add.Accepting += (_, _) => _ = AddAsync();
+        refresh.Accepting += (_, _) => _ = RefreshAsync();
+        quit.Accepting += (_, _) => app.RequestStop(window);
 
-        window.KeyDown += (_, key) =>
+        window.KeyDownNotHandled += (_, key) =>
         {
-            if (key == Key.Q)
+            if (key == Key.Q || key == Key.Esc)
             {
                 app.RequestStop(window);
                 key.Handled = true;
@@ -112,7 +86,8 @@ public static class ShowDashboardView
             }
         };
 
-        window.Add(repoFrame, agentFrame, addButton, hint);
+        window.Add(repoPanel, agentPanel, add, refresh, quit, FleetTheme.HintBar(
+            "a  add repository      r  refresh      q  quit      tab  move focus"));
 
         _ = RefreshAsync();
 
