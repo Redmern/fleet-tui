@@ -25,6 +25,7 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects;
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Terminal.Gui.App;
@@ -200,7 +201,11 @@ public static class Program
             ? store.Load(named)
             : new ResolveProjectHandler(store).ForDirectory(Environment.CurrentDirectory);
 
-        if (project is null)
+        var requested = ValueOf(args, "--action") is { } id && id.Length > 0
+            ? FleetActionIds.Parse(id)
+            : FleetAction.None;
+
+        if (requested is FleetAction.OpenProject or FleetAction.NewProject || project is null)
         {
             return await PickAndOpenAsync().ConfigureAwait(false);
         }
@@ -214,11 +219,13 @@ public static class Program
 
         var keymap = new Keymap(keymapStore.Load());
 
-        var chosen = Menu(app, keymap,
-        [
-            FleetAction.AddRepository,
-            FleetAction.EditKeybinds,
-        ]);
+        var chosen = requested != FleetAction.None
+            ? requested
+            : Menu(app, keymap,
+            [
+                FleetAction.AddRepository,
+                FleetAction.EditKeybinds,
+            ]);
 
         switch (chosen)
         {
@@ -335,6 +342,7 @@ public static class Program
               fleet                       pick a project and open it
               fleet dash --project <name> the dashboard (runs inside a pane)
               fleet menu                  the fleet menu, or the picker outside a project
+              fleet menu --action <id>    jump straight to add-repository or keybinds
               fleet apply-keybinds        write the wezterm keybinding module
               fleet doctor                check the environment
             """);

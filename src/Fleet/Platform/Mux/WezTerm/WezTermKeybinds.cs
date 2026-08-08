@@ -1,11 +1,20 @@
 using System.Text;
 using Fleet.Platform.Mux.WezTerm.Models;
+using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 
 namespace Fleet.Platform.Mux.WezTerm;
 
 public static class WezTermKeybinds
 {
+    private static readonly FleetAction[] MenuActions =
+    [
+        FleetAction.AddRepository,
+        FleetAction.EditKeybinds,
+        FleetAction.OpenProject,
+    ];
+
     public static string Generate(Keymap keymap, string fleetExecutable)
     {
         var chord = WezTermChord.From(keymap.PrefixText);
@@ -33,10 +42,33 @@ public static class WezTermKeybinds
         sb.AppendLine("  table.insert(config.keys, {");
         sb.AppendLine($"    key = '{chord.Key}',");
         sb.AppendLine($"    mods = '{chord.Mods}',");
-        sb.AppendLine("    action = act.SplitPane {");
-        sb.AppendLine("      direction = 'Right',");
-        sb.AppendLine("      size = { Percent = 40 },");
-        sb.AppendLine("      command = { args = { M.fleet, 'menu' } },");
+        sb.AppendLine("    action = act.InputSelector {");
+        sb.AppendLine("      title = 'fleet',");
+        sb.AppendLine("      fuzzy = true,");
+        sb.AppendLine("      choices = {");
+
+        foreach (var action in MenuActions)
+        {
+            var label = KeymapDefaults.Describe(action);
+            var id = FleetActionIds.For(action);
+            sb.AppendLine($"        {{ label = '{label}', id = '{id}' }},");
+        }
+
+        sb.AppendLine("      },");
+        sb.AppendLine("      action = wezterm.action_callback(function(window, pane, id, _label)");
+        sb.AppendLine("        if not id then");
+        sb.AppendLine("          return");
+        sb.AppendLine("        end");
+        sb.AppendLine();
+        sb.AppendLine("        window:perform_action(");
+        sb.AppendLine("          act.SplitPane {");
+        sb.AppendLine("            direction = 'Right',");
+        sb.AppendLine("            size = { Percent = 45 },");
+        sb.AppendLine("            command = { args = { M.fleet, 'menu', '--action', id } },");
+        sb.AppendLine("          },");
+        sb.AppendLine("          pane");
+        sb.AppendLine("        )");
+        sb.AppendLine("      end),");
         sb.AppendLine("    },");
         sb.AppendLine("  })");
         sb.AppendLine();

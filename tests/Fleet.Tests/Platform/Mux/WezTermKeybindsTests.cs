@@ -56,6 +56,8 @@ public class WezTermKeybindsTests
 
         Assert.Contains("'menu'", lua);
         Assert.Contains("SplitPane", lua);
+        Assert.Contains("InputSelector", lua);
+        Assert.Contains("'add-repository'", lua);
     }
 
     [Fact]
