@@ -869,10 +869,41 @@ have been a comment lives here instead.
 - `FailSilentDriver` catches only expected failure types, and `IsAvailableAsync`
   returning `false` is an answer rather than a swallowed failure.
 
-## Still to verify
+**2026-08-08 — `Porta.Pty` under NativeAOT: FAILS. Gate resolved, answer is no.**
 
-- `Porta.Pty` under NativeAOT on both Windows and Linux, including its
-  `Vanara.PInvoke.Kernel32` dependency. Gate for the `embedded` driver.
+Proven by a spike in `spikes/PtySpike`, AOT-published and run.
+
+With the analyzers on, ILC refuses outright: `IL2104`/`IL3053` from `Vanara.Core`
+and `Vanara.PInvoke.Shared`, which use `TypeDescriptor.GetConverter` and
+`BinaryFormatter.Serialize`. With warnings suppressed it publishes a 3.49 MB
+binary, then **crashes at runtime before ConPTY is reached**:
+
+```
+System.ArgumentException: Unable to convert object to its binary format.
+  at Vanara.Extensions.InteropExtensions.WriteNoChecks(...)
+  at Vanara.PInvoke.Kernel32.SetInformationJobObject[T](...)
+  at Porta.Pty.Windows.JobObject.Create()
+  at Porta.Pty.Windows.PtyProvider.StartPseudoConsoleAsync(...)
+```
+
+Vanara marshals generic structs via `BinaryFormatter`, which NativeAOT strips.
+Suppressing the warning hides the diagnosis, not the defect.
+
+Confirmed working in the same spike: prefix detection over the raw input byte
+stream, including `Ctrl+S` arriving as `0x13`. The keyboard-interception half of
+the attach model is sound; only the PTY library is not.
+
+Alternatives, with dependency graphs checked:
+
+- **Hand-written ConPTY.** `LibraryImport` source generators, zero dependencies,
+  guaranteed AOT-safe. The API set is already listed under *Remaining P/Invoke*.
+  Windows only; the Unix controlling-terminal problem remains unsolved.
+- `RoyalApps.RoyalTerminal.Terminal.Pty.{Windows,Unix,Platform}` — target
+  `net10.0` and do **not** depend on Vanara. Untested under AOT.
+- `Microsoft.Windows.Console.ConPTY` — no dependencies at all, Microsoft, but
+  Windows-only and preview.
+
+## Still to verify
 - Terminal.Gui v2 AOT on a real **Linux** runner. Windows is now proven; the CI
   matrix answers Linux on first push.
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
