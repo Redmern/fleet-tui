@@ -9,6 +9,7 @@ using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.PickProject;
 using Fleet.Features.Projects.PickProject.Models;
+using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Platform.Git;
@@ -36,6 +37,8 @@ public static class Program
         {
             "" => await PickAndOpenAsync().ConfigureAwait(false),
             "dash" => Dash(args[1..]),
+            "menu" => await MenuAsync(args[1..]).ConfigureAwait(false),
+            "apply-keybinds" => ApplyKeybinds(),
             "doctor" => await DoctorAsync().ConfigureAwait(false),
             "--help" or "-h" or "help" => Help(),
             var verb => Unknown(verb),
@@ -188,6 +191,90 @@ public static class Program
         return ShowMenuView.Show(app, keymap, handler.Items(actions));
     }
 
+    private static async Task<int> MenuAsync(string[] args)
+    {
+        var store = NewProjectStore();
+
+        var project = ValueOf(args, "--project") is { } named && named.Length > 0
+            ? store.Load(named)
+            : new ResolveProjectHandler(store).ForDirectory(Environment.CurrentDirectory);
+
+        if (project is null)
+        {
+            Console.Error.WriteLine(
+                "fleet menu: no project for this directory. " +
+                "Run it inside a project, or pass --project <name>.");
+            return 1;
+        }
+
+        var keymapStore = NewKeymapStore();
+        var git = NewGit();
+        var adder = new AddRepositoryHandler(git);
+
+        using IApplication app = Application.Create().Init();
+        FleetTheme.Register();
+
+        var keymap = new Keymap(keymapStore.Load());
+
+        var chosen = Menu(app, keymap,
+        [
+            FleetAction.AddRepository,
+            FleetAction.EditKeybinds,
+        ]);
+
+        switch (chosen)
+        {
+            case FleetAction.AddRepository:
+                var request = AddRepositoryView.Show(app, project.Root);
+
+                if (request is not null)
+                {
+                    var outcome = await adder.HandleAsync(request).ConfigureAwait(false);
+
+                    if (!outcome.Succeeded)
+                    {
+                        FleetDialog.Error(app, "Could not add repository", outcome.Error!);
+                    }
+                }
+
+                break;
+
+            case FleetAction.EditKeybinds:
+                EditKeybindsView.Show(app, keymapStore, keymap);
+                break;
+        }
+
+        return 0;
+    }
+
+    private static int ApplyKeybinds()
+    {
+        var keymap = new Keymap(NewKeymapStore().Load());
+        var exe = Environment.ProcessPath ?? "fleet";
+
+        var lua = WezTermKeybinds.Generate(keymap, exe);
+        var target = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".wezterm",
+            "fleet.lua");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.WriteAllText(target, lua);
+
+        Console.WriteLine($"wrote {target}");
+        Console.WriteLine($"  prefix chord  {keymap.PrefixDisplay}");
+        Console.WriteLine();
+        Console.WriteLine("add these two lines to your .wezterm.lua, then reload wezterm:");
+        Console.WriteLine();
+        Console.WriteLine("  local fleet = require 'fleet'");
+        Console.WriteLine("  fleet.apply(config)");
+        Console.WriteLine();
+        Console.WriteLine("wezterm must be able to find fleet.lua, so ensure ~/.wezterm is on");
+        Console.WriteLine("package.path, or copy fleet.lua next to your .wezterm.lua.");
+
+        return 0;
+    }
+
     private static async Task<int> DoctorAsync()
     {
         var log = NewLog();
@@ -249,6 +336,8 @@ public static class Program
             usage:
               fleet                       pick a project and open it
               fleet dash --project <name> the dashboard (runs inside a pane)
+              fleet menu                  the fleet menu (project from cwd)
+              fleet apply-keybinds        write the wezterm keybinding module
               fleet doctor                check the environment
             """);
         return 0;
