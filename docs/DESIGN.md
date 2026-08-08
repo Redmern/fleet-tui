@@ -963,6 +963,33 @@ Alternatives, with dependency graphs checked:
 - `Microsoft.Windows.Console.ConPTY` — no dependencies at all, Microsoft, but
   Windows-only and preview.
 
+**2026-08-08 — keyboard and code page facts, measured in a real WezTerm pane.**
+
+With `ENABLE_VIRTUAL_TERMINAL_INPUT` set, single bytes arrive for control chords:
+
+| Key | Byte |
+|---|---|
+| `ctrl+space` | `0x00` |
+| `space` | `0x20` |
+| `ctrl+a` | `0x01` |
+| `ctrl+g` | `0x07` |
+| `ctrl+q` | `0x11` |
+| `ctrl+s` | **never arrives** — WezTerm claims it as a tmux-style leader |
+
+`ctrl+s` is unusable as fleet's prefix on this machine: `~/.wezterm.lua` enables a
+`CTRL+s` leader. The default prefix is therefore `Ctrl+Space`.
+
+**A pane fleet owns must set the console code page to UTF-8.** Measured
+`wasOutputCP=437`, so writing a child's UTF-8 output straight through renders
+box-drawing characters as CP437 mojibake (`─` appears as `Гôç`). `SetConsoleOutputCP(65001)`
+and `SetConsoleCP(65001)`, restored on exit, fix it.
+
+**Process note, learned the hard way:** Windows locks a running executable, so
+publishing over a spike that is still attached fails with `MSB3027` after ten
+retries. Filtering publish output to `IL` warnings hides that error and yields a
+stale binary that looks freshly built. Kill running instances first, and check
+the timestamp.
+
 ## Still to verify
 - Terminal.Gui v2 AOT on a real **Linux** runner. Windows is now proven; the CI
   matrix answers Linux on first push.
