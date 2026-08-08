@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>fleet</AssemblyName>
+    <RootNamespace>Fleet</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    NativeAOT. The analyzers promote IL2026/IL3050 to build errors, which is what
+    mechanically enforces the "no reflection-based frameworks" rule in
+    docs/DESIGN.md rather than leaving it as advice.
+  -->
+  <PropertyGroup>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+  </PropertyGroup>
+
+</Project>

@@ -190,14 +190,12 @@ dotnet add tests/Fleet.Tests reference src/Fleet
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <IsAotCompatible>true</IsAotCompatible>
-    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
-    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 </Project>
 ```
 
-`IsAotCompatible` promotes trim and AOT warnings to errors. That is what stops a reflection-based dependency from being discovered at publish time instead of at build time — and it is the mechanism that enforces the *Rejected patterns* list rather than leaving it as advice.
+**The AOT analyzers are deliberately not here.** They belong to `src/Fleet` alone. The test project references xunit, which is reflection-based by design, so enabling the analyzers repository-wide would combine with `TreatWarningsAsErrors` to fail the test build on warnings that are both correct and irrelevant. There is only one source project, so there is nothing to duplicate.
 
 - [ ] **Step 4: Configure the app project**
 
@@ -205,15 +203,37 @@ dotnet add tests/Fleet.Tests reference src/Fleet
 
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>fleet</AssemblyName>
     <RootNamespace>Fleet</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
   </PropertyGroup>
+
 </Project>
 ```
+
+`IsAotCompatible` promotes trim and AOT warnings to errors. That is what stops a reflection-based dependency from being discovered at publish time instead of at build time — and it is the mechanism that enforces the *Rejected patterns* list rather than leaving it as advice.
+
+Also add `.gitattributes`, so the workflow's bash steps get LF on every platform:
+
+```
+* text=auto
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+```
+
+And delete the template's `tests/Fleet.Tests/UnitTest1.cs`.
 
 - [ ] **Step 5: Expose the repository root to the test assembly**
 
@@ -225,10 +245,32 @@ The architecture tests scan source files, so they need to find them. `tests/Flee
   </ItemGroup>
 ```
 
-- [ ] **Step 6: Verify it builds**
+- [ ] **Step 6: Verify it builds, and that AOT publishes**
 
 Run: `dotnet build`
 Expected: `Build succeeded. 0 Warning(s) 0 Error(s)`
+
+Then establish the AOT baseline now, while the project is trivial and a failure
+can only be the toolchain:
+
+Run: `dotnet publish src/Fleet -c Release -o out`
+Expected: `Fleet -> .../out/`, and `out/fleet.exe --help` prints usage.
+
+**Windows prerequisite.** NativeAOT needs the MSVC linker and the Windows SDK.
+Visual Studio Build Tools 2022 with the "Desktop development with C++" workload
+supplies both. If the linker is installed but publish still fails with
+`'vswhere.exe' is not recognized` followed by `MSB3073 ... exited with code 123`,
+the toolchain is fine and only `vswhere` is missing from `PATH`:
+
+```powershell
+$env:PATH = "C:\Program Files (x86)\Microsoft Visual Studio\Installer;$env:PATH"
+```
+
+Publishing from a Developer PowerShell prompt has the same effect. GitHub's
+`windows-latest` runner already has `vswhere` on `PATH`, so CI is unaffected.
+
+Observed baseline on 2026-08-08: `net10.0`, `win-x64`, 1.0 MB `fleet.exe`. Worth
+comparing against once Terminal.Gui is added in Task 13.
 
 - [ ] **Step 7: Write the CI workflow**
 

@@ -1,0 +1,43 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+      - run: dotnet build --configuration Release
+      - run: dotnet test --configuration Release --no-build
+
+  # The only thing that will catch a trimming break introduced by a dependency
+  # bump. It must stay green.
+  aot-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+      - run: dotnet publish src/Fleet -c Release -o out
+      - name: Smoke test
+        shell: bash
+        run: |
+          BIN=out/fleet
+          [ -f out/fleet.exe ] && BIN=out/fleet.exe
+          "$BIN" --help
+          # doctor exits non-zero when no multiplexer is reachable, which is
+          # correct locally and expected on a headless runner. This asserts the
+          # binary starts and runs, not that the environment is healthy.
+          "$BIN" doctor || echo "doctor reported problems (expected on a headless runner)"
