@@ -32,7 +32,11 @@ public sealed class Keymap
     public string TextFor(FleetAction action) =>
         Config.Bindings.TryGetValue(action, out var text) ? text : string.Empty;
 
+    public string DisplayFor(FleetAction action) => FleetKeyText.Display(TextFor(action));
+
     public string PrefixText => Config.Prefix;
+
+    public string PrefixDisplay => FleetKeyText.Display(Config.Prefix);
 
     public FleetAction ActionFor(Key key)
     {

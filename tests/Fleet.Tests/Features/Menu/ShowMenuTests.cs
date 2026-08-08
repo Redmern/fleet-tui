@@ -48,7 +48,7 @@ public class ShowMenuTests
 
         var items = new ShowMenuHandler(keymap).Items(DashboardActions);
 
-        Assert.Equal("F2", items.Single(i => i.Action == FleetAction.AddRepository).KeyText);
+        Assert.Equal("f2", items.Single(i => i.Action == FleetAction.AddRepository).KeyText);
     }
 
     [Fact]

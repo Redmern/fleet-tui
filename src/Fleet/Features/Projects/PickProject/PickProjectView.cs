@@ -100,7 +100,7 @@ public static class PickProjectView
                 key.Handled = true;
 
                 status.Text = result.Outcome == PrefixOutcome.Armed
-                    ? $"{keymap.PrefixText} ..."
+                    ? $"{keymap.PrefixDisplay} ..."
                     : string.Empty;
 
                 if (result.Outcome == PrefixOutcome.Action)

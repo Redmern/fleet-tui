@@ -7,16 +7,16 @@ public static class FleetHintText
     public static string Motions(Keymap keymap) =>
         string.Join(
             "   ",
-            $"{keymap.TextFor(FleetAction.MoveDown)}/{keymap.TextFor(FleetAction.MoveUp)} move",
-            $"{keymap.TextFor(FleetAction.MoveFirst)}/{keymap.TextFor(FleetAction.MoveLast)} first/last");
+            $"{keymap.DisplayFor(FleetAction.MoveDown)}/{keymap.DisplayFor(FleetAction.MoveUp)} move",
+            $"{keymap.DisplayFor(FleetAction.MoveFirst)}/{keymap.DisplayFor(FleetAction.MoveLast)} first/last");
 
     public static string Picker(Keymap keymap) =>
         string.Join(
             "   ",
             Motions(keymap),
-            $"{keymap.TextFor(FleetAction.OpenProject)}/enter open",
-            $"{keymap.TextFor(FleetAction.NewProject)} new",
-            $"{keymap.TextFor(FleetAction.Close)}/esc quit",
+            $"{keymap.DisplayFor(FleetAction.OpenProject)}/enter open",
+            $"{keymap.DisplayFor(FleetAction.NewProject)} new",
+            $"{keymap.DisplayFor(FleetAction.Close)}/esc quit",
             Menu(keymap));
 
     public static string Dashboard(Keymap keymap) =>
@@ -24,11 +24,11 @@ public static class FleetHintText
             "   ",
             Motions(keymap),
             "tab pane",
-            $"{keymap.TextFor(FleetAction.AddRepository)} add repo",
-            $"{keymap.TextFor(FleetAction.Refresh)} refresh",
-            $"{keymap.TextFor(FleetAction.Close)} close",
+            $"{keymap.DisplayFor(FleetAction.AddRepository)} add repo",
+            $"{keymap.DisplayFor(FleetAction.Refresh)} refresh",
+            $"{keymap.DisplayFor(FleetAction.Close)} close",
             Menu(keymap));
 
     public static string Menu(Keymap keymap) =>
-        $"{keymap.PrefixText} {keymap.TextFor(FleetAction.OpenMenu)} menu";
+        $"{keymap.PrefixDisplay} {keymap.DisplayFor(FleetAction.OpenMenu)} menu";
 }

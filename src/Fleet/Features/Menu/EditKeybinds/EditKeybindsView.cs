@@ -26,8 +26,8 @@ public static class EditKeybindsView
 
         void Fill()
         {
-            var rows = new List<string> { Row("Prefix", config.Prefix) };
-            rows.AddRange(actions.Select(a => Row(KeymapDefaults.Describe(a), Binding(config, a))));
+            var rows = new List<string> { Row("Prefix", FleetKeyText.Display(config.Prefix)) };
+            rows.AddRange(actions.Select(a => Row(KeymapDefaults.Describe(a), FleetKeyText.Display(Binding(config, a)))));
             list.SetSource(new ObservableCollection<string>(rows));
         }
 
@@ -54,7 +54,7 @@ public static class EditKeybindsView
 
             store.Save(config);
             Fill();
-            status.Text = $"Saved. {target} is now {captured}. Restart fleet panes to apply.";
+            status.Text = $"Saved. {target} is now {FleetKeyText.Display(captured)}. Reopen panes to apply.";
         }
 
         Fill();

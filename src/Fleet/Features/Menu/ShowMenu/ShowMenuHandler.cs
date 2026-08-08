@@ -9,7 +9,7 @@ public sealed class ShowMenuHandler(Keymap keymap)
 {
     public IReadOnlyList<FleetMenuItem> Items(IReadOnlyList<FleetAction> actions) =>
         actions
-            .Select(a => new FleetMenuItem(a, KeymapDefaults.Describe(a), keymap.TextFor(a)))
+            .Select(a => new FleetMenuItem(a, KeymapDefaults.Describe(a), keymap.DisplayFor(a)))
             .ToList();
 
     public static IReadOnlyList<string> Rows(IReadOnlyList<FleetMenuItem> items)

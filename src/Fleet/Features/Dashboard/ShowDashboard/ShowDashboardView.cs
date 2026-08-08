@@ -85,7 +85,7 @@ public static class ShowDashboardView
 
                 status.Text = result.Outcome switch
                 {
-                    PrefixOutcome.Armed => $"{keymap.PrefixText} ...",
+                    PrefixOutcome.Armed => $"{keymap.PrefixDisplay} ...",
                     _ => string.Empty,
                 };
 
