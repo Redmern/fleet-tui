@@ -4,7 +4,7 @@ namespace Fleet.Shared.Keymap;
 
 public static class KeymapDefaults
 {
-    public const string Prefix = "Ctrl+s";
+    public const string Prefix = "Ctrl+Space";
 
     public static IReadOnlyDictionary<FleetAction, string> Bindings { get; } =
         new Dictionary<FleetAction, string>

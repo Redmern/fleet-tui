@@ -8,6 +8,8 @@ namespace Fleet.Tests.Ui;
 
 public class PrefixRecognizerTests
 {
+    private static Key Prefix => Keymap.Default.Prefix;
+
     private static PrefixRecognizer New() => new(Keymap.Default);
 
     [Fact]
@@ -24,7 +26,7 @@ public class PrefixRecognizerTests
     {
         var recognizer = New();
 
-        var result = recognizer.Feed(Key.S.WithCtrl);
+        var result = recognizer.Feed(Prefix);
 
         Assert.Equal(PrefixOutcome.Armed, result.Outcome);
         Assert.True(result.Handled);
@@ -32,10 +34,19 @@ public class PrefixRecognizerTests
     }
 
     [Fact]
+    public void Ctrl_s_is_not_the_prefix_because_wezterm_claims_it_as_a_leader()
+    {
+        var recognizer = New();
+
+        Assert.Equal(PrefixOutcome.NotForFleet, recognizer.Feed(Key.S.WithCtrl).Outcome);
+        Assert.False(recognizer.Armed);
+    }
+
+    [Fact]
     public void Prefix_then_space_opens_the_menu()
     {
         var recognizer = New();
-        recognizer.Feed(Key.S.WithCtrl);
+        recognizer.Feed(Prefix);
 
         var result = recognizer.Feed(Key.Space);
 
@@ -48,7 +59,7 @@ public class PrefixRecognizerTests
     public void Prefix_then_an_unbound_key_cancels_without_acting()
     {
         var recognizer = New();
-        recognizer.Feed(Key.S.WithCtrl);
+        recognizer.Feed(Prefix);
 
         var result = recognizer.Feed(Key.F12);
 
@@ -61,7 +72,7 @@ public class PrefixRecognizerTests
     public void Prefix_then_escape_cancels()
     {
         var recognizer = New();
-        recognizer.Feed(Key.S.WithCtrl);
+        recognizer.Feed(Prefix);
 
         Assert.Equal(PrefixOutcome.Cancelled, recognizer.Feed(Key.Esc).Outcome);
     }
@@ -70,9 +81,9 @@ public class PrefixRecognizerTests
     public void Prefix_twice_stays_armed()
     {
         var recognizer = New();
-        recognizer.Feed(Key.S.WithCtrl);
+        recognizer.Feed(Prefix);
 
-        var result = recognizer.Feed(Key.S.WithCtrl);
+        var result = recognizer.Feed(Prefix);
 
         Assert.Equal(PrefixOutcome.Armed, result.Outcome);
         Assert.True(recognizer.Armed);
@@ -87,22 +98,22 @@ public class PrefixRecognizerTests
     }
 
     [Fact]
-    public void A_custom_prefix_is_honoured()
+    public void A_custom_prefix_is_honoured_and_the_default_stops_working()
     {
         var recognizer = new PrefixRecognizer(
             new Keymap(KeymapConfig.Default.WithPrefix("Ctrl+B")));
 
-        Assert.Equal(PrefixOutcome.NotForFleet, recognizer.Feed(Key.S.WithCtrl).Outcome);
+        Assert.Equal(PrefixOutcome.NotForFleet, recognizer.Feed(Prefix).Outcome);
         Assert.Equal(PrefixOutcome.Armed, recognizer.Feed(Key.B.WithCtrl).Outcome);
     }
 
     [Fact]
     public void Prefix_then_a_rebound_menu_key_still_opens_the_menu()
     {
-        var recognizer = new PrefixRecognizer(
-            new Keymap(KeymapConfig.Default.With(FleetAction.OpenMenu, "m")));
+        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.OpenMenu, "m"));
+        var recognizer = new PrefixRecognizer(keymap);
 
-        recognizer.Feed(Key.S.WithCtrl);
+        recognizer.Feed(keymap.Prefix);
 
         Assert.Equal(FleetAction.OpenMenu, recognizer.Feed(Key.M).Action);
     }

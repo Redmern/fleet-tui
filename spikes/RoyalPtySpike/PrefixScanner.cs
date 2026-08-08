@@ -7,7 +7,7 @@ public enum ScanOutcome
     OpenMenu,
 }
 
-public sealed class PrefixScanner(byte prefix = 0x13, byte menu = 0x20)
+public sealed class PrefixScanner(byte prefix = 0x00, byte menu = 0x20)
 {
     public bool Armed { get; private set; }
 
