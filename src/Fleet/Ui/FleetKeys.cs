@@ -20,13 +20,16 @@ public static class FleetKeys
 
     public static void ApplyMotions(View view)
     {
-        view.KeyBindings.Add(Down, Command.Down);
-        view.KeyBindings.Add(Up, Command.Up);
-        view.KeyBindings.Add(First, Command.Start);
-        view.KeyBindings.Add(Last, Command.End);
-        view.KeyBindings.Add(PageDown, Command.PageDown);
-        view.KeyBindings.Add(PageUp, Command.PageUp);
+        Bind(view, Down, Command.Down);
+        Bind(view, Up, Command.Up);
+        Bind(view, First, Command.Start);
+        Bind(view, Last, Command.End);
+        Bind(view, PageDown, Command.PageDown);
+        Bind(view, PageUp, Command.PageUp);
     }
 
-    public static void ApplyOpen(View view) => view.KeyBindings.Add(Open, Command.Accept);
+    public static void ApplyOpen(View view) => Bind(view, Open, Command.Accept);
+
+    private static void Bind(View view, Key key, params Command[] commands)
+        => view.KeyBindings.ReplaceCommands(key, commands);
 }
