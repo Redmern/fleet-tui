@@ -24,7 +24,6 @@ public static class FleetHintText
             "   ",
             Motions(keymap),
             "tab pane",
-            $"{keymap.DisplayFor(FleetAction.AddRepository)} add repo",
             $"{keymap.DisplayFor(FleetAction.Refresh)} refresh",
             $"{keymap.DisplayFor(FleetAction.Close)} close",
             Menu(keymap));

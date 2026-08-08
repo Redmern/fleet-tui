@@ -28,8 +28,16 @@ public class ShowMenuTests
     {
         var items = new ShowMenuHandler(Keymap.Default).Items(DashboardActions);
 
-        Assert.Equal("a", items.Single(i => i.Action == FleetAction.AddRepository).KeyText);
+        Assert.Equal("r", items.Single(i => i.Action == FleetAction.Refresh).KeyText);
         Assert.Equal("q", items.Single(i => i.Action == FleetAction.Close).KeyText);
+    }
+
+    [Fact]
+    public void A_menu_only_action_shows_no_key_because_it_has_none()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items(DashboardActions);
+
+        Assert.Empty(items.Single(i => i.Action == FleetAction.AddRepository).KeyText);
     }
 
     [Fact]
@@ -44,11 +52,11 @@ public class ShowMenuTests
     [Fact]
     public void A_rebound_action_shows_its_new_key_in_the_menu()
     {
-        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.AddRepository, "F2"));
+        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.Refresh, "F2"));
 
         var items = new ShowMenuHandler(keymap).Items(DashboardActions);
 
-        Assert.Equal("f2", items.Single(i => i.Action == FleetAction.AddRepository).KeyText);
+        Assert.Equal("f2", items.Single(i => i.Action == FleetAction.Refresh).KeyText);
     }
 
     [Fact]

@@ -37,30 +37,44 @@ public static class WezTermKeybinds
         sb.AppendLine($"M.fleet = '{exe}'");
         sb.AppendLine();
         sb.AppendLine("-- The menu belongs to windows fleet is actually running in. A fleet dashboard");
-        sb.AppendLine("-- marks its pane with a WezTerm user var; without one the chord is forwarded to");
-        sb.AppendLine("-- the pane untouched, so unrelated windows keep the key.");
-        sb.AppendLine("local function has_fleet_pane(window)");
+        sb.AppendLine("-- marks its pane with a WezTerm user var holding the project name; without one");
+        sb.AppendLine("-- the chord is forwarded to the pane untouched, so unrelated windows keep the");
+        sb.AppendLine("-- key.");
+        sb.AppendLine("local function fleet_project(window)");
         sb.AppendLine("  local ok, tabs = pcall(function()");
         sb.AppendLine("    return window:mux_window():tabs()");
         sb.AppendLine("  end)");
         sb.AppendLine();
         sb.AppendLine("  if not ok or not tabs then");
-        sb.AppendLine("    return false");
+        sb.AppendLine("    return nil");
         sb.AppendLine("  end");
         sb.AppendLine();
         sb.AppendLine("  for _, tab in ipairs(tabs) do");
         sb.AppendLine("    for _, p in ipairs(tab:panes()) do");
         sb.AppendLine("      local vars = p:get_user_vars()");
-        sb.AppendLine($"      if vars and vars['{WezTermUserVars.FleetVar}'] then");
-        sb.AppendLine("        wezterm.log_info('fleet: dashboard pane found, menu enabled')");
-        sb.AppendLine("        return true");
+        sb.AppendLine($"      local project = vars and vars['{WezTermUserVars.FleetVar}']");
+        sb.AppendLine("      if project and project ~= '' then");
+        sb.AppendLine("        wezterm.log_info('fleet: dashboard pane found for ' .. project)");
+        sb.AppendLine("        return project");
         sb.AppendLine("      end");
         sb.AppendLine("    end");
         sb.AppendLine("  end");
         sb.AppendLine();
         sb.AppendLine("  wezterm.log_info('fleet: no dashboard pane in this window, forwarding the key')");
-        sb.AppendLine("  return false");
+        sb.AppendLine("  return nil");
         sb.AppendLine("end");
+        sb.AppendLine();
+        sb.AppendLine("-- Actions the running dashboard renders itself. Sending these to the dashboard");
+        sb.AppendLine("-- keeps the form inside the pane it belongs to instead of squeezing a third");
+        sb.AppendLine("-- column into the window.");
+        sb.AppendLine("M.dashboard_actions = {");
+
+        foreach (var action in MenuActions.Where(DashboardActions.IsServed))
+        {
+            sb.AppendLine($"  ['{FleetActionIds.For(action)}'] = true,");
+        }
+
+        sb.AppendLine("}");
         sb.AppendLine();
         sb.AppendLine("function M.apply(config)");
         sb.AppendLine("  config.keys = config.keys or {}");
@@ -69,7 +83,7 @@ public static class WezTermKeybinds
         sb.AppendLine($"    key = '{chord.Key}',");
         sb.AppendLine($"    mods = '{chord.Mods}',");
         sb.AppendLine("    action = wezterm.action_callback(function(window, pane)");
-        sb.AppendLine("      if not has_fleet_pane(window) then");
+        sb.AppendLine("      if not fleet_project(window) then");
         sb.AppendLine("        window:perform_action(");
         sb.AppendLine($"          act.SendKey {{ key = '{chord.Key}', mods = '{chord.Mods}' }},");
         sb.AppendLine("          pane");
@@ -93,6 +107,15 @@ public static class WezTermKeybinds
         sb.AppendLine("          },");
         sb.AppendLine("          action = wezterm.action_callback(function(inner, target, id, _label)");
         sb.AppendLine("            if not id then");
+        sb.AppendLine("              return");
+        sb.AppendLine("            end");
+        sb.AppendLine();
+        sb.AppendLine("            local project = fleet_project(inner)");
+        sb.AppendLine();
+        sb.AppendLine("            if project and M.dashboard_actions[id] then");
+        sb.AppendLine("              wezterm.background_child_process {");
+        sb.AppendLine("                M.fleet, 'request', '--action', id, '--project', project,");
+        sb.AppendLine("              }");
         sb.AppendLine("              return");
         sb.AppendLine("            end");
         sb.AppendLine();

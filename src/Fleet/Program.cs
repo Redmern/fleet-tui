@@ -25,6 +25,7 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects;
+using Fleet.Ports.Requests;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
@@ -40,6 +41,7 @@ public static class Program
             "" => await PickAndOpenAsync().ConfigureAwait(false),
             "dash" => Dash(args[1..]),
             "menu" => await MenuAsync(args[1..]).ConfigureAwait(false),
+            "request" => Request(args[1..]),
             "apply-keybinds" => ApplyKeybinds(),
             "doctor" => await DoctorAsync().ConfigureAwait(false),
             "--help" or "-h" or "help" => Help(),
@@ -53,6 +55,8 @@ public static class Program
     private static IGitRunner NewGit() => new GitRunner();
 
     private static IKeymapStore NewKeymapStore() => new JsonKeymapStore();
+
+    private static IActionRequestStore NewRequestStore() => new FileActionRequestStore();
 
     private static IMuxDriver NewMux(IFleetLog log, out string chosen, out string? unsupported)
     {
@@ -149,7 +153,9 @@ public static class Program
 
         var keymapStore = NewKeymapStore();
 
-        WezTermUserVars.MarkDashboard();
+        WezTermUserVars.MarkDashboard(project.Name);
+
+        var requests = NewRequestStore();
 
         using IApplication app = Application.Create().Init();
         FleetTheme.Register();
@@ -183,8 +189,33 @@ public static class Program
                 FleetAction.Close,
             ]),
 
-            EditKeybinds: () => EditKeybindsView.Show(app, keymapStore, keymap)));
+            EditKeybinds: () => EditKeybindsView.Show(app, keymapStore, keymap),
 
+            TakeRequest: () => requests.TakePending(project.Name)));
+
+        return 0;
+    }
+
+    private static int Request(string[] args)
+    {
+        var name = ValueOf(args, "--project");
+        var id = ValueOf(args, "--action");
+
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(id))
+        {
+            Console.Error.WriteLine("fleet request: --project <name> and --action <id> are required");
+            return 2;
+        }
+
+        var action = FleetActionIds.Parse(id);
+
+        if (action == FleetAction.None)
+        {
+            Console.Error.WriteLine($"fleet request: unknown action '{id}'");
+            return 2;
+        }
+
+        NewRequestStore().Submit(name, action);
         return 0;
     }
 
@@ -377,6 +408,8 @@ public static class Program
               fleet dash --project <name> the dashboard (runs inside a pane)
               fleet menu                  the fleet menu, or the picker outside a project
               fleet menu --action <id>    jump straight to add-repository or keybinds
+              fleet request --action <id> --project <name>
+                                          hand an action to that project's dashboard
               fleet apply-keybinds        write the wezterm keybinding module
               fleet doctor                check the environment
             """);

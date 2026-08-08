@@ -50,6 +50,8 @@ fleet                       pick a project and open it
 fleet dash --project <name> the dashboard (runs inside a pane)
 fleet menu                  the fleet menu, or the picker outside a project
 fleet menu --action <id>    jump straight to add-repository or keybinds
+fleet request --action <id> --project <name>
+                            hand an action to that project's running dashboard
 fleet apply-keybinds        write the wezterm keybinding module
 fleet doctor                check the environment
 ```
@@ -72,7 +74,19 @@ fleet.apply(config)
 ```
 
 `ctrl+space` then opens a centred overlay listing fleet's actions, with fuzzy
-filtering. Choosing one opens fleet's own view in a split.
+filtering.
+
+What happens next depends on the action. **Add repository** and **Keybinds** are
+views the dashboard already knows how to draw, so the choice is handed to the
+running dashboard — `fleet request` drops it in `%APPDATA%\fleet\requests`, the
+dashboard picks it up on its next poll, and the form fills the pane it belongs
+to. Actions the dashboard cannot draw, such as opening another project, still get
+a split of their own.
+
+This is why the menu is scoped to windows containing a fleet pane: the dashboard
+marks its pane with a WezTerm user var holding the project name, which is both
+the "is fleet here?" test and the address the request is sent to. Elsewhere the
+chord is forwarded to the pane untouched.
 
 The binding is a single chord inserted into `config.keys`, not a WezTerm
 `leader` — WezTerm allows only one leader and you may already use it. The module
@@ -90,11 +104,13 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `ctrl+d` / `ctrl+u` | page down / up |
 | `l` or `enter` | open the selection |
 | `n` | new project (picker) |
-| `a` | add repository (dashboard) |
 | `r` | refresh (dashboard) |
 | `q` | close the pane |
 | `esc` | cancel a dialog — never closes the dashboard |
 | `ctrl+space` | the fleet menu, from any pane |
+
+Adding a repository has no bare key on purpose — it lives in the menu only, so
+the dashboard's letters stay free for navigation.
 
 Every one of these is configurable through **Keybinds** in the menu, including
 the prefix. Changes are saved to `%APPDATA%\fleet\keybinds.json`.

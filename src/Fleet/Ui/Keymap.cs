@@ -16,7 +16,9 @@ public sealed class Keymap
 
         foreach (var (action, text) in Config.Bindings)
         {
-            _keys[action] = Parse(text, KeymapDefaults.Bindings[action]);
+            _keys[action] = Parse(
+                text,
+                KeymapDefaults.Bindings.TryGetValue(action, out var fallback) ? fallback : text);
         }
     }
 

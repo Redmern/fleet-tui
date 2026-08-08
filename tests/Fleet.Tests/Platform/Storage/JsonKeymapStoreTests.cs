@@ -22,9 +22,9 @@ public sealed class JsonKeymapStoreTests : ConfigHomeFixture
     [Fact]
     public void Save_then_Load_round_trips_a_custom_binding()
     {
-        Store.Save(KeymapConfig.Default.With(FleetAction.AddRepository, "F2"));
+        Store.Save(KeymapConfig.Default.With(FleetAction.OpenProject, "F2"));
 
-        Assert.Equal("F2", Store.Load().Bindings[FleetAction.AddRepository]);
+        Assert.Equal("F2", Store.Load().Bindings[FleetAction.OpenProject]);
     }
 
     [Fact]

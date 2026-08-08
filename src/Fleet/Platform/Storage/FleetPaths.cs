@@ -24,6 +24,8 @@ public static class FleetPaths
 
     public static string Sessions => Path.Combine(Config, "sessions");
 
+    public static string Requests => Path.Combine(Config, "requests");
+
     public static string LogFile => Path.Combine(Config, "fleet.log");
 
     public static string KeymapFile => Path.Combine(Config, "keybinds.json");

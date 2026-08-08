@@ -23,7 +23,7 @@ public sealed record KeymapConfig(string Prefix, IReadOnlyDictionary<FleetAction
 
         foreach (var (action, key) in Bindings)
         {
-            if (!string.IsNullOrWhiteSpace(key))
+            if (!string.IsNullOrWhiteSpace(key) && bindings.ContainsKey(action))
             {
                 bindings[action] = key;
             }

@@ -46,7 +46,20 @@ public class KeymapTests
     public void ActionFor_resolves_a_bound_key()
     {
         Assert.Equal(FleetAction.Close, Keymap.Default.ActionFor(Key.Q));
-        Assert.Equal(FleetAction.AddRepository, Keymap.Default.ActionFor(Key.A));
+        Assert.Equal(FleetAction.Refresh, Keymap.Default.ActionFor(Key.R));
+    }
+
+    [Fact]
+    public void A_saved_binding_for_a_retired_action_is_dropped_rather_than_crashing()
+    {
+        var stale = new KeymapConfig(
+            KeymapDefaults.Prefix,
+            new Dictionary<FleetAction, string> { [FleetAction.AddRepository] = "a" });
+
+        var keymap = new Keymap(stale);
+
+        Assert.Equal(Key.Empty, keymap.KeyFor(FleetAction.AddRepository));
+        Assert.Equal(FleetAction.None, keymap.ActionFor(Key.A));
     }
 
     [Fact]

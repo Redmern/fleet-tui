@@ -1050,6 +1050,55 @@ A single chord, not a leader: WezTerm supports one `leader` and a user may
 already have one (this machine uses `CTRL+s` for a tmux mode), so fleet inserts
 into `config.keys` instead. Default prefix is `Ctrl+Space`.
 
+### Where the chosen action runs — 2026-08-08
+
+The first cut ran every menu choice as `fleet menu --action <id>` in a fresh
+split. For **Add repository** that was wrong twice over: a third column appeared
+beside claude and the dashboard, squeezing both, and the form was rendered by a
+process with no idea a dashboard existed.
+
+Split by who can draw the view:
+
+- Actions the dashboard already draws — add repository, keybinds, refresh — are
+  **handed to the running dashboard**. `fleet request --action <id> --project
+  <name>` writes one file to `%APPDATA%\fleet\requests\<project>.request`;
+  `ShowDashboardView` polls it every 200 ms through `IApplication.AddTimeout` and
+  dispatches it exactly as if the key had been pressed. The form fills the pane
+  it belongs to and nothing is resized.
+- Everything else — opening another project, the picker — still gets a split,
+  because there is no running view to hand it to.
+
+`DashboardActions.Served` is the single list both sides read: it drives the
+generated Lua's `M.dashboard_actions` table and documents the split in one place.
+
+Two properties make the file store adequate without a daemon:
+
+- **Latest wins, no queue.** One file per project, overwritten. A user who picks
+  twice before the dashboard polls gets the second choice, which is what they
+  meant.
+- **Read-then-delete.** `TakePending` consumes the request, so a form cannot open
+  twice. A torn read during the writer's `WriteAllText` throws `IOException`,
+  is swallowed, and the next tick retries — the file is still there.
+
+The address is the WezTerm user var. The dashboard now publishes its **project
+name** as the value of `fleet` rather than the constant `"dashboard"`, so the
+same var answers both "is fleet in this window?" and "which dashboard do I send
+this to?". WezTerm's `wezterm.background_child_process` runs the request with no
+pane at all, so nothing flashes on screen.
+
+A `busy` flag guards the poll: Terminal.Gui timeouts keep firing inside nested
+`Run` loops, so without it a second request would stack a modal on top of the
+open one.
+
+**Add repository has no bare key.** It is menu-only, and `AddRepository` was
+removed from `KeymapDefaults.Bindings` and `Configurable` rather than merely left
+unhandled — a key shown in the keybinds editor that does nothing is worse than no
+key. Consequence: a saved `keybinds.json` from before this change still contains
+`AddRepository`, and `Keymap`'s constructor indexed `KeymapDefaults.Bindings[action]`
+directly, so it would have thrown `KeyNotFoundException` on load. `MergedOverDefaults`
+now drops bindings for actions fleet no longer has, and the lookup is a
+`TryGetValue`. Any future retired action is safe by the same route.
+
 **The `embedded` driver is parked, not cancelled.** Everything the spikes proved
 still holds if headless Windows ever forces it: RoyalApps PTY and hand-written
 ConPTY are both NativeAOT-clean, and the remaining work is the input parser and

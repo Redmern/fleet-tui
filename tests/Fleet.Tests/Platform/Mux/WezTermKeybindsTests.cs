@@ -50,14 +50,34 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
-    public void The_binding_runs_fleet_menu_in_a_split()
+    public void The_binding_offers_the_menu_as_a_selector()
     {
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
 
-        Assert.Contains("'menu'", lua);
-        Assert.Contains("SplitPane", lua);
         Assert.Contains("InputSelector", lua);
         Assert.Contains("'add-repository'", lua);
+    }
+
+    [Fact]
+    public void Actions_the_dashboard_renders_are_handed_to_it_instead_of_opening_a_pane()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+
+        Assert.Contains("M.dashboard_actions = {", lua);
+        Assert.Contains("['add-repository'] = true", lua);
+        Assert.Contains("if project and M.dashboard_actions[id] then", lua);
+        Assert.Contains("wezterm.background_child_process {", lua);
+        Assert.Contains("'request', '--action', id, '--project', project", lua);
+    }
+
+    [Fact]
+    public void Actions_the_dashboard_cannot_render_still_open_their_own_pane()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+
+        Assert.Contains("SplitPane", lua);
+        Assert.Contains("'menu'", lua);
+        Assert.DoesNotContain("['open-project'] = true", lua);
     }
 
     [Fact]
@@ -65,9 +85,9 @@ public class WezTermKeybindsTests
     {
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
 
-        Assert.Contains("local function has_fleet_pane(window)", lua);
+        Assert.Contains("local function fleet_project(window)", lua);
         Assert.Contains("get_user_vars()", lua);
-        Assert.Contains("if not has_fleet_pane(window) then", lua);
+        Assert.Contains("if not fleet_project(window) then", lua);
     }
 
     [Fact]

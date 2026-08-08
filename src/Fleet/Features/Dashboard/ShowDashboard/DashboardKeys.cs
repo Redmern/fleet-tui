@@ -18,9 +18,7 @@ public static class DashboardKeys
 
         return action switch
         {
-            FleetAction.Close
-                or FleetAction.AddRepository
-                or FleetAction.Refresh => DashboardKey.Act(action),
+            FleetAction.Close or FleetAction.Refresh => DashboardKey.Act(action),
             _ => DashboardKey.Ignore,
         };
     }

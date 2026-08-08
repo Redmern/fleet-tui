@@ -37,16 +37,41 @@ public static class ShowDashboardView
             repoList.SetSource(new ObservableCollection<string>(rows));
         }
 
+        var busy = false;
+
         async Task AddAsync()
         {
-            var error = await callbacks.AddRepository().ConfigureAwait(true);
+            busy = true;
 
-            if (error is not null)
+            try
             {
-                FleetDialog.Error(app, "Could not add repository", error);
-            }
+                var error = await callbacks.AddRepository().ConfigureAwait(true);
 
-            await RefreshAsync().ConfigureAwait(true);
+                if (error is not null)
+                {
+                    FleetDialog.Error(app, "Could not add repository", error);
+                }
+
+                await RefreshAsync().ConfigureAwait(true);
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
+        void EditKeybinds()
+        {
+            busy = true;
+
+            try
+            {
+                callbacks.EditKeybinds();
+            }
+            finally
+            {
+                busy = false;
+            }
         }
 
         void Dispatch(FleetAction action)
@@ -66,7 +91,7 @@ public static class ShowDashboardView
                     break;
 
                 case FleetAction.EditKeybinds:
-                    callbacks.EditKeybinds();
+                    EditKeybinds();
                     break;
 
                 case FleetAction.OpenMenu:
@@ -106,8 +131,25 @@ public static class ShowDashboardView
             }
         }
 
+        bool Pump()
+        {
+            if (!busy)
+            {
+                var pending = callbacks.TakeRequest();
+
+                if (pending != FleetAction.None)
+                {
+                    Dispatch(pending);
+                }
+            }
+
+            return true;
+        }
+
         repoList.KeyDown += Keys;
         agentList.KeyDown += Keys;
+
+        app.AddTimeout(TimeSpan.FromMilliseconds(200), Pump);
 
         window.Add(
             repoHeader,

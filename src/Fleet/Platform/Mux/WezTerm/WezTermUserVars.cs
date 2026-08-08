@@ -6,7 +6,6 @@ public static class WezTermUserVars
 {
     public const string FleetVar = "fleet";
 
-    public const string DashboardValue = "dashboard";
 
     public static string Sequence(string name, string value)
     {
@@ -26,5 +25,5 @@ public static class WezTermUserVars
         }
     }
 
-    public static void MarkDashboard() => Mark(FleetVar, DashboardValue);
+    public static void MarkDashboard(string project) => Mark(FleetVar, project);
 }

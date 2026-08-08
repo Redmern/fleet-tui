@@ -1,4 +1,5 @@
 using Fleet.Features.Dashboard.ShowDashboard;
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Terminal.Gui.Input;
@@ -26,15 +27,20 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void Add_and_refresh_map_to_their_actions()
+    public void Refresh_maps_to_its_action()
     {
-        Assert.Equal(
-            FleetAction.AddRepository,
-            DashboardKeys.For(Map.KeyFor(FleetAction.AddRepository), Map).Action);
-
         Assert.Equal(
             FleetAction.Refresh,
             DashboardKeys.For(Map.KeyFor(FleetAction.Refresh), Map).Action);
+    }
+
+    [Fact]
+    public void Adding_a_repository_has_no_bare_key_because_it_belongs_to_the_menu()
+    {
+        Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.AddRepository));
+        Assert.DoesNotContain(FleetAction.AddRepository, KeymapDefaults.Configurable);
+
+        Assert.False(DashboardKeys.For(Key.A, Map).Consume);
     }
 
     [Theory]
