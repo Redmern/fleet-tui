@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>royalptyspike</AssemblyName>
+    <RootNamespace>RoyalPtySpike</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RoyalApps.RoyalTerminal.Terminal.Pty.Platform" Version="0.5.0" />
+  </ItemGroup>
+
+</Project>

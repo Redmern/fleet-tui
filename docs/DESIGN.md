@@ -906,9 +906,11 @@ warnings-as-errors:
 - Pipe I/O works: ConPTY's own init stream (`ESC[?9001h ESC[?1004h`) arrives.
 - Prefix scanning over raw input bytes works, `Ctrl+S` as `0x13` included.
 
-So the AOT gate is cleared. What is *not* yet working is child attachment: every
-native call reports success, but the spawned process inherits the parent console
-instead of the pseudoconsole, so its output never reaches the pipe.
+So the AOT gate is cleared.
+
+Child attachment could not be verified in this harness: every native call reports
+success, but the child's output arrives on the parent's stdout instead of through
+the pipe, of which only ConPTY's 16 handshake bytes are received.
 
 Ruled out by experiment, so they need not be retried:
 
@@ -918,11 +920,38 @@ Ruled out by experiment, so they need not be retried:
 | `lpValue` should be a pointer to the `HPCON` | No — captures 0 bytes, worse than by-value |
 | `bInheritHandles` should be `true` | No change |
 | Short-lived child exits before ConPTY renders | No — a chatty child behaves identically |
+| A bug in our own P/Invoke | **No — see below** |
 
-Still untried: inheritable `SECURITY_ATTRIBUTES` on the pipes, explicitly zeroed
-`STARTUPINFOEX`, and `FreeConsole` in the parent before spawning. This is a bug
-in roughly 200 lines of our own code, not a platform limitation — Windows
-Terminal's own sample does the same sequence and works.
+**2026-08-08 — RoyalApps PTY under NativeAOT: also works, and it exonerates our
+ConPTY code.**
+
+`RoyalApps.RoyalTerminal.Terminal.Pty.Platform` 0.5.0 publishes with strict
+analyzers, **0 IL warnings, 1.91 MB**. Pure managed, no native shims, all
+`net10.0`, no Vanara. API is callback-based: `DefaultPtyFactory().Create()` then
+`Start(shell, columns, rows, workingDirectory, environment, arguments)`,
+`DataReceived`, `ProcessExited`, `Resize`, `Write`, `Stop`.
+
+It then produced **byte-for-byte the same failure** as our hand-written ConPTY:
+same 16 handshake bytes, child output on the parent's stdout, resize accepted.
+Two unrelated implementations failing identically pointed at the harness, and it
+was: the automation shell used for these runs has **no console**.
+`Console.WindowWidth` throws `IOException`, and both
+`Console.IsOutputRedirected` and `Console.IsInputRedirected` are `true`.
+
+ConPTY exists to host a console for a child. With the parent's stdio redirected
+to pipes there is no terminal to hand off to, so the child never lands on the
+pseudoconsole. **The earlier conclusion that this was a bug in our ~200 lines was
+wrong.** Both implementations are probably correct; neither can be verified
+except from a real terminal.
+
+Outstanding, and only a human at a real terminal can answer it: run
+`spikes/royalout/royalptyspike.exe --attach nvim` and `--attach claude` inside a
+WezTerm pane, and confirm that the child renders correctly, that `ctrl+s space`
+draws the overlay, and that the child repaints after dismissal.
+
+Recommendation if that passes: prefer RoyalApps over hand-written ConPTY. It is
+AOT-clean, cross-platform including Unix, and removes the P/Invoke and the
+fork-safety problem from fleet's own codebase.
 
 Alternatives, with dependency graphs checked:
 
