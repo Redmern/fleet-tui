@@ -214,8 +214,20 @@ public static class Program
             new Dictionary<string, string> { ["TERM"] = "xterm-256color" },
             command[1..]);
 
-        var scanner = new PrefixScanner();
+        var prefixByte = PrefixByte();
+        var scanner = new PrefixScanner(prefixByte);
         var single = new byte[1];
+
+        async Task StatusAsync(string text)
+        {
+            var line = $"[s[{rows};1H[K[48;2;69;71;90m" +
+                       $"[38;2;249;226;175m {text} [0m[u";
+
+            await stdout.WriteAsync(Encoding.UTF8.GetBytes(line)).ConfigureAwait(false);
+            await stdout.FlushAsync().ConfigureAwait(false);
+        }
+
+        await StatusAsync($"ptyspike: prefix=0x{prefixByte:X2} waiting").ConfigureAwait(false);
 
         while (!_exited)
         {
@@ -233,6 +245,7 @@ public static class Program
                     break;
 
                 case ScanOutcome.Swallowed:
+                    await StatusAsync("ptyspike: PREFIX ARMED - press space").ConfigureAwait(false);
                     break;
 
                 case ScanOutcome.OpenMenu:
@@ -253,5 +266,22 @@ public static class Program
 
         pty.Stop();
         return 0;
+    }
+
+    private static byte PrefixByte()
+    {
+        var configured = Environment.GetEnvironmentVariable("PTYSPIKE_PREFIX");
+
+        if (!string.IsNullOrWhiteSpace(configured)
+            && byte.TryParse(
+                configured.Replace("0x", string.Empty, StringComparison.OrdinalIgnoreCase),
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed))
+        {
+            return parsed;
+        }
+
+        return 0x00;
     }
 }
