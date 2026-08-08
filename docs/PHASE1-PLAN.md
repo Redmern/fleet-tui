@@ -53,7 +53,7 @@ Each of these is common and each would make things worse here.
 ### Two projects, not six
 
 ```
-fleet.sln
+fleet.slnx         → the .NET 10 SDK creates the new XML solution format
 src/Fleet          → the binary (AOT-published as `fleet`)
 tests/Fleet.Tests  → everything, mirroring the slice tree
 ```
