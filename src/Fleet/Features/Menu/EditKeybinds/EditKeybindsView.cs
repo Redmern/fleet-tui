@@ -20,8 +20,8 @@ public static class EditKeybindsView
         var config = keymap.Config;
         var actions = KeymapDefaults.Configurable;
 
-        var window = FleetTheme.Modal("Keybinds", 72, actions.Count + 9);
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(4));
+        var window = FleetTheme.Overlay("Keybinds");
+        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(3), string.Empty);
 
         void Fill()

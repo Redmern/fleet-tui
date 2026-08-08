@@ -18,6 +18,17 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Screen,
     };
 
+    public static Window Overlay(string title) => new()
+    {
+        Title = $" {title} ",
+        X = 0,
+        Y = 0,
+        Width = Dim.Fill(),
+        Height = Dim.Fill(),
+        BorderStyle = Border,
+        SchemeName = FleetSchemes.Screen,
+    };
+
     public static Window Modal(string title, int width, int height) => new()
     {
         Title = $" {title} ",

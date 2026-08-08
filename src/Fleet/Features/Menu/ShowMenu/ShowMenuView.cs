@@ -17,10 +17,9 @@ public static class ShowMenuView
         var chosen = FleetAction.None;
         var rows = ShowMenuHandler.Rows(items);
 
-        var width = Math.Clamp(rows.Count == 0 ? 40 : rows.Max(r => r.Length) + 8, 44, 92);
-        var window = FleetTheme.Modal("fleet menu", width, items.Count + 6);
+        var window = FleetTheme.Overlay("fleet menu");
 
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
+        var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
         list.SetSource(new ObservableCollection<string>(rows.ToList()));
 
         FleetKeys.ApplyMotions(list, keymap);
