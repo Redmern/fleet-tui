@@ -567,10 +567,58 @@ public class SliceBoundaryTests
 
 Known limitation, stated rather than hidden: a violation written without naming the namespace — same-namespace types, or a `global using` — slips past. If that ever happens in practice, add `NetArchTest.Rules` alongside these rather than replacing them.
 
+Two rules beyond the four listed above are worth having, and were added during implementation:
+
+- `Shared_depends_on_nothing_inside_Fleet` — `Shared/` is pure, so it may not name `Ports`, `Platform`, or `Features`.
+- `The_source_tree_was_actually_found` — asserts `RepoRoot` resolves to a directory containing `.cs` files. Without it, a broken `RepoRoot` would make every other rule pass vacuously, which is the one failure mode of a source-scanning test.
+
 - [ ] **Step 2: Run it**
 
 Run: `dotnet test --filter SliceBoundaryTests`
-Expected: PASS, 4 tests
+Expected: PASS, 6 tests
+
+- [ ] **Step 2b: Prove the rules actually bite**
+
+Six passing tests mean nothing yet — there are no slices to violate anything. Plant deliberate violations, confirm they are caught, then remove them.
+
+```powershell
+New-Item -ItemType Directory -Force -Path `
+  src/Fleet/Platform/Probe, src/Fleet/Features/Probe/AlphaSlice, src/Fleet/Features/Probe/BetaSlice | Out-Null
+
+@'
+namespace Fleet.Platform.Probe;
+internal static class ProbeThing { public const int N = 1; }
+'@ | Set-Content src/Fleet/Platform/Probe/ProbeThing.cs
+
+@'
+namespace Fleet.Features.Probe.AlphaSlice;
+using Fleet.Platform.Probe;
+internal static class Alpha { public static int Use() => ProbeThing.N; }
+'@ | Set-Content src/Fleet/Features/Probe/AlphaSlice/Alpha.cs
+
+@'
+namespace Fleet.Features.Probe.BetaSlice;
+using Fleet.Features.Probe.AlphaSlice;
+internal static class Beta { public static int Use() => Alpha.Use(); }
+'@ | Set-Content src/Fleet/Features/Probe/BetaSlice/Beta.cs
+
+dotnet test --filter SliceBoundaryTests
+```
+
+Expected: **3 failed, 3 passed** — `Features_never_reference_Platform` and
+`Only_Program_references_Platform_implementations` naming `AlphaSlice/Alpha.cs`,
+and `No_slice_references_another_slice` naming `BetaSlice/Beta.cs`.
+
+The probe must actually compile, which is why `Platform/Probe/ProbeThing.cs`
+exists — a `using` of a namespace that does not exist fails the build instead of
+the test, and proves nothing.
+
+Then remove them and confirm green:
+
+```powershell
+Remove-Item -Recurse -Force src/Fleet/Features, src/Fleet/Platform
+dotnet test
+```
 
 - [ ] **Step 3: Commit**
 
