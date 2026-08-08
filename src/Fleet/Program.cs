@@ -270,6 +270,7 @@ public static class Program
 
         Console.WriteLine($"wrote {target}");
         Console.WriteLine($"  prefix chord  {keymap.PrefixDisplay}");
+        Console.WriteLine($"  reload        {TouchWezTermConfig()}");
         Console.WriteLine();
         Console.WriteLine("add these two lines to your .wezterm.lua, then reload wezterm:");
         Console.WriteLine();
@@ -280,6 +281,37 @@ public static class Program
         Console.WriteLine("package.path, or copy fleet.lua next to your .wezterm.lua.");
 
         return 0;
+    }
+
+    private static string TouchWezTermConfig()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        string[] candidates =
+        [
+            Path.Combine(home, ".wezterm.lua"),
+            Path.Combine(home, ".config", "wezterm", "wezterm.lua"),
+        ];
+
+        foreach (var candidate in candidates)
+        {
+            if (!File.Exists(candidate))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.SetLastWriteTimeUtc(candidate, DateTime.UtcNow);
+                return $"nudged {candidate}";
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return $"could not nudge {candidate}: {e.Message}";
+            }
+        }
+
+        return "no wezterm config found; reload wezterm yourself";
     }
 
     private static async Task<int> DoctorAsync()
