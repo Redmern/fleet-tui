@@ -74,6 +74,14 @@ public sealed class FakeMuxDriver : IMuxDriver
         return Task.FromResult(id);
     }
 
+    public Task KillPaneAsync(PaneId id, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        _panes.TryRemove(id.Value, out _);
+
+        return Task.CompletedTask;
+    }
+
     public Task MovePaneAsync(
         PaneId id, MovePaneOptions options, CancellationToken ct = default)
     {

@@ -27,6 +27,8 @@ public static class FleetHintText
             $"{keymap.DisplayFor(FleetAction.NewAgent)} agent",
             "enter open",
             $"{keymap.DisplayFor(FleetAction.ToggleHidden)} hide",
+            $"{keymap.DisplayFor(FleetAction.StopAgent)} stop",
+            $"{keymap.DisplayFor(FleetAction.RemoveAgent)} remove",
             $"{keymap.DisplayFor(FleetAction.Refresh)} refresh",
             Menu(keymap));
 

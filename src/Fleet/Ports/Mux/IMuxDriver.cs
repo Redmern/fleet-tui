@@ -19,6 +19,8 @@ public interface IMuxDriver
 
     Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default);
 
+    Task KillPaneAsync(PaneId id, CancellationToken ct = default);
+
     Task MovePaneAsync(PaneId id, MovePaneOptions options, CancellationToken ct = default);
 
     Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default);

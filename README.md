@@ -10,10 +10,10 @@ the fleet menu from **any** pane, including one running nothing but Claude.
 
 > **Status.** Projects, repositories, the menu, configurable keybinds and agents
 > all work: you can start an agent in its own worktree, restart it after closing
-> the terminal, change what it opens, and hide it from the tab bar. Reaping agents
-> and tearing worktrees down is deliberately not built yet, and neither is live
-> agent status. Only the WezTerm driver ships; tmux and the embedded driver are
-> designed but unwritten. Nothing has been built or run on Linux.
+> the terminal, change what it opens, hide it from the tab bar, stop it, and
+> remove it together with its worktree. Live agent status via hooks is not built
+> yet. Only the WezTerm driver ships; tmux and the embedded driver are designed
+> but unwritten. Nothing has been built or run on Linux.
 
 ## Requirements
 
@@ -109,6 +109,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `n` | new project (picker) / new agent (dashboard) |
 | `enter` | open the selection / open an agent, restarting it if needed |
 | `c` | change what an agent opens |
+| `s` | stop an agent, keeping its worktree |
+| `d` | remove an agent and its worktree |
 | `x` | hide / show an agent in the terminal |
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
@@ -170,6 +172,17 @@ an agent that already exists; it applies the next time that agent starts.
 
 fleet creates the worktree beside its siblings, starts the harness in it, and
 lists it under Agents.
+
+### Stopping and removing
+
+`s` stops an agent: its pane closes, the worktree and the record stay, and
+`enter` starts it again.
+
+`d` removes it: stops it, deletes the worktree, drops it from the list. **The
+branch is kept** — removing an agent is not deleting work. You are asked to
+confirm, and the confirmation names any uncommitted files that would be lost.
+Files under `.fleet/` do not count, so an agent is never permanently "dirty"
+because of fleet's own bookkeeping.
 
 ### Hiding an agent
 

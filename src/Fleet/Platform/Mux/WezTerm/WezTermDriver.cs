@@ -118,6 +118,9 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         return ParsePaneId(await _cli.RunAsync(args, ct).ConfigureAwait(false));
     }
 
+    public async Task KillPaneAsync(PaneId id, CancellationToken ct = default) =>
+        await _cli.RunAsync(["kill-pane", "--pane-id", id.Value], ct).ConfigureAwait(false);
+
     public async Task MovePaneAsync(
         PaneId id, MovePaneOptions options, CancellationToken ct = default)
     {

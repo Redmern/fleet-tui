@@ -4,6 +4,9 @@ using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Features.Agents.OpenAgent;
+using Fleet.Features.Agents.RemoveAgent;
+using Fleet.Features.Agents.RemoveAgent.Models;
+using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Repositories.AddRepository;
@@ -29,11 +32,47 @@ public static class DashboardWiring
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
         FleetAction.ToggleHidden,
+        FleetAction.StopAgent,
+        FleetAction.RemoveAgent,
         FleetAction.AddRepository,
         FleetAction.Refresh,
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
+
+    private static IReadOnlyList<string> RemovalWarning(
+        string repository, string branch, string worktree, WorktreeState state)
+    {
+        var lines = new List<string>
+        {
+            $"{repository}/{branch}",
+            worktree,
+            string.Empty,
+        };
+
+        if (!state.Exists)
+        {
+            lines.Add("Its worktree is already gone; only the record is removed.");
+            return lines;
+        }
+
+        if (state.IsDirty)
+        {
+            lines.Add($"WARNING: {state.Changed.Count} uncommitted change(s) will be lost:");
+            lines.AddRange(state.Changed.Take(5).Select(c => $"  {c}"));
+
+            if (state.Changed.Count > 5)
+            {
+                lines.Add($"  ... and {state.Changed.Count - 5} more");
+            }
+        }
+        else
+        {
+            lines.Add("The worktree is clean. Its branch is kept.");
+        }
+
+        return lines;
+    }
 
     public static DashboardCallbacks For(
         IApplication app,
@@ -54,6 +93,8 @@ public static class DashboardWiring
         var hider = new HideAgentHandler(mux, agents);
         var branches = new ListBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
+        var stopper = new StopAgentHandler(mux);
+        var remover = new RemoveAgentHandler(git, mux, agents);
 
         return new DashboardCallbacks(
             LoadRepositories: async () =>
@@ -181,6 +222,51 @@ public static class DashboardWiring
                     ? $"{agent.Repository}/{agent.Branch} is hidden from the terminal; "
                       + "it is still listed here."
                     : $"{agent.Repository}/{agent.Branch} is back in the terminal.";
+            },
+
+            StopAgent: async index =>
+            {
+                var running = lister.Handle(project.Name);
+
+                if (index < 0 || index >= running.Count)
+                {
+                    return null;
+                }
+
+                var agent = running[index];
+                var outcome = await stopper.HandleAsync(agent).ConfigureAwait(false);
+
+                return outcome.Succeeded
+                    ? $"{agent.Repository}/{agent.Branch} stopped; its worktree is untouched."
+                    : outcome.Error;
+            },
+
+            RemoveAgent: index =>
+            {
+                var running = lister.Handle(project.Name);
+
+                if (index < 0 || index >= running.Count)
+                {
+                    return null;
+                }
+
+                var agent = running[index];
+                var state = remover.InspectAsync(agent).GetAwaiter().GetResult();
+
+                if (!FleetDialog.Confirm(
+                        app,
+                        "Remove this agent?",
+                        RemovalWarning(agent.Repository, agent.Branch, agent.Worktree, state),
+                        confirmText: "Remove"))
+                {
+                    return null;
+                }
+
+                var outcome = remover.HandleAsync(project.Name, agent).GetAwaiter().GetResult();
+
+                return outcome.Succeeded
+                    ? $"{agent.Repository}/{agent.Branch} removed."
+                    : outcome.Error;
             });
     }
 }

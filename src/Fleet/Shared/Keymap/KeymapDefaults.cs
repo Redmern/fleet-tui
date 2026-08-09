@@ -26,6 +26,8 @@ public static class KeymapDefaults
             [FleetAction.NewAgent] = "n",
             [FleetAction.ChangeHarness] = "c",
             [FleetAction.ToggleHidden] = "x",
+            [FleetAction.StopAgent] = "s",
+            [FleetAction.RemoveAgent] = "d",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -47,6 +49,8 @@ public static class KeymapDefaults
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
         FleetAction.ToggleHidden,
+        FleetAction.StopAgent,
+        FleetAction.RemoveAgent,
     ];
 
     public static string Describe(FleetAction action) =>
@@ -70,6 +74,8 @@ public static class KeymapDefaults
             FleetAction.NewAgent => "New agent",
             FleetAction.ChangeHarness => "Change what an agent opens",
             FleetAction.ToggleHidden => "Hide or show an agent in the terminal",
+            FleetAction.StopAgent => "Stop an agent",
+            FleetAction.RemoveAgent => "Remove an agent and its worktree",
             _ => action.ToString(),
         };
 }

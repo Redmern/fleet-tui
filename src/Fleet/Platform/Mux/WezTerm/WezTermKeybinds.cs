@@ -13,6 +13,8 @@ public static class WezTermKeybinds
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
         FleetAction.ToggleHidden,
+        FleetAction.StopAgent,
+        FleetAction.RemoveAgent,
         FleetAction.AddRepository,
         FleetAction.EditKeybinds,
         FleetAction.OpenProject,

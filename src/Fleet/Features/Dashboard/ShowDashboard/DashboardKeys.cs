@@ -13,6 +13,8 @@ public static class DashboardKeys
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
         FleetAction.ToggleHidden,
+        FleetAction.StopAgent,
+        FleetAction.RemoveAgent,
         FleetAction.PrevTab,
         FleetAction.NextTab,
     ];
@@ -21,6 +23,7 @@ public static class DashboardKeys
         action is FleetAction.OpenMenu
             or FleetAction.NewAgent
             or FleetAction.ChangeHarness
+            or FleetAction.RemoveAgent
             or FleetAction.AddRepository
             or FleetAction.EditKeybinds;
 

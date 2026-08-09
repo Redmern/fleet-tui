@@ -14,6 +14,8 @@ public static class FleetActionIds
         FleetAction.NewAgent => "new-agent",
         FleetAction.ChangeHarness => "change-harness",
         FleetAction.ToggleHidden => "toggle-hidden",
+        FleetAction.StopAgent => "stop-agent",
+        FleetAction.RemoveAgent => "remove-agent",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -27,6 +29,8 @@ public static class FleetActionIds
         "new-agent" => FleetAction.NewAgent,
         "change-harness" => FleetAction.ChangeHarness,
         "toggle-hidden" => FleetAction.ToggleHidden,
+        "stop-agent" => FleetAction.StopAgent,
+        "remove-agent" => FleetAction.RemoveAgent,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

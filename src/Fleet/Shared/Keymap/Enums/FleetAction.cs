@@ -21,4 +21,6 @@ public enum FleetAction
     NewAgent,
     ChangeHarness,
     ToggleHidden,
+    StopAgent,
+    RemoveAgent,
 }

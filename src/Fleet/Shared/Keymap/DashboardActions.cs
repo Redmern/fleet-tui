@@ -9,6 +9,8 @@ public static class DashboardActions
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
         FleetAction.ToggleHidden,
+        FleetAction.StopAgent,
+        FleetAction.RemoveAgent,
         FleetAction.AddRepository,
         FleetAction.EditKeybinds,
         FleetAction.Refresh,

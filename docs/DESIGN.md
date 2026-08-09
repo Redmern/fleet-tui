@@ -1184,6 +1184,42 @@ Storage: **daemonless files**, the option DESIGN.md deferred until the wezterm
 driver worked. Agent records live in `sessions/<project>.json`; the dashboard
 reads on refresh. No background process on any driver.
 
+### Stopping and removing agents — 2026-08-09
+
+Two separate actions, because they destroy different amounts:
+
+- **Stop** (`s`) kills the agent's pane and leaves the worktree and the record
+  alone. `enter` starts it again.
+- **Remove** (`d`) stops it, removes the worktree, and drops the record. The
+  **branch is kept** — removing an agent is not deleting work.
+
+All four teardown traps from the section above are now paid for, with tests:
+
+1. **Dirty check ignores `.fleet/`.** Counting fleet's own untracked files would
+   make every fleet-spawned worktree permanently dirty. Verified live: a worktree
+   holding both `wip-notes.txt` and `.fleet/ready` reported exactly one change.
+2. **`.git` is verified at the directory first.** `git status` walks *up* until it
+   finds a repository, so a half-removed worktree would otherwise report whatever
+   encloses it — and a teardown decision made on another repo's cleanliness
+   deletes the wrong thing. `IsWorktree` checks for `.git` as either a directory
+   or a file, since a linked worktree's `.git` is a file.
+3. **Order: inspect → `worktree remove --force` → `worktree prune`.** The force
+   flag is needed because git's own check does not ignore `.fleet/`. Nothing
+   deletes `.fleet/` first: a removal that then failed would leave the worktree in
+   place with its markers destroyed.
+4. **Removal runs from the main worktree**, resolved via `rev-parse
+   --git-common-dir` and taking that directory's parent — the worktree's own
+   parent is the container, which is not a repository at all.
+
+The dirty state is shown in the confirmation rather than used to refuse. Refusing
+would strand a user whose only uncommitted file is one they do not want; naming
+the files and the count keeps the decision theirs while making it deliberate.
+
+`RemoveAgent` is dispatched through the deferred path with the rest of the
+view-opening actions, and the git and mux calls it makes are blocking rather than
+awaited — a modal cannot be opened after an `await` (see the
+SynchronizationContext note), and the whole flow is modal anyway.
+
 ### What an agent opens, and hiding it — 2026-08-09
 
 **Harness is per agent and changeable.** `claude` or `nvim` (claude launched from

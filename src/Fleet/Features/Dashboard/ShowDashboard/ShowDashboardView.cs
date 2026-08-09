@@ -163,6 +163,35 @@ public static class ShowDashboardView
             });
         }
 
+        async Task StopAsync()
+        {
+            var error = await callbacks.StopAgent(agentList.SelectedItem ?? -1)
+                .ConfigureAwait(false);
+
+            app.Invoke(() =>
+            {
+                status.Text = error ?? string.Empty;
+                RefreshAgents();
+            });
+        }
+
+        void RemoveAgent()
+        {
+            busy = true;
+
+            try
+            {
+                var error = callbacks.RemoveAgent(agentList.SelectedItem ?? -1);
+
+                status.Text = error ?? string.Empty;
+                RefreshAgents();
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
         void ChangeHarness()
         {
             busy = true;
@@ -235,6 +264,14 @@ public static class ShowDashboardView
 
                 case FleetAction.ToggleHidden:
                     Start(ToggleHiddenAsync);
+                    break;
+
+                case FleetAction.StopAgent:
+                    Start(StopAsync);
+                    break;
+
+                case FleetAction.RemoveAgent:
+                    RemoveAgent();
                     break;
 
                 case FleetAction.EditKeybinds:

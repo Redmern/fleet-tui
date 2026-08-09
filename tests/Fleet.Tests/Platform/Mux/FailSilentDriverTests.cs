@@ -83,6 +83,8 @@ public class FailSilentDriverTests
 
         public Task<PaneId> SplitAsync(SplitOptions o, CancellationToken ct = default) => throw toThrow;
 
+        public Task KillPaneAsync(PaneId id, CancellationToken ct = default) => throw toThrow;
+
         public Task MovePaneAsync(
             PaneId id, MovePaneOptions options, CancellationToken ct = default) => throw toThrow;
 
