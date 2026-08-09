@@ -9,6 +9,8 @@ public static class FleetTheme
 {
     public const LineStyle Border = LineStyle.Rounded;
 
+    private static readonly System.Text.Rune NoHotKey = (System.Text.Rune)'￿';
+
     public static void Register() => FleetSchemeRegistry.Register();
 
     public static Window Screen(string title) => new()
@@ -85,7 +87,7 @@ public static class FleetTheme
         Text = text,
         NoDecorations = false,
         ShadowStyle = ShadowStyles.None,
-        HotKeySpecifier = (System.Text.Rune)'￿',
+        HotKeySpecifier = NoHotKey,
         SchemeName = FleetSchemes.Accent,
     };
 
@@ -97,6 +99,16 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Screen,
     };
 
+    public static Button Submit(Pos x, Pos y, string text) => new()
+    {
+        X = x,
+        Y = y,
+        Text = text,
+        ShadowStyle = ShadowStyles.None,
+        HotKeySpecifier = NoHotKey,
+        SchemeName = FleetSchemes.Accent,
+    };
+
     public static Button Primary(Pos x, Pos y, string text) => new()
     {
         X = x,
@@ -104,6 +116,7 @@ public static class FleetTheme
         Text = text,
         IsDefault = true,
         ShadowStyle = ShadowStyles.None,
+        HotKeySpecifier = NoHotKey,
         SchemeName = FleetSchemes.Accent,
     };
 
@@ -113,6 +126,7 @@ public static class FleetTheme
         Y = y,
         Text = text,
         ShadowStyle = ShadowStyles.None,
+        HotKeySpecifier = NoHotKey,
         SchemeName = FleetSchemes.Screen,
     };
 

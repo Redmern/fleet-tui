@@ -39,6 +39,8 @@ public static class NewAgentView
         var branchField = FleetTheme.Field(14, 3);
         var baseRow = FleetTheme.Choice(14, 5, DefaultBase);
         var harnessRow = FleetTheme.Choice(14, 7, AgentHarness.Describe(harness));
+        var create = FleetTheme.Submit(1, 12, "Create agent");
+        var cancel = FleetTheme.Secondary(18, 12, "Cancel");
 
         void ChooseHarness()
         {
@@ -133,6 +135,18 @@ public static class NewAgentView
             e.Handled = true;
         };
 
+        create.Accepting += (_, e) =>
+        {
+            Submit();
+            e.Handled = true;
+        };
+
+        cancel.Accepting += (_, e) =>
+        {
+            app.RequestStop(window);
+            e.Handled = true;
+        };
+
         branchField.Accepting += (_, e) =>
         {
             Submit();
@@ -159,6 +173,8 @@ public static class NewAgentView
             harnessRow,
             FleetTheme.Caption(1, 9, "Leave the branch name empty to work on the base itself."),
             FleetTheme.Caption(1, 10, "Leave the base empty to cut from the default branch."),
+            create,
+            cancel,
             FleetTheme.HintBar(FleetHints.NewAgent));
 
         app.Run(window);
