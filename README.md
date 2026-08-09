@@ -105,9 +105,9 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `h` / `l` | previous / next tab (dashboard) |
 | `l` or `enter` | open the selection (picker) |
 | `n` | new project (picker) / new agent (dashboard) |
-| `enter` | open the selection / focus an agent |
+| `enter` | open the selection / open an agent, restarting it if needed |
 | `r` | refresh (dashboard) |
-| `q` | close the pane |
+| `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
 | `ctrl+space` | the fleet menu, from any pane |
 
@@ -138,8 +138,8 @@ its count, so the tab you are not looking at still tells you what is in it.
 │ (no agents - spawning agents arrives in ph… │
 ```
 
-Escape is swallowed here: the pane closes on `q` or through the menu, never by
-cancelling out of it.
+Nothing on the dashboard closes it — not `esc`, not `q`. It is the project's main
+pane, so closing is deliberate: **Close this pane** from the fleet menu.
 
 ## Agents
 
@@ -149,7 +149,12 @@ one repository and one branch.
 Select a repository on the Repositories tab and press `n`. Name a branch; leave
 **From** empty to cut from the repository's default branch. fleet creates the
 worktree beside its siblings, starts the harness in it, and lists it under
-Agents. `enter` on an agent focuses its pane.
+Agents.
+
+`enter` on an agent **focuses its pane, or restarts it** if the pane is gone —
+after closing the terminal, selecting an agent brings it back in the same
+worktree with the same harness. That works because an agent is identified by its
+worktree path, so nothing about it depends on a pane surviving.
 
 ```
 Agents (1)    Repositories (1)

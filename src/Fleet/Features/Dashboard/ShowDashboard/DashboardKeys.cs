@@ -9,7 +9,6 @@ public static class DashboardKeys
 {
     private static readonly FleetAction[] Scope =
     [
-        FleetAction.Close,
         FleetAction.Refresh,
         FleetAction.NewAgent,
         FleetAction.PrevTab,

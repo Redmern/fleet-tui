@@ -1184,6 +1184,19 @@ Storage: **daemonless files**, the option DESIGN.md deferred until the wezterm
 driver worked. Agent records live in `sessions/<project>.json`; the dashboard
 reads on refresh. No background process on any driver.
 
+**Restore is the same action as focus.** `enter` looks for a pane whose cwd is the
+agent's worktree; if there is none, it spawns the recorded harness there rather
+than reporting a dead agent. This is the payoff of keying identity on the worktree
+path: after the terminal closes, the record still describes everything needed to
+bring the agent back, and no pane id had to survive. A worktree that no longer
+exists on disk is reported instead — that is a deleted agent, not a stopped one.
+
+**Nothing on the dashboard closes it.** It is the project's main pane, so `q` was
+removed from its key scope alongside `esc`; `Close this pane` moved into the
+WezTerm menu, which routes it back through `fleet request` like the other
+dashboard-served actions. Closing is now always deliberate. The picker keeps `q`,
+which is why key scoping had to exist first.
+
 Ported from the traps section, with tests: base-ref selection prefers the local
 branch when it is ahead of origin (so unpushed merges are not silently reverted),
 and the default branch resolves `origin/HEAD` → the anchor's own `HEAD` → `main`

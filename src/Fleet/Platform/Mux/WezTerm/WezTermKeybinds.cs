@@ -14,6 +14,7 @@ public static class WezTermKeybinds
         FleetAction.AddRepository,
         FleetAction.EditKeybinds,
         FleetAction.OpenProject,
+        FleetAction.Close,
     ];
 
     public static string Generate(Keymap keymap, string fleetExecutable)

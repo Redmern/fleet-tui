@@ -1,5 +1,6 @@
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Terminal.Gui.Input;
@@ -20,10 +21,17 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void Only_the_close_keybind_closes_the_pane()
+    public void No_bare_key_closes_the_dashboard_because_it_is_the_main_pane()
     {
-        Assert.Equal(FleetAction.Close, DashboardKeys.For(Map.KeyFor(FleetAction.Close), Map).Action);
+        Assert.False(DashboardKeys.For(Map.KeyFor(FleetAction.Close), Map).Consume);
         Assert.Equal(FleetAction.None, DashboardKeys.For(Key.Esc, Map).Action);
+    }
+
+    [Fact]
+    public void Closing_is_still_reachable_through_the_fleet_menu()
+    {
+        Assert.Contains(FleetAction.Close, DashboardActions.Served);
+        Assert.Equal(FleetAction.Close, FleetActionIds.Parse(FleetActionIds.For(FleetAction.Close)));
     }
 
     [Fact]
@@ -124,12 +132,12 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void A_rebound_close_key_is_what_closes_the_pane()
+    public void A_rebound_refresh_key_is_what_refreshes()
     {
         var keymap = new Keymap(
-            global::Fleet.Shared.Keymap.Models.KeymapConfig.Default.With(FleetAction.Close, "x"));
+            global::Fleet.Shared.Keymap.Models.KeymapConfig.Default.With(FleetAction.Refresh, "x"));
 
-        Assert.Equal(FleetAction.Close, DashboardKeys.For(Key.X, keymap).Action);
+        Assert.Equal(FleetAction.Refresh, DashboardKeys.For(Key.X, keymap).Action);
         Assert.True(DashboardKeys.For(Key.Esc, keymap).Consume);
         Assert.Equal(FleetAction.None, DashboardKeys.For(Key.Esc, keymap).Action);
     }

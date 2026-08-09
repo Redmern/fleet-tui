@@ -140,9 +140,9 @@ public static class ShowDashboardView
             }
         }
 
-        async Task FocusAsync()
+        async Task OpenAsync()
         {
-            var error = await callbacks.FocusAgent(agentList.SelectedItem ?? -1)
+            var error = await callbacks.OpenAgent(agentList.SelectedItem ?? -1)
                 .ConfigureAwait(false);
 
             if (error is not null)
@@ -293,7 +293,7 @@ public static class ShowDashboardView
 
         agentList.Accepting += (_, e) =>
         {
-            Start(FocusAsync);
+            Start(OpenAsync);
             e.Handled = true;
         };
 

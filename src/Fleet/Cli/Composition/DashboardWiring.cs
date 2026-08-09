@@ -1,4 +1,4 @@
-using Fleet.Features.Agents.FocusAgent;
+using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
@@ -44,7 +44,7 @@ public static class DashboardWiring
         var adder = new AddRepositoryHandler(git);
         var lister = new ListAgentsHandler(agents);
         var spawner = new NewAgentHandler(git, mux, agents);
-        var focuser = new FocusAgentHandler(mux);
+        var opener = new OpenAgentHandler(mux);
 
         return new DashboardCallbacks(
             LoadRepositories: async () =>
@@ -92,7 +92,7 @@ public static class DashboardWiring
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
-            FocusAgent: async index =>
+            OpenAgent: async index =>
             {
                 var running = lister.Handle(project.Name);
 
@@ -101,7 +101,7 @@ public static class DashboardWiring
                     return null;
                 }
 
-                var outcome = await focuser.HandleAsync(running[index].Worktree)
+                var outcome = await opener.HandleAsync(project.Name, running[index])
                     .ConfigureAwait(false);
 
                 return outcome.Succeeded ? null : outcome.Error;

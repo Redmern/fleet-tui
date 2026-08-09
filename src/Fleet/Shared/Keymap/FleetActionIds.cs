@@ -23,6 +23,7 @@ public static class FleetActionIds
         "new-project" => FleetAction.NewProject,
         "refresh" => FleetAction.Refresh,
         "new-agent" => FleetAction.NewAgent,
+        "close" => FleetAction.Close,
         _ => FleetAction.None,
     };
 }

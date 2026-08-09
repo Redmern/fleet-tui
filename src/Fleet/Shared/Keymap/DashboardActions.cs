@@ -10,6 +10,7 @@ public static class DashboardActions
         FleetAction.AddRepository,
         FleetAction.EditKeybinds,
         FleetAction.Refresh,
+        FleetAction.Close,
     ];
 
     public static bool IsServed(FleetAction action) => Served.Contains(action);
