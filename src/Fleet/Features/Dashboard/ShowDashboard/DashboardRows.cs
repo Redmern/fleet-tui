@@ -4,7 +4,7 @@ namespace Fleet.Features.Dashboard.ShowDashboard;
 
 public static class DashboardRows
 {
-    public const string EmptyHint = "(no repositories - press 'a' to add one)";
+    public const string EmptyHint = "(no repositories - add one from the fleet menu)";
 
     public static IReadOnlyList<DashboardRow> ForRepositories(
         IReadOnlyList<(string Name, string DefaultBranch)> repositories)

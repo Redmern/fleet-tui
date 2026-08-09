@@ -1,4 +1,7 @@
 using System.Text;
+using Fleet.Features.Agents.FocusAgent;
+using Fleet.Features.Agents.ListAgents;
+using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Diagnostics.RunDoctor;
@@ -21,6 +24,7 @@ using Fleet.Platform.Mux.Models;
 using Fleet.Platform.Mux.WezTerm;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
+using Fleet.Ports.Agents;
 using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
@@ -57,6 +61,8 @@ public static class Program
     private static IKeymapStore NewKeymapStore() => new JsonKeymapStore();
 
     private static IActionRequestStore NewRequestStore() => new FileActionRequestStore();
+
+    private static IAgentStore NewAgentStore() => new JsonAgentStore();
 
     private static IMuxDriver NewMux(IFleetLog log, out string chosen, out string? unsupported)
     {
@@ -157,6 +163,13 @@ public static class Program
 
         var requests = NewRequestStore();
 
+        var log = NewLog();
+        var mux = NewMux(log, out _, out _);
+        var agentStore = NewAgentStore();
+        var agentLister = new ListAgentsHandler(agentStore);
+        var spawner = new NewAgentHandler(git, mux, agentStore);
+        var focuser = new FocusAgentHandler(mux);
+
         using IApplication app = Application.Create().Init();
         FleetTheme.Register();
 
@@ -164,8 +177,9 @@ public static class Program
 
         ShowDashboardView.Show(app, project.Name, keymap, new DashboardCallbacks(
             LoadRepositories: async () =>
-                (await lister.HandleAsync(project.Root).ConfigureAwait(false))
-                    .Select(r => (r.Name, r.DefaultBranch))
+                (IReadOnlyList<RepositoryChoice>)(await lister
+                        .HandleAsync(project.Root).ConfigureAwait(false))
+                    .Select(r => new RepositoryChoice(r.Name, r.Path, r.DefaultBranch))
                     .ToList(),
 
             AddRepository: async () =>
@@ -183,6 +197,7 @@ public static class Program
 
             ShowMenu: () => Menu(app, keymap,
             [
+                FleetAction.NewAgent,
                 FleetAction.AddRepository,
                 FleetAction.Refresh,
                 FleetAction.EditKeybinds,
@@ -191,7 +206,46 @@ public static class Program
 
             EditKeybinds: () => EditKeybindsView.Show(app, keymapStore, keymap),
 
-            TakeRequest: () => requests.TakePending(project.Name)));
+            TakeRequest: () => requests.TakePending(project.Name),
+
+            LoadAgents: () =>
+            {
+                var agents = agentLister.Handle(project.Name);
+                return (AgentRows.For(agents), agents.Count);
+            },
+
+            NewAgent: async repository =>
+            {
+                var request = NewAgentView.Show(
+                    app,
+                    project.Name,
+                    repository.Name,
+                    repository.Directory,
+                    harness: "claude");
+
+                if (request is null)
+                {
+                    return null;
+                }
+
+                var outcome = await spawner.HandleAsync(request).ConfigureAwait(false);
+                return outcome.Succeeded ? null : outcome.Error;
+            },
+
+            FocusAgent: async index =>
+            {
+                var agents = agentLister.Handle(project.Name);
+
+                if (index < 0 || index >= agents.Count)
+                {
+                    return null;
+                }
+
+                var outcome = await focuser.HandleAsync(agents[index].Worktree)
+                    .ConfigureAwait(false);
+
+                return outcome.Succeeded ? null : outcome.Error;
+            }));
 
         return 0;
     }

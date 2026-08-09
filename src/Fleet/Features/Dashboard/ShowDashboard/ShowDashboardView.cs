@@ -23,9 +23,6 @@ public static class ShowDashboardView
         var agentList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var repoList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
 
-        agentList.SetSource(new ObservableCollection<string>(
-            ["(no agents - spawning agents arrives in phase 2)"]));
-
         var lists = new[] { agentList, repoList };
 
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
@@ -46,16 +43,43 @@ public static class ShowDashboardView
             window.SetNeedsDraw();
         }
 
-        async Task RefreshAsync()
+        void RefreshAgents()
         {
-            var repositories = await callbacks.LoadRepositories().ConfigureAwait(true);
-            var rows = DashboardRows.ForRepositories(repositories).Select(r => r.Text).ToList();
+            var agents = callbacks.LoadAgents();
+            var selected = agentList.SelectedItem ?? 0;
+
+            agentList.SetSource(new ObservableCollection<string>(agents.Rows.ToList()));
+            agentList.SelectedItem = Math.Clamp(selected, 0, Math.Max(0, agents.Rows.Count - 1));
+
+            tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(agents.Count));
+        }
+
+        IReadOnlyList<RepositoryChoice> repositories = [];
+
+        void ApplyRepositories(IReadOnlyList<RepositoryChoice> loaded)
+        {
+            repositories = loaded;
+
+            var rows = DashboardRows
+                .ForRepositories(loaded.Select(r => (r.Name, r.DefaultBranch)).ToList())
+                .Select(r => r.Text)
+                .ToList();
 
             repoList.SetSource(new ObservableCollection<string>(rows));
-            tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(rows.Count));
+            tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(loaded.Count));
+
+            RefreshAgents();
+        }
+
+        async Task RefreshAsync()
+        {
+            var loaded = await callbacks.LoadRepositories().ConfigureAwait(false);
+
+            app.Invoke(() => ApplyRepositories(loaded));
         }
 
         var busy = false;
+        var queued = FleetAction.None;
 
         async Task AddAsync()
         {
@@ -63,18 +87,67 @@ public static class ShowDashboardView
 
             try
             {
-                var error = await callbacks.AddRepository().ConfigureAwait(true);
+                var error = await callbacks.AddRepository().ConfigureAwait(false);
 
-                if (error is not null)
+                app.Invoke(() =>
                 {
-                    FleetDialog.Error(app, "Could not add repository", error);
-                }
+                    if (error is not null)
+                    {
+                        FleetDialog.Error(app, "Could not add repository", error);
+                    }
+                });
 
-                await RefreshAsync().ConfigureAwait(true);
+                await RefreshAsync().ConfigureAwait(false);
             }
             finally
             {
                 busy = false;
+            }
+        }
+
+        async Task NewAgentAsync()
+        {
+            if (repositories.Count == 0)
+            {
+                status.Text = DashboardRows.EmptyHint;
+                return;
+            }
+
+            var chosen = repositories[
+                Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1)];
+
+            busy = true;
+
+            try
+            {
+                var error = await callbacks.NewAgent(chosen).ConfigureAwait(false);
+
+                app.Invoke(() =>
+                {
+                    if (error is not null)
+                    {
+                        FleetDialog.Error(app, "Could not start the agent", error);
+                    }
+
+                    ShowTab(DashboardTabs.AgentsTab);
+                });
+
+                await RefreshAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
+        async Task FocusAsync()
+        {
+            var error = await callbacks.FocusAgent(agentList.SelectedItem ?? -1)
+                .ConfigureAwait(false);
+
+            if (error is not null)
+            {
+                app.Invoke(() => status.Text = error);
             }
         }
 
@@ -92,6 +165,21 @@ public static class ShowDashboardView
             }
         }
 
+        async Task ReportingAsync(Func<Task> work)
+        {
+            try
+            {
+                await work().ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                busy = false;
+                app.Invoke(() => status.Text = e.Message);
+            }
+        }
+
+        void Start(Func<Task> work) => _ = ReportingAsync(work);
+
         void Dispatch(FleetAction action)
         {
             switch (action)
@@ -101,11 +189,15 @@ public static class ShowDashboardView
                     break;
 
                 case FleetAction.AddRepository:
-                    _ = AddAsync();
+                    Start(AddAsync);
                     break;
 
                 case FleetAction.Refresh:
-                    _ = RefreshAsync();
+                    Start(RefreshAsync);
+                    break;
+
+                case FleetAction.NewAgent:
+                    Start(NewAgentAsync);
                     break;
 
                 case FleetAction.EditKeybinds:
@@ -126,8 +218,24 @@ public static class ShowDashboardView
             }
         }
 
+        void FromKey(FleetAction action)
+        {
+            if (DashboardKeys.OpensAView(action))
+            {
+                queued = action;
+                return;
+            }
+
+            Dispatch(action);
+        }
+
         void Keys(object? sender, Key key)
         {
+            if (busy)
+            {
+                return;
+            }
+
             var result = prefix.Feed(key);
 
             if (result.Handled)
@@ -142,7 +250,7 @@ public static class ShowDashboardView
 
                 if (result.Outcome == PrefixOutcome.Action)
                 {
-                    Dispatch(result.Action);
+                    FromKey(result.Action);
                 }
 
                 return;
@@ -153,28 +261,45 @@ public static class ShowDashboardView
             if (direct.Consume)
             {
                 key.Handled = true;
-                Dispatch(direct.Action);
+                FromKey(direct.Action);
             }
         }
 
         bool Pump()
         {
-            if (!busy)
+            if (busy)
             {
-                var pending = callbacks.TakeRequest();
+                return true;
+            }
 
-                if (pending != FleetAction.None)
-                {
-                    Dispatch(pending);
-                }
+            if (queued != FleetAction.None)
+            {
+                var action = queued;
+                queued = FleetAction.None;
+                Dispatch(action);
+
+                return true;
+            }
+
+            var pending = callbacks.TakeRequest();
+
+            if (pending != FleetAction.None)
+            {
+                Dispatch(pending);
             }
 
             return true;
         }
 
-        window.KeyDownNotHandled += Keys;
+        agentList.Accepting += (_, e) =>
+        {
+            Start(FocusAsync);
+            e.Handled = true;
+        };
 
-        app.AddTimeout(TimeSpan.FromMilliseconds(200), Pump);
+        app.Keyboard.KeyDown += Keys;
+
+        app.AddTimeout(TimeSpan.FromMilliseconds(80), Pump);
 
         window.Add(
             tabBar.Root,
@@ -185,7 +310,7 @@ public static class ShowDashboardView
 
         ShowTab(DashboardTabs.AgentsTab);
 
-        _ = RefreshAsync();
+        Start(RefreshAsync);
 
         try
         {
@@ -193,6 +318,7 @@ public static class ShowDashboardView
         }
         finally
         {
+            app.Keyboard.KeyDown -= Keys;
             window.Dispose();
         }
     }

@@ -104,7 +104,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `ctrl+d` / `ctrl+u` | page down / up |
 | `h` / `l` | previous / next tab (dashboard) |
 | `l` or `enter` | open the selection (picker) |
-| `n` | new project (picker) |
+| `n` | new project (picker) / new agent (dashboard) |
+| `enter` | open the selection / focus an agent |
 | `r` | refresh (dashboard) |
 | `q` | close the pane |
 | `esc` | cancel a dialog — never closes the dashboard |
@@ -139,6 +140,34 @@ its count, so the tab you are not looking at still tells you what is in it.
 
 Escape is swallowed here: the pane closes on `q` or through the menu, never by
 cancelling out of it.
+
+## Agents
+
+An agent is a harness — `claude` — running in a **worktree of its own**, bound to
+one repository and one branch.
+
+Select a repository on the Repositories tab and press `n`. Name a branch; leave
+**From** empty to cut from the repository's default branch. fleet creates the
+worktree beside its siblings, starts the harness in it, and lists it under
+Agents. `enter` on an agent focuses its pane.
+
+```
+Agents (1)    Repositories (1)
+══════════
+
+widgets   feature/login   claude
+```
+
+An agent's identity is its **worktree path**, never a pane id — pane ids are
+transient and driver-specific, so focusing and restoring work off the path.
+Records live in `%APPDATA%\fleet\sessions\<project>.json`; no daemon runs.
+
+Base branch selection prefers your **local** branch when it is ahead of origin,
+so cutting a new agent never silently reverts unpushed work.
+
+> Not built yet: reaping agents and tearing worktrees down. Remove a worktree
+> with `git worktree remove` for now — fleet's teardown is deliberately absent
+> until its dirty check is written, since that is the part that can destroy work.
 
 ## Projects and repositories
 

@@ -18,4 +18,5 @@ public enum FleetAction
     PageUp,
     PrevTab,
     NextTab,
+    NewAgent,
 }

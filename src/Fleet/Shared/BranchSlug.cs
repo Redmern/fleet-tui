@@ -1,4 +1,4 @@
-namespace Fleet.Features.Repositories;
+namespace Fleet.Shared;
 
 public static class BranchSlug
 {

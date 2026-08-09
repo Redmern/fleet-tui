@@ -3,8 +3,11 @@ using Fleet.Shared.Keymap.Enums;
 namespace Fleet.Features.Dashboard.ShowDashboard.Models;
 
 public sealed record DashboardCallbacks(
-    Func<Task<IReadOnlyList<(string Name, string DefaultBranch)>>> LoadRepositories,
+    Func<Task<IReadOnlyList<RepositoryChoice>>> LoadRepositories,
     Func<Task<string?>> AddRepository,
     Func<FleetAction> ShowMenu,
     Action EditKeybinds,
-    Func<FleetAction> TakeRequest);
+    Func<FleetAction> TakeRequest,
+    Func<(IReadOnlyList<string> Rows, int Count)> LoadAgents,
+    Func<RepositoryChoice, Task<string?>> NewAgent,
+    Func<int, Task<string?>> FocusAgent);

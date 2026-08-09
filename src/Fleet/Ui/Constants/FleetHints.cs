@@ -6,6 +6,8 @@ public static class FleetHints
 
     public const string AddRepository = "tab field   space toggle clone   enter add   esc cancel";
 
+    public const string NewAgent = "tab field   enter start   esc cancel";
+
     public const string Confirm = "y/enter yes   n/esc no";
 
     public const string Dismiss = "enter/esc dismiss";

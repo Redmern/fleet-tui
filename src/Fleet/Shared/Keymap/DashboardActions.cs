@@ -6,6 +6,7 @@ public static class DashboardActions
 {
     public static IReadOnlyList<FleetAction> Served { get; } =
     [
+        FleetAction.NewAgent,
         FleetAction.AddRepository,
         FleetAction.EditKeybinds,
         FleetAction.Refresh,

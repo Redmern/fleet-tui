@@ -2,6 +2,7 @@ using Fleet.Features.Repositories.AddRepository.Enums;
 using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Ports.Git;
 using Fleet.Ports.Git.Models;
+using Fleet.Shared;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Repositories.AddRepository;

@@ -11,6 +11,7 @@ public static class FleetActionIds
         FleetAction.OpenProject => "open-project",
         FleetAction.NewProject => "new-project",
         FleetAction.Refresh => "refresh",
+        FleetAction.NewAgent => "new-agent",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -21,6 +22,7 @@ public static class FleetActionIds
         "open-project" => FleetAction.OpenProject,
         "new-project" => FleetAction.NewProject,
         "refresh" => FleetAction.Refresh,
+        "new-agent" => FleetAction.NewAgent,
         _ => FleetAction.None,
     };
 }

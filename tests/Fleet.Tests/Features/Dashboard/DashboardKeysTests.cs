@@ -44,6 +44,29 @@ public class DashboardKeysTests
     }
 
     [Fact]
+    public void The_new_agent_key_starts_an_agent()
+    {
+        Assert.Equal(Key.N, Map.KeyFor(FleetAction.NewAgent));
+        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, Map).Action);
+    }
+
+    [Fact]
+    public void A_keymap_saved_before_agents_existed_still_gets_the_new_agent_key()
+    {
+        var saved = new global::Fleet.Shared.Keymap.Models.KeymapConfig(
+            KeymapDefaults.Prefix,
+            new Dictionary<FleetAction, string>
+            {
+                [FleetAction.Close] = "q",
+                [FleetAction.Refresh] = "r",
+            });
+
+        var keymap = new Keymap(saved);
+
+        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, keymap).Action);
+    }
+
+    [Fact]
     public void Tabs_are_switched_with_h_and_l()
     {
         Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.H, Map).Action);

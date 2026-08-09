@@ -11,9 +11,16 @@ public static class DashboardKeys
     [
         FleetAction.Close,
         FleetAction.Refresh,
+        FleetAction.NewAgent,
         FleetAction.PrevTab,
         FleetAction.NextTab,
     ];
+
+    public static bool OpensAView(FleetAction action) =>
+        action is FleetAction.OpenMenu
+            or FleetAction.NewAgent
+            or FleetAction.AddRepository
+            or FleetAction.EditKeybinds;
 
     public static DashboardKey For(Key key, Keymap keymap)
     {

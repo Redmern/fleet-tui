@@ -24,6 +24,8 @@ public static class FleetHintText
             "   ",
             Motions(keymap),
             $"{keymap.DisplayFor(FleetAction.PrevTab)}/{keymap.DisplayFor(FleetAction.NextTab)} tab",
+            $"{keymap.DisplayFor(FleetAction.NewAgent)} agent",
+            "enter focus",
             $"{keymap.DisplayFor(FleetAction.Refresh)} refresh",
             $"{keymap.DisplayFor(FleetAction.Close)} close",
             Menu(keymap));

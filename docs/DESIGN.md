@@ -1143,6 +1143,60 @@ asks for its own. A shared key is now deterministic by construction instead of
 depending on dictionary enumeration order, and vim-style keys can mean different
 things in different views — which is the point of them.
 
+### Agents, first slice — 2026-08-09
+
+Spawn and list. `n` on the dashboard opens a form for the repository selected in
+the Repositories tab, plans a worktree, cuts the branch, spawns the harness in
+it, records it, and lists it under Agents. `enter` focuses an agent's pane,
+matched **by worktree path** — never a pane id, per the identity rule above.
+
+Storage: **daemonless files**, the option DESIGN.md deferred until the wezterm
+driver worked. Agent records live in `sessions/<project>.json`; the dashboard
+reads on refresh. No background process on any driver.
+
+Ported from the traps section, with tests: base-ref selection prefers the local
+branch when it is ahead of origin (so unpushed merges are not silently reverted),
+and the default branch resolves `origin/HEAD` → the anchor's own `HEAD` → `main`
+rather than jumping to a hardcoded `main`. Reap and the dirty check are **not**
+built — teardown order is the part that destroys work if half-done.
+
+### Terminal.Gui v2 has no SynchronizationContext — 2026-08-09
+
+Three separate bugs in one afternoon came from this, so it is worth stating
+plainly. `Terminal.Gui` never installs a `SynchronizationContext`, so
+`ConfigureAwait(true)` is a **no-op**: every continuation after an `await` runs
+on a thread-pool thread. Consequences, all observed:
+
+- Opening a view after an `await` deadlocks the app — the modal's nested `Run`
+  starts on the wrong thread and renders nothing while still taking keys.
+- Any UI mutation after an `await` must go through `IApplication.Invoke`, which
+  queues to the next main-loop iteration (or runs inline if already on it).
+
+The dashboard's rule: **async work returns data; the UI is touched only inside
+`app.Invoke`**, and a view is only ever opened before the first `await` of a
+handler. `ReportingAsync` wraps fire-and-forget work so a failure lands in the
+status line instead of vanishing into a discarded `Task` — which is what hid the
+first instance of this for three build cycles.
+
+### Dashboard keys are claimed at the application, not the view — 2026-08-09
+
+A focused `ListView` swallows printable keys for its type-to-search
+(`CollectionNavigator`), and it does so in `OnKeyDown`, before the `KeyDown`
+event is raised — so neither a handler on the list nor `window.KeyDownNotHandled`
+ever sees them. Only keys with an explicit `KeyBindings` entry survive, which is
+why `j`/`k` worked and `n` did not, and why the earlier per-list handler appeared
+to work for `a`/`r`/`q` before the lists gained focus.
+
+The dashboard now subscribes to `app.Keyboard.KeyDown`, which fires before any
+view dispatch, and unsubscribes in the `finally` beside `window.Dispose()`. It
+ignores keys while `busy`, so a form's own fields keep their input rather than
+having `q` or `n` stolen by the dashboard underneath.
+
+Diagnosis note for next time: the decisive evidence was writing the received key
+into the status line. Three theories (navigator matching, key-dispatch
+re-entrancy, z-order) all survived reasoning and all died to one line of
+instrumentation showing `j` arriving and `n` not.
+
 **The `embedded` driver is parked, not cancelled.** Everything the spikes proved
 still holds if headless Windows ever forces it: RoyalApps PTY and hand-written
 ConPTY are both NativeAOT-clean, and the remaining work is the input parser and

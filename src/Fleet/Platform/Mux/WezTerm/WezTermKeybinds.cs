@@ -10,6 +10,7 @@ public static class WezTermKeybinds
 {
     private static readonly FleetAction[] MenuActions =
     [
+        FleetAction.NewAgent,
         FleetAction.AddRepository,
         FleetAction.EditKeybinds,
         FleetAction.OpenProject,

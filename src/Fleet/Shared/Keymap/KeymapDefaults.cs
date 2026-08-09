@@ -23,6 +23,7 @@ public static class KeymapDefaults
             [FleetAction.PageUp] = "Ctrl+U",
             [FleetAction.PrevTab] = "h",
             [FleetAction.NextTab] = "l",
+            [FleetAction.NewAgent] = "n",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -41,6 +42,7 @@ public static class KeymapDefaults
         FleetAction.PageUp,
         FleetAction.PrevTab,
         FleetAction.NextTab,
+        FleetAction.NewAgent,
     ];
 
     public static string Describe(FleetAction action) =>
@@ -61,6 +63,7 @@ public static class KeymapDefaults
             FleetAction.PageUp => "Page up",
             FleetAction.PrevTab => "Previous tab",
             FleetAction.NextTab => "Next tab",
+            FleetAction.NewAgent => "New agent",
             _ => action.ToString(),
         };
 }
