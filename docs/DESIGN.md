@@ -1143,6 +1143,36 @@ asks for its own. A shared key is now deterministic by construction instead of
 depending on dictionary enumeration order, and vim-style keys can mean different
 things in different views — which is the point of them.
 
+### The composition root is a folder, not a file — 2026-08-09
+
+`Program.cs` had grown to 478 lines doing four jobs: parsing args, constructing
+adapters, running each command, and formatting output. `Dash` alone was 115 lines,
+most of it the `DashboardCallbacks` block.
+
+```
+Cli/
+  CommandLine.cs          args -> Invocation          pure, now tested
+  Runner.cs               verb -> command
+  Commands/               one file per verb
+  Composition/            the only place that names Fleet.Platform
+Program.cs                8 lines
+```
+
+Two things this bought beyond tidiness. Argument parsing had **no tests at all**
+and now has nine, including the case where a flag is last with no value after it.
+And the rule that was "only `Program.cs` may reference `Platform`" — true only
+because one file happened to be the root — is now "only `Cli/Composition` may",
+which is what was actually meant. A second test keeps `Cli/Commands` itself free
+of `Platform`, so commands wire features together without reaching for adapters.
+
+`Adapters` returns a `MuxSelection` record rather than the old `out string chosen,
+out string? unsupported`, and the mux is still constructed per command rather than
+eagerly — `fleet request` runs on every menu pick and must not pay for a PATH
+probe it never uses.
+
+A test asserts `Program.cs` stays under 20 lines. That is the whole point of the
+refactor, so it is worth failing a build over.
+
 ### Agents, first slice — 2026-08-09
 
 Spawn and list. `n` on the dashboard opens a form for the repository selected in

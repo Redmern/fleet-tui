@@ -207,12 +207,17 @@ Vertical slices: one folder per behaviour, holding its command, handler and view
 
 ```
 src/Fleet/
-  Program.cs      composition root - the only file naming a Platform type
+  Program.cs      8 lines: parse, dispatch, return an exit code
+  Cli/            the composition root
+    CommandLine.cs    args -> Invocation (pure)
+    Runner.cs         verb -> command
+    Commands/         one file per verb
+    Composition/      the only place naming a Platform type
   Shared/         pure helpers: Result, keymap config, names, paths
-  Ports/          four interfaces covering all I/O
+  Ports/          the interfaces covering all I/O
   Ui/             FleetTheme, keymap resolution, prefix recognition
   Platform/       adapters: storage, git, logging, mux drivers
-  Features/       Projects, Repositories, Dashboard, Menu, Diagnostics
+  Features/       Projects, Repositories, Agents, Dashboard, Menu, Diagnostics
 tests/Fleet.Tests/
   Architecture/   the layout rules, enforced as tests
 ```
@@ -221,7 +226,9 @@ The rules are checked mechanically, not by convention:
 
 - a slice never references another slice — cooperation goes through the
   composition root
-- `Features/` never references `Platform/`; only `Program.cs` may
+- only `Cli/Composition/` names a `Platform` type — not even `Cli/Commands/` may
+- nothing outside the composition root depends on `Cli/`
+- `Program.cs` stays under 20 lines
 - `Ports/` and `Ui/` depend on nothing but `Shared/`
 - no slice styles itself — no scheme, border or `MessageBox` outside `Ui/`
 - no source file contains a comment

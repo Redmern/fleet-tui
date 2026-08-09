@@ -8,6 +8,7 @@ public class SliceBoundaryTests
     private const string FeaturesNamespace = "Fleet.Features";
     private const string PortsNamespace = "Fleet.Ports";
     private const string UiNamespace = "Fleet.Ui";
+    private const string CliNamespace = "Fleet.Cli";
 
     private static string RepoRoot { get; } =
         typeof(SliceBoundaryTests).Assembly
@@ -74,19 +75,49 @@ public class SliceBoundaryTests
     }
 
     [Fact]
-    public void Only_Program_references_Platform_implementations()
+    public void Only_the_composition_root_references_Platform_implementations()
     {
-        var platformDir = Path.Combine(SrcDir, "Platform") + Path.DirectorySeparatorChar;
-        var composition = Path.Combine(SrcDir, "Program.cs");
-
         var violations = CsFiles(SrcDir)
-            .Where(f => !f.StartsWith(platformDir, StringComparison.OrdinalIgnoreCase))
-            .Where(f => !string.Equals(f, composition, StringComparison.OrdinalIgnoreCase))
+            .Where(f => !Under(f, "Platform"))
+            .Where(f => !Under(f, Path.Combine("Cli", "Composition")))
             .Where(Mentions(PlatformNamespace))
             .Select(Relative)
             .ToList();
 
         Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Commands_wire_things_up_but_do_not_reach_for_Platform_themselves()
+    {
+        var violations = CsFiles(Path.Combine(SrcDir, "Cli", "Commands"))
+            .Where(Mentions(PlatformNamespace))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Nothing_outside_the_composition_root_depends_on_the_cli()
+    {
+        var violations = CsFiles(SrcDir)
+            .Where(f => !Under(f, "Cli"))
+            .Where(f => !string.Equals(
+                f, Path.Combine(SrcDir, "Program.cs"), StringComparison.OrdinalIgnoreCase))
+            .Where(Mentions(CliNamespace))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Program_is_a_composition_root_not_a_place_for_logic()
+    {
+        var lines = File.ReadAllLines(Path.Combine(SrcDir, "Program.cs")).Length;
+
+        Assert.True(lines < 20, $"Program.cs has grown to {lines} lines");
     }
 
     [Fact]
@@ -108,6 +139,7 @@ public class SliceBoundaryTests
         var violations = CsFiles(Path.Combine(SrcDir, "Ui"))
             .Where(f => Mentions(PlatformNamespace)(f)
                      || Mentions(FeaturesNamespace)(f)
+                     || Mentions(CliNamespace)(f)
                      || Mentions(PortsNamespace)(f))
             .Select(Relative)
             .ToList();
@@ -175,6 +207,11 @@ public class SliceBoundaryTests
 
         Assert.Empty(violations);
     }
+
+    private static bool Under(string file, string relativeDir) =>
+        file.StartsWith(
+            Path.Combine(SrcDir, relativeDir) + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase);
 
     private static Func<string, bool> Mentions(string ns) =>
         file => File.ReadAllText(file).Contains(ns, StringComparison.Ordinal);
