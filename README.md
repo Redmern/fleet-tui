@@ -106,6 +106,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `l` or `enter` | open the selection (picker) |
 | `n` | new project (picker) / new agent (dashboard) |
 | `enter` | open the selection / open an agent, restarting it if needed |
+| `c` | change what an agent opens |
+| `x` | hide / show an agent in the terminal |
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
@@ -157,9 +159,27 @@ selection list, **Branch name** is typed:
 | empty | empty | refused — nothing to work on |
 
 The base list shows local branches first, then remote-tracking ones marked
-`(remote)`; a remote already checked out locally is not listed twice. fleet
-creates the worktree beside its siblings, starts the harness in it, and lists it
-under Agents.
+`(remote)`; a remote already checked out locally is not listed twice.
+
+**Opens** picks what runs in the worktree — `claude`, or `nvim` with claude
+started from inside it by your own config. `c` on the dashboard changes this for
+an agent that already exists; it applies the next time that agent starts.
+
+fleet creates the worktree beside its siblings, starts the harness in it, and
+lists it under Agents.
+
+### Hiding an agent
+
+`x` hides an agent from the WezTerm tab bar without stopping it. It stays listed
+under Agents marked `(hidden)`, and `enter` brings it back — hiding is a terminal
+concern, never a fleet-listing one, so an agent can never be hidden from the
+dashboard itself.
+
+WezTerm has no API to hide a tab, so a hidden agent moves to the `fleet-hidden`
+workspace. The CLI cannot switch workspaces, so fleet writes the wanted workspace
+to `requests/workspace.request` and the generated Lua switches to it from an
+`update-status` handler. Re-run `fleet apply-keybinds` after upgrading, or hidden
+agents will not come back.
 
 `enter` on an agent **focuses its pane, or restarts it** if the pane is gone —
 after closing the terminal, selecting an agent brings it back in the same

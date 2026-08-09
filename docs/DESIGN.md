@@ -1184,6 +1184,36 @@ Storage: **daemonless files**, the option DESIGN.md deferred until the wezterm
 driver worked. Agent records live in `sessions/<project>.json`; the dashboard
 reads on refresh. No background process on any driver.
 
+### What an agent opens, and hiding it — 2026-08-09
+
+**Harness is per agent and changeable.** `claude` or `nvim` (claude launched from
+inside it by the user's own config — fleet starts nvim and stays out of the way).
+Chosen on the new-agent form, and `c` on the dashboard re-picks it for an existing
+agent. The change is recorded and takes effect the next time the agent starts;
+nothing restarts a running process behind the user's back.
+
+**Hidden means "in another workspace".** WezTerm has no API to hide a tab, so a
+hidden agent is moved to the `fleet-hidden` workspace: gone from this window's tab
+bar, still running, and still listed in fleet's Agents pane marked `(hidden)` —
+hiding is a terminal concern, never a fleet-listing one.
+
+Bringing one back needed a mechanism fleet did not have. **The CLI cannot switch
+workspaces**: `wezterm cli activate-pane` on a pane in another workspace returns
+exit 0 and leaves `list-clients` reporting the old workspace. Verified twice, once
+before designing this and once after. So fleet writes the wanted workspace to
+`requests/workspace.request` and the generated Lua performs the switch from an
+`update-status` handler — the only periodic callback WezTerm offers, firing about
+once a second. Same request-file shape as the menu actions.
+
+**A path bug this uncovered, worth recording.** `CwdUrl.Normalize` returns forward
+slashes (`C:/repos/...`) while an agent's worktree is recorded with backslashes, so
+`PathKey.Same` never matched on Windows. Hiding silently did nothing, and "open
+agent" had been *respawning* rather than focusing an existing pane — it looked
+correct because a new pane appeared. No test caught it because `FakeMuxDriver`
+stores whatever cwd it is given, so fake and real never disagreed. `PathKey` now
+folds separators on Windows, and the test asserts a real wezterm cwd against a real
+recorded worktree.
+
 ### Starting an agent: branch name and base — 2026-08-09
 
 The form is three rows. **Repo** and **Base** are buttons that open a

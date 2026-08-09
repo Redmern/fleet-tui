@@ -24,6 +24,8 @@ public static class KeymapDefaults
             [FleetAction.PrevTab] = "h",
             [FleetAction.NextTab] = "l",
             [FleetAction.NewAgent] = "n",
+            [FleetAction.ChangeHarness] = "c",
+            [FleetAction.ToggleHidden] = "x",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -43,6 +45,8 @@ public static class KeymapDefaults
         FleetAction.PrevTab,
         FleetAction.NextTab,
         FleetAction.NewAgent,
+        FleetAction.ChangeHarness,
+        FleetAction.ToggleHidden,
     ];
 
     public static string Describe(FleetAction action) =>
@@ -64,6 +68,8 @@ public static class KeymapDefaults
             FleetAction.PrevTab => "Previous tab",
             FleetAction.NextTab => "Next tab",
             FleetAction.NewAgent => "New agent",
+            FleetAction.ChangeHarness => "Change what an agent opens",
+            FleetAction.ToggleHidden => "Hide or show an agent in the terminal",
             _ => action.ToString(),
         };
 }

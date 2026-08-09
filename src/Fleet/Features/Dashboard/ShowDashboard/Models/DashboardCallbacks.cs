@@ -10,4 +10,6 @@ public sealed record DashboardCallbacks(
     Func<FleetAction> TakeRequest,
     Func<(IReadOnlyList<string> Rows, int Count)> LoadAgents,
     Func<IReadOnlyList<RepositoryChoice>, int, Task<string?>> NewAgent,
-    Func<int, Task<string?>> OpenAgent);
+    Func<int, Task<string?>> OpenAgent,
+    Func<int, string?> ChangeHarness,
+    Func<int, Task<string?>> ToggleHidden);

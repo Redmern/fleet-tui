@@ -59,12 +59,12 @@ public class WezTermDriverTests
     }
 
     [Fact]
-    public void ParsePanes_treats_the_tab_as_the_window()
+    public void ParsePanes_keeps_the_window_and_the_tab_apart()
     {
         var panes = WezTermDriver.ParsePanes(RealOutput);
 
-        Assert.Single(panes.Select(p => p.WindowId).Distinct());
-        Assert.Equal("58", panes[0].WindowId);
+        Assert.Equal("58", panes[0].TabId);
+        Assert.NotEqual(panes[0].TabId, panes[0].WindowId);
     }
 
     [Fact]

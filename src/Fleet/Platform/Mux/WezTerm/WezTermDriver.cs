@@ -30,7 +30,8 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
 
         return rows.Select(r => new Pane(
             Id: new PaneId(r.PaneId.ToString()),
-            WindowId: r.TabId.ToString(),
+            WindowId: r.WindowId.ToString(),
+            TabId: r.TabId.ToString(),
             SessionName: r.Workspace,
             Title: string.IsNullOrEmpty(r.TabTitle) ? r.Title : r.TabTitle,
             Cwd: CwdUrl.Normalize(r.Cwd),
@@ -66,9 +67,15 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             args.Add(options.Cwd);
         }
 
-        if (options.NewWindow)
+        if (options.NewWindow || !string.IsNullOrEmpty(options.Workspace))
         {
             args.Add("--new-window");
+        }
+
+        if (!string.IsNullOrEmpty(options.Workspace))
+        {
+            args.Add("--workspace");
+            args.Add(options.Workspace);
         }
 
         if (options.Args.Count > 0)
@@ -109,6 +116,31 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         }
 
         return ParsePaneId(await _cli.RunAsync(args, ct).ConfigureAwait(false));
+    }
+
+    public async Task MovePaneAsync(
+        PaneId id, MovePaneOptions options, CancellationToken ct = default)
+    {
+        var args = new List<string> { "move-pane-to-new-tab", "--pane-id", id.Value };
+
+        if (options.NewWindow || !string.IsNullOrEmpty(options.Workspace))
+        {
+            args.Add("--new-window");
+        }
+
+        if (!string.IsNullOrEmpty(options.Workspace))
+        {
+            args.Add("--workspace");
+            args.Add(options.Workspace);
+        }
+
+        if (!string.IsNullOrEmpty(options.WindowId))
+        {
+            args.Add("--window-id");
+            args.Add(options.WindowId);
+        }
+
+        await _cli.RunAsync(args, ct).ConfigureAwait(false);
     }
 
     public async Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default)

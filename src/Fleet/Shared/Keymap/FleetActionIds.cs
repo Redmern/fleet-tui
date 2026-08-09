@@ -12,6 +12,8 @@ public static class FleetActionIds
         FleetAction.NewProject => "new-project",
         FleetAction.Refresh => "refresh",
         FleetAction.NewAgent => "new-agent",
+        FleetAction.ChangeHarness => "change-harness",
+        FleetAction.ToggleHidden => "toggle-hidden",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -23,6 +25,8 @@ public static class FleetActionIds
         "new-project" => FleetAction.NewProject,
         "refresh" => FleetAction.Refresh,
         "new-agent" => FleetAction.NewAgent,
+        "change-harness" => FleetAction.ChangeHarness,
+        "toggle-hidden" => FleetAction.ToggleHidden,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

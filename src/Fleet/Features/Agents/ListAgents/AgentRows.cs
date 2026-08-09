@@ -19,7 +19,8 @@ public static class AgentRows
         return agents
             .Select(a =>
                 $"{a.Repository.PadRight(repoWidth)}   " +
-                $"{a.Branch.PadRight(branchWidth)}   {a.Harness}")
+                $"{a.Branch.PadRight(branchWidth)}   {a.Harness.PadRight(6)}" +
+                (a.Hidden ? "   (hidden)" : string.Empty))
             .ToList();
     }
 }

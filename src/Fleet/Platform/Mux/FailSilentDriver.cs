@@ -25,6 +25,9 @@ public sealed class FailSilentDriver(IMuxDriver inner, Action<Exception> onSwall
     public Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default)
         => Guard(() => inner.SplitAsync(options, ct), PaneId.None);
 
+    public Task MovePaneAsync(PaneId id, MovePaneOptions options, CancellationToken ct = default)
+        => Guard(() => inner.MovePaneAsync(id, options, ct));
+
     public Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default)
         => Guard(() => inner.SetTitleAsync(id, title, ct));
 

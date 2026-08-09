@@ -5,6 +5,8 @@ namespace Fleet.Tests.Platform.Mux;
 
 public class WezTermUserVarsTests
 {
+    private const string Request = @"C:\fleet\workspace.request";
+
     [Fact]
     public void The_sequence_is_an_osc_1337_set_user_var()
     {
@@ -28,7 +30,7 @@ public class WezTermUserVarsTests
     [Fact]
     public void The_dashboard_marker_uses_the_name_the_generated_lua_looks_for()
     {
-        var lua = WezTermKeybinds.Generate(global::Fleet.Ui.Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(global::Fleet.Ui.Keymap.Default, "fleet", Request);
 
         Assert.Contains($"vars['{WezTermUserVars.FleetVar}']", lua, StringComparison.Ordinal);
     }

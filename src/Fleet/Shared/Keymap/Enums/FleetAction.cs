@@ -19,4 +19,6 @@ public enum FleetAction
     PrevTab,
     NextTab,
     NewAgent,
+    ChangeHarness,
+    ToggleHidden,
 }

@@ -8,5 +8,7 @@ public sealed record SpawnOptions
 
     public bool NewWindow { get; init; }
 
+    public string? Workspace { get; init; }
+
     public IReadOnlyList<string> Args { get; init; } = [];
 }

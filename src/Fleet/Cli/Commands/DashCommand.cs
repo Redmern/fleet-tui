@@ -46,7 +46,8 @@ public static class DashCommand
                 git,
                 mux.Driver,
                 Adapters.Agents(),
-                Adapters.Requests()));
+                Adapters.Requests(),
+                Adapters.Workspaces()));
 
         return 0;
     }

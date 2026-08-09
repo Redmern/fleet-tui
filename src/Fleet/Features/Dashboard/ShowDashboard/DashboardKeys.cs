@@ -11,6 +11,8 @@ public static class DashboardKeys
     [
         FleetAction.Refresh,
         FleetAction.NewAgent,
+        FleetAction.ChangeHarness,
+        FleetAction.ToggleHidden,
         FleetAction.PrevTab,
         FleetAction.NextTab,
     ];
@@ -18,6 +20,7 @@ public static class DashboardKeys
     public static bool OpensAView(FleetAction action) =>
         action is FleetAction.OpenMenu
             or FleetAction.NewAgent
+            or FleetAction.ChangeHarness
             or FleetAction.AddRepository
             or FleetAction.EditKeybinds;
 

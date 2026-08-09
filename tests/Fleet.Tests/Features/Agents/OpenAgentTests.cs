@@ -2,6 +2,7 @@ using Fleet.Features.Agents.OpenAgent;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Requests;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -11,6 +12,8 @@ public sealed class OpenAgentTests : IDisposable
         Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
 
     private readonly FakeMuxDriver _mux = new();
+
+    private readonly RecordingWorkspaces _workspaces = new();
 
     public OpenAgentTests() => Directory.CreateDirectory(_root);
 
@@ -40,7 +43,7 @@ public sealed class OpenAgentTests : IDisposable
         await _mux.SpawnAsync(new SpawnOptions { Cwd = Path.Combine(_root, "backend", "main") });
         var wanted = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
-        var result = await new OpenAgentHandler(_mux).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -54,7 +57,7 @@ public sealed class OpenAgentTests : IDisposable
         var agent = Agent();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree + Path.DirectorySeparatorChar });
 
-        var result = await new OpenAgentHandler(_mux).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.Single(await _mux.ListPanesAsync());
@@ -65,7 +68,7 @@ public sealed class OpenAgentTests : IDisposable
     {
         var agent = Agent();
 
-        var result = await new OpenAgentHandler(_mux).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -81,7 +84,7 @@ public sealed class OpenAgentTests : IDisposable
     {
         var agent = Agent() with { Harness = "aider" };
 
-        await new OpenAgentHandler(_mux).HandleAsync("techweb", agent);
+        await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
@@ -94,7 +97,7 @@ public sealed class OpenAgentTests : IDisposable
         var agent = Agent();
         Directory.Delete(agent.Worktree, recursive: true);
 
-        var result = await new OpenAgentHandler(_mux).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
 
         Assert.False(result.Succeeded);
         Assert.Contains("cannot be restarted", result.Error);
@@ -107,11 +110,18 @@ public sealed class OpenAgentTests : IDisposable
         var agent = Agent();
         var other = await _mux.SpawnAsync(new SpawnOptions { Cwd = Path.Combine(_root, "other") });
 
-        await new OpenAgentHandler(_mux).HandleAsync("techweb", agent);
+        await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
 
         var panes = await _mux.ListPanesAsync();
 
         Assert.Equal(2, panes.Count);
         Assert.Contains(panes, p => p.Id == other);
+    }
+
+    private sealed class RecordingWorkspaces : IWorkspaceRequestStore
+    {
+        public List<string> Asked { get; } = [];
+
+        public void Submit(string workspace) => Asked.Add(workspace);
     }
 }

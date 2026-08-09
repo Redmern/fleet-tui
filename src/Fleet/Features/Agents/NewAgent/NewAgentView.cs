@@ -1,4 +1,5 @@
 using Fleet.Features.Agents.NewAgent.Models;
+using Fleet.Shared.Constants;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Terminal.Gui.App;
@@ -32,9 +33,30 @@ public static class NewAgentView
 
         var window = FleetTheme.Overlay("New agent");
 
+        var harness = AgentHarness.Normalize(prompt.Harness);
+
         var repositoryRow = FleetTheme.Choice(14, 1, prompt.Repositories[repository].Name);
         var branchField = FleetTheme.Field(14, 3);
         var baseRow = FleetTheme.Choice(14, 5, DefaultBase);
+        var harnessRow = FleetTheme.Choice(14, 7, AgentHarness.Describe(harness));
+
+        void ChooseHarness()
+        {
+            var picked = FleetPicker.Choose(
+                app,
+                "Harness",
+                AgentHarness.All.Select(AgentHarness.Describe).ToList(),
+                keymap,
+                AgentHarness.All.ToList().IndexOf(harness));
+
+            if (picked is null)
+            {
+                return;
+            }
+
+            harness = AgentHarness.All[picked.Value];
+            harnessRow.Text = AgentHarness.Describe(harness);
+        }
 
         void ChooseRepository()
         {
@@ -88,7 +110,7 @@ public static class NewAgentView
                 prompt.Repositories[repository].Directory,
                 branchField.Text,
                 chosenBase,
-                prompt.Harness);
+                harness);
 
             app.RequestStop(window);
         }
@@ -102,6 +124,12 @@ public static class NewAgentView
         baseRow.Accepting += (_, e) =>
         {
             ChooseBase();
+            e.Handled = true;
+        };
+
+        harnessRow.Accepting += (_, e) =>
+        {
+            ChooseHarness();
             e.Handled = true;
         };
 
@@ -127,8 +155,10 @@ public static class NewAgentView
             branchField,
             FleetTheme.Caption(1, 5, "Base:"),
             baseRow,
-            FleetTheme.Caption(1, 7, "Leave the branch name empty to work on the base itself."),
-            FleetTheme.Caption(1, 8, "Leave the base empty to cut from the default branch."),
+            FleetTheme.Caption(1, 7, "Opens:"),
+            harnessRow,
+            FleetTheme.Caption(1, 9, "Leave the branch name empty to work on the base itself."),
+            FleetTheme.Caption(1, 10, "Leave the base empty to cut from the default branch."),
             FleetTheme.HintBar(FleetHints.NewAgent));
 
         app.Run(window);

@@ -7,6 +7,8 @@ namespace Fleet.Tests.Platform.Mux;
 
 public class WezTermKeybindsTests
 {
+    private const string Request = @"C:\fleet\workspace.request";
+
     [Theory]
     [InlineData("Ctrl+Space", " ", "CTRL")]
     [InlineData("Ctrl+A", "a", "CTRL")]
@@ -24,7 +26,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_generated_lua_binds_the_configured_prefix()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "C:\\bin\\fleet.exe");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "C:\\bin\\fleet.exe", Request);
 
         Assert.Contains("key = ' '", lua);
         Assert.Contains("mods = 'CTRL'", lua);
@@ -35,7 +37,7 @@ public class WezTermKeybindsTests
     {
         var keymap = new Keymap(KeymapConfig.Default.WithPrefix("Ctrl+A"));
 
-        var lua = WezTermKeybinds.Generate(keymap, "fleet");
+        var lua = WezTermKeybinds.Generate(keymap, "fleet", Request);
 
         Assert.Contains("key = 'a'", lua);
         Assert.DoesNotContain("key = ' '", lua);
@@ -44,7 +46,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void Windows_paths_are_escaped_for_lua()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "C:\\bin\\fleet.exe");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "C:\\bin\\fleet.exe", Request);
 
         Assert.Contains("C:\\\\bin\\\\fleet.exe", lua);
     }
@@ -52,7 +54,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_binding_offers_the_menu_as_a_selector()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("InputSelector", lua);
         Assert.Contains("'add-repository'", lua);
@@ -61,7 +63,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void Actions_the_dashboard_renders_are_handed_to_it_instead_of_opening_a_pane()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("M.dashboard_actions = {", lua);
         Assert.Contains("['add-repository'] = true", lua);
@@ -73,7 +75,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void Actions_the_dashboard_cannot_render_still_open_their_own_pane()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("SplitPane", lua);
         Assert.Contains("'menu'", lua);
@@ -83,7 +85,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_menu_is_scoped_to_windows_that_contain_a_fleet_pane()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("local function fleet_project(window)", lua);
         Assert.Contains("get_user_vars()", lua);
@@ -93,7 +95,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void Without_a_fleet_pane_the_chord_is_forwarded_to_the_pane()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("act.SendKey { key = ' ', mods = 'CTRL' }", lua);
     }
@@ -101,7 +103,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_module_exposes_apply_and_warns_it_is_generated()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("function M.apply(config)", lua);
         Assert.Contains("return M", lua);
@@ -111,8 +113,35 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_module_also_exposes_setup_for_configs_written_against_the_predecessor()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet");
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("function M.setup(config, _opts)", lua);
+    }
+
+    [Fact]
+    public void The_module_switches_workspace_because_the_cli_cannot()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("wezterm.on('update-status'", lua);
+        Assert.Contains("act.SwitchToWorkspace { name = wanted }", lua);
+        Assert.Contains("os.remove(M.workspace_request)", lua);
+    }
+
+    [Fact]
+    public void The_workspace_request_path_is_escaped_for_lua()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains(@"C:\\fleet\\workspace.request", lua);
+    }
+
+    [Fact]
+    public void Hiding_an_agent_is_offered_in_the_menu()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("'toggle-hidden'", lua);
+        Assert.Contains("['toggle-hidden'] = true", lua);
     }
 }

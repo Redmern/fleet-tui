@@ -28,6 +28,8 @@ public static class Adapters
 
     public static IActionRequestStore Requests() => new FileActionRequestStore();
 
+    public static IWorkspaceRequestStore Workspaces() => new FileWorkspaceRequestStore();
+
     public static IAgentStore Agents() => new JsonAgentStore();
 
     public static MuxSelection Mux(IFleetLog log)
@@ -57,7 +59,9 @@ public static class Adapters
             "fleet.lua");
 
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        File.WriteAllText(target, WezTermKeybinds.Generate(keymap, Executable));
+        File.WriteAllText(
+            target,
+            WezTermKeybinds.Generate(keymap, Executable, FileWorkspaceRequestStore.File));
 
         return target;
     }

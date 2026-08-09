@@ -45,7 +45,12 @@ public sealed class FakeMuxDriver : IMuxDriver
             ? NextWindowId()
             : _panes.Values.FirstOrDefault()?.Pane.WindowId ?? NextWindowId();
 
-        Add(id, window, options.SessionName ?? "default", options.Cwd ?? string.Empty, options.Args);
+        Add(
+            id,
+            window,
+            options.Workspace ?? options.SessionName ?? "default",
+            options.Cwd ?? string.Empty,
+            options.Args);
         return Task.FromResult(id);
     }
 
@@ -67,6 +72,21 @@ public sealed class FakeMuxDriver : IMuxDriver
             options.Args);
 
         return Task.FromResult(id);
+    }
+
+    public Task MovePaneAsync(
+        PaneId id, MovePaneOptions options, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        RequirePane(id);
+
+        Mutate(id, p => p with
+        {
+            SessionName = options.Workspace ?? p.SessionName,
+            WindowId = options.WindowId ?? (options.NewWindow ? NextWindowId() : p.WindowId),
+        });
+
+        return Task.CompletedTask;
     }
 
     public Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default)
@@ -103,7 +123,14 @@ public sealed class FakeMuxDriver : IMuxDriver
     private void Add(
         PaneId id, string window, string session, string cwd, IReadOnlyList<string> args)
         => _panes[id.Value] = new Entry(
-            new Pane(id, window, session, Title: string.Empty, Cwd: cwd, IsActive: true),
+            new Pane(
+                id,
+                window,
+                TabId: id.Value,
+                SessionName: session,
+                Title: string.Empty,
+                Cwd: cwd,
+                IsActive: true),
             args);
 
     private void Mutate(PaneId id, Func<Pane, Pane> change)

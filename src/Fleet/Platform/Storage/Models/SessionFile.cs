@@ -20,4 +20,6 @@ public sealed class AgentEntry
     public string BaseRef { get; set; } = string.Empty;
 
     public bool RepositoryWasBare { get; set; }
+
+    public bool Hidden { get; set; }
 }

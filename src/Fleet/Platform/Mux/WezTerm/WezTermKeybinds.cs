@@ -11,16 +11,19 @@ public static class WezTermKeybinds
     private static readonly FleetAction[] MenuActions =
     [
         FleetAction.NewAgent,
+        FleetAction.ChangeHarness,
+        FleetAction.ToggleHidden,
         FleetAction.AddRepository,
         FleetAction.EditKeybinds,
         FleetAction.OpenProject,
         FleetAction.Close,
     ];
 
-    public static string Generate(Keymap keymap, string fleetExecutable)
+    public static string Generate(Keymap keymap, string fleetExecutable, string workspaceRequest)
     {
         var chord = WezTermChord.From(keymap.PrefixText);
         var exe = fleetExecutable.Replace("\\", "\\\\", StringComparison.Ordinal);
+        var request = workspaceRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
 
         var sb = new StringBuilder();
 
@@ -77,6 +80,37 @@ public static class WezTermKeybinds
         }
 
         sb.AppendLine("}");
+        sb.AppendLine();
+        sb.AppendLine("-- The CLI cannot switch workspaces: activate-pane reports success but leaves");
+        sb.AppendLine("-- the client where it was. Hidden agents live in their own workspace, so fleet");
+        sb.AppendLine("-- asks for a switch by writing a file and this handler performs it. update-status");
+        sb.AppendLine("-- fires about once a second, which is the only timer wezterm offers.");
+        sb.AppendLine($"M.workspace_request = '{request}'");
+        sb.AppendLine();
+        sb.AppendLine("wezterm.on('update-status', function(window, _pane)");
+        sb.AppendLine("  local handle = io.open(M.workspace_request, 'r')");
+        sb.AppendLine();
+        sb.AppendLine("  if not handle then");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  local wanted = handle:read('*a')");
+        sb.AppendLine("  handle:close()");
+        sb.AppendLine("  os.remove(M.workspace_request)");
+        sb.AppendLine();
+        sb.AppendLine("  wanted = wanted and wanted:gsub('%s+$', '')");
+        sb.AppendLine();
+        sb.AppendLine("  if not wanted or wanted == '' then");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  if window:active_workspace() == wanted then");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  wezterm.log_info('fleet: switching to workspace ' .. wanted)");
+        sb.AppendLine("  window:perform_action(act.SwitchToWorkspace { name = wanted }, _pane)");
+        sb.AppendLine("end)");
         sb.AppendLine();
         sb.AppendLine("function M.apply(config)");
         sb.AppendLine("  config.keys = config.keys or {}");
