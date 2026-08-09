@@ -11,13 +11,17 @@ public sealed class ListBranchesHandler(IGitRunner git)
         var result = await git
             .RunAsync(
                 repositoryDirectory,
-                ["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"],
+                ["for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes"],
                 null,
                 ct)
             .ConfigureAwait(false);
 
         return result.Ok ? Parse(result.Out) : [];
     }
+
+    private const string LocalPrefix = "refs/heads/";
+
+    private const string RemotePrefix = "refs/remotes/origin/";
 
     public static IReadOnlyList<BranchChoice> Parse(string output)
     {
@@ -26,22 +30,30 @@ public sealed class ListBranchesHandler(IGitRunner git)
 
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
-            var name = line.Trim();
+            var reference = line.Trim();
 
-            if (name.Length == 0 || name.EndsWith("/HEAD", StringComparison.Ordinal))
+            if (reference.StartsWith(LocalPrefix, StringComparison.Ordinal))
+            {
+                var name = reference[LocalPrefix.Length..];
+
+                if (name.Length > 0)
+                {
+                    locals.Add(new BranchChoice(name, false));
+                }
+
+                continue;
+            }
+
+            if (!reference.StartsWith(RemotePrefix, StringComparison.Ordinal))
             {
                 continue;
             }
 
-            var remote = name.StartsWith("origin/", StringComparison.Ordinal);
+            var branch = reference[RemotePrefix.Length..];
 
-            if (remote)
+            if (branch.Length > 0 && branch != "HEAD")
             {
-                remotes.Add(new BranchChoice(name, true));
-            }
-            else
-            {
-                locals.Add(new BranchChoice(name, false));
+                remotes.Add(new BranchChoice("origin/" + branch, true));
             }
         }
 
