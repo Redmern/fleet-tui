@@ -8,10 +8,12 @@ Opening a project gives you one window split in two: Claude on the left, the
 fleet dashboard on the right. A prefix chord — `ctrl+space` by default — opens
 the fleet menu from **any** pane, including one running nothing but Claude.
 
-> **Status: phase 1.** Projects, repositories, the dashboard shell, the menu and
-> configurable keybinds all work. Agents do not exist yet — the Agents pane is a
-> placeholder until phase 2. Only the WezTerm driver ships; tmux and the embedded
-> driver are designed but unwritten. Nothing has been built or run on Linux.
+> **Status.** Projects, repositories, the menu, configurable keybinds and agents
+> all work: you can start an agent in its own worktree, restart it after closing
+> the terminal, change what it opens, and hide it from the tab bar. Reaping agents
+> and tearing worktrees down is deliberately not built yet, and neither is live
+> agent status. Only the WezTerm driver ships; tmux and the embedded driver are
+> designed but unwritten. Nothing has been built or run on Linux.
 
 ## Requirements
 
@@ -135,9 +137,10 @@ its count, so the tab you are not looking at still tells you what is in it.
 
 ```
 ╭┤ fleet — techweb ├──────────────────────────╮
-│ Agents (0)    Repositories (1)              │
+│ Agents (2)    Repositories (1)              │
 │ ══════════                                  │
-│ (no agents - spawning agents arrives in ph… │
+│ backend   feature/login   claude            │
+│ backend   fix/auth        nvim     (hidden) │
 ```
 
 Nothing on the dashboard closes it — not `esc`, not `q`. It is the project's main
@@ -145,8 +148,8 @@ pane, so closing is deliberate: **Close this pane** from the fleet menu.
 
 ## Agents
 
-An agent is a harness — `claude` — running in a **worktree of its own**, bound to
-one repository and one branch.
+An agent is a harness — `claude`, or `nvim` — running in a **worktree of its
+own**, bound to one repository and one branch.
 
 Press `n` on the dashboard. The form has three rows — **Repo** and **Base** open a
 selection list, **Branch name** is typed:
