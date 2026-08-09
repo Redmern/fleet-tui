@@ -166,9 +166,17 @@ selection list, **Branch name** is typed:
 The base list shows local branches first, then remote-tracking ones marked
 `(remote)`; a remote already checked out locally is not listed twice.
 
-**Opens** picks what runs in the worktree — `claude`, or `nvim` with claude
-started from inside it by your own config. `c` on the dashboard changes this for
-an agent that already exists; it applies the next time that agent starts.
+**Opens** picks what runs in the worktree:
+
+- `claude` — the harness on its own.
+- `nvim (neo-tree and claude)` — nvim rooted at the worktree, started with
+  `:Neotree show` and `:ClaudeCode`, so the tree and Claude are both open.
+
+`c` on the dashboard changes this for an agent that already exists; it applies the
+next time that agent starts.
+
+The nvim option runs the commands from your own config, so it depends on
+`neo-tree` and `claudecode.nvim` being installed.
 
 fleet creates the worktree beside its siblings, starts the harness in it, and
 lists it under Agents.

@@ -6,6 +6,7 @@ using Fleet.Platform.Git;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -94,7 +95,7 @@ public sealed class NewAgentTests : IDisposable
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
         Assert.Equal(Path.Combine(directory, "feature_login"), pane.Cwd);
-        Assert.Equal(["claude"], _mux.ArgsFor(pane.Id));
+        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
     }
 
     [Fact]

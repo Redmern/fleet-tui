@@ -116,4 +116,33 @@ public class HideAgentTests
 
         public void Remove(string project, string worktree) { }
     }
+
+    [Fact]
+    public void Claude_runs_on_its_own()
+    {
+        Assert.Equal([AgentHarness.Claude], AgentHarness.CommandFor(AgentHarness.Claude));
+    }
+
+    [Fact]
+    public void Nvim_is_started_with_neo_tree_and_claude_open()
+    {
+        var command = AgentHarness.CommandFor(AgentHarness.Nvim);
+
+        Assert.Equal(AgentHarness.Nvim, command[0]);
+        Assert.Equal("-c", command[1]);
+        Assert.Contains("Neotree show", command[2]);
+        Assert.Contains("ClaudeCode", command[2]);
+    }
+
+    [Fact]
+    public void The_startup_commands_are_scheduled_so_lazy_plugins_have_loaded()
+    {
+        Assert.StartsWith("lua vim.schedule(", AgentHarness.NvimStartup);
+    }
+
+    [Fact]
+    public void An_unknown_harness_still_launches_something_usable()
+    {
+        Assert.Equal([AgentHarness.Claude], AgentHarness.CommandFor("emacs"));
+    }
 }

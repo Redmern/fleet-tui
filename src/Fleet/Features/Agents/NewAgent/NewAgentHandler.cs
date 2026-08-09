@@ -5,6 +5,7 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.NewAgent;
@@ -75,7 +76,7 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             {
                 Cwd = plan.TargetDirectory,
                 SessionName = command.ProjectName,
-                Args = [command.Harness],
+                Args = AgentHarness.CommandFor(command.Harness),
             },
             ct).ConfigureAwait(false);
 

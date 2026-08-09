@@ -1184,6 +1184,21 @@ Storage: **daemonless files**, the option DESIGN.md deferred until the wezterm
 driver worked. Agent records live in `sessions/<project>.json`; the dashboard
 reads on refresh. No background process on any driver.
 
+### The nvim harness opens neo-tree and claude — 2026-08-09
+
+`AgentHarness.CommandFor` turns a harness into an argv. `claude` is just
+`["claude"]`; `nvim` is
+`["nvim", "-c", "lua vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)"]`.
+
+`vim.schedule` rather than two bare `-c` commands: both plugins are lazy-loaded,
+and deferring to the event loop lets lazy.nvim resolve the `:Neotree` and
+`:ClaudeCode` command triggers before they are called. The command names come
+from the user's own config (`neo-tree.lua`, `claudecode.lua`) — fleet is coupled
+to that config, which is worth remembering if the plugin set changes.
+
+The whole lua string is a single argv element and reaches wezterm through
+`ProcessStartInfo.ArgumentList`, so .NET does the quoting and no shell is involved.
+
 ### Stopping and removing agents — 2026-08-09
 
 Two separate actions, because they destroy different amounts:

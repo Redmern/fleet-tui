@@ -3,6 +3,7 @@ using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Requests;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -75,20 +76,20 @@ public sealed class OpenAgentTests : IDisposable
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
         Assert.Equal(agent.Worktree, pane.Cwd);
-        Assert.Equal(["claude"], _mux.ArgsFor(pane.Id));
+        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
         Assert.Equal("backend/feature_login", _mux.TitleOf(pane.Id));
     }
 
     [Fact]
     public async Task A_restarted_agent_keeps_the_harness_it_was_created_with()
     {
-        var agent = Agent() with { Harness = "aider" };
+        var agent = Agent() with { Harness = AgentHarness.Nvim };
 
         await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
-        Assert.Equal(["aider"], _mux.ArgsFor(pane.Id));
+        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), _mux.ArgsFor(pane.Id));
     }
 
     [Fact]

@@ -40,7 +40,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IWorkspaceRequestStore work
                 Cwd = agent.Worktree,
                 SessionName = project,
                 Workspace = agent.Hidden ? FleetWorkspaces.Hidden : null,
-                Args = [agent.Harness],
+                Args = AgentHarness.CommandFor(agent.Harness),
             },
             ct).ConfigureAwait(false);
 
