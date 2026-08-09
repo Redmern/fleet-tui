@@ -78,6 +78,16 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Screen,
     };
 
+    public static TextField Choice(Pos x, Pos y, string text) => new()
+    {
+        X = x,
+        Y = y,
+        Width = Dim.Fill(2),
+        Text = text,
+        ReadOnly = true,
+        SchemeName = FleetSchemes.Screen,
+    };
+
     public static CheckBox Toggle(Pos x, Pos y, string text) => new()
     {
         X = x,

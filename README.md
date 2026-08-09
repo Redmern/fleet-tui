@@ -146,10 +146,20 @@ pane, so closing is deliberate: **Close this pane** from the fleet menu.
 An agent is a harness — `claude` — running in a **worktree of its own**, bound to
 one repository and one branch.
 
-Select a repository on the Repositories tab and press `n`. Name a branch; leave
-**From** empty to cut from the repository's default branch. fleet creates the
-worktree beside its siblings, starts the harness in it, and lists it under
-Agents.
+Press `n` on the dashboard. The form has three rows — **Repo** and **Base** open a
+selection list, **Branch name** is typed:
+
+| Branch name | Base | Result |
+|---|---|---|
+| given | given | cut that branch from that base |
+| given | empty | cut that branch from the default branch |
+| empty | given | work on the base branch itself |
+| empty | empty | refused — nothing to work on |
+
+The base list shows local branches first, then remote-tracking ones marked
+`(remote)`; a remote already checked out locally is not listed twice. fleet
+creates the worktree beside its siblings, starts the harness in it, and lists it
+under Agents.
 
 `enter` on an agent **focuses its pane, or restarts it** if the pane is gone —
 after closing the terminal, selecting an agent brings it back in the same

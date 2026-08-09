@@ -4,6 +4,6 @@ public sealed record NewAgentCommand(
     string ProjectName,
     string RepositoryName,
     string RepositoryDirectory,
-    string Branch,
-    string BaseBranch,
+    string BranchName,
+    string Base,
     string Harness);

@@ -14,12 +14,14 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
     {
-        var branch = command.Branch.Trim();
+        var planned = AgentBranch.Plan(command.BranchName, command.Base);
 
-        if (branch.Length == 0)
+        if (!planned.Succeeded)
         {
-            return Fail("A branch name is required.");
+            return Fail(planned.Error!);
         }
+
+        var branch = planned.Value!.Branch;
 
         if (!Directory.Exists(command.RepositoryDirectory))
         {
@@ -40,7 +42,7 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
 
         if (plan.MustCreate)
         {
-            var resolved = await ResolveBaseRefAsync(plan.Anchor, command.BaseBranch, ct)
+            var resolved = await ResolveBaseRefAsync(plan.Anchor, planned.Value!.Base, ct)
                 .ConfigureAwait(false);
 
             if (!resolved.Succeeded)
@@ -93,6 +95,16 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
         string anchor, string requested, CancellationToken ct)
     {
         var wanted = requested.Trim();
+
+        if (AgentBranch.IsRemote(wanted))
+        {
+            var tracked = await ExistsAsync(anchor, $"refs/remotes/{wanted}", ct)
+                .ConfigureAwait(false);
+
+            return tracked
+                ? Result<string>.Ok(wanted)
+                : Result<string>.Fail($"'{wanted}' is not a branch in this repository.");
+        }
 
         if (wanted.Length == 0)
         {

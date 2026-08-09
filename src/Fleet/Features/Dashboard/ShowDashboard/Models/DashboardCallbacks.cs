@@ -9,5 +9,5 @@ public sealed record DashboardCallbacks(
     Action EditKeybinds,
     Func<FleetAction> TakeRequest,
     Func<(IReadOnlyList<string> Rows, int Count)> LoadAgents,
-    Func<RepositoryChoice, Task<string?>> NewAgent,
+    Func<IReadOnlyList<RepositoryChoice>, int, Task<string?>> NewAgent,
     Func<int, Task<string?>> OpenAgent);

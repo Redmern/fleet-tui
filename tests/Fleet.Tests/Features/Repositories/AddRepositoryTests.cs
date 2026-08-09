@@ -126,6 +126,34 @@ public sealed class AddRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task A_clone_tracks_its_remote_branches_so_they_can_be_seen_and_fetched()
+    {
+        await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin", "main"));
+        var origin = Path.Combine(_root, "origin");
+
+        await Git.RunAsync(Path.Combine(origin, "main"), ["branch", "release"]);
+
+        var dest = Path.Combine(_root, "dest");
+        Directory.CreateDirectory(dest);
+
+        var result = await Handler().HandleAsync(
+            AddRepositoryCommand.CloneFrom(dest, "backend", origin, "main"));
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var container = Path.Combine(dest, "backend");
+
+        Assert.Equal(
+            "+refs/heads/*:refs/remotes/origin/*",
+            (await Git.RunAsync(container, ["config", "--get", "remote.origin.fetch"])).Out);
+
+        var remotes = await Git.RunAsync(
+            container, ["for-each-ref", "--format=%(refname:short)", "refs/remotes"]);
+
+        Assert.Contains("origin/release", remotes.Out, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Cloning_records_the_requested_branch_as_the_repository_head()
     {
         await Handler().HandleAsync(AddRepositoryCommand.CreateNew(_root, "origin", "main"));

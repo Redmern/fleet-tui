@@ -113,14 +113,14 @@ public static class ShowDashboardView
                 return;
             }
 
-            var chosen = repositories[
-                Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1)];
+            var selected = Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1);
 
             busy = true;
 
             try
             {
-                var error = await callbacks.NewAgent(chosen).ConfigureAwait(false);
+                var error = await callbacks.NewAgent(repositories, selected)
+                    .ConfigureAwait(false);
 
                 app.Invoke(() =>
                 {

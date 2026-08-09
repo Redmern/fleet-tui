@@ -1,6 +1,7 @@
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.NewAgent;
+using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Repositories.AddRepository;
@@ -45,6 +46,7 @@ public static class DashboardWiring
         var lister = new ListAgentsHandler(agents);
         var spawner = new NewAgentHandler(git, mux, agents);
         var opener = new OpenAgentHandler(mux);
+        var branches = new ListBranchesHandler(git);
 
         return new DashboardCallbacks(
             LoadRepositories: async () =>
@@ -78,10 +80,17 @@ public static class DashboardWiring
                 return (AgentRows.For(running), running.Count);
             },
 
-            NewAgent: async repository =>
+            NewAgent: async (available, selected) =>
             {
                 var request = NewAgentView.Show(
-                    app, project.Name, repository.Name, repository.Directory, Harness);
+                    app,
+                    new NewAgentPrompt(
+                        project.Name,
+                        available.Select(r => (r.Name, r.Directory)).ToList(),
+                        selected,
+                        directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
+                        Harness),
+                    keymap);
 
                 if (request is null)
                 {

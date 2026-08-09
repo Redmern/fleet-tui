@@ -76,6 +76,7 @@ public sealed class AddRepositoryHandler(IGitRunner git)
         string branch, CancellationToken ct)
     {
         await Run(projectRoot, ["clone", "--bare", url, gitDir], ct).ConfigureAwait(false);
+        await TrackRemoteBranchesAsync(container, ct).ConfigureAwait(false);
 
         var effective = branch;
         if (effective.Length == 0)
@@ -104,6 +105,18 @@ public sealed class AddRepositoryHandler(IGitRunner git)
         await AddWorktreeAsync(container, effective, ct).ConfigureAwait(false);
 
         return Result<Repository>.Ok(new Repository(name, container, effective));
+    }
+
+    private async Task TrackRemoteBranchesAsync(string container, CancellationToken ct)
+    {
+        await Run(
+                container,
+                ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"],
+                ct)
+            .ConfigureAwait(false);
+
+        await git.RunAsync(container, ["fetch", "--prune", "origin"], null, ct)
+            .ConfigureAwait(false);
     }
 
     private async Task AddWorktreeAsync(string container, string branch, CancellationToken ct)

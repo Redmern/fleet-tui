@@ -2,46 +2,114 @@ using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Terminal.Gui.App;
+using Terminal.Gui.Views;
 
 namespace Fleet.Features.Agents.NewAgent;
 
 public static class NewAgentView
 {
+    public const string DefaultBase = "(default branch)";
+
     public static NewAgentCommand? Show(
         IApplication app,
-        string projectName,
-        string repositoryName,
-        string repositoryDirectory,
-        string harness)
+        NewAgentPrompt prompt,
+        Keymap keymap)
     {
+        if (prompt.Repositories.Count == 0)
+        {
+            FleetDialog.Error(
+                app,
+                "No repositories",
+                "This project has no repositories yet. Add one from the fleet menu first.");
+
+            return null;
+        }
+
         NewAgentCommand? result = null;
+
+        var repository = Math.Clamp(prompt.Selected, 0, prompt.Repositories.Count - 1);
+        var chosenBase = string.Empty;
 
         var window = FleetTheme.Overlay("New agent");
 
-        var branchField = FleetTheme.Field(11, 3);
-        var baseField = FleetTheme.Field(11, 5);
+        var repositoryRow = FleetTheme.Choice(13, 1, prompt.Repositories[repository].Name);
+        var branchField = FleetTheme.Field(13, 3);
+        var baseRow = FleetTheme.Choice(13, 5, DefaultBase);
+
+        void ChooseRepository()
+        {
+            var picked = FleetPicker.Choose(
+                app,
+                "Repository",
+                prompt.Repositories.Select(r => r.Name).ToList(),
+                keymap,
+                repository);
+
+            if (picked is null)
+            {
+                return;
+            }
+
+            repository = picked.Value;
+            repositoryRow.Text = prompt.Repositories[repository].Name;
+            chosenBase = string.Empty;
+            baseRow.Text = DefaultBase;
+        }
+
+        void ChooseBase()
+        {
+            var branches = prompt.Branches(prompt.Repositories[repository].Directory);
+
+            if (branches.Count == 0)
+            {
+                FleetDialog.Error(
+                    app, "No branches", "That repository has no branches to start from.");
+
+                return;
+            }
+
+            var picked = FleetPicker.Choose(
+                app, "Base branch", branches.Select(b => b.Label).ToList(), keymap);
+
+            if (picked is null)
+            {
+                return;
+            }
+
+            chosenBase = branches[picked.Value].Reference;
+            baseRow.Text = chosenBase;
+        }
 
         void Submit()
         {
             result = new NewAgentCommand(
-                projectName,
-                repositoryName,
-                repositoryDirectory,
+                prompt.ProjectName,
+                prompt.Repositories[repository].Name,
+                prompt.Repositories[repository].Directory,
                 branchField.Text,
-                baseField.Text,
-                harness);
+                chosenBase,
+                prompt.Harness);
 
             app.RequestStop(window);
         }
 
-        foreach (var field in new[] { branchField, baseField })
+        repositoryRow.Accepting += (_, e) =>
         {
-            field.Accepting += (_, e) =>
-            {
-                Submit();
-                e.Handled = true;
-            };
-        }
+            ChooseRepository();
+            e.Handled = true;
+        };
+
+        baseRow.Accepting += (_, e) =>
+        {
+            ChooseBase();
+            e.Handled = true;
+        };
+
+        branchField.Accepting += (_, e) =>
+        {
+            Submit();
+            e.Handled = true;
+        };
 
         window.KeyDown += (_, key) =>
         {
@@ -53,12 +121,14 @@ public static class NewAgentView
         };
 
         window.Add(
-            FleetTheme.Caption(1, 1, $"Repo:      {repositoryName}"),
-            FleetTheme.Caption(1, 3, "Branch:"),
+            FleetTheme.Caption(1, 1, "Repo:"),
+            repositoryRow,
+            FleetTheme.Caption(1, 3, "Branch name:"),
             branchField,
-            FleetTheme.Caption(1, 5, "From:"),
-            baseField,
-            FleetTheme.Caption(1, 7, "Leave From empty to cut from the default branch."),
+            FleetTheme.Caption(1, 5, "Base:"),
+            baseRow,
+            FleetTheme.Caption(1, 7, "Leave the branch name empty to work on the base itself."),
+            FleetTheme.Caption(1, 8, "Leave the base empty to cut from the default branch."),
             FleetTheme.HintBar(FleetHints.NewAgent));
 
         app.Run(window);

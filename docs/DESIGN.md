@@ -1184,6 +1184,35 @@ Storage: **daemonless files**, the option DESIGN.md deferred until the wezterm
 driver worked. Agent records live in `sessions/<project>.json`; the dashboard
 reads on refresh. No background process on any driver.
 
+### Starting an agent: branch name and base — 2026-08-09
+
+The form is three rows. **Repo** and **Base** open a `FleetPicker` overlay;
+**Branch name** is the only typed field. What the pair means:
+
+| Branch name | Base | Result |
+|---|---|---|
+| given | given | cut that branch from that base |
+| given | empty | cut that branch from the default branch |
+| empty | given | work on the base branch itself, no new branch |
+| empty | empty | refused — there is nothing to work on |
+
+`AgentBranch.Plan` is the pure function holding that table, so the rule is tested
+without a terminal. A remote base with no branch name reduces to a local branch of
+the same short name (`origin/develop` → work on `develop`), which is what
+`worktree add -b develop origin/develop` does anyway.
+
+**`clone --bare` leaves a repository with no remotes.** Discovered while building
+the base picker: it copies the remote's branches straight into `refs/heads` and
+writes **no fetch refspec**, so `refs/remotes` is empty and `git fetch` can never
+learn about new upstream branches. The user's `backend` had 18 local refs and 0
+remote ones. `AddRepository` now sets
+`remote.origin.fetch = +refs/heads/*:refs/remotes/origin/*` and fetches once, so
+remote-tracking branches exist. This also makes trap 1 meaningful — the local
+versus `origin/` comparison had nothing to compare against before.
+
+The picker hides a remote whose short name already exists locally, so the list
+does not double up now that both ref namespaces are populated.
+
 **Restore is the same action as focus.** `enter` looks for a pane whose cwd is the
 agent's worktree; if there is none, it spawns the recorded harness there rather
 than reporting a dead agent. This is the payoff of keying identity on the worktree
