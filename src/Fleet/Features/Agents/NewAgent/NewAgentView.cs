@@ -32,9 +32,9 @@ public static class NewAgentView
 
         var window = FleetTheme.Overlay("New agent");
 
-        var repositoryRow = FleetTheme.Choice(13, 1, prompt.Repositories[repository].Name);
-        var branchField = FleetTheme.Field(13, 3);
-        var baseRow = FleetTheme.Choice(13, 5, DefaultBase);
+        var repositoryRow = FleetTheme.Choice(14, 1, prompt.Repositories[repository].Name);
+        var branchField = FleetTheme.Field(14, 3);
+        var baseRow = FleetTheme.Choice(14, 5, DefaultBase);
 
         void ChooseRepository()
         {

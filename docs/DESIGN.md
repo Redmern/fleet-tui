@@ -1186,8 +1186,18 @@ reads on refresh. No background process on any driver.
 
 ### Starting an agent: branch name and base — 2026-08-09
 
-The form is three rows. **Repo** and **Base** open a `FleetPicker` overlay;
-**Branch name** is the only typed field. What the pair means:
+The form is three rows. **Repo** and **Base** are buttons that open a
+`FleetPicker` overlay; **Branch name** is the only typed field. They were
+read-only text fields first, which was wrong: a field that looks exactly like the
+editable one beside it reads as somewhere to type, not somewhere to press. The
+affordance has to match the behaviour.
+
+`FleetTheme.Choice` sets `HotKeySpecifier` to a character that cannot occur, so a
+button labelled `backend` does not claim `b` and swallow it from the branch-name
+field beside it — the default would have made the first letter a hotkey that fires
+regardless of focus.
+
+What the pair means:
 
 | Branch name | Base | Result |
 |---|---|---|
