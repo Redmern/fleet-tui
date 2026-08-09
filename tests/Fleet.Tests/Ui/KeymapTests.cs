@@ -54,11 +54,11 @@ public class KeymapTests
     {
         var stale = new KeymapConfig(
             KeymapDefaults.Prefix,
-            new Dictionary<FleetAction, string> { [FleetAction.AddRepository] = "a" });
+            new Dictionary<FleetAction, string> { [FleetAction.StopAgent] = "a" });
 
         var keymap = new Keymap(stale);
 
-        Assert.Equal(Key.Empty, keymap.KeyFor(FleetAction.AddRepository));
+        Assert.Equal(Key.Empty, keymap.KeyFor(FleetAction.StopAgent));
         Assert.Equal(FleetAction.None, keymap.ActionFor(Key.A));
     }
 

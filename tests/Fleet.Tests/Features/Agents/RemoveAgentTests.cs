@@ -66,7 +66,7 @@ public sealed class RemoveAgentTests : IDisposable
     {
         var agent = await AgentAsync();
 
-        var result = await Handler().HandleAsync("techweb", agent);
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.False(Directory.Exists(agent.Worktree));
@@ -79,7 +79,7 @@ public sealed class RemoveAgentTests : IDisposable
         var agent = await AgentAsync();
         var container = Path.Combine(_root, "backend");
 
-        await Handler().HandleAsync("techweb", agent);
+        await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
 
         Assert.True(Directory.Exists(Path.Combine(container, ".git")));
         Assert.True(Directory.Exists(Path.Combine(container, "main")));
@@ -91,7 +91,7 @@ public sealed class RemoveAgentTests : IDisposable
         var agent = await AgentAsync();
         var container = Path.Combine(_root, "backend");
 
-        await Handler().HandleAsync("techweb", agent);
+        await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
 
         var branches = await new GitRunner()
             .RunAsync(container, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]);
@@ -105,7 +105,7 @@ public sealed class RemoveAgentTests : IDisposable
         var agent = await AgentAsync();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
-        await Handler().HandleAsync("techweb", agent);
+        await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
 
         Assert.Empty(await _mux.ListPanesAsync());
     }
@@ -154,7 +154,7 @@ public sealed class RemoveAgentTests : IDisposable
         await new GitRunner().RunAsync(container, ["worktree", "remove", "--force", agent.Worktree]);
 
         var state = await Handler().InspectAsync(agent);
-        var result = await Handler().HandleAsync("techweb", agent);
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
 
         Assert.False(state.Exists);
         Assert.True(result.Succeeded, result.Error);

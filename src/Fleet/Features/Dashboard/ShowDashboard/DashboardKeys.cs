@@ -7,17 +7,28 @@ namespace Fleet.Features.Dashboard.ShowDashboard;
 
 public static class DashboardKeys
 {
-    private static readonly FleetAction[] Scope =
+    private static readonly FleetAction[] AgentScope =
     [
-        FleetAction.Refresh,
         FleetAction.NewAgent,
+        FleetAction.RemoveAgent,
         FleetAction.ChangeHarness,
         FleetAction.ToggleHidden,
-        FleetAction.StopAgent,
-        FleetAction.RemoveAgent,
+        FleetAction.Refresh,
         FleetAction.PrevTab,
         FleetAction.NextTab,
     ];
+
+    private static readonly FleetAction[] RepositoryScope =
+    [
+        FleetAction.AddRepository,
+        FleetAction.RemoveRepository,
+        FleetAction.Refresh,
+        FleetAction.PrevTab,
+        FleetAction.NextTab,
+    ];
+
+    public static IReadOnlyList<FleetAction> ScopeFor(int tab) =>
+        tab == DashboardTabs.RepositoriesTab ? RepositoryScope : AgentScope;
 
     public static bool OpensAView(FleetAction action) =>
         action is FleetAction.OpenMenu
@@ -25,9 +36,10 @@ public static class DashboardKeys
             or FleetAction.ChangeHarness
             or FleetAction.RemoveAgent
             or FleetAction.AddRepository
+            or FleetAction.RemoveRepository
             or FleetAction.EditKeybinds;
 
-    public static DashboardKey For(Key key, Keymap keymap)
+    public static DashboardKey For(Key key, Keymap keymap, int tab)
     {
         if (key == FleetKeys.Cancel)
         {
@@ -44,7 +56,7 @@ public static class DashboardKeys
             return DashboardKey.Act(FleetAction.NextTab);
         }
 
-        var action = keymap.ActionFor(key, Scope);
+        var action = keymap.ActionFor(key, ScopeFor(tab));
 
         return action == FleetAction.None
             ? DashboardKey.Ignore

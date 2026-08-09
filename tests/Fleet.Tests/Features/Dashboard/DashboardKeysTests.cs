@@ -11,10 +11,14 @@ public class DashboardKeysTests
 {
     private static Keymap Map => Keymap.Default;
 
+    private const int Agents = DashboardTabs.AgentsTab;
+
+    private const int Repositories = DashboardTabs.RepositoriesTab;
+
     [Fact]
     public void Escape_is_swallowed_so_it_can_never_close_the_pane()
     {
-        var result = DashboardKeys.For(Key.Esc, Map);
+        var result = DashboardKeys.For(Key.Esc, Map, Agents);
 
         Assert.True(result.Consume);
         Assert.Equal(FleetAction.None, result.Action);
@@ -23,8 +27,8 @@ public class DashboardKeysTests
     [Fact]
     public void No_bare_key_closes_the_dashboard_because_it_is_the_main_pane()
     {
-        Assert.False(DashboardKeys.For(Map.KeyFor(FleetAction.Close), Map).Consume);
-        Assert.Equal(FleetAction.None, DashboardKeys.For(Key.Esc, Map).Action);
+        Assert.False(DashboardKeys.For(Map.KeyFor(FleetAction.Close), Map, Agents).Consume);
+        Assert.Equal(FleetAction.None, DashboardKeys.For(Key.Esc, Map, Agents).Action);
     }
 
     [Fact]
@@ -39,23 +43,54 @@ public class DashboardKeysTests
     {
         Assert.Equal(
             FleetAction.Refresh,
-            DashboardKeys.For(Map.KeyFor(FleetAction.Refresh), Map).Action);
+            DashboardKeys.For(Map.KeyFor(FleetAction.Refresh), Map, Agents).Action);
     }
 
     [Fact]
-    public void Adding_a_repository_has_no_bare_key_because_it_belongs_to_the_menu()
+    public void The_new_key_means_agent_or_repository_depending_on_the_tab()
     {
-        Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.AddRepository));
-        Assert.DoesNotContain(FleetAction.AddRepository, KeymapDefaults.Configurable);
+        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, Map, Agents).Action);
+        Assert.Equal(
+            FleetAction.AddRepository, DashboardKeys.For(Key.N, Map, Repositories).Action);
+    }
 
-        Assert.False(DashboardKeys.For(Key.A, Map).Consume);
+    [Fact]
+    public void The_remove_key_means_agent_or_repository_depending_on_the_tab()
+    {
+        Assert.Equal(FleetAction.RemoveAgent, DashboardKeys.For(Key.D, Map, Agents).Action);
+        Assert.Equal(
+            FleetAction.RemoveRepository, DashboardKeys.For(Key.D, Map, Repositories).Action);
+    }
+
+    [Fact]
+    public void Hiding_and_the_harness_make_no_sense_for_a_repository()
+    {
+        Assert.False(DashboardKeys.For(Map.KeyFor(FleetAction.ToggleHidden), Map, Repositories)
+            .Consume);
+
+        Assert.False(DashboardKeys.For(Map.KeyFor(FleetAction.ChangeHarness), Map, Repositories)
+            .Consume);
+    }
+
+    [Fact]
+    public void Stopping_has_no_bare_key_because_it_lives_in_the_manage_menu()
+    {
+        Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.StopAgent));
+        Assert.DoesNotContain(FleetAction.StopAgent, DashboardKeys.ScopeFor(Agents));
+    }
+
+    [Fact]
+    public void Tabs_can_still_be_switched_from_either_side()
+    {
+        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.H, Map, Repositories).Action);
+        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map, Repositories).Action);
     }
 
     [Fact]
     public void The_new_agent_key_starts_an_agent()
     {
         Assert.Equal(Key.N, Map.KeyFor(FleetAction.NewAgent));
-        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, Map).Action);
+        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, Map, Agents).Action);
     }
 
     [Fact]
@@ -71,21 +106,21 @@ public class DashboardKeysTests
 
         var keymap = new Keymap(saved);
 
-        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, keymap).Action);
+        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, keymap, Agents).Action);
     }
 
     [Fact]
     public void Tabs_are_switched_with_h_and_l()
     {
-        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.H, Map).Action);
-        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map).Action);
+        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.H, Map, Agents).Action);
+        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map, Agents).Action);
     }
 
     [Fact]
     public void The_arrow_keys_switch_tabs_too()
     {
-        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.CursorLeft, Map).Action);
-        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.CursorRight, Map).Action);
+        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.CursorLeft, Map, Agents).Action);
+        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.CursorRight, Map, Agents).Action);
     }
 
     [Fact]
@@ -93,7 +128,7 @@ public class DashboardKeysTests
     {
         Assert.Equal(Map.KeyFor(FleetAction.OpenProject), Map.KeyFor(FleetAction.NextTab));
 
-        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map).Action);
+        Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map, Agents).Action);
     }
 
     [Theory]
@@ -106,7 +141,7 @@ public class DashboardKeysTests
     {
         var key = (Key)typeof(Key).GetProperty(keyName)!.GetValue(null)!;
 
-        var result = DashboardKeys.For(key, Map);
+        var result = DashboardKeys.For(key, Map, Agents);
 
         Assert.False(result.Consume);
         Assert.Equal(FleetAction.None, result.Action);
@@ -117,7 +152,7 @@ public class DashboardKeysTests
     {
         Assert.Equal(Map.KeyFor(FleetAction.MoveUp), Map.KeyFor(FleetAction.EditKeybinds));
 
-        var result = DashboardKeys.For(Map.KeyFor(FleetAction.EditKeybinds), Map);
+        var result = DashboardKeys.For(Map.KeyFor(FleetAction.EditKeybinds), Map, Agents);
 
         Assert.False(result.Consume);
         Assert.Equal(FleetAction.None, result.Action);
@@ -126,7 +161,7 @@ public class DashboardKeysTests
     [Fact]
     public void The_menu_key_does_not_fire_bare_because_it_belongs_to_the_prefix()
     {
-        var result = DashboardKeys.For(Map.KeyFor(FleetAction.OpenMenu), Map);
+        var result = DashboardKeys.For(Map.KeyFor(FleetAction.OpenMenu), Map, Agents);
 
         Assert.False(result.Consume);
     }
@@ -135,10 +170,11 @@ public class DashboardKeysTests
     public void A_rebound_refresh_key_is_what_refreshes()
     {
         var keymap = new Keymap(
-            global::Fleet.Shared.Keymap.Models.KeymapConfig.Default.With(FleetAction.Refresh, "x"));
+            global::Fleet.Shared.Keymap.Models.KeymapConfig.Default.With(FleetAction.Refresh, "F5"));
 
-        Assert.Equal(FleetAction.Refresh, DashboardKeys.For(Key.X, keymap).Action);
-        Assert.True(DashboardKeys.For(Key.Esc, keymap).Consume);
-        Assert.Equal(FleetAction.None, DashboardKeys.For(Key.Esc, keymap).Action);
+        Assert.Equal(
+            FleetAction.Refresh, DashboardKeys.For(new Key("F5"), keymap, Agents).Action);
+        Assert.True(DashboardKeys.For(Key.Esc, keymap, Agents).Consume);
+        Assert.Equal(FleetAction.None, DashboardKeys.For(Key.Esc, keymap, Agents).Action);
     }
 }

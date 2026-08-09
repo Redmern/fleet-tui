@@ -23,4 +23,5 @@ public enum FleetAction
     ToggleHidden,
     StopAgent,
     RemoveAgent,
+    RemoveRepository,
 }

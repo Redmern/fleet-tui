@@ -35,9 +35,9 @@ public class ShowMenuTests
     [Fact]
     public void A_menu_only_action_shows_no_key_because_it_has_none()
     {
-        var items = new ShowMenuHandler(Keymap.Default).Items(DashboardActions);
+        var items = new ShowMenuHandler(Keymap.Default).Items([FleetAction.StopAgent]);
 
-        Assert.Empty(items.Single(i => i.Action == FleetAction.AddRepository).KeyText);
+        Assert.Empty(items.Single(i => i.Action == FleetAction.StopAgent).KeyText);
     }
 
     [Fact]

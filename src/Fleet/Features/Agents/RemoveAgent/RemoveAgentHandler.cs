@@ -26,11 +26,14 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
     }
 
     public async Task<Result> HandleAsync(
-        string project, AgentRecord agent, CancellationToken ct = default)
+        string project,
+        AgentRecord agent,
+        bool deleteWorktree,
+        CancellationToken ct = default)
     {
         await StopAsync(agent, ct).ConfigureAwait(false);
 
-        if (IsWorktree(agent.Worktree))
+        if (deleteWorktree && IsWorktree(agent.Worktree))
         {
             var anchor = await AnchorAsync(agent.Worktree, ct).ConfigureAwait(false);
 

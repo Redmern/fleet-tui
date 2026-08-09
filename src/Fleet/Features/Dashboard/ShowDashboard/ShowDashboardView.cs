@@ -26,6 +26,7 @@ public static class ShowDashboardView
         var lists = new[] { agentList, repoList };
 
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
+        var hints = FleetTheme.HintBar(FleetHintText.Agents(keymap));
 
         FleetKeys.ApplyMotions(agentList, keymap);
         FleetKeys.ApplyMotions(repoList, keymap);
@@ -38,6 +39,10 @@ public static class ShowDashboardView
             {
                 lists[i].Visible = i == index;
             }
+
+            hints.Text = index == DashboardTabs.RepositoriesTab
+                ? FleetHintText.Repositories(keymap)
+                : FleetHintText.Agents(keymap);
 
             lists[index].SetFocus();
             window.SetNeedsDraw();
@@ -163,25 +168,13 @@ public static class ShowDashboardView
             });
         }
 
-        async Task StopAsync()
-        {
-            var error = await callbacks.StopAgent(agentList.SelectedItem ?? -1)
-                .ConfigureAwait(false);
-
-            app.Invoke(() =>
-            {
-                status.Text = error ?? string.Empty;
-                RefreshAgents();
-            });
-        }
-
-        void RemoveAgent()
+        void ManageAgent()
         {
             busy = true;
 
             try
             {
-                var error = callbacks.RemoveAgent(agentList.SelectedItem ?? -1);
+                var error = callbacks.ManageAgent(agentList.SelectedItem ?? -1);
 
                 status.Text = error ?? string.Empty;
                 RefreshAgents();
@@ -190,6 +183,31 @@ public static class ShowDashboardView
             {
                 busy = false;
             }
+        }
+
+        void RemoveRepository()
+        {
+            if (repositories.Count == 0)
+            {
+                return;
+            }
+
+            var selected = Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1);
+
+            busy = true;
+
+            try
+            {
+                var error = callbacks.RemoveRepository(repositories[selected]);
+
+                status.Text = error ?? string.Empty;
+            }
+            finally
+            {
+                busy = false;
+            }
+
+            Start(RefreshAsync);
         }
 
         void ChangeHarness()
@@ -266,12 +284,12 @@ public static class ShowDashboardView
                     Start(ToggleHiddenAsync);
                     break;
 
-                case FleetAction.StopAgent:
-                    Start(StopAsync);
+                case FleetAction.RemoveAgent:
+                    ManageAgent();
                     break;
 
-                case FleetAction.RemoveAgent:
-                    RemoveAgent();
+                case FleetAction.RemoveRepository:
+                    RemoveRepository();
                     break;
 
                 case FleetAction.EditKeybinds:
@@ -330,7 +348,7 @@ public static class ShowDashboardView
                 return;
             }
 
-            var direct = DashboardKeys.For(key, keymap);
+            var direct = DashboardKeys.For(key, keymap, tabBar.Selected);
 
             if (direct.Consume)
             {
@@ -380,7 +398,7 @@ public static class ShowDashboardView
             agentList,
             repoList,
             status,
-            FleetTheme.HintBar(FleetHintText.Dashboard(keymap)));
+            hints);
 
         ShowTab(DashboardTabs.AgentsTab);
 

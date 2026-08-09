@@ -16,6 +16,7 @@ public static class FleetActionIds
         FleetAction.ToggleHidden => "toggle-hidden",
         FleetAction.StopAgent => "stop-agent",
         FleetAction.RemoveAgent => "remove-agent",
+        FleetAction.RemoveRepository => "remove-repository",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -31,6 +32,7 @@ public static class FleetActionIds
         "toggle-hidden" => FleetAction.ToggleHidden,
         "stop-agent" => FleetAction.StopAgent,
         "remove-agent" => FleetAction.RemoveAgent,
+        "remove-repository" => FleetAction.RemoveRepository,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

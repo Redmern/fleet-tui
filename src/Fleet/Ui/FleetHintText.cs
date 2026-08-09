@@ -19,16 +19,21 @@ public static class FleetHintText
             $"{keymap.DisplayFor(FleetAction.Close)}/esc quit",
             Menu(keymap));
 
-    public static string Dashboard(Keymap keymap) =>
+    public static string Agents(Keymap keymap) =>
         string.Join(
             "   ",
-            Motions(keymap),
-            $"{keymap.DisplayFor(FleetAction.PrevTab)}/{keymap.DisplayFor(FleetAction.NextTab)} tab",
-            $"{keymap.DisplayFor(FleetAction.NewAgent)} agent",
+            $"{keymap.DisplayFor(FleetAction.NewAgent)} new",
             "enter open",
+            $"{keymap.DisplayFor(FleetAction.ChangeHarness)} opens",
             $"{keymap.DisplayFor(FleetAction.ToggleHidden)} hide",
-            $"{keymap.DisplayFor(FleetAction.StopAgent)} stop",
-            $"{keymap.DisplayFor(FleetAction.RemoveAgent)} remove",
+            $"{keymap.DisplayFor(FleetAction.RemoveAgent)} manage",
+            Menu(keymap));
+
+    public static string Repositories(Keymap keymap) =>
+        string.Join(
+            "   ",
+            $"{keymap.DisplayFor(FleetAction.AddRepository)} add",
+            $"{keymap.DisplayFor(FleetAction.RemoveRepository)} remove",
             $"{keymap.DisplayFor(FleetAction.Refresh)} refresh",
             Menu(keymap));
 

@@ -106,11 +106,10 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `ctrl+d` / `ctrl+u` | page down / up |
 | `h` / `l` | previous / next tab (dashboard) |
 | `l` or `enter` | open the selection (picker) |
-| `n` | new project (picker) / new agent (dashboard) |
+| `n` | new project (picker) / new agent / add repository |
 | `enter` | open the selection / open an agent, restarting it if needed |
 | `c` | change what an agent opens |
-| `s` | stop an agent, keeping its worktree |
-| `d` | remove an agent and its worktree |
+| `d` | manage an agent / remove a repository |
 | `x` | hide / show an agent in the terminal |
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
@@ -183,14 +182,23 @@ lists it under Agents.
 
 ### Stopping and removing
 
-`s` stops an agent: its pane closes, the worktree and the record stay, and
-`enter` starts it again.
+`d` on an agent opens a menu rather than acting straight away:
 
-`d` removes it: stops it, deletes the worktree, drops it from the list. **The
-branch is kept** — removing an agent is not deleting work. You are asked to
-confirm, and the confirmation names any uncommitted files that would be lost.
-Files under `.fleet/` do not count, so an agent is never permanently "dirty"
-because of fleet's own bookkeeping.
+- **Stop the agent, keep everything** — its pane closes; `enter` starts it again.
+- **Remove the agent, keep its files** — fleet forgets it; the worktree stays.
+- **Remove the agent and delete its worktree** — asks to confirm, naming any
+  uncommitted files that would be lost. Files under `.fleet/` do not count, so an
+  agent is never permanently "dirty" from fleet's own bookkeeping.
+
+**The branch is always kept** — removing an agent is not deleting work.
+
+`d` on a **repository** deletes the repository and every worktree under it. It
+refuses while any agent is registered on that repository, and the confirmation
+lists every worktree that would go and any branch that is not pushed.
+
+Keys follow the tab: `n` and `d` mean agent things on Agents and repository
+things on Repositories. Hiding and the harness picker do nothing on the
+Repositories tab.
 
 ### Hiding an agent
 

@@ -1199,6 +1199,33 @@ to that config, which is worth remembering if the plugin set changes.
 The whole lua string is a single argv element and reaches wezterm through
 `ProcessStartInfo.ArgumentList`, so .NET does the quoting and no shell is involved.
 
+### Keys are scoped to the visible tab — 2026-08-09
+
+`n` and `d` mean different things on each tab: new agent / add repository, manage
+agent / remove repository. `DashboardKeys.For` takes the selected tab and resolves
+against `AgentScope` or `RepositoryScope`, which is the same scoped-resolution
+mechanism that lets `l` mean "next tab" here and "open" in the picker. Hiding and
+the harness picker simply are not in the repository scope, so those keys do
+nothing there rather than doing something meaningless.
+
+The hint bar follows the tab and lists only actions, not motions — `j/k`, `g/G`
+and `h/l` were noise once the tabs made the bar longer than the pane.
+
+`d` on an agent opens a picker rather than acting: **stop**, **remove the agent
+but keep its files**, **remove the agent and delete its worktree**. Three
+outcomes that destroy different amounts should be three visible choices, not
+three keys the user has to remember. Stop therefore lost its bare key.
+
+`d` on a repository deletes the repository and every worktree under it. Two
+guards: it refuses outright while any agent is registered on that repository, and
+the confirmation lists every worktree that would go plus any branch that is not
+pushed. This is the most destructive action fleet has.
+
+**Trap re-encountered:** a saved `keybinds.json` overrides the shipped defaults
+entirely, so giving `AddRepository` the `n` default did not reach an install whose
+saved file still said `a`. Changing a default is never enough for an existing
+user; the stale entry has to be removed.
+
 ### Stopping and removing agents — 2026-08-09
 
 Two separate actions, because they destroy different amounts:

@@ -10,6 +10,8 @@ using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Repositories.AddRepository;
+using Fleet.Features.Repositories.RemoveRepository;
+using Fleet.Features.Repositories.RemoveRepository.Models;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Git;
@@ -32,16 +34,45 @@ public static class DashboardWiring
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
         FleetAction.ToggleHidden,
-        FleetAction.StopAgent,
         FleetAction.RemoveAgent,
         FleetAction.AddRepository,
+        FleetAction.RemoveRepository,
         FleetAction.Refresh,
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
 
+    private static IReadOnlyList<string> RepositoryWarning(
+        string name, string directory, RepositoryState state)
+    {
+        var lines = new List<string> { name, directory, string.Empty };
+
+        if (!state.Exists)
+        {
+            lines.Add("It is already gone from disk.");
+            return lines;
+        }
+
+        lines.Add("This deletes the repository and every worktree under it:");
+        lines.AddRange(state.Worktrees.Take(5).Select(w => $"  {w}"));
+
+        if (state.Worktrees.Count > 5)
+        {
+            lines.Add($"  ... and {state.Worktrees.Count - 5} more");
+        }
+
+        if (state.Unpushed.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"WARNING: {state.Unpushed.Count} branch(es) are not pushed:");
+            lines.AddRange(state.Unpushed.Take(5).Select(b => $"  {b}"));
+        }
+
+        return lines;
+    }
+
     private static IReadOnlyList<string> RemovalWarning(
-        string repository, string branch, string worktree, WorktreeState state)
+        string repository, string branch, string worktree, WorktreeState state, bool deleting)
     {
         var lines = new List<string>
         {
@@ -49,6 +80,13 @@ public static class DashboardWiring
             worktree,
             string.Empty,
         };
+
+        if (!deleting)
+        {
+            lines.Add("The worktree and its branch stay on disk.");
+            lines.Add("Only fleet forgets about this agent.");
+            return lines;
+        }
 
         if (!state.Exists)
         {
@@ -95,6 +133,7 @@ public static class DashboardWiring
         var harnesses = new ChangeHarnessHandler(agents);
         var stopper = new StopAgentHandler(mux);
         var remover = new RemoveAgentHandler(git, mux, agents);
+        var repositoryRemover = new RemoveRepositoryHandler(git);
 
         return new DashboardCallbacks(
             LoadRepositories: async () =>
@@ -224,7 +263,7 @@ public static class DashboardWiring
                     : $"{agent.Repository}/{agent.Branch} is back in the terminal.";
             },
 
-            StopAgent: async index =>
+            ManageAgent: index =>
             {
                 var running = lister.Handle(project.Name);
 
@@ -234,38 +273,87 @@ public static class DashboardWiring
                 }
 
                 var agent = running[index];
-                var outcome = await stopper.HandleAsync(agent).ConfigureAwait(false);
 
-                return outcome.Succeeded
-                    ? $"{agent.Repository}/{agent.Branch} stopped; its worktree is untouched."
-                    : outcome.Error;
-            },
+                var picked = FleetPicker.Choose(
+                    app,
+                    $"{agent.Repository}/{agent.Branch}",
+                    AgentDisposal.Choices,
+                    keymap);
 
-            RemoveAgent: index =>
-            {
-                var running = lister.Handle(project.Name);
-
-                if (index < 0 || index >= running.Count)
+                if (picked is null)
                 {
                     return null;
                 }
 
-                var agent = running[index];
-                var state = remover.InspectAsync(agent).GetAwaiter().GetResult();
+                if (picked == AgentDisposal.Stop)
+                {
+                    var stopped = stopper.HandleAsync(agent).GetAwaiter().GetResult();
+
+                    return stopped.Succeeded
+                        ? $"{agent.Repository}/{agent.Branch} stopped; its worktree is untouched."
+                        : stopped.Error;
+                }
+
+                var deleting = picked == AgentDisposal.Delete;
+
+                var state = deleting
+                    ? remover.InspectAsync(agent).GetAwaiter().GetResult()
+                    : WorktreeState.Gone;
 
                 if (!FleetDialog.Confirm(
                         app,
-                        "Remove this agent?",
-                        RemovalWarning(agent.Repository, agent.Branch, agent.Worktree, state),
-                        confirmText: "Remove"))
+                        deleting ? "Delete this worktree?" : "Remove this agent?",
+                        RemovalWarning(agent.Repository, agent.Branch, agent.Worktree, state, deleting),
+                        confirmText: deleting ? "Delete" : "Remove"))
                 {
                     return null;
                 }
 
-                var outcome = remover.HandleAsync(project.Name, agent).GetAwaiter().GetResult();
+                var outcome = remover
+                    .HandleAsync(project.Name, agent, deleting)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (!outcome.Succeeded)
+                {
+                    return outcome.Error;
+                }
+
+                return deleting
+                    ? $"{agent.Repository}/{agent.Branch} removed with its worktree."
+                    : $"{agent.Repository}/{agent.Branch} removed; its files are still on disk.";
+            },
+
+            RemoveRepository: repository =>
+            {
+                var owned = lister.Handle(project.Name)
+                    .Where(a => a.Repository == repository.Name)
+                    .ToList();
+
+                if (owned.Count > 0)
+                {
+                    return $"{repository.Name} still has {owned.Count} agent(s). "
+                         + "Remove those first.";
+                }
+
+                var state = repositoryRemover
+                    .InspectAsync(repository.Directory)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (!FleetDialog.Confirm(
+                        app,
+                        "Delete this repository?",
+                        RepositoryWarning(repository.Name, repository.Directory, state),
+                        confirmText: "Delete"))
+                {
+                    return null;
+                }
+
+                var outcome = repositoryRemover.Handle(repository.Directory);
 
                 return outcome.Succeeded
-                    ? $"{agent.Repository}/{agent.Branch} removed."
+                    ? $"{repository.Name} deleted."
                     : outcome.Error;
             });
     }
