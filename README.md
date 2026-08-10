@@ -134,9 +134,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `l` or `enter` | open the selection (picker) |
 | `n` | new project (picker) / new agent / add repository |
 | `enter` | open the selection / open an agent, restarting it if needed |
-| `c` | change what an agent opens |
-| `d` | manage an agent / remove a repository |
-| `x` | hide / show an agent in the terminal |
+| `m` | manage an agent |
+| `d` | remove a repository |
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
@@ -152,8 +151,8 @@ shared key is never ambiguous.
 Every one of these is configurable through **Keybinds** in the menu, including
 the prefix. Changes are saved to `%APPDATA%\fleet\keybinds.json`.
 
-Note that a saved keymap overrides the shipped defaults completely. Once you
-rebind anything, later changes to fleet's defaults will not reach you.
+Only keys you actually change are written, so later changes to fleet's shipped
+defaults still reach you.
 
 ## The dashboard
 
@@ -197,7 +196,7 @@ The base list shows local branches first, then remote-tracking ones marked
 - `nvim (neo-tree and claude)` — nvim rooted at the worktree, started with
   `:Neotree show` and `:ClaudeCode`, so the tree and Claude are both open.
 
-`c` on the dashboard changes this for an agent that already exists; it applies the
+`m` on the dashboard changes this for an agent that already exists; it applies the
 next time that agent starts.
 
 The nvim option runs the commands from your own config, so it depends on
@@ -208,8 +207,10 @@ lists it under Agents.
 
 ### Stopping and removing
 
-`d` on an agent opens a menu rather than acting straight away:
+`m` on an agent opens a menu holding everything that acts on one agent:
 
+- **Change what it opens** — claude, or nvim with neo-tree and claude.
+- **Hide or show it in the terminal** — see below.
 - **Stop the agent, keep everything** — its pane closes; `enter` starts it again.
 - **Remove the agent, keep its files** — fleet forgets it; the worktree stays.
 - **Remove the agent and delete its worktree** — asks to confirm, naming any
@@ -228,7 +229,8 @@ Repositories tab.
 
 ### Hiding an agent
 
-`x` hides an agent from the WezTerm tab bar without stopping it. It stays listed
+**Hide or show it**, from the `m` menu, hides an agent from the WezTerm tab bar
+without stopping it. It stays listed
 under Agents marked `(hidden)`, and `enter` brings it back — hiding is a terminal
 concern, never a fleet-listing one, so an agent can never be hidden from the
 dashboard itself.

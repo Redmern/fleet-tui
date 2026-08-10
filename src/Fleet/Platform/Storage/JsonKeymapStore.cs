@@ -2,6 +2,7 @@ using System.Text.Json;
 using Fleet.Platform.Storage.Models;
 using Fleet.Ports.Keymap;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Models;
 
 namespace Fleet.Platform.Storage;
@@ -46,7 +47,8 @@ public sealed class JsonKeymapStore : IKeymapStore
         var file = new KeymapFile
         {
             Prefix = config.Prefix,
-            Bindings = config.Bindings.ToDictionary(b => b.Key.ToString(), b => b.Value),
+            Bindings = KeymapDiff.AgainstDefaults(config.Bindings)
+                .ToDictionary(b => b.Key.ToString(), b => b.Value),
         };
 
         File.WriteAllText(

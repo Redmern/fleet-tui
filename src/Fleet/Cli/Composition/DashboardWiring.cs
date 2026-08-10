@@ -14,6 +14,7 @@ using Fleet.Features.Repositories.RemoveRepository;
 using Fleet.Features.Repositories.RemoveRepository.Models;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports.Agents;
+using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
@@ -41,6 +42,56 @@ public static class DashboardWiring
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
+
+    private static string ChooseHarness(
+        IApplication app,
+        Keymap keymap,
+        ChangeHarnessHandler harnesses,
+        string project,
+        AgentRecord agent)
+    {
+        var picked = FleetPicker.Choose(
+            app,
+            $"{agent.Repository}/{agent.Branch} opens",
+            AgentHarness.All.Select(AgentHarness.Describe).ToList(),
+            keymap,
+            AgentHarness.All.ToList().IndexOf(agent.Harness));
+
+        if (picked is null)
+        {
+            return string.Empty;
+        }
+
+        var wanted = AgentHarness.All[picked.Value];
+        harnesses.Handle(project, agent, wanted);
+
+        return $"{agent.Repository}/{agent.Branch} now opens {AgentHarness.Describe(wanted)} "
+             + "next time it starts.";
+    }
+
+    private static string? ToggleHidden(
+        IMuxDriver mux, HideAgentHandler hider, Project project, AgentRecord agent)
+    {
+        var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+
+        var dashboard = panes
+            .FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root))?.WindowId;
+
+        var outcome = hider
+            .HandleAsync(project.Name, agent, dashboard)
+            .GetAwaiter()
+            .GetResult();
+
+        if (!outcome.Succeeded)
+        {
+            return outcome.Error;
+        }
+
+        return outcome.Value!.Hidden
+            ? $"{agent.Repository}/{agent.Branch} is hidden from the terminal; "
+              + "it is still listed here."
+            : $"{agent.Repository}/{agent.Branch} is back in the terminal.";
+    }
 
     private static IReadOnlyList<string> RepositoryWarning(
         string name, string directory, RepositoryState state)
@@ -203,66 +254,6 @@ public static class DashboardWiring
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
-            ChangeHarness: index =>
-            {
-                var running = lister.Handle(project.Name);
-
-                if (index < 0 || index >= running.Count)
-                {
-                    return null;
-                }
-
-                var agent = running[index];
-
-                var picked = FleetPicker.Choose(
-                    app,
-                    $"{agent.Repository}/{agent.Branch} opens",
-                    AgentHarness.All.Select(AgentHarness.Describe).ToList(),
-                    keymap,
-                    AgentHarness.All.ToList().IndexOf(agent.Harness));
-
-                if (picked is null)
-                {
-                    return null;
-                }
-
-                harnesses.Handle(project.Name, agent, AgentHarness.All[picked.Value]);
-
-                return $"{agent.Repository}/{agent.Branch} now opens "
-                     + $"{AgentHarness.Describe(AgentHarness.All[picked.Value])} next time it starts.";
-            },
-
-            ToggleHidden: async index =>
-            {
-                var running = lister.Handle(project.Name);
-
-                if (index < 0 || index >= running.Count)
-                {
-                    return null;
-                }
-
-                var panes = await mux.ListPanesAsync().ConfigureAwait(false);
-
-                var dashboard = panes.FirstOrDefault(
-                    p => PathKey.Same(p.Cwd, project.Root))?.WindowId;
-
-                var outcome = await hider
-                    .HandleAsync(project.Name, running[index], dashboard)
-                    .ConfigureAwait(false);
-
-                if (!outcome.Succeeded)
-                {
-                    return outcome.Error;
-                }
-
-                var agent = outcome.Value!;
-
-                return agent.Hidden
-                    ? $"{agent.Repository}/{agent.Branch} is hidden from the terminal; "
-                      + "it is still listed here."
-                    : $"{agent.Repository}/{agent.Branch} is back in the terminal.";
-            },
-
             ManageAgent: index =>
             {
                 var running = lister.Handle(project.Name);
@@ -283,6 +274,16 @@ public static class DashboardWiring
                 if (picked is null)
                 {
                     return null;
+                }
+
+                if (picked == AgentDisposal.Opens)
+                {
+                    return ChooseHarness(app, keymap, harnesses, project.Name, agent);
+                }
+
+                if (picked == AgentDisposal.Hide)
+                {
+                    return ToggleHidden(mux, hider, project, agent);
                 }
 
                 if (picked == AgentDisposal.Stop)

@@ -11,8 +11,6 @@ public static class DashboardKeys
     [
         FleetAction.NewAgent,
         FleetAction.RemoveAgent,
-        FleetAction.ChangeHarness,
-        FleetAction.ToggleHidden,
         FleetAction.Refresh,
         FleetAction.PrevTab,
         FleetAction.NextTab,

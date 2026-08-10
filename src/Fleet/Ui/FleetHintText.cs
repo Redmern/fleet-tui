@@ -24,8 +24,6 @@ public static class FleetHintText
             "   ",
             $"{keymap.DisplayFor(FleetAction.NewAgent)} new",
             "enter open",
-            $"{keymap.DisplayFor(FleetAction.ChangeHarness)} opens",
-            $"{keymap.DisplayFor(FleetAction.ToggleHidden)} hide",
             $"{keymap.DisplayFor(FleetAction.RemoveAgent)} manage",
             Menu(keymap));
 

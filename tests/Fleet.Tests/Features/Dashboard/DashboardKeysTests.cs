@@ -55,21 +55,27 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void The_remove_key_means_agent_or_repository_depending_on_the_tab()
+    public void Managing_an_agent_and_removing_a_repository_have_their_own_keys()
     {
-        Assert.Equal(FleetAction.RemoveAgent, DashboardKeys.For(Key.D, Map, Agents).Action);
+        Assert.Equal(FleetAction.RemoveAgent, DashboardKeys.For(Key.M, Map, Agents).Action);
         Assert.Equal(
             FleetAction.RemoveRepository, DashboardKeys.For(Key.D, Map, Repositories).Action);
     }
 
     [Fact]
-    public void Hiding_and_the_harness_make_no_sense_for_a_repository()
+    public void Removing_a_repository_never_fires_on_the_agents_tab()
     {
-        Assert.False(DashboardKeys.For(Map.KeyFor(FleetAction.ToggleHidden), Map, Repositories)
-            .Consume);
+        Assert.False(DashboardKeys.For(Key.D, Map, Agents).Consume);
+    }
 
-        Assert.False(DashboardKeys.For(Map.KeyFor(FleetAction.ChangeHarness), Map, Repositories)
-            .Consume);
+    [Fact]
+    public void The_harness_and_hide_keys_are_gone_because_they_live_in_the_manage_menu()
+    {
+        Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.ChangeHarness));
+        Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.ToggleHidden));
+
+        Assert.False(DashboardKeys.For(Key.C, Map, Agents).Consume);
+        Assert.False(DashboardKeys.For(Key.X, Map, Agents).Consume);
     }
 
     [Fact]

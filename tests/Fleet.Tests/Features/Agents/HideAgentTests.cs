@@ -1,5 +1,6 @@
 using Fleet.Features.Agents.ChangeHarness;
 using Fleet.Features.Agents.HideAgent;
+using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
@@ -144,5 +145,16 @@ public class HideAgentTests
     public void An_unknown_harness_still_launches_something_usable()
     {
         Assert.Equal([AgentHarness.Claude], AgentHarness.CommandFor("emacs"));
+    }
+
+    [Fact]
+    public void The_manage_menu_offers_every_per_agent_action()
+    {
+        Assert.Equal(5, AgentDisposal.Choices.Count);
+        Assert.Contains("opens", AgentDisposal.Choices[AgentDisposal.Opens]);
+        Assert.Contains("Hide", AgentDisposal.Choices[AgentDisposal.Hide]);
+        Assert.Contains("Stop", AgentDisposal.Choices[AgentDisposal.Stop]);
+        Assert.Contains("keep its files", AgentDisposal.Choices[AgentDisposal.Forget]);
+        Assert.Contains("delete its worktree", AgentDisposal.Choices[AgentDisposal.Delete]);
     }
 }

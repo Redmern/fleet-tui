@@ -1284,20 +1284,24 @@ nothing there rather than doing something meaningless.
 The hint bar follows the tab and lists only actions, not motions — `j/k`, `g/G`
 and `h/l` were noise once the tabs made the bar longer than the pane.
 
-`d` on an agent opens a picker rather than acting: **stop**, **remove the agent
-but keep its files**, **remove the agent and delete its worktree**. Three
-outcomes that destroy different amounts should be three visible choices, not
-three keys the user has to remember. Stop therefore lost its bare key.
+`m` on an agent opens a picker holding **everything that acts on one agent**:
+change what it opens, hide or show it, stop it, remove it keeping its files, remove
+it with its worktree. Per-agent settings and per-agent destruction belong in the
+same place, which leaves the dashboard's top level as just *new*, *open*, *manage*.
+`c`, `x` and the old `d` lost their bare keys.
 
 `d` on a repository deletes the repository and every worktree under it. Two
 guards: it refuses outright while any agent is registered on that repository, and
 the confirmation lists every worktree that would go plus any branch that is not
 pushed. This is the most destructive action fleet has.
 
-**Trap re-encountered:** a saved `keybinds.json` overrides the shipped defaults
-entirely, so giving `AddRepository` the `n` default did not reach an install whose
-saved file still said `a`. Changing a default is never enough for an existing
-user; the stale entry has to be removed.
+**Trap fixed, not just re-encountered.** A saved `keybinds.json` held the *whole*
+keymap, so it pinned every shipped default at the moment it was written and later
+changes never reached the user — `AddRepository` stayed on `a`, then `RemoveAgent`
+stayed on `d` after it moved to `m`. `JsonKeymapStore.Save` now writes only bindings
+that **differ** from `KeymapDefaults` (`KeymapDiff.AgainstDefaults`) and drops
+actions fleet no longer has. A user who never rebinds anything ends up with an empty
+`bindings` object and follows the defaults forever.
 
 ### Stopping and removing agents — 2026-08-09
 

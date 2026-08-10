@@ -11,7 +11,5 @@ public sealed record DashboardCallbacks(
     Func<(IReadOnlyList<string> Rows, int Count)> LoadAgents,
     Func<IReadOnlyList<RepositoryChoice>, int, Task<string?>> NewAgent,
     Func<int, Task<string?>> OpenAgent,
-    Func<int, string?> ChangeHarness,
-    Func<int, Task<string?>> ToggleHidden,
     Func<int, string?> ManageAgent,
     Func<RepositoryChoice, string?> RemoveRepository);
