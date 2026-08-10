@@ -1201,15 +1201,13 @@ The whole lua string is a single argv element and reaches wezterm through
 
 ### The fleet menu is a key table, not a fuzzy picker — 2026-08-10
 
-`InputSelector` has no per-entry keybinding — it offers fuzzy typing or arrow
-selection and nothing else. So the prefix now activates a **one-shot key table**:
-one keypress runs its action and the table pops. `Escape` leaves without running
-anything.
+`InputSelector`'s **`alphabet`** labels each row with a character and selects that
+row on the keypress, so the menu stays a full overlay while every entry answers to
+one key. `fuzzy = false`; the order of `M.menu` decides which key lands on which
+row, because the alphabet is concatenated in that order.
 
-WezTerm draws no menu for a key table, so the entries are listed in the left
-status bar while it is active, from the `update-status` handler already there for
-workspace switching. It tracks whether it put the text there and only clears its
-own, rather than blanking a status another config might own.
+A one-shot key table was tried first and rejected: it gives the keys but WezTerm
+draws no menu for one, leaving nothing on screen but a status-bar strip.
 
 `MenuKeys.Assign` picks the keys: an action keeps the key it already has elsewhere
 in fleet when that key is free, otherwise the first unused letter of its label,
@@ -1217,9 +1215,15 @@ otherwise any free letter or digit. Pure and tested, including that no two entri
 ever collide — `n` goes to *new agent* and *add repo* falls through to `a`, since
 both want `n` in their own contexts.
 
-The choices are fixed at config-load time, which suits a key table: the entries
-are a static list, and only the routing (dashboard request versus split) is
-decided at press time.
+The choices are fixed at config-load time, which is fine: the entries are a static
+list, and only the routing — dashboard request versus split — is decided at press
+time.
+
+**A handed-off action also moves focus.** `fleet_project` returns the dashboard
+pane alongside the project name, and `M.run` activates that pane's tab and then
+the pane after writing the request. Choosing *keybinds* from an agent pane
+otherwise opened the editor in the dashboard pane the user was not looking at —
+the action worked and appeared to do nothing.
 
 ### Keys are scoped to the visible tab — 2026-08-09
 

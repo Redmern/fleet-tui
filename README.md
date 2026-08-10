@@ -75,16 +75,23 @@ local fleet = require 'fleet'
 fleet.apply(config)
 ```
 
-`ctrl+space` then arms fleet's menu: the entries appear in the status bar and
-**one keypress runs one action**. `Escape` leaves without doing anything.
+`ctrl+space` then opens fleet's menu as a full overlay where **each entry has its
+own key** — press it and the action runs. No typing, no fuzzy matching.
 
 ```
-fleet  n new agent   c opens   x hide   d manage   a add repo
-       r drop repo   k keybinds   l project   q close pane
+fleet
+  n  new agent      a  add repo     l  project
+  c  opens          r  drop repo    q  close pane
+  x  hide           k  keybinds
+  d  manage
 ```
 
-Keys are assigned from your keymap where they are free, so `n` is a new agent
-here just as it is on the dashboard.
+Keys come from your keymap where they are free, so `n` is a new agent here just as
+it is on the dashboard.
+
+Choosing an action the dashboard draws — keybinds, add repo, manage — also
+**focuses the fleet pane**, so you end up looking at the view you asked for even
+when you triggered it from an agent pane.
 
 What happens next depends on the action. **Add repository** and **Keybinds** are
 views the dashboard already knows how to draw, so the choice is handed to the

@@ -52,14 +52,23 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
-    public void The_menu_is_a_key_table_rather_than_fuzzy_matching()
+    public void The_menu_is_an_overlay_selected_by_key_rather_than_by_typing()
     {
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
-        Assert.Contains("act.ActivateKeyTable { name = 'fleet', one_shot = true }", lua);
-        Assert.Contains("config.key_tables['fleet'] = entries", lua);
-        Assert.DoesNotContain("InputSelector", lua);
-        Assert.DoesNotContain("fuzzy =", lua);
+        Assert.Contains("act.InputSelector {", lua);
+        Assert.Contains("fuzzy = false", lua);
+        Assert.Contains("alphabet = alphabet", lua);
+        Assert.DoesNotContain("fuzzy = true", lua);
+    }
+
+    [Fact]
+    public void The_alphabet_is_built_from_the_entries_so_a_key_lands_on_its_own_row()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("alphabet = alphabet .. item.key", lua);
+        Assert.Contains("choices[#choices + 1] = { label = item.label, id = item.id }", lua);
     }
 
     [Fact]
@@ -73,23 +82,6 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
-    public void Escape_leaves_the_menu_without_running_anything()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("key = 'Escape', action = act.PopKeyTable", lua);
-    }
-
-    [Fact]
-    public void The_entries_are_listed_while_the_table_is_active()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("window:active_key_table() == 'fleet'", lua);
-        Assert.Contains("window:set_left_status", lua);
-    }
-
-    [Fact]
     public void Actions_the_dashboard_renders_are_handed_to_it_instead_of_opening_a_pane()
     {
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
@@ -99,6 +91,17 @@ public class WezTermKeybindsTests
         Assert.Contains("if project and M.dashboard_actions[id] then", lua);
         Assert.Contains("wezterm.background_child_process {", lua);
         Assert.Contains("'request', '--action', id, '--project', project", lua);
+    }
+
+    [Fact]
+    public void Handing_an_action_to_the_dashboard_also_focuses_it()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("return project, p", lua);
+        Assert.Contains("local project, dashboard = fleet_project(window)", lua);
+        Assert.Contains("dashboard:tab():activate()", lua);
+        Assert.Contains("dashboard:activate()", lua);
     }
 
     [Fact]
