@@ -25,6 +25,11 @@ public static class PickProjectView
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
         list.SetSource(new ObservableCollection<string>(entries.Select(e => e.Label).ToList()));
 
+        if (entries.Count > 0)
+        {
+            list.SelectedItem = 0;
+        }
+
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
 
         FleetKeys.ApplyMotions(list, keymap);
