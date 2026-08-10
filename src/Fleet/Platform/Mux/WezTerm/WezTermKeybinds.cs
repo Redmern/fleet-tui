@@ -8,6 +8,8 @@ namespace Fleet.Platform.Mux.WezTerm;
 
 public static class WezTermKeybinds
 {
+    private const string TableName = "fleet";
+
     private static readonly FleetAction[] MenuActions =
     [
         FleetAction.NewAgent,
@@ -24,6 +26,7 @@ public static class WezTermKeybinds
     public static string Generate(Keymap keymap, string fleetExecutable, string workspaceRequest)
     {
         var chord = WezTermChord.From(keymap.PrefixText);
+        var menu = MenuKeys.Assign(MenuActions, keymap.Config.Bindings);
         var exe = fleetExecutable.Replace("\\", "\\\\", StringComparison.Ordinal);
         var request = workspaceRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
 
@@ -42,6 +45,7 @@ public static class WezTermKeybinds
         sb.AppendLine("local M = {}");
         sb.AppendLine();
         sb.AppendLine($"M.fleet = '{exe}'");
+        sb.AppendLine("M.showing_menu = false");
         sb.AppendLine();
         sb.AppendLine("-- The menu belongs to windows fleet is actually running in. A fleet dashboard");
         sb.AppendLine("-- marks its pane with a WezTerm user var holding the project name; without one");
@@ -90,6 +94,18 @@ public static class WezTermKeybinds
         sb.AppendLine($"M.workspace_request = '{request}'");
         sb.AppendLine();
         sb.AppendLine("wezterm.on('update-status', function(window, _pane)");
+        sb.AppendLine($"  if window:active_key_table() == '{TableName}' then");
+        sb.AppendLine("    local parts = {}");
+        sb.AppendLine("    for _, item in ipairs(M.menu) do");
+        sb.AppendLine("      parts[#parts + 1] = item.key .. ' ' .. item.label");
+        sb.AppendLine("    end");
+        sb.AppendLine("    window:set_left_status(' fleet  ' .. table.concat(parts, '   ') .. ' ')");
+        sb.AppendLine("    M.showing_menu = true");
+        sb.AppendLine("  elseif M.showing_menu then");
+        sb.AppendLine("    M.showing_menu = false");
+        sb.AppendLine("    window:set_left_status('')");
+        sb.AppendLine("  end");
+        sb.AppendLine();
         sb.AppendLine("  local handle = io.open(M.workspace_request, 'r')");
         sb.AppendLine();
         sb.AppendLine("  if not handle then");
@@ -114,8 +130,60 @@ public static class WezTermKeybinds
         sb.AppendLine("  window:perform_action(act.SwitchToWorkspace { name = wanted }, _pane)");
         sb.AppendLine("end)");
         sb.AppendLine();
+        sb.AppendLine("-- One key per entry, not fuzzy matching. The prefix activates a one-shot key");
+        sb.AppendLine("-- table; the next key runs its action and the table pops. The entries are");
+        sb.AppendLine("-- listed in the status bar while the table is active, since wezterm draws no");
+        sb.AppendLine("-- menu for a key table.");
+        sb.AppendLine("M.menu = {");
+
+        foreach (var entry in menu)
+        {
+            var id = FleetActionIds.For(entry.Action);
+            sb.AppendLine(
+                $"  {{ key = '{entry.Key}', label = '{entry.Label}', id = '{id}' }},");
+        }
+
+        sb.AppendLine("}");
+        sb.AppendLine();
+        sb.AppendLine("function M.run(window, pane, id)");
+        sb.AppendLine("  local project = fleet_project(window)");
+        sb.AppendLine();
+        sb.AppendLine("  if project and M.dashboard_actions[id] then");
+        sb.AppendLine("    wezterm.background_child_process {");
+        sb.AppendLine("      M.fleet, 'request', '--action', id, '--project', project,");
+        sb.AppendLine("    }");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  window:perform_action(");
+        sb.AppendLine("    act.SplitPane {");
+        sb.AppendLine("      direction = 'Right',");
+        sb.AppendLine("      size = { Percent = 45 },");
+        sb.AppendLine("      command = { args = { M.fleet, 'menu', '--action', id } },");
+        sb.AppendLine("    },");
+        sb.AppendLine("    pane");
+        sb.AppendLine("  )");
+        sb.AppendLine("end");
+        sb.AppendLine();
         sb.AppendLine("function M.apply(config)");
         sb.AppendLine("  config.keys = config.keys or {}");
+        sb.AppendLine("  config.key_tables = config.key_tables or {}");
+        sb.AppendLine();
+        sb.AppendLine("  local entries = {}");
+        sb.AppendLine();
+        sb.AppendLine("  for _, item in ipairs(M.menu) do");
+        sb.AppendLine("    local id = item.id");
+        sb.AppendLine("    table.insert(entries, {");
+        sb.AppendLine("      key = item.key,");
+        sb.AppendLine("      action = wezterm.action_callback(function(window, pane)");
+        sb.AppendLine("        M.run(window, pane, id)");
+        sb.AppendLine("      end),");
+        sb.AppendLine("    })");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  table.insert(entries, { key = 'Escape', action = act.PopKeyTable })");
+        sb.AppendLine();
+        sb.AppendLine($"  config.key_tables['{TableName}'] = entries");
         sb.AppendLine();
         sb.AppendLine("  table.insert(config.keys, {");
         sb.AppendLine($"    key = '{chord.Key}',");
@@ -130,43 +198,7 @@ public static class WezTermKeybinds
         sb.AppendLine("      end");
         sb.AppendLine();
         sb.AppendLine("      window:perform_action(");
-        sb.AppendLine("        act.InputSelector {");
-        sb.AppendLine("          title = 'fleet',");
-        sb.AppendLine("          fuzzy = true,");
-        sb.AppendLine("          choices = {");
-
-        foreach (var action in MenuActions)
-        {
-            var label = KeymapDefaults.Describe(action);
-            var id = FleetActionIds.For(action);
-            sb.AppendLine($"            {{ label = '{label}', id = '{id}' }},");
-        }
-
-        sb.AppendLine("          },");
-        sb.AppendLine("          action = wezterm.action_callback(function(inner, target, id, _label)");
-        sb.AppendLine("            if not id then");
-        sb.AppendLine("              return");
-        sb.AppendLine("            end");
-        sb.AppendLine();
-        sb.AppendLine("            local project = fleet_project(inner)");
-        sb.AppendLine();
-        sb.AppendLine("            if project and M.dashboard_actions[id] then");
-        sb.AppendLine("              wezterm.background_child_process {");
-        sb.AppendLine("                M.fleet, 'request', '--action', id, '--project', project,");
-        sb.AppendLine("              }");
-        sb.AppendLine("              return");
-        sb.AppendLine("            end");
-        sb.AppendLine();
-        sb.AppendLine("            inner:perform_action(");
-        sb.AppendLine("              act.SplitPane {");
-        sb.AppendLine("                direction = 'Right',");
-        sb.AppendLine("                size = { Percent = 45 },");
-        sb.AppendLine("                command = { args = { M.fleet, 'menu', '--action', id } },");
-        sb.AppendLine("              },");
-        sb.AppendLine("              target");
-        sb.AppendLine("            )");
-        sb.AppendLine("          end),");
-        sb.AppendLine("        },");
+        sb.AppendLine($"        act.ActivateKeyTable {{ name = '{TableName}', one_shot = true }},");
         sb.AppendLine("        pane");
         sb.AppendLine("      )");
         sb.AppendLine("    end),");

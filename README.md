@@ -75,8 +75,16 @@ local fleet = require 'fleet'
 fleet.apply(config)
 ```
 
-`ctrl+space` then opens a centred overlay listing fleet's actions, with fuzzy
-filtering.
+`ctrl+space` then arms fleet's menu: the entries appear in the status bar and
+**one keypress runs one action**. `Escape` leaves without doing anything.
+
+```
+fleet  n new agent   c opens   x hide   d manage   a add repo
+       r drop repo   k keybinds   l project   q close pane
+```
+
+Keys are assigned from your keymap where they are free, so `n` is a new agent
+here just as it is on the dashboard.
 
 What happens next depends on the action. **Add repository** and **Keybinds** are
 views the dashboard already knows how to draw, so the choice is handed to the

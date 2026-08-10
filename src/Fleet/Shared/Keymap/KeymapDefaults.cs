@@ -55,6 +55,22 @@ public static class KeymapDefaults
         FleetAction.RemoveRepository,
     ];
 
+    public static string Short(FleetAction action) =>
+        action switch
+        {
+            FleetAction.NewAgent => "new agent",
+            FleetAction.ChangeHarness => "opens",
+            FleetAction.ToggleHidden => "hide",
+            FleetAction.RemoveAgent => "manage",
+            FleetAction.AddRepository => "add repo",
+            FleetAction.RemoveRepository => "drop repo",
+            FleetAction.EditKeybinds => "keybinds",
+            FleetAction.OpenProject => "project",
+            FleetAction.Refresh => "refresh",
+            FleetAction.Close => "close pane",
+            _ => Describe(action).ToLowerInvariant(),
+        };
+
     public static string Describe(FleetAction action) =>
         action switch
         {

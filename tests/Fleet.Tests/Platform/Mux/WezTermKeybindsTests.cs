@@ -52,12 +52,41 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
-    public void The_binding_offers_the_menu_as_a_selector()
+    public void The_menu_is_a_key_table_rather_than_fuzzy_matching()
     {
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
-        Assert.Contains("InputSelector", lua);
-        Assert.Contains("'add-repository'", lua);
+        Assert.Contains("act.ActivateKeyTable { name = 'fleet', one_shot = true }", lua);
+        Assert.Contains("config.key_tables['fleet'] = entries", lua);
+        Assert.DoesNotContain("InputSelector", lua);
+        Assert.DoesNotContain("fuzzy =", lua);
+    }
+
+    [Fact]
+    public void Every_menu_entry_carries_a_key()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("M.menu = {", lua);
+        Assert.Contains("id = 'add-repository'", lua);
+        Assert.Contains("id = 'new-agent'", lua);
+    }
+
+    [Fact]
+    public void Escape_leaves_the_menu_without_running_anything()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("key = 'Escape', action = act.PopKeyTable", lua);
+    }
+
+    [Fact]
+    public void The_entries_are_listed_while_the_table_is_active()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("window:active_key_table() == 'fleet'", lua);
+        Assert.Contains("window:set_left_status", lua);
     }
 
     [Fact]

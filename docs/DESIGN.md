@@ -1199,6 +1199,28 @@ to that config, which is worth remembering if the plugin set changes.
 The whole lua string is a single argv element and reaches wezterm through
 `ProcessStartInfo.ArgumentList`, so .NET does the quoting and no shell is involved.
 
+### The fleet menu is a key table, not a fuzzy picker — 2026-08-10
+
+`InputSelector` has no per-entry keybinding — it offers fuzzy typing or arrow
+selection and nothing else. So the prefix now activates a **one-shot key table**:
+one keypress runs its action and the table pops. `Escape` leaves without running
+anything.
+
+WezTerm draws no menu for a key table, so the entries are listed in the left
+status bar while it is active, from the `update-status` handler already there for
+workspace switching. It tracks whether it put the text there and only clears its
+own, rather than blanking a status another config might own.
+
+`MenuKeys.Assign` picks the keys: an action keeps the key it already has elsewhere
+in fleet when that key is free, otherwise the first unused letter of its label,
+otherwise any free letter or digit. Pure and tested, including that no two entries
+ever collide — `n` goes to *new agent* and *add repo* falls through to `a`, since
+both want `n` in their own contexts.
+
+The choices are fixed at config-load time, which suits a key table: the entries
+are a static list, and only the routing (dashboard request versus split) is
+decided at press time.
+
 ### Keys are scoped to the visible tab — 2026-08-09
 
 `n` and `d` mean different things on each tab: new agent / add repository, manage
