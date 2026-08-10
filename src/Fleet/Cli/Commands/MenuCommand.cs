@@ -1,5 +1,7 @@
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
+using Fleet.Features.Agents.ListAgents;
+using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Repositories.AddRepository;
@@ -65,6 +67,31 @@ public static class MenuCommand
 
             case FleetAction.EditKeybinds:
                 EditKeybindsView.Show(app, keymaps, keymap);
+                break;
+
+            case FleetAction.ListAgents:
+                var agents = Adapters.Agents();
+                var mux = Adapters.Mux(Adapters.Log());
+                var opener = new OpenAgentHandler(mux.Driver, Adapters.Workspaces());
+                var listing = AgentSplit.By(new ListAgentsHandler(agents).Handle(project.Name));
+
+                ListAgentsView.Show(app, listing, keymap, (tab, index) =>
+                {
+                    var chosen = listing.For(tab);
+
+                    if (index < 0 || index >= chosen.Count)
+                    {
+                        return null;
+                    }
+
+                    var outcome = opener
+                        .HandleAsync(project.Name, chosen[index])
+                        .GetAwaiter()
+                        .GetResult();
+
+                    return outcome.Succeeded ? null : outcome.Error;
+                });
+
                 break;
         }
 

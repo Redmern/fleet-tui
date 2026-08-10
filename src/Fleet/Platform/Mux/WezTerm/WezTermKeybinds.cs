@@ -10,16 +10,12 @@ public static class WezTermKeybinds
 {
     private static readonly FleetAction[] MenuActions =
     [
-        FleetAction.NewAgent,
-        FleetAction.ChangeHarness,
-        FleetAction.ToggleHidden,
-        FleetAction.RemoveAgent,
-        FleetAction.AddRepository,
-        FleetAction.RemoveRepository,
+        FleetAction.QuitFleet,
         FleetAction.EditKeybinds,
-        FleetAction.OpenProject,
-        FleetAction.Close,
+        FleetAction.FocusMain,
+        FleetAction.ListAgents,
     ];
+
 
     public static string Generate(Keymap keymap, string fleetExecutable, string workspaceRequest)
     {
@@ -129,8 +125,33 @@ public static class WezTermKeybinds
 
         sb.AppendLine("}");
         sb.AppendLine();
+        sb.AppendLine("local function focus(dashboard)");
+        sb.AppendLine("  if not dashboard then");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  pcall(function()");
+        sb.AppendLine("    dashboard:tab():activate()");
+        sb.AppendLine("    dashboard:activate()");
+        sb.AppendLine("  end)");
+        sb.AppendLine("end");
+        sb.AppendLine();
         sb.AppendLine("function M.run(window, pane, id)");
         sb.AppendLine("  local project, dashboard = fleet_project(window)");
+        sb.AppendLine();
+        sb.AppendLine($"  if id == '{FleetActionIds.For(FleetAction.FocusMain)}' then");
+        sb.AppendLine("    focus(dashboard)");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine($"  if id == '{FleetActionIds.For(FleetAction.QuitFleet)}' then");
+        sb.AppendLine("    if project then");
+        sb.AppendLine("      wezterm.background_child_process {");
+        sb.AppendLine("        M.fleet, 'quit', '--project', project,");
+        sb.AppendLine("      }");
+        sb.AppendLine("    end");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
         sb.AppendLine();
         sb.AppendLine("  if project and M.dashboard_actions[id] then");
         sb.AppendLine("    wezterm.background_child_process {");
@@ -138,12 +159,7 @@ public static class WezTermKeybinds
         sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine("    -- the view opens in the dashboard, so look at it");
-        sb.AppendLine("    if dashboard then");
-        sb.AppendLine("      pcall(function()");
-        sb.AppendLine("        dashboard:tab():activate()");
-        sb.AppendLine("        dashboard:activate()");
-        sb.AppendLine("      end)");
-        sb.AppendLine("    end");
+        sb.AppendLine("    focus(dashboard)");
         sb.AppendLine();
         sb.AppendLine("    return");
         sb.AppendLine("  end");

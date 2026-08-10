@@ -24,4 +24,7 @@ public enum FleetAction
     StopAgent,
     RemoveAgent,
     RemoveRepository,
+    QuitFleet,
+    FocusMain,
+    ListAgents,
 }

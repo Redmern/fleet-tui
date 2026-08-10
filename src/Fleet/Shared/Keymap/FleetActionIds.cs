@@ -17,6 +17,9 @@ public static class FleetActionIds
         FleetAction.StopAgent => "stop-agent",
         FleetAction.RemoveAgent => "remove-agent",
         FleetAction.RemoveRepository => "remove-repository",
+        FleetAction.QuitFleet => "quit",
+        FleetAction.FocusMain => "main-pane",
+        FleetAction.ListAgents => "list-agents",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -33,6 +36,9 @@ public static class FleetActionIds
         "stop-agent" => FleetAction.StopAgent,
         "remove-agent" => FleetAction.RemoveAgent,
         "remove-repository" => FleetAction.RemoveRepository,
+        "quit" => FleetAction.QuitFleet,
+        "main-pane" => FleetAction.FocusMain,
+        "list-agents" => FleetAction.ListAgents,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

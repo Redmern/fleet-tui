@@ -77,8 +77,9 @@ public class WezTermKeybindsTests
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("M.menu = {", lua);
-        Assert.Contains("id = 'add-repository'", lua);
-        Assert.Contains("id = 'new-agent'", lua);
+        Assert.All(
+            new[] { "quit", "keybinds", "main-pane", "list-agents" },
+            id => Assert.Contains($"id = '{id}'", lua));
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public class WezTermKeybindsTests
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
         Assert.Contains("M.dashboard_actions = {", lua);
-        Assert.Contains("['add-repository'] = true", lua);
+        Assert.Contains("['keybinds'] = true", lua);
         Assert.Contains("if project and M.dashboard_actions[id] then", lua);
         Assert.Contains("wezterm.background_child_process {", lua);
         Assert.Contains("'request', '--action', id, '--project', project", lua);
@@ -169,11 +170,36 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
-    public void Hiding_an_agent_is_offered_in_the_menu()
+    public void The_menu_offers_only_quit_keybinds_main_pane_and_the_agent_list()
     {
         var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
 
-        Assert.Contains("'toggle-hidden'", lua);
-        Assert.Contains("['toggle-hidden'] = true", lua);
+        Assert.Contains("{ key = 'q', label = 'quit fleet', id = 'quit' }", lua);
+        Assert.Contains("{ key = 'k', label = 'keybinds', id = 'keybinds' }", lua);
+        Assert.Contains("{ key = 'm', label = 'main pane', id = 'main-pane' }", lua);
+        Assert.Contains("{ key = 'l', label = 'list agents', id = 'list-agents' }", lua);
+
+        Assert.DoesNotContain("'new-agent'", lua);
+        Assert.DoesNotContain("'toggle-hidden'", lua);
+        Assert.DoesNotContain("'add-repository'", lua);
+        Assert.DoesNotContain("'remove-repository'", lua);
+    }
+
+    [Fact]
+    public void Going_to_the_main_pane_needs_no_fleet_process()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("if id == 'main-pane' then", lua);
+        Assert.Contains("focus(dashboard)", lua);
+    }
+
+    [Fact]
+    public void Quitting_runs_the_quit_verb_for_the_project()
+    {
+        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+
+        Assert.Contains("if id == 'quit' then", lua);
+        Assert.Contains("M.fleet, 'quit', '--project', project,", lua);
     }
 }

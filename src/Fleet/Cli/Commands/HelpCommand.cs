@@ -14,6 +14,7 @@ public static class HelpCommand
               fleet menu --action <id>    jump straight to add-repository or keybinds
               fleet request --action <id> --project <name>
                                           hand an action to that project's dashboard
+              fleet quit --project <name> close everything for that project
               fleet apply-keybinds        write the wezterm keybinding module
               fleet doctor                check the environment
             """);

@@ -29,6 +29,9 @@ public static class KeymapDefaults
             [FleetAction.RemoveAgent] = "d",
             [FleetAction.AddRepository] = "n",
             [FleetAction.RemoveRepository] = "d",
+            [FleetAction.QuitFleet] = "q",
+            [FleetAction.FocusMain] = "m",
+            [FleetAction.ListAgents] = "l",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -53,6 +56,9 @@ public static class KeymapDefaults
         FleetAction.RemoveAgent,
         FleetAction.AddRepository,
         FleetAction.RemoveRepository,
+        FleetAction.QuitFleet,
+        FleetAction.FocusMain,
+        FleetAction.ListAgents,
     ];
 
     public static string Short(FleetAction action) =>
@@ -68,6 +74,9 @@ public static class KeymapDefaults
             FleetAction.OpenProject => "project",
             FleetAction.Refresh => "refresh",
             FleetAction.Close => "close pane",
+            FleetAction.QuitFleet => "quit fleet",
+            FleetAction.FocusMain => "main pane",
+            FleetAction.ListAgents => "list agents",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -95,6 +104,9 @@ public static class KeymapDefaults
             FleetAction.StopAgent => "Stop an agent",
             FleetAction.RemoveAgent => "Manage an agent",
             FleetAction.RemoveRepository => "Remove a repository",
+            FleetAction.QuitFleet => "Quit fleet",
+            FleetAction.FocusMain => "Go to the main pane",
+            FleetAction.ListAgents => "List agents",
             _ => action.ToString(),
         };
 }

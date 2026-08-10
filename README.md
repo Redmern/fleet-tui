@@ -80,18 +80,24 @@ own key** — press it and the action runs. No typing, no fuzzy matching.
 
 ```
 fleet
-  n  new agent      a  add repo     l  project
-  c  opens          r  drop repo    q  close pane
-  x  hide           k  keybinds
-  d  manage
+  q  quit fleet
+  k  keybinds
+  m  main pane
+  l  list agents
 ```
 
-Keys come from your keymap where they are free, so `n` is a new agent here just as
-it is on the dashboard.
+- **quit fleet** closes every pane of the project, including hidden agents in
+  their own workspace, so nothing is left running invisibly. Agent records are
+  already on disk, so reopening the project lists them again.
+- **keybinds** opens the editor in the dashboard and **focuses that pane**, so you
+  end up looking at the view you asked for even from an agent pane.
+- **main pane** jumps to the dashboard. This one never starts a fleet process.
+- **list agents** opens a list with **Open** and **Hidden** tabs; `enter` goes to
+  the agent, switching workspace first if it is hidden.
 
-Choosing an action the dashboard draws — keybinds, add repo, manage — also
-**focuses the fleet pane**, so you end up looking at the view you asked for even
-when you triggered it from an agent pane.
+The dashboard keys act on whatever row is selected there, so they are not in this
+menu — a menu you can open from a claude pane cannot act on a selection you cannot
+see.
 
 What happens next depends on the action. **Add repository** and **Keybinds** are
 views the dashboard already knows how to draw, so the choice is handed to the

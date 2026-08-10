@@ -1209,6 +1209,22 @@ row, because the alphabet is concatenated in that order.
 A one-shot key table was tried first and rejected: it gives the keys but WezTerm
 draws no menu for one, leaving nothing on screen but a status-bar strip.
 
+**The menu is four entries, not everything fleet can do.** `q` quit, `k` keybinds,
+`m` main pane, `l` list agents. The agent and repository actions left it: they act
+on whatever row is selected, which only makes sense on the dashboard where the
+selection is visible. A menu reachable from a claude pane cannot act on a selection
+the user cannot see.
+
+Each entry routes differently, which is why `M.run` is a dispatch rather than one
+path: `m` is pure Lua (activate the dashboard pane, no fleet process at all), `q`
+runs `fleet quit` with no pane via `background_child_process`, `k` is handed to the
+running dashboard, and `l` opens its own pane.
+
+`QuitPlan.PanesToClose` closes every pane in the project's window **plus** any pane
+sitting in a recorded agent's worktree — a hidden agent lives in another window, so
+closing only the project window would leave it running and invisible. The plan is a
+pure function over the pane list, so the fan-out is tested without a terminal.
+
 `MenuKeys.Assign` picks the keys: an action keeps the key it already has elsewhere
 in fleet when that key is free, otherwise the first unused letter of its label,
 otherwise any free letter or digit. Pure and tested, including that no two entries
