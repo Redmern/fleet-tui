@@ -29,7 +29,7 @@ public static class NewAgentView
         NewAgentCommand? result = null;
 
         var repository = Math.Clamp(prompt.Selected, 0, prompt.Repositories.Count - 1);
-        var chosenBase = string.Empty;
+        var chosenBase = prompt.Repositories[repository].DefaultBranch;
 
         var window = FleetTheme.Overlay("New agent");
 
@@ -37,7 +37,7 @@ public static class NewAgentView
 
         var repositoryRow = FleetTheme.Choice(14, 1, prompt.Repositories[repository].Name);
         var branchField = FleetTheme.Field(14, 3);
-        var baseRow = FleetTheme.Choice(14, 5, DefaultBase);
+        var baseRow = FleetTheme.Choice(14, 5, Shown(chosenBase));
         var harnessRow = FleetTheme.Choice(14, 7, AgentHarness.Describe(harness));
         var create = FleetTheme.Submit(1, 12, "Create agent");
         var cancel = FleetTheme.Secondary(18, 12, "Cancel");
@@ -76,8 +76,8 @@ public static class NewAgentView
 
             repository = picked.Value;
             repositoryRow.Text = prompt.Repositories[repository].Name;
-            chosenBase = string.Empty;
-            baseRow.Text = DefaultBase;
+            chosenBase = prompt.Repositories[repository].DefaultBranch;
+            baseRow.Text = Shown(chosenBase);
         }
 
         void ChooseBase()
@@ -101,7 +101,7 @@ public static class NewAgentView
             }
 
             chosenBase = branches[picked.Value].Reference;
-            baseRow.Text = chosenBase;
+            baseRow.Text = Shown(chosenBase);
         }
 
         void Submit()
@@ -182,4 +182,7 @@ public static class NewAgentView
 
         return result;
     }
+
+    private static string Shown(string branch) =>
+        branch.Length == 0 ? DefaultBase : branch;
 }

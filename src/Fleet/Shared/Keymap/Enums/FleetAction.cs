@@ -27,4 +27,6 @@ public enum FleetAction
     QuitFleet,
     FocusMain,
     ListAgents,
+    PullRepository,
+    ManageRepository,
 }

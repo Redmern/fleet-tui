@@ -31,8 +31,10 @@ public static class FleetHintText
         string.Join(
             "   ",
             $"{keymap.DisplayFor(FleetAction.AddRepository)} add",
+            "enter open",
+            $"{keymap.DisplayFor(FleetAction.PullRepository)} pull",
+            $"{keymap.DisplayFor(FleetAction.ManageRepository)} manage",
             $"{keymap.DisplayFor(FleetAction.RemoveRepository)} remove",
-            $"{keymap.DisplayFor(FleetAction.Refresh)} refresh",
             Menu(keymap));
 
     public static string Menu(Keymap keymap) =>

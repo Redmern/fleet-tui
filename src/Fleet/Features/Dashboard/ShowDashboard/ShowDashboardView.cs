@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -60,17 +61,17 @@ public static class ShowDashboardView
         }
 
         IReadOnlyList<RepositoryChoice> repositories = [];
+        var rows = new ObservableCollection<string>();
 
         void ApplyRepositories(IReadOnlyList<RepositoryChoice> loaded)
         {
             repositories = loaded;
 
-            var rows = DashboardRows
+            rows = new ObservableCollection<string>(DashboardRows
                 .ForRepositories(loaded.Select(r => (r.Name, r.DefaultBranch)).ToList())
-                .Select(r => r.Text)
-                .ToList();
+                .Select(r => r.Text));
 
-            repoList.SetSource(new ObservableCollection<string>(rows));
+            repoList.SetSource(rows);
             tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(loaded.Count));
 
             RefreshAgents();
@@ -173,6 +174,106 @@ public static class ShowDashboardView
             }
         }
 
+        RepositoryChoice? Highlighted()
+        {
+            if (repositories.Count == 0)
+            {
+                return null;
+            }
+
+            return repositories[Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1)];
+        }
+
+        async Task PullAsync()
+        {
+            var chosen = Highlighted();
+
+            if (chosen is null)
+            {
+                return;
+            }
+
+            var row = Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1);
+            var tick = 0;
+            var pulling = true;
+
+            var spin = app.AddTimeout(TimeSpan.FromMilliseconds(90), () =>
+            {
+                if (!pulling)
+                {
+                    return false;
+                }
+
+                Rewrite(row, $"{FleetGlyphs.Frame(tick++)}  {chosen.Name}   pulling...");
+
+                return true;
+            });
+
+            var error = await callbacks.PullRepository(chosen).ConfigureAwait(false);
+
+            pulling = false;
+
+            if (spin is not null)
+            {
+                app.RemoveTimeout(spin);
+            }
+
+            app.Invoke(() =>
+            {
+                status.Text = error ?? string.Empty;
+                Start(RefreshAsync);
+            });
+        }
+
+        void Rewrite(int row, string text)
+        {
+            if (repoList.Source is not null && row < repoList.Source.Count)
+            {
+                rows[row] = text;
+                repoList.SetNeedsDraw();
+            }
+        }
+
+        void ManageRepository()
+        {
+            var chosen = Highlighted();
+
+            if (chosen is null)
+            {
+                return;
+            }
+
+            busy = true;
+
+            try
+            {
+                status.Text = callbacks.ManageRepository(chosen) ?? string.Empty;
+            }
+            finally
+            {
+                busy = false;
+            }
+
+            Start(RefreshAsync);
+        }
+
+        async Task OpenRepositoryAsync()
+        {
+            var chosen = Highlighted();
+
+            if (chosen is null)
+            {
+                return;
+            }
+
+            var error = await callbacks.OpenRepository(chosen).ConfigureAwait(false);
+
+            if (error is not null)
+            {
+                app.Invoke(() => status.Text = error);
+            }
+        }
+
         void RemoveRepository()
         {
             if (repositories.Count == 0)
@@ -253,6 +354,14 @@ public static class ShowDashboardView
 
                 case FleetAction.RemoveRepository:
                     RemoveRepository();
+                    break;
+
+                case FleetAction.PullRepository:
+                    Start(PullAsync);
+                    break;
+
+                case FleetAction.ManageRepository:
+                    ManageRepository();
                     break;
 
                 case FleetAction.EditKeybinds:
@@ -349,6 +458,12 @@ public static class ShowDashboardView
         agentList.Accepting += (_, e) =>
         {
             Start(OpenAsync);
+            e.Handled = true;
+        };
+
+        repoList.Accepting += (_, e) =>
+        {
+            Start(OpenRepositoryAsync);
             e.Handled = true;
         };
 

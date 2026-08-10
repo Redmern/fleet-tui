@@ -9,8 +9,12 @@ using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Menu.EditKeybinds;
+using Fleet.Features.Repositories;
 using Fleet.Features.Repositories.AddRepository;
+using Fleet.Features.Repositories.OpenRepository;
+using Fleet.Features.Repositories.PullRepository;
 using Fleet.Features.Repositories.RemoveRepository;
+using Fleet.Features.Repositories.SetDefaultBranch;
 using Fleet.Features.Repositories.RemoveRepository.Models;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports.Agents;
@@ -185,6 +189,11 @@ public static class DashboardWiring
         var stopper = new StopAgentHandler(mux);
         var remover = new RemoveAgentHandler(git, mux, agents);
         var repositoryRemover = new RemoveRepositoryHandler(git);
+        var puller = new PullRepositoryHandler(git);
+        var defaults = new SetDefaultBranchHandler(git);
+        var opener2 = new OpenRepositoryHandler(mux);
+        var branches0 = branches;
+        var states = new BranchStates(git);
 
         return new DashboardCallbacks(
             LoadRepositories: async () =>
@@ -215,7 +224,10 @@ public static class DashboardWiring
             LoadAgents: () =>
             {
                 var running = lister.Handle(project.Name);
-                return (AgentRows.For(running), running.Count);
+
+                return (
+                    AgentRows.For(running, a => states.For(a.Worktree, a.BaseRef)),
+                    running.Count);
             },
 
             NewAgent: async (available, selected) =>
@@ -224,7 +236,7 @@ public static class DashboardWiring
                     app,
                     new NewAgentPrompt(
                         project.Name,
-                        available.Select(r => (r.Name, r.Directory)).ToList(),
+                        available.Select(r => (r.Name, r.Directory, r.DefaultBranch)).ToList(),
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
                         AgentHarness.Claude),
@@ -356,6 +368,78 @@ public static class DashboardWiring
                 return outcome.Succeeded
                     ? $"{repository.Name} deleted."
                     : outcome.Error;
-            });
+            },
+
+            PullRepository: async repository =>
+            {
+                var outcome = await puller
+                    .HandleAsync(repository.Directory, repository.DefaultBranch)
+                    .ConfigureAwait(false);
+
+                return outcome.Succeeded
+                    ? $"{repository.Name}: {outcome.Value}"
+                    : outcome.Error;
+            },
+
+            ManageRepository: repository =>
+            {
+                var picked = FleetPicker.Choose(
+                    app, repository.Name, RepositoryChores.Choices, keymap);
+
+                if (picked != RepositoryChores.DefaultBranch)
+                {
+                    return null;
+                }
+
+                var branches = branches0.HandleAsync(repository.Directory)
+                    .GetAwaiter()
+                    .GetResult()
+                    .Where(b => !b.IsRemote)
+                    .ToList();
+
+                if (branches.Count == 0)
+                {
+                    return $"{repository.Name} has no local branches.";
+                }
+
+                var chosen = FleetPicker.Choose(
+                    app,
+                    $"{repository.Name} default branch",
+                    branches.Select(b => b.Reference).ToList(),
+                    keymap,
+                    branches.FindIndex(b => b.Reference == repository.DefaultBranch));
+
+                if (chosen is null)
+                {
+                    return null;
+                }
+
+                var wanted = branches[chosen.Value].Reference;
+
+                var set = defaults
+                    .HandleAsync(repository.Directory, wanted)
+                    .GetAwaiter()
+                    .GetResult();
+
+                return set.Succeeded
+                    ? $"{repository.Name} now defaults to {wanted}. Its worktrees are untouched."
+                    : set.Error;
+            },
+
+            OpenRepository: async repository =>
+            {
+                var outcome = await opener2
+                    .HandleAsync(
+                        project.Name,
+                        repository.Name,
+                        repository.Directory,
+                        repository.DefaultBranch,
+                        project.Root)
+                    .ConfigureAwait(false);
+
+                return outcome.Succeeded ? null : outcome.Error;
+            },
+
+            AgentState: agent => states.For(agent.Worktree, agent.BaseRef));
     }
 }

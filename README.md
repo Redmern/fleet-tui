@@ -135,7 +135,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `l` or `enter` | open the selection (picker) |
 | `n` | new project (picker) / new agent / add repository |
 | `enter` | open the selection / open an agent, restarting it if needed |
-| `m` | manage an agent |
+| `m` | manage an agent / manage a repository |
+| `p` | pull the highlighted repository |
 | `d` | remove a repository |
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
@@ -266,6 +267,20 @@ so cutting a new agent never silently reverts unpushed work.
 > Not built yet: reaping agents and tearing worktrees down. Remove a worktree
 > with `git worktree remove` for now — fleet's teardown is deliberately absent
 > until its dirty check is written, since that is the part that can destroy work.
+
+## Repositories
+
+The Repositories tab is not just a list:
+
+- `enter` opens the repository in a pane — a plain shell at its default branch's
+  worktree, for pulling and reading code.
+- `p` pulls it: `fetch --prune`, then `merge --ff-only` in that worktree, so it can
+  never create a merge commit in a checkout an agent is sharing. The row spins
+  while it runs.
+- `m` manages it — currently changing the **default branch**. That is bookkeeping
+  only: it decides what future agents cut from and what `p` fast-forwards, and
+  **no worktree is switched**.
+- `d` removes it, and `r` re-reads what is on disk.
 
 ## Projects and repositories
 

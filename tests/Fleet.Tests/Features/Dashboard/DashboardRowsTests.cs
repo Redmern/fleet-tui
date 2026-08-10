@@ -1,4 +1,5 @@
 using Fleet.Features.Dashboard.ShowDashboard;
+using Fleet.Ui.Constants;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 
 namespace Fleet.Tests.Features.Dashboard;
@@ -18,7 +19,12 @@ public class DashboardRowsTests
     {
         var rows = DashboardRows.ForRepositories([("widgets", "main"), ("api", "develop")]);
 
-        Assert.Equal(["widgets   [main]", "api   [develop]"], rows.Select(r => r.Text));
+        Assert.Equal(
+            [
+                $"widgets   {FleetGlyphs.Branch} main",
+                $"api       {FleetGlyphs.Branch} develop",
+            ],
+            rows.Select(r => r.Text));
     }
 
     [Fact]

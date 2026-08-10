@@ -20,6 +20,8 @@ public static class DashboardKeys
     [
         FleetAction.AddRepository,
         FleetAction.RemoveRepository,
+        FleetAction.PullRepository,
+        FleetAction.ManageRepository,
         FleetAction.Refresh,
         FleetAction.PrevTab,
         FleetAction.NextTab,
@@ -35,6 +37,7 @@ public static class DashboardKeys
             or FleetAction.RemoveAgent
             or FleetAction.AddRepository
             or FleetAction.RemoveRepository
+            or FleetAction.ManageRepository
             or FleetAction.EditKeybinds;
 
     public static DashboardKey For(Key key, Keymap keymap, int tab)

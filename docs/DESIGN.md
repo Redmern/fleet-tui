@@ -1273,6 +1273,51 @@ and `MovePaneAsync`, so the move emitted it twice. Both argv builders are now
 `static` and tested directly — the flags are a pure function of the options, and
 that is the level at which this class of mistake is catchable.
 
+### Repositories are openable, pullable and configurable — 2026-08-10
+
+The Repositories tab stopped being a read-only list. `enter` opens a repository in
+a pane — a plain shell, not an agent, because the point is pulling and reading
+code rather than driving a harness. `p` pulls it. `m` manages it.
+
+Where "the repository" is on disk matters: fleet's layout is a bare container with
+worktrees under it, and neither `pull` nor a shell is useful in a bare repository.
+`RepositoryWorktree.For` resolves the **default branch's checkout** and falls back
+to the container only when that worktree is missing, so `enter` and `p` land
+somewhere with files in it.
+
+Pull is `fetch --prune` in the container followed by `merge --ff-only` in that
+worktree — never a plain `pull`, so it can't create a merge commit in a checkout
+an agent may be sharing. A fetch that succeeds while the fast-forward cannot is
+reported as a success with a reason, because the fetch is the part that matters.
+
+**Manage changes the default branch only.** `symbolic-ref HEAD` is bookkeeping: it
+decides what future agents cut from and what `p` fast-forwards. It deliberately
+does **not** switch any worktree's checkout — that would move the ground under an
+agent working there, and would fail outright on a dirty worktree. The status line
+says "its worktrees are untouched" so the narrower meaning is visible.
+
+**The new-agent form pre-fills Base with the chosen repository's default branch**
+rather than a placeholder, and follows the repository when that changes. Empty
+still means "the default branch", but showing the name means the user can see what
+they are cutting from without opening the picker.
+
+### Branch pills and a pull spinner — 2026-08-10
+
+An agent's branch renders as a pill — `` — carrying its
+distance from its own base ref (`rev-list --left-right --count HEAD...<base>`) and
+a `*` when the worktree has uncommitted work. Repositories show the same glyph
+before their default branch.
+
+The counts cost two git calls per agent per refresh. That is why they are computed
+in `BranchStates` in the composition root and passed into `AgentRows` as a
+function: the row rendering stays pure and testable, and the git work stays where
+the I/O belongs.
+
+Pull shows a spinner on the row it is pulling, driven by `AddTimeout` at 90ms and
+removed when the pull returns. The row text is rewritten in place in the bound
+`ObservableCollection` rather than rebuilding the list, so the selection does not
+move under the user mid-pull.
+
 ### Keys are scoped to the visible tab### Keys are scoped to the visible tab — 2026-08-09
 
 `n` and `d` mean different things on each tab: new agent / add repository, manage
