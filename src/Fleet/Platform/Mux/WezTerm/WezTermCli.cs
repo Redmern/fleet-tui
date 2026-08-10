@@ -5,9 +5,52 @@ namespace Fleet.Platform.Mux.WezTerm;
 
 public sealed class WezTermCli(string executable = "wezterm")
 {
+    private string? _socket;
+    private bool _resolved;
+
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(5);
 
     public async Task<string> RunAsync(IReadOnlyList<string> args, CancellationToken ct = default)
+    {
+        var socket = await SocketAsync(ct).ConfigureAwait(false);
+
+        return await RunOnAsync(args, socket, ct).ConfigureAwait(false);
+    }
+
+    private async Task<string?> SocketAsync(CancellationToken ct)
+    {
+        if (_resolved)
+        {
+            return _socket;
+        }
+
+        _resolved = true;
+        _socket = WezTermSockets.FromEnvironment();
+
+        if (_socket is not null)
+        {
+            return _socket;
+        }
+
+        foreach (var candidate in WezTermSockets.Candidates(WezTermSockets.RuntimeDirectory))
+        {
+            try
+            {
+                await RunOnAsync(["list", "--format", "json"], candidate, ct).ConfigureAwait(false);
+
+                _socket = candidate;
+                return _socket;
+            }
+            catch (Exception e) when (e is MuxUnavailableException or TimeoutException)
+            {
+            }
+        }
+
+        return _socket;
+    }
+
+    private async Task<string> RunOnAsync(
+        IReadOnlyList<string> args, string? socket, CancellationToken ct)
     {
         var psi = new ProcessStartInfo(executable)
         {
@@ -16,6 +59,11 @@ public sealed class WezTermCli(string executable = "wezterm")
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+
+        if (socket is not null)
+        {
+            psi.Environment[WezTermSockets.Variable] = socket;
+        }
 
         psi.ArgumentList.Add("cli");
         foreach (var a in args)

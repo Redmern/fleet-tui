@@ -62,6 +62,11 @@ fleet doctor                check the environment
 selected multiplexer driver and whether it responds, the git version, every saved
 project, and any failures fleet swallowed.
 
+fleet works from any terminal, not just a wezterm pane. Inside a pane it talks to
+the mux named by `WEZTERM_UNIX_SOCKET`; outside one it finds a live wezterm socket
+itself. If several wezterm windows are running as separate GUI processes, it targets
+the most recently used one that answers.
+
 ## The menu
 
 ```powershell

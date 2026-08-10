@@ -808,6 +808,37 @@ surfacing at runtime. Note `cwd` arrives with a trailing slash
 
 ## Non-obvious behaviour
 
+### `wezterm cli` needs to be told which mux — 2026-08-10
+
+Running `fleet` from a terminal that is **not** a wezterm pane failed with "the
+wezterm multiplexer did not respond", while the same binary worked from inside
+wezterm. Cause: inside a pane, `WEZTERM_UNIX_SOCKET` names the mux to talk to.
+Outside one, `wezterm cli` picks a socket itself, and with **two wezterm GUIs
+running** it chose one it then failed to connect to:
+
+```
+failed to connect to Socket("gui-sock-186924")
+```
+
+Both sockets answered fine when the variable pointed at their full path, so the
+sockets were live — only the auto-discovery was wrong. `FailSilentDriver` swallowed
+the exception, `SpawnAsync` returned `PaneId.None`, and `OpenProjectHandler`
+reported the mux as unreachable. Correct behaviour from a wrong premise, which is
+why it read as a fleet bug.
+
+`WezTermCli` now resolves the socket when the variable is absent: enumerate
+`gui-sock-*` in wezterm's runtime directory, newest first, probe each with
+`cli list`, keep the first that answers and reuse it for the process. An inherited
+`WEZTERM_UNIX_SOCKET` is used as-is and never probed, so behaviour inside a pane is
+unchanged.
+
+**Consequence worth remembering:** with several wezterm GUIs running, fleet targets
+the most recently used one that answers. Panes are numbered per mux, so a pane id
+from one GUI means nothing to another — which is also why an earlier attempt looked
+like it had opened nothing: the window existed, on the other GUI.
+
+
+
 The codebase carries no comments by project convention, enforced by
 `SliceBoundaryTests.No_source_file_contains_a_comment`. Everything that would
 have been a comment lives here instead.
