@@ -196,4 +196,21 @@ public sealed class RemoveAgentTests : IDisposable
 
         public void Remove(string project, string worktree) => Removed.Add(worktree);
     }
+
+    [Fact]
+    public async Task A_worktree_git_has_already_unregistered_is_still_deleted()
+    {
+        var agent = await AgentAsync();
+        var container = Path.Combine(_root, "backend");
+
+        // reproduce git having removed its bookkeeping but not the files
+        await new GitRunner().RunAsync(container, ["worktree", "remove", "--force", agent.Worktree]);
+        Directory.CreateDirectory(agent.Worktree);
+        await File.WriteAllTextAsync(Path.Combine(agent.Worktree, "left-behind.txt"), "x");
+
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.False(Directory.Exists(agent.Worktree));
+    }
 }

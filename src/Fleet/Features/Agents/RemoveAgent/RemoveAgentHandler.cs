@@ -10,6 +10,10 @@ namespace Fleet.Features.Agents.RemoveAgent;
 
 public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore store)
 {
+    private const int Attempts = 4;
+
+    private static readonly TimeSpan Backoff = TimeSpan.FromMilliseconds(400);
+
     public async Task<WorktreeState> InspectAsync(
         AgentRecord agent, CancellationToken ct = default)
     {
@@ -33,30 +37,85 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
     {
         await StopAsync(agent, ct).ConfigureAwait(false);
 
-        if (deleteWorktree && IsWorktree(agent.Worktree))
+        if (deleteWorktree)
         {
-            var anchor = await AnchorAsync(agent.Worktree, ct).ConfigureAwait(false);
+            var failure = await DiscardWorktreeAsync(agent.Worktree, ct).ConfigureAwait(false);
 
-            if (anchor is null)
+            if (failure is not null)
             {
-                return Result.Fail($"Could not find the repository owning {agent.Worktree}.");
+                return Result.Fail(failure);
             }
-
-            var removed = await git
-                .RunAsync(anchor, ["worktree", "remove", "--force", agent.Worktree], null, ct)
-                .ConfigureAwait(false);
-
-            if (!removed.Ok)
-            {
-                return Result.Fail($"git worktree remove: {removed.Message}");
-            }
-
-            await git.RunAsync(anchor, ["worktree", "prune"], null, ct).ConfigureAwait(false);
         }
 
         store.Remove(project, agent.Worktree);
 
         return Result.Ok();
+    }
+
+    private async Task<string?> DiscardWorktreeAsync(string worktree, CancellationToken ct)
+    {
+        var anchor = await AnchorAsync(worktree, ct).ConfigureAwait(false)
+                     ?? Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(worktree));
+
+        if (anchor is null)
+        {
+            return $"Could not find the repository owning {worktree}.";
+        }
+
+        for (var attempt = 0; attempt < Attempts && IsWorktree(worktree); attempt++)
+        {
+            var removed = await git
+                .RunAsync(anchor, ["worktree", "remove", "--force", worktree], null, ct)
+                .ConfigureAwait(false);
+
+            if (removed.Ok || WorktreeLock.AlreadyUnregistered(removed.Message))
+            {
+                break;
+            }
+
+            if (!WorktreeLock.LooksBusy(removed.Message))
+            {
+                return $"git worktree remove: {removed.Message}";
+            }
+
+            await Task.Delay(Backoff, ct).ConfigureAwait(false);
+        }
+
+        for (var attempt = 0; attempt < Attempts && Directory.Exists(worktree); attempt++)
+        {
+            if (attempt > 0)
+            {
+                await Task.Delay(Backoff, ct).ConfigureAwait(false);
+            }
+
+            Discard(worktree);
+        }
+
+        await git.RunAsync(anchor, ["worktree", "prune"], null, ct).ConfigureAwait(false);
+
+        return Directory.Exists(worktree) ? WorktreeLock.Busy(worktree) : null;
+    }
+
+    private static void Discard(string directory)
+    {
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(
+                directory, "*", SearchOption.AllDirectories))
+            {
+                var attributes = File.GetAttributes(file);
+
+                if (attributes.HasFlag(FileAttributes.ReadOnly))
+                {
+                    File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
+                }
+            }
+
+            Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private async Task StopAsync(AgentRecord agent, CancellationToken ct)
