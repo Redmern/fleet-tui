@@ -239,7 +239,7 @@ public static class DashboardWiring
                         available.Select(r => (r.Name, r.Directory, r.DefaultBranch)).ToList(),
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
-                        AgentHarness.Claude),
+                        AgentHarness.Nvim),
                     keymap);
 
                 if (request is null)
@@ -440,6 +440,10 @@ public static class DashboardWiring
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
-            AgentState: agent => states.For(agent.Worktree, agent.BaseRef));
+            AgentState: agent => states.For(agent.Worktree, agent.BaseRef),
+
+            RepositoryState: repository => states.For(
+                RepositoryWorktree.For(
+                    repository.Directory, repository.DefaultBranch, Directory.Exists)));
     }
 }

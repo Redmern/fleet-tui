@@ -1301,24 +1301,52 @@ rather than a placeholder, and follows the repository when that changes. Empty
 still means "the default branch", but showing the name means the user can see what
 they are cutting from without opening the picker.
 
-### Branch pills and a pull spinner — 2026-08-10
+### Rows read branch, repository, status — 2026-08-10
 
-An agent's branch renders as a pill — `` — carrying its
-distance from its own base ref (`rev-list --left-right --count HEAD...<base>`) and
-a `*` when the worktree has uncommitted work. Repositories show the same glyph
-before their default branch.
+An agent row leads with its **branch**, then the repository, then a git status in
+lazygit's shape: `` for behind/ahead, `*` when the worktree is dirty.
+The harness column is gone — it was the least interesting thing on the row and is
+one keypress away in the manage menu. Repositories carry the same glyph and status.
 
-The counts cost two git calls per agent per refresh. That is why they are computed
-in `BranchStates` in the composition root and passed into `AgentRows` as a
-function: the row rendering stays pure and testable, and the git work stays where
-the I/O belongs.
+**Three fallbacks are needed to get a count at all**, discovered by watching the
+status stay stubbornly empty:
 
-Pull shows a spinner on the row it is pulling, driven by `AddTimeout` at 90ms and
-removed when the pull returns. The row text is rewritten in place in the bound
-`ObservableCollection` rather than rebuilding the list, so the selection does not
-move under the user mid-pull.
+1. `@{upstream}` — the obvious form, and **never** configured here: a worktree made
+   by `git worktree add` from a bare clone has no upstream, so this always failed.
+2. `origin/<branch>` — works for repository branches like `develop`.
+3. The agent's recorded **base ref** — needed because an agent branch such as `dev`
+   is local-only, so `origin/dev` does not exist either.
 
-### Keys are scoped to the visible tab### Keys are scoped to the visible tab — 2026-08-09
+An empty status therefore means "level with whatever it can be compared to", not
+"unknown", and `BranchState.Unknown` is reserved for a worktree that is gone.
+
+`BranchStatus` lives in `Ui` and takes a `BranchState` from `Shared` — the type
+started in `Ports/Git/Models`, which the architecture test rejected immediately,
+since `Ui` may depend on nothing but `Shared`. It is a domain value, not an I/O
+contract, so `Shared` was where it belonged.
+
+### The bottom bar is buttons — 2026-08-10
+
+`FleetActionBar` replaces the hint label with a row of `Button`s, so every shortcut
+is also clickable. They are built with `CanFocus = false` and handled on
+`MouseEvent`/`LeftButtonClicked`: focusable buttons would join the Tab order and
+steal focus from the list, which is the thing the user actually navigates. Keys and
+clicks run the same delegates, so there is one definition of what each entry does.
+
+The bar is rebuilt per tab, which is also what keeps the two key scopes and the two
+visible sets in step.
+
+### Opening a repository opens nvim — 2026-08-10
+
+`enter` on a repository was a bare shell. It now runs nvim with the tree open
+(`AgentHarness.BrowseCommand`) — but deliberately **not** `ClaudeCode`, unlike the
+nvim harness for agents: a repository pane is for pulling and reading, and starting
+a second claude there would be a surprise.
+
+`nvim` is also the default for new agents now, and `Describe` returns the plain
+name, so the button reads `nvim` rather than explaining itself.
+
+### Keys are scoped to the visible tab### Keys are scoped to the visible tab### Keys are scoped to the visible tab — 2026-08-09
 
 `n` and `d` mean different things on each tab: new agent / add repository, manage
 agent / remove repository. `DashboardKeys.For` takes the selected tab and resolves

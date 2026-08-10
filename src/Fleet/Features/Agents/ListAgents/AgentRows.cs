@@ -1,6 +1,7 @@
 using Fleet.Ports.Agents.Models;
-using Fleet.Ports.Git.Models;
-using Fleet.Ui.Constants;
+using Fleet.Ui;
+
+using Fleet.Shared;
 
 namespace Fleet.Features.Agents.ListAgents;
 
@@ -19,24 +20,15 @@ public static class AgentRows
             return [EmptyHint];
         }
 
-        var pills = agents.Select(a => Pill(a.Branch, state(a))).ToList();
-
-        var repoWidth = agents.Max(a => a.Repository.Length);
+        var pills = agents.Select(a => BranchStatus.Pill(a.Branch)).ToList();
         var pillWidth = pills.Max(p => p.Length);
+        var repoWidth = agents.Max(a => a.Repository.Length);
 
         return
         [
             .. agents.Select((a, i) =>
-                $"{a.Repository.PadRight(repoWidth)}   {pills[i].PadRight(pillWidth)}   " +
-                $"{a.Harness.PadRight(6)}" + (a.Hidden ? "   (hidden)" : string.Empty)),
+                $"{pills[i].PadRight(pillWidth)}   {a.Repository.PadRight(repoWidth)}   " +
+                $"{BranchStatus.Of(state(a))}" + (a.Hidden ? "   (hidden)" : string.Empty)),
         ];
-    }
-
-    public static string Pill(string branch, BranchState state)
-    {
-        var diffs = state.Ahead > 0 ? $" +{state.Ahead}" : string.Empty;
-        var dirty = state.Dirty ? "*" : string.Empty;
-
-        return $"{FleetGlyphs.Branch} {branch}{diffs}{dirty}";
     }
 }

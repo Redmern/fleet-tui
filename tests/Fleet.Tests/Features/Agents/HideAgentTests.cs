@@ -104,7 +104,7 @@ public class HideAgentTests
         var changed = new ChangeHarnessHandler(_store)
             .Handle("techweb", Agent() with { Harness = AgentHarness.Nvim }, "emacs");
 
-        Assert.Equal(AgentHarness.Claude, changed.Value!.Harness);
+        Assert.Equal(AgentHarness.Nvim, changed.Value!.Harness);
     }
 
     private sealed class RecordingStore : IAgentStore
@@ -142,9 +142,25 @@ public class HideAgentTests
     }
 
     [Fact]
-    public void An_unknown_harness_still_launches_something_usable()
+    public void An_unknown_harness_falls_back_to_the_default_which_is_nvim()
     {
-        Assert.Equal([AgentHarness.Claude], AgentHarness.CommandFor("emacs"));
+        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), AgentHarness.CommandFor("emacs"));
+    }
+
+    [Fact]
+    public void Nvim_is_the_default_and_is_labelled_plainly()
+    {
+        Assert.Equal(AgentHarness.Nvim, AgentHarness.All[0]);
+        Assert.Equal("nvim", AgentHarness.Describe(AgentHarness.Nvim));
+        Assert.Equal("claude", AgentHarness.Describe(AgentHarness.Claude));
+    }
+
+    [Fact]
+    public void Browsing_a_repository_opens_nvim_with_the_tree_but_not_claude()
+    {
+        Assert.Equal(AgentHarness.Nvim, AgentHarness.BrowseCommand[0]);
+        Assert.Contains("Neotree show", AgentHarness.BrowseStartup);
+        Assert.DoesNotContain("ClaudeCode", AgentHarness.BrowseStartup);
     }
 
     [Fact]

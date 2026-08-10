@@ -17,13 +17,12 @@ public class AgentRowsTests
     }
 
     [Fact]
-    public void Each_agent_shows_its_repository_branch_and_harness()
+    public void Each_agent_shows_its_branch_and_repository()
     {
         var rows = AgentRows.For([Agent("backend", "feature_login")]);
 
-        Assert.Contains("backend", rows[0]);
         Assert.Contains("feature_login", rows[0]);
-        Assert.Contains("claude", rows[0]);
+        Assert.Contains("backend", rows[0]);
     }
 
     [Fact]
@@ -32,8 +31,10 @@ public class AgentRowsTests
         var rows = AgentRows.For(
             [Agent("backend", "fix"), Agent("a-much-longer-repo", "feature_login")]);
 
-        var harnessColumns = rows.Select(r => r.IndexOf("claude", StringComparison.Ordinal));
+        var repoColumns = rows
+            .Select((r, i) => r.IndexOf(i == 0 ? "backend" : "a-much-longer-repo",
+                StringComparison.Ordinal));
 
-        Assert.Single(harnessColumns.Distinct());
+        Assert.Single(repoColumns.Distinct());
     }
 }

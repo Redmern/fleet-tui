@@ -27,7 +27,7 @@ public static class ShowDashboardView
         var lists = new[] { agentList, repoList };
 
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
-        var hints = FleetTheme.HintBar(FleetHintText.Agents(keymap));
+        var hints = new FleetActionBar(Pos.AnchorEnd(1));
 
         FleetKeys.ApplyMotions(agentList, keymap);
         FleetKeys.ApplyMotions(repoList, keymap);
@@ -41,9 +41,7 @@ public static class ShowDashboardView
                 lists[i].Visible = i == index;
             }
 
-            hints.Text = index == DashboardTabs.RepositoriesTab
-                ? FleetHintText.Repositories(keymap)
-                : FleetHintText.Agents(keymap);
+            hints.Show(index == DashboardTabs.RepositoriesTab ? RepositoryBar() : AgentBar());
 
             lists[index].SetFocus();
             window.SetNeedsDraw();
@@ -68,7 +66,7 @@ public static class ShowDashboardView
             repositories = loaded;
 
             rows = new ObservableCollection<string>(DashboardRows
-                .ForRepositories(loaded.Select(r => (r.Name, r.DefaultBranch)).ToList())
+                .ForRepositories(loaded, callbacks.RepositoryState)
                 .Select(r => r.Text));
 
             repoList.SetSource(rows);
@@ -382,6 +380,29 @@ public static class ShowDashboardView
             }
         }
 
+        IReadOnlyList<(string, string, Action)> AgentBar() =>
+        [
+            (keymap.DisplayFor(FleetAction.NewAgent), "new", () => FromKey(FleetAction.NewAgent)),
+            ("enter", "open", () => Start(OpenAsync)),
+            (keymap.DisplayFor(FleetAction.RemoveAgent), "manage",
+                () => FromKey(FleetAction.RemoveAgent)),
+            (keymap.PrefixDisplay + " " + keymap.DisplayFor(FleetAction.OpenMenu), "menu",
+                () => FromKey(FleetAction.OpenMenu)),
+        ];
+
+        IReadOnlyList<(string, string, Action)> RepositoryBar() =>
+        [
+            (keymap.DisplayFor(FleetAction.AddRepository), "add",
+                () => FromKey(FleetAction.AddRepository)),
+            ("enter", "open", () => Start(OpenRepositoryAsync)),
+            (keymap.DisplayFor(FleetAction.PullRepository), "pull", () => Start(PullAsync)),
+            (keymap.DisplayFor(FleetAction.ManageRepository), "manage",
+                () => FromKey(FleetAction.ManageRepository)),
+            (keymap.DisplayFor(FleetAction.RemoveRepository), "remove",
+                () => FromKey(FleetAction.RemoveRepository)),
+            (keymap.DisplayFor(FleetAction.Refresh), "refresh", () => Start(RefreshAsync)),
+        ];
+
         void FromKey(FleetAction action)
         {
             if (DashboardKeys.OpensAView(action))
@@ -476,7 +497,7 @@ public static class ShowDashboardView
             agentList,
             repoList,
             status,
-            hints);
+            hints.Root);
 
         ShowTab(DashboardTabs.AgentsTab);
 

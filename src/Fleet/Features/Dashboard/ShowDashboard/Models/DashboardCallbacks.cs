@@ -1,6 +1,7 @@
 using Fleet.Ports.Agents.Models;
-using Fleet.Ports.Git.Models;
 using Fleet.Shared.Keymap.Enums;
+
+using Fleet.Shared;
 
 namespace Fleet.Features.Dashboard.ShowDashboard.Models;
 
@@ -18,4 +19,5 @@ public sealed record DashboardCallbacks(
     Func<RepositoryChoice, Task<string?>> PullRepository,
     Func<RepositoryChoice, string?> ManageRepository,
     Func<RepositoryChoice, Task<string?>> OpenRepository,
-    Func<AgentRecord, BranchState> AgentState);
+    Func<AgentRecord, BranchState> AgentState,
+    Func<RepositoryChoice, BranchState> RepositoryState);

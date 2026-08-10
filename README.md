@@ -272,8 +272,8 @@ so cutting a new agent never silently reverts unpushed work.
 
 The Repositories tab is not just a list:
 
-- `enter` opens the repository in a pane — a plain shell at its default branch's
-  worktree, for pulling and reading code.
+- `enter` opens the repository in nvim with the tree, at its default branch's
+  worktree. Not claude — this pane is for pulling and reading code.
 - `p` pulls it: `fetch --prune`, then `merge --ff-only` in that worktree, so it can
   never create a merge commit in a checkout an agent is sharing. The row spins
   while it runs.

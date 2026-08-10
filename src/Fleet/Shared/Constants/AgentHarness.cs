@@ -9,14 +9,13 @@ public static class AgentHarness
     public const string NvimStartup =
         "lua vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
 
-    public static IReadOnlyList<string> All { get; } = [Claude, Nvim];
+    public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
 
-    public static string Describe(string harness) => harness switch
-    {
-        Claude => "claude",
-        Nvim => "nvim (neo-tree and claude)",
-        _ => harness,
-    };
+    public static string Describe(string harness) => Normalize(harness);
+
+    public const string BrowseStartup = "lua vim.schedule(function() vim.cmd('Neotree show') end)";
+
+    public static IReadOnlyList<string> BrowseCommand { get; } = [Nvim, "-c", BrowseStartup];
 
     public static IReadOnlyList<string> CommandFor(string harness) =>
         Normalize(harness) == Nvim
@@ -24,5 +23,5 @@ public static class AgentHarness
             : [Claude];
 
     public static string Normalize(string harness) =>
-        All.Contains(harness.Trim()) ? harness.Trim() : Claude;
+        All.Contains(harness.Trim()) ? harness.Trim() : Nvim;
 }

@@ -1,6 +1,7 @@
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Repositories.OpenRepository;
@@ -30,7 +31,13 @@ public sealed class OpenRepositoryHandler(IMuxDriver mux)
         var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
 
         var pane = await mux.SpawnAsync(
-            new SpawnOptions { Cwd = directory, SessionName = project, WindowId = window },
+            new SpawnOptions
+            {
+                Cwd = directory,
+                SessionName = project,
+                WindowId = window,
+                Args = AgentHarness.BrowseCommand,
+            },
             ct).ConfigureAwait(false);
 
         if (pane.IsNone)
