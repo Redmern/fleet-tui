@@ -10,5 +10,7 @@ public sealed record SpawnOptions
 
     public string? Workspace { get; init; }
 
+    public string? WindowId { get; init; }
+
     public IReadOnlyList<string> Args { get; init; } = [];
 }

@@ -88,4 +88,33 @@ public class WezTermDriverTests
     [Fact]
     public void ParsePanes_handles_an_empty_list()
         => Assert.Empty(WezTermDriver.ParsePanes("[]"));
+
+    [Fact]
+    public void Moving_a_pane_names_the_target_window_exactly_once()
+    {
+        var args = WezTermDriver.MoveArgs(
+            new PaneId("29"), new MovePaneOptions { WindowId = "14" });
+
+        Assert.Equal(1, args.Count(a => a == "--window-id"));
+        Assert.Equal(["move-pane-to-new-tab", "--pane-id", "29", "--window-id", "14"], args);
+    }
+
+    [Fact]
+    public void Moving_a_pane_to_a_workspace_needs_a_new_window()
+    {
+        var args = WezTermDriver.MoveArgs(
+            new PaneId("29"), new MovePaneOptions { Workspace = "fleet-hidden" });
+
+        Assert.Contains("--new-window", args);
+        Assert.Contains("--workspace", args);
+        Assert.DoesNotContain("--window-id", args);
+    }
+
+    [Fact]
+    public void Spawning_into_a_window_names_it_once_too()
+    {
+        var args = WezTermDriver.SpawnArgs(new SpawnOptions { WindowId = "14", Cwd = "C:/x" });
+
+        Assert.Equal(1, args.Count(a => a == "--window-id"));
+    }
 }

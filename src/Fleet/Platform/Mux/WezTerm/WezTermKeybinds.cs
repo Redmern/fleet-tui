@@ -8,19 +8,10 @@ namespace Fleet.Platform.Mux.WezTerm;
 
 public static class WezTermKeybinds
 {
-    private static readonly FleetAction[] MenuActions =
-    [
-        FleetAction.QuitFleet,
-        FleetAction.EditKeybinds,
-        FleetAction.FocusMain,
-        FleetAction.ListAgents,
-    ];
-
 
     public static string Generate(Keymap keymap, string fleetExecutable, string workspaceRequest)
     {
         var chord = WezTermChord.From(keymap.PrefixText);
-        var menu = MenuKeys.Assign(MenuActions, keymap.Config.Bindings);
         var exe = fleetExecutable.Replace("\\", "\\\\", StringComparison.Ordinal);
         var request = workspaceRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
 
@@ -68,18 +59,6 @@ public static class WezTermKeybinds
         sb.AppendLine("  return nil");
         sb.AppendLine("end");
         sb.AppendLine();
-        sb.AppendLine("-- Actions the running dashboard renders itself. Sending these to the dashboard");
-        sb.AppendLine("-- keeps the form inside the pane it belongs to instead of squeezing a third");
-        sb.AppendLine("-- column into the window.");
-        sb.AppendLine("M.dashboard_actions = {");
-
-        foreach (var action in MenuActions.Where(DashboardActions.IsServed))
-        {
-            sb.AppendLine($"  ['{FleetActionIds.For(action)}'] = true,");
-        }
-
-        sb.AppendLine("}");
-        sb.AppendLine();
         sb.AppendLine("-- The CLI cannot switch workspaces: activate-pane reports success but leaves");
         sb.AppendLine("-- the client where it was. Hidden agents live in their own workspace, so fleet");
         sb.AppendLine("-- asks for a switch by writing a file and this handler performs it. update-status");
@@ -111,85 +90,16 @@ public static class WezTermKeybinds
         sb.AppendLine("  window:perform_action(act.SwitchToWorkspace { name = wanted }, _pane)");
         sb.AppendLine("end)");
         sb.AppendLine();
-        sb.AppendLine("-- One key per entry rather than fuzzy matching. InputSelector's alphabet");
-        sb.AppendLine("-- labels each row with a character and selects it on that keypress, so the");
-        sb.AppendLine("-- order of M.menu decides which key lands on which entry.");
-        sb.AppendLine("M.menu = {");
-
-        foreach (var entry in menu)
-        {
-            var id = FleetActionIds.For(entry.Action);
-            sb.AppendLine(
-                $"  {{ key = '{entry.Key}', label = '{entry.Label}', id = '{id}' }},");
-        }
-
-        sb.AppendLine("}");
-        sb.AppendLine();
-        sb.AppendLine("local function focus(dashboard)");
-        sb.AppendLine("  if not dashboard then");
-        sb.AppendLine("    return");
-        sb.AppendLine("  end");
-        sb.AppendLine();
-        sb.AppendLine("  pcall(function()");
-        sb.AppendLine("    dashboard:tab():activate()");
-        sb.AppendLine("    dashboard:activate()");
-        sb.AppendLine("  end)");
-        sb.AppendLine("end");
-        sb.AppendLine();
-        sb.AppendLine("function M.run(window, pane, id)");
-        sb.AppendLine("  local project, dashboard = fleet_project(window)");
-        sb.AppendLine();
-        sb.AppendLine($"  if id == '{FleetActionIds.For(FleetAction.FocusMain)}' then");
-        sb.AppendLine("    focus(dashboard)");
-        sb.AppendLine("    return");
-        sb.AppendLine("  end");
-        sb.AppendLine();
-        sb.AppendLine($"  if id == '{FleetActionIds.For(FleetAction.QuitFleet)}' then");
-        sb.AppendLine("    if project then");
-        sb.AppendLine("      wezterm.background_child_process {");
-        sb.AppendLine("        M.fleet, 'quit', '--project', project,");
-        sb.AppendLine("      }");
-        sb.AppendLine("    end");
-        sb.AppendLine("    return");
-        sb.AppendLine("  end");
-        sb.AppendLine();
-        sb.AppendLine("  if project and M.dashboard_actions[id] then");
-        sb.AppendLine("    wezterm.background_child_process {");
-        sb.AppendLine("      M.fleet, 'request', '--action', id, '--project', project,");
-        sb.AppendLine("    }");
-        sb.AppendLine();
-        sb.AppendLine("    -- the view opens in the dashboard, so look at it");
-        sb.AppendLine("    focus(dashboard)");
-        sb.AppendLine();
-        sb.AppendLine("    return");
-        sb.AppendLine("  end");
-        sb.AppendLine();
-        sb.AppendLine("  window:perform_action(");
-        sb.AppendLine("    act.SplitPane {");
-        sb.AppendLine("      direction = 'Right',");
-        sb.AppendLine("      size = { Percent = 45 },");
-        sb.AppendLine("      command = { args = { M.fleet, 'menu', '--action', id } },");
-        sb.AppendLine("    },");
-        sb.AppendLine("    pane");
-        sb.AppendLine("  )");
-        sb.AppendLine("end");
-        sb.AppendLine();
         sb.AppendLine("function M.apply(config)");
         sb.AppendLine("  config.keys = config.keys or {}");
-        sb.AppendLine();
-        sb.AppendLine("  local choices = {}");
-        sb.AppendLine("  local alphabet = ''");
-        sb.AppendLine();
-        sb.AppendLine("  for _, item in ipairs(M.menu) do");
-        sb.AppendLine("    choices[#choices + 1] = { label = item.label, id = item.id }");
-        sb.AppendLine("    alphabet = alphabet .. item.key");
-        sb.AppendLine("  end");
         sb.AppendLine();
         sb.AppendLine("  table.insert(config.keys, {");
         sb.AppendLine($"    key = '{chord.Key}',");
         sb.AppendLine($"    mods = '{chord.Mods}',");
         sb.AppendLine("    action = wezterm.action_callback(function(window, pane)");
-        sb.AppendLine("      if not fleet_project(window) then");
+        sb.AppendLine("      local project = fleet_project(window)");
+        sb.AppendLine();
+        sb.AppendLine("      if not project then");
         sb.AppendLine("        window:perform_action(");
         sb.AppendLine($"          act.SendKey {{ key = '{chord.Key}', mods = '{chord.Mods}' }},");
         sb.AppendLine("          pane");
@@ -197,17 +107,11 @@ public static class WezTermKeybinds
         sb.AppendLine("        return");
         sb.AppendLine("      end");
         sb.AppendLine();
+        sb.AppendLine("      -- fleet renders its own menu, styled like the rest of it. A tab");
+        sb.AppendLine("      -- rather than a split, so no pane is resized; it closes itself.");
         sb.AppendLine("      window:perform_action(");
-        sb.AppendLine("        act.InputSelector {");
-        sb.AppendLine("          title = 'fleet',");
-        sb.AppendLine("          fuzzy = false,");
-        sb.AppendLine("          alphabet = alphabet,");
-        sb.AppendLine("          choices = choices,");
-        sb.AppendLine("          action = wezterm.action_callback(function(inner, target, id, _label)");
-        sb.AppendLine("            if id then");
-        sb.AppendLine("              M.run(inner, target, id)");
-        sb.AppendLine("            end");
-        sb.AppendLine("          end),");
+        sb.AppendLine("        act.SpawnCommandInNewTab {");
+        sb.AppendLine("          args = { M.fleet, 'menu', '--project', project },");
         sb.AppendLine("        },");
         sb.AppendLine("        pane");
         sb.AppendLine("      )");

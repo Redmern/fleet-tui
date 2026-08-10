@@ -27,7 +27,7 @@ public static class KeymapDefaults
             [FleetAction.RemoveAgent] = "m",
             [FleetAction.AddRepository] = "n",
             [FleetAction.RemoveRepository] = "d",
-            [FleetAction.QuitFleet] = "q",
+            [FleetAction.QuitFleet] = "Q",
             [FleetAction.FocusMain] = "m",
             [FleetAction.ListAgents] = "l",
         };

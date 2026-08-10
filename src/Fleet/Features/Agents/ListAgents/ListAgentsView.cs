@@ -79,7 +79,7 @@ public static class ListAgentsView
             };
         }
 
-        window.KeyDown += (_, key) =>
+        void Keys(object? sender, Key key)
         {
             if (key == FleetKeys.Cancel || key == keymap.KeyFor(Shared.Keymap.Enums.FleetAction.Close))
             {
@@ -100,7 +100,9 @@ public static class ListAgentsView
                 ShowTab(AgentListing.HiddenTab);
                 key.Handled = true;
             }
-        };
+        }
+
+        app.Keyboard.KeyDown += Keys;
 
         window.Add(
             tabBar.Root,
@@ -111,7 +113,14 @@ public static class ListAgentsView
 
         ShowTab(AgentListing.OpenTab);
 
-        app.Run(window);
-        window.Dispose();
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            app.Keyboard.KeyDown -= Keys;
+            window.Dispose();
+        }
     }
 }

@@ -3,8 +3,11 @@ using Fleet.Cli.Models;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Menu.EditKeybinds;
+using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Repositories.AddRepository;
+using Fleet.Ports.Projects.Models;
+using Fleet.Shared;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
@@ -16,8 +19,10 @@ public static class MenuCommand
 {
     private static readonly FleetAction[] MenuActions =
     [
-        FleetAction.AddRepository,
+        FleetAction.QuitFleet,
         FleetAction.EditKeybinds,
+        FleetAction.FocusMain,
+        FleetAction.ListAgents,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -65,6 +70,14 @@ public static class MenuCommand
 
                 break;
 
+            case FleetAction.QuitFleet:
+                await Quit(project).ConfigureAwait(false);
+                break;
+
+            case FleetAction.FocusMain:
+                await FocusMain(project).ConfigureAwait(false);
+                break;
+
             case FleetAction.EditKeybinds:
                 EditKeybindsView.Show(app, keymaps, keymap);
                 break;
@@ -72,7 +85,7 @@ public static class MenuCommand
             case FleetAction.ListAgents:
                 var agents = Adapters.Agents();
                 var mux = Adapters.Mux(Adapters.Log());
-                var opener = new OpenAgentHandler(mux.Driver, Adapters.Workspaces());
+                var opener = new OpenAgentHandler(mux.Driver, agents);
                 var listing = AgentSplit.By(new ListAgentsHandler(agents).Handle(project.Name));
 
                 ListAgentsView.Show(app, listing, keymap, (tab, index) =>
@@ -85,7 +98,7 @@ public static class MenuCommand
                     }
 
                     var outcome = opener
-                        .HandleAsync(project.Name, chosen[index])
+                        .HandleAsync(project.Name, chosen[index], project.Root)
                         .GetAwaiter()
                         .GetResult();
 
@@ -96,5 +109,28 @@ public static class MenuCommand
         }
 
         return 0;
+    }
+
+    private static async Task Quit(Project project)
+    {
+        var agents = new ListAgentsHandler(Adapters.Agents()).Handle(project.Name);
+        var mux = Adapters.Mux(Adapters.Log());
+
+        await new QuitProjectHandler(mux.Driver)
+            .HandleAsync(project.Root, agents)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task FocusMain(Project project)
+    {
+        var mux = Adapters.Mux(Adapters.Log());
+        var panes = await mux.Driver.ListPanesAsync().ConfigureAwait(false);
+
+        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root));
+
+        if (dashboard is not null)
+        {
+            await mux.Driver.FocusPaneAsync(dashboard.Id).ConfigureAwait(false);
+        }
     }
 }

@@ -1,37 +1,40 @@
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
-using Fleet.Ports.Requests;
 using Fleet.Shared;
-using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.OpenAgent;
 
-public sealed class OpenAgentHandler(IMuxDriver mux, IWorkspaceRequestStore workspaces)
+public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 {
     public async Task<Result> HandleAsync(
-        string project, AgentRecord agent, CancellationToken ct = default)
+        string project,
+        AgentRecord agent,
+        string projectRoot,
+        CancellationToken ct = default)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var match = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, agent.Worktree));
+        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
+        var running = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, agent.Worktree));
 
-        if (match is not null)
+        if (running is not null)
         {
-            if (match.SessionName != FleetWorkspaces.Default)
+            if (agent.Hidden)
             {
-                workspaces.Submit(match.SessionName);
+                await Unhide(project, agent, running.Id, window, ct).ConfigureAwait(false);
             }
 
-            await mux.FocusPaneAsync(match.Id, ct).ConfigureAwait(false);
+            await mux.FocusPaneAsync(running.Id, ct).ConfigureAwait(false);
+
             return Result.Ok();
         }
 
         if (!Directory.Exists(agent.Worktree))
         {
-            return Result.Fail(
-                $"{agent.Worktree} is gone, so this agent cannot be restarted.");
+            return Result.Fail($"{agent.Worktree} is gone, so this agent cannot be restarted.");
         }
 
         var pane = await mux.SpawnAsync(
@@ -39,8 +42,8 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IWorkspaceRequestStore work
             {
                 Cwd = agent.Worktree,
                 SessionName = project,
-                Workspace = agent.Hidden ? FleetWorkspaces.Hidden : null,
-                Args = AgentHarness.CommandFor(agent.Harness),
+                WindowId = window,
+                Args = Shared.Constants.AgentHarness.CommandFor(agent.Harness),
             },
             ct).ConfigureAwait(false);
 
@@ -55,9 +58,21 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IWorkspaceRequestStore work
 
         if (agent.Hidden)
         {
-            workspaces.Submit(FleetWorkspaces.Hidden);
+            store.Save(project, agent with { Hidden = false });
         }
 
         return Result.Ok();
+    }
+
+    private async Task Unhide(
+        string project, AgentRecord agent, PaneId pane, string? window, CancellationToken ct)
+    {
+        await mux.MovePaneAsync(
+                pane,
+                new MovePaneOptions { WindowId = window, NewWindow = window is null },
+                ct)
+            .ConfigureAwait(false);
+
+        store.Save(project, agent with { Hidden = false });
     }
 }

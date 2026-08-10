@@ -1230,49 +1230,50 @@ to that config, which is worth remembering if the plugin set changes.
 The whole lua string is a single argv element and reaches wezterm through
 `ProcessStartInfo.ArgumentList`, so .NET does the quoting and no shell is involved.
 
-### The fleet menu is a key table, not a fuzzy picker — 2026-08-10
+### The menu is fleet's, not WezTerm's — 2026-08-10
 
-`InputSelector`'s **`alphabet`** labels each row with a character and selects that
-row on the keypress, so the menu stays a full overlay while every entry answers to
-one key. `fuzzy = false`; the order of `M.menu` decides which key lands on which
-row, because the alphabet is concatenated in that order.
+The prefix now runs `fleet menu --project <name>` in a **new tab**; fleet draws the
+menu itself with `FleetTheme`, and every entry shows its key. A tab rather than a
+split so no pane is resized, and it closes itself when the action finishes.
 
-A one-shot key table was tried first and rejected: it gives the keys but WezTerm
-draws no menu for one, leaving nothing on screen but a status-bar strip.
+This removed more than it added. Gone from the generated Lua: the `InputSelector`,
+the key table that replaced it, `M.menu`, `M.dashboard_actions`, `M.run` and the
+routing between "hand it to the dashboard" and "open a pane". The Lua is now two
+things — gate on a fleet pane being present, and spawn the menu. Everything else is
+C#, which is also testable.
 
-**The menu is four entries, not everything fleet can do.** `q` quit, `k` keybinds,
-`m` main pane, `l` list agents. The agent and repository actions left it: they act
-on whatever row is selected, which only makes sense on the dashboard where the
-selection is visible. A menu reachable from a claude pane cannot act on a selection
-the user cannot see.
+Two earlier attempts are worth recording as dead ends: `InputSelector` with
+`fuzzy = true` (no per-entry keys), then `alphabet` (keys, but WezTerm owns the
+rendering and the styling), then a one-shot key table (keys, but WezTerm draws no
+menu at all). Owning the menu was the answer the whole way along; the reason not to
+was that the prefix must work from a claude pane, and spawning a tab solves that
+without fleet owning anyone's PTY.
 
-Each entry routes differently, which is why `M.run` is a dispatch rather than one
-path: `m` is pure Lua (activate the dashboard pane, no fleet process at all), `q`
-runs `fleet quit` with no pane via `background_child_process`, `k` is handed to the
-running dashboard, and `l` opens its own pane.
+**Every fleet picker now carries keys.** `PickerKeys` assigns the first free letter
+of each label and `FleetPicker` renders `key  label` and selects on that key, so the
+manage menu and the harness picker got keys for free.
 
-`QuitPlan.PanesToClose` closes every pane in the project's window **plus** any pane
-sitting in a recorded agent's worktree — a hidden agent lives in another window, so
-closing only the project window would leave it running and invisible. The plan is a
-pure function over the pane list, so the fan-out is tested without a terminal.
+### Opening a hidden agent unhides it — 2026-08-10
 
-`MenuKeys.Assign` picks the keys: an action keeps the key it already has elsewhere
-in fleet when that key is free, otherwise the first unused letter of its label,
-otherwise any free letter or digit. Pure and tested, including that no two entries
-ever collide — `n` goes to *new agent* and *add repo* falls through to `a`, since
-both want `n` in their own contexts.
+Opening a hidden agent used to spawn it in the hidden workspace, which put a new
+WezTerm window in front of the user. `OpenAgentHandler` now takes the project root,
+finds the project's window, and **moves the pane back into it** — clearing `Hidden`
+in the record — before focusing. A hidden agent with no pane restarts visible in the
+project window rather than hidden.
 
-The choices are fixed at config-load time, which is fine: the entries are a static
-list, and only the routing — dashboard request versus split — is decided at press
-time.
+Because opening always brings an agent back, nothing needs to switch workspace any
+more; the `update-status` bridge stays only for the case where a user is parked in
+the hidden workspace themselves.
 
-**A handed-off action also moves focus.** `fleet_project` returns the dashboard
-pane alongside the project name, and `M.run` activates that pane's tab and then
-the pane after writing the request. Choosing *keybinds* from an agent pane
-otherwise opened the editor in the dashboard pane the user was not looking at —
-the action worked and appeared to do nothing.
+**A bug of my own making, found in fleet's log.** Moving a pane silently did nothing
+while the record still flipped. `FailSilentDriver` swallowed the reason and
+`fleet.log` had it exactly: `--window-id cannot be used multiple times`. A patch had
+added a `--window-id` block by matching a snippet that appears in *both* `SpawnAsync`
+and `MovePaneAsync`, so the move emitted it twice. Both argv builders are now
+`static` and tested directly — the flags are a pure function of the options, and
+that is the level at which this class of mistake is catchable.
 
-### Keys are scoped to the visible tab — 2026-08-09
+### Keys are scoped to the visible tab### Keys are scoped to the visible tab — 2026-08-09
 
 `n` and `d` mean different things on each tab: new agent / add repository, manage
 agent / remove repository. `DashboardKeys.For` takes the selected tab and resolves

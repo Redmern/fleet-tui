@@ -57,7 +57,10 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         return ParsePanes(json);
     }
 
-    public async Task<PaneId> SpawnAsync(SpawnOptions options, CancellationToken ct = default)
+    public async Task<PaneId> SpawnAsync(SpawnOptions options, CancellationToken ct = default) =>
+        ParsePaneId(await _cli.RunAsync(SpawnArgs(options), ct).ConfigureAwait(false));
+
+    public static IReadOnlyList<string> SpawnArgs(SpawnOptions options)
     {
         var args = new List<string> { "spawn" };
 
@@ -78,13 +81,21 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             args.Add(options.Workspace);
         }
 
+        if (!options.NewWindow
+            && string.IsNullOrEmpty(options.Workspace)
+            && !string.IsNullOrEmpty(options.WindowId))
+        {
+            args.Add("--window-id");
+            args.Add(options.WindowId);
+        }
+
         if (options.Args.Count > 0)
         {
             args.Add("--");
             args.AddRange(options.Args);
         }
 
-        return ParsePaneId(await _cli.RunAsync(args, ct).ConfigureAwait(false));
+        return args;
     }
 
     public async Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default)
@@ -122,7 +133,10 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         await _cli.RunAsync(["kill-pane", "--pane-id", id.Value], ct).ConfigureAwait(false);
 
     public async Task MovePaneAsync(
-        PaneId id, MovePaneOptions options, CancellationToken ct = default)
+        PaneId id, MovePaneOptions options, CancellationToken ct = default) =>
+        await _cli.RunAsync(MoveArgs(id, options), ct).ConfigureAwait(false);
+
+    public static IReadOnlyList<string> MoveArgs(PaneId id, MovePaneOptions options)
     {
         var args = new List<string> { "move-pane-to-new-tab", "--pane-id", id.Value };
 
@@ -143,7 +157,7 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             args.Add(options.WindowId);
         }
 
-        await _cli.RunAsync(args, ct).ConfigureAwait(false);
+        return args;
     }
 
     public async Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default)

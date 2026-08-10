@@ -80,25 +80,26 @@ local fleet = require 'fleet'
 fleet.apply(config)
 ```
 
-`ctrl+space` then opens fleet's menu as a full overlay where **each entry has its
-own key** — press it and the action runs. No typing, no fuzzy matching.
+`ctrl+space` then opens **fleet's own menu** — drawn by fleet, styled like the rest
+of it, one key per entry. It opens as a tab, so no pane is resized, and closes
+itself when done.
 
 ```
-fleet
-  q  quit fleet
-  k  keybinds
-  m  main pane
-  l  list agents
+╭┤ fleet menu ├──────────────────────╮
+│ Quit fleet            Q            │
+│ Keybinds              k            │
+│ Go to the main pane   m            │
+│ List agents           l            │
 ```
 
-- **quit fleet** closes every pane of the project, including hidden agents in
+- **Quit fleet** (`Q`, deliberately shifted) closes every pane of the project, including hidden agents in
   their own workspace, so nothing is left running invisibly. Agent records are
   already on disk, so reopening the project lists them again.
 - **keybinds** opens the editor in the dashboard and **focuses that pane**, so you
   end up looking at the view you asked for even from an agent pane.
 - **main pane** jumps to the dashboard. This one never starts a fleet process.
-- **list agents** opens a list with **Open** and **Hidden** tabs; `enter` goes to
-  the agent, switching workspace first if it is hidden.
+- **List agents** opens a list with **Open** and **Hidden** tabs, switched with
+  `h`/`l` or the arrows; `enter` goes to the agent.
 
 The dashboard keys act on whatever row is selected there, so they are not in this
 menu — a menu you can open from a claude pane cannot act on a selection you cannot
@@ -241,7 +242,9 @@ to `requests/workspace.request` and the generated Lua switches to it from an
 `update-status` handler. Re-run `fleet apply-keybinds` after upgrading, or hidden
 agents will not come back.
 
-`enter` on an agent **focuses its pane, or restarts it** if the pane is gone —
+`enter` on an agent **focuses its pane, or restarts it** if the pane is gone. A
+hidden agent is **unhidden first**, so it comes back into the project window rather
+than opening a window of its own —
 after closing the terminal, selecting an agent brings it back in the same
 worktree with the same harness. That works because an agent is identified by its
 worktree path, so nothing about it depends on a pane surviving.

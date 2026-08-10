@@ -178,7 +178,7 @@ public static class DashboardWiring
         var adder = new AddRepositoryHandler(git);
         var lister = new ListAgentsHandler(agents);
         var spawner = new NewAgentHandler(git, mux, agents);
-        var opener = new OpenAgentHandler(mux, workspaces);
+        var opener = new OpenAgentHandler(mux, agents);
         var hider = new HideAgentHandler(mux, agents);
         var branches = new ListBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
@@ -248,7 +248,7 @@ public static class DashboardWiring
                     return null;
                 }
 
-                var outcome = await opener.HandleAsync(project.Name, running[index])
+                var outcome = await opener.HandleAsync(project.Name, running[index], project.Root)
                     .ConfigureAwait(false);
 
                 return outcome.Succeeded ? null : outcome.Error;

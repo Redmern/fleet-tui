@@ -9,6 +9,9 @@ public class WezTermKeybindsTests
 {
     private const string Request = @"C:\fleet\workspace.request";
 
+    private static string Lua(Keymap? keymap = null, string exe = "fleet") =>
+        WezTermKeybinds.Generate(keymap ?? Keymap.Default, exe, Request);
+
     [Theory]
     [InlineData("Ctrl+Space", " ", "CTRL")]
     [InlineData("Ctrl+A", "a", "CTRL")]
@@ -26,7 +29,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_generated_lua_binds_the_configured_prefix()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "C:\\bin\\fleet.exe", Request);
+        var lua = Lua(exe: "C:\bin\fleet.exe");
 
         Assert.Contains("key = ' '", lua);
         Assert.Contains("mods = 'CTRL'", lua);
@@ -35,9 +38,7 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_generated_lua_follows_a_rebound_prefix()
     {
-        var keymap = new Keymap(KeymapConfig.Default.WithPrefix("Ctrl+A"));
-
-        var lua = WezTermKeybinds.Generate(keymap, "fleet", Request);
+        var lua = Lua(new Keymap(KeymapConfig.Default.WithPrefix("Ctrl+A")));
 
         Assert.Contains("key = 'a'", lua);
         Assert.DoesNotContain("key = ' '", lua);
@@ -46,97 +47,52 @@ public class WezTermKeybindsTests
     [Fact]
     public void Windows_paths_are_escaped_for_lua()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "C:\\bin\\fleet.exe", Request);
+        var lua = Lua(exe: @"C:\bin\fleet.exe");
 
-        Assert.Contains("C:\\\\bin\\\\fleet.exe", lua);
+        Assert.Contains(@"C:\\bin\\fleet.exe", lua);
+        Assert.Contains(@"C:\\fleet\\workspace.request", lua);
     }
 
     [Fact]
-    public void The_menu_is_an_overlay_selected_by_key_rather_than_by_typing()
+    public void The_prefix_opens_fleets_own_menu_in_a_tab()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+        var lua = Lua();
 
-        Assert.Contains("act.InputSelector {", lua);
-        Assert.Contains("fuzzy = false", lua);
-        Assert.Contains("alphabet = alphabet", lua);
-        Assert.DoesNotContain("fuzzy = true", lua);
+        Assert.Contains("act.SpawnCommandInNewTab {", lua);
+        Assert.Contains("args = { M.fleet, 'menu', '--project', project },", lua);
     }
 
     [Fact]
-    public void The_alphabet_is_built_from_the_entries_so_a_key_lands_on_its_own_row()
+    public void Wezterm_no_longer_draws_the_menu_itself()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+        var lua = Lua();
 
-        Assert.Contains("alphabet = alphabet .. item.key", lua);
-        Assert.Contains("choices[#choices + 1] = { label = item.label, id = item.id }", lua);
-    }
-
-    [Fact]
-    public void Every_menu_entry_carries_a_key()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("M.menu = {", lua);
-        Assert.All(
-            new[] { "quit", "keybinds", "main-pane", "list-agents" },
-            id => Assert.Contains($"id = '{id}'", lua));
-    }
-
-    [Fact]
-    public void Actions_the_dashboard_renders_are_handed_to_it_instead_of_opening_a_pane()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("M.dashboard_actions = {", lua);
-        Assert.Contains("['keybinds'] = true", lua);
-        Assert.Contains("if project and M.dashboard_actions[id] then", lua);
-        Assert.Contains("wezterm.background_child_process {", lua);
-        Assert.Contains("'request', '--action', id, '--project', project", lua);
-    }
-
-    [Fact]
-    public void Handing_an_action_to_the_dashboard_also_focuses_it()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("return project, p", lua);
-        Assert.Contains("local project, dashboard = fleet_project(window)", lua);
-        Assert.Contains("dashboard:tab():activate()", lua);
-        Assert.Contains("dashboard:activate()", lua);
-    }
-
-    [Fact]
-    public void Actions_the_dashboard_cannot_render_still_open_their_own_pane()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("SplitPane", lua);
-        Assert.Contains("'menu'", lua);
-        Assert.DoesNotContain("['open-project'] = true", lua);
+        Assert.DoesNotContain("InputSelector", lua);
+        Assert.DoesNotContain("ActivateKeyTable", lua);
+        Assert.DoesNotContain("M.menu", lua);
+        Assert.DoesNotContain("M.dashboard_actions", lua);
     }
 
     [Fact]
     public void The_menu_is_scoped_to_windows_that_contain_a_fleet_pane()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+        var lua = Lua();
 
         Assert.Contains("local function fleet_project(window)", lua);
         Assert.Contains("get_user_vars()", lua);
-        Assert.Contains("if not fleet_project(window) then", lua);
+        Assert.Contains("if not project then", lua);
     }
 
     [Fact]
     public void Without_a_fleet_pane_the_chord_is_forwarded_to_the_pane()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("act.SendKey { key = ' ', mods = 'CTRL' }", lua);
+        Assert.Contains("act.SendKey { key = ' ', mods = 'CTRL' }", Lua());
     }
 
     [Fact]
     public void The_module_exposes_apply_and_warns_it_is_generated()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+        var lua = Lua();
 
         Assert.Contains("function M.apply(config)", lua);
         Assert.Contains("return M", lua);
@@ -146,60 +102,17 @@ public class WezTermKeybindsTests
     [Fact]
     public void The_module_also_exposes_setup_for_configs_written_against_the_predecessor()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("function M.setup(config, _opts)", lua);
+        Assert.Contains("function M.setup(config, _opts)", Lua());
     }
 
     [Fact]
     public void The_module_switches_workspace_because_the_cli_cannot()
     {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
+        var lua = Lua();
 
         Assert.Contains("wezterm.on('update-status'", lua);
         Assert.Contains("act.SwitchToWorkspace { name = wanted }", lua);
         Assert.Contains("os.remove(M.workspace_request)", lua);
     }
 
-    [Fact]
-    public void The_workspace_request_path_is_escaped_for_lua()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains(@"C:\\fleet\\workspace.request", lua);
-    }
-
-    [Fact]
-    public void The_menu_offers_only_quit_keybinds_main_pane_and_the_agent_list()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("{ key = 'q', label = 'quit fleet', id = 'quit' }", lua);
-        Assert.Contains("{ key = 'k', label = 'keybinds', id = 'keybinds' }", lua);
-        Assert.Contains("{ key = 'm', label = 'main pane', id = 'main-pane' }", lua);
-        Assert.Contains("{ key = 'l', label = 'list agents', id = 'list-agents' }", lua);
-
-        Assert.DoesNotContain("'new-agent'", lua);
-        Assert.DoesNotContain("'toggle-hidden'", lua);
-        Assert.DoesNotContain("'add-repository'", lua);
-        Assert.DoesNotContain("'remove-repository'", lua);
-    }
-
-    [Fact]
-    public void Going_to_the_main_pane_needs_no_fleet_process()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("if id == 'main-pane' then", lua);
-        Assert.Contains("focus(dashboard)", lua);
-    }
-
-    [Fact]
-    public void Quitting_runs_the_quit_verb_for_the_project()
-    {
-        var lua = WezTermKeybinds.Generate(Keymap.Default, "fleet", Request);
-
-        Assert.Contains("if id == 'quit' then", lua);
-        Assert.Contains("M.fleet, 'quit', '--project', project,", lua);
-    }
 }

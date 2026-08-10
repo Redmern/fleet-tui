@@ -2,7 +2,7 @@ using Fleet.Features.Agents.OpenAgent;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
-using Fleet.Ports.Requests;
+using Fleet.Ports.Agents;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Agents;
@@ -14,7 +14,9 @@ public sealed class OpenAgentTests : IDisposable
 
     private readonly FakeMuxDriver _mux = new();
 
-    private readonly RecordingWorkspaces _workspaces = new();
+    private readonly RecordingStore _store = new();
+
+    private string ProjectRoot => Path.Combine(_root, "project");
 
     public OpenAgentTests() => Directory.CreateDirectory(_root);
 
@@ -44,7 +46,7 @@ public sealed class OpenAgentTests : IDisposable
         await _mux.SpawnAsync(new SpawnOptions { Cwd = Path.Combine(_root, "backend", "main") });
         var wanted = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
-        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -58,7 +60,7 @@ public sealed class OpenAgentTests : IDisposable
         var agent = Agent();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree + Path.DirectorySeparatorChar });
 
-        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.Single(await _mux.ListPanesAsync());
@@ -69,7 +71,7 @@ public sealed class OpenAgentTests : IDisposable
     {
         var agent = Agent();
 
-        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -85,7 +87,7 @@ public sealed class OpenAgentTests : IDisposable
     {
         var agent = Agent() with { Harness = AgentHarness.Nvim };
 
-        await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
@@ -98,7 +100,7 @@ public sealed class OpenAgentTests : IDisposable
         var agent = Agent();
         Directory.Delete(agent.Worktree, recursive: true);
 
-        var result = await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
+        var result = await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         Assert.False(result.Succeeded);
         Assert.Contains("cannot be restarted", result.Error);
@@ -111,7 +113,7 @@ public sealed class OpenAgentTests : IDisposable
         var agent = Agent();
         var other = await _mux.SpawnAsync(new SpawnOptions { Cwd = Path.Combine(_root, "other") });
 
-        await new OpenAgentHandler(_mux, _workspaces).HandleAsync("techweb", agent);
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         var panes = await _mux.ListPanesAsync();
 
@@ -119,10 +121,54 @@ public sealed class OpenAgentTests : IDisposable
         Assert.Contains(panes, p => p.Id == other);
     }
 
-    private sealed class RecordingWorkspaces : IWorkspaceRequestStore
+    private sealed class RecordingStore : IAgentStore
     {
-        public List<string> Asked { get; } = [];
+        public List<AgentRecord> Saved { get; } = [];
 
-        public void Submit(string workspace) => Asked.Add(workspace);
+        public void Save(string project, AgentRecord agent) => Saved.Add(agent);
+
+        public IReadOnlyList<AgentRecord> List(string project) => Saved;
+
+        public void Remove(string project, string worktree) { }
+    }
+
+    [Fact]
+    public async Task Opening_a_hidden_agent_unhides_it_rather_than_leaving_it_aside()
+    {
+        var agent = Agent() with { Hidden = true };
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree, Workspace = "fleet-hidden" });
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.False(Assert.Single(_store.Saved).Hidden);
+    }
+
+    [Fact]
+    public async Task A_hidden_agent_with_no_pane_restarts_visible_not_hidden()
+    {
+        var agent = Agent() with { Hidden = true };
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.NotEqual("fleet-hidden", pane.SessionName);
+        Assert.False(Assert.Single(_store.Saved).Hidden);
+    }
+
+    [Fact]
+    public async Task Opening_a_visible_agent_records_nothing()
+    {
+        var agent = Agent();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.Empty(_store.Saved);
     }
 }
