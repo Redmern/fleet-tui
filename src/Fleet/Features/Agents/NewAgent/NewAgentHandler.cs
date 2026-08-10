@@ -37,7 +37,7 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             command.RepositoryDirectory,
             branch,
             bare.Ok && bare.Out == "true",
-            Directory.Exists);
+            WorktreePlanner.LooksLikeWorktree);
 
         var baseRef = branch;
 

@@ -37,6 +37,37 @@ public class WorktreePlannerTests
     }
 
     [Fact]
+    public void A_leftover_directory_that_is_not_a_worktree_is_still_created()
+    {
+        var plan = WorktreePlanner.For("base", "test2", true, _ => false);
+
+        Assert.True(plan.MustCreate);
+    }
+
+    [Fact]
+    public void Only_a_directory_holding_dot_git_counts_as_a_worktree()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+        var bare = Path.Combine(root, "empty");
+        var real = Path.Combine(root, "real");
+
+        try
+        {
+            Directory.CreateDirectory(bare);
+            Directory.CreateDirectory(real);
+            File.WriteAllText(Path.Combine(real, ".git"), "gitdir: ../x");
+
+            Assert.False(WorktreePlanner.LooksLikeWorktree(bare));
+            Assert.True(WorktreePlanner.LooksLikeWorktree(real));
+            Assert.False(WorktreePlanner.LooksLikeWorktree(Path.Combine(root, "missing")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void A_plain_repository_plans_to_itself_with_nothing_to_create()
     {
         var plan = WorktreePlanner.For("base", "develop", false, NothingExists);
