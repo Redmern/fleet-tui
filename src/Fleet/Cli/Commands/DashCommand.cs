@@ -26,7 +26,8 @@ public static class DashCommand
 
         var keymaps = Adapters.Keymaps();
         var git = Adapters.Git();
-        var mux = Adapters.Mux(Adapters.Log());
+        var log = Adapters.Log();
+        var mux = Adapters.Mux(log);
 
         Adapters.MarkDashboardPane(project.Name);
 
@@ -47,7 +48,8 @@ public static class DashCommand
                 mux.Driver,
                 Adapters.Agents(),
                 Adapters.Requests(),
-                Adapters.Workspaces()));
+                Adapters.Workspaces(),
+                log));
 
         return 0;
     }

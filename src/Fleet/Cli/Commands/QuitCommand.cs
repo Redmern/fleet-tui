@@ -26,8 +26,14 @@ public static class QuitCommand
         var agents = new ListAgentsHandler(Adapters.Agents()).Handle(project.Name);
         var mux = Adapters.Mux(Adapters.Log());
 
-        var result = await new QuitProjectHandler(mux.Driver)
-            .HandleAsync(project.Root, agents)
+        if (mux.Unsupported is not null)
+        {
+            Console.Error.WriteLine($"fleet quit: {mux.Unsupported}");
+            return 1;
+        }
+
+        var result = await new QuitProjectHandler(mux.Driver, Adapters.Agents())
+            .HandleAsync(project.Name, project.Root, agents)
             .ConfigureAwait(false);
 
         if (!result.Succeeded)

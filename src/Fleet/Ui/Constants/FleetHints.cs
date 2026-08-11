@@ -8,15 +8,11 @@ public static class FleetHints
 
     public const string NewAgent = "tab field   enter activate   esc cancel";
 
-    public const string Picker = "press a key   j/k move   enter select   esc cancel";
-
     public const string AgentList = "enter open   q/esc close";
 
-    public const string Confirm = "y/enter yes   n/esc no";
+    public const string Confirm = "h/l move   enter select   y yes   n/esc no";
 
     public const string Dismiss = "enter/esc dismiss";
-
-    public const string Menu = "j/k move   enter select   esc close";
 
     public const string Keybinds = "j/k move   enter rebind   esc close";
 

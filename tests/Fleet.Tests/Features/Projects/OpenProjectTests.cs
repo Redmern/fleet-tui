@@ -3,6 +3,7 @@ using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Projects.Models;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Projects;
 
@@ -66,7 +67,7 @@ public class OpenProjectTests
 
         var result = await new OpenProjectHandler(mux).HandleAsync(Command);
 
-        Assert.Equal("backend", mux.TitleOf(result.Value.HarnessPane));
+        Assert.Equal(FleetTabTitles.Dashboard, mux.TitleOf(result.Value.HarnessPane));
     }
 
     [Fact]

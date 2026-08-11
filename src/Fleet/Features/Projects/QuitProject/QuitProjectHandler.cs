@@ -1,3 +1,4 @@
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
@@ -6,9 +7,10 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Projects.QuitProject;
 
-public sealed class QuitProjectHandler(IMuxDriver mux)
+public sealed class QuitProjectHandler(IMuxDriver mux, IAgentStore store)
 {
     public async Task<Result> HandleAsync(
+        string project,
         string projectRoot,
         IReadOnlyList<AgentRecord> agents,
         CancellationToken ct = default)
@@ -24,11 +26,27 @@ public sealed class QuitProjectHandler(IMuxDriver mux)
             return Result.Fail("Nothing of this project is open.");
         }
 
+        Remember(project, agents, panes);
+
         foreach (var pane in doomed)
         {
             await mux.KillPaneAsync(pane, ct).ConfigureAwait(false);
         }
 
         return Result.Ok();
+    }
+
+    private void Remember(
+        string project, IReadOnlyList<AgentRecord> agents, IReadOnlyList<Pane> panes)
+    {
+        foreach (var agent in agents)
+        {
+            var open = panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
+
+            if (open != agent.Open)
+            {
+                store.Save(project, agent with { Open = open });
+            }
+        }
     }
 }

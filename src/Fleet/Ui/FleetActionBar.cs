@@ -1,75 +1,126 @@
 using Fleet.Ui.Constants;
-using Terminal.Gui.Drawing;
+using Fleet.Ui.Models;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
-using Terminal.Gui.Views;
 
 namespace Fleet.Ui;
 
 public sealed class FleetActionBar
 {
-    private static readonly System.Text.Rune NoHotKey = (System.Text.Rune)'￿';
-
-    private readonly List<Button> _buttons = [];
+    private readonly ChipStrip _strip;
 
     public FleetActionBar(Pos y)
     {
-        Root = new View
+        _strip = new ChipStrip
         {
             X = 1,
             Y = y,
             Width = Dim.Fill(1),
             Height = 1,
             CanFocus = false,
+            SchemeName = FleetSchemes.Screen,
         };
     }
 
-    public View Root { get; }
+    public View Root => _strip;
 
-    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
+    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
+        _strip.Show(items);
+
+    private sealed class ChipStrip : View
     {
-        foreach (var button in _buttons)
+        private readonly List<(int From, int To, Action Run)> _hits = [];
+
+        private IReadOnlyList<FleetSpan> _spans = [];
+
+        public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
         {
-            Root.Remove(button);
-            button.Dispose();
+            var spans = new List<FleetSpan>();
+
+            _hits.Clear();
+
+            var offset = 0;
+
+            foreach (var (key, label, run) in items)
+            {
+                var text = key.Length == 0 ? $" {label} " : $" {key} {label} ";
+                var chip = text.Length + 2;
+
+                spans.Add(new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge));
+
+                if (key.Length > 0)
+                {
+                    spans.Add(new FleetSpan($" {key} ", FleetTones.ChipKey));
+                    spans.Add(new FleetSpan($"{label} ", FleetTones.ChipLabel));
+                }
+                else
+                {
+                    spans.Add(new FleetSpan($" {label} ", FleetTones.ChipLabel));
+                }
+
+                spans.Add(new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge));
+                spans.Add(FleetSpan.Plain(" "));
+
+                _hits.Add((offset, offset + chip - 1, run));
+
+                offset += chip + 1;
+            }
+
+            _spans = spans;
+
+            SetNeedsLayout();
+            SetNeedsDraw();
         }
 
-        _buttons.Clear();
-
-        var offset = 0;
-
-        foreach (var (key, label, run) in items)
+        protected override bool OnDrawingContent(DrawContext? context)
         {
-            var text = key.Length == 0 ? label : $"{key} {label}";
+            var basis = GetAttributeForRole(Terminal.Gui.Drawing.VisualRole.Normal);
+            var width = Viewport.Width;
+            var drawn = 0;
 
-            var button = new Button
-            {
-                X = Pos.Absolute(offset),
-                Y = 0,
-                Text = text,
-                NoDecorations = true,
-                ShadowStyle = ShadowStyles.None,
-                HotKeySpecifier = NoHotKey,
-                CanFocus = false,
-                SchemeName = FleetSchemes.Hint,
-            };
+            Move(0, 0);
 
-            button.MouseEvent += (_, e) =>
+            foreach (var span in _spans)
             {
-                if (e.Flags.HasFlag(MouseFlags.LeftButtonClicked))
+                SetAttribute(FleetInk.For(span.Tone, basis));
+
+                foreach (var rune in span.Text.EnumerateRunes())
+                {
+                    if (drawn >= width)
+                    {
+                        return true;
+                    }
+
+                    AddRune(rune);
+                    drawn++;
+                }
+            }
+
+            return true;
+        }
+
+        protected override bool OnMouseEvent(Mouse mouse)
+        {
+            if (!mouse.Flags.HasFlag(MouseFlags.LeftButtonClicked))
+            {
+                return false;
+            }
+
+            if (mouse.Position is not { } at)
+            {
+                return false;
+            }
+
+            foreach (var (from, to, run) in _hits)
+            {
+                if (at.X >= from && at.X <= to)
                 {
                     run();
-                    e.Handled = true;
+                    return true;
                 }
-            };
+            }
 
-            _buttons.Add(button);
-            Root.Add(button);
-
-            offset += text.Length + 3;
+            return false;
         }
-
-        Root.SetNeedsLayout();
-        Root.SetNeedsDraw();
     }
 }

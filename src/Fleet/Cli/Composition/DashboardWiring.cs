@@ -8,6 +8,7 @@ using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Repositories;
 using Fleet.Features.Repositories.AddRepository;
@@ -16,12 +17,17 @@ using Fleet.Features.Repositories.PullRepository;
 using Fleet.Features.Repositories.RemoveRepository;
 using Fleet.Features.Repositories.SetDefaultBranch;
 using Fleet.Features.Repositories.RemoveRepository.Models;
+using Fleet.Features.Repositories.Secrets;
+using Fleet.Features.Setup.RunSetup;
+using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
+using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Requests;
 using Fleet.Shared;
@@ -34,6 +40,8 @@ namespace Fleet.Cli.Composition;
 
 public static class DashboardWiring
 {
+    private const int LogTail = 400;
+
     private static readonly FleetAction[] MenuActions =
     [
         FleetAction.NewAgent,
@@ -43,9 +51,85 @@ public static class DashboardWiring
         FleetAction.AddRepository,
         FleetAction.RemoveRepository,
         FleetAction.Refresh,
+        FleetAction.ViewLogs,
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
+
+    private static string? Noted(IFleetLog log, string project, string? message)
+    {
+        Note(log, project, message);
+
+        return message;
+    }
+
+    private static void Note(IFleetLog log, string project, string? message)
+    {
+        if (message is { Length: > 0 })
+        {
+            log.Write(LogTag.For(project, message));
+        }
+    }
+
+    private static string? Secrets(
+        IApplication app,
+        Keymap keymap,
+        IMuxDriver mux,
+        Project project,
+        RepositoryChoice repository)
+    {
+        var secrets = new SecretsHandler();
+
+        var plan = secrets.Plan(
+            project.Root, repository.Name, repository.Directory, repository.DefaultBranch);
+
+        return SecretsView.Show(
+            app,
+            keymap,
+            plan,
+            open: chosen => Edit(mux, project, chosen.Root),
+            copy: chosen =>
+            {
+                if (chosen.Files.Count == 0)
+                {
+                    return $"{chosen.Repository} has no secret files to copy yet.";
+                }
+
+                var seeded = secrets.Distribute(chosen);
+
+                return $"copied {chosen.Files.Count} secret file(s) into "
+                     + $"{seeded} worktree(s) of {chosen.Repository}.";
+            });
+    }
+
+    private static string? Edit(IMuxDriver mux, Project project, string root)
+    {
+        Directory.CreateDirectory(root);
+
+        var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+
+        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root))?.WindowId;
+
+        var pane = mux.SpawnAsync(
+                new SpawnOptions
+                {
+                    Cwd = root,
+                    SessionName = project.Name,
+                    WindowId = window,
+                    Args = AgentHarness.BrowseCommand,
+                })
+            .GetAwaiter()
+            .GetResult();
+
+        if (pane.IsNone)
+        {
+            return $"could not open {root}.";
+        }
+
+        mux.SetTitleAsync(pane, "secrets").GetAwaiter().GetResult();
+
+        return $"editing the secrets of {Path.GetFileName(Path.GetDirectoryName(root)!)}.";
+    }
 
     private static string ChooseHarness(
         IApplication app,
@@ -176,9 +260,11 @@ public static class DashboardWiring
         IMuxDriver mux,
         IAgentStore agents,
         IActionRequestStore requests,
-        IWorkspaceRequestStore workspaces)
+        IWorkspaceRequestStore workspaces,
+        IFleetLog log)
     {
         var repositories = new ListRepositoriesHandler(git);
+        var remotes = new ListRemotesHandler(git);
         var adder = new AddRepositoryHandler(git);
         var lister = new ListAgentsHandler(agents);
         var spawner = new NewAgentHandler(git, mux, agents);
@@ -186,7 +272,7 @@ public static class DashboardWiring
         var hider = new HideAgentHandler(mux, agents);
         var branches = new ListBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
-        var stopper = new StopAgentHandler(mux);
+        var stopper = new StopAgentHandler(mux, agents);
         var remover = new RemoveAgentHandler(git, mux, agents);
         var repositoryRemover = new RemoveRepositoryHandler(git);
         var puller = new PullRepositoryHandler(git);
@@ -204,7 +290,12 @@ public static class DashboardWiring
 
             AddRepository: async () =>
             {
-                var request = AddRepositoryView.Show(app, project.Root);
+                var known = await remotes
+                    .HandleAsync([.. (await repositories.HandleAsync(project.Root)
+                        .ConfigureAwait(false)).Select(r => r.Path)])
+                    .ConfigureAwait(false);
+
+                var request = AddRepositoryView.Show(app, project.Root, known, keymap);
 
                 if (request is null)
                 {
@@ -212,12 +303,25 @@ public static class DashboardWiring
                 }
 
                 var outcome = await adder.HandleAsync(request).ConfigureAwait(false);
+
+                Note(log, project.Name, outcome.Succeeded
+                    ? $"added repository {request.Name}"
+                    : $"could not add repository {request.Name}: {outcome.Error}");
+
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
             ShowMenu: () => FleetUi.Menu(app, keymap, MenuActions),
 
-            EditKeybinds: () => EditKeybindsView.Show(app, keymaps, keymap),
+            EditKeybinds: () => new Keymap(EditKeybindsView.Show(app, keymaps, keymap)),
+
+            ReloadKeymap: () => new Keymap(keymaps.Load()),
+
+            ShowLogs: () => ViewLogsView.Show(
+                app,
+                keymap,
+                project.Name,
+                LogParser.For(project.Name, LogParser.Parse(log.Tail(LogTail)))),
 
             TakeRequest: () => requests.TakePending(project.Name),
 
@@ -225,9 +329,10 @@ public static class DashboardWiring
             {
                 var running = lister.Handle(project.Name);
 
-                return (
+                return new AgentBoard(
                     AgentRows.For(running, a => states.For(a.Worktree, a.BaseRef)),
-                    running.Count);
+                    running.Count,
+                    [.. running.Select(a => a.Hidden)]);
             },
 
             NewAgent: async (available, selected) =>
@@ -247,7 +352,17 @@ public static class DashboardWiring
                     return null;
                 }
 
+                if (!Adapters.OnPath(request.Harness))
+                {
+                    return Noted(log, project.Name, HarnessTrouble.Missing(request.Harness));
+                }
+
                 var outcome = await spawner.HandleAsync(request).ConfigureAwait(false);
+
+                Note(log, project.Name, outcome.Succeeded
+                    ? $"started agent {request.RepositoryName}/{outcome.Value!.Branch}"
+                    : $"could not start an agent in {request.RepositoryName}: {outcome.Error}");
+
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
@@ -260,10 +375,33 @@ public static class DashboardWiring
                     return null;
                 }
 
-                var outcome = await opener.HandleAsync(project.Name, running[index], project.Root)
+                var agent = running[index];
+
+                if (!Adapters.OnPath(agent.Harness))
+                {
+                    return Noted(log, project.Name, HarnessTrouble.Missing(agent.Harness));
+                }
+
+                var outcome = await opener.HandleAsync(project.Name, agent, project.Root)
                     .ConfigureAwait(false);
 
+                Note(log, project.Name, outcome.Succeeded
+                    ? $"opened {agent.Repository}/{agent.Branch}"
+                    : $"could not open {agent.Repository}/{agent.Branch}: {outcome.Error}");
+
                 return outcome.Succeeded ? null : outcome.Error;
+            },
+
+            HideAgent: index =>
+            {
+                var running = lister.Handle(project.Name);
+
+                if (index < 0 || index >= running.Count)
+                {
+                    return null;
+                }
+
+                return Noted(log, project.Name, ToggleHidden(mux, hider, project, running[index]));
             },
 
             ManageAgent: index =>
@@ -280,7 +418,7 @@ public static class DashboardWiring
                 var picked = FleetPicker.Choose(
                     app,
                     $"{agent.Repository}/{agent.Branch}",
-                    AgentDisposal.Choices,
+                    AgentDisposal.For(agent.Hidden),
                     keymap);
 
                 if (picked is null)
@@ -290,21 +428,22 @@ public static class DashboardWiring
 
                 if (picked == AgentDisposal.Opens)
                 {
-                    return ChooseHarness(app, keymap, harnesses, project.Name, agent);
+                    return Noted(
+                        log, project.Name, ChooseHarness(app, keymap, harnesses, project.Name, agent));
                 }
 
                 if (picked == AgentDisposal.Hide)
                 {
-                    return ToggleHidden(mux, hider, project, agent);
+                    return Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
                 }
 
                 if (picked == AgentDisposal.Stop)
                 {
-                    var stopped = stopper.HandleAsync(agent).GetAwaiter().GetResult();
+                    var stopped = stopper.HandleAsync(project.Name, agent).GetAwaiter().GetResult();
 
-                    return stopped.Succeeded
+                    return Noted(log, project.Name, stopped.Succeeded
                         ? $"{agent.Repository}/{agent.Branch} stopped; its worktree is untouched."
-                        : stopped.Error;
+                        : stopped.Error);
                 }
 
                 var deleting = picked == AgentDisposal.Delete;
@@ -329,12 +468,12 @@ public static class DashboardWiring
 
                 if (!outcome.Succeeded)
                 {
-                    return outcome.Error;
+                    return Noted(log, project.Name, outcome.Error);
                 }
 
-                return deleting
+                return Noted(log, project.Name, deleting
                     ? $"{agent.Repository}/{agent.Branch} removed with its worktree."
-                    : $"{agent.Repository}/{agent.Branch} removed; its files are still on disk.";
+                    : $"{agent.Repository}/{agent.Branch} removed; its files are still on disk.");
             },
 
             RemoveRepository: repository =>
@@ -365,9 +504,9 @@ public static class DashboardWiring
 
                 var outcome = repositoryRemover.Handle(repository.Directory);
 
-                return outcome.Succeeded
+                return Noted(log, project.Name, outcome.Succeeded
                     ? $"{repository.Name} deleted."
-                    : outcome.Error;
+                    : outcome.Error);
             },
 
             PullRepository: async repository =>
@@ -376,19 +515,35 @@ public static class DashboardWiring
                     .HandleAsync(repository.Directory, repository.DefaultBranch)
                     .ConfigureAwait(false);
 
-                return outcome.Succeeded
+                return Noted(log, project.Name, outcome.Succeeded
                     ? $"{repository.Name}: {outcome.Value}"
-                    : outcome.Error;
+                    : outcome.Error);
             },
 
             ManageRepository: repository =>
             {
                 var picked = FleetPicker.Choose(
-                    app, repository.Name, RepositoryChores.Choices, keymap);
+                    app, repository.Name, RepositoryChores.Entries, keymap);
+
+                if (picked == RepositoryChores.Pull)
+                {
+                    return RepositoryManaged.Then(FleetAction.PullRepository);
+                }
+
+                if (picked == RepositoryChores.Remove)
+                {
+                    return RepositoryManaged.Then(FleetAction.RemoveRepository);
+                }
+
+                if (picked == RepositoryChores.Secrets)
+                {
+                    return new RepositoryManaged(
+                        Noted(log, project.Name, Secrets(app, keymap, mux, project, repository)));
+                }
 
                 if (picked != RepositoryChores.DefaultBranch)
                 {
-                    return null;
+                    return RepositoryManaged.Nothing;
                 }
 
                 var branches = branches0.HandleAsync(repository.Directory)
@@ -399,7 +554,7 @@ public static class DashboardWiring
 
                 if (branches.Count == 0)
                 {
-                    return $"{repository.Name} has no local branches.";
+                    return new RepositoryManaged($"{repository.Name} has no local branches.");
                 }
 
                 var chosen = FleetPicker.Choose(
@@ -411,7 +566,7 @@ public static class DashboardWiring
 
                 if (chosen is null)
                 {
-                    return null;
+                    return RepositoryManaged.Nothing;
                 }
 
                 var wanted = branches[chosen.Value].Reference;
@@ -421,9 +576,9 @@ public static class DashboardWiring
                     .GetAwaiter()
                     .GetResult();
 
-                return set.Succeeded
+                return new RepositoryManaged(Noted(log, project.Name, set.Succeeded
                     ? $"{repository.Name} now defaults to {wanted}. Its worktrees are untouched."
-                    : set.Error;
+                    : set.Error));
             },
 
             OpenRepository: async repository =>

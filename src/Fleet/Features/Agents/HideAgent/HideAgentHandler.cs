@@ -31,9 +31,12 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
                         },
                     ct)
                 .ConfigureAwait(false);
+
+            await mux.SetTitleAsync(pane.Id, BranchSlug.Of(agent.Branch), ct)
+                .ConfigureAwait(false);
         }
 
-        var changed = agent with { Hidden = hiding };
+        var changed = agent with { Hidden = hiding, Open = pane is not null };
         store.Save(project, changed);
 
         return Result<AgentRecord>.Ok(changed);

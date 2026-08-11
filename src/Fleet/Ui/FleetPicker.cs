@@ -1,5 +1,4 @@
-using System.Collections.ObjectModel;
-using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -13,34 +12,63 @@ public static class FleetPicker
         string title,
         IReadOnlyList<string> items,
         Keymap keymap,
+        int selected = 0) =>
+        Choose(app, title, PickerEntry.Plain(items), keymap, selected);
+
+    public static int? Choose(
+        IApplication app,
+        string title,
+        IReadOnlyList<PickerEntry> entries,
+        Keymap keymap,
         int selected = 0)
     {
-        if (items.Count == 0)
+        if (entries.Count == 0)
         {
             return null;
         }
 
         int? result = null;
 
-        var keys = PickerKeys.For(items);
+        var keys = PickerKeys.For(entries);
 
         var window = FleetTheme.Overlay(title);
 
         var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
-        list.SetSource(new ObservableCollection<string>(PickerKeys.Label(items, keys).ToList()));
-        list.SelectedItem = Math.Clamp(selected, 0, items.Count - 1);
+
+        FleetRows.Fill(
+            list, PickerKeys.Rows(entries, keys), Math.Clamp(selected, 0, entries.Count - 1));
 
         FleetKeys.ApplyMotions(list, keymap);
 
+        void Take(int index)
+        {
+            result = index;
+            app.RequestStop(window);
+        }
+
         list.Accepting += (_, e) =>
         {
-            result = list.SelectedItem;
-            app.RequestStop(window);
+            Take(FleetRows.Selected(list));
             e.Handled = true;
         };
 
-        window.KeyDown += (_, key) =>
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", "select", () => Take(FleetRows.Selected(list))),
+            ("esc", "cancel", () => app.RequestStop(window)),
+        ]);
+
+        var claim = FleetModal.Enter();
+
+        void Keys(object? sender, Key key)
         {
+            if (!FleetModal.Owns(claim))
+            {
+                return;
+            }
+
             if (key == FleetKeys.Cancel)
             {
                 app.RequestStop(window);
@@ -52,18 +80,27 @@ public static class FleetPicker
             {
                 if (keys[i].Length == 1 && key == new Key(keys[i]))
                 {
-                    result = i;
-                    app.RequestStop(window);
+                    Take(i);
                     key.Handled = true;
                     return;
                 }
             }
-        };
+        }
 
-        window.Add(list, FleetTheme.HintBar(FleetHints.Picker));
+        app.Keyboard.KeyDown += Keys;
 
-        app.Run(window);
-        window.Dispose();
+        window.Add(list, bar.Root);
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            app.Keyboard.KeyDown -= Keys;
+            window.Dispose();
+        }
 
         return result;
     }

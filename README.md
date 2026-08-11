@@ -5,7 +5,7 @@ repositories. Neovim is the editor, Claude Code is the agent, and a terminal
 multiplexer supplies the panes.
 
 Opening a project gives you one window split in two: Claude on the left, the
-fleet dashboard on the right. A prefix chord — `ctrl+space` by default — opens
+fleet dashboard on the right. A prefix chord — `ctrl+enter` by default — opens
 the fleet menu from **any** pane, including one running nothing but Claude.
 
 > **Status.** Projects, repositories, the menu, configurable keybinds and agents
@@ -13,29 +13,97 @@ the fleet menu from **any** pane, including one running nothing but Claude.
 > the terminal, change what it opens, hide it from the tab bar, stop it, and
 > remove it together with its worktree. Live agent status via hooks is not built
 > yet. Only the WezTerm driver ships; tmux and the embedded driver are designed
-> but unwritten. Nothing has been built or run on Linux.
+> but unwritten. Linux is built and tested by CI but has not been used in anger.
 
 ## Requirements
 
-- Windows, with [WezTerm](https://wezterm.org) on `PATH`
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+To run fleet:
+
+- [WezTerm](https://wezterm.org) on `PATH` — fleet has nothing to drive without it
 - git
-- Visual Studio Build Tools 2022 with the **Desktop development with C++**
-  workload — NativeAOT needs the MSVC linker and the Windows SDK
+- [Neovim](https://neovim.io) with `neo-tree` and `claudecode.nvim`, for the default
+  harness; agents can also open Claude Code alone
 - Claude Code, for the pane fleet opens on the left
+- a Nerd Font in WezTerm, or the branch pills and icons render as boxes
+
+To build it yourself, additionally:
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- Windows: Visual Studio Build Tools 2022 with the **Desktop development with C++**
+  workload — NativeAOT needs the MSVC linker and the Windows SDK
+- Linux: `clang` and `zlib1g-dev`, for the same reason
 
 ## Install
 
+From a published release, with no SDK on the machine:
+
 ```powershell
-.\install.ps1
+# Windows
+$env:FLEET_REPO = '<owner>/fleet'
+.\scripts\get-fleet.ps1
 ```
 
-This publishes a NativeAOT binary, copies it to
-`%LOCALAPPDATA%\Programs\fleet\fleet.exe`, adds that directory to your user
-`PATH`, and runs `fleet doctor` to verify. Open a new terminal afterwards.
+```sh
+# Linux
+FLEET_REPO=<owner>/fleet sh scripts/get-fleet.sh
+```
 
-`.\install.ps1 -Uninstall` reverses it. Add `-Purge` to delete `%APPDATA%\fleet`
-as well.
+From source:
+
+```powershell
+.\install.ps1     # Windows
+```
+
+```sh
+./install.sh       # Linux and macOS
+```
+
+### Bringing the dependencies with it
+
+Add `-WithDeps` (or `--with-deps`) and the installer sets up the machine first:
+WezTerm, Neovim and git through winget on Windows or the package manager it finds
+on Linux, then a Neovim config cloned into `%LOCALAPPDATA%\nvim` /
+`~/.config/nvim`:
+
+```powershell
+.\install.ps1 -WithDeps
+.\scripts\get-fleet.ps1 -Repo <owner>/fleet -WithDeps
+```
+
+```sh
+./install.sh --with-deps
+FLEET_REPO=<owner>/fleet sh scripts/get-fleet.sh --with-deps
+```
+
+Which config it clones: `-NvimConfig <git-url>`, else `FLEET_NVIM_CONFIG`, else the
+default at the top of `scripts/deps.ps1` and `install.sh`. Anything already present
+is left alone — an existing tool is skipped, a config directory holding a different
+remote is not touched, and a matching one is fast-forwarded. A config that ships its
+own `bootstrap.sh` is reported rather than run.
+
+Debian and Ubuntu carry no WezTerm package, so there `--with-deps` installs the rest
+and points at [wezterm.org/installation](https://wezterm.org/installation).
+
+Either route ends by running `fleet setup`, which writes the WezTerm module, wires
+your WezTerm config, and lists anything still missing with the command that fixes
+it:
+
+```
+fleet setup
+  ok  wezterm        found on PATH
+  ok  git            found on PATH
+  --  nvim           missing - agents cannot open it
+  ok  fleet.lua      C:\Users\you\.wezterm\fleet.lua
+  ok  wezterm config wired C:\Users\you\.wezterm.lua
+  glyph check     develop ↑1 ●
+still to do:
+  nvim           winget install Neovim.Neovim
+```
+
+It is safe to run again: an already-wired config is left alone.
+
+`.\install.ps1 -Uninstall` reverses a Windows install. Add `-Purge` to delete
+`%APPDATA%\fleet` as well. On Linux, `./install.sh --uninstall`.
 
 If publishing fails with `'vswhere.exe' is not recognized` followed by `MSB3073`,
 the toolchain is fine and only `vswhere` is missing from `PATH`; the installer
@@ -73,14 +141,16 @@ the most recently used one that answers.
 fleet apply-keybinds
 ```
 
-writes `~/.wezterm/fleet.lua` from your current keymap. Add to `.wezterm.lua`:
+writes the Lua module from your current keymap — `~/.wezterm/fleet.lua` on Windows,
+`~/.config/wezterm/fleet.lua` elsewhere. `fleet setup` adds these lines to your
+WezTerm config for you; by hand it is:
 
 ```lua
 local fleet = require 'fleet'
 fleet.apply(config)
 ```
 
-`ctrl+space` then opens **fleet's own menu** — drawn by fleet, styled like the rest
+`ctrl+enter` then opens **fleet's own menu** — drawn by fleet, styled like the rest
 of it, one key per entry. It opens as a tab, so no pane is resized, and closes
 itself when done.
 
@@ -141,7 +211,7 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
-| `ctrl+space` | the fleet menu, from any pane |
+| `ctrl+enter` | the fleet menu, from any pane |
 
 Adding a repository has no bare key on purpose — it lives in the menu only, so
 the dashboard's letters stay free for navigation.

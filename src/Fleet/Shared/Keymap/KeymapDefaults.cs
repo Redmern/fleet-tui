@@ -4,16 +4,17 @@ namespace Fleet.Shared.Keymap;
 
 public static class KeymapDefaults
 {
-    public const string Prefix = "Ctrl+Space";
+    public const string Prefix = "Ctrl+Enter";
 
     public static IReadOnlyDictionary<FleetAction, string> Bindings { get; } =
         new Dictionary<FleetAction, string>
         {
             [FleetAction.OpenMenu] = "Space",
             [FleetAction.NewProject] = "n",
+            [FleetAction.RemoveProject] = "d",
             [FleetAction.OpenProject] = "l",
             [FleetAction.Refresh] = "r",
-            [FleetAction.EditKeybinds] = "k",
+            [FleetAction.EditKeybinds] = "e",
             [FleetAction.Close] = "q",
             [FleetAction.MoveDown] = "j",
             [FleetAction.MoveUp] = "k",
@@ -25,6 +26,7 @@ public static class KeymapDefaults
             [FleetAction.NextTab] = "l",
             [FleetAction.NewAgent] = "n",
             [FleetAction.RemoveAgent] = "m",
+            [FleetAction.ToggleHidden] = "x",
             [FleetAction.AddRepository] = "n",
             [FleetAction.RemoveRepository] = "d",
             [FleetAction.PullRepository] = "p",
@@ -32,12 +34,14 @@ public static class KeymapDefaults
             [FleetAction.QuitFleet] = "Q",
             [FleetAction.FocusMain] = "m",
             [FleetAction.ListAgents] = "l",
+            [FleetAction.ViewLogs] = "L",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
     [
         FleetAction.OpenMenu,
         FleetAction.NewProject,
+        FleetAction.RemoveProject,
         FleetAction.OpenProject,
         FleetAction.Refresh,
         FleetAction.EditKeybinds,
@@ -52,6 +56,7 @@ public static class KeymapDefaults
         FleetAction.NextTab,
         FleetAction.NewAgent,
         FleetAction.RemoveAgent,
+        FleetAction.ToggleHidden,
         FleetAction.AddRepository,
         FleetAction.RemoveRepository,
         FleetAction.PullRepository,
@@ -59,11 +64,13 @@ public static class KeymapDefaults
         FleetAction.QuitFleet,
         FleetAction.FocusMain,
         FleetAction.ListAgents,
+        FleetAction.ViewLogs,
     ];
 
     public static string Short(FleetAction action) =>
         action switch
         {
+            FleetAction.RemoveProject => "drop project",
             FleetAction.NewAgent => "new agent",
             FleetAction.ChangeHarness => "opens",
             FleetAction.ToggleHidden => "hide",
@@ -77,8 +84,9 @@ public static class KeymapDefaults
             FleetAction.Refresh => "refresh",
             FleetAction.Close => "close pane",
             FleetAction.QuitFleet => "quit fleet",
-            FleetAction.FocusMain => "main pane",
+            FleetAction.FocusMain => "dashboard",
             FleetAction.ListAgents => "list agents",
+            FleetAction.ViewLogs => "logs",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -87,6 +95,7 @@ public static class KeymapDefaults
         {
             FleetAction.OpenMenu => "Open the fleet menu",
             FleetAction.NewProject => "New project",
+            FleetAction.RemoveProject => "Remove a project from fleet",
             FleetAction.OpenProject => "Open selection",
             FleetAction.AddRepository => "Add repository",
             FleetAction.Refresh => "Refresh",
@@ -109,8 +118,9 @@ public static class KeymapDefaults
             FleetAction.PullRepository => "Pull the repository",
             FleetAction.ManageRepository => "Manage the repository",
             FleetAction.QuitFleet => "Quit fleet",
-            FleetAction.FocusMain => "Go to the main pane",
+            FleetAction.FocusMain => "Go to dashboard",
             FleetAction.ListAgents => "List agents",
+            FleetAction.ViewLogs => "Show log",
             _ => action.ToString(),
         };
 }

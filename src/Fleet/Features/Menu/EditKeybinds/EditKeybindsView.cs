@@ -77,8 +77,17 @@ public static class EditKeybindsView
 
         window.Add(list, status, FleetTheme.HintBar(FleetHints.Keybinds));
 
-        app.Run(window);
-        window.Dispose();
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
 
         return config;
     }

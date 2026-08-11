@@ -31,6 +31,23 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Hidden_and_open_survive_the_round_trip_because_that_is_the_session_state()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+
+        _store.Save("techweb", Agent(worktree) with { Hidden = true, Open = true });
+
+        var agent = Assert.Single(_store.List("techweb"));
+
+        Assert.True(agent.Hidden);
+        Assert.True(agent.Open);
+
+        _store.Save("techweb", agent with { Open = false });
+
+        Assert.False(Assert.Single(_store.List("techweb")).Open);
+    }
+
+    [Fact]
     public void The_worktree_path_is_the_identity_so_saving_twice_updates_rather_than_duplicates()
     {
         var worktree = Path.Combine(ConfigHome, "backend", "develop");

@@ -1,3 +1,4 @@
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Shared;
@@ -5,9 +6,10 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.StopAgent;
 
-public sealed class StopAgentHandler(IMuxDriver mux)
+public sealed class StopAgentHandler(IMuxDriver mux, IAgentStore store)
 {
-    public async Task<Result> HandleAsync(AgentRecord agent, CancellationToken ct = default)
+    public async Task<Result> HandleAsync(
+        string project, AgentRecord agent, CancellationToken ct = default)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
@@ -21,6 +23,11 @@ public sealed class StopAgentHandler(IMuxDriver mux)
         foreach (var pane in running)
         {
             await mux.KillPaneAsync(pane.Id, ct).ConfigureAwait(false);
+        }
+
+        if (agent.Open)
+        {
+            store.Save(project, agent with { Open = false });
         }
 
         return Result.Ok();

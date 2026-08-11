@@ -1,7 +1,7 @@
-using System.Collections.ObjectModel;
 using Fleet.Features.Agents.ListAgents.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -25,14 +25,18 @@ public static class ListAgentsView
         var openList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var hiddenList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
 
-        openList.SetSource(new ObservableCollection<string>(
-            listing.Open.Count == 0 ? [NoneOpen] : AgentRows.For(listing.Open).ToList()));
+        FleetRows.Fill(
+            openList,
+            listing.Open.Count == 0 ? [FleetRow.Plain(NoneOpen)] : AgentRows.For(listing.Open));
 
-        hiddenList.SetSource(new ObservableCollection<string>(
-            listing.Hidden.Count == 0 ? [NoneHidden] : AgentRows.For(listing.Hidden).ToList()));
+        FleetRows.Fill(
+            hiddenList,
+            listing.Hidden.Count == 0
+                ? [FleetRow.Plain(NoneHidden)]
+                : AgentRows.For(listing.Hidden));
 
         var lists = new[] { openList, hiddenList };
-        var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
+        var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
 
         FleetKeys.ApplyMotions(openList, keymap);
         FleetKeys.ApplyMotions(hiddenList, keymap);
@@ -59,7 +63,7 @@ public static class ListAgentsView
                 return;
             }
 
-            var error = open(tab, lists[tab].SelectedItem ?? 0);
+            var error = open(tab, FleetRows.Selected(lists[tab]));
 
             if (error is not null)
             {
@@ -79,8 +83,15 @@ public static class ListAgentsView
             };
         }
 
+        var claim = FleetModal.Enter();
+
         void Keys(object? sender, Key key)
         {
+            if (!FleetModal.Owns(claim))
+            {
+                return;
+            }
+
             if (key == FleetKeys.Cancel || key == keymap.KeyFor(Shared.Keymap.Enums.FleetAction.Close))
             {
                 app.RequestStop(window);
@@ -119,6 +130,7 @@ public static class ListAgentsView
         }
         finally
         {
+            FleetModal.Leave();
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();
         }

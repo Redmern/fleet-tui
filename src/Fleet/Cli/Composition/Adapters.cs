@@ -4,6 +4,9 @@ using Fleet.Platform.Logging;
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Constants;
 using Fleet.Platform.Mux.Models;
+using Fleet.Features.Setup.RunSetup;
+using Fleet.Features.Setup.RunSetup.Enums;
+using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Platform.Mux.WezTerm;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
@@ -36,9 +39,7 @@ public static class Adapters
     {
         var chosen = DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath));
 
-        var unsupported = chosen == DriverNames.WezTerm
-            ? null
-            : $"the '{chosen}' driver is not implemented yet (phase 1 ships wezterm only)";
+        var unsupported = MuxTrouble.With(chosen, OnPath(DriverNames.WezTerm));
 
         return new MuxSelection(
             new FailSilentDriver(new WezTermDriver(), log.Swallowed), chosen, unsupported);
@@ -51,12 +52,50 @@ public static class Adapters
     public static void MarkDashboardPane(string project) =>
         WezTermUserVars.MarkDashboard(project);
 
+    public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
+
+    public static ConfigWiring WireWezTermConfig()
+    {
+        var home = Home;
+
+        var config = WezTermWiring.ConfigCandidates(home).FirstOrDefault(File.Exists);
+
+        if (config is null)
+        {
+            return new ConfigWiring(WiringState.Missing, WezTermWiring.ConfigCandidates(home)[0]);
+        }
+
+        try
+        {
+            var text = File.ReadAllText(config);
+
+            if (WezTermWiring.AlreadyWired(text))
+            {
+                return new ConfigWiring(WiringState.Already, config);
+            }
+
+            var wired = WezTermWiring.Wire(text);
+
+            File.Copy(config, config + ".bak-fleet", overwrite: true);
+            File.WriteAllText(config, wired.Text);
+
+            return new ConfigWiring(
+                WiringState.Added,
+                config,
+                wired.BeforeReturn ? string.Empty : "appended at the end of the file");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new ConfigWiring(WiringState.Failed, config, e.Message);
+        }
+    }
+
+    private static string Home =>
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
     public static string WriteKeybindModule(Keymap keymap)
     {
-        var target = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".wezterm",
-            "fleet.lua");
+        var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermWiring.Module);
 
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.WriteAllText(

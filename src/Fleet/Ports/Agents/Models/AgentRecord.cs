@@ -7,4 +7,5 @@ public sealed record AgentRecord(
     string Harness,
     string BaseRef,
     bool RepositoryWasBare,
-    bool Hidden = false);
+    bool Hidden = false,
+    bool Open = false);

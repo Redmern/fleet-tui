@@ -4,7 +4,10 @@ using Fleet.Features.Projects.CreateProject;
 using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.PickProject;
+using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Projects.PickProject.Models;
+using Fleet.Features.Projects.RestoreSession;
+using Fleet.Features.Projects.RemoveProject;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
@@ -18,19 +21,13 @@ public static class PickProjectCommand
     [
         FleetAction.NewProject,
         FleetAction.OpenProject,
+        FleetAction.RemoveProject,
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
 
     public static async Task<int> RunAsync()
     {
-        var chosen = Choose();
-
-        if (chosen is null)
-        {
-            return 0;
-        }
-
         var log = Adapters.Log();
         var mux = Adapters.Mux(log);
 
@@ -39,11 +36,39 @@ public static class PickProjectCommand
             return Fail(mux.Unsupported);
         }
 
+        var chosen = Choose();
+
+        if (chosen is null)
+        {
+            return 0;
+        }
+
         var result = await new OpenProjectHandler(mux.Driver)
             .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable))
             .ConfigureAwait(false);
 
-        return result.Succeeded ? 0 : Fail(result.Error!);
+        if (!result.Succeeded)
+        {
+            return Fail(result.Error!);
+        }
+
+        var agents = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name);
+
+        var runnable = agents.Where(a => Adapters.OnPath(a.Harness)).ToList();
+
+        foreach (var stranded in agents.Except(runnable).Select(a => a.Harness).Distinct())
+        {
+            Console.Error.WriteLine(
+                $"fleet: {stranded} is not on PATH, so agents that open it stay closed.");
+        }
+
+        await new RestoreSessionHandler(mux.Driver)
+            .HandleAsync(chosen.Name, chosen.Root, runnable)
+            .ConfigureAwait(false);
+
+        await mux.Driver.FocusPaneAsync(result.Value.DashPane).ConfigureAwait(false);
+
+        return 0;
     }
 
     private static Project? Choose()
@@ -51,6 +76,7 @@ public static class PickProjectCommand
         var projects = Adapters.Projects();
         var keymaps = Adapters.Keymaps();
         var creator = new CreateProjectHandler(projects);
+        var remover = new RemoveProjectHandler(projects);
 
         using IApplication app = FleetUi.Start();
 
@@ -62,6 +88,26 @@ public static class PickProjectCommand
             new PickProjectHandler(projects),
             new PickProjectCallbacks(
                 CreateProject: () => CreateProjectView.Show(app, creator),
+                RemoveProject: project =>
+                {
+                    var confirmed = FleetDialog.Confirm(
+                        app,
+                        $"Remove {project.Name}?",
+                        [
+                            "fleet forgets this project.",
+                            $"{project.Root} and everything in it stays on disk.",
+                        ],
+                        "Remove");
+
+                    if (!confirmed)
+                    {
+                        return null;
+                    }
+
+                    var dropped = remover.Handle(project);
+
+                    return dropped.Succeeded ? dropped.Value : dropped.Error;
+                },
                 ShowMenu: () => FleetUi.Menu(app, keymap, MenuActions),
                 EditKeybinds: () => EditKeybindsView.Show(app, keymaps, keymap)));
     }

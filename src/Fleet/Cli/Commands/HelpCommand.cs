@@ -15,6 +15,7 @@ public static class HelpCommand
               fleet request --action <id> --project <name>
                                           hand an action to that project's dashboard
               fleet quit --project <name> close everything for that project
+              fleet setup                 first run: wire wezterm, check what is missing
               fleet apply-keybinds        write the wezterm keybinding module
               fleet doctor                check the environment
             """);

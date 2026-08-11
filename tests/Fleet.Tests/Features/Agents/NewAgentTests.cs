@@ -107,7 +107,7 @@ public sealed class NewAgentTests : IDisposable
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
-        Assert.Equal("backend/feature_login", _mux.TitleOf(pane.Id));
+        Assert.Equal("feature_login", _mux.TitleOf(pane.Id));
     }
 
     [Fact]

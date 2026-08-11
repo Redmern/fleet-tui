@@ -19,7 +19,7 @@ public static class FleetDialog
             y++;
         }
 
-        var yes = FleetTheme.Primary(2, y + 1, confirmText);
+        var yes = FleetTheme.Submit(2, y + 1, confirmText);
         var no = FleetTheme.Secondary(2 + confirmText.Length + 6, y + 1, "No");
 
         yes.Accepting += (_, _) =>
@@ -43,12 +43,33 @@ public static class FleetDialog
                 app.RequestStop(window);
                 key.Handled = true;
             }
+            else if (key == Key.H || key == Key.CursorLeft)
+            {
+                yes.SetFocus();
+                key.Handled = true;
+            }
+            else if (key == Key.L || key == Key.CursorRight)
+            {
+                no.SetFocus();
+                key.Handled = true;
+            }
         };
 
         window.Add(yes, no, FleetTheme.HintBar(FleetHints.Confirm));
 
-        app.Run(window);
-        window.Dispose();
+        yes.SetFocus();
+
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
 
         return confirmed;
     }
@@ -79,8 +100,17 @@ public static class FleetDialog
 
         window.Add(dismiss, FleetTheme.HintBar(FleetHints.Dismiss));
 
-        app.Run(window);
-        window.Dispose();
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
     }
 
     private static Terminal.Gui.Views.Window Sized(

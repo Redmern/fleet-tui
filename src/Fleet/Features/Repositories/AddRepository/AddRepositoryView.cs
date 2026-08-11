@@ -8,7 +8,10 @@ namespace Fleet.Features.Repositories.AddRepository;
 
 public static class AddRepositoryView
 {
-    public static AddRepositoryCommand? Show(IApplication app, string projectRoot)
+    public const string PickUrl = "like...";
+
+    public static AddRepositoryCommand? Show(
+        IApplication app, string projectRoot, IReadOnlyList<string> knownUrls, Keymap keymap)
     {
         AddRepositoryCommand? result = null;
 
@@ -17,10 +20,35 @@ public static class AddRepositoryView
         var clone = FleetTheme.Toggle(1, 1, "Clone from a URL instead of creating a new repository");
         var nameField = FleetTheme.Field(11, 3);
         var urlField = FleetTheme.Field(11, 5);
-        var branchField = FleetTheme.Field(11, 7, "main");
+        var branchField = FleetTheme.Field(11, 9, "main");
 
+        var like = FleetTheme.Choice(11, 6, PickUrl);
+
+        like.Visible = knownUrls.Count > 0;
         urlField.Enabled = false;
-        clone.ValueChanged += (_, _) => urlField.Enabled = clone.Value == CheckState.Checked;
+        like.Enabled = false;
+
+        void Cloning(bool on)
+        {
+            urlField.Enabled = on;
+            like.Enabled = on;
+        }
+
+        clone.ValueChanged += (_, _) => Cloning(clone.Value == CheckState.Checked);
+
+        like.Accepting += (_, e) =>
+        {
+            var picked = FleetPicker.Choose(app, "Start from", knownUrls, keymap);
+
+            if (picked is not null)
+            {
+                urlField.Text = knownUrls[picked.Value];
+                urlField.SetFocus();
+                urlField.MoveEnd();
+            }
+
+            e.Handled = true;
+        };
 
         void Submit()
         {
@@ -56,7 +84,8 @@ public static class AddRepositoryView
             nameField,
             FleetTheme.Caption(1, 5, "URL:"),
             urlField,
-            FleetTheme.Caption(1, 7, "Branch:"),
+            like,
+            FleetTheme.Caption(1, 9, "Branch:"),
             branchField,
             FleetTheme.HintBar(FleetHints.AddRepository));
 

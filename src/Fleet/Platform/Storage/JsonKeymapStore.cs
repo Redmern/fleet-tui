@@ -46,7 +46,7 @@ public sealed class JsonKeymapStore : IKeymapStore
 
         var file = new KeymapFile
         {
-            Prefix = config.Prefix,
+            Prefix = KeymapDiff.PrefixAgainstDefault(config.Prefix),
             Bindings = KeymapDiff.AgainstDefaults(config.Bindings)
                 .ToDictionary(b => b.Key.ToString(), b => b.Value),
         };

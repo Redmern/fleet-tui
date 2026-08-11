@@ -13,7 +13,7 @@ public class WezTermKeybindsTests
         WezTermKeybinds.Generate(keymap ?? Keymap.Default, exe, Request);
 
     [Theory]
-    [InlineData("Ctrl+Space", " ", "CTRL")]
+    [InlineData("Ctrl+Enter", "Enter", "CTRL")]
     [InlineData("Ctrl+A", "a", "CTRL")]
     [InlineData("Ctrl+Shift+P", "p", "CTRL|SHIFT")]
     [InlineData("Esc", "Escape", "NONE")]
@@ -31,7 +31,7 @@ public class WezTermKeybindsTests
     {
         var lua = Lua(exe: "C:\bin\fleet.exe");
 
-        Assert.Contains("key = ' '", lua);
+        Assert.Contains("key = 'Enter'", lua);
         Assert.Contains("mods = 'CTRL'", lua);
     }
 
@@ -41,7 +41,7 @@ public class WezTermKeybindsTests
         var lua = Lua(new Keymap(KeymapConfig.Default.WithPrefix("Ctrl+A")));
 
         Assert.Contains("key = 'a'", lua);
-        Assert.DoesNotContain("key = ' '", lua);
+        Assert.DoesNotContain("key = 'Enter'", lua);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class WezTermKeybindsTests
     {
         var lua = Lua();
 
-        Assert.Contains("local function fleet_project(window)", lua);
+        Assert.Contains("local function fleet_project(window, quiet)", lua);
         Assert.Contains("get_user_vars()", lua);
         Assert.Contains("if not project then", lua);
     }
@@ -86,7 +86,31 @@ public class WezTermKeybindsTests
     [Fact]
     public void Without_a_fleet_pane_the_chord_is_forwarded_to_the_pane()
     {
-        Assert.Contains("act.SendKey { key = ' ', mods = 'CTRL' }", Lua());
+        Assert.Contains("act.SendKey { key = 'Enter', mods = 'CTRL' }", Lua());
+    }
+
+    [Fact]
+    public void The_module_exposes_the_project_lookup_instead_of_writing_the_status()
+    {
+        var lua = Lua();
+
+        Assert.Contains("function M.project(window)", lua);
+        Assert.Contains("function M.label(window)", lua);
+        Assert.Contains("", lua);
+        Assert.Contains("pcall(fleet_project, window, true)", lua);
+    }
+
+    [Fact]
+    public void Fleet_never_writes_the_left_status_because_another_handler_owns_it()
+    {
+        var lua = Lua();
+
+        Assert.DoesNotContain("window:set_left_status(", lua);
+
+        var comment = lua.IndexOf("--   win:set_left_status", StringComparison.Ordinal);
+
+        Assert.True(comment > 0, "the recipe for the host config should still be documented");
+        Assert.DoesNotContain("win:set_left_status", lua[(comment + 30)..]);
     }
 
     [Fact]

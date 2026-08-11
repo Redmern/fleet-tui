@@ -167,7 +167,8 @@ public sealed class RemoveAgentTests : IDisposable
         var agent = await AgentAsync();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
-        var result = await new StopAgentHandler(_mux).HandleAsync(agent);
+        var result = await new StopAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent with { Open = true });
 
         Assert.True(result.Succeeded, result.Error);
         Assert.Empty(await _mux.ListPanesAsync());
@@ -176,11 +177,23 @@ public sealed class RemoveAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task Stopping_records_that_the_agent_is_no_longer_open()
+    {
+        var agent = await AgentAsync();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        await new StopAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent with { Open = true });
+
+        Assert.False(Assert.Single(_store.Saved).Open);
+    }
+
+    [Fact]
     public async Task Stopping_an_agent_that_is_not_running_says_so()
     {
         var agent = await AgentAsync();
 
-        var result = await new StopAgentHandler(_mux).HandleAsync(agent);
+        var result = await new StopAgentHandler(_mux, _store).HandleAsync("techweb", agent);
 
         Assert.False(result.Succeeded);
         Assert.Contains("not running", result.Error);
@@ -190,7 +203,9 @@ public sealed class RemoveAgentTests : IDisposable
     {
         public List<string> Removed { get; } = [];
 
-        public void Save(string project, AgentRecord agent) { }
+        public List<AgentRecord> Saved { get; } = [];
+
+        public void Save(string project, AgentRecord agent) => Saved.Add(agent);
 
         public IReadOnlyList<AgentRecord> List(string project) => [];
 

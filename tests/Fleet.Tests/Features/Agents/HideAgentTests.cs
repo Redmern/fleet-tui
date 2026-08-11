@@ -6,6 +6,7 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Ui;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -33,6 +34,17 @@ public class HideAgentTests
 
         var panes = await _mux.ListPanesAsync();
         Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == pane).SessionName);
+    }
+
+    [Fact]
+    public async Task Moving_the_pane_names_its_new_tab_after_the_branch_again()
+    {
+        var agent = Agent();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1");
+
+        Assert.Equal("test", _mux.TitleOf(pane));
     }
 
     [Fact]
@@ -64,6 +76,29 @@ public class HideAgentTests
 
         var panes = await _mux.ListPanesAsync();
         Assert.Equal("w9", panes.Single(p => p.Id == pane).WindowId);
+    }
+
+    [Fact]
+    public async Task Hiding_keeps_the_agent_marked_open_because_its_pane_lives_on()
+    {
+        var agent = Agent();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1");
+
+        var saved = Assert.Single(_store.Saved);
+
+        Assert.True(saved.Hidden);
+        Assert.True(saved.Open);
+    }
+
+    [Fact]
+    public async Task An_agent_with_no_pane_is_recorded_as_closed()
+    {
+        var saved = await new HideAgentHandler(_mux, _store)
+            .HandleAsync("techweb", Agent() with { Open = true }, "w1");
+
+        Assert.False(saved.Value!.Open);
     }
 
     [Fact]
@@ -168,9 +203,43 @@ public class HideAgentTests
     {
         Assert.Equal(5, AgentDisposal.Choices.Count);
         Assert.Contains("opens", AgentDisposal.Choices[AgentDisposal.Opens]);
-        Assert.Contains("Hide", AgentDisposal.Choices[AgentDisposal.Hide]);
+        Assert.Contains("Hide it", AgentDisposal.Choices[AgentDisposal.Hide]);
         Assert.Contains("Stop", AgentDisposal.Choices[AgentDisposal.Stop]);
         Assert.Contains("keep its files", AgentDisposal.Choices[AgentDisposal.Forget]);
         Assert.Contains("delete its worktree", AgentDisposal.Choices[AgentDisposal.Delete]);
+    }
+
+    [Fact]
+    public void Every_manage_choice_pairs_a_keyword_with_its_description()
+    {
+        Assert.Equal(AgentDisposal.Choices.Count, AgentDisposal.Entries.Count);
+
+        Assert.Equal(
+            ["opens", "hide", "stop", "forget", "delete"],
+            AgentDisposal.Entries.Select(e => e.Label));
+
+        Assert.Equal(AgentDisposal.Choices, AgentDisposal.Entries.Select(e => e.Detail));
+    }
+
+    [Fact]
+    public void A_hidden_agent_is_offered_show_rather_than_hide()
+    {
+        var hidden = AgentDisposal.For(hidden: true);
+
+        Assert.Equal(AgentWords.Show, hidden[AgentDisposal.Hide].Label);
+        Assert.Equal(AgentDisposal.ShowDetail, hidden[AgentDisposal.Hide].Detail);
+
+        Assert.Equal(AgentWords.Hide, AgentDisposal.For(hidden: false)[AgentDisposal.Hide].Label);
+    }
+
+    [Fact]
+    public void The_manage_keys_are_pinned_so_show_does_not_steal_stops_key()
+    {
+        foreach (var hidden in new[] { true, false })
+        {
+            Assert.Equal(
+                ["o", "h", "s", "f", "d"],
+                PickerKeys.For(AgentDisposal.For(hidden)));
+        }
     }
 }

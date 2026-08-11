@@ -7,7 +7,7 @@ namespace Fleet.Tests.Ui;
 public class FleetKeyTextTests
 {
     [Theory]
-    [InlineData("Ctrl+Space", "ctrl+space")]
+    [InlineData("Ctrl+Enter", "ctrl+enter")]
     [InlineData("Ctrl+S", "ctrl+s")]
     [InlineData("Ctrl+D", "ctrl+d")]
     [InlineData("Ctrl+Shift+P", "ctrl+shift+p")]
@@ -57,10 +57,10 @@ public class FleetKeyTextTests
         var keymap = Keymap.Default;
 
         Assert.Equal(KeymapDefaults.Prefix, keymap.PrefixText);
-        Assert.Equal("ctrl+space", keymap.PrefixDisplay);
+        Assert.Equal("ctrl+enter", keymap.PrefixDisplay);
     }
 
     [Fact]
     public void The_prefix_hint_reads_lowercase()
-        => Assert.Equal("ctrl+space space menu", FleetHintText.Menu(Keymap.Default));
+        => Assert.Equal("ctrl+enter space menu", FleetHintText.Menu(Keymap.Default));
 }

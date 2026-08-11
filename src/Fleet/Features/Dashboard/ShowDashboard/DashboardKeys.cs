@@ -11,6 +11,7 @@ public static class DashboardKeys
     [
         FleetAction.NewAgent,
         FleetAction.RemoveAgent,
+        FleetAction.ToggleHidden,
         FleetAction.Refresh,
         FleetAction.PrevTab,
         FleetAction.NextTab,
@@ -19,8 +20,6 @@ public static class DashboardKeys
     private static readonly FleetAction[] RepositoryScope =
     [
         FleetAction.AddRepository,
-        FleetAction.RemoveRepository,
-        FleetAction.PullRepository,
         FleetAction.ManageRepository,
         FleetAction.Refresh,
         FleetAction.PrevTab,
@@ -38,6 +37,7 @@ public static class DashboardKeys
             or FleetAction.AddRepository
             or FleetAction.RemoveRepository
             or FleetAction.ManageRepository
+            or FleetAction.ViewLogs
             or FleetAction.EditKeybinds;
 
     public static DashboardKey For(Key key, Keymap keymap, int tab)

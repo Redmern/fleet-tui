@@ -11,7 +11,7 @@ public class PickProjectSelectionTests
             Path.Combine(RepoRoot, "src", "Fleet", "Features", "Projects", "PickProject",
                 "PickProjectView.cs"));
 
-        Assert.Contains("list.SelectedItem = 0;", source);
+        Assert.Contains("FleetRows.Fill(list, PickProjectHandler.Rows(entries));", source);
     }
 
     private static string RepoRoot { get; } =

@@ -38,6 +38,14 @@ public sealed class Keymap
 
     public string PrefixText => Config.Prefix;
 
+    public string Signature =>
+        string.Join(
+            '|',
+            Config.Bindings
+                .OrderBy(b => b.Key)
+                .Select(b => $"{b.Key}={b.Value}")
+                .Prepend($"prefix={Config.Prefix}"));
+
     public string PrefixDisplay => FleetKeyText.Display(Config.Prefix);
 
     public FleetAction ActionFor(Key key)

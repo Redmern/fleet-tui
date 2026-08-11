@@ -59,6 +59,8 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             {
                 return Fail(created.Error!);
             }
+
+            await SeedSecretsAsync(command, plan.TargetDirectory, ct).ConfigureAwait(false);
         }
 
         var agent = new AgentRecord(
@@ -67,7 +69,9 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             branch,
             command.Harness,
             baseRef,
-            plan.TargetDirectory != command.RepositoryDirectory);
+            plan.TargetDirectory != command.RepositoryDirectory,
+            Hidden: false,
+            Open: true);
 
         store.Save(command.ProjectName, agent);
 
@@ -85,11 +89,32 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             return Fail($"the {mux.Name} multiplexer did not respond. Run 'fleet doctor'.");
         }
 
-        await mux.SetTitleAsync(
-                pane, $"{command.RepositoryName}/{BranchSlug.Of(branch)}", ct)
-            .ConfigureAwait(false);
+        await mux.SetTitleAsync(pane, BranchSlug.Of(branch), ct).ConfigureAwait(false);
 
         return Result<AgentRecord>.Ok(agent);
+    }
+
+    private async Task SeedSecretsAsync(
+        NewAgentCommand command, string worktree, CancellationToken ct)
+    {
+        var projectRoot = Directory.GetParent(command.RepositoryDirectory)?.FullName;
+
+        if (projectRoot is null)
+        {
+            return;
+        }
+
+        var head = await git
+            .RunAsync(command.RepositoryDirectory, ["symbolic-ref", "--short", "HEAD"], null, ct)
+            .ConfigureAwait(false);
+
+        if (!head.Ok || head.Out.Length == 0)
+        {
+            return;
+        }
+
+        SecretsMirror.CopyInto(
+            SecretsMirror.Root(projectRoot, command.RepositoryName, head.Out.Trim()), worktree);
     }
 
     private async Task<Result<string>> ResolveBaseRefAsync(

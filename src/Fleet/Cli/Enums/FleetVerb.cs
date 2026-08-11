@@ -7,6 +7,7 @@ public enum FleetVerb
     Menu,
     Request,
     ApplyKeybinds,
+    Setup,
     Quit,
     Doctor,
     Help,

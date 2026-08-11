@@ -1,9 +1,11 @@
-using System.Collections.ObjectModel;
+using Fleet.Features.Dashboard.ShowDashboard.Constants;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -16,7 +18,9 @@ public static class ShowDashboardView
         IApplication app, string projectName, Keymap keymap, DashboardCallbacks callbacks)
     {
         var window = FleetTheme.Screen($"fleet — {projectName}");
-        var prefix = new PrefixRecognizer(keymap);
+
+        var keys = keymap;
+        var prefix = new PrefixRecognizer(keys);
 
         var tabBar = FleetTheme.TabBar(1, 0,
             [DashboardTabs.Agents(0), DashboardTabs.Repositories(0)]);
@@ -26,11 +30,11 @@ public static class ShowDashboardView
 
         var lists = new[] { agentList, repoList };
 
-        var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
+        var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
         var hints = new FleetActionBar(Pos.AnchorEnd(1));
 
-        FleetKeys.ApplyMotions(agentList, keymap);
-        FleetKeys.ApplyMotions(repoList, keymap);
+        FleetKeys.ApplyMotions(agentList, keys);
+        FleetKeys.ApplyMotions(repoList, keys);
 
         void ShowTab(int index)
         {
@@ -47,29 +51,45 @@ public static class ShowDashboardView
             window.SetNeedsDraw();
         }
 
+        var board = new AgentBoard([], 0, []);
+
+        void ShowAgentBar()
+        {
+            if (tabBar.Selected == DashboardTabs.AgentsTab)
+            {
+                hints.Show(AgentBar());
+            }
+        }
+
         void RefreshAgents()
         {
-            var agents = callbacks.LoadAgents();
-            var selected = agentList.SelectedItem ?? 0;
+            board = callbacks.LoadAgents();
 
-            agentList.SetSource(new ObservableCollection<string>(agents.Rows.ToList()));
-            agentList.SelectedItem = Math.Clamp(selected, 0, Math.Max(0, agents.Rows.Count - 1));
+            var selected = FleetRows.Selected(agentList);
 
-            tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(agents.Count));
+            FleetRows.Fill(agentList, board.Rows, selected);
+
+            tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(board.Count));
+
+            ShowAgentBar();
         }
 
         IReadOnlyList<RepositoryChoice> repositories = [];
-        var rows = new ObservableCollection<string>();
+        var repoRows = new FleetRowSource([]);
 
         void ApplyRepositories(IReadOnlyList<RepositoryChoice> loaded)
         {
             repositories = loaded;
 
-            rows = new ObservableCollection<string>(DashboardRows
-                .ForRepositories(loaded, callbacks.RepositoryState)
-                .Select(r => r.Text));
+            var selected = FleetRows.Selected(repoList);
 
-            repoList.SetSource(rows);
+            FleetRows.Fill(
+                repoList,
+                DashboardRows.ForRepositories(loaded, callbacks.RepositoryState),
+                selected);
+
+            repoRows = (FleetRowSource)repoList.Source!;
+
             tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(loaded.Count));
 
             RefreshAgents();
@@ -83,7 +103,23 @@ public static class ShowDashboardView
         }
 
         var busy = false;
+        var pulling = false;
+        var refreshing = false;
         var queued = FleetAction.None;
+
+        async Task AutoRefreshAsync()
+        {
+            refreshing = true;
+
+            try
+            {
+                await RefreshAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                refreshing = false;
+            }
+        }
 
         async Task AddAsync()
         {
@@ -117,7 +153,7 @@ public static class ShowDashboardView
                 return;
             }
 
-            var selected = Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1);
+            var selected = Math.Clamp(FleetRows.Selected(repoList), 0, repositories.Count - 1);
 
             busy = true;
 
@@ -146,12 +182,27 @@ public static class ShowDashboardView
 
         async Task OpenAsync()
         {
-            var error = await callbacks.OpenAgent(agentList.SelectedItem ?? -1)
+            var error = await callbacks.OpenAgent(FleetRows.Selected(agentList))
                 .ConfigureAwait(false);
 
             if (error is not null)
             {
                 app.Invoke(() => status.Text = error);
+            }
+        }
+
+        void HideAgent()
+        {
+            busy = true;
+
+            try
+            {
+                status.Text = callbacks.HideAgent(FleetRows.Selected(agentList)) ?? string.Empty;
+                RefreshAgents();
+            }
+            finally
+            {
+                busy = false;
             }
         }
 
@@ -161,7 +212,7 @@ public static class ShowDashboardView
 
             try
             {
-                var error = callbacks.ManageAgent(agentList.SelectedItem ?? -1);
+                var error = callbacks.ManageAgent(FleetRows.Selected(agentList));
 
                 status.Text = error ?? string.Empty;
                 RefreshAgents();
@@ -179,7 +230,7 @@ public static class ShowDashboardView
                 return null;
             }
 
-            return repositories[Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1)];
+            return repositories[Math.Clamp(FleetRows.Selected(repoList), 0, repositories.Count - 1)];
         }
 
         async Task PullAsync()
@@ -191,9 +242,10 @@ public static class ShowDashboardView
                 return;
             }
 
-            var row = Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1);
+            var row = Math.Clamp(FleetRows.Selected(repoList), 0, repositories.Count - 1);
             var tick = 0;
-            var pulling = true;
+
+            pulling = true;
 
             var spin = app.AddTimeout(TimeSpan.FromMilliseconds(90), () =>
             {
@@ -225,11 +277,8 @@ public static class ShowDashboardView
 
         void Rewrite(int row, string text)
         {
-            if (repoList.Source is not null && row < repoList.Source.Count)
-            {
-                rows[row] = text;
-                repoList.SetNeedsDraw();
-            }
+            repoRows.Replace(row, FleetRow.Plain(text));
+            repoList.SetNeedsDraw();
         }
 
         void ManageRepository()
@@ -241,15 +290,29 @@ public static class ShowDashboardView
                 return;
             }
 
+            RepositoryManaged managed;
+
             busy = true;
 
             try
             {
-                status.Text = callbacks.ManageRepository(chosen) ?? string.Empty;
+                managed = callbacks.ManageRepository(chosen);
+                status.Text = managed.Status ?? string.Empty;
             }
             finally
             {
                 busy = false;
+            }
+
+            switch (managed.Follow)
+            {
+                case FleetAction.PullRepository:
+                    Start(PullAsync);
+                    return;
+
+                case FleetAction.RemoveRepository:
+                    RemoveRepository();
+                    return;
             }
 
             Start(RefreshAsync);
@@ -279,7 +342,7 @@ public static class ShowDashboardView
                 return;
             }
 
-            var selected = Math.Clamp(repoList.SelectedItem ?? 0, 0, repositories.Count - 1);
+            var selected = Math.Clamp(FleetRows.Selected(repoList), 0, repositories.Count - 1);
 
             busy = true;
 
@@ -297,13 +360,43 @@ public static class ShowDashboardView
             Start(RefreshAsync);
         }
 
+        void ShowLogs()
+        {
+            busy = true;
+
+            try
+            {
+                callbacks.ShowLogs();
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
+        void UseKeymap(Keymap next)
+        {
+            if (next.Signature == keys.Signature)
+            {
+                return;
+            }
+
+            keys = next;
+            prefix = new PrefixRecognizer(keys);
+
+            FleetKeys.ApplyMotions(agentList, keys);
+            FleetKeys.ApplyMotions(repoList, keys);
+
+            ShowTab(tabBar.Selected);
+        }
+
         void EditKeybinds()
         {
             busy = true;
 
             try
             {
-                callbacks.EditKeybinds();
+                UseKeymap(callbacks.EditKeybinds());
             }
             finally
             {
@@ -350,6 +443,10 @@ public static class ShowDashboardView
                     ManageAgent();
                     break;
 
+                case FleetAction.ToggleHidden:
+                    HideAgent();
+                    break;
+
                 case FleetAction.RemoveRepository:
                     RemoveRepository();
                     break;
@@ -364,6 +461,10 @@ public static class ShowDashboardView
 
                 case FleetAction.EditKeybinds:
                     EditKeybinds();
+                    break;
+
+                case FleetAction.ViewLogs:
+                    ShowLogs();
                     break;
 
                 case FleetAction.PrevTab:
@@ -382,25 +483,25 @@ public static class ShowDashboardView
 
         IReadOnlyList<(string, string, Action)> AgentBar() =>
         [
-            (keymap.DisplayFor(FleetAction.NewAgent), "new", () => FromKey(FleetAction.NewAgent)),
+            (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
             ("enter", "open", () => Start(OpenAsync)),
-            (keymap.DisplayFor(FleetAction.RemoveAgent), "manage",
+            (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
                 () => FromKey(FleetAction.RemoveAgent)),
-            (keymap.PrefixDisplay + " " + keymap.DisplayFor(FleetAction.OpenMenu), "menu",
-                () => FromKey(FleetAction.OpenMenu)),
+            (keys.DisplayFor(FleetAction.ToggleHidden),
+                board.IsHidden(FleetRows.Selected(agentList)) ? AgentWords.Show : AgentWords.Hide,
+                () => FromKey(FleetAction.ToggleHidden)),
+            (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
         ];
 
         IReadOnlyList<(string, string, Action)> RepositoryBar() =>
         [
-            (keymap.DisplayFor(FleetAction.AddRepository), "add",
+            (keys.DisplayFor(FleetAction.AddRepository), "add",
                 () => FromKey(FleetAction.AddRepository)),
             ("enter", "open", () => Start(OpenRepositoryAsync)),
-            (keymap.DisplayFor(FleetAction.PullRepository), "pull", () => Start(PullAsync)),
-            (keymap.DisplayFor(FleetAction.ManageRepository), "manage",
+            (keys.DisplayFor(FleetAction.ManageRepository), "manage",
                 () => FromKey(FleetAction.ManageRepository)),
-            (keymap.DisplayFor(FleetAction.RemoveRepository), "remove",
-                () => FromKey(FleetAction.RemoveRepository)),
-            (keymap.DisplayFor(FleetAction.Refresh), "refresh", () => Start(RefreshAsync)),
+            (keys.DisplayFor(FleetAction.Refresh), "refresh", () => Start(RefreshAsync)),
+            (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
         ];
 
         void FromKey(FleetAction action)
@@ -416,7 +517,7 @@ public static class ShowDashboardView
 
         void Keys(object? sender, Key key)
         {
-            if (busy)
+            if (busy || FleetModal.Any)
             {
                 return;
             }
@@ -429,7 +530,7 @@ public static class ShowDashboardView
 
                 status.Text = result.Outcome switch
                 {
-                    PrefixOutcome.Armed => $"{keymap.PrefixDisplay} ...",
+                    PrefixOutcome.Armed => $"{keys.PrefixDisplay} ...",
                     _ => string.Empty,
                 };
 
@@ -441,7 +542,7 @@ public static class ShowDashboardView
                 return;
             }
 
-            var direct = DashboardKeys.For(key, keymap, tabBar.Selected);
+            var direct = DashboardKeys.For(key, keys, tabBar.Selected);
 
             if (direct.Consume)
             {
@@ -476,6 +577,19 @@ public static class ShowDashboardView
             return true;
         }
 
+        bool Beat()
+        {
+            if (!busy && !pulling && !refreshing && queued == FleetAction.None)
+            {
+                UseKeymap(callbacks.ReloadKeymap());
+                Start(AutoRefreshAsync);
+            }
+
+            return true;
+        }
+
+        agentList.ValueChanged += (_, _) => ShowAgentBar();
+
         agentList.Accepting += (_, e) =>
         {
             Start(OpenAsync);
@@ -491,6 +605,7 @@ public static class ShowDashboardView
         app.Keyboard.KeyDown += Keys;
 
         app.AddTimeout(TimeSpan.FromMilliseconds(80), Pump);
+        app.AddTimeout(DashboardRefresh.Interval, Beat);
 
         window.Add(
             tabBar.Root,

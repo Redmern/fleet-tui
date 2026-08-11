@@ -41,22 +41,57 @@ public class AgentPillTests
     }
 
     [Fact]
-    public void The_branch_leads_the_row_then_the_repository_then_the_status()
+    public void One_pill_holds_the_branch_then_the_icon_then_the_status()
     {
-        var row = AgentRows.For([Agent()], _ => new BranchState(1, 4, false))[0];
+        var pill = BranchStatus.Pill("dev", new BranchState(0, 0, false));
+
+        Assert.Equal(FleetGlyphs.PillLeft, pill[0].Text);
+        Assert.Equal(FleetTones.PillEdge, pill[0].Tone);
+        Assert.Contains("dev", pill[1].Text);
+        Assert.Equal(FleetTones.BranchName, pill[1].Tone);
+        Assert.Contains(FleetGlyphs.Branch, pill[2].Text);
+        Assert.Equal(FleetTones.Icon, pill[2].Tone);
+        Assert.Equal(FleetGlyphs.PillRight, pill[^1].Text);
+        Assert.Equal(FleetTones.PillEdge, pill[^1].Tone);
+    }
+
+    [Fact]
+    public void Ahead_behind_and_dirty_each_carry_their_own_tone()
+    {
+        var tones = BranchStatus.Pill("dev", new BranchState(1, 4, true))
+            .Select(s => s.Tone)
+            .ToList();
+
+        Assert.Equal(
+            [
+                FleetTones.PillEdge,
+                FleetTones.BranchName,
+                FleetTones.Icon,
+                FleetTones.Behind,
+                FleetTones.Ahead,
+                FleetTones.Dirty,
+                FleetTones.PillEdge,
+            ],
+            tones);
+    }
+
+    [Fact]
+    public void The_branch_pill_leads_the_row_and_the_repository_follows_it()
+    {
+        var row = AgentRows.For([Agent()], _ => new BranchState(1, 4, false))[0].Text;
 
         var branch = row.IndexOf("dev", StringComparison.Ordinal);
-        var repo = row.IndexOf("frontend", StringComparison.Ordinal);
         var status = row.IndexOf(FleetGlyphs.Behind, StringComparison.Ordinal);
+        var repo = row.IndexOf("frontend", StringComparison.Ordinal);
 
-        Assert.True(branch < repo, "the branch comes first");
-        Assert.True(repo < status, "the status comes last");
+        Assert.True(branch < status, "the branch opens the pill");
+        Assert.True(status < repo, "the status is still inside the pill, before the repository");
     }
 
     [Fact]
     public void The_harness_is_not_shown_on_the_row()
     {
-        var row = AgentRows.For([Agent()], _ => BranchState.Unknown)[0];
+        var row = AgentRows.For([Agent()], _ => BranchState.Unknown)[0].Text;
 
         Assert.DoesNotContain(AgentHarness.Nvim, row);
     }
@@ -64,9 +99,17 @@ public class AgentPillTests
     [Fact]
     public void A_hidden_agent_still_says_so()
     {
-        var row = AgentRows.For([Agent() with { Hidden = true }], _ => BranchState.Unknown)[0];
+        var row = AgentRows.For([Agent() with { Hidden = true }], _ => BranchState.Unknown)[0].Text;
 
         Assert.Contains("(hidden)", row);
+    }
+
+    [Fact]
+    public void The_pill_glyphs_are_the_nerd_font_codepoints()
+    {
+        Assert.Equal("\ue0a0", FleetGlyphs.Branch);
+        Assert.Equal("\ue0b6", FleetGlyphs.PillLeft);
+        Assert.Equal("\ue0b4", FleetGlyphs.PillRight);
     }
 
     [Fact]

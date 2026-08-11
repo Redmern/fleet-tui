@@ -2,6 +2,7 @@ using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Projects.OpenProject;
@@ -26,7 +27,7 @@ public sealed class OpenProjectHandler(IMuxDriver mux)
             return Unreachable();
         }
 
-        await mux.SetTitleAsync(harnessPane, command.Project.Name, ct).ConfigureAwait(false);
+        await mux.SetTitleAsync(harnessPane, FleetTabTitles.Dashboard, ct).ConfigureAwait(false);
 
         var dashPane = await mux.SplitAsync(
             new SplitOptions(harnessPane, SplitDirection.Right)

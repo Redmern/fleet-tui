@@ -9,12 +9,16 @@ namespace Fleet.Tests.Ui;
 public class KeymapTests
 {
     [Fact]
-    public void The_default_prefix_is_ctrl_space()
-        => Assert.Equal(Key.Space.WithCtrl, Keymap.Default.Prefix);
+    public void The_default_prefix_is_ctrl_enter()
+        => Assert.Equal(Key.Enter.WithCtrl, Keymap.Default.Prefix);
 
     [Fact]
-    public void The_default_prefix_is_not_ctrl_s_because_wezterm_claims_it()
-        => Assert.NotEqual(Key.S.WithCtrl, Keymap.Default.Prefix);
+    public void The_default_prefix_avoids_the_keys_neovim_and_wezterm_claim()
+    {
+        Assert.NotEqual(Key.S.WithCtrl, Keymap.Default.Prefix);
+        Assert.NotEqual(Key.Space.WithCtrl, Keymap.Default.Prefix);
+        Assert.NotEqual(Key.D.WithCtrl, Keymap.Default.Prefix);
+    }
 
     [Fact]
     public void The_default_prefix_parses_rather_than_falling_back()
@@ -114,7 +118,7 @@ public class KeymapTests
 
         var keymap = new Keymap(partial);
 
-        Assert.Equal(Key.Space.WithCtrl, keymap.Prefix);
+        Assert.Equal(Key.Enter.WithCtrl, keymap.Prefix);
         Assert.Equal(Key.J, keymap.KeyFor(FleetAction.MoveDown));
         Assert.Equal(new Key("F5"), keymap.KeyFor(FleetAction.Refresh));
     }

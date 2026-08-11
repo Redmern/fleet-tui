@@ -55,11 +55,18 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void Managing_an_agent_and_removing_a_repository_have_their_own_keys()
+    public void Managing_is_the_only_per_row_key_on_either_tab()
     {
         Assert.Equal(FleetAction.RemoveAgent, DashboardKeys.For(Key.M, Map, Agents).Action);
         Assert.Equal(
-            FleetAction.RemoveRepository, DashboardKeys.For(Key.D, Map, Repositories).Action);
+            FleetAction.ManageRepository, DashboardKeys.For(Key.M, Map, Repositories).Action);
+    }
+
+    [Fact]
+    public void Pulling_and_dropping_a_repository_live_in_its_manage_menu_only()
+    {
+        Assert.False(DashboardKeys.For(Key.P, Map, Repositories).Consume);
+        Assert.False(DashboardKeys.For(Key.D, Map, Repositories).Consume);
     }
 
     [Fact]
@@ -69,13 +76,19 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void The_harness_and_hide_keys_are_gone_because_they_live_in_the_manage_menu()
+    public void The_harness_key_is_gone_because_it_lives_in_the_manage_menu()
     {
         Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.ChangeHarness));
-        Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.ToggleHidden));
 
         Assert.False(DashboardKeys.For(Key.C, Map, Agents).Consume);
-        Assert.False(DashboardKeys.For(Key.X, Map, Agents).Consume);
+    }
+
+    [Fact]
+    public void Hiding_has_its_own_key_on_the_agents_tab_only_and_leaves_h_to_the_tabs()
+    {
+        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.X, Map, Agents).Action);
+        Assert.False(DashboardKeys.For(Key.X, Map, Repositories).Consume);
+        Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.H, Map, Agents).Action);
     }
 
     [Fact]
@@ -154,10 +167,14 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void The_keybinds_key_does_not_fire_bare_because_it_collides_with_move_up()
+    public void The_keybinds_key_no_longer_collides_with_move_up()
     {
-        Assert.Equal(Map.KeyFor(FleetAction.MoveUp), Map.KeyFor(FleetAction.EditKeybinds));
+        Assert.NotEqual(Map.KeyFor(FleetAction.MoveUp), Map.KeyFor(FleetAction.EditKeybinds));
+    }
 
+    [Fact]
+    public void The_keybinds_key_still_does_not_fire_bare_on_a_dashboard_tab()
+    {
         var result = DashboardKeys.For(Map.KeyFor(FleetAction.EditKeybinds), Map, Agents);
 
         Assert.False(result.Consume);

@@ -1,7 +1,7 @@
 using Fleet.Ports.Agents.Models;
-using Fleet.Ui;
-
 using Fleet.Shared;
+using Fleet.Ui;
+using Fleet.Ui.Models;
 
 namespace Fleet.Features.Agents.ListAgents;
 
@@ -9,26 +9,40 @@ public static class AgentRows
 {
     public const string EmptyHint = "(no agents - press 'n' to start one)";
 
-    public static IReadOnlyList<string> For(IReadOnlyList<AgentRecord> agents) =>
+    public static IReadOnlyList<FleetRow> For(IReadOnlyList<AgentRecord> agents) =>
         For(agents, _ => BranchState.Unknown);
 
-    public static IReadOnlyList<string> For(
+    public static IReadOnlyList<FleetRow> For(
         IReadOnlyList<AgentRecord> agents, Func<AgentRecord, BranchState> state)
     {
         if (agents.Count == 0)
         {
-            return [EmptyHint];
+            return [FleetRow.Plain(EmptyHint)];
         }
 
-        var pills = agents.Select(a => BranchStatus.Pill(a.Branch)).ToList();
-        var pillWidth = pills.Max(p => p.Length);
-        var repoWidth = agents.Max(a => a.Repository.Length);
+        var pills = agents.Select(a => BranchStatus.Pill(a.Branch, state(a))).ToList();
+        var pillWidth = pills.Max(p => p.Sum(s => s.Text.Length));
 
-        return
+        return [.. agents.Select((a, i) => Row(a, pills[i], pillWidth))];
+    }
+
+    private static FleetRow Row(
+        AgentRecord agent, IReadOnlyList<FleetSpan> pill, int pillWidth)
+    {
+        var gap = pillWidth - pill.Sum(s => s.Text.Length);
+
+        List<FleetSpan> spans =
         [
-            .. agents.Select((a, i) =>
-                $"{pills[i].PadRight(pillWidth)}   {a.Repository.PadRight(repoWidth)}   " +
-                $"{BranchStatus.Of(state(a))}" + (a.Hidden ? "   (hidden)" : string.Empty)),
+            .. pill,
+            FleetSpan.Plain(new string(' ', gap + 3)),
+            FleetSpan.Muted(agent.Repository),
         ];
+
+        if (agent.Hidden)
+        {
+            spans.Add(FleetSpan.Muted("   (hidden)"));
+        }
+
+        return new FleetRow(spans);
     }
 }

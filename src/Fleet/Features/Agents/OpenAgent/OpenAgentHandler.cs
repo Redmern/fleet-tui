@@ -26,6 +26,23 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
             {
                 await Unhide(project, agent, running.Id, window, ct).ConfigureAwait(false);
             }
+            else
+            {
+                if (window is not null && running.WindowId != window)
+                {
+                    await mux.MovePaneAsync(
+                            running.Id, new MovePaneOptions { WindowId = window }, ct)
+                        .ConfigureAwait(false);
+
+                    await mux.SetTitleAsync(running.Id, BranchSlug.Of(agent.Branch), ct)
+                        .ConfigureAwait(false);
+                }
+
+                if (!agent.Open)
+                {
+                    store.Save(project, agent with { Open = true });
+                }
+            }
 
             await mux.FocusPaneAsync(running.Id, ct).ConfigureAwait(false);
 
@@ -52,13 +69,11 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
             return Result.Fail($"the {mux.Name} multiplexer did not respond. Run 'fleet doctor'.");
         }
 
-        await mux.SetTitleAsync(
-                pane, $"{agent.Repository}/{BranchSlug.Of(agent.Branch)}", ct)
-            .ConfigureAwait(false);
+        await mux.SetTitleAsync(pane, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
 
-        if (agent.Hidden)
+        if (agent.Hidden || !agent.Open)
         {
-            store.Save(project, agent with { Hidden = false });
+            store.Save(project, agent with { Hidden = false, Open = true });
         }
 
         return Result.Ok();
@@ -73,6 +88,6 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
                 ct)
             .ConfigureAwait(false);
 
-        store.Save(project, agent with { Hidden = false });
+        store.Save(project, agent with { Hidden = false, Open = true });
     }
 }

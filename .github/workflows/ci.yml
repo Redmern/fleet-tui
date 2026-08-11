@@ -1,43 +1,58 @@
 name: ci
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.x'
-      - run: dotnet build --configuration Release
-      - run: dotnet test --configuration Release --no-build
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
 
-  # The only thing that will catch a trimming break introduced by a dependency
-  # bump. It must stay green.
-  aot-smoke:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.x'
-      - run: dotnet publish src/Fleet -c Release -o out
+          dotnet-version: '10.0.x'
+
+      # NativeAOT links with clang on Linux; Windows runners already have MSVC.
+      - name: Install the native toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Test
+        run: dotnet test Fleet.slnx --nologo -v minimal
+
+      - name: Publish (NativeAOT)
+        run: >
+          dotnet publish src/Fleet/Fleet.csproj
+          -c Release -r ${{ matrix.rid }}
+          -o out/${{ matrix.rid }} --nologo
+
+      # Proves the binary actually links and starts on this platform, which is
+      # the whole point of running the matrix. doctor exits 1 without a mux, so
+      # help is the check that must succeed.
       - name: Smoke test
         shell: bash
         run: |
-          BIN=out/fleet
-          [ -f out/fleet.exe ] && BIN=out/fleet.exe
-          "$BIN" --help
-          # doctor exits non-zero when no multiplexer is reachable, which is
-          # correct locally and expected on a headless runner. This asserts the
-          # binary starts and runs, not that the environment is healthy.
-          "$BIN" doctor || echo "doctor reported problems (expected on a headless runner)"
+          exe=out/${{ matrix.rid }}/fleet
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          "$exe" --help
+          "$exe" doctor || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fleet-${{ matrix.rid }}
+          path: out/${{ matrix.rid }}/fleet*
+          if-no-files-found: error

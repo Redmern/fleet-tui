@@ -20,15 +20,26 @@ public sealed class OpenRepositoryHandler(IMuxDriver mux)
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
+        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
+
         var open = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, directory));
 
         if (open is not null)
         {
+            if (window is not null && open.WindowId != window)
+            {
+                await mux.MovePaneAsync(
+                        open.Id, new MovePaneOptions { WindowId = window }, ct)
+                    .ConfigureAwait(false);
+
+                await mux.SetTitleAsync(open.Id, $"{name}/{BranchSlug.Of(branch)}", ct)
+                    .ConfigureAwait(false);
+            }
+
             await mux.FocusPaneAsync(open.Id, ct).ConfigureAwait(false);
+
             return Result.Ok();
         }
-
-        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
 
         var pane = await mux.SpawnAsync(
             new SpawnOptions

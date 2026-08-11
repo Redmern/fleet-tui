@@ -8,7 +8,12 @@ public sealed class WezTermCli(string executable = "wezterm")
     private string? _socket;
     private bool _resolved;
 
+    public const string NoAutoStart = "--no-auto-start";
+
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(5);
+
+    public static IReadOnlyList<string> Argv(IReadOnlyList<string> args) =>
+        ["cli", NoAutoStart, .. args];
 
     public async Task<string> RunAsync(IReadOnlyList<string> args, CancellationToken ct = default)
     {
@@ -65,8 +70,7 @@ public sealed class WezTermCli(string executable = "wezterm")
             psi.Environment[WezTermSockets.Variable] = socket;
         }
 
-        psi.ArgumentList.Add("cli");
-        foreach (var a in args)
+        foreach (var a in Argv(args))
         {
             psi.ArgumentList.Add(a);
         }

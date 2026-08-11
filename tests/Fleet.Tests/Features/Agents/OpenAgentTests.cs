@@ -40,6 +40,35 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task A_pane_living_in_another_window_is_brought_here_before_it_is_focused()
+    {
+        var agent = Agent();
+
+        Directory.CreateDirectory(ProjectRoot);
+
+        var dashboard = await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+
+        var stray = await _mux.SpawnAsync(
+            new SpawnOptions { Cwd = agent.Worktree, NewWindow = true });
+
+        var panes = await _mux.ListPanesAsync();
+        var home = panes.Single(p => p.Id == dashboard).WindowId;
+
+        Assert.NotEqual(home, panes.Single(p => p.Id == stray).WindowId);
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var after = await _mux.ListPanesAsync();
+
+        Assert.Equal(home, after.Single(p => p.Id == stray).WindowId);
+        Assert.True(after.Single(p => p.Id == stray).IsActive);
+        Assert.Equal("feature_login", _mux.TitleOf(stray));
+    }
+
+    [Fact]
     public async Task A_running_agent_is_found_by_its_worktree_not_by_a_pane_id()
     {
         var agent = Agent();
@@ -79,7 +108,7 @@ public sealed class OpenAgentTests : IDisposable
 
         Assert.Equal(agent.Worktree, pane.Cwd);
         Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
-        Assert.Equal("backend/feature_login", _mux.TitleOf(pane.Id));
+        Assert.Equal("feature_login", _mux.TitleOf(pane.Id));
     }
 
     [Fact]
@@ -162,9 +191,20 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_a_visible_agent_records_nothing()
+    public async Task Opening_an_agent_records_that_it_is_open_so_a_crash_can_be_recovered()
     {
         var agent = Agent();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(Assert.Single(_store.Saved).Open);
+    }
+
+    [Fact]
+    public async Task An_agent_already_recorded_as_open_is_not_written_again()
+    {
+        var agent = Agent() with { Open = true };
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
         await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);

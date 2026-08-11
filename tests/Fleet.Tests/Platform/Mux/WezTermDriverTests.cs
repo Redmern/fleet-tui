@@ -117,4 +117,12 @@ public class WezTermDriverTests
 
         Assert.Equal(1, args.Count(a => a == "--window-id"));
     }
+
+    [Fact]
+    public void Every_cli_call_refuses_to_start_a_mux_server_of_its_own()
+    {
+        var argv = WezTermCli.Argv(["list", "--format", "json"]);
+
+        Assert.Equal(["cli", WezTermCli.NoAutoStart, "list", "--format", "json"], argv);
+    }
 }

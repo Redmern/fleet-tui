@@ -51,14 +51,30 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Section,
     };
 
-    public static ListView Rows(Pos x, Pos y, Dim height) => new()
+    public static ListView Rows(Pos x, Pos y, Dim height) => Steady(new FleetList
     {
         X = x,
         Y = y,
         Width = Dim.Fill(1),
         Height = height,
         SchemeName = FleetSchemes.Screen,
-    };
+    });
+
+    public static ListView CenteredRows(int width, int height) => Steady(new FleetList
+    {
+        X = Pos.Center(),
+        Y = Pos.Center(),
+        Width = width,
+        Height = height,
+        SchemeName = FleetSchemes.Screen,
+    });
+
+    private static ListView Steady(ListView list)
+    {
+        FleetRows.KeepOffSpacers(list);
+
+        return list;
+    }
 
     public static FleetTabBar TabBar(Pos x, Pos y, IReadOnlyList<string> titles) =>
         new(x, y, titles);
@@ -69,6 +85,16 @@ public static class FleetTheme
         Y = y,
         Text = text,
         SchemeName = FleetSchemes.Screen,
+    };
+
+    public static Label StatusLine(Pos y) => new()
+    {
+        X = 1,
+        Y = y,
+        Width = Dim.Fill(2),
+        Text = string.Empty,
+        TextAlignment = Alignment.End,
+        SchemeName = FleetSchemes.Status,
     };
 
     public static TextField Field(Pos x, Pos y, string text = "") => new()

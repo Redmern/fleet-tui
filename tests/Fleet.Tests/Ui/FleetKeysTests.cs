@@ -1,76 +1,27 @@
-using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
-using Terminal.Gui.Input;
-using Terminal.Gui.Views;
 
 namespace Fleet.Tests.Ui;
 
 public class FleetKeysTests
 {
-    private static Keymap Map => Keymap.Default;
-
     [Fact]
-    public void ApplyMotions_does_not_throw_on_keys_the_widget_already_binds()
+    public void Moving_past_the_last_row_lands_on_the_first()
     {
-        var list = new ListView();
-
-        FleetKeys.ApplyMotions(list, Map);
-        FleetKeys.ApplyOpen(list, Map);
+        Assert.Equal(0, FleetList.Wrap(3, 3));
+        Assert.Equal(1, FleetList.Wrap(4, 3));
     }
 
     [Fact]
-    public void ApplyMotions_is_idempotent()
+    public void Moving_up_from_the_first_row_lands_on_the_last()
     {
-        var list = new ListView();
-
-        FleetKeys.ApplyMotions(list, Map);
-        FleetKeys.ApplyMotions(list, Map);
-    }
-
-    [Theory]
-    [InlineData(FleetAction.MoveDown, Command.Down)]
-    [InlineData(FleetAction.MoveUp, Command.Up)]
-    [InlineData(FleetAction.MoveFirst, Command.Start)]
-    [InlineData(FleetAction.MoveLast, Command.End)]
-    [InlineData(FleetAction.PageDown, Command.PageDown)]
-    [InlineData(FleetAction.PageUp, Command.PageUp)]
-    public void Each_motion_maps_to_its_command(FleetAction action, Command expected)
-    {
-        var list = new ListView();
-        FleetKeys.ApplyMotions(list, Map);
-
-        Assert.Contains(expected, list.KeyBindings.GetCommands(Map.KeyFor(action)));
+        Assert.Equal(2, FleetList.Wrap(-1, 3));
+        Assert.Equal(1, FleetList.Wrap(-2, 3));
     }
 
     [Fact]
-    public void Open_maps_the_configured_key_to_accept()
+    public void An_empty_list_stays_at_zero_rather_than_dividing_by_zero()
     {
-        var list = new ListView();
-        FleetKeys.ApplyOpen(list, Map);
-
-        Assert.Contains(
-            Command.Accept,
-            list.KeyBindings.GetCommands(Map.KeyFor(FleetAction.OpenProject)));
-    }
-
-    [Fact]
-    public void Arrow_keys_keep_working_alongside_the_vim_motions()
-    {
-        var list = new ListView();
-        FleetKeys.ApplyMotions(list, Map);
-
-        Assert.Contains(Command.Down, list.KeyBindings.GetCommands(Key.CursorDown));
-        Assert.Contains(Command.Up, list.KeyBindings.GetCommands(Key.CursorUp));
-    }
-
-    [Fact]
-    public void A_rebound_motion_is_what_gets_applied()
-    {
-        var keymap = new Keymap(Map.Config.With(FleetAction.MoveDown, "z"));
-        var list = new ListView();
-
-        FleetKeys.ApplyMotions(list, keymap);
-
-        Assert.Contains(Command.Down, list.KeyBindings.GetCommands(Key.Z));
+        Assert.Equal(0, FleetList.Wrap(-1, 0));
+        Assert.Equal(0, FleetList.Wrap(5, 0));
     }
 }

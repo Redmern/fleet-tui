@@ -6,6 +6,9 @@ namespace Fleet.Platform.Git;
 
 public sealed class GitRunner(string executable = "git") : IGitRunner
 {
+    public static IReadOnlyList<string> Argv(string workDir, IReadOnlyList<string> args) =>
+        string.IsNullOrWhiteSpace(workDir) ? [.. args] : ["-C", workDir, .. args];
+
     public async Task<GitResult> RunAsync(
         string workDir,
         IReadOnlyList<string> args,
@@ -14,7 +17,6 @@ public sealed class GitRunner(string executable = "git") : IGitRunner
     {
         var psi = new ProcessStartInfo(executable)
         {
-            WorkingDirectory = workDir,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = stdin is not null,
@@ -22,7 +24,7 @@ public sealed class GitRunner(string executable = "git") : IGitRunner
             CreateNoWindow = true,
         };
 
-        foreach (var a in args)
+        foreach (var a in Argv(workDir, args))
         {
             psi.ArgumentList.Add(a);
         }

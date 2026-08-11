@@ -1,6 +1,7 @@
 using Fleet.Cli.Composition;
 using Fleet.Features.Diagnostics.RunDoctor;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
+using Fleet.Features.Setup.RunSetup;
 
 namespace Fleet.Cli.Commands;
 
@@ -35,6 +36,11 @@ public static class DoctorCommand
         Console.WriteLine($"  mux driver    {report.ChosenDriver}");
         Console.WriteLine($"  mux reachable {(report.MuxReachable ? "yes" : "no")}");
         Console.WriteLine($"  git           {report.GitVersion ?? "NOT FOUND"}");
+
+        foreach (var tool in SetupHandler.Required.Concat(SetupHandler.Harness).Where(t => t != "git"))
+        {
+            Console.WriteLine($"  {tool,-13} {(Adapters.OnPath(tool) ? "on PATH" : "NOT FOUND")}");
+        }
         Console.WriteLine($"  projects      {report.Projects.Count}");
 
         foreach (var project in report.Projects)

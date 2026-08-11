@@ -4,6 +4,11 @@ namespace Fleet.Shared.Keymap;
 
 public static class KeymapDiff
 {
+    public static string PrefixAgainstDefault(string prefix) =>
+        string.Equals(prefix, KeymapDefaults.Prefix, StringComparison.Ordinal)
+            ? string.Empty
+            : prefix;
+
     public static IReadOnlyDictionary<FleetAction, string> AgainstDefaults(
         IReadOnlyDictionary<FleetAction, string> bindings)
     {

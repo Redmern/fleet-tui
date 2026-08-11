@@ -22,4 +22,6 @@ public sealed class AgentEntry
     public bool RepositoryWasBare { get; set; }
 
     public bool Hidden { get; set; }
+
+    public bool Open { get; set; }
 }

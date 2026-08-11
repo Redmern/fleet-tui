@@ -1548,9 +1548,502 @@ entirely. Once a user rebinds anything, the editor persists the whole keymap, so
 later changes to the shipped defaults never reach them. Changing a default is not
 enough to fix an existing install.
 
+## Coloured rows, 2026-08-10
+
+A `ListView` row bound to `ObservableCollection<string>` is one string drawn with
+one attribute, so a green `↑1` beside a yellow `↓4` is impossible through
+`SetSource`. Rows are now `FleetRow` — an ordered list of `FleetSpan(Text, Tone)`
+— rendered by `FleetRowSource`, a hand-written `IListDataSource`. Its `Render`
+walks the spans rune by rune, honours the viewport's horizontal offset, sets the
+attribute per span through `FleetInk.For(tone, basis)`, and pads the rest of the
+row so the selection bar still spans the full width. `basis` comes from
+`GetAttributeForRole(selected ? Focus : Normal)`, so the selected row keeps its
+highlight and each span keeps its own foreground.
+
+Two details the interface forces: `IListDataSource` extends `IDisposable`, and
+`ToList()` is what the list's type-to-search reads, so it returns the flattened
+`Text` of each row. `CollectionChanged` is implemented with empty accessors —
+rows are replaced by assigning a new `Source`, and the pull spinner mutates one
+row through `Replace(index, row)` followed by `SetNeedsDraw()`.
+
+Tones live in `Ui/Constants/FleetTones.cs` as string constants (matching
+`FleetSchemes`) rather than an enum, and map to palette colours in `FleetInk`.
+The git status is now a lualine-style pill:  edge, git icon, then `↓n` yellow,
+`↑n` green, dirty red, then the closing edge — all on `Surface0`, with the edge
+glyphs drawn in `Surface0` against the row background so the pill reads as a
+rounded shape. The branch name lost its icon, since the pill now carries it.
+
+**A write stripped a private-use glyph.** `FleetGlyphs.Branch` was `""` — an
+empty string, not a git icon — so no icon had rendered for some time, and the
+`Contains(FleetGlyphs.Branch)` assertions passed vacuously against `""`. The
+nerd-font codepoints (U+E0A0, U+E0B6, U+E0B4) are pinned by a test asserting the
+exact escape, which is the only cheap guard against an editor or tool that
+silently drops them.
+
+**The dashboard refreshes itself** every `DashboardRefresh.Interval` (4 s) from a
+second `AddTimeout`, skipping while `busy`, while a pull is running, or while an
+action is queued, and never overlapping itself. Repository selection is now
+clamped and restored across a refresh the same way the agent list already was —
+without that, an automatic refresh would yank the cursor back to the first row
+every few seconds.
+
+The hint bar's buttons keep `CanFocus = false` (focusable buttons join the Tab
+order and steal focus from the list) but dropped `NoDecorations`, so they render
+bracketed on a raised `fleet.chip` surface. They are laid out with
+`Pos.Right(previous) + 1` instead of a manual character offset, which lets
+`Dim.Auto` own their widths.
+
+## `wezterm cli` auto-start, 2026-08-10
+
+`fleet doctor` appeared to hang: it printed its whole report, then the shell never
+came back. It was not fleet — the process had already exited. `wezterm cli`
+**starts a mux server of its own** when it cannot reach the socket, and that
+daemon inherits the handles of the pipe the caller is reading, so the reader never
+sees EOF. Run detached with output to files it exited in 5 s; run through a pipe it
+hung indefinitely. Every invocation also left behind three processes:
+`wezterm-mux-server.exe`, an `OpenConsole.exe`, and a default `pwsh -NoLogo` pane,
+because an auto-started server opens its default pane. The socket-candidate probe
+in `WezTermCli.SocketAsync` tries several paths, so one doctor run per candidate
+became one daemon per candidate — 18 servers and 54 processes had accumulated.
+
+Every call now goes through `WezTermCli.Argv`, which inserts `--no-auto-start`
+after `cli`. Auto-start is never what fleet wants: if no mux is reachable the
+correct outcome is a clean "mux not reachable", not a new daemon. The flag also
+makes probing instant — a dead candidate now fails in 0 s instead of burning the
+5 s timeout, so the piped doctor run went from >120 s to 0 s.
+
+Worth remembering: "the process hangs" and "the pipe never closes" look identical
+from a shell. Checking whether the process still exists (it did not) is what
+separated them; comparing a file-redirected run against a piped run confirmed it.
+
+## The picker becomes a cheat-sheet, 2026-08-10
+
+Picker rows are now three columns: the key in blue, a one-word keyword, and the
+description as a `FleetRow.Trailing` span. `FleetRowSource.Render` right-aligns
+trailing spans by padding to `width - tail`, so descriptions hug the right edge
+and reflow on resize — the row cannot know the pane width when it is built, so
+the alignment has to happen at draw time, not in the row builder.
+
+Choices are `PickerEntry(Label, Detail)`. Keys are still derived from the label,
+which is why the keyword column matters: `AgentDisposal.Entries` labelled
+opens/hide/stop/forget/delete yields `o h s f d`, every key a mnemonic of its
+word, where deriving from the sentences gave the meaningless `c h s r e`.
+
+**Pressing the key needed a second Enter** because the picker listened on
+`window.KeyDown`, and a focused `ListView` eats printable keys for type-to-search
+before that fires — the same trap as the dashboard's `n`. It now listens on
+`app.Keyboard.KeyDown`.
+
+That introduces a nesting problem: pickers open pickers (manage → default branch),
+every one subscribed to the same app-level event, so an inner selection would also
+match an outer picker's key and stop the wrong window. Guarded with a static depth
+counter — each `Choose` claims `++depth` and its handler ignores keys unless
+`depth` still equals its own. `View.IsCurrentTop` looked like the intended answer
+but its exact semantics under nested `Run` calls were not worth guessing.
+
+## The prefix moves to Ctrl+Enter, 2026-08-10
+
+`Ctrl+Space` collides with Neovim, and because the WezTerm binding consumes the
+chord before the pane sees it, nvim could never get the key back. `Ctrl+D` was the
+other candidate and is worse: nvim's half-page scroll, a shell EOF, and already
+fleet's own `PageDown`. The default is now `Ctrl+Enter`, which `WezTermChord` maps
+to `key = 'Enter', mods = 'CTRL'`.
+
+Changing a default is not enough on an existing install: a saved `keybinds.json`
+pinned `"prefix": "Ctrl+Space"` explicitly, and an explicit value always wins over
+the defaults. `JsonKeymapStore.Save` now writes the prefix only when it differs
+from the shipped one (`KeymapDiff.PrefixAgainstDefault`), the same diffing the
+bindings already had — and the existing file needed its prefix blanked by hand.
+`apply-keybinds` has to be re-run and the WezTerm config reloaded before the new
+chord exists in the terminal.
+
+Keybinds also moved from `k` to `e`, because `k` is move-up: in the fleet menu,
+navigating up opened the keybinds editor.
+
+## One pill per row, 2026-08-10
+
+The branch and its status are one pill now: `⟨branch  ⎇ ↓4 ↑1 ●⟩`, built by
+`BranchStatus.Pill(branch, state)`. Repositories use the same pill for their
+default branch. Agent rows are pill-then-repository, and because pill widths vary
+the alignment gap is computed from the widest pill rather than by padding a
+column — `PadRight` cannot align a run of coloured spans.
+
+Pull and remove left the repository hint bar for its manage menu (`b branch`,
+`p pull`, `r remove`), and their bare keys were dropped from the repository scope
+so `d` can no longer drop a repository by accident. The menu runs synchronously
+inside `busy`, but pulling wants the spinner and removing wants the confirm
+dialog, both owned by the dashboard — so `ManageRepository` returns
+`RepositoryManaged(Status, Follow)` and the dashboard performs the follow-up
+action itself.
+
+The fleet menu is centred (`FleetTheme.CenteredRows`, sized from its own rows) and
+its keys are blue, like the picker. The project picker got the same treatment: name
+left, root right-aligned as a trailing span, and chip buttons instead of a hint
+line.
+
+## Unregistering a project, 2026-08-10
+
+`d` in the project picker drops a project from fleet and touches nothing else:
+`RemoveProjectHandler` refuses a nameless project and one fleet does not know,
+then calls `IProjectStore.Remove`, which deletes only the project's json record.
+The confirm dialog says so in as many words — "fleet forgets this project.
+`<root>` and everything in it stays on disk" — because a "remove" next to a path
+reads as a delete, and this one never is. The agent records under the project's
+config directory are left alone too, so re-adding the same root brings them back.
+
+The picker rebuilds its rows from the store after a removal rather than mutating
+the row list, and clamps the selection, which is the same shape the dashboard uses
+for its refresh.
+
+## One owner for the keys, 2026-08-10
+
+The fleet menu's keys needed a second Enter for keybinds (`e`) and the dashboard
+(`m`), but not for list agents (`l`) — and that exception was the tell. `l` is
+`OpenProject`, which `FleetKeys.ApplyOpen` had bound to `Command.Accept` on the
+list, so it was not selecting "list agents" at all: it was accepting whatever row
+happened to be highlighted. The other keys went to `list.KeyDown`, which a focused
+`ListView` never reaches for printable letters. The menu now listens on
+`app.Keyboard.KeyDown` and no longer binds an accept key.
+
+Moving views to app-level keys creates the real problem this section is about: the
+handlers of every view *underneath* are still subscribed. An `esc` in the agent
+list would also close the menu below it; a `y` in a confirm dialog could match a
+key in the picker beneath. `FleetModal` replaces the picker's private counter with
+one shared depth: a view claims `Enter()`, ignores keys unless `Owns(claim)`, and
+`Leave()`s in its `finally`. Views that keep view-level handlers still claim, so
+whatever sits below them goes quiet — `FleetDialog`, `EditKeybindsView`,
+`ListAgentsView` — and the dashboard now skips keys when `FleetModal.Any`, which is
+the same protection its `busy` flag gave for the modals it opens itself.
+
+`Q` in the menu confirms before quitting: it closes the dashboard and every agent
+pane, so the dialog says exactly that and that nothing on disk changes. "Go to the
+main pane" is now "Go to the fleet dashboard", which is what it actually does.
+
+## Spacing, caps and chips, 2026-08-10
+
+A `ListView` has no row height, so vertical space between items can only be a real
+row. `FleetRowSource` now interleaves a spacer row (`null`) between items and keeps
+`Stride`, `ItemAt` and `IndexOf` so a *row* index and an *item* index stay
+distinct — every call site went through `FleetRows.Selected/Select/Fill` rather
+than reading `SelectedItem` directly, because a raw `SelectedItem` is now double
+the data index and silently off-by-one-item wherever it leaks. `FleetTheme.Rows`
+wires `FleetRows.KeepOffSpacers`, which bounces a selection that lands on a spacer
+onward in the direction of travel, so `j`/`k` and the arrows skip the gaps.
+
+The selection bar is rounded by drawing the powerline caps in the *bar's* colour
+against the row background:  at column 0,  at the last column, `Focus`
+between them. The cap column is reserved on unselected rows too, otherwise a
+right-aligned description shifted a column as the cursor arrived.
+
+The hint bar is no longer `Button`s. Rounded chips need three colours per chip —
+edge, key, label — and a Button draws its whole text with one attribute, so
+`FleetActionBar` is a small `View` that draws `FleetSpan`s in `OnDrawingContent`
+and hit-tests clicks by x range in `OnMouseEvent`. It still never takes focus, so
+the list keeps it. Terminal.Gui v2 names that argument type `Mouse`, not
+`MouseEventArgs`, and its `Position` is a `Point?`.
+
+Repository rows now lead with the branch pill and follow with the name, matching
+the agent rows, and the agents tab says `n add` rather than `n new`.
+
+## The log viewer, 2026-08-10
+
+`L log` lives in the fleet menu, not on the dashboard's tabs — it is a
+per-project view, not a per-tab action, and both bars were carrying the same chip.
+It opens the project's log: rows of `timestamp   message`, newest first, with a
+muted "n more" marker where an entry has detail, and Enter opens that detail.
+
+The key is `L`, not `l`: `l` is next-tab in the dashboard, and taking it for logs
+would have silently killed `h`/`l` tab movement.
+
+The log file is one global file, so "this project's log" needed a convention rather
+than a second file: `LogTag.For(project, message)` writes `[project] message`, and
+`LogParser` splits the tag back out. The viewer keeps entries tagged for this
+project *and* untagged ones — untagged means fleet's own failure, which is worth
+seeing from anywhere — and drops other projects'. Dashboard outcomes now go through
+`Noted`, which logs the same status string the view shows, so the log is a history
+of what the dashboard did rather than only what crashed.
+
+Details come from continuation lines: a line without a leading timestamp belongs to
+the entry above it. `FileLog.Swallowed` now appends up to twelve indented stack
+frames that way, so a swallowed exception has something to open.
+
+Row spacing was tried and dropped. One terminal row is the smallest vertical unit
+there is, so "a little space" between rows is not representable — the choice is a
+whole blank line or none, and a whole line read as too much everywhere, menus and
+pickers included. `FleetRowSource` keeps the capability (`spaced: true`) and the
+row/item index mapping that goes with it, but nothing asks for it now; separation
+comes from the rounded selection bar instead.
+
+## Two more redraw and focus fixes, 2026-08-10
+
+**Two `update-status` handlers cannot share one status slot.** The pill showed
+`default` because `~/.wezterm/tmux-mode.lua` — the user's own tab-bar config — sets
+the left status to the workspace name on every tick. Writing ours every tick made the
+two alternate once a second, which is the "flicker"; writing ours only when *our*
+text changed let theirs overwrite it permanently, which is the `default`. Neither is
+fixable from fleet's side, because "unchanged since I last wrote it" is not the same
+as "still on screen".
+
+So fleet stopped writing the left status and exports the lookup instead: `M.project(window)`
+returns the project of a dashboard in that window, `M.label(window)` prefixes the ship
+glyph, and the recipe for a host config is a comment at the top of the module. The
+host's pill now reads `fleet.label(win) or win:active_workspace()`, which keeps their
+styling, keeps the workspace name in windows without a dashboard, and leaves exactly
+one writer. Their config already had this shape for tabs (`fleet.setup(config, { tabs = false })`),
+where fleet supplies glyphs and tmux-mode renders them.
+
+Diagnosis note: the wezterm GUI log (`~/.local/share/wezterm/wezterm-gui.exe-log-*.txt`)
+is where this became obvious — it was full of `format-tab-title` errors from the same
+file, which is what pointed at a second config owning the bar. The `git_branch(cwd_path(pane))`
+call in that handler is also what drew the branch bubble that the `-C` fix silenced.
+
+The confirm dialog's buttons move with `h`/`l` and the arrows, and Enter acts on
+whichever has focus. That needed the confirm button to stop being `IsDefault` —
+a default button answers Enter from anywhere, so "enter selects" and "the focused
+button wins" cannot both hold while one exists. `y` and `n`/`esc` still work.
+
+## The tab bar flicker was fleet's git children, 2026-08-10
+
+A branch bubble appeared in the tab bar's right corner for a fraction of a second
+every four seconds. Nothing in fleet sets a right status — the user's own wezterm
+config does, from the active pane's working directory. The four-second beat gave it
+away: it is the dashboard's auto-refresh, and `GitRunner` was starting every `git`
+with `WorkingDirectory = workDir`. WezTerm reads a pane's cwd from its foreground
+process, so for the ~100 ms each `git status` lived, the pane looked like it had
+moved into that repository, and the status handler dutifully drew its branch.
+
+`GitRunner.Argv` now passes the directory as `git -C <dir>` and leaves the child's
+cwd alone, so a refresh is invisible to the terminal. `-C` is equivalent for every
+call site — git resolves relative paths in the arguments against it exactly as it
+did against the process directory — and an empty directory means no flag, which is
+what `doctor`'s `git --version` wants.
+
+Worth remembering: a spawned child's working directory is observable from outside
+the process. Anything that inspects a terminal pane sees it.
+
+## The tab bar says what things are, 2026-08-10
+
+WezTerm's left segment was `default` — its workspace name, which tells you nothing.
+The generated module's `update-status` handler now calls `window:set_left_status`
+with a ship glyph and the project of whichever fleet dashboard lives in that window,
+falling back to the workspace name when there is none. `fleet_project` was already
+written for the prefix chord, so the lookup was there to reuse.
+
+It is drawn as the same lavender bubble wezterm used for `default`: the powerline
+caps carry `Foreground = Lavender` over the tab bar's own background while the body
+inverts to `Crust` on `Lavender`. A left status is plain text unless you build the
+bubble yourself — wezterm's workspace indicator styling is not exposed.
+
+The project tab is titled `fleet` and agent tabs are titled after their branch
+(`BranchSlug.Of`) rather than `repo/branch`. A task summary would be better than a
+branch name, but nothing records what an agent is working on, so the branch is the
+best signal that exists today.
+
+**Titles were being set and then lost.** Agent tabs read `node.exe` because
+hide/show moves the pane with `move-pane-to-new-tab`, and the new tab has no title,
+so wezterm falls back to the process name. `HideAgentHandler` re-applies the title
+after every move.
+
+**The project picker's `d` did nothing** — the same `ListView` type-to-search trap
+that had already bitten the dashboard's `n` and the picker's keys: the handler was on
+`list.KeyDown`, which printable letters never reach. It now listens on
+`app.Keyboard.KeyDown` behind a `FleetModal` claim. Worth noting the pattern: every
+time a view keeps its keys on the list instead of the app, this bug comes back.
+Removal itself was fine — `JsonProjectStore.Remove` deletes one json record and
+nothing else.
+
+## Hide gets a key again, 2026-08-10
+
+Hide is back as a bare key on the agents tab, bound to `x` rather than the `h` its
+label suggests: `h` is prev-tab, and hjkl tab movement outranks a mnemonic. It stays
+in the manage menu too — the chip is a shortcut, not a move.
+
+## Wrapping navigation, 2026-08-10
+
+`j` at the bottom now goes to the first row, `k` at the top to the last. The wrap
+could not live in `FleetKeys`: `View.AddCommand` is protected, so nothing outside a
+subclass can replace a `ListView`'s `Command.Down`. `FleetList : ListView` overrides
+both commands in its constructor, which also means the arrow keys wrap identically —
+they resolve to the same commands — and spacer rows are stepped over on the wrap.
+
+## Opening something already open elsewhere, 2026-08-11
+
+Enter on a repository did nothing and said nothing. `wezterm cli list` through the
+GUI socket showed why: `frontend/develop` already had a pane, in window 9, while the
+dashboard was in window 10. Both open handlers found that pane and called
+`activate-pane`, which activates a pane *within its own window* and cannot raise a
+different GUI window — so the call succeeded, nothing moved, and there was no error
+to report.
+
+Opening now moves a stray pane into the dashboard's window first (the same
+`move-pane-to-new-tab --window-id` that hide/show uses) and re-applies its title,
+because a moved pane lands in a fresh tab with none. Spawning a second pane in the
+same worktree would have been the other option and a worse one: two editors in one
+worktree fight over swap files.
+
+Diagnosis note: the mux sockets live in `~/.local/share/wezterm/gui-sock-*`, and each
+GUI has its own. Querying each in turn is how to see the whole picture from outside a
+pane — `wezterm cli list` with no socket set only ever shows the mux you happen to be
+in, which is why this looked like nothing at all was happening.
+
+## A rebound key reaches the dashboard, 2026-08-11
+
+The dashboard built its `Keymap` once at startup, so a rebind left its chips and its
+key handling on the old map — and the editor can run in a *separate* `fleet menu`
+process, where no in-process callback could have told it. The dashboard now keeps a
+mutable keymap: `EditKeybinds` returns the new one, and the four-second beat reloads
+from disk for edits made elsewhere. Adopting one rebuilds the prefix recogniser, the
+list motions and the bar.
+
+Reloading needed a cheap "did anything change" test, since rebuilding on every beat
+would fight the auto-refresh. `KeymapConfig` holds a dictionary, so record equality
+does not do it; `Keymap.Signature` renders the prefix and the sorted bindings into a
+string instead.
+
+## Quit remembers, open restores, 2026-08-11
+
+Quitting now records which agents had a live pane — `QuitProjectHandler` compares
+each agent's worktree against the pane list *before* killing anything and writes
+`Open` back to the record, only when it changed, so a quit does not rewrite every
+file. Opening a project then spawns a pane for each agent marked open, skipping any
+whose worktree has vanished or that is somehow already running, and a hidden agent
+comes back into the hidden workspace rather than the dashboard's window.
+
+`Open` lives on `AgentRecord` beside `Hidden`, which is the same kind of thing: not
+configuration, but the state fleet needs to put the desk back the way you left it.
+
+Quit is not the only writer, because a crash never reaches it. Every transition
+records itself as it happens: a new agent is born `Open: true`, opening or restarting
+one sets it, stopping one clears it, and hiding writes whether a pane was actually
+found. Each of those writes only when the flag changes, so the file is not rewritten
+on every action.
+
+**The flag was invisible for a while.** `AgentRecord` had it, but `AgentEntry` — the
+JSON shape it is mapped to by hand — did not, so every save dropped it and every load
+returned `false`. The handler tests passed throughout because they use a fake store;
+the one seam that mattered had no coverage. There is now a round-trip test through the
+real `JsonAgentStore` asserting both `hidden` and `open` survive. Any new field on a
+record needs the same three edits: the record, the entry, and both directions of the
+mapping.
+
+## Secrets that git does not carry, 2026-08-11
+
+A repository often needs files that are deliberately untracked — `.env`,
+`appsettings.Local.json` — and every worktree needs its own copy. They live in a
+mirror under the project root: `.config/{repository}/{defaultBranch}/…`, laid out
+exactly as they sit inside the repository, so a file's place in the mirror is its
+place in the worktree. `SecretsMirror` is in `Shared` rather than in a slice because
+both the repositories manage menu and agent creation need it, and slices may not
+reference each other.
+
+Creating a worktree seeds it: `NewAgentHandler` copies the mirror in right after
+`worktree add`, only when it actually created the worktree. `m` → `secrets` on a
+repository lists what the mirror holds, opens it in nvim for editing, or copies it
+into every existing worktree on demand.
+
+**fleet never reads these files.** It enumerates names, and copies bytes with
+`File.Copy` — nothing loads their contents into memory, into the log, or onto the
+screen. The manage view shows paths and counts only.
+
+`.config` is not a bare repository, so it cannot appear on the repositories tab.
+
+## Opening a project lands on the main pane, 2026-08-11
+
+Restoring a session spawns panes, and each spawn takes focus, so opening a project
+with agents left the user staring at whichever agent happened to come last. Focus is
+re-asserted on the dashboard pane after the restore, which also activates its tab.
+
+## Installing without a toolchain, 2026-08-11
+
+Three pieces, in the order they matter.
+
+**CI publishes the binaries.** `.github/workflows/ci.yml` builds and tests on
+windows-latest and ubuntu-latest, publishes NativeAOT for each RID and *runs the
+result* — `fleet --help` must exit 0, which is what turns "Linux should work" into a
+fact rather than a hope. Linux needs `clang` and `zlib1g-dev` installed on the runner
+for the AOT link. `release.yml` does the same on a `v*` tag and attaches
+`fleet-win-x64.exe` / `fleet-linux-x64` with sha256 sums to the release.
+
+**`fleet setup` owns the wiring.** It writes the Lua module to the place that
+platform keeps it (`~/.wezterm` on Windows, `~/.config/wezterm` elsewhere), adds the
+two `require` lines to the WezTerm config, and prints a checklist of wezterm, git,
+nvim and claude with the exact command that fixes each miss. Only wezterm and git
+block: an agent can still run Claude Code alone. The glyph check prints a real pill
+so a missing Nerd Font is visible rather than described.
+
+Two things that had to be got right. The block goes in **before the final
+`return config`** — appending it after would be dead code, and the config would look
+wired while doing nothing. And "already wired" cannot be a search for one exact
+string: the first version looked for `require 'fleet'` and missed
+`pcall(require, "fleet")`, so it cheerfully appended a second copy to a config that
+already had one. It now treats any uncommented line mentioning both `require` and
+`fleet` as wired. The installer backs the file up as `.bak-fleet` before writing.
+
+**Bootstrappers download instead of building.** `scripts/get-fleet.ps1` and
+`scripts/get-fleet.sh` fetch a release asset, put it on `PATH` and run `fleet setup`;
+`install.ps1` and `install.sh` still build from source for development. The release
+repository is deliberately not baked in — it comes from `-Repo`/`FLEET_REPO`, and the
+scripts refuse with an explanation rather than guessing a URL.
+
+## A machine that is missing things, 2026-08-11
+
+Tested by stripping `PATH` down to system directories plus git and running the real
+binary. What it showed, and what changed as a result:
+
+- `fleet setup` was already right: wezterm, nvim and claude marked missing, each with
+  the winget or npm line that fixes it, exit code 1 because wezterm is required.
+- `fleet doctor` said `mux reachable no` without ever saying wezterm was absent. It
+  now lists wezterm alongside nvim and claude as tools with a found/NOT FOUND state.
+- The worst message was the mux one. With no wezterm and no tmux, driver selection
+  falls through to `embedded`, so the user was told "the 'embedded' driver is not
+  implemented yet" — true, irrelevant, and unactionable. `MuxTrouble.With` now
+  distinguishes the two cases: no wezterm on `PATH` means "wezterm is not installed,
+  or not on PATH. Install it and run 'fleet setup'." The driver message survives only
+  for the case it describes, being inside tmux with wezterm present.
+- `fleet` drew the whole project picker *before* checking the mux, so the failure
+  arrived after the user had chosen. The check moved above the picker.
+- `fleet quit` reported "Nothing of this project is open", which is what an empty pane
+  list looks like whether or not a multiplexer exists. It now names the real problem.
+- A missing **harness** used to surface as "the wezterm multiplexer did not respond"
+  when the spawn of a nonexistent `nvim` failed. Creating or opening an agent now
+  refuses with `nvim is not on PATH. Install it, or change what this agent opens.`
+  Session restore skips agents whose harness is absent and says so on stderr, rather
+  than filling the window with panes that die on arrival.
+
+The environment checks live in the composition root, not in the handlers: the
+handlers stay ignorant of `PATH` and take probes, which is why all of this is
+testable without a machine that lacks anything.
+
+## Installing the dependencies too, 2026-08-11
+
+`-WithDeps` / `--with-deps` turns the installers into machine setup: WezTerm, Neovim
+and git through winget on Windows, through pacman/dnf/apt on Linux, then a Neovim
+config cloned into the right place for the platform.
+
+Three decisions worth keeping:
+
+- **Nothing is overwritten.** A tool already on `PATH` is skipped. A config directory
+  that is a checkout of the same remote is fast-forwarded; one with a *different*
+  remote, or one that is not a checkout at all, is reported and left exactly as it
+  was. A Neovim config is somebody's work, and an installer that clobbers it is worse
+  than one that does nothing.
+- **The config's own `bootstrap.sh` is never run.** It is reported. Installing a
+  package is one kind of consent; executing a script from a repository is another.
+- **winget's PATH changes do not reach the running process**, so after installing,
+  the usual locations (`Program Files\WezTerm`, `Neovim\bin`, `Git\cmd`) are prepended
+  to this process's `PATH`. Without that, `fleet setup` at the end of the same run
+  would report the tool it just installed as missing.
+
+The logic lives once. `scripts/deps.ps1` defines a function and does nothing on
+dot-source, so `install.ps1` sources it locally and `get-fleet.ps1` downloads it from
+the same repository — which is what makes `-WithDeps` work through `irm | iex`. On
+Linux the same trick uses `install.sh --deps-only`.
+
+The default config URL is a real personal repository rather than a placeholder,
+because a placeholder in an installer is a broken installer. It sits on one line at
+the top of each script, and both honour `FLEET_NVIM_CONFIG`.
+
 ## Still to verify
-- Terminal.Gui v2 AOT on a real **Linux** runner. Windows is now proven; the CI
-  matrix answers Linux on first push.
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
 

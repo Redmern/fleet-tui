@@ -29,4 +29,6 @@ public enum FleetAction
     ListAgents,
     PullRepository,
     ManageRepository,
+    RemoveProject,
+    ViewLogs,
 }

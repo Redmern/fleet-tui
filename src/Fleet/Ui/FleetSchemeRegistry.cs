@@ -30,6 +30,25 @@ public static class FleetSchemeRegistry
             FleetPalette.Base,
             FleetPalette.Blue));
 
+        SchemeManager.AddScheme(FleetSchemes.Status, Build(
+            FleetPalette.Subtext0,
+            FleetPalette.Base,
+            FleetPalette.Subtext0));
+
+        SchemeManager.AddScheme(FleetSchemes.Chip, new Scheme
+        {
+            Normal = Attr(FleetPalette.Text, FleetPalette.Surface0),
+            HotNormal = Attr(FleetPalette.Blue, FleetPalette.Surface0),
+            Focus = Attr(FleetPalette.Crust, FleetPalette.Blue),
+            HotFocus = Attr(FleetPalette.Crust, FleetPalette.Lavender),
+            Active = Attr(FleetPalette.Crust, FleetPalette.Blue),
+            HotActive = Attr(FleetPalette.Crust, FleetPalette.Lavender),
+            Highlight = Attr(FleetPalette.Crust, FleetPalette.Lavender),
+            Editable = Attr(FleetPalette.Text, FleetPalette.Surface0),
+            ReadOnly = Attr(FleetPalette.Subtext0, FleetPalette.Surface0),
+            Disabled = Attr(FleetPalette.Overlay0, FleetPalette.Surface0),
+        });
+
         SchemeManager.AddScheme(FleetSchemes.Accent, new Scheme
         {
             Normal = Attr(FleetPalette.Crust, FleetPalette.Blue),

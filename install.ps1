@@ -3,10 +3,11 @@
     Install fleet: publish the NativeAOT binary, put it on the user PATH.
 
 .DESCRIPTION
-    Deliberately small. Phase 1 has no Claude Code hooks, no daemon and no
-    WezTerm Lua module, so there is nothing to wire up — unlike the predecessor
-    project, whose installer did all three. Add to this only when a phase
-    actually needs it.
+    Builds from source. For a machine without the .NET SDK use
+    scripts\get-fleet.ps1, which downloads a published binary instead.
+
+    Wiring lives in 'fleet setup', which this script runs at the end, so the
+    installer stays a build-and-copy step and the wiring is testable on its own.
 
 .PARAMETER Uninstall
     Remove the binary and the PATH entry. Configuration under %APPDATA%\fleet is
@@ -14,6 +15,14 @@
 
 .PARAMETER Purge
     With -Uninstall, also delete %APPDATA%\fleet.
+
+.PARAMETER WithDeps
+    Install WezTerm, Neovim and git through winget when they are missing, and
+    clone a Neovim config into %LOCALAPPDATA%\nvim.
+
+.PARAMETER NvimConfig
+    Git URL of the Neovim config to clone with -WithDeps. Defaults to
+    FLEET_NVIM_CONFIG, then to the one in scripts\deps.ps1.
 
 .EXAMPLE
     .\install.ps1
@@ -24,7 +33,9 @@
 [CmdletBinding()]
 param(
     [switch]$Uninstall,
-    [switch]$Purge
+    [switch]$Purge,
+    [switch]$WithDeps,
+    [string]$NvimConfig
 )
 
 $ErrorActionPreference = 'Stop'
@@ -94,6 +105,11 @@ if ($Uninstall) {
 # ---------------------------------------------------------------------------
 # Install
 # ---------------------------------------------------------------------------
+
+if ($WithDeps) {
+    . (Join-Path $RepoRoot 'scripts\deps.ps1')
+    Install-FleetDeps -NvimConfig $NvimConfig
+}
 
 Write-Step 'Checking prerequisites'
 
@@ -170,6 +186,12 @@ Write-Ok "installed $BinPath"
 
 Add-ToUserPath $InstallDir
 
-Write-Step 'Verifying'
-& $BinPath doctor
+Write-Step 'Setting up'
+& $BinPath setup
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host '    something fleet needs is missing - see the list above' -ForegroundColor Yellow
+}
+
 Write-Host "`nfleet installed. Run 'fleet' in a new terminal." -ForegroundColor Green
+exit 0

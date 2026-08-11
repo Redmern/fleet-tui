@@ -1,0 +1,88 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (must already exist)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            asset: fleet-win-x64.exe
+          - os: ubuntu-latest
+            rid: linux-x64
+            asset: fleet-linux-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install the native toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Test
+        run: dotnet test Fleet.slnx --nologo -v minimal
+
+      - name: Publish (NativeAOT)
+        run: >
+          dotnet publish src/Fleet/Fleet.csproj
+          -c Release -r ${{ matrix.rid }}
+          -o out/${{ matrix.rid }} --nologo
+
+      - name: Name the asset and hash it
+        shell: bash
+        run: |
+          mkdir -p dist
+          built=out/${{ matrix.rid }}/fleet
+          [ -f "$built.exe" ] && built="$built.exe"
+          cp "$built" "dist/${{ matrix.asset }}"
+          cd dist
+          sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            && gh release upload "$TAG" dist/* --clobber \
+            || gh release create "$TAG" dist/* \
+                 --title "fleet $TAG" \
+                 --notes "Native binaries for Windows and Linux. Install with scripts/get-fleet.ps1 or scripts/get-fleet.sh, then run 'fleet setup'."

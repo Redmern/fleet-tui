@@ -1,5 +1,6 @@
 using Fleet.Features.Projects.QuitProject;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
@@ -79,10 +80,63 @@ public class QuitProjectTests
     [Fact]
     public async Task Nothing_open_is_reported_rather_than_silently_succeeding()
     {
-        var result = await new QuitProjectHandler(new FakeMuxDriver())
-            .HandleAsync("C:/repos/techweb", []);
+        var result = await new QuitProjectHandler(new FakeMuxDriver(), new RecordingStore())
+            .HandleAsync("techweb", "C:/repos/techweb", []);
 
         Assert.False(result.Succeeded);
         Assert.Contains("Nothing", result.Error);
+    }
+
+    [Fact]
+    public async Task Quitting_remembers_which_agents_were_open_and_which_were_not()
+    {
+        var mux = new FakeMuxDriver();
+        var store = new RecordingStore();
+
+        var root = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+        var live = Path.Combine(root, "backend", "dev");
+        var idle = Path.Combine(root, "backend", "spike");
+
+        await mux.SpawnAsync(new SpawnOptions { Cwd = root });
+        await mux.SpawnAsync(new SpawnOptions { Cwd = live });
+
+        var agents = new[] { Agent(live), Agent(idle) with { Open = true } };
+
+        var result = await new QuitProjectHandler(mux, store).HandleAsync("techweb", root, agents);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        Assert.Equal(
+            [(live, true), (idle, false)],
+            store.Saved.Select(a => (a.Worktree, a.Open)));
+    }
+
+    [Fact]
+    public async Task An_agent_whose_state_did_not_change_is_not_rewritten()
+    {
+        var mux = new FakeMuxDriver();
+        var store = new RecordingStore();
+
+        var root = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+        var live = Path.Combine(root, "backend", "dev");
+
+        await mux.SpawnAsync(new SpawnOptions { Cwd = root });
+        await mux.SpawnAsync(new SpawnOptions { Cwd = live });
+
+        await new QuitProjectHandler(mux, store)
+            .HandleAsync("techweb", root, [Agent(live) with { Open = true }]);
+
+        Assert.Empty(store.Saved);
+    }
+
+    private sealed class RecordingStore : IAgentStore
+    {
+        public List<AgentRecord> Saved { get; } = [];
+
+        public void Save(string project, AgentRecord agent) => Saved.Add(agent);
+
+        public IReadOnlyList<AgentRecord> List(string project) => Saved;
+
+        public void Remove(string project, string worktree) { }
     }
 }

@@ -28,6 +28,7 @@ public static class CommandLine
         "menu" => FleetVerb.Menu,
         "request" => FleetVerb.Request,
         "apply-keybinds" => FleetVerb.ApplyKeybinds,
+        "setup" => FleetVerb.Setup,
         "quit" => FleetVerb.Quit,
         "doctor" => FleetVerb.Doctor,
         "help" or "--help" or "-h" => FleetVerb.Help,

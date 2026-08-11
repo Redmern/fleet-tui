@@ -2,6 +2,7 @@ using Fleet.Features.Menu.ShowMenu;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 
 namespace Fleet.Tests.Features.Menu;
 
@@ -68,11 +69,13 @@ public class ShowMenuTests
 
         Assert.Equal(items.Count, rows.Count);
 
-        var keyColumns = rows
-            .Select((row, i) => row.Length - items[i].KeyText.Length)
+        var labelColumns = rows
+            .Select(row => row.Spans[0].Text.Length)
             .Distinct();
 
-        Assert.Single(keyColumns);
+        Assert.Single(labelColumns);
+
+        Assert.All(rows, row => Assert.Equal(FleetTones.Key, row.Spans[0].Tone));
     }
 
     [Fact]

@@ -13,6 +13,7 @@ public static class Runner
         FleetVerb.Menu => await MenuCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Request => RequestCommand.Run(invocation),
         FleetVerb.ApplyKeybinds => ApplyKeybindsCommand.Run(),
+        FleetVerb.Setup => SetupCommand.Run(),
         FleetVerb.Quit => await QuitCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Doctor => await DoctorCommand.RunAsync().ConfigureAwait(false),
         FleetVerb.Help => HelpCommand.Run(),

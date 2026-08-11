@@ -1,8 +1,6 @@
-using System.Collections.ObjectModel;
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
-using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -19,15 +17,16 @@ public static class ShowMenuView
 
         var window = FleetTheme.Overlay("fleet menu");
 
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
-        list.SetSource(new ObservableCollection<string>(rows.ToList()));
+        var list = FleetTheme.CenteredRows(
+            ShowMenuHandler.Width(rows), ShowMenuHandler.Height(rows));
+
+        FleetRows.Fill(list, rows);
 
         FleetKeys.ApplyMotions(list, keymap);
-        FleetKeys.ApplyOpen(list, keymap);
 
         void Accept()
         {
-            var index = list.SelectedItem ?? -1;
+            var index = FleetRows.Selected(list);
 
             if (index >= 0 && index < items.Count)
             {
@@ -42,9 +41,24 @@ public static class ShowMenuView
             e.Handled = true;
         };
 
-        list.KeyDown += (_, key) =>
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", "select", Accept),
+            ("esc", "close", () => app.RequestStop(window)),
+        ]);
+
+        var claim = FleetModal.Enter();
+
+        void Keys(object? sender, Key key)
         {
-            if (key == Key.Esc)
+            if (!FleetModal.Owns(claim))
+            {
+                return;
+            }
+
+            if (key == FleetKeys.Cancel)
             {
                 app.RequestStop(window);
                 key.Handled = true;
@@ -61,12 +75,22 @@ public static class ShowMenuView
                     return;
                 }
             }
-        };
+        }
 
-        window.Add(list, FleetTheme.HintBar(FleetHints.Menu));
+        app.Keyboard.KeyDown += Keys;
 
-        app.Run(window);
-        window.Dispose();
+        window.Add(list, bar.Root);
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            app.Keyboard.KeyDown -= Keys;
+            window.Dispose();
+        }
 
         return chosen;
     }

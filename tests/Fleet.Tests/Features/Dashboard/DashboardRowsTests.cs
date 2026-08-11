@@ -36,8 +36,20 @@ public class DashboardRowsTests
         var rows = DashboardRows.ForRepositories(
             [Repo("zeta"), Repo("alpha")], _ => BranchState.Unknown);
 
-        Assert.StartsWith("zeta", rows[0].Text);
-        Assert.StartsWith("alpha", rows[1].Text);
+        Assert.EndsWith("zeta", rows[0].Text);
+        Assert.EndsWith("alpha", rows[1].Text);
+    }
+
+    [Fact]
+    public void The_branch_pill_comes_first_and_the_repository_name_follows_it()
+    {
+        var rows = DashboardRows.ForRepositories(
+            [Repo("backend", "develop")], _ => BranchState.Unknown);
+
+        var branch = rows[0].Text.IndexOf("develop", StringComparison.Ordinal);
+        var name = rows[0].Text.IndexOf("backend", StringComparison.Ordinal);
+
+        Assert.True(branch < name, "the pill opens the row");
     }
 
     [Fact]

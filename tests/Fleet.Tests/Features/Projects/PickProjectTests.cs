@@ -34,8 +34,13 @@ public class PickProjectTests
         var entries = new PickProjectHandler(
             new StubStore(new Project("backend", "/repos/backend"))).Entries();
 
-        Assert.Contains("backend", entries[0].Label);
-        Assert.Contains("/repos/backend", entries[0].Label);
+        Assert.Equal("backend", entries[0].Label);
+        Assert.Equal("/repos/backend", entries[0].Detail);
+
+        var row = PickProjectHandler.Rows(entries)[0];
+
+        Assert.Contains("backend", row.Spans[0].Text);
+        Assert.Contains("/repos/backend", row.Trailing![0].Text);
     }
 
     [Fact]

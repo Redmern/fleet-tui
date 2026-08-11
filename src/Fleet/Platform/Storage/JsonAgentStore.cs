@@ -29,6 +29,7 @@ public sealed class JsonAgentStore : IAgentStore
             BaseRef = agent.BaseRef,
             RepositoryWasBare = agent.RepositoryWasBare,
             Hidden = agent.Hidden,
+            Open = agent.Open,
         });
 
         Write(file, session);
@@ -51,7 +52,8 @@ public sealed class JsonAgentStore : IAgentStore
                 a.Harness,
                 a.BaseRef,
                 a.RepositoryWasBare,
-                a.Hidden))
+                a.Hidden,
+                a.Open))
             .OrderBy(a => a.Repository, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Branch, StringComparer.OrdinalIgnoreCase)
             .ToList();

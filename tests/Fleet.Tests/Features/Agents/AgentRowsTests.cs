@@ -13,7 +13,7 @@ public class AgentRowsTests
     {
         var rows = AgentRows.For([]);
 
-        Assert.Equal([AgentRows.EmptyHint], rows);
+        Assert.Equal([AgentRows.EmptyHint], rows.Select(r => r.Text));
     }
 
     [Fact]
@@ -21,8 +21,8 @@ public class AgentRowsTests
     {
         var rows = AgentRows.For([Agent("backend", "feature_login")]);
 
-        Assert.Contains("feature_login", rows[0]);
-        Assert.Contains("backend", rows[0]);
+        Assert.Contains("feature_login", rows[0].Text);
+        Assert.Contains("backend", rows[0].Text);
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public class AgentRowsTests
             [Agent("backend", "fix"), Agent("a-much-longer-repo", "feature_login")]);
 
         var repoColumns = rows
-            .Select((r, i) => r.IndexOf(i == 0 ? "backend" : "a-much-longer-repo",
+            .Select((r, i) => r.Text.IndexOf(i == 0 ? "backend" : "a-much-longer-repo",
                 StringComparison.Ordinal));
 
         Assert.Single(repoColumns.Distinct());
