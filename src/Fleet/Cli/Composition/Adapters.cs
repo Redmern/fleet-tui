@@ -4,6 +4,7 @@ using Fleet.Platform.Logging;
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Constants;
 using Fleet.Platform.Mux.Models;
+using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Enums;
 using Fleet.Features.Setup.RunSetup.Models;
@@ -13,6 +14,8 @@ using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
+using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Requests;
 using Fleet.Ui;
@@ -54,6 +57,98 @@ public static class Adapters
 
     public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
 
+    public static string? PickFolder(IMuxDriver mux, string project, string startIn)
+    {
+        var file = Path.Combine(
+            Path.GetTempPath(), $"fleet-folder-{Guid.NewGuid():N}");
+
+        var pane = mux
+            .SpawnAsync(FileBrowser.Choose(startIn, project, CurrentWindow(mux), file))
+            .GetAwaiter()
+            .GetResult();
+
+        if (pane.IsNone)
+        {
+            return null;
+        }
+
+        mux.SetTitleAsync(pane, "choose a folder").GetAwaiter().GetResult();
+        mux.FocusPaneAsync(pane).GetAwaiter().GetResult();
+
+        try
+        {
+            return WaitForChoice(mux, pane, file);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    public static string? BrowseFolder(IMuxDriver mux, string project, string root)
+    {
+        var pane = mux
+            .SpawnAsync(FileBrowser.Browse(root, project, CurrentWindow(mux)))
+            .GetAwaiter()
+            .GetResult();
+
+        if (pane.IsNone)
+        {
+            return null;
+        }
+
+        mux.SetTitleAsync(pane, "files").GetAwaiter().GetResult();
+        mux.FocusPaneAsync(pane).GetAwaiter().GetResult();
+
+        return root;
+    }
+
+    private static string? WaitForChoice(IMuxDriver mux, PaneId pane, string file)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(10);
+
+        while (DateTime.UtcNow < deadline)
+        {
+            if (File.Exists(file))
+            {
+                return FileBrowser.Chosen(file, ReadOrNull);
+            }
+
+            Thread.Sleep(150);
+
+            var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+
+            if (panes.All(p => p.Id != pane))
+            {
+                return File.Exists(file) ? FileBrowser.Chosen(file, ReadOrNull) : null;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadOrNull(string file)
+    {
+        try
+        {
+            return File.ReadAllText(file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static string? CurrentWindow(IMuxDriver mux) =>
+        mux.ListPanesAsync().GetAwaiter().GetResult()
+            .FirstOrDefault(p => p.IsActive)?.WindowId;
+
     public static ConfigWiring WireWezTermConfig()
     {
         var home = Home;
@@ -89,6 +184,8 @@ public static class Adapters
             return new ConfigWiring(WiringState.Failed, config, e.Message);
         }
     }
+
+    public static string HomeDirectory => Home;
 
     private static string Home =>
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

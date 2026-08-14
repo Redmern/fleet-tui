@@ -31,4 +31,5 @@ public enum FleetAction
     ManageRepository,
     RemoveProject,
     ViewLogs,
+    BrowseFiles,
 }

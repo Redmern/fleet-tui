@@ -89,8 +89,17 @@ public static class AddRepositoryView
             branchField,
             FleetTheme.HintBar(FleetHints.AddRepository));
 
-        app.Run(window);
-        window.Dispose();
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
 
         return result;
     }

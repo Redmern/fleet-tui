@@ -5,6 +5,7 @@ using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.PickProject;
 using Fleet.Features.Agents.ListAgents;
+using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Projects.PickProject.Models;
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.RemoveProject;
@@ -78,6 +79,18 @@ public static class PickProjectCommand
         var creator = new CreateProjectHandler(projects);
         var remover = new RemoveProjectHandler(projects);
 
+        var driver = Adapters.Mux(Adapters.Log()).Driver;
+
+        Func<string, string?>? folders = null;
+
+        if (Adapters.OnPath(FileBrowser.Command))
+        {
+            folders = wanted => Adapters.PickFolder(
+                driver,
+                "fleet",
+                FileBrowser.StartIn(wanted, Directory.Exists, Adapters.HomeDirectory));
+        }
+
         using IApplication app = FleetUi.Start();
 
         var keymap = new Keymap(keymaps.Load());
@@ -87,7 +100,7 @@ public static class PickProjectCommand
             keymap,
             new PickProjectHandler(projects),
             new PickProjectCallbacks(
-                CreateProject: () => CreateProjectView.Show(app, creator),
+                CreateProject: () => CreateProjectView.Show(app, creator, folders),
                 RemoveProject: project =>
                 {
                     var confirmed = FleetDialog.Confirm(

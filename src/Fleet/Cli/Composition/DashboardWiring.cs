@@ -8,6 +8,7 @@ using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Repositories;
@@ -52,6 +53,7 @@ public static class DashboardWiring
         FleetAction.RemoveRepository,
         FleetAction.Refresh,
         FleetAction.ViewLogs,
+        FleetAction.BrowseFiles,
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
@@ -316,6 +318,15 @@ public static class DashboardWiring
             EditKeybinds: () => new Keymap(EditKeybindsView.Show(app, keymaps, keymap)),
 
             ReloadKeymap: () => new Keymap(keymaps.Load()),
+
+            BrowseFiles: () => Adapters.OnPath(FileBrowser.Command)
+                ? Noted(
+                    log,
+                    project.Name,
+                    Adapters.BrowseFolder(mux, project.Name, project.Root) is not null
+                        ? $"file navigator opened in {project.Root}."
+                        : $"could not open {FileBrowser.Command}.")
+                : Noted(log, project.Name, HarnessTrouble.Missing(FileBrowser.Command)),
 
             ShowLogs: () => ViewLogsView.Show(
                 app,

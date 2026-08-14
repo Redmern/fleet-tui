@@ -15,6 +15,7 @@ public static class SetupHints
         "git" => "winget install Git.Git",
         "nvim" => "winget install Neovim.Neovim",
         "claude" => "npm install -g @anthropic-ai/claude-code",
+        "yazi" => "winget install sxyazi.yazi",
         _ => $"install {tool} and put it on PATH",
     };
 
@@ -22,6 +23,7 @@ public static class SetupHints
     {
         "claude" => "npm install -g @anthropic-ai/claude-code",
         "nvim" => "install neovim with your package manager",
+        "yazi" => "install yazi with your package manager, or see https://yazi-rs.github.io",
         _ => $"install {tool} with your package manager",
     };
 }

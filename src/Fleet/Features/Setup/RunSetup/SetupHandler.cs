@@ -7,7 +7,7 @@ public sealed class SetupHandler(Func<string, bool> onPath)
 {
     public static readonly IReadOnlyList<string> Required = ["wezterm", "git"];
 
-    public static readonly IReadOnlyList<string> Harness = ["nvim", "claude"];
+    public static readonly IReadOnlyList<string> Harness = ["nvim", "claude", "yazi"];
 
     public SetupReport Inspect(string modulePath, ConfigWiring wiring, string configDirectory)
     {
@@ -29,9 +29,16 @@ public sealed class SetupHandler(Func<string, bool> onPath)
             : new SetupStep(
                 tool,
                 false,
-                required ? "missing - fleet needs it" : "missing - agents cannot open it",
+                Cost(tool, required),
                 required,
                 SetupHints.For(tool));
+
+    private static string Cost(string tool, bool required) => (tool, required) switch
+    {
+        (_, true) => "missing - fleet needs it",
+        ("yazi", _) => "missing - no folder picker or file navigator",
+        _ => "missing - agents cannot open it",
+    };
 
     private static SetupStep Wiring(ConfigWiring wiring) => wiring.State switch
     {

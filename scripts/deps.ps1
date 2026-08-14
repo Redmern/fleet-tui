@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Install what fleet needs on Windows: WezTerm, Neovim, and a Neovim config.
+    Install what fleet needs on Windows: WezTerm, Neovim, yazi and a Neovim config.
 
 .DESCRIPTION
     Dot-source this and call Install-FleetDeps. Both installers use it, which is
@@ -33,7 +33,8 @@ function Install-FleetDeps {
     $tools = @(
         @{ Name = 'wezterm'; Id = 'wez.wezterm' },
         @{ Name = 'nvim'; Id = 'Neovim.Neovim' },
-        @{ Name = 'git'; Id = 'Git.Git' }
+        @{ Name = 'git'; Id = 'Git.Git' },
+        @{ Name = 'yazi'; Id = 'sxyazi.yazi' }
     )
 
     Step 'Installing dependencies'
@@ -67,7 +68,8 @@ function Install-FleetDeps {
     foreach ($dir in @(
             (Join-Path $env:ProgramFiles 'WezTerm'),
             (Join-Path $env:ProgramFiles 'Neovim\bin'),
-            (Join-Path $env:ProgramFiles 'Git\cmd'))) {
+            (Join-Path $env:ProgramFiles 'Git\cmd'),
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'))) {
         if ((Test-Path $dir) -and (($env:PATH -split ';') -notcontains $dir)) {
             $env:PATH = "$dir;$env:PATH"
         }

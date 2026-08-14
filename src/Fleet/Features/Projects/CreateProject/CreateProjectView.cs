@@ -9,7 +9,10 @@ namespace Fleet.Features.Projects.CreateProject;
 
 public static class CreateProjectView
 {
-    public static Project? Show(IApplication app, CreateProjectHandler handler)
+    public const string PickLabel = "browse";
+
+    public static Project? Show(
+        IApplication app, CreateProjectHandler handler, Func<string, string?>? pickFolder = null)
     {
         Project? created = null;
 
@@ -17,7 +20,28 @@ public static class CreateProjectView
 
         var nameField = FleetTheme.Field(11, 1);
         var rootField = FleetTheme.Field(11, 3);
-        var error = FleetTheme.ErrorText(1, 5);
+        var browse = FleetTheme.Choice(11, 4, PickLabel);
+        var error = FleetTheme.ErrorText(1, 6);
+
+        browse.Visible = pickFolder is not null;
+
+        browse.Accepting += (_, e) =>
+        {
+            var chosen = pickFolder?.Invoke(rootField.Text);
+
+            if (chosen is { Length: > 0 })
+            {
+                rootField.Text = chosen;
+                rootField.SetFocus();
+                rootField.MoveEnd();
+            }
+            else
+            {
+                error.Text = "No folder was chosen.";
+            }
+
+            e.Handled = true;
+        };
 
         void Submit()
         {
@@ -82,11 +106,21 @@ public static class CreateProjectView
             nameField,
             FleetTheme.Caption(1, 3, "Root:"),
             rootField,
+            browse,
             error,
             FleetTheme.HintBar(FleetHints.Form));
 
-        app.Run(window);
-        window.Dispose();
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
 
         return created;
     }

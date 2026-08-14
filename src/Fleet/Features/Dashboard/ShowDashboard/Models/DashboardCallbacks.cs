@@ -14,6 +14,7 @@ public sealed record DashboardCallbacks(
     Func<Keymap> EditKeybinds,
     Func<Keymap> ReloadKeymap,
     Action ShowLogs,
+    Func<string?> BrowseFiles,
     Func<FleetAction> TakeRequest,
     Func<AgentBoard> LoadAgents,
     Func<IReadOnlyList<RepositoryChoice>, int, Task<string?>> NewAgent,

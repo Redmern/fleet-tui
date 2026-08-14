@@ -360,6 +360,20 @@ public static class ShowDashboardView
             Start(RefreshAsync);
         }
 
+        void BrowseFiles()
+        {
+            busy = true;
+
+            try
+            {
+                status.Text = callbacks.BrowseFiles() ?? string.Empty;
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
         void ShowLogs()
         {
             busy = true;
@@ -465,6 +479,10 @@ public static class ShowDashboardView
 
                 case FleetAction.ViewLogs:
                     ShowLogs();
+                    break;
+
+                case FleetAction.BrowseFiles:
+                    BrowseFiles();
                     break;
 
                 case FleetAction.PrevTab:

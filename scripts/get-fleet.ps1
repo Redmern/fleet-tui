@@ -11,7 +11,7 @@
     'trivium/fleet'.
 
 .PARAMETER WithDeps
-    Install WezTerm, Neovim and git through winget when missing, and clone a
+    Install WezTerm, Neovim, yazi and git through winget when missing, and clone a
     Neovim config into %LOCALAPPDATA%\nvim. The dependency script is downloaded
     from the same repository, so this works through 'irm | iex' too.
 

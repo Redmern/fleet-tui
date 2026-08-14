@@ -23,6 +23,7 @@ To run fleet:
 - git
 - [Neovim](https://neovim.io) with `neo-tree` and `claudecode.nvim`, for the default
   harness; agents can also open Claude Code alone
+- [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
 - Claude Code, for the pane fleet opens on the left
 - a Nerd Font in WezTerm, or the branch pills and icons render as boxes
 
@@ -61,8 +62,8 @@ From source:
 ### Bringing the dependencies with it
 
 Add `-WithDeps` (or `--with-deps`) and the installer sets up the machine first:
-WezTerm, Neovim and git through winget on Windows or the package manager it finds
-on Linux, then a Neovim config cloned into `%LOCALAPPDATA%\nvim` /
+WezTerm, Neovim, yazi and git through winget on Windows or the package manager it
+finds on Linux, then a Neovim config cloned into `%LOCALAPPDATA%\nvim` /
 `~/.config/nvim`:
 
 ```powershell

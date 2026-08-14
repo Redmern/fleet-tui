@@ -3,6 +3,7 @@ using Fleet.Cli.Models;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Diagnostics.ViewLogs;
+using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
@@ -29,6 +30,7 @@ public static class MenuCommand
         FleetAction.FocusMain,
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
+        FleetAction.BrowseFiles,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -105,6 +107,20 @@ public static class MenuCommand
 
             case FleetAction.EditKeybinds:
                 EditKeybindsView.Show(app, keymaps, keymap);
+                break;
+
+            case FleetAction.BrowseFiles:
+                if (!Adapters.OnPath(FileBrowser.Command))
+                {
+                    Console.Error.WriteLine(
+                        $"fleet: {FileBrowser.Command} is not on PATH. Install it to browse files.");
+
+                    return 1;
+                }
+
+                Adapters.BrowseFolder(
+                    Adapters.Mux(Adapters.Log()).Driver, project.Name, project.Root);
+
                 break;
 
             case FleetAction.ViewLogs:

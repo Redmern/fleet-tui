@@ -177,8 +177,17 @@ public static class NewAgentView
             cancel,
             FleetTheme.HintBar(FleetHints.NewAgent));
 
-        app.Run(window);
-        window.Dispose();
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
 
         return result;
     }

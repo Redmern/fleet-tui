@@ -17,7 +17,7 @@
     With -Uninstall, also delete %APPDATA%\fleet.
 
 .PARAMETER WithDeps
-    Install WezTerm, Neovim and git through winget when they are missing, and
+    Install WezTerm, Neovim, yazi and git through winget when they are missing, and
     clone a Neovim config into %LOCALAPPDATA%\nvim.
 
 .PARAMETER NvimConfig

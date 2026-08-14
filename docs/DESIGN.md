@@ -2043,6 +2043,33 @@ The default config URL is a real personal repository rather than a placeholder,
 because a placeholder in an installer is a broken installer. It sits on one line at
 the top of each script, and both honour `FLEET_NVIM_CONFIG`.
 
+## yazi as the folder picker, 2026-08-14
+
+Typing `n` in the New project form did nothing but reopen the form. Four views ran a
+window without claiming the keys — `CreateProjectView`, `AddRepositoryView`,
+`NewAgentView`, `CaptureKeyView` — so the project picker underneath, which listens on
+`app.Keyboard.KeyDown`, kept firing its `n`/`d`/`q` bindings on every letter typed
+into a field. The two repository and agent forms only escaped it because the dashboard
+guards with `busy`. All four claim `FleetModal` now, and a test walks `src` for any
+file that runs `app.Run(window)` without claiming, so the next view cannot forget.
+
+The folder picker uses `yazi --cwd-file <tmp>`: yazi writes the directory it ended up
+in when it quits, which is exactly "pick a folder" rather than "pick a file". fleet
+spawns it in its own tab, focuses it, and then *blocks* its own loop polling for the
+file — acceptable only because the user is looking at yazi in another tab, and the
+poll also watches for the pane disappearing, so killing the tab returns immediately
+instead of waiting out the ten-minute ceiling.
+
+`FileBrowser` holds the parts worth testing: the argv for both modes, reading the
+first line of the cwd file, and where to start — the typed path if it exists, else its
+nearest existing parent, else home. Half a path is the normal case when someone is
+mid-type, and starting at home there would throw away what they had written.
+
+`f` in the fleet menu opens the same navigator in the project root, from the menu and
+from the dashboard both. yazi is an optional dependency: without it the browse button
+hides itself and the menu entry reports what to install, which is why `fleet setup`
+lists it as costing "no folder picker or file navigator" rather than blocking.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

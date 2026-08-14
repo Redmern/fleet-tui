@@ -37,8 +37,17 @@ public static class CaptureKeyView
             app.RequestStop(window);
         };
 
-        app.Run(window);
-        window.Dispose();
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
 
         return captured;
     }

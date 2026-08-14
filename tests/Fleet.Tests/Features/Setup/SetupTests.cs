@@ -16,7 +16,7 @@ public class SetupTests
     [Fact]
     public void Everything_present_blocks_nothing()
     {
-        var report = Report("wezterm", "git", "nvim", "claude");
+        var report = Report("wezterm", "git", "nvim", "claude", "yazi");
 
         Assert.False(report.Blocked);
         Assert.Empty(report.Missing);
@@ -25,7 +25,7 @@ public class SetupTests
     [Fact]
     public void A_missing_multiplexer_blocks_because_fleet_cannot_work_without_it()
     {
-        var report = Report("git", "nvim", "claude");
+        var report = Report("git", "nvim", "claude", "yazi");
 
         Assert.True(report.Blocked);
         Assert.Contains(report.Missing, s => s.Name == "wezterm");
@@ -39,8 +39,18 @@ public class SetupTests
         Assert.False(report.Blocked);
 
         Assert.Equal(
-            ["nvim", "claude"],
+            ["nvim", "claude", "yazi"],
             report.Missing.Select(s => s.Name));
+    }
+
+    [Fact]
+    public void A_missing_yazi_costs_the_pickers_rather_than_the_agents()
+    {
+        var step = Assert.Single(
+            Report("wezterm", "git", "nvim", "claude").Missing, s => s.Name == "yazi");
+
+        Assert.Contains("folder picker", step.Detail);
+        Assert.False(step.Required);
     }
 
     [Fact]
