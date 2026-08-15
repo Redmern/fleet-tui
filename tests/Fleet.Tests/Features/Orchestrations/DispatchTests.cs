@@ -78,15 +78,14 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task The_pane_opens_hidden_and_kicks_claude_off()
+    public async Task The_pane_opens_hidden_running_an_interactive_claude()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
         var panes = await _mux.ListPanesAsync();
         var claude = panes.Single(p =>
             p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(
-                new[] { AgentHarness.Claude, AgentHarness.OrchestratorKickoff }));
+            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
 
         Assert.Equal(FleetWorkspaces.Hidden, claude.SessionName);
     }

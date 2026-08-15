@@ -39,10 +39,10 @@ public class OrchestrationSlugTests
     }
 
     [Fact]
-    public void An_orchestrator_harness_resumes_or_kicks_off()
+    public void An_orchestrator_opens_interactive_claude_fresh_and_resumes_on_reopen()
     {
         Assert.Equal(
-            [AgentHarness.Claude, AgentHarness.OrchestratorKickoff],
+            [AgentHarness.Claude],
             AgentHarness.CommandFor(AgentHarness.Orchestrator, fresh: true));
 
         Assert.Equal(

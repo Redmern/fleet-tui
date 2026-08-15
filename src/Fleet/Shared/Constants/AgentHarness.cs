@@ -11,9 +11,6 @@ public static class AgentHarness
     public const string NvimStartup =
         "lua vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
 
-    public const string OrchestratorKickoff =
-        "Read CLAUDE.md and TASK.md in this folder, then begin.";
-
     public const string ResumeArgument = "--continue";
 
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
@@ -32,7 +29,7 @@ public static class AgentHarness
         Normalize(harness) switch
         {
             Nvim => [Nvim, "-c", NvimStartup],
-            Orchestrator => fresh ? [Claude, OrchestratorKickoff] : [Claude, ResumeArgument],
+            Orchestrator => fresh ? [Claude] : [Claude, ResumeArgument],
             _ => [Claude],
         };
 
