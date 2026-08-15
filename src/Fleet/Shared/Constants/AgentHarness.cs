@@ -13,6 +13,9 @@ public static class AgentHarness
 
     public const string ResumeArgument = "--continue";
 
+    public const string OrchestratorKickoff =
+        "Read CLAUDE.md and TASK.md in this folder, then begin.";
+
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
 
     public static IReadOnlyList<string> Known { get; } = [Nvim, Claude, Orchestrator];

@@ -7,5 +7,7 @@ public interface IClaudeConfigStore
 {
     Result Sync(ClaudePlan plan);
 
+    Result EnableServer(string userSettingsPath, string serverName);
+
     ClaudeState Inspect(string directory, string serverName);
 }

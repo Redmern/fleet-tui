@@ -30,9 +30,16 @@ public static class ClaudeWiring
             Adapters.Executable,
             ["hook-dispatch", "--project", project]);
 
-        return new ClaudeConfigWriter().Sync(plan);
+        var writer = new ClaudeConfigWriter();
+
+        writer.EnableServer(UserSettingsPath, server.Name);
+
+        return writer.Sync(plan);
     }
 
     public static ClaudeState Inspect(string directory) =>
         new ClaudeConfigWriter().Inspect(directory, McpTools.ServerName);
+
+    private static string UserSettingsPath =>
+        Path.Combine(Adapters.HomeDirectory, ".claude", "settings.json");
 }

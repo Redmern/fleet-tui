@@ -37,6 +37,9 @@ public sealed class FailSilentDriver(IMuxDriver inner, Action<Exception> onSwall
     public Task FocusPaneAsync(PaneId id, CancellationToken ct = default)
         => Guard(() => inner.FocusPaneAsync(id, ct));
 
+    public Task SendTextAsync(PaneId id, string text, CancellationToken ct = default)
+        => Guard(() => inner.SendTextAsync(id, text, ct));
+
     private static bool IsExpected(Exception e) =>
         e is MuxUnavailableException
           or IOException

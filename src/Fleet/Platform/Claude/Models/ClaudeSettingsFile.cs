@@ -54,6 +54,15 @@ public sealed class HooksJson
     public Dictionary<string, JsonElement> Extra { get; set; } = [];
 }
 
+public sealed class UserSettingsFile
+{
+    [JsonPropertyName("enabledMcpjsonServers")]
+    public List<string> EnabledMcpjsonServers { get; set; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> Extra { get; set; } = [];
+}
+
 public sealed class ClaudeSettingsFile
 {
     [JsonPropertyName("permissions")]

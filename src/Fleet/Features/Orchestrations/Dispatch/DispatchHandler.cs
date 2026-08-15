@@ -13,8 +13,11 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Orchestrations.Dispatch;
 
-public sealed class DispatchHandler(IMuxDriver mux, IAgentStore store, IHarnessConfig harness)
+public sealed class DispatchHandler(
+    IMuxDriver mux, IAgentStore store, IHarnessConfig harness, TimeSpan? kickoffDelay = null)
 {
+    private readonly TimeSpan _kickoffDelay = kickoffDelay ?? TimeSpan.FromMilliseconds(2500);
+
     public async Task<Result<DispatchReply>> HandleAsync(
         DispatchCommand command, string stampUtc, CancellationToken ct = default)
     {
@@ -93,6 +96,18 @@ public sealed class DispatchHandler(IMuxDriver mux, IAgentStore store, IHarnessC
             await mux.SetTitleAsync(browse, $"{slug} files", ct).ConfigureAwait(false);
         }
 
+        await KickOff(pane, ct).ConfigureAwait(false);
+
         return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, DispatchNote.Dispatched(slug)));
+    }
+
+    private async Task KickOff(PaneId pane, CancellationToken ct)
+    {
+        if (_kickoffDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(_kickoffDelay, ct).ConfigureAwait(false);
+        }
+
+        await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff + "\r", ct).ConfigureAwait(false);
     }
 }

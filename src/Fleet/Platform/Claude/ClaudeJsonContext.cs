@@ -8,4 +8,5 @@ namespace Fleet.Platform.Claude;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(McpJsonFile))]
 [JsonSerializable(typeof(ClaudeSettingsFile))]
+[JsonSerializable(typeof(UserSettingsFile))]
 public partial class ClaudeJsonContext : JsonSerializerContext;

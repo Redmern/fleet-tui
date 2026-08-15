@@ -167,6 +167,11 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
     public async Task FocusPaneAsync(PaneId id, CancellationToken ct = default)
         => await _cli.RunAsync(["activate-pane", "--pane-id", id.Value], ct).ConfigureAwait(false);
 
+    public async Task SendTextAsync(PaneId id, string text, CancellationToken ct = default)
+        => await _cli
+            .RunAsync(["send-text", "--pane-id", id.Value, "--no-paste", text], ct)
+            .ConfigureAwait(false);
+
     private static string DirectionFlag(SplitDirection d) => d switch
     {
         SplitDirection.Right => "--right",

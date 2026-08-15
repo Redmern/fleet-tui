@@ -9,6 +9,7 @@ namespace Fleet.Platform.Mux.Fake;
 public sealed class FakeMuxDriver : IMuxDriver
 {
     private readonly ConcurrentDictionary<string, Entry> _panes = new();
+    private readonly ConcurrentDictionary<string, List<string>> _sent = new();
     private int _nextPane;
     private int _nextWindow;
 
@@ -117,6 +118,19 @@ public sealed class FakeMuxDriver : IMuxDriver
 
         return Task.CompletedTask;
     }
+
+    public Task SendTextAsync(PaneId id, string text, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        RequirePane(id);
+
+        _sent.GetOrAdd(id.Value, _ => []).Add(text);
+
+        return Task.CompletedTask;
+    }
+
+    public IReadOnlyList<string> SentTo(PaneId id) =>
+        _sent.TryGetValue(id.Value, out var lines) ? lines : [];
 
     public IReadOnlyList<string> ArgsFor(PaneId id) =>
         _panes.TryGetValue(id.Value, out var e) ? e.Args : [];

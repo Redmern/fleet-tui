@@ -32,7 +32,8 @@ public sealed class DispatchTests : IDisposable
         }
     }
 
-    private DispatchHandler Handler => new(_mux, _store, new NullHarnessConfig());
+    private DispatchHandler Handler =>
+        new(_mux, _store, new NullHarnessConfig(), TimeSpan.Zero);
 
     private DispatchCommand Command(string prompt, string caller = "") =>
         new("techweb", _root, prompt, caller);
@@ -102,6 +103,22 @@ public sealed class DispatchTests : IDisposable
             && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
 
         Assert.Equal(FleetWorkspaces.Hidden, browser.SessionName);
+    }
+
+    [Fact]
+    public async Task It_types_the_kickoff_into_the_claude_pane_so_the_sub_starts_itself()
+    {
+        var reply = await Handler.HandleAsync(Command("start work"), "t");
+
+        var panes = await _mux.ListPanesAsync();
+        var claude = panes.Single(p =>
+            p.Cwd == reply.Value!.Folder
+            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
+
+        var sent = Assert.Single(_mux.SentTo(claude.Id));
+
+        Assert.Contains(AgentHarness.OrchestratorKickoff, sent);
+        Assert.EndsWith("\r", sent);
     }
 
     [Fact]

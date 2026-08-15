@@ -26,4 +26,6 @@ public interface IMuxDriver
     Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default);
 
     Task FocusPaneAsync(PaneId id, CancellationToken ct = default);
+
+    Task SendTextAsync(PaneId id, string text, CancellationToken ct = default);
 }
