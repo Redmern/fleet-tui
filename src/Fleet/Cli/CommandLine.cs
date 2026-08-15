@@ -42,6 +42,7 @@ public static class CommandLine
         "dispatch" => FleetVerb.Dispatch,
         "hook-dispatch" => FleetVerb.HookDispatch,
         "report" => FleetVerb.Report,
+        "mcp" => FleetVerb.Mcp,
         "quit" => FleetVerb.Quit,
         "doctor" => FleetVerb.Doctor,
         "help" or "--help" or "-h" => FleetVerb.Help,

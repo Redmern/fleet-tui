@@ -1,5 +1,8 @@
+using System.Text;
 using Fleet.Cli.Composition.Models;
+using Fleet.Platform.Approvals;
 using Fleet.Platform.Git;
+using Fleet.Platform.Mcp;
 using Fleet.Platform.Logging;
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Constants;
@@ -14,7 +17,9 @@ using Fleet.Platform.Hooks;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
+using Fleet.Ports.Approvals;
 using Fleet.Ports.Git;
+using Fleet.Ports.Mcp;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
@@ -41,6 +46,20 @@ public static class Adapters
     public static ISettingsSync SettingsSync() => new NullSettingsSync();
 
     public static IHarnessConfig HarnessConfig() => new NullHarnessConfig();
+
+    public static IApprovalChannel Approvals() => new NullApprovalChannel();
+
+    public static IMcpServer McpServer(IFleetLog log)
+    {
+        var stdout = new StreamWriter(
+            Console.OpenStandardOutput(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+        {
+            AutoFlush = false,
+            NewLine = "\n",
+        };
+
+        return new StdioMcpServer(Console.In, stdout, log);
+    }
 
     public static (string Text, string? Cwd) ReadHookPayload()
     {

@@ -11,6 +11,7 @@ public enum FleetVerb
     Dispatch,
     HookDispatch,
     Report,
+    Mcp,
     Quit,
     Doctor,
     Help,
