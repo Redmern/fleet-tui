@@ -1,6 +1,7 @@
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Agents;
 using Fleet.Shared;
@@ -181,30 +182,41 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_a_hidden_orchestrator_adds_the_file_browser_alongside_its_pane()
+    public async Task Opening_a_hidden_orchestrator_brings_its_whole_pane_group_into_view()
     {
+        Directory.CreateDirectory(ProjectRoot);
+        var dashboard = await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+        var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
+
         var agent = Agent() with { Harness = AgentHarness.Orchestrator, Hidden = true };
-        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree, Workspace = "fleet-hidden" });
+
+        var claude = await _mux.SpawnAsync(
+            new SpawnOptions { Cwd = agent.Worktree, Workspace = "fleet-hidden", NewWindow = true });
+        var browser = await _mux.SplitAsync(
+            new SplitOptions(claude, SplitDirection.Right)
+            {
+                Cwd = agent.Worktree,
+                Args = AgentHarness.BrowseCommand,
+            });
 
         var result = await new OpenAgentHandler(_mux, _store)
             .HandleAsync("techweb", agent, ProjectRoot);
 
         Assert.True(result.Succeeded, result.Error);
 
-        var atWorktree = (await _mux.ListPanesAsync())
-            .Where(p => PathKey.Same(p.Cwd, agent.Worktree))
-            .ToList();
+        var panes = await _mux.ListPanesAsync();
 
-        Assert.Equal(2, atWorktree.Count);
-        Assert.Contains(atWorktree, p => _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
+        Assert.Equal(home, panes.Single(p => p.Id == claude).WindowId);
+        Assert.Equal(home, panes.Single(p => p.Id == browser).WindowId);
     }
 
     [Fact]
-    public async Task Opening_an_orchestrator_that_already_has_a_browser_does_not_add_another()
+    public async Task Opening_an_orchestrator_never_spawns_an_extra_pane_when_it_already_has_them()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
-        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
-        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        await _mux.SplitAsync(
+            new SplitOptions(claude, SplitDirection.Right) { Cwd = agent.Worktree });
 
         await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 

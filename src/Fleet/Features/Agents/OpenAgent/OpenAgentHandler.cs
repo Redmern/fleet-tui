@@ -24,31 +24,30 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
         if (running is not null)
         {
-            if (agent.Hidden)
+            foreach (var member in mine)
             {
-                await Unhide(project, agent, running.Id, window, ct).ConfigureAwait(false);
-            }
-            else
-            {
-                if (window is not null && running.WindowId != window)
+                if (agent.Hidden)
                 {
                     await mux.MovePaneAsync(
-                            running.Id, new MovePaneOptions { WindowId = window }, ct)
-                        .ConfigureAwait(false);
-
-                    await mux.SetTitleAsync(running.Id, BranchSlug.Of(agent.Branch), ct)
+                            member.Id,
+                            new MovePaneOptions { WindowId = window, NewWindow = window is null },
+                            ct)
                         .ConfigureAwait(false);
                 }
-
-                if (!agent.Open)
+                else if (window is not null && member.WindowId != window)
                 {
-                    store.Save(project, agent with { Open = true });
+                    await mux.MovePaneAsync(
+                            member.Id, new MovePaneOptions { WindowId = window }, ct)
+                        .ConfigureAwait(false);
                 }
             }
 
-            if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness) && mine.Count == 1)
+            await mux.SetTitleAsync(running.Id, BranchSlug.Of(agent.Branch), ct)
+                .ConfigureAwait(false);
+
+            if (agent.Hidden || !agent.Open)
             {
-                await OpenBrowseSplit(agent, running.Id, ct).ConfigureAwait(false);
+                store.Save(project, agent with { Hidden = false, Open = true });
             }
 
             await mux.FocusPaneAsync(running.Id, ct).ConfigureAwait(false);
@@ -106,17 +105,5 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
         {
             await mux.SetTitleAsync(browse, $"{agent.Branch} files", ct).ConfigureAwait(false);
         }
-    }
-
-    private async Task Unhide(
-        string project, AgentRecord agent, PaneId pane, string? window, CancellationToken ct)
-    {
-        await mux.MovePaneAsync(
-                pane,
-                new MovePaneOptions { WindowId = window, NewWindow = window is null },
-                ct)
-            .ConfigureAwait(false);
-
-        store.Save(project, agent with { Hidden = false, Open = true });
     }
 }

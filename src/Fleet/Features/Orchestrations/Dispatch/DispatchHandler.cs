@@ -3,6 +3,7 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -77,6 +78,20 @@ public sealed class DispatchHandler(IMuxDriver mux, IAgentStore store, IHarnessC
         }
 
         await mux.SetTitleAsync(pane, slug, ct).ConfigureAwait(false);
+
+        var browse = await mux.SplitAsync(
+            new SplitOptions(pane, SplitDirection.Right)
+            {
+                Percent = 50,
+                Cwd = folder,
+                Args = AgentHarness.BrowseCommand,
+            },
+            ct).ConfigureAwait(false);
+
+        if (!browse.IsNone)
+        {
+            await mux.SetTitleAsync(browse, $"{slug} files", ct).ConfigureAwait(false);
+        }
 
         return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, DispatchNote.Dispatched(slug)));
     }
