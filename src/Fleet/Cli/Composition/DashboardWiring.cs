@@ -234,6 +234,25 @@ public static class DashboardWiring
         return lines;
     }
 
+    private static IReadOnlyList<string> CascadeWarning(IReadOnlyList<AgentRecord> children)
+    {
+        var lines = new List<string>
+        {
+            "These agents were created by this sub-orchestrator.",
+            "Removing them deletes their worktrees; uncommitted work is lost.",
+            string.Empty,
+        };
+
+        lines.AddRange(children.Take(8).Select(c => $"  {c.Repository}/{c.Branch}"));
+
+        if (children.Count > 8)
+        {
+            lines.Add($"  ... and {children.Count - 8} more");
+        }
+
+        return lines;
+    }
+
     private static IReadOnlyList<string> RemovalWarning(
         AgentRecord agent, WorktreeState state, bool deleting)
     {
@@ -531,6 +550,32 @@ public static class DashboardWiring
                     return null;
                 }
 
+                var cascaded = 0;
+
+                if (AgentHarness.IsOrchestrator(agent.Harness))
+                {
+                    var children = lister.Handle(project.Name)
+                        .Where(a => !AgentHarness.IsOrchestrator(a.Harness)
+                                 && string.Equals(
+                                     a.Owner, agent.Branch, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (children.Count > 0 && FleetDialog.Confirm(
+                            app,
+                            $"Throw away its {children.Count} agent(s)?",
+                            CascadeWarning(children),
+                            confirmText: "Remove all"))
+                    {
+                        foreach (var child in children)
+                        {
+                            remover.HandleAsync(project.Name, child, deleteWorktree: true)
+                                .GetAwaiter()
+                                .GetResult();
+                            cascaded++;
+                        }
+                    }
+                }
+
                 var outcome = remover
                     .HandleAsync(project.Name, agent, deleting)
                     .GetAwaiter()
@@ -541,9 +586,11 @@ public static class DashboardWiring
                     return Noted(log, project.Name, outcome.Error);
                 }
 
+                var tail = cascaded > 0 ? $" and {cascaded} of its agent(s)" : string.Empty;
+
                 return Noted(log, project.Name, deleting
-                    ? $"{Label(agent)} removed with its worktree."
-                    : $"{Label(agent)} removed; its files are still on disk.");
+                    ? $"{Label(agent)} removed with its worktree{tail}."
+                    : $"{Label(agent)} removed; its files are still on disk{tail}.");
             },
 
             RemoveRepository: repository =>
