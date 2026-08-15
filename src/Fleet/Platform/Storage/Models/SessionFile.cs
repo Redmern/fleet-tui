@@ -24,4 +24,8 @@ public sealed class AgentEntry
     public bool Hidden { get; set; }
 
     public bool Open { get; set; }
+
+    public string Owner { get; set; } = string.Empty;
+
+    public string Status { get; set; } = string.Empty;
 }

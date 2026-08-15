@@ -79,4 +79,45 @@ public class CommandLineTests
         Assert.Equal(FleetVerb.Unknown, invocation.Verb);
         Assert.Null(invocation.Project);
     }
+
+    [Fact]
+    public void Dispatch_and_hook_dispatch_are_verbs()
+    {
+        Assert.Equal(FleetVerb.Dispatch, CommandLine.Parse(["dispatch"]).Verb);
+        Assert.Equal(FleetVerb.HookDispatch, CommandLine.Parse(["hook-dispatch"]).Verb);
+    }
+
+    [Fact]
+    public void A_free_text_prompt_is_read_whether_it_comes_before_or_after_the_flags()
+    {
+        Assert.Equal(
+            "add oauth login",
+            CommandLine.Parse(["dispatch", "--project", "techweb", "add oauth login"]).Text);
+
+        Assert.Equal(
+            "add oauth login",
+            CommandLine.Parse(["dispatch", "add oauth login", "--project", "techweb"]).Text);
+    }
+
+    [Fact]
+    public void A_flag_value_is_never_taken_for_the_free_text()
+    {
+        Assert.Null(CommandLine.Parse(["dispatch", "--project", "techweb"]).Text);
+    }
+
+    [Fact]
+    public void A_double_dash_passes_the_rest_through_as_the_prompt()
+    {
+        Assert.Equal(
+            "--weird prompt text",
+            CommandLine.Parse(["dispatch", "--project", "p", "--", "--weird", "prompt", "text"]).Text);
+    }
+
+    [Fact]
+    public void The_caller_flag_is_parsed()
+    {
+        Assert.Equal(
+            "sub-slug",
+            CommandLine.Parse(["dispatch", "--project", "p", "--caller", "sub-slug", "task"]).Caller);
+    }
 }

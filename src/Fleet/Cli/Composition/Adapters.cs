@@ -10,6 +10,7 @@ using Fleet.Features.Setup.RunSetup.Enums;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Platform.Mux.WezTerm;
 using Fleet.Platform.Harness;
+using Fleet.Platform.Hooks;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
@@ -19,6 +20,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Requests;
+using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Ui;
 
@@ -37,6 +39,17 @@ public static class Adapters
     public static ISettingsStore Settings() => new JsonSettingsStore();
 
     public static ISettingsSync SettingsSync() => new NullSettingsSync();
+
+    public static IHarnessConfig HarnessConfig() => new NullHarnessConfig();
+
+    public static (string Text, string? Cwd) ReadHookPayload()
+    {
+        var payload = HookIo.Read(Console.In);
+
+        return (payload.Text, payload.Cwd);
+    }
+
+    public static string HookBlockJson(string note) => HookIo.Block(note);
 
     public static IActionRequestStore Requests() => new FileActionRequestStore();
 

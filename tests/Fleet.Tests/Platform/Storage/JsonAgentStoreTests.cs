@@ -48,6 +48,35 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_owner_and_status_of_an_orchestration_survive_the_round_trip()
+    {
+        var worktree = Path.Combine(ConfigHome, ".fleet", "orchestrations", "add-login");
+
+        _store.Save(
+            "techweb",
+            Agent(worktree) with { Owner = "parent", Status = "done" });
+
+        var agent = Assert.Single(_store.List("techweb"));
+
+        Assert.Equal("parent", agent.Owner);
+        Assert.Equal("done", agent.Status);
+    }
+
+    [Fact]
+    public void A_session_written_before_these_fields_existed_loads_with_empty_defaults()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Sessions, "techweb.json"),
+            """{"version":1,"agents":[{"worktree":"~/x","repository":"backend","branch":"dev","harness":"claude"}]}""");
+
+        var agent = Assert.Single(_store.List("techweb"));
+
+        Assert.Equal(string.Empty, agent.Owner);
+        Assert.Equal(string.Empty, agent.Status);
+    }
+
+    [Fact]
     public void The_worktree_path_is_the_identity_so_saving_twice_updates_rather_than_duplicates()
     {
         var worktree = Path.Combine(ConfigHome, "backend", "develop");

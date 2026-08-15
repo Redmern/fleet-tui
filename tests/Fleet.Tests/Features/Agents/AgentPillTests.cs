@@ -97,11 +97,12 @@ public class AgentPillTests
     }
 
     [Fact]
-    public void A_hidden_agent_still_says_so()
+    public void A_hidden_agent_is_marked_with_the_glyph_not_the_word()
     {
         var row = AgentRows.For([Agent() with { Hidden = true }], _ => BranchState.Unknown)[0].Text;
 
-        Assert.Contains("(hidden)", row);
+        Assert.Contains(FleetGlyphs.Hidden, row);
+        Assert.DoesNotContain("(hidden)", row);
     }
 
     [Fact]

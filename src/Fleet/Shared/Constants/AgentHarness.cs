@@ -6,10 +6,19 @@ public static class AgentHarness
 
     public const string Nvim = "nvim";
 
+    public const string Orchestrator = "orchestrator";
+
     public const string NvimStartup =
         "lua vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
 
+    public const string OrchestratorKickoff =
+        "Read CLAUDE.md and TASK.md in this folder, then begin.";
+
+    public const string ResumeArgument = "--continue";
+
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
+
+    public static IReadOnlyList<string> Known { get; } = [Nvim, Claude, Orchestrator];
 
     public static string Describe(string harness) => Normalize(harness);
 
@@ -17,11 +26,16 @@ public static class AgentHarness
 
     public static IReadOnlyList<string> BrowseCommand { get; } = [Nvim, "-c", BrowseStartup];
 
-    public static IReadOnlyList<string> CommandFor(string harness) =>
-        Normalize(harness) == Nvim
-            ? [Nvim, "-c", NvimStartup]
-            : [Claude];
+    public static bool IsOrchestrator(string harness) => Normalize(harness) == Orchestrator;
+
+    public static IReadOnlyList<string> CommandFor(string harness, bool fresh = false) =>
+        Normalize(harness) switch
+        {
+            Nvim => [Nvim, "-c", NvimStartup],
+            Orchestrator => fresh ? [Claude, OrchestratorKickoff] : [Claude, ResumeArgument],
+            _ => [Claude],
+        };
 
     public static string Normalize(string harness) =>
-        All.Contains(harness.Trim()) ? harness.Trim() : Nvim;
+        Known.Contains(harness.Trim()) ? harness.Trim() : Nvim;
 }

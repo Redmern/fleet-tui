@@ -8,4 +8,6 @@ public sealed record AgentRecord(
     string BaseRef,
     bool RepositoryWasBare,
     bool Hidden = false,
-    bool Open = false);
+    bool Open = false,
+    string Owner = "",
+    string Status = "");

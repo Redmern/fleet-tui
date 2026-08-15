@@ -14,6 +14,8 @@ public static class Runner
         FleetVerb.Request => RequestCommand.Run(invocation),
         FleetVerb.ApplyKeybinds => ApplyKeybindsCommand.Run(),
         FleetVerb.Setup => SetupCommand.Run(),
+        FleetVerb.Dispatch => await DispatchCommand.RunAsync(invocation).ConfigureAwait(false),
+        FleetVerb.HookDispatch => await HookDispatchCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Quit => await QuitCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Doctor => await DoctorCommand.RunAsync().ConfigureAwait(false),
         FleetVerb.Help => HelpCommand.Run(),

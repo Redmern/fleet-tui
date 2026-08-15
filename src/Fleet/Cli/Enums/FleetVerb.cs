@@ -8,6 +8,8 @@ public enum FleetVerb
     Request,
     ApplyKeybinds,
     Setup,
+    Dispatch,
+    HookDispatch,
     Quit,
     Doctor,
     Help,

@@ -1,6 +1,7 @@
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 
 namespace Fleet.Features.Agents.ListAgents;
@@ -38,11 +39,8 @@ public static class AgentRows
             FleetSpan.Muted(agent.Repository),
         ];
 
-        if (agent.Hidden)
-        {
-            spans.Add(FleetSpan.Muted("   (hidden)"));
-        }
-
-        return new FleetRow(spans);
+        return new FleetRow(
+            spans,
+            agent.Hidden ? [FleetSpan.Muted($"{FleetGlyphs.Hidden} ")] : null);
     }
 }

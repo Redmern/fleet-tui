@@ -16,6 +16,8 @@ public static class HelpCommand
                                           hand an action to that project's dashboard
               fleet quit --project <name> close everything for that project
               fleet setup                 first run: wire wezterm, check what is missing
+              fleet dispatch --project <p> "<task>"
+                                          spin up a hidden sub-orchestrator for a task
               fleet apply-keybinds        write the wezterm keybinding module
               fleet doctor                check the environment
             """);

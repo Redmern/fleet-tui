@@ -16,6 +16,13 @@ public static class FleetGlyphs
 
     public const string PillRight = "";
 
+
+    public const string Hidden = "";
+
+    public const string Orchestrator = "";
+
+    public const string Child = "└─";
+
     public static readonly string[] Spinner =
         ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
