@@ -3,6 +3,7 @@ using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Agents;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Agents;
@@ -177,6 +178,40 @@ public sealed class OpenAgentTests : IDisposable
         await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         Assert.Single(await _mux.ListPanesAsync());
+    }
+
+    [Fact]
+    public async Task Opening_a_hidden_orchestrator_adds_the_file_browser_alongside_its_pane()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator, Hidden = true };
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree, Workspace = "fleet-hidden" });
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var atWorktree = (await _mux.ListPanesAsync())
+            .Where(p => PathKey.Same(p.Cwd, agent.Worktree))
+            .ToList();
+
+        Assert.Equal(2, atWorktree.Count);
+        Assert.Contains(atWorktree, p => _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
+    }
+
+    [Fact]
+    public async Task Opening_an_orchestrator_that_already_has_a_browser_does_not_add_another()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        var atWorktree = (await _mux.ListPanesAsync())
+            .Count(p => PathKey.Same(p.Cwd, agent.Worktree));
+
+        Assert.Equal(2, atWorktree);
     }
 
     private sealed class RecordingStore : IAgentStore

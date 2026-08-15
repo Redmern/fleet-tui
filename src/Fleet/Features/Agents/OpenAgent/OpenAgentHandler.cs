@@ -19,7 +19,8 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
         var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
-        var running = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, agent.Worktree));
+        var mine = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
+        var running = mine.FirstOrDefault();
 
         if (running is not null)
         {
@@ -43,6 +44,11 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
                 {
                     store.Save(project, agent with { Open = true });
                 }
+            }
+
+            if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness) && mine.Count == 1)
+            {
+                await OpenBrowseSplit(agent, running.Id, ct).ConfigureAwait(false);
             }
 
             await mux.FocusPaneAsync(running.Id, ct).ConfigureAwait(false);
