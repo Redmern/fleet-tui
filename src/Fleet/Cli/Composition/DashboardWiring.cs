@@ -450,9 +450,11 @@ public static class DashboardWiring
                     return null;
                 }
 
-                if (!Adapters.OnPath(agent.Harness))
+                var executable = AgentHarness.CommandFor(agent.Harness)[0];
+
+                if (!Adapters.OnPath(executable))
                 {
-                    return Noted(log, project.Name, HarnessTrouble.Missing(agent.Harness));
+                    return Noted(log, project.Name, HarnessTrouble.Missing(executable));
                 }
 
                 var outcome = await opener.HandleAsync(project.Name, agent, project.Root)

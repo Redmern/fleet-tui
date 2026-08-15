@@ -48,7 +48,7 @@ public static class SubRows
 
         if (agent.Hidden)
         {
-            trailing.Add(FleetSpan.Muted($"   {FleetGlyphs.Hidden}"));
+            trailing.Add(FleetSpan.Muted($"   {FleetGlyphs.Hidden} "));
         }
 
         return new FleetRow(
