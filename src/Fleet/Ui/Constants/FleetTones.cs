@@ -25,4 +25,10 @@ public static class FleetTones
     public const string Behind = "pill.behind";
 
     public const string Dirty = "pill.dirty";
+
+    public const string Good = "good";
+
+    public const string Warn = "warn";
+
+    public const string Bad = "bad";
 }

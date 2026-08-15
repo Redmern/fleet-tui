@@ -17,4 +17,6 @@ public static class FleetHints
     public const string Keybinds = "j/k move   enter rebind   esc close";
 
     public const string Capture = "press any key   esc cancel";
+
+    public const string Settings = "j/k move   enter change   c channel   r default   esc close";
 }

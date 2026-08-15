@@ -40,7 +40,7 @@ public static class EditKeybindsView
             }
 
             var target = index == 0 ? PrefixRow : actions[index - 1].ToString();
-            var captured = CaptureKeyView.Show(app, target);
+            var captured = FleetKeyCapture.Show(app, target);
 
             if (captured is null)
             {

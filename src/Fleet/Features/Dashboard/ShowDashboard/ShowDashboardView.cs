@@ -418,6 +418,20 @@ public static class ShowDashboardView
             }
         }
 
+        void EditSettings()
+        {
+            busy = true;
+
+            try
+            {
+                callbacks.EditSettings();
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
         async Task ReportingAsync(Func<Task> work)
         {
             try
@@ -475,6 +489,10 @@ public static class ShowDashboardView
 
                 case FleetAction.EditKeybinds:
                     EditKeybinds();
+                    break;
+
+                case FleetAction.EditSettings:
+                    EditSettings();
                     break;
 
                 case FleetAction.ViewLogs:

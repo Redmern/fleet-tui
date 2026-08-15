@@ -32,4 +32,5 @@ public enum FleetAction
     RemoveProject,
     ViewLogs,
     BrowseFiles,
+    EditSettings,
 }

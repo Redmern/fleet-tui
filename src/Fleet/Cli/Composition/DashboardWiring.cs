@@ -11,6 +11,7 @@ using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Menu.EditKeybinds;
+using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Repositories;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.OpenRepository;
@@ -31,6 +32,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Requests;
+using Fleet.Ports.Settings;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
@@ -263,6 +265,8 @@ public static class DashboardWiring
         IAgentStore agents,
         IActionRequestStore requests,
         IWorkspaceRequestStore workspaces,
+        ISettingsStore settings,
+        ISettingsSync settingsSync,
         IFleetLog log)
     {
         var repositories = new ListRepositoriesHandler(git);
@@ -318,6 +322,20 @@ public static class DashboardWiring
             EditKeybinds: () => new Keymap(EditKeybindsView.Show(app, keymaps, keymap)),
 
             ReloadKeymap: () => new Keymap(keymaps.Load()),
+
+            EditSettings: () => EditSettingsView.Show(
+                app,
+                keymap,
+                project.Name,
+                settings.Load(project.Name),
+                next =>
+                {
+                    settings.Save(project.Name, next);
+                    var synced = settingsSync.Resync(project.Name, project.Root, next);
+                    return synced.Succeeded
+                        ? null
+                        : $"Saved, but claude's permissions could not be updated: {synced.Error}";
+                }),
 
             BrowseFiles: () => Adapters.OnPath(FileBrowser.Command)
                 ? Noted(

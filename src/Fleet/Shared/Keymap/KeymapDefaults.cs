@@ -36,6 +36,7 @@ public static class KeymapDefaults
             [FleetAction.ListAgents] = "l",
             [FleetAction.ViewLogs] = "L",
             [FleetAction.BrowseFiles] = "f",
+            [FleetAction.EditSettings] = "P",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -67,6 +68,7 @@ public static class KeymapDefaults
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
+        FleetAction.EditSettings,
     ];
 
     public static string Short(FleetAction action) =>
@@ -90,6 +92,7 @@ public static class KeymapDefaults
             FleetAction.ListAgents => "list agents",
             FleetAction.ViewLogs => "logs",
             FleetAction.BrowseFiles => "files",
+            FleetAction.EditSettings => "permissions",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -125,6 +128,7 @@ public static class KeymapDefaults
             FleetAction.ListAgents => "List agents",
             FleetAction.ViewLogs => "Show log",
             FleetAction.BrowseFiles => "File navigator in the project root",
+            FleetAction.EditSettings => "Harness permissions for this project",
             _ => action.ToString(),
         };
 }

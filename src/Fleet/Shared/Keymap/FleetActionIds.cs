@@ -22,6 +22,7 @@ public static class FleetActionIds
         FleetAction.QuitFleet => "quit",
         FleetAction.FocusMain => "main-pane",
         FleetAction.ListAgents => "list-agents",
+        FleetAction.EditSettings => "settings",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -43,6 +44,7 @@ public static class FleetActionIds
         "quit" => FleetAction.QuitFleet,
         "main-pane" => FleetAction.FocusMain,
         "list-agents" => FleetAction.ListAgents,
+        "settings" => FleetAction.EditSettings,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

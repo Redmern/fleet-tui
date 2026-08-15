@@ -38,7 +38,8 @@ public static class DashboardKeys
             or FleetAction.RemoveRepository
             or FleetAction.ManageRepository
             or FleetAction.ViewLogs
-            or FleetAction.EditKeybinds;
+            or FleetAction.EditKeybinds
+            or FleetAction.EditSettings;
 
     public static DashboardKey For(Key key, Keymap keymap, int tab)
     {

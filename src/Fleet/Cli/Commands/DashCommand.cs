@@ -49,6 +49,8 @@ public static class DashCommand
                 Adapters.Agents(),
                 Adapters.Requests(),
                 Adapters.Workspaces(),
+                Adapters.Settings(),
+                Adapters.SettingsSync(),
                 log));
 
         return 0;

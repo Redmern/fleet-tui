@@ -30,9 +30,12 @@ public static class FleetPaths
 
     public static string KeymapFile => Path.Combine(Config, "keybinds.json");
 
+    public static string Settings => Path.Combine(Config, "settings");
+
     public static void EnsureDirs()
     {
         Directory.CreateDirectory(Projects);
         Directory.CreateDirectory(Sessions);
+        Directory.CreateDirectory(Settings);
     }
 }

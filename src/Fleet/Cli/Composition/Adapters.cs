@@ -9,6 +9,7 @@ using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Enums;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Platform.Mux.WezTerm;
+using Fleet.Platform.Harness;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
@@ -18,6 +19,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Requests;
+using Fleet.Ports.Settings;
 using Fleet.Ui;
 
 namespace Fleet.Cli.Composition;
@@ -31,6 +33,10 @@ public static class Adapters
     public static IGitRunner Git() => new GitRunner();
 
     public static IKeymapStore Keymaps() => new JsonKeymapStore();
+
+    public static ISettingsStore Settings() => new JsonSettingsStore();
+
+    public static ISettingsSync SettingsSync() => new NullSettingsSync();
 
     public static IActionRequestStore Requests() => new FileActionRequestStore();
 

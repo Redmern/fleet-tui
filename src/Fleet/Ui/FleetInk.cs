@@ -17,6 +17,15 @@ public static class FleetInk
         FleetTones.Key => new Attribute(
             new Color(FleetPalette.Blue), basis.Background, TextStyle.None),
 
+        FleetTones.Good => new Attribute(
+            new Color(FleetPalette.Green), basis.Background, TextStyle.None),
+
+        FleetTones.Warn => new Attribute(
+            new Color(FleetPalette.Yellow), basis.Background, TextStyle.None),
+
+        FleetTones.Bad => new Attribute(
+            new Color(FleetPalette.Red), basis.Background, TextStyle.None),
+
         FleetTones.PillEdge or FleetTones.ChipEdge =>
             new Attribute(Pill, basis.Background, TextStyle.None),
 

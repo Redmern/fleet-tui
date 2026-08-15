@@ -13,6 +13,7 @@ public sealed record DashboardCallbacks(
     Func<FleetAction> ShowMenu,
     Func<Keymap> EditKeybinds,
     Func<Keymap> ReloadKeymap,
+    Action EditSettings,
     Action ShowLogs,
     Func<string?> BrowseFiles,
     Func<FleetAction> TakeRequest,

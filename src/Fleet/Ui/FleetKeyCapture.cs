@@ -1,11 +1,10 @@
-using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 
-namespace Fleet.Features.Menu.EditKeybinds;
+namespace Fleet.Ui;
 
-public static class CaptureKeyView
+public static class FleetKeyCapture
 {
     public static string? Show(IApplication app, string target)
     {

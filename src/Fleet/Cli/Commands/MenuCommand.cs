@@ -5,6 +5,7 @@ using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditKeybinds;
+using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Repositories.AddRepository;
@@ -31,6 +32,7 @@ public static class MenuCommand
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
+        FleetAction.EditSettings,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -107,6 +109,22 @@ public static class MenuCommand
 
             case FleetAction.EditKeybinds:
                 EditKeybindsView.Show(app, keymaps, keymap);
+                break;
+
+            case FleetAction.EditSettings:
+                var settings = Adapters.Settings();
+
+                EditSettingsView.Show(
+                    app,
+                    keymap,
+                    project.Name,
+                    settings.Load(project.Name),
+                    next =>
+                    {
+                        settings.Save(project.Name, next);
+                        return null;
+                    });
+
                 break;
 
             case FleetAction.BrowseFiles:
