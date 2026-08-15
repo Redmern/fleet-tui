@@ -18,6 +18,28 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
         var mine = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
 
+        if (AgentHarness.IsOrchestrator(agent.Harness))
+        {
+            if (hiding && dashboardWindow is not null)
+            {
+                var home = panes.FirstOrDefault(p => p.WindowId == dashboardWindow);
+
+                if (home is not null)
+                {
+                    await mux.FocusPaneAsync(home.Id, ct).ConfigureAwait(false);
+                }
+            }
+            else if (!hiding && mine.Count > 0)
+            {
+                await mux.FocusPaneAsync(mine[0].Id, ct).ConfigureAwait(false);
+            }
+
+            var toggled = agent with { Hidden = hiding, Open = mine.Count > 0 };
+            store.Save(project, toggled);
+
+            return Result<AgentRecord>.Ok(toggled);
+        }
+
         var options = hiding
             ? new MovePaneOptions { Workspace = FleetWorkspaces.Hidden }
             : new MovePaneOptions { WindowId = dashboardWindow, NewWindow = dashboardWindow is null };

@@ -24,6 +24,18 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
         if (running is not null)
         {
+            if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness))
+            {
+                if (agent.Hidden || !agent.Open)
+                {
+                    store.Save(project, agent with { Hidden = false, Open = true });
+                }
+
+                await mux.FocusPaneAsync(running.Id, ct).ConfigureAwait(false);
+
+                return Result.Ok();
+            }
+
             foreach (var member in mine)
             {
                 if (agent.Hidden)

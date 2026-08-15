@@ -93,21 +93,28 @@ public class HideAgentTests
     }
 
     [Fact]
-    public async Task Hiding_an_orchestrator_moves_every_pane_it_owns_including_its_browser()
+    public async Task Hiding_an_orchestrator_leaves_its_split_intact_and_steps_back_to_the_dashboard()
     {
-        var agent = Agent();
-        var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+        var claude = await _mux.SpawnAsync(
+            new SpawnOptions { Cwd = agent.Worktree, NewWindow = true });
         var browser = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var dashboard = await _mux.SpawnAsync(
+            new SpawnOptions { Cwd = "C:/repos/techweb", NewWindow = true });
+        var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
 
         var result = await new HideAgentHandler(_mux, _store)
-            .HandleAsync("techweb", agent, dashboardWindow: "w1");
+            .HandleAsync("techweb", agent, dashboardWindow: home);
 
         Assert.True(result.Succeeded, result.Error);
+        Assert.True(result.Value!.Hidden);
 
         var panes = await _mux.ListPanesAsync();
 
-        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
-        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == browser).SessionName);
+        // The sub's panes are not moved to the hidden workspace — the split survives.
+        Assert.NotEqual(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
+        Assert.NotEqual(FleetWorkspaces.Hidden, panes.Single(p => p.Id == browser).SessionName);
+        Assert.True(panes.Single(p => p.Id == dashboard).IsActive);
     }
 
     [Fact]

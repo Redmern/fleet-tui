@@ -182,16 +182,16 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_a_hidden_orchestrator_brings_its_whole_pane_group_into_view()
+    public async Task Opening_a_hidden_orchestrator_activates_its_split_in_place_without_moving_panes()
     {
         Directory.CreateDirectory(ProjectRoot);
-        var dashboard = await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
-        var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
 
         var agent = Agent() with { Harness = AgentHarness.Orchestrator, Hidden = true };
 
         var claude = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = agent.Worktree, Workspace = "fleet-hidden", NewWindow = true });
+        var subWindow = (await _mux.ListPanesAsync()).Single(p => p.Id == claude).WindowId;
         var browser = await _mux.SplitAsync(
             new SplitOptions(claude, SplitDirection.Right)
             {
@@ -206,8 +206,11 @@ public sealed class OpenAgentTests : IDisposable
 
         var panes = await _mux.ListPanesAsync();
 
-        Assert.Equal(home, panes.Single(p => p.Id == claude).WindowId);
-        Assert.Equal(home, panes.Single(p => p.Id == browser).WindowId);
+        // The split stays put — both panes keep their window, and claude is focused.
+        Assert.Equal(subWindow, panes.Single(p => p.Id == claude).WindowId);
+        Assert.Equal(subWindow, panes.Single(p => p.Id == browser).WindowId);
+        Assert.True(panes.Single(p => p.Id == claude).IsActive);
+        Assert.False(Assert.Single(_store.Saved).Hidden);
     }
 
     [Fact]
