@@ -6,4 +6,6 @@ public sealed record ClaudePlan(
     IReadOnlyList<string> Allow,
     IReadOnlyList<string> Deny,
     IReadOnlyList<string> Ask,
-    IReadOnlyList<string> EnabledServers);
+    IReadOnlyList<string> EnabledServers,
+    string HookCommand,
+    IReadOnlyList<string> HookArgs);

@@ -51,7 +51,8 @@ public static class DoctorCommand
 
             Console.WriteLine(
                 $"                  mcp: {(claude.ServerRegistered ? "registered" : "NOT registered")}, "
-                + $"{(claude.ServerEnabled ? "enabled" : "NOT enabled")}");
+                + $"{(claude.ServerEnabled ? "enabled" : "NOT enabled")}, "
+                + $"dispatch hook {(claude.HookInstalled ? "installed" : "NOT installed")}");
         }
 
         if (report.Projects.Count > 0)

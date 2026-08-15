@@ -54,9 +54,13 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             return ClaudeState.Absent;
         }
 
+        var hookInstalled = settings.Hooks?.UserPromptSubmit
+            .Any(group => group.Hooks.Any(IsOwnedHook)) ?? false;
+
         return new ClaudeState(
             mcp.McpServers.ContainsKey(serverName),
             settings.EnabledMcpjsonServers.Contains(serverName),
+            hookInstalled,
             settings.Permissions.Allow);
     }
 
@@ -83,7 +87,33 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         {
             file.EnabledMcpjsonServers.Add(plan.Server.Name);
         }
+
+        ApplyHook(file, plan.HookCommand, plan.HookArgs);
     }
+
+    private static void ApplyHook(
+        ClaudeSettingsFile file, string command, IReadOnlyList<string> args)
+    {
+        if (command.Trim().Length == 0)
+        {
+            return;
+        }
+
+        var hooks = file.Hooks ??= new HooksJson();
+
+        hooks.UserPromptSubmit = hooks.UserPromptSubmit
+            .Where(group => !group.Hooks.Any(IsOwnedHook))
+            .ToList();
+
+        hooks.UserPromptSubmit.Add(new HookGroup
+        {
+            Hooks = [new HookEntry { Type = "command", Command = command, Args = [.. args] }],
+        });
+    }
+
+    private static bool IsOwnedHook(HookEntry entry) =>
+        entry.Command.Contains("hook-dispatch", StringComparison.Ordinal)
+        || (entry.Args?.Contains("hook-dispatch") ?? false);
 
     private static List<string> Merge(List<string> existing, IReadOnlyList<string> owned)
     {

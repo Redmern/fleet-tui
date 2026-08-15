@@ -35,7 +35,9 @@ public sealed class ClaudeConfigWriterTests : IDisposable
             allow ?? ["mcp__fleet__list_agents"],
             deny ?? [],
             ask ?? [],
-            ["fleet"]);
+            ["fleet"],
+            "fleet.exe",
+            ["hook-dispatch", "--project", "techweb"]);
 
     [Fact]
     public void The_server_is_registered_as_a_stdio_command()
@@ -115,6 +117,57 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         writer.Sync(Plan());
 
         Assert.Single(Occurrences(File.ReadAllText(SettingsPath), "\"fleet\""));
+    }
+
+    [Fact]
+    public void The_dispatch_hook_is_registered_on_user_prompt_submit()
+    {
+        new ClaudeConfigWriter().Sync(Plan());
+
+        var settings = File.ReadAllText(SettingsPath);
+
+        Assert.Contains("\"UserPromptSubmit\"", settings);
+        Assert.Contains("hook-dispatch", settings);
+    }
+
+    [Fact]
+    public void Re_syncing_does_not_pile_up_duplicate_dispatch_hooks()
+    {
+        var writer = new ClaudeConfigWriter();
+
+        writer.Sync(Plan());
+        writer.Sync(Plan());
+
+        Assert.Single(Occurrences(File.ReadAllText(SettingsPath), "hook-dispatch"));
+    }
+
+    [Fact]
+    public void A_users_own_hooks_survive_the_merge()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """
+            {"hooks":{"PostToolUse":[{"hooks":[{"type":"command","command":"echo done"}]}],
+            "UserPromptSubmit":[{"hooks":[{"type":"command","command":"echo mine"}]}]}}
+            """);
+
+        new ClaudeConfigWriter().Sync(Plan());
+
+        var settings = File.ReadAllText(SettingsPath);
+
+        Assert.Contains("PostToolUse", settings);
+        Assert.Contains("echo done", settings);
+        Assert.Contains("echo mine", settings);
+        Assert.Contains("hook-dispatch", settings);
+    }
+
+    [Fact]
+    public void The_hook_state_is_reported_by_inspect()
+    {
+        new ClaudeConfigWriter().Sync(Plan());
+
+        Assert.True(new ClaudeConfigWriter().Inspect(_dir, "fleet").HookInstalled);
     }
 
     [Fact]

@@ -18,6 +18,42 @@ public sealed class PermissionsJson
     public Dictionary<string, JsonElement> Extra { get; set; } = [];
 }
 
+public sealed class HookEntry
+{
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "command";
+
+    [JsonPropertyName("command")]
+    public string Command { get; set; } = string.Empty;
+
+    [JsonPropertyName("args")]
+    public List<string>? Args { get; set; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> Extra { get; set; } = [];
+}
+
+public sealed class HookGroup
+{
+    [JsonPropertyName("matcher")]
+    public string? Matcher { get; set; }
+
+    [JsonPropertyName("hooks")]
+    public List<HookEntry> Hooks { get; set; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> Extra { get; set; } = [];
+}
+
+public sealed class HooksJson
+{
+    [JsonPropertyName("UserPromptSubmit")]
+    public List<HookGroup> UserPromptSubmit { get; set; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> Extra { get; set; } = [];
+}
+
 public sealed class ClaudeSettingsFile
 {
     [JsonPropertyName("permissions")]
@@ -25,6 +61,9 @@ public sealed class ClaudeSettingsFile
 
     [JsonPropertyName("enabledMcpjsonServers")]
     public List<string> EnabledMcpjsonServers { get; set; } = [];
+
+    [JsonPropertyName("hooks")]
+    public HooksJson? Hooks { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extra { get; set; } = [];

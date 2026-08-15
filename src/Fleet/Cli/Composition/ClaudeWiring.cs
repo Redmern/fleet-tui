@@ -26,7 +26,9 @@ public static class ClaudeWiring
             permissions.Allow,
             permissions.Deny,
             permissions.Ask,
-            [server.Name]);
+            [server.Name],
+            Adapters.Executable,
+            ["hook-dispatch", "--project", project]);
 
         return new ClaudeConfigWriter().Sync(plan);
     }
