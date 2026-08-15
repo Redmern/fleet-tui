@@ -23,18 +23,27 @@ public static class ShowDashboardView
         var prefix = new PrefixRecognizer(keys);
 
         var tabBar = FleetTheme.TabBar(1, 0,
-            [DashboardTabs.Agents(0), DashboardTabs.Repositories(0)]);
+            [DashboardTabs.Agents(0), DashboardTabs.Subs(0), DashboardTabs.Repositories(0)]);
 
         var agentList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
+        var subList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var repoList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
 
-        var lists = new[] { agentList, repoList };
+        var lists = new[] { agentList, subList, repoList };
 
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
         var hints = new FleetActionBar(Pos.AnchorEnd(1));
 
         FleetKeys.ApplyMotions(agentList, keys);
+        FleetKeys.ApplyMotions(subList, keys);
         FleetKeys.ApplyMotions(repoList, keys);
+
+        IReadOnlyList<(string, string, Action)> BarFor(int index) => index switch
+        {
+            DashboardTabs.RepositoriesTab => RepositoryBar(),
+            DashboardTabs.SubsTab => SubBar(),
+            _ => AgentBar(),
+        };
 
         void ShowTab(int index)
         {
@@ -45,19 +54,20 @@ public static class ShowDashboardView
                 lists[i].Visible = i == index;
             }
 
-            hints.Show(index == DashboardTabs.RepositoriesTab ? RepositoryBar() : AgentBar());
+            hints.Show(BarFor(index));
 
             lists[index].SetFocus();
             window.SetNeedsDraw();
         }
 
         var board = new AgentBoard([], 0, []);
+        var subs = SubBoard.Empty;
 
-        void ShowAgentBar()
+        void ShowBarFor(int tab)
         {
-            if (tabBar.Selected == DashboardTabs.AgentsTab)
+            if (tabBar.Selected == tab)
             {
-                hints.Show(AgentBar());
+                hints.Show(BarFor(tab));
             }
         }
 
@@ -71,7 +81,20 @@ public static class ShowDashboardView
 
             tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(board.Count));
 
-            ShowAgentBar();
+            ShowBarFor(DashboardTabs.AgentsTab);
+        }
+
+        void RefreshSubs()
+        {
+            subs = callbacks.LoadSubs();
+
+            var selected = FleetRows.Selected(subList);
+
+            FleetRows.Fill(subList, subs.Rows, selected);
+
+            tabBar.Retitle(DashboardTabs.SubsTab, DashboardTabs.Subs(subs.Count));
+
+            ShowBarFor(DashboardTabs.SubsTab);
         }
 
         IReadOnlyList<RepositoryChoice> repositories = [];
@@ -93,6 +116,7 @@ public static class ShowDashboardView
             tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(loaded.Count));
 
             RefreshAgents();
+            RefreshSubs();
         }
 
         async Task RefreshAsync()
@@ -180,9 +204,20 @@ public static class ShowDashboardView
             }
         }
 
+        int ActiveTab() => tabBar.Selected;
+
+        int ActiveRow() =>
+            FleetRows.Selected(ActiveTab() == DashboardTabs.SubsTab ? subList : agentList);
+
+        void RefreshActive()
+        {
+            RefreshAgents();
+            RefreshSubs();
+        }
+
         async Task OpenAsync()
         {
-            var error = await callbacks.OpenAgent(FleetRows.Selected(agentList))
+            var error = await callbacks.OpenAgent(ActiveTab(), ActiveRow())
                 .ConfigureAwait(false);
 
             if (error is not null)
@@ -197,8 +232,8 @@ public static class ShowDashboardView
 
             try
             {
-                status.Text = callbacks.HideAgent(FleetRows.Selected(agentList)) ?? string.Empty;
-                RefreshAgents();
+                status.Text = callbacks.HideAgent(ActiveTab(), ActiveRow()) ?? string.Empty;
+                RefreshActive();
             }
             finally
             {
@@ -212,10 +247,10 @@ public static class ShowDashboardView
 
             try
             {
-                var error = callbacks.ManageAgent(FleetRows.Selected(agentList));
+                var error = callbacks.ManageAgent(ActiveTab(), ActiveRow());
 
                 status.Text = error ?? string.Empty;
-                RefreshAgents();
+                RefreshActive();
             }
             finally
             {
@@ -399,6 +434,7 @@ public static class ShowDashboardView
             prefix = new PrefixRecognizer(keys);
 
             FleetKeys.ApplyMotions(agentList, keys);
+            FleetKeys.ApplyMotions(subList, keys);
             FleetKeys.ApplyMotions(repoList, keys);
 
             ShowTab(tabBar.Selected);
@@ -529,6 +565,17 @@ public static class ShowDashboardView
             (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
         ];
 
+        IReadOnlyList<(string, string, Action)> SubBar() =>
+        [
+            ("enter", "open", () => Start(OpenAsync)),
+            (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
+                () => FromKey(FleetAction.RemoveAgent)),
+            (keys.DisplayFor(FleetAction.ToggleHidden),
+                subs.IsHidden(FleetRows.Selected(subList)) ? AgentWords.Show : AgentWords.Hide,
+                () => FromKey(FleetAction.ToggleHidden)),
+            (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
+        ];
+
         IReadOnlyList<(string, string, Action)> RepositoryBar() =>
         [
             (keys.DisplayFor(FleetAction.AddRepository), "add",
@@ -624,9 +671,16 @@ public static class ShowDashboardView
             return true;
         }
 
-        agentList.ValueChanged += (_, _) => ShowAgentBar();
+        agentList.ValueChanged += (_, _) => ShowBarFor(DashboardTabs.AgentsTab);
+        subList.ValueChanged += (_, _) => ShowBarFor(DashboardTabs.SubsTab);
 
         agentList.Accepting += (_, e) =>
+        {
+            Start(OpenAsync);
+            e.Handled = true;
+        };
+
+        subList.Accepting += (_, e) =>
         {
             Start(OpenAsync);
             e.Handled = true;
@@ -646,6 +700,7 @@ public static class ShowDashboardView
         window.Add(
             tabBar.Root,
             agentList,
+            subList,
             repoList,
             status,
             hints.Root);

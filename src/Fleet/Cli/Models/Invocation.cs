@@ -8,4 +8,5 @@ public sealed record Invocation(
     string? Project,
     string? Action,
     string? Text = null,
-    string? Caller = null);
+    string? Caller = null,
+    string? Status = null);

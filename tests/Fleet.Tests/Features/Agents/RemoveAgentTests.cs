@@ -61,6 +61,48 @@ public sealed class RemoveAgentTests : IDisposable
             Path.Combine(container, slug), "backend", branch, AgentHarness.Claude, "main", true);
     }
 
+    private AgentRecord Orchestrator(string slug = "upgrade")
+    {
+        var folder = Path.Combine(_root, ".fleet", "orchestrations", slug);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "TASK.md"), "do the thing");
+
+        return new AgentRecord(
+            folder, string.Empty, slug, AgentHarness.Orchestrator, "origin/main", false,
+            Hidden: true, Open: true);
+    }
+
+    [Fact]
+    public async Task An_orchestrator_needs_no_worktree_inspection()
+    {
+        var state = await Handler().InspectAsync(Orchestrator());
+
+        Assert.False(state.Exists);
+    }
+
+    [Fact]
+    public async Task Deleting_an_orchestrator_discards_its_folder_without_git()
+    {
+        var agent = Orchestrator();
+
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.False(Directory.Exists(agent.Worktree));
+        Assert.Equal(agent.Worktree, Assert.Single(_store.Removed));
+    }
+
+    [Fact]
+    public async Task Forgetting_an_orchestrator_leaves_its_folder_on_disk()
+    {
+        var agent = Orchestrator();
+
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: false);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.True(Directory.Exists(agent.Worktree));
+    }
+
     [Fact]
     public async Task Removing_an_agent_takes_its_worktree_with_it()
     {

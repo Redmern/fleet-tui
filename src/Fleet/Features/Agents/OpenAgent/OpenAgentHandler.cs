@@ -1,6 +1,7 @@
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Results;
@@ -71,12 +72,34 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
         await mux.SetTitleAsync(pane, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
 
+        if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness))
+        {
+            await OpenBrowseSplit(agent, pane, ct).ConfigureAwait(false);
+        }
+
         if (agent.Hidden || !agent.Open)
         {
             store.Save(project, agent with { Hidden = false, Open = true });
         }
 
         return Result.Ok();
+    }
+
+    private async Task OpenBrowseSplit(AgentRecord agent, PaneId pane, CancellationToken ct)
+    {
+        var browse = await mux.SplitAsync(
+            new SplitOptions(pane, SplitDirection.Right)
+            {
+                Percent = 50,
+                Cwd = agent.Worktree,
+                Args = Shared.Constants.AgentHarness.BrowseCommand,
+            },
+            ct).ConfigureAwait(false);
+
+        if (!browse.IsNone)
+        {
+            await mux.SetTitleAsync(browse, $"{agent.Branch} files", ct).ConfigureAwait(false);
+        }
     }
 
     private async Task Unhide(

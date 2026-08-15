@@ -26,16 +26,26 @@ public static class AgentDisposal
 
     public const string ShowDetail = "Bring it back into the terminal";
 
-    public static IReadOnlyList<PickerEntry> For(bool hidden) =>
-    [
-        new("opens", Choices[Opens], "o"),
-        hidden
+    public static IReadOnlyList<PickerEntry> For(bool hidden) => For(hidden, orchestrator: false);
+
+    public static IReadOnlyList<PickerEntry> For(bool hidden, bool orchestrator)
+    {
+        var entries = new List<PickerEntry>();
+
+        if (!orchestrator)
+        {
+            entries.Add(new("opens", Choices[Opens], "o"));
+        }
+
+        entries.Add(hidden
             ? new PickerEntry(AgentWords.Show, ShowDetail, "h")
-            : new PickerEntry(AgentWords.Hide, Choices[Hide], "h"),
-        new("stop", Choices[Stop], "s"),
-        new("forget", Choices[Forget], "f"),
-        new("delete", Choices[Delete], "d"),
-    ];
+            : new PickerEntry(AgentWords.Hide, Choices[Hide], "h"));
+        entries.Add(new("stop", Choices[Stop], "s"));
+        entries.Add(new("forget", Choices[Forget], "f"));
+        entries.Add(new("delete", Choices[Delete], "d"));
+
+        return entries;
+    }
 
     public static IReadOnlyList<PickerEntry> Entries { get; } = For(hidden: false);
 }

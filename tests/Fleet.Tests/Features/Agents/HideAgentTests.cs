@@ -93,6 +93,24 @@ public class HideAgentTests
     }
 
     [Fact]
+    public async Task Hiding_an_orchestrator_moves_every_pane_it_owns_including_its_browser()
+    {
+        var agent = Agent();
+        var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var browser = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        var result = await new HideAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, dashboardWindow: "w1");
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
+        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == browser).SessionName);
+    }
+
+    [Fact]
     public async Task An_agent_with_no_pane_is_recorded_as_closed()
     {
         var saved = await new HideAgentHandler(_mux, _store)

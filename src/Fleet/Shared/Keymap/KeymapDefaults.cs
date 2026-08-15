@@ -127,7 +127,7 @@ public static class KeymapDefaults
             FleetAction.FocusMain => "Go to dashboard",
             FleetAction.ListAgents => "List agents",
             FleetAction.ViewLogs => "Show log",
-            FleetAction.BrowseFiles => "File navigator in the project root",
+            FleetAction.BrowseFiles => "File navigator",
             FleetAction.EditSettings => "Harness permissions for this project",
             _ => action.ToString(),
         };

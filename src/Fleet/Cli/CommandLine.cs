@@ -11,7 +11,10 @@ public static class CommandLine
 
     public const string CallerFlag = "--caller";
 
-    private static readonly string[] ValueFlags = [ProjectFlag, ActionFlag, CallerFlag];
+    public const string StatusFlag = "--status";
+
+    private static readonly string[] ValueFlags =
+        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag];
 
     public static Invocation Parse(IReadOnlyList<string> args)
     {
@@ -24,7 +27,8 @@ public static class CommandLine
             ValueOf(options, ProjectFlag),
             ValueOf(options, ActionFlag),
             TextOf(options),
-            ValueOf(options, CallerFlag));
+            ValueOf(options, CallerFlag),
+            ValueOf(options, StatusFlag));
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch
@@ -37,6 +41,7 @@ public static class CommandLine
         "setup" => FleetVerb.Setup,
         "dispatch" => FleetVerb.Dispatch,
         "hook-dispatch" => FleetVerb.HookDispatch,
+        "report" => FleetVerb.Report,
         "quit" => FleetVerb.Quit,
         "doctor" => FleetVerb.Doctor,
         "help" or "--help" or "-h" => FleetVerb.Help,

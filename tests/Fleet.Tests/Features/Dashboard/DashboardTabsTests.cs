@@ -8,14 +8,25 @@ public class DashboardTabsTests
     public void Agents_is_the_first_tab_so_it_is_the_one_showing_on_open()
     {
         Assert.Equal(0, DashboardTabs.AgentsTab);
-        Assert.Equal(1, DashboardTabs.RepositoriesTab);
+        Assert.Equal(1, DashboardTabs.SubsTab);
+        Assert.Equal(2, DashboardTabs.RepositoriesTab);
     }
 
     [Fact]
-    public void A_tab_title_carries_its_count_because_the_other_tab_is_hidden()
+    public void A_tab_title_carries_its_count_because_the_other_tabs_are_hidden()
     {
         Assert.Equal("Repositories (2)", DashboardTabs.Repositories(2));
+        Assert.Equal("Subs (3)", DashboardTabs.Subs(3));
         Assert.Equal("Agents (0)", DashboardTabs.Agents(0));
+    }
+
+    [Theory]
+    [InlineData(0, 1, 1)]
+    [InlineData(1, 1, 2)]
+    [InlineData(2, -1, 1)]
+    public void Stepping_walks_all_three_tabs(int current, int delta, int expected)
+    {
+        Assert.Equal(expected, DashboardTabs.Step(current, delta, 3));
     }
 
     [Theory]

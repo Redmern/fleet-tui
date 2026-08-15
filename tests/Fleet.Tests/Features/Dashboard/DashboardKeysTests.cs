@@ -15,6 +15,8 @@ public class DashboardKeysTests
 
     private const int Repositories = DashboardTabs.RepositoriesTab;
 
+    private const int Subs = DashboardTabs.SubsTab;
+
     [Fact]
     public void Escape_is_swallowed_so_it_can_never_close_the_pane()
     {
@@ -103,6 +105,15 @@ public class DashboardKeysTests
     {
         Assert.Equal(FleetAction.PrevTab, DashboardKeys.For(Key.H, Map, Repositories).Action);
         Assert.Equal(FleetAction.NextTab, DashboardKeys.For(Key.L, Map, Repositories).Action);
+    }
+
+    [Fact]
+    public void The_subs_tab_manages_and_hides_but_never_starts_a_new_agent()
+    {
+        Assert.Equal(FleetAction.RemoveAgent, DashboardKeys.For(Key.M, Map, Subs).Action);
+        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.X, Map, Subs).Action);
+        Assert.DoesNotContain(FleetAction.NewAgent, DashboardKeys.ScopeFor(Subs));
+        Assert.False(DashboardKeys.For(Key.N, Map, Subs).Consume);
     }
 
     [Fact]

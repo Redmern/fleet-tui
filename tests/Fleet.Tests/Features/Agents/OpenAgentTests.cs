@@ -150,6 +150,35 @@ public sealed class OpenAgentTests : IDisposable
         Assert.Contains(panes, p => p.Id == other);
     }
 
+    [Fact]
+    public async Task Opening_an_orchestrator_splits_a_file_browser_alongside_it()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.Equal(2, panes.Count);
+
+        var browser = panes.Single(p => _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
+
+        Assert.Equal($"{agent.Branch} files", _mux.TitleOf(browser.Id));
+    }
+
+    [Fact]
+    public async Task A_plain_agent_opens_a_single_pane_with_no_browser()
+    {
+        var agent = Agent();
+
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.Single(await _mux.ListPanesAsync());
+    }
+
     private sealed class RecordingStore : IAgentStore
     {
         public List<AgentRecord> Saved { get; } = [];

@@ -16,27 +16,19 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         var hiding = !agent.Hidden;
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
-        var pane = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, agent.Worktree));
+        var mine = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
 
-        if (pane is not null)
+        var options = hiding
+            ? new MovePaneOptions { Workspace = FleetWorkspaces.Hidden }
+            : new MovePaneOptions { WindowId = dashboardWindow, NewWindow = dashboardWindow is null };
+
+        foreach (var pane in mine)
         {
-            await mux.MovePaneAsync(
-                    pane.Id,
-                    hiding
-                        ? new MovePaneOptions { Workspace = FleetWorkspaces.Hidden }
-                        : new MovePaneOptions
-                        {
-                            WindowId = dashboardWindow,
-                            NewWindow = dashboardWindow is null,
-                        },
-                    ct)
-                .ConfigureAwait(false);
-
-            await mux.SetTitleAsync(pane.Id, BranchSlug.Of(agent.Branch), ct)
-                .ConfigureAwait(false);
+            await mux.MovePaneAsync(pane.Id, options, ct).ConfigureAwait(false);
+            await mux.SetTitleAsync(pane.Id, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
         }
 
-        var changed = agent with { Hidden = hiding, Open = pane is not null };
+        var changed = agent with { Hidden = hiding, Open = mine.Count > 0 };
         store.Save(project, changed);
 
         return Result<AgentRecord>.Ok(changed);

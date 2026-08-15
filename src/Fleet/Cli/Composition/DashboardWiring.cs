@@ -7,7 +7,9 @@ using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
+using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Menu.EditKeybinds;
@@ -59,6 +61,22 @@ public static class DashboardWiring
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
+
+    private static AgentRecord? At(ListAgentsHandler lister, string project, int tab, int index)
+    {
+        var listing = SubTree.Of(lister.Handle(project));
+
+        var source = tab == DashboardTabs.SubsTab
+            ? listing.Flat.Select(e => e.Agent).ToList()
+            : (IReadOnlyList<AgentRecord>)listing.Board;
+
+        return index >= 0 && index < source.Count ? source[index] : null;
+    }
+
+    private static string Label(AgentRecord agent) =>
+        AgentHarness.IsOrchestrator(agent.Harness)
+            ? agent.Branch
+            : $"{agent.Repository}/{agent.Branch}";
 
     private static string? Noted(IFleetLog log, string project, string? message)
     {
@@ -215,14 +233,28 @@ public static class DashboardWiring
     }
 
     private static IReadOnlyList<string> RemovalWarning(
-        string repository, string branch, string worktree, WorktreeState state, bool deleting)
+        AgentRecord agent, WorktreeState state, bool deleting)
     {
         var lines = new List<string>
         {
-            $"{repository}/{branch}",
-            worktree,
+            Label(agent),
+            agent.Worktree,
             string.Empty,
         };
+
+        if (AgentHarness.IsOrchestrator(agent.Harness))
+        {
+            lines.Add(deleting
+                ? "This deletes the orchestration folder and everything it holds:"
+                : "The orchestration folder stays on disk; only fleet forgets it.");
+
+            if (deleting)
+            {
+                lines.Add("  agent files, instructions, and reports.");
+            }
+
+            return lines;
+        }
 
         if (!deleting)
         {
@@ -356,12 +388,23 @@ public static class DashboardWiring
 
             LoadAgents: () =>
             {
-                var running = lister.Handle(project.Name);
+                var board = SubTree.Of(lister.Handle(project.Name)).Board;
 
                 return new AgentBoard(
-                    AgentRows.For(running, a => states.For(a.Worktree, a.BaseRef)),
-                    running.Count,
-                    [.. running.Select(a => a.Hidden)]);
+                    AgentRows.For(board, a => states.For(a.Worktree, a.BaseRef)),
+                    board.Count,
+                    [.. board.Select(a => a.Hidden)]);
+            },
+
+            LoadSubs: () =>
+            {
+                var listing = SubTree.Of(lister.Handle(project.Name));
+                var trigger = settings.Load(project.Name).Trigger;
+
+                return new SubBoard(
+                    SubRows.For(listing, a => states.For(a.Worktree, a.BaseRef), trigger),
+                    listing.Flat.Count(e => !e.IsChild),
+                    [.. listing.Flat.Select(e => e.Agent.Hidden)]);
             },
 
             NewAgent: async (available, selected) =>
@@ -395,16 +438,14 @@ public static class DashboardWiring
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
-            OpenAgent: async index =>
+            OpenAgent: async (tab, index) =>
             {
-                var running = lister.Handle(project.Name);
+                var agent = At(lister, project.Name, tab, index);
 
-                if (index < 0 || index >= running.Count)
+                if (agent is null)
                 {
                     return null;
                 }
-
-                var agent = running[index];
 
                 if (!Adapters.OnPath(agent.Harness))
                 {
@@ -415,67 +456,62 @@ public static class DashboardWiring
                     .ConfigureAwait(false);
 
                 Note(log, project.Name, outcome.Succeeded
-                    ? $"opened {agent.Repository}/{agent.Branch}"
-                    : $"could not open {agent.Repository}/{agent.Branch}: {outcome.Error}");
+                    ? $"opened {Label(agent)}"
+                    : $"could not open {Label(agent)}: {outcome.Error}");
 
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
-            HideAgent: index =>
+            HideAgent: (tab, index) =>
             {
-                var running = lister.Handle(project.Name);
+                var agent = At(lister, project.Name, tab, index);
 
-                if (index < 0 || index >= running.Count)
-                {
-                    return null;
-                }
-
-                return Noted(log, project.Name, ToggleHidden(mux, hider, project, running[index]));
+                return agent is null
+                    ? null
+                    : Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
             },
 
-            ManageAgent: index =>
+            ManageAgent: (tab, index) =>
             {
-                var running = lister.Handle(project.Name);
+                var agent = At(lister, project.Name, tab, index);
 
-                if (index < 0 || index >= running.Count)
+                if (agent is null)
                 {
                     return null;
                 }
 
-                var agent = running[index];
+                var entries = AgentDisposal.For(agent.Hidden, AgentHarness.IsOrchestrator(agent.Harness));
 
-                var picked = FleetPicker.Choose(
-                    app,
-                    $"{agent.Repository}/{agent.Branch}",
-                    AgentDisposal.For(agent.Hidden),
-                    keymap);
+                var picked = FleetPicker.Choose(app, Label(agent), entries, keymap);
 
                 if (picked is null)
                 {
                     return null;
                 }
 
-                if (picked == AgentDisposal.Opens)
+                var choice = entries[picked.Value].Key;
+
+                if (choice == "o")
                 {
                     return Noted(
                         log, project.Name, ChooseHarness(app, keymap, harnesses, project.Name, agent));
                 }
 
-                if (picked == AgentDisposal.Hide)
+                if (choice == "h")
                 {
                     return Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
                 }
 
-                if (picked == AgentDisposal.Stop)
+                if (choice == "s")
                 {
                     var stopped = stopper.HandleAsync(project.Name, agent).GetAwaiter().GetResult();
 
                     return Noted(log, project.Name, stopped.Succeeded
-                        ? $"{agent.Repository}/{agent.Branch} stopped; its worktree is untouched."
+                        ? $"{Label(agent)} stopped; its worktree is untouched."
                         : stopped.Error);
                 }
 
-                var deleting = picked == AgentDisposal.Delete;
+                var deleting = choice == "d";
 
                 var state = deleting
                     ? remover.InspectAsync(agent).GetAwaiter().GetResult()
@@ -484,7 +520,7 @@ public static class DashboardWiring
                 if (!FleetDialog.Confirm(
                         app,
                         deleting ? "Delete this worktree?" : "Remove this agent?",
-                        RemovalWarning(agent.Repository, agent.Branch, agent.Worktree, state, deleting),
+                        RemovalWarning(agent, state, deleting),
                         confirmText: deleting ? "Delete" : "Remove"))
                 {
                     return null;
@@ -501,8 +537,8 @@ public static class DashboardWiring
                 }
 
                 return Noted(log, project.Name, deleting
-                    ? $"{agent.Repository}/{agent.Branch} removed with its worktree."
-                    : $"{agent.Repository}/{agent.Branch} removed; its files are still on disk.");
+                    ? $"{Label(agent)} removed with its worktree."
+                    : $"{Label(agent)} removed; its files are still on disk.");
             },
 
             RemoveRepository: repository =>

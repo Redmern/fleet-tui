@@ -17,6 +17,15 @@ public static class DashboardKeys
         FleetAction.NextTab,
     ];
 
+    private static readonly FleetAction[] SubScope =
+    [
+        FleetAction.RemoveAgent,
+        FleetAction.ToggleHidden,
+        FleetAction.Refresh,
+        FleetAction.PrevTab,
+        FleetAction.NextTab,
+    ];
+
     private static readonly FleetAction[] RepositoryScope =
     [
         FleetAction.AddRepository,
@@ -26,8 +35,12 @@ public static class DashboardKeys
         FleetAction.NextTab,
     ];
 
-    public static IReadOnlyList<FleetAction> ScopeFor(int tab) =>
-        tab == DashboardTabs.RepositoriesTab ? RepositoryScope : AgentScope;
+    public static IReadOnlyList<FleetAction> ScopeFor(int tab) => tab switch
+    {
+        DashboardTabs.RepositoriesTab => RepositoryScope,
+        DashboardTabs.SubsTab => SubScope,
+        _ => AgentScope,
+    };
 
     public static bool OpensAView(FleetAction action) =>
         action is FleetAction.OpenMenu

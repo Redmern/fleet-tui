@@ -4,6 +4,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Git;
 using Fleet.Ports.Mux;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.RemoveAgent;
@@ -17,7 +18,7 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
     public async Task<WorktreeState> InspectAsync(
         AgentRecord agent, CancellationToken ct = default)
     {
-        if (!IsWorktree(agent.Worktree))
+        if (AgentHarness.IsOrchestrator(agent.Harness) || !IsWorktree(agent.Worktree))
         {
             return WorktreeState.Gone;
         }
@@ -39,7 +40,9 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
 
         if (deleteWorktree)
         {
-            var failure = await DiscardWorktreeAsync(agent.Worktree, ct).ConfigureAwait(false);
+            var failure = AgentHarness.IsOrchestrator(agent.Harness)
+                ? DiscardFolder(agent.Worktree)
+                : await DiscardWorktreeAsync(agent.Worktree, ct).ConfigureAwait(false);
 
             if (failure is not null)
             {
@@ -94,6 +97,21 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
         await git.RunAsync(anchor, ["worktree", "prune"], null, ct).ConfigureAwait(false);
 
         return Directory.Exists(worktree) ? WorktreeLock.Busy(worktree) : null;
+    }
+
+    private string? DiscardFolder(string folder)
+    {
+        for (var attempt = 0; attempt < Attempts && Directory.Exists(folder); attempt++)
+        {
+            if (attempt > 0)
+            {
+                Thread.Sleep(Backoff);
+            }
+
+            Discard(folder);
+        }
+
+        return Directory.Exists(folder) ? WorktreeLock.Busy(folder) : null;
     }
 
     private static void Discard(string directory)
