@@ -11,9 +11,12 @@ the fleet menu from **any** pane, including one running nothing but Claude.
 > **Status.** Projects, repositories, the menu, configurable keybinds and agents
 > all work: you can start an agent in its own worktree, restart it after closing
 > the terminal, change what it opens, hide it from the tab bar, stop it, and
-> remove it together with its worktree. Live agent status via hooks is not built
-> yet. Only the WezTerm driver ships; tmux and the embedded driver are designed
-> but unwritten. Linux is built and tested by CI but has not been used in anger.
+> remove it together with its worktree. The orchestrator works too: Claude drives
+> fleet over an MCP server under per-project permissions, and a `,`-prefixed
+> prompt dispatches a sub-orchestrator that appears on its own tab. Live agent
+> status via hooks is not built yet. Only the WezTerm driver ships; tmux and the
+> embedded driver are designed but unwritten. Linux is built and tested by CI but
+> has not been used in anger.
 
 ## Requirements
 
@@ -124,6 +127,11 @@ fleet menu --action <id>    jump straight to add-repository or keybinds
 fleet request --action <id> --project <name>
                             hand an action to that project's running dashboard
 fleet apply-keybinds        write the wezterm keybinding module
+fleet mcp --project <name>  serve the MCP tools over stdio (Claude calls this)
+fleet dispatch "<task>" --project <name>
+                            spin up a sub-orchestrator for a task
+fleet report --caller <slug> --status <s> --project <name> -- <summary>
+                            a sub-orchestrator reports its own status
 fleet doctor                check the environment
 ```
 
@@ -373,6 +381,35 @@ work.
 
 Creating a project whose root does not exist asks before creating the directory.
 
+## The orchestrator
+
+The pane fleet opens on the left — Claude — is the project's orchestrator, and it
+can drive fleet itself through an MCP server. `fleet mcp --project <name>` speaks
+the Model Context Protocol over stdio; fleet registers it for you in the project's
+`.mcp.json` and pre-approves it in `.claude/settings.local.json` every time the
+dashboard starts, so Claude sees the `fleet` tools with no first-run prompt. (Claude
+Code only honours a project's approval in a *trusted* workspace — run `claude` there
+once and accept the trust dialog. `fleet doctor` reports whether each project is
+registered and enabled.)
+
+**Permissions.** Press `P` in the menu to say, per project and per tool, whether the
+orchestrator may do the action, must ask, or can't. Reads are allowed by default;
+writes ask. An "ask" can prompt in the fleet dashboard, in Claude's own permission
+prompt, or both. When the prompt lives in the dashboard, the running dashboard shows
+an Allow/Deny dialog — even though the MCP call is a separate process — and the
+answer travels back over the filesystem. If no dashboard is running, the tool fails
+fast with a clear error instead of hanging.
+
+**Dispatch.** Type a prompt in the main pane beginning with the dispatch trigger — a
+comma by default, configurable in the permissions screen — and instead of answering,
+the orchestrator spins up a *sub-orchestrator*: its own Claude in a hidden pane,
+working under `<project>/.fleet/orchestrations/<slug>/`, with a file browser split
+alongside. A sub-orchestrator uses the same MCP tools under the same permissions,
+creates repo agents that are stamped as its own, and reports back with
+`fleet report`. The **Subs** tab (between Agents and Repositories) groups each
+sub-orchestrator with the agents it created and shows its status — working, done, or
+failed — until you remove it.
+
 ## Configuration
 
 Everything lives under `%APPDATA%\fleet`:
@@ -380,6 +417,8 @@ Everything lives under `%APPDATA%\fleet`:
 ```
 projects/<name>.json    a name and a root, with ~ for the home directory
 keybinds.json           the prefix and every action binding
+settings/<name>.json    the per-project tool permissions and dispatch trigger
+approvals/<name>/       in-flight MCP approval requests (transient)
 fleet.log               failures fleet degraded past, shown by doctor
 ```
 

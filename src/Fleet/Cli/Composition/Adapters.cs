@@ -43,9 +43,9 @@ public static class Adapters
 
     public static ISettingsStore Settings() => new JsonSettingsStore();
 
-    public static ISettingsSync SettingsSync() => new NullSettingsSync();
+    public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
-    public static IHarnessConfig HarnessConfig() => new NullHarnessConfig();
+    public static IHarnessConfig HarnessConfig() => new ClaudeHarnessConfig();
 
     public static IApprovalChannel Approvals() => new FileApprovalChannel();
 

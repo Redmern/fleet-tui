@@ -713,6 +713,51 @@ management, `browser`, `fan`, `watch`, the `embedded` driver, and tiling. Each i
 a deliberate deferral, not an oversight — the design leaves room for all of them,
 and none is needed to find out whether the core loop is good.
 
+## The orchestrator — MCP, permissions, dispatch
+
+The pane fleet opens on the left drives fleet through an MCP server
+(`fleet mcp`), so an AI harness and a human reach the *same* handlers. Four
+decisions shaped it.
+
+**One tool identity, not two.** The MCP tool set and the per-project permission
+set are the same enum (`HarnessTool`) in `Shared/Settings`. An MCP tool, its
+permission rule, its settings-screen row, and its Claude rule-string
+(`mcp__fleet__<id>`) all derive from one value, so the editor and the server
+cannot drift. The `ServeMcp` slice adds descriptions and JSON-schema shape; it
+does not re-declare the tools.
+
+**JSON is AOT-safe by asymmetry.** NativeAOT forbids reflection-based
+serialization. Inbound JSON-RPC is parsed *untyped* with `JsonDocument`: the
+`id` is captured as raw text so a string, number, or null round-trips
+byte-for-byte, and `arguments` are flattened to `Dictionary<string,string>` so
+no `JsonElement` ever crosses into Ports or Features. Outbound frames are built
+from source-generated DTOs, with the JSON-RPC envelope composed by string
+concatenation around one serialized payload — no closed-generic registration.
+`.mcp.json` and `.claude/settings.local.json` merges preserve unknown keys via
+`[JsonExtensionData]`, so fleet never clobbers a user's own settings, and
+refuses to write when the existing file is unparseable. A `Console.`-free
+architecture test guards the MCP path, because a stray write to stdout is
+indistinguishable from a protocol frame and kills the server silently.
+
+**The gate, and why "ask" can mean "allow".** Every call passes one choke point
+(`McpDispatcher`, serialized by a semaphore) that reads the project's policy:
+allow runs it, forbid refuses it before any handler sees it, ask raises a
+prompt. The subtlety: when the ask should prompt in fleet's own dialog, the
+*Claude-side* rule is written as **allow** — otherwise Claude's permission
+prompt fires first and fleet's gate never runs. Only an ask routed explicitly
+to Claude's prompt is left for Claude to handle. So the planner maps
+`Ask + FleetDialog → allow`, `Ask + ClaudePermission → ask`, `Forbid → deny`.
+
+**Approvals ride the filesystem.** `fleet mcp` and `fleet dash` are separate
+processes, so a dashboard prompt cannot be an in-process call. The MCP side
+drops an `<id>.ask` and polls for an `<id>.reply`; the dashboard's existing
+80 ms pump takes the oldest ask, shows an Allow/Deny dialog, and writes the
+reply. A heartbeat file — touched every four seconds and while a dialog is open
+— lets the MCP side fail fast with "no dashboard is running" instead of hanging
+for two minutes when nobody can answer. Once an ask is picked up, a `.taken`
+marker exempts it from the heartbeat check, so a slow human decision is never
+mistaken for a dead dashboard.
+
 ## Open — not yet designed
 
 - **Agent state storage.** Daemonless files versus a state daemon. Deliberately

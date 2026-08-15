@@ -208,6 +208,24 @@ public class SliceBoundaryTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void The_mcp_path_never_touches_the_console_because_stdout_is_the_protocol()
+    {
+        var mcpDirs = new[]
+        {
+            Path.Combine(FeaturesDir, "Mcp"),
+            Path.Combine(SrcDir, "Platform", "Mcp"),
+        };
+
+        var violations = mcpDirs
+            .SelectMany(CsFiles)
+            .Where(f => File.ReadAllText(f).Contains("Console.", StringComparison.Ordinal))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
     private static bool Under(string file, string relativeDir) =>
         file.StartsWith(
             Path.Combine(SrcDir, relativeDir) + Path.DirectorySeparatorChar,

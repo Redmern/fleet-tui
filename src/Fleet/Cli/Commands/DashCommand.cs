@@ -1,6 +1,7 @@
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
 using Fleet.Features.Dashboard.ShowDashboard;
+using Fleet.Shared;
 using Fleet.Ui;
 using Terminal.Gui.App;
 
@@ -30,6 +31,13 @@ public static class DashCommand
         var mux = Adapters.Mux(log);
 
         Adapters.MarkDashboardPane(project.Name);
+
+        var synced = ClaudeWiring.SyncRoot(project.Name, project.Root);
+
+        if (!synced.Succeeded)
+        {
+            log.Write(LogTag.For(project.Name, $"claude config: {synced.Error}"));
+        }
 
         var approvals = Adapters.ApprovalInbox();
 

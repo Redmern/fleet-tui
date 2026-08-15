@@ -5,4 +5,5 @@ public sealed record ClaudePlan(
     McpServerEntry Server,
     IReadOnlyList<string> Allow,
     IReadOnlyList<string> Deny,
+    IReadOnlyList<string> Ask,
     IReadOnlyList<string> EnabledServers);

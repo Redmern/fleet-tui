@@ -1,4 +1,5 @@
 using Fleet.Features.Mcp.ServeMcp.Models;
+using Fleet.Shared.Mcp;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 
@@ -6,7 +7,7 @@ namespace Fleet.Features.Mcp.ServeMcp;
 
 public static class McpTools
 {
-    public const string ServerName = "fleet";
+    public const string ServerName = McpServerId.ServerName;
 
     private static readonly ToolParam Repository =
         new(ToolArguments.Repository, "string", "The repository name.", true);
@@ -14,7 +15,7 @@ public static class McpTools
     private static readonly ToolParam Branch =
         new(ToolArguments.Branch, "string", "The agent's branch.", true);
 
-    public static string RuleId(HarnessTool tool) => $"mcp__{ServerName}__{HarnessToolIds.For(tool)}";
+    public static string RuleId(HarnessTool tool) => McpServerId.RuleId(tool);
 
     public static IReadOnlyList<ToolSpec> All { get; } =
     [

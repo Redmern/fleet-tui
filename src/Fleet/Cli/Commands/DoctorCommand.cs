@@ -46,6 +46,20 @@ public static class DoctorCommand
         foreach (var project in report.Projects)
         {
             Console.WriteLine($"                {project.Name} -> {project.Root}");
+
+            var claude = ClaudeWiring.Inspect(project.Root);
+
+            Console.WriteLine(
+                $"                  mcp: {(claude.ServerRegistered ? "registered" : "NOT registered")}, "
+                + $"{(claude.ServerEnabled ? "enabled" : "NOT enabled")}");
+        }
+
+        if (report.Projects.Count > 0)
+        {
+            Console.WriteLine(
+                "  note          Claude Code (2.1.196+) only honours a project's mcp approval");
+            Console.WriteLine(
+                "                in a trusted workspace — run 'claude' there once and accept trust.");
         }
 
         if (report.RecentSwallowed.Count > 0)
