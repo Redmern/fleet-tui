@@ -19,4 +19,6 @@ public static class OrchestrationPaths
     public static string ReportFile(string folder) => Path.Combine(folder, "REPORT.md");
 
     public static string ReportsFolder(string folder) => Path.Combine(folder, "reports");
+
+    public static string ReadyMarker(string folder) => Path.Combine(folder, ".fleet-ready");
 }

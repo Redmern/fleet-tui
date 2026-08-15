@@ -3,4 +3,7 @@ namespace Fleet.Ports.Mcp.Models;
 public sealed record McpServing(
     string ServerName,
     IReadOnlyList<McpToolInfo> Tools,
-    Func<McpRequest, CancellationToken, Task<McpResult>> Invoke);
+    Func<McpRequest, CancellationToken, Task<McpResult>> Invoke)
+{
+    public Action? OnReady { get; init; }
+}

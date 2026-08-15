@@ -14,9 +14,15 @@ using Fleet.Shared.Results;
 namespace Fleet.Features.Orchestrations.Dispatch;
 
 public sealed class DispatchHandler(
-    IMuxDriver mux, IAgentStore store, IHarnessConfig harness, TimeSpan? kickoffDelay = null)
+    IMuxDriver mux,
+    IAgentStore store,
+    IHarnessConfig harness,
+    TimeSpan? readyTimeout = null,
+    TimeSpan? pollInterval = null)
 {
-    private readonly TimeSpan _kickoffDelay = kickoffDelay ?? TimeSpan.FromMilliseconds(2500);
+    private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
+
+    private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(200);
 
     public async Task<Result<DispatchReply>> HandleAsync(
         DispatchCommand command, string stampUtc, CancellationToken ct = default)
@@ -96,16 +102,22 @@ public sealed class DispatchHandler(
             await mux.SetTitleAsync(browse, $"{slug} files", ct).ConfigureAwait(false);
         }
 
-        await KickOff(pane, ct).ConfigureAwait(false);
+        await KickOff(folder, pane, ct).ConfigureAwait(false);
 
         return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, DispatchNote.Dispatched(slug)));
     }
 
-    private async Task KickOff(PaneId pane, CancellationToken ct)
+    private async Task KickOff(string folder, PaneId pane, CancellationToken ct)
     {
-        if (_kickoffDelay > TimeSpan.Zero)
+        var marker = OrchestrationPaths.ReadyMarker(folder);
+
+        var attempts = _pollInterval > TimeSpan.Zero
+            ? (int)Math.Ceiling(_readyTimeout / _pollInterval)
+            : 0;
+
+        for (var i = 0; i < attempts && !File.Exists(marker); i++)
         {
-            await Task.Delay(_kickoffDelay, ct).ConfigureAwait(false);
+            await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
         }
 
         await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff + "\r", ct).ConfigureAwait(false);

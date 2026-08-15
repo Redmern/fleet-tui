@@ -4,6 +4,7 @@ using Fleet.Platform.Mcp;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Mcp;
+using Fleet.Shared.Orchestrations;
 
 namespace Fleet.Cli.Composition;
 
@@ -31,11 +32,35 @@ public static class McpWiring
             log,
             actions.PerformAsync);
 
-        var serving = new McpServing(McpTools.ServerName, ToolInfos(), dispatcher.HandleAsync);
+        var serving = new McpServing(McpTools.ServerName, ToolInfos(), dispatcher.HandleAsync)
+        {
+            OnReady = ReadySignal(project.Root, caller),
+        };
 
         await Adapters.McpServer(log).RunAsync(serving, ct).ConfigureAwait(false);
 
         return 0;
+    }
+
+    private static Action? ReadySignal(string projectRoot, string caller)
+    {
+        if (caller.Trim().Length == 0)
+        {
+            return null;
+        }
+
+        var marker = OrchestrationPaths.ReadyMarker(OrchestrationPaths.For(projectRoot, caller));
+
+        return () =>
+        {
+            try
+            {
+                File.WriteAllText(marker, string.Empty);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        };
     }
 
     private static IReadOnlyList<McpToolInfo> ToolInfos() =>

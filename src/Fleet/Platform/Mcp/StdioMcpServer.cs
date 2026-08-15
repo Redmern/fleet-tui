@@ -41,6 +41,7 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
         switch (call.Method)
         {
             case "initialize":
+                serving.OnReady?.Invoke();
                 return JsonRpcCodec.Result(
                     call.Id,
                     JsonRpcCodec.Initialize(ProtocolVersion, serving.ServerName, Version));
