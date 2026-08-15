@@ -31,27 +31,37 @@ public static class DashCommand
 
         Adapters.MarkDashboardPane(project.Name);
 
+        var approvals = Adapters.ApprovalInbox();
+
         using IApplication app = FleetUi.Start();
 
         var keymap = new Keymap(keymaps.Load());
 
-        ShowDashboardView.Show(
-            app,
-            project.Name,
-            keymap,
-            DashboardWiring.For(
+        try
+        {
+            ShowDashboardView.Show(
                 app,
-                project,
+                project.Name,
                 keymap,
-                keymaps,
-                git,
-                mux.Driver,
-                Adapters.Agents(),
-                Adapters.Requests(),
-                Adapters.Workspaces(),
-                Adapters.Settings(),
-                Adapters.SettingsSync(),
-                log));
+                DashboardWiring.For(
+                    app,
+                    project,
+                    keymap,
+                    keymaps,
+                    git,
+                    mux.Driver,
+                    Adapters.Agents(),
+                    Adapters.Requests(),
+                    Adapters.Workspaces(),
+                    Adapters.Settings(),
+                    Adapters.SettingsSync(),
+                    approvals,
+                    log));
+        }
+        finally
+        {
+            approvals.Retire(project.Name);
+        }
 
         return 0;
     }

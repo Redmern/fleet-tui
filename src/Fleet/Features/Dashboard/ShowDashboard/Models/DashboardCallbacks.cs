@@ -1,4 +1,5 @@
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Approvals.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Models;
@@ -28,4 +29,7 @@ public sealed record DashboardCallbacks(
     Func<RepositoryChoice, RepositoryManaged> ManageRepository,
     Func<RepositoryChoice, Task<string?>> OpenRepository,
     Func<AgentRecord, BranchState> AgentState,
-    Func<RepositoryChoice, BranchState> RepositoryState);
+    Func<RepositoryChoice, BranchState> RepositoryState,
+    Func<PendingApproval?> TakeApproval,
+    Action<string, bool> AnswerApproval,
+    Action Heartbeat);

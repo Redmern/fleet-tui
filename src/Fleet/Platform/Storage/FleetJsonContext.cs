@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Fleet.Platform.Approvals.Models;
 using Fleet.Platform.Storage.Models;
 
 namespace Fleet.Platform.Storage;
@@ -10,4 +11,5 @@ namespace Fleet.Platform.Storage;
 [JsonSerializable(typeof(KeymapFile))]
 [JsonSerializable(typeof(SessionFile))]
 [JsonSerializable(typeof(SettingsFile))]
+[JsonSerializable(typeof(AskFile))]
 public partial class FleetJsonContext : JsonSerializerContext;

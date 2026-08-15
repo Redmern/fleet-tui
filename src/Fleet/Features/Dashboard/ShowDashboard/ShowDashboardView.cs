@@ -1,5 +1,6 @@
 using Fleet.Features.Dashboard.ShowDashboard.Constants;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Ports.Approvals.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
@@ -650,6 +651,18 @@ public static class ShowDashboardView
                 return true;
             }
 
+            if (!FleetModal.Any)
+            {
+                var approval = callbacks.TakeApproval();
+
+                if (approval is not null)
+                {
+                    ShowApproval(approval);
+
+                    return true;
+                }
+            }
+
             var pending = callbacks.TakeRequest();
 
             if (pending != FleetAction.None)
@@ -660,8 +673,34 @@ public static class ShowDashboardView
             return true;
         }
 
+        void ShowApproval(PendingApproval approval)
+        {
+            busy = true;
+
+            try
+            {
+                var allowed = FleetDialog.Confirm(
+                    app, "Approve this action?", ApprovalLines(approval.Request), confirmText: "Allow");
+
+                callbacks.AnswerApproval(approval.Id, allowed);
+
+                status.Text = allowed
+                    ? $"allowed {approval.Request.Tool}"
+                    : $"declined {approval.Request.Tool}";
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
+        static IReadOnlyList<string> ApprovalLines(ApprovalRequest request) =>
+            [request.Summary, string.Empty, $"tool: {request.Tool}"];
+
         bool Beat()
         {
+            callbacks.Heartbeat();
+
             if (!busy && !pulling && !refreshing && queued == FleetAction.None)
             {
                 UseKeymap(callbacks.ReloadKeymap());
@@ -706,6 +745,8 @@ public static class ShowDashboardView
             hints.Root);
 
         ShowTab(DashboardTabs.AgentsTab);
+
+        callbacks.Heartbeat();
 
         Start(RefreshAsync);
 

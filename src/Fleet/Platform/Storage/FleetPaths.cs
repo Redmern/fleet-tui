@@ -32,6 +32,8 @@ public static class FleetPaths
 
     public static string Settings => Path.Combine(Config, "settings");
 
+    public static string Approvals => Path.Combine(Config, "approvals");
+
     public static void EnsureDirs()
     {
         Directory.CreateDirectory(Projects);

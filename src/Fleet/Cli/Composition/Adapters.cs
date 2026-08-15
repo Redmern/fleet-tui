@@ -47,7 +47,9 @@ public static class Adapters
 
     public static IHarnessConfig HarnessConfig() => new NullHarnessConfig();
 
-    public static IApprovalChannel Approvals() => new NullApprovalChannel();
+    public static IApprovalChannel Approvals() => new FileApprovalChannel();
+
+    public static IApprovalInbox ApprovalInbox() => new FileApprovalChannel();
 
     public static IMcpServer McpServer(IFleetLog log)
     {

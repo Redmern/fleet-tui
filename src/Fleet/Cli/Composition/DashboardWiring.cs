@@ -28,6 +28,8 @@ using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Approvals;
+using Fleet.Ports.Approvals.Enums;
 using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
@@ -299,6 +301,7 @@ public static class DashboardWiring
         IWorkspaceRequestStore workspaces,
         ISettingsStore settings,
         ISettingsSync settingsSync,
+        IApprovalInbox approvals,
         IFleetLog log)
     {
         var repositories = new ListRepositoriesHandler(git);
@@ -664,6 +667,15 @@ public static class DashboardWiring
 
             RepositoryState: repository => states.For(
                 RepositoryWorktree.For(
-                    repository.Directory, repository.DefaultBranch, Directory.Exists)));
+                    repository.Directory, repository.DefaultBranch, Directory.Exists)),
+
+            TakeApproval: () => approvals.TakePending(project.Name),
+
+            AnswerApproval: (id, allowed) => approvals.Answer(
+                project.Name,
+                id,
+                allowed ? ApprovalDecision.Allowed : ApprovalDecision.Denied),
+
+            Heartbeat: () => approvals.Heartbeat(project.Name));
     }
 }
