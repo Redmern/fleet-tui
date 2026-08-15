@@ -27,6 +27,14 @@ public class FileBrowserTests
     }
 
     [Fact]
+    public void The_tab_title_says_how_to_choose_and_how_to_cancel()
+    {
+        Assert.Contains("q choose", FileBrowser.ChooseTitle);
+        Assert.Contains("Q cancel", FileBrowser.ChooseTitle);
+        Assert.True(FileBrowser.ChooseTitle.Length <= 20, "a tab title gets truncated");
+    }
+
+    [Fact]
     public void The_chosen_folder_is_the_first_line_of_the_file()
     {
         Assert.Equal("C:/repos/techweb", FileBrowser.Chosen("f", _ => "C:/repos/techweb\n"));

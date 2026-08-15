@@ -8,6 +8,10 @@ public static class FileBrowser
 
     public const string CwdFlag = "--cwd-file";
 
+    public const string ChooseTitle = "q choose · Q cancel";
+
+    public const string BrowseTitle = "files";
+
     public static SpawnOptions Browse(string cwd, string project, string? window) =>
         new()
         {

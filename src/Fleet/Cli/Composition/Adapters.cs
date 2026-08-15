@@ -72,7 +72,7 @@ public static class Adapters
             return null;
         }
 
-        mux.SetTitleAsync(pane, "choose a folder").GetAwaiter().GetResult();
+        mux.SetTitleAsync(pane, FileBrowser.ChooseTitle).GetAwaiter().GetResult();
         mux.FocusPaneAsync(pane).GetAwaiter().GetResult();
 
         try
@@ -103,7 +103,7 @@ public static class Adapters
             return null;
         }
 
-        mux.SetTitleAsync(pane, "files").GetAwaiter().GetResult();
+        mux.SetTitleAsync(pane, FileBrowser.BrowseTitle).GetAwaiter().GetResult();
         mux.FocusPaneAsync(pane).GetAwaiter().GetResult();
 
         return root;
