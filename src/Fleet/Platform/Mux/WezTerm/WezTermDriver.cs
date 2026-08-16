@@ -92,7 +92,9 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         if (options.Args.Count > 0)
         {
             args.Add("--");
-            args.AddRange(options.Args);
+            args.AddRange(options.Env.Count > 0
+                ? EnvLaunch.Wrap(OperatingSystem.IsWindows(), options.Env, options.Args)
+                : options.Args);
         }
 
         return args;

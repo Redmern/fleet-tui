@@ -51,7 +51,8 @@ public sealed class FakeMuxDriver : IMuxDriver
             window,
             options.Workspace ?? options.SessionName ?? "default",
             options.Cwd ?? string.Empty,
-            options.Args);
+            options.Args,
+            options.Env);
         return Task.FromResult(id);
     }
 
@@ -143,7 +144,8 @@ public sealed class FakeMuxDriver : IMuxDriver
     private string NextWindowId() => $"w{Interlocked.Increment(ref _nextWindow)}";
 
     private void Add(
-        PaneId id, string window, string session, string cwd, IReadOnlyList<string> args)
+        PaneId id, string window, string session, string cwd, IReadOnlyList<string> args,
+        IReadOnlyDictionary<string, string>? env = null)
         => _panes[id.Value] = new Entry(
             new Pane(
                 id,
@@ -153,7 +155,11 @@ public sealed class FakeMuxDriver : IMuxDriver
                 Title: string.Empty,
                 Cwd: cwd,
                 IsActive: true),
-            args);
+            args,
+            env ?? new Dictionary<string, string>());
+
+    public IReadOnlyDictionary<string, string> EnvFor(PaneId id) =>
+        _panes.TryGetValue(id.Value, out var e) ? e.Env : new Dictionary<string, string>();
 
     private void Mutate(PaneId id, Func<Pane, Pane> change)
     {
@@ -179,5 +185,6 @@ public sealed class FakeMuxDriver : IMuxDriver
         }
     }
 
-    private sealed record Entry(Pane Pane, IReadOnlyList<string> Args);
+    private sealed record Entry(
+        Pane Pane, IReadOnlyList<string> Args, IReadOnlyDictionary<string, string> Env);
 }

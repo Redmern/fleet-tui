@@ -14,6 +14,15 @@ public static class AgentHarness
     public const string OrchestratorKickoff =
         "Read CLAUDE.md and TASK.md in this folder, then begin.";
 
+    public const string ResumeArgument = "--continue";
+
+    public static IReadOnlyDictionary<string, string> SessionPersistence { get; } =
+        new Dictionary<string, string>
+        {
+            ["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"] = "1",
+            ["CLAUDE_CODE_CHILD_SESSION"] = string.Empty,
+        };
+
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
 
     public static IReadOnlyList<string> Known { get; } = [Nvim, Claude, Orchestrator];

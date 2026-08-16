@@ -108,6 +108,22 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task The_claude_pane_forces_session_persistence_so_it_can_be_resumed()
+    {
+        var reply = await Handler.HandleAsync(Command("start work"), "t");
+
+        var panes = await _mux.ListPanesAsync();
+        var claude = panes.Single(p =>
+            p.Cwd == reply.Value!.Folder
+            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
+
+        var env = _mux.EnvFor(claude.Id);
+
+        Assert.Equal("1", env["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"]);
+        Assert.Equal(string.Empty, env["CLAUDE_CODE_CHILD_SESSION"]);
+    }
+
+    [Fact]
     public async Task It_types_the_kickoff_into_the_claude_pane_so_the_sub_starts_itself()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");

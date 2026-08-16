@@ -79,13 +79,20 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
             return Result.Fail($"{agent.Worktree} is gone, so this agent cannot be restarted.");
         }
 
+        var orchestrator = Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness);
+
         var pane = await mux.SpawnAsync(
             new SpawnOptions
             {
                 Cwd = agent.Worktree,
                 SessionName = project,
                 WindowId = window,
-                Args = Shared.Constants.AgentHarness.CommandFor(agent.Harness),
+                Args = orchestrator
+                    ? [Shared.Constants.AgentHarness.Claude, Shared.Constants.AgentHarness.ResumeArgument]
+                    : Shared.Constants.AgentHarness.CommandFor(agent.Harness),
+                Env = orchestrator
+                    ? Shared.Constants.AgentHarness.SessionPersistence
+                    : new Dictionary<string, string>(),
             },
             ct).ConfigureAwait(false);
 
@@ -96,7 +103,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
         await mux.SetTitleAsync(pane, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
 
-        if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness))
+        if (orchestrator)
         {
             await OpenBrowseSplit(agent, pane, ct).ConfigureAwait(false);
         }

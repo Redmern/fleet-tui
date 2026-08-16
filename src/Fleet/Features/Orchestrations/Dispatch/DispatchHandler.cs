@@ -83,6 +83,7 @@ public sealed class DispatchHandler(
                 WindowId = window,
                 NewWindow = window is null,
                 Args = AgentHarness.CommandFor(AgentHarness.Orchestrator),
+                Env = AgentHarness.SessionPersistence,
             },
             ct).ConfigureAwait(false);
 

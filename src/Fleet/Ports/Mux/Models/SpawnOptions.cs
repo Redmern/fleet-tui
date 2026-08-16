@@ -13,4 +13,7 @@ public sealed record SpawnOptions
     public string? WindowId { get; init; }
 
     public IReadOnlyList<string> Args { get; init; } = [];
+
+    public IReadOnlyDictionary<string, string> Env { get; init; } =
+        new Dictionary<string, string>();
 }
