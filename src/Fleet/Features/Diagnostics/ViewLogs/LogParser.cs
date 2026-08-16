@@ -70,7 +70,7 @@ public static class LogParser
         var (project, message) = LogTag.Split(line[(split + 1)..]);
 
         return (
-            when.ToLocalTime().ToString(StampFormat, CultureInfo.InvariantCulture),
+            when.ToString(StampFormat, CultureInfo.InvariantCulture),
             project,
             message,
             []);

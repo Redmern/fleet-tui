@@ -143,7 +143,15 @@ public sealed class AddRepositoryHandler(IGitRunner git)
         }
 
         var commit = await git
-            .RunAsync(container, ["commit-tree", tree.Out, "-m", "Initial commit"], null, ct)
+            .RunAsync(
+                container,
+                [
+                    "-c", "user.name=fleet",
+                    "-c", "user.email=fleet@localhost",
+                    "commit-tree", tree.Out, "-m", "Initial commit",
+                ],
+                null,
+                ct)
             .ConfigureAwait(false);
 
         if (!commit.Ok)
