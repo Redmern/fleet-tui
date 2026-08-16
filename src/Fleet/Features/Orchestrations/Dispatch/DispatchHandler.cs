@@ -18,11 +18,14 @@ public sealed class DispatchHandler(
     IAgentStore store,
     IHarnessConfig harness,
     TimeSpan? readyTimeout = null,
-    TimeSpan? pollInterval = null)
+    TimeSpan? pollInterval = null,
+    TimeSpan? submitGap = null)
 {
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
 
     private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(200);
+
+    private readonly TimeSpan _submitGap = submitGap ?? TimeSpan.FromMilliseconds(500);
 
     public async Task<Result<DispatchReply>> HandleAsync(
         DispatchCommand command, string stampUtc, CancellationToken ct = default)
@@ -123,6 +126,13 @@ public sealed class DispatchHandler(
             await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
         }
 
-        await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff + "\r", ct).ConfigureAwait(false);
+        await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff, ct).ConfigureAwait(false);
+
+        if (_submitGap > TimeSpan.Zero)
+        {
+            await Task.Delay(_submitGap, ct).ConfigureAwait(false);
+        }
+
+        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 }

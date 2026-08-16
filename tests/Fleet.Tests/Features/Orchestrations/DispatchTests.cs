@@ -33,7 +33,7 @@ public sealed class DispatchTests : IDisposable
     }
 
     private DispatchHandler Handler =>
-        new(_mux, _store, new NullHarnessConfig(), TimeSpan.Zero);
+        new(_mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
 
     private DispatchCommand Command(string prompt, string caller = "") =>
         new("techweb", _root, prompt, caller);
@@ -117,10 +117,10 @@ public sealed class DispatchTests : IDisposable
             p.Cwd == reply.Value!.Folder
             && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
 
-        var sent = Assert.Single(_mux.SentTo(claude.Id));
+        var sent = _mux.SentTo(claude.Id);
 
-        Assert.Contains(AgentHarness.OrchestratorKickoff, sent);
-        Assert.EndsWith("\r", sent);
+        Assert.Contains(sent, s => s.Contains(AgentHarness.OrchestratorKickoff));
+        Assert.Contains("\r", sent);
     }
 
     [Fact]
