@@ -30,7 +30,8 @@ public sealed class McpDispatcher(
 
         Log(McpAudit.Requested(caller.Caller, tool));
 
-        var decision = McpGate.Decide(tool, settings.Load(caller.Project).MergedOverDefaults());
+        var decision = McpGate.Decide(
+            tool, settings.Load(caller.Project).MergedOverDefaults(), caller.IsSub);
 
         if (decision.Forbidden)
         {

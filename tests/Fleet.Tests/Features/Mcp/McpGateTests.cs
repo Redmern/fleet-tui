@@ -53,6 +53,37 @@ public sealed class McpGateTests
     }
 
     [Fact]
+    public void A_sub_orchestrator_may_create_and_manage_agents_without_asking()
+    {
+        Assert.True(McpGate.Decide(HarnessTool.NewAgent, SettingsConfig.Default, isSub: true).Allowed);
+        Assert.True(McpGate.Decide(HarnessTool.OpenAgent, SettingsConfig.Default, isSub: true).Allowed);
+        Assert.True(McpGate.Decide(HarnessTool.StopAgent, SettingsConfig.Default, isSub: true).Allowed);
+    }
+
+    [Fact]
+    public void The_main_orchestrator_is_still_asked_before_creating_an_agent()
+    {
+        Assert.False(McpGate.Decide(HarnessTool.NewAgent, SettingsConfig.Default, isSub: false).Allowed);
+    }
+
+    [Fact]
+    public void A_sub_is_still_refused_a_forbidden_tool()
+    {
+        var settings = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid);
+
+        Assert.True(McpGate.Decide(HarnessTool.NewAgent, settings, isSub: true).Forbidden);
+    }
+
+    [Fact]
+    public void A_sub_still_asks_before_destructive_tools_it_is_not_trusted_with()
+    {
+        var decision = McpGate.Decide(HarnessTool.RemoveRepository, SettingsConfig.Default, isSub: true);
+
+        Assert.False(decision.Allowed);
+        Assert.False(decision.Forbidden);
+    }
+
+    [Fact]
     public void A_claude_only_ask_does_not_ask_fleet_because_claude_already_prompted()
     {
         var settings = With(HarnessTool.NewAgent, ActionPolicy.Ask, AskChannel.ClaudePermission);
