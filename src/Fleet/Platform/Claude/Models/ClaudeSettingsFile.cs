@@ -71,6 +71,9 @@ public sealed class ClaudeSettingsFile
     [JsonPropertyName("enabledMcpjsonServers")]
     public List<string> EnabledMcpjsonServers { get; set; } = [];
 
+    [JsonPropertyName("enableAllProjectMcpServers")]
+    public bool? EnableAllProjectMcpServers { get; set; }
+
     [JsonPropertyName("hooks")]
     public HooksJson? Hooks { get; set; }
 

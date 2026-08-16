@@ -200,6 +200,8 @@ public sealed class McpActions(
             store.Save(project, created.Value! with { Owner = caller });
         }
 
+        ClaudeWiring.ApproveFolder(project, created.Value!.Worktree);
+
         return Ok($"started {repo.Name}/{Branch(request)}.");
     }
 

@@ -453,6 +453,11 @@ public static class DashboardWiring
 
                 var outcome = await spawner.HandleAsync(request).ConfigureAwait(false);
 
+                if (outcome.Succeeded)
+                {
+                    ClaudeWiring.ApproveFolder(project.Name, outcome.Value!.Worktree);
+                }
+
                 Note(log, project.Name, outcome.Succeeded
                     ? $"started agent {request.RepositoryName}/{outcome.Value!.Branch}"
                     : $"could not start an agent in {request.RepositoryName}: {outcome.Error}");

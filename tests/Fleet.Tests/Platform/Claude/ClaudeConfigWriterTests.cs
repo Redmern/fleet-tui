@@ -171,6 +171,38 @@ public sealed class ClaudeConfigWriterTests : IDisposable
     }
 
     [Fact]
+    public void Approving_a_folder_enables_the_server_without_an_mcp_json_or_hook()
+    {
+        var result = new ClaudeConfigWriter()
+            .ApproveServer(_dir, "fleet", ["mcp__fleet__list_agents"]);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var settings = File.ReadAllText(SettingsPath);
+
+        Assert.Contains("\"enabledMcpjsonServers\"", settings);
+        Assert.Contains("\"enableAllProjectMcpServers\": true", settings);
+        Assert.Contains("mcp__fleet__list_agents", settings);
+        Assert.DoesNotContain("UserPromptSubmit", settings);
+        Assert.False(File.Exists(McpPath));
+    }
+
+    [Fact]
+    public void Approving_a_folder_keeps_the_agents_own_settings()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(SettingsPath, """{"permissions":{"allow":["Bash(ls)"]},"model":"opus"}""");
+
+        new ClaudeConfigWriter().ApproveServer(_dir, "fleet", ["mcp__fleet__list_agents"]);
+
+        var settings = File.ReadAllText(SettingsPath);
+
+        Assert.Contains("Bash(ls)", settings);
+        Assert.Contains("\"model\": \"opus\"", settings);
+        Assert.Contains("mcp__fleet__list_agents", settings);
+    }
+
+    [Fact]
     public void Broken_json_is_left_untouched_rather_than_clobbered()
     {
         File.WriteAllText(McpPath, "{ not json at all");

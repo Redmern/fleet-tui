@@ -37,6 +37,14 @@ public static class ClaudeWiring
         return writer.Sync(plan);
     }
 
+    public static Result ApproveFolder(string project, string folder)
+    {
+        var settings = Adapters.Settings().Load(project).MergedOverDefaults();
+        var permissions = ClaudePermissionPlanner.Plan(settings);
+
+        return new ClaudeConfigWriter().ApproveServer(folder, McpTools.ServerName, permissions.Allow);
+    }
+
     public static ClaudeState Inspect(string directory) =>
         new ClaudeConfigWriter().Inspect(directory, McpTools.ServerName);
 

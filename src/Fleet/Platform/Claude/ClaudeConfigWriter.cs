@@ -66,6 +66,31 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             : Result.Fail($"fleet could not write {userSettingsPath}.");
     }
 
+    public Result ApproveServer(
+        string directory, string serverName, IReadOnlyList<string> allow)
+    {
+        var path = Path.Combine(directory, ".claude", "settings.local.json");
+
+        var settings = ReadSettings(path);
+
+        if (settings is null)
+        {
+            return Result.Fail($"{path} is not valid JSON; fleet left it untouched.");
+        }
+
+        if (!settings.EnabledMcpjsonServers.Contains(serverName))
+        {
+            settings.EnabledMcpjsonServers.Add(serverName);
+        }
+
+        settings.EnableAllProjectMcpServers = true;
+        settings.Permissions.Allow = Merge(settings.Permissions.Allow, allow);
+
+        return Write(path, JsonSerializer.Serialize(settings, ClaudeJsonContext.Default.ClaudeSettingsFile))
+            ? Result.Ok()
+            : Result.Fail($"fleet could not write {path}.");
+    }
+
     public ClaudeState Inspect(string directory, string serverName)
     {
         var mcp = ReadMcp(Path.Combine(directory, ".mcp.json"));
