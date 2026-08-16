@@ -286,15 +286,22 @@ public sealed class McpActions(
 
     private async Task Deliver(AgentRecord agent, PaneId pane, string message, CancellationToken ct)
     {
+        var dir = Path.Combine(agent.Worktree, ".fleet");
+        Directory.CreateDirectory(dir);
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, AgentHarness.AgentInstructionFile), message, ct).ConfigureAwait(false);
+
+        var prompt = AgentHarness.AgentInstructionPrompt;
+
         if (AgentHarness.Normalize(agent.Harness) == AgentHarness.Nvim)
         {
-            await mux.SendTextAsync(pane, "\x1b" + AgentHarness.TellPrefix + message + "\r", ct)
+            await mux.SendTextAsync(pane, "\x1b" + AgentHarness.TellPrefix + prompt + "\r", ct)
                 .ConfigureAwait(false);
 
             return;
         }
 
-        await mux.SendTextAsync(pane, message, ct).ConfigureAwait(false);
+        await mux.SendTextAsync(pane, prompt, ct).ConfigureAwait(false);
         await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }

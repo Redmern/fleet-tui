@@ -16,7 +16,12 @@ public static class AgentHarness
         + "if c then vim.fn.chansend(c, o.args..'\\r') end end end end, {nargs='+'}) "
         + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
 
-    public const string TellPrefix = ":FleetTell ";
+    public const string TellPrefix = ":FleetTell ";
+
+    public const string AgentInstructionFile = "instruction.md";
+
+    public const string AgentInstructionPrompt =
+        "Read .fleet/instruction.md in this folder and do what it says.";
 
     public const string OrchestratorKickoff =
         "Read CLAUDE.md and TASK.md in this folder, then begin.";
