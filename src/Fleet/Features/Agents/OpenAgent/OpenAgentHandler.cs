@@ -22,20 +22,27 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
         var mine = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
         var running = mine.FirstOrDefault();
 
-        if (running is not null)
+        if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness))
         {
-            if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness))
+            if (mine.Count >= 2)
             {
                 if (agent.Hidden || !agent.Open)
                 {
                     store.Save(project, agent with { Hidden = false, Open = true });
                 }
 
-                await mux.FocusPaneAsync(running.Id, ct).ConfigureAwait(false);
+                await mux.FocusPaneAsync(running!.Id, ct).ConfigureAwait(false);
 
                 return Result.Ok();
             }
 
+            foreach (var stale in mine)
+            {
+                await mux.KillPaneAsync(stale.Id, ct).ConfigureAwait(false);
+            }
+        }
+        else if (running is not null)
+        {
             foreach (var member in mine)
             {
                 if (agent.Hidden)

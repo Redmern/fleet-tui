@@ -214,6 +214,31 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task Opening_an_orchestrator_whose_claude_died_rebuilds_the_split()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+
+        // Only the browser survives — the claude pane exited.
+        var browser = await _mux.SpawnAsync(
+            new SpawnOptions { Cwd = agent.Worktree, Args = AgentHarness.BrowseCommand });
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var panes = await _mux.ListPanesAsync();
+
+        // The stale lone pane is gone; a fresh claude + browser split stands in its place.
+        Assert.DoesNotContain(panes, p => p.Id == browser);
+        var atWorktree = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
+        Assert.Equal(2, atWorktree.Count);
+        Assert.Contains(atWorktree, p => _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
+        Assert.Contains(atWorktree, p =>
+            _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.CommandFor(AgentHarness.Orchestrator)));
+    }
+
+    [Fact]
     public async Task Opening_an_orchestrator_never_spawns_an_extra_pane_when_it_already_has_them()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
