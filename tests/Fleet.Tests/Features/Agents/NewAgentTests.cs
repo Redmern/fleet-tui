@@ -99,6 +99,18 @@ public sealed class NewAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_agent_forces_session_persistence_so_its_claude_saves_transcripts()
+    {
+        var directory = await RepositoryAsync();
+
+        await Handler().HandleAsync(Command(directory, "feature/login"));
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Equal("1", _mux.EnvFor(pane.Id)["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"]);
+    }
+
+    [Fact]
     public async Task The_pane_is_titled_with_the_repository_and_the_slugged_branch()
     {
         var directory = await RepositoryAsync();
