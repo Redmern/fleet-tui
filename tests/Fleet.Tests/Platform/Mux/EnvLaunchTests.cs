@@ -17,8 +17,9 @@ public sealed class EnvLaunchTests
 
         Assert.Equal("cmd", argv[0]);
         Assert.Equal("/c", argv[1]);
-        Assert.Contains("set \"CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1\"", argv[2]);
-        Assert.Contains("set \"CLAUDE_CODE_CHILD_SESSION=\"", argv[2]);
+        Assert.Contains("set CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1", argv[2]);
+        Assert.Contains("set CLAUDE_CODE_CHILD_SESSION=", argv[2]);
+        Assert.DoesNotContain("\"", argv[2]);
         Assert.EndsWith("claude --continue", argv[2]);
     }
 

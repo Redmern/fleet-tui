@@ -10,7 +10,7 @@ public static class EnvLaunch
         if (windows)
         {
             var parts = env
-                .Select(kv => $"set \"{kv.Key}={kv.Value}\"")
+                .Select(kv => $"set {kv.Key}={kv.Value}")
                 .Append(run);
 
             return ["cmd", "/c", string.Join("& ", parts)];
