@@ -32,8 +32,9 @@ public static class ToolText
     private static string Line(AgentRecord agent)
     {
         var where = agent.Hidden ? "hidden" : agent.Open ? "open" : "closed";
+        var status = agent.Status.Trim().Length == 0 ? string.Empty : $" [{agent.Status.Trim()}]";
 
-        return $"{AgentKey.Describe(agent.Repository, agent.Branch)} — {where}";
+        return $"{AgentKey.Describe(agent.Repository, agent.Branch)} — {where}{status}";
     }
 
     private static string Where(AgentRecord agent) =>

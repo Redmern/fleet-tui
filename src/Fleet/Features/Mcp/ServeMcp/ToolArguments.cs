@@ -10,6 +10,8 @@ public static class ToolArguments
 
     public const string Message = "message";
 
+    public const string Task = "task";
+
     public const string Status = "status";
 
     public const string Summary = "summary";

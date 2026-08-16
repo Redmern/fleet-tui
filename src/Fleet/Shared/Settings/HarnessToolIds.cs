@@ -22,6 +22,7 @@ public static class HarnessToolIds
         HarnessTool.RemoveAgent => "remove_agent",
         HarnessTool.DeleteWorktree => "delete_worktree",
         HarnessTool.ChangeHarness => "change_harness",
+        HarnessTool.TellAgent => "tell_agent",
         HarnessTool.AddRepository => "add_repository",
         HarnessTool.PullRepository => "pull_repository",
         HarnessTool.RemoveRepository => "remove_repository",

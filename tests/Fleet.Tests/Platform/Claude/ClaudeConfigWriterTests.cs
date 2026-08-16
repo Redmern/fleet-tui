@@ -170,30 +170,33 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         Assert.True(new ClaudeConfigWriter().Inspect(_dir, "fleet").HookInstalled);
     }
 
+    private static McpServerEntry AgentServer() =>
+        new("fleet", "fleet", ["mcp", "--project", "techweb", "--caller", "agent:backend/login"]);
+
     [Fact]
-    public void Approving_a_folder_enables_the_server_without_an_mcp_json_or_hook()
+    public void Approving_a_worktree_registers_a_caller_stamped_server_but_no_hook()
     {
         var result = new ClaudeConfigWriter()
-            .ApproveServer(_dir, "fleet", ["mcp__fleet__list_agents"]);
+            .SyncWorktree(AgentServer(), _dir, ["mcp__fleet__list_agents"]);
 
         Assert.True(result.Succeeded, result.Error);
 
         var settings = File.ReadAllText(SettingsPath);
+        var mcp = File.ReadAllText(McpPath);
 
-        Assert.Contains("\"enabledMcpjsonServers\"", settings);
         Assert.Contains("\"enableAllProjectMcpServers\": true", settings);
         Assert.Contains("mcp__fleet__list_agents", settings);
         Assert.DoesNotContain("UserPromptSubmit", settings);
-        Assert.False(File.Exists(McpPath));
+        Assert.Contains("agent:backend/login", mcp);
     }
 
     [Fact]
-    public void Approving_a_folder_keeps_the_agents_own_settings()
+    public void Approving_a_worktree_keeps_the_agents_own_settings()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
         File.WriteAllText(SettingsPath, """{"permissions":{"allow":["Bash(ls)"]},"model":"opus"}""");
 
-        new ClaudeConfigWriter().ApproveServer(_dir, "fleet", ["mcp__fleet__list_agents"]);
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, ["mcp__fleet__list_agents"]);
 
         var settings = File.ReadAllText(SettingsPath);
 

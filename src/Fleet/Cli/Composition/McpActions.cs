@@ -25,7 +25,10 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Models;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
@@ -89,6 +92,7 @@ public sealed class McpActions(
             HarnessTool.RepositoryStatus => await RepositoryStatus(request, ct).ConfigureAwait(false),
             HarnessTool.LogTail => LogTail(request),
             HarnessTool.NewAgent => await NewAgent(request, ct).ConfigureAwait(false),
+            HarnessTool.TellAgent => await TellAgent(request, ct).ConfigureAwait(false),
             HarnessTool.OpenAgent => await OpenAgent(request, ct).ConfigureAwait(false),
             HarnessTool.SetAgentVisible => await SetVisible(request, ct).ConfigureAwait(false),
             HarnessTool.StopAgent => await StopAgent(request, ct).ConfigureAwait(false),
@@ -200,9 +204,99 @@ public sealed class McpActions(
             store.Save(project, created.Value! with { Owner = caller });
         }
 
-        ClaudeWiring.ApproveFolder(project, created.Value!.Worktree);
+        ClaudeWiring.ApproveFolder(project, created.Value!.Worktree, repo.Name, Branch(request));
 
-        return Ok($"started {repo.Name}/{Branch(request)}.");
+        var task = ToolArguments.Text(request, ToolArguments.Task);
+
+        if (task.Length == 0)
+        {
+            return Ok($"started {repo.Name}/{Branch(request)}.");
+        }
+
+        var delivered = await SendWhenReady(created.Value!, task, ct).ConfigureAwait(false);
+
+        return Ok(delivered
+            ? $"started {repo.Name}/{Branch(request)} and gave it its first task."
+            : $"started {repo.Name}/{Branch(request)}, but it was not ready to take the task; "
+              + "use tell_agent once it is up.");
+    }
+
+    private async Task<bool> SendWhenReady(AgentRecord agent, string message, CancellationToken ct)
+    {
+        var marker = OrchestrationPaths.ReadyMarker(agent.Worktree);
+
+        for (var i = 0; i < 80 && !File.Exists(marker); i++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300), ct).ConfigureAwait(false);
+        }
+
+        if (!File.Exists(marker))
+        {
+            return false;
+        }
+
+        var pane = await PaneFor(agent, ct).ConfigureAwait(false);
+
+        if (pane is null)
+        {
+            return false;
+        }
+
+        await Deliver(agent, pane.Value, message, ct).ConfigureAwait(false);
+
+        return true;
+    }
+
+    private async Task<McpResult> TellAgent(McpRequest request, CancellationToken ct)
+    {
+        if (Missing(request, ToolArguments.Repository, ToolArguments.Branch, ToolArguments.Message)
+            is { } error)
+        {
+            return error;
+        }
+
+        var agent = Find(request);
+
+        if (agent is null)
+        {
+            return McpResult.Error(ToolText.NotFound(Repo(request), Branch(request)));
+        }
+
+        var pane = await PaneFor(agent, ct).ConfigureAwait(false);
+
+        if (pane is null)
+        {
+            return McpResult.Error(
+                $"{Repo(request)}/{Branch(request)} is not open; open it first, then tell it.");
+        }
+
+        await Deliver(agent, pane.Value, ToolArguments.Text(request, ToolArguments.Message), ct)
+            .ConfigureAwait(false);
+
+        return Ok($"sent to {Repo(request)}/{Branch(request)}.");
+    }
+
+    private async Task<PaneId?> PaneFor(AgentRecord agent, CancellationToken ct)
+    {
+        var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var pane = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, agent.Worktree));
+
+        return pane?.Id;
+    }
+
+    private async Task Deliver(AgentRecord agent, PaneId pane, string message, CancellationToken ct)
+    {
+        if (AgentHarness.Normalize(agent.Harness) == AgentHarness.Nvim)
+        {
+            await mux.SendTextAsync(pane, "\x1b" + AgentHarness.TellPrefix + message + "\r", ct)
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        await mux.SendTextAsync(pane, message, ct).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
+        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 
     private async Task<McpResult> OpenAgent(McpRequest request, CancellationToken ct)

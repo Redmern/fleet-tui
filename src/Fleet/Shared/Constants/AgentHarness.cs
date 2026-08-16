@@ -10,7 +10,13 @@ public static class AgentHarness
 
     public const string NvimStartup =
         "lua vim.env.CLAUDE_CODE_FORCE_SESSION_PERSISTENCE='1' vim.env.CLAUDE_CODE_CHILD_SESSION=nil "
+        + "vim.api.nvim_create_user_command('FleetTell', function(o) "
+        + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
+        + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
+        + "if c then vim.fn.chansend(c, o.args..'\\r') end end end end, {nargs='+'}) "
         + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
+
+    public const string TellPrefix = ":FleetTell ";
 
     public const string OrchestratorKickoff =
         "Read CLAUDE.md and TASK.md in this folder, then begin.";

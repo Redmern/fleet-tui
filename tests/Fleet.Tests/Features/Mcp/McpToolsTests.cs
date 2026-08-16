@@ -70,6 +70,24 @@ public sealed class McpToolsTests
     }
 
     [Fact]
+    public void New_agent_can_take_an_optional_first_task()
+    {
+        var spec = McpTools.Find("new_agent")!;
+
+        Assert.Contains(spec.Params, p => p.Name == "task" && !p.Required);
+    }
+
+    [Fact]
+    public void Tell_agent_sends_a_required_message_to_a_named_agent()
+    {
+        var spec = McpTools.Find("tell_agent")!;
+
+        Assert.Contains(spec.Params, p => p.Name == "repository" && p.Required);
+        Assert.Contains(spec.Params, p => p.Name == "branch" && p.Required);
+        Assert.Contains(spec.Params, p => p.Name == "message" && p.Required);
+    }
+
+    [Fact]
     public void Report_takes_a_status_and_an_optional_summary()
     {
         var spec = McpTools.Find("report")!;

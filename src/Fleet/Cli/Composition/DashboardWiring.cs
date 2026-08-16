@@ -455,7 +455,9 @@ public static class DashboardWiring
 
                 if (outcome.Succeeded)
                 {
-                    ClaudeWiring.ApproveFolder(project.Name, outcome.Value!.Worktree);
+                    ClaudeWiring.ApproveFolder(
+                        project.Name, outcome.Value!.Worktree,
+                        outcome.Value.Repository, outcome.Value.Branch);
                 }
 
                 Note(log, project.Name, outcome.Succeeded

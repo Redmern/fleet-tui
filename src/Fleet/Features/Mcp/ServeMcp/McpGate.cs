@@ -9,6 +9,7 @@ public static class McpGate
     private static readonly HashSet<HarnessTool> SubAutonomous =
     [
         HarnessTool.NewAgent,
+        HarnessTool.TellAgent,
         HarnessTool.OpenAgent,
         HarnessTool.SetAgentVisible,
         HarnessTool.StopAgent,

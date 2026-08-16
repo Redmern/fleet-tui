@@ -16,6 +16,7 @@ public enum HarnessTool
     RemoveAgent,
     DeleteWorktree,
     ChangeHarness,
+    TellAgent,
     AddRepository,
     PullRepository,
     RemoveRepository,

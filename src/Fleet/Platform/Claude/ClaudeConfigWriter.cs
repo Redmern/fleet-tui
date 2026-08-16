@@ -66,29 +66,43 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             : Result.Fail($"fleet could not write {userSettingsPath}.");
     }
 
-    public Result ApproveServer(
-        string directory, string serverName, IReadOnlyList<string> allow)
+    public Result SyncWorktree(McpServerEntry server, string directory, IReadOnlyList<string> allow)
     {
-        var path = Path.Combine(directory, ".claude", "settings.local.json");
+        var mcpPath = Path.Combine(directory, ".mcp.json");
+        var settingsPath = Path.Combine(directory, ".claude", "settings.local.json");
 
-        var settings = ReadSettings(path);
+        var mcp = ReadMcp(mcpPath);
+        var settings = ReadSettings(settingsPath);
+
+        if (mcp is null)
+        {
+            return Result.Fail($"{mcpPath} is not valid JSON; fleet left it untouched.");
+        }
 
         if (settings is null)
         {
-            return Result.Fail($"{path} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{settingsPath} is not valid JSON; fleet left it untouched.");
         }
 
-        if (!settings.EnabledMcpjsonServers.Contains(serverName))
+        Apply(mcp, server);
+
+        if (!settings.EnabledMcpjsonServers.Contains(server.Name))
         {
-            settings.EnabledMcpjsonServers.Add(serverName);
+            settings.EnabledMcpjsonServers.Add(server.Name);
         }
 
         settings.EnableAllProjectMcpServers = true;
         settings.Permissions.Allow = Merge(settings.Permissions.Allow, allow);
 
-        return Write(path, JsonSerializer.Serialize(settings, ClaudeJsonContext.Default.ClaudeSettingsFile))
+        if (!Write(mcpPath, JsonSerializer.Serialize(mcp, ClaudeJsonContext.Default.McpJsonFile)))
+        {
+            return Result.Fail($"fleet could not write {mcpPath}.");
+        }
+
+        return Write(
+            settingsPath, JsonSerializer.Serialize(settings, ClaudeJsonContext.Default.ClaudeSettingsFile))
             ? Result.Ok()
-            : Result.Fail($"fleet could not write {path}.");
+            : Result.Fail($"fleet could not write {settingsPath}.");
     }
 
     public ClaudeState Inspect(string directory, string serverName)

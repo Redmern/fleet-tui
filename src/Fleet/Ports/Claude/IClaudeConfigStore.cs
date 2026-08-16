@@ -9,7 +9,7 @@ public interface IClaudeConfigStore
 
     Result EnableServer(string userSettingsPath, string serverName);
 
-    Result ApproveServer(string directory, string serverName, IReadOnlyList<string> allow);
+    Result SyncWorktree(McpServerEntry server, string directory, IReadOnlyList<string> allow);
 
     ClaudeState Inspect(string directory, string serverName);
 }

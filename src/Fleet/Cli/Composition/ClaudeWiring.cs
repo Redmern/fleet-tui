@@ -2,6 +2,7 @@ using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Mcp.SyncClaudeConfig;
 using Fleet.Platform.Claude;
 using Fleet.Ports.Claude.Models;
+using Fleet.Shared.Mcp;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings.Models;
 
@@ -37,12 +38,15 @@ public static class ClaudeWiring
         return writer.Sync(plan);
     }
 
-    public static Result ApproveFolder(string project, string folder)
+    public static Result ApproveFolder(string project, string folder, string repository, string branch)
     {
         var settings = Adapters.Settings().Load(project).MergedOverDefaults();
         var permissions = ClaudePermissionPlanner.Plan(settings);
 
-        return new ClaudeConfigWriter().ApproveServer(folder, McpTools.ServerName, permissions.Allow);
+        var server = McpRegistration.For(
+            Adapters.Executable, project, McpCaller.ForAgent(repository, branch));
+
+        return new ClaudeConfigWriter().SyncWorktree(server, folder, permissions.Allow);
     }
 
     public static ClaudeState Inspect(string directory) =>

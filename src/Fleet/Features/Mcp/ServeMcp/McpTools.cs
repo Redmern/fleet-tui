@@ -40,9 +40,17 @@ public static class McpTools
             new ToolParam(ToolArguments.Lines, "integer", "How many lines to read.", false)),
         Spec(
             HarnessTool.NewAgent,
-            "Start a new agent on a branch of a repository.",
+            "Start a new agent on a branch of a repository, optionally with a first task.",
             Repository,
-            new ToolParam(ToolArguments.Branch, "string", "The branch to create or reuse.", true)),
+            new ToolParam(ToolArguments.Branch, "string", "The branch to create or reuse.", true),
+            new ToolParam(
+                ToolArguments.Task, "string", "An optional first instruction to send the agent.", false)),
+        Spec(
+            HarnessTool.TellAgent,
+            "Send an instruction to a running agent's Claude.",
+            Repository,
+            Branch,
+            new ToolParam(ToolArguments.Message, "string", "The instruction to send.", true)),
         Spec(HarnessTool.OpenAgent, "Bring an agent's pane into view.", Repository, Branch),
         Spec(
             HarnessTool.SetAgentVisible,

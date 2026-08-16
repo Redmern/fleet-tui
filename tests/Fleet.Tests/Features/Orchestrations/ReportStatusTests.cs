@@ -29,6 +29,44 @@ public sealed class ReportStatusTests
         return record;
     }
 
+    private AgentRecord SeedAgent(string repository, string branch)
+    {
+        var record = new AgentRecord(
+            $"C:/repos/techweb/{repository}/{branch}",
+            repository,
+            branch,
+            AgentHarness.Nvim,
+            "origin/main",
+            true,
+            Owner: "some-sub");
+
+        _store.Saved.Add(record);
+
+        return record;
+    }
+
+    [Fact]
+    public void An_agent_reports_its_own_status_by_its_repository_and_branch()
+    {
+        SeedAgent("backend", "feature/login");
+
+        var result = Handler.Handle(
+            "techweb", "agent:backend/feature/login", OrchestrationStatus.Done, "endpoint added");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal(OrchestrationStatus.Done, Assert.Single(_store.Written).Status);
+    }
+
+    [Fact]
+    public void An_agent_report_does_not_match_an_orchestrator()
+    {
+        Seed("backend");
+
+        var result = Handler.Handle("techweb", "agent:backend/main", OrchestrationStatus.Done, "");
+
+        Assert.False(result.Succeeded);
+    }
+
     [Fact]
     public void The_main_orchestrator_cannot_report()
     {

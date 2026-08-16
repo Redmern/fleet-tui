@@ -49,7 +49,7 @@ public static class McpWiring
             return null;
         }
 
-        var marker = OrchestrationPaths.ReadyMarker(OrchestrationPaths.For(projectRoot, caller));
+        var marker = OrchestrationPaths.ReadyMarker(Environment.CurrentDirectory);
 
         return () =>
         {
