@@ -69,13 +69,16 @@ public sealed class DispatchHandler(
 
         store.Save(command.ProjectName, record);
 
+        var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, command.ProjectRoot))?.WindowId;
+
         var pane = await mux.SpawnAsync(
             new SpawnOptions
             {
                 Cwd = folder,
-                SessionName = FleetWorkspaces.Hidden,
-                Workspace = FleetWorkspaces.Hidden,
-                NewWindow = true,
+                SessionName = command.ProjectName,
+                WindowId = window,
+                NewWindow = window is null,
                 Args = AgentHarness.CommandFor(AgentHarness.Orchestrator, fresh: true),
             },
             ct).ConfigureAwait(false);

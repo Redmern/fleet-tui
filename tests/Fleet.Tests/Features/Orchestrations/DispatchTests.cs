@@ -79,30 +79,32 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task The_pane_opens_hidden_running_an_interactive_claude()
+    public async Task The_pane_runs_an_interactive_claude()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
         var panes = await _mux.ListPanesAsync();
-        var claude = panes.Single(p =>
+
+        Assert.Single(panes, p =>
             p.Cwd == reply.Value!.Folder
             && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
-
-        Assert.Equal(FleetWorkspaces.Hidden, claude.SessionName);
     }
 
     [Fact]
-    public async Task It_opens_a_hidden_file_browser_beside_claude()
+    public async Task It_opens_a_file_browser_beside_claude_in_the_same_window()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
         var panes = await _mux.ListPanesAsync();
 
+        var claude = panes.Single(p =>
+            p.Cwd == reply.Value!.Folder
+            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
         var browser = panes.Single(p =>
             p.Cwd == reply.Value!.Folder
             && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
 
-        Assert.Equal(FleetWorkspaces.Hidden, browser.SessionName);
+        Assert.Equal(claude.WindowId, browser.WindowId);
     }
 
     [Fact]
