@@ -9,7 +9,8 @@ public static class AgentHarness
     public const string Orchestrator = "orchestrator";
 
     public const string NvimStartup =
-        "lua vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
+        "lua vim.env.CLAUDE_CODE_FORCE_SESSION_PERSISTENCE='1' vim.env.CLAUDE_CODE_CHILD_SESSION=nil "
+        + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
 
     public const string OrchestratorKickoff =
         "Read CLAUDE.md and TASK.md in this folder, then begin.";
@@ -22,6 +23,9 @@ public static class AgentHarness
             ["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"] = "1",
             ["CLAUDE_CODE_CHILD_SESSION"] = string.Empty,
         };
+
+    public static IReadOnlyDictionary<string, string> SpawnEnv(string harness) =>
+        CommandFor(harness)[0] == Claude ? SessionPersistence : new Dictionary<string, string>();
 
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
 

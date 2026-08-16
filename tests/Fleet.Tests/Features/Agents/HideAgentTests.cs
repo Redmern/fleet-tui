@@ -198,7 +198,21 @@ public class HideAgentTests
     [Fact]
     public void The_startup_commands_are_scheduled_so_lazy_plugins_have_loaded()
     {
-        Assert.StartsWith("lua vim.schedule(", AgentHarness.NvimStartup);
+        Assert.Contains("vim.schedule(", AgentHarness.NvimStartup);
+    }
+
+    [Fact]
+    public void Nvim_forces_session_persistence_for_the_claude_it_launches()
+    {
+        Assert.Contains("CLAUDE_CODE_FORCE_SESSION_PERSISTENCE='1'", AgentHarness.NvimStartup);
+        Assert.Contains("CLAUDE_CODE_CHILD_SESSION=nil", AgentHarness.NvimStartup);
+    }
+
+    [Fact]
+    public void An_nvim_agent_is_not_shell_wrapped_since_its_lua_sets_the_env()
+    {
+        Assert.Empty(AgentHarness.SpawnEnv(AgentHarness.Nvim));
+        Assert.NotEmpty(AgentHarness.SpawnEnv(AgentHarness.Claude));
     }
 
     [Fact]
