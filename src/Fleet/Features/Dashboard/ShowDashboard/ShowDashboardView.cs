@@ -72,59 +72,40 @@ public static class ShowDashboardView
             }
         }
 
-        void RefreshAgents()
-        {
-            board = callbacks.LoadAgents();
-
-            var selected = FleetRows.Selected(agentList);
-
-            FleetRows.Fill(agentList, board.Rows, selected);
-
-            tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(board.Count));
-
-            ShowBarFor(DashboardTabs.AgentsTab);
-        }
-
-        void RefreshSubs()
-        {
-            subs = callbacks.LoadSubs();
-
-            var selected = FleetRows.Selected(subList);
-
-            FleetRows.Fill(subList, subs.Rows, selected);
-
-            tabBar.Retitle(DashboardTabs.SubsTab, DashboardTabs.Subs(subs.Count));
-
-            ShowBarFor(DashboardTabs.SubsTab);
-        }
-
         IReadOnlyList<RepositoryChoice> repositories = [];
         var repoRows = new FleetRowSource([]);
 
-        void ApplyRepositories(IReadOnlyList<RepositoryChoice> loaded)
+        void Bind(
+            IReadOnlyList<RepositoryChoice> loaded,
+            IReadOnlyList<FleetRow> repoRowsData,
+            AgentBoard agentBoard,
+            SubBoard subBoard)
         {
             repositories = loaded;
-
-            var selected = FleetRows.Selected(repoList);
-
-            FleetRows.Fill(
-                repoList,
-                DashboardRows.ForRepositories(loaded, callbacks.RepositoryState),
-                selected);
-
+            FleetRows.Fill(repoList, repoRowsData, FleetRows.Selected(repoList));
             repoRows = (FleetRowSource)repoList.Source!;
-
             tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(loaded.Count));
 
-            RefreshAgents();
-            RefreshSubs();
+            board = agentBoard;
+            FleetRows.Fill(agentList, board.Rows, FleetRows.Selected(agentList));
+            tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(board.Count));
+            ShowBarFor(DashboardTabs.AgentsTab);
+
+            subs = subBoard;
+            FleetRows.Fill(subList, subs.Rows, FleetRows.Selected(subList));
+            tabBar.Retitle(DashboardTabs.SubsTab, DashboardTabs.Subs(subs.Count));
+            ShowBarFor(DashboardTabs.SubsTab);
         }
 
         async Task RefreshAsync()
         {
             var loaded = await callbacks.LoadRepositories().ConfigureAwait(false);
 
-            app.Invoke(() => ApplyRepositories(loaded));
+            var repoRowsData = DashboardRows.ForRepositories(loaded, callbacks.RepositoryState);
+            var agentBoard = callbacks.LoadAgents();
+            var subBoard = callbacks.LoadSubs();
+
+            app.Invoke(() => Bind(loaded, repoRowsData, agentBoard, subBoard));
         }
 
         var busy = false;
@@ -210,12 +191,6 @@ public static class ShowDashboardView
         int ActiveRow() =>
             FleetRows.Selected(ActiveTab() == DashboardTabs.SubsTab ? subList : agentList);
 
-        void RefreshActive()
-        {
-            RefreshAgents();
-            RefreshSubs();
-        }
-
         async Task OpenAsync()
         {
             var error = await callbacks.OpenAgent(ActiveTab(), ActiveRow())
@@ -234,7 +209,7 @@ public static class ShowDashboardView
             try
             {
                 status.Text = callbacks.HideAgent(ActiveTab(), ActiveRow()) ?? string.Empty;
-                RefreshActive();
+                Start(RefreshAsync);
             }
             finally
             {
@@ -251,7 +226,7 @@ public static class ShowDashboardView
                 var error = callbacks.ManageAgent(ActiveTab(), ActiveRow());
 
                 status.Text = error ?? string.Empty;
-                RefreshActive();
+                Start(RefreshAsync);
             }
             finally
             {

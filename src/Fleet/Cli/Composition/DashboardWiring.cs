@@ -64,6 +64,15 @@ public static class DashboardWiring
         FleetAction.Close,
     ];
 
+    private static Func<AgentRecord, BranchState> Memoized(BranchStates states)
+    {
+        var cache = new Dictionary<string, BranchState>(StringComparer.OrdinalIgnoreCase);
+
+        return agent => cache.TryGetValue(agent.Worktree, out var cached)
+            ? cached
+            : cache[agent.Worktree] = states.For(agent.Worktree, agent.BaseRef);
+    }
+
     private static AgentRecord? At(ListAgentsHandler lister, string project, int tab, int index)
     {
         var listing = SubTree.Of(lister.Handle(project));
@@ -413,7 +422,7 @@ public static class DashboardWiring
                 var board = SubTree.Of(lister.Handle(project.Name)).Board;
 
                 return new AgentBoard(
-                    AgentRows.For(board, a => states.For(a.Worktree, a.BaseRef)),
+                    AgentRows.For(board, Memoized(states)),
                     board.Count,
                     [.. board.Select(a => a.Hidden)]);
             },
@@ -424,7 +433,7 @@ public static class DashboardWiring
                 var trigger = settings.Load(project.Name).Trigger;
 
                 return new SubBoard(
-                    SubRows.For(listing, a => states.For(a.Worktree, a.BaseRef), trigger),
+                    SubRows.For(listing, Memoized(states), trigger),
                     listing.Flat.Count(e => !e.IsChild),
                     [.. listing.Flat.Select(e => e.Agent.Hidden)]);
             },

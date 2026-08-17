@@ -145,42 +145,37 @@ Write-Ok "published to $publishDir"
 
 Write-Step 'Installing'
 
-# Windows holds an exclusive lock on a running executable, so a copy over the
-# installed binary fails with "being used by another process" while any fleet is
-# open. Stop them first and say so, rather than failing halfway through an
-# install.
-$running = @(Get-Process fleet -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -eq $BinPath })
-
-if ($running.Count -gt 0) {
-    foreach ($p in $running) {
-        try { $p.Kill(); $p.WaitForExit(3000) | Out-Null } catch { }
-    }
-    Write-Warn2 "stopped $($running.Count) running fleet process(es) to replace the binary"
-}
-
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-# Windows releases the file lock slightly after the process dies, and a pane may
-# spawn a new fleet at any moment, so the copy is retried rather than assumed.
-$copied = $false
-foreach ($attempt in 1..10) {
+# Windows won't let you overwrite a running executable, but it WILL let you rename
+# one. Move the current binary aside (works even while fleets are running) and drop
+# the new one in its place, so reinstalling never has to kill live fleets. Running
+# fleets keep executing from the renamed file until they are reopened; new launches
+# get the new binary.
+if (Test-Path $BinPath) {
+    $stale = "$BinPath.old-$(Get-Date -Format 'yyyyMMddHHmmss')"
     try {
-        Copy-Item (Join-Path $publishDir 'fleet.exe') $BinPath -Force -ErrorAction Stop
-        $copied = $true
-        break
+        Move-Item $BinPath $stale -Force -ErrorAction Stop
     }
     catch {
-        Get-Process fleet -ErrorAction SilentlyContinue |
-            Where-Object { $_.Path -eq $BinPath } |
-            ForEach-Object { try { $_.Kill() } catch { } }
-        Start-Sleep -Milliseconds 400
+        # Rename failed (rare) - fall back to stopping the running fleets.
+        $running = @(Get-Process fleet -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -eq $BinPath })
+        foreach ($p in $running) {
+            try { $p.Kill(); $p.WaitForExit(3000) | Out-Null } catch { }
+        }
+        if ($running.Count -gt 0) {
+            Write-Warn2 "could not rename the binary aside; stopped $($running.Count) running fleet(s)"
+        }
     }
 }
 
-if (-not $copied) {
-    throw "could not replace $BinPath - close any running fleet panes and retry"
-}
+Copy-Item (Join-Path $publishDir 'fleet.exe') $BinPath -Force
+
+# Best-effort cleanup of binaries left by earlier reinstalls. Any still locked by a
+# running fleet stay until that process exits, which is harmless.
+Get-ChildItem (Join-Path $InstallDir 'fleet.exe.old-*') -ErrorAction SilentlyContinue |
+    ForEach-Object { try { Remove-Item $_.FullName -Force -ErrorAction Stop } catch { } }
 
 Write-Ok "installed $BinPath"
 
