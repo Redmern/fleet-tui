@@ -229,19 +229,26 @@ public static class ShowDashboardView
 
         void ManageAgent()
         {
+            var tab = ActiveTab();
+            var row = ActiveRow();
+
             busy = true;
 
-            try
+            Start(async () =>
             {
-                var error = callbacks.ManageAgent(ActiveTab(), ActiveRow());
+                try
+                {
+                    var message = await callbacks.ManageAgent(tab, row).ConfigureAwait(false);
 
-                status.Text = error ?? string.Empty;
-                Start(RefreshAsync);
-            }
-            finally
-            {
-                busy = false;
-            }
+                    app.Invoke(() => status.Text = message ?? string.Empty);
+
+                    await RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    busy = false;
+                }
+            });
         }
 
         RepositoryChoice? Highlighted()
@@ -311,32 +318,31 @@ public static class ShowDashboardView
                 return;
             }
 
-            RepositoryManaged managed;
-
             busy = true;
 
-            try
+            Start(async () =>
             {
-                managed = callbacks.ManageRepository(chosen);
-                status.Text = managed.Status ?? string.Empty;
-            }
-            finally
-            {
-                busy = false;
-            }
+                var managed = await callbacks.ManageRepository(chosen).ConfigureAwait(false);
 
-            switch (managed.Follow)
-            {
-                case FleetAction.PullRepository:
-                    Start(PullAsync);
-                    return;
+                app.Invoke(() =>
+                {
+                    status.Text = managed.Status ?? string.Empty;
+                    busy = false;
 
-                case FleetAction.RemoveRepository:
-                    RemoveRepository();
-                    return;
-            }
+                    switch (managed.Follow)
+                    {
+                        case FleetAction.PullRepository:
+                            Start(PullAsync);
+                            return;
 
-            Start(RefreshAsync);
+                        case FleetAction.RemoveRepository:
+                            RemoveRepository();
+                            return;
+                    }
+
+                    Start(RefreshAsync);
+                });
+            });
         }
 
         async Task OpenRepositoryAsync()
@@ -364,21 +370,25 @@ public static class ShowDashboardView
             }
 
             var selected = Math.Clamp(FleetRows.Selected(repoList), 0, repositories.Count - 1);
+            var chosen = repositories[selected];
 
             busy = true;
 
-            try
+            Start(async () =>
             {
-                var error = callbacks.RemoveRepository(repositories[selected]);
+                try
+                {
+                    var message = await callbacks.RemoveRepository(chosen).ConfigureAwait(false);
 
-                status.Text = error ?? string.Empty;
-            }
-            finally
-            {
-                busy = false;
-            }
+                    app.Invoke(() => status.Text = message ?? string.Empty);
 
-            Start(RefreshAsync);
+                    await RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    busy = false;
+                }
+            });
         }
 
         void BrowseFiles()

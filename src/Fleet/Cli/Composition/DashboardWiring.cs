@@ -511,7 +511,7 @@ public static class DashboardWiring
                     : Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
             },
 
-            ManageAgent: (tab, index) =>
+            ManageAgent: async (tab, index) =>
             {
                 var agent = At(lister, project.Name, tab, index);
 
@@ -522,7 +522,9 @@ public static class DashboardWiring
 
                 var entries = AgentDisposal.For(agent.Hidden, AgentHarness.IsOrchestrator(agent.Harness));
 
-                var picked = FleetPicker.Choose(app, Label(agent), entries, keymap);
+                var picked = await FleetAsync
+                    .OnUi(app, () => FleetPicker.Choose(app, Label(agent), entries, keymap))
+                    .ConfigureAwait(false);
 
                 if (picked is null)
                 {
@@ -534,7 +536,9 @@ public static class DashboardWiring
                 if (choice == "o")
                 {
                     return Noted(
-                        log, project.Name, ChooseHarness(app, keymap, harnesses, project.Name, agent));
+                        log, project.Name, await FleetAsync
+                            .OnUi(app, () => ChooseHarness(app, keymap, harnesses, project.Name, agent))
+                            .ConfigureAwait(false));
                 }
 
                 if (choice == "h")
@@ -544,7 +548,7 @@ public static class DashboardWiring
 
                 if (choice == "s")
                 {
-                    var stopped = stopper.HandleAsync(project.Name, agent).GetAwaiter().GetResult();
+                    var stopped = await stopper.HandleAsync(project.Name, agent).ConfigureAwait(false);
 
                     return Noted(log, project.Name, stopped.Succeeded
                         ? $"{Label(agent)} stopped; its worktree is untouched."
@@ -554,14 +558,18 @@ public static class DashboardWiring
                 var deleting = choice == "d";
 
                 var state = deleting
-                    ? remover.InspectAsync(agent).GetAwaiter().GetResult()
+                    ? await remover.InspectAsync(agent).ConfigureAwait(false)
                     : WorktreeState.Gone;
 
-                if (!FleetDialog.Confirm(
+                var confirmed = await FleetAsync
+                    .OnUi(app, () => FleetDialog.Confirm(
                         app,
                         deleting ? "Delete this worktree?" : "Remove this agent?",
                         RemovalWarning(agent, state, deleting),
                         confirmText: deleting ? "Delete" : "Remove"))
+                    .ConfigureAwait(false);
+
+                if (!confirmed)
                 {
                     return null;
                 }
@@ -576,26 +584,28 @@ public static class DashboardWiring
                                      a.Owner, agent.Branch, StringComparison.OrdinalIgnoreCase))
                         .ToList();
 
-                    if (children.Count > 0 && FleetDialog.Confirm(
+                    var cascade = children.Count > 0 && await FleetAsync
+                        .OnUi(app, () => FleetDialog.Confirm(
                             app,
                             $"Throw away its {children.Count} agent(s)?",
                             CascadeWarning(children),
                             confirmText: "Remove all"))
+                        .ConfigureAwait(false);
+
+                    if (cascade)
                     {
                         foreach (var child in children)
                         {
-                            remover.HandleAsync(project.Name, child, deleteWorktree: true)
-                                .GetAwaiter()
-                                .GetResult();
+                            await remover.HandleAsync(project.Name, child, deleteWorktree: true)
+                                .ConfigureAwait(false);
                             cascaded++;
                         }
                     }
                 }
 
-                var outcome = remover
+                var outcome = await remover
                     .HandleAsync(project.Name, agent, deleting)
-                    .GetAwaiter()
-                    .GetResult();
+                    .ConfigureAwait(false);
 
                 if (!outcome.Succeeded)
                 {
@@ -609,7 +619,7 @@ public static class DashboardWiring
                     : $"{Label(agent)} removed; its files are still on disk{tail}.");
             },
 
-            RemoveRepository: repository =>
+            RemoveRepository: async repository =>
             {
                 var owned = lister.Handle(project.Name)
                     .Where(a => a.Repository == repository.Name)
@@ -621,16 +631,19 @@ public static class DashboardWiring
                          + "Remove those first.";
                 }
 
-                var state = repositoryRemover
+                var state = await repositoryRemover
                     .InspectAsync(repository.Directory)
-                    .GetAwaiter()
-                    .GetResult();
+                    .ConfigureAwait(false);
 
-                if (!FleetDialog.Confirm(
+                var confirmed = await FleetAsync
+                    .OnUi(app, () => FleetDialog.Confirm(
                         app,
                         "Delete this repository?",
                         RepositoryWarning(repository.Name, repository.Directory, state),
                         confirmText: "Delete"))
+                    .ConfigureAwait(false);
+
+                if (!confirmed)
                 {
                     return null;
                 }
@@ -653,10 +666,12 @@ public static class DashboardWiring
                     : outcome.Error);
             },
 
-            ManageRepository: repository =>
+            ManageRepository: async repository =>
             {
-                var picked = FleetPicker.Choose(
-                    app, repository.Name, RepositoryChores.Entries, keymap);
+                var picked = await FleetAsync
+                    .OnUi(app, () => FleetPicker.Choose(
+                        app, repository.Name, RepositoryChores.Entries, keymap))
+                    .ConfigureAwait(false);
 
                 if (picked == RepositoryChores.Pull)
                 {
@@ -671,7 +686,9 @@ public static class DashboardWiring
                 if (picked == RepositoryChores.Secrets)
                 {
                     return new RepositoryManaged(
-                        Noted(log, project.Name, Secrets(app, keymap, mux, project, repository)));
+                        Noted(log, project.Name, await FleetAsync
+                            .OnUi(app, () => Secrets(app, keymap, mux, project, repository))
+                            .ConfigureAwait(false)));
                 }
 
                 if (picked != RepositoryChores.DefaultBranch)
@@ -679,9 +696,7 @@ public static class DashboardWiring
                     return RepositoryManaged.Nothing;
                 }
 
-                var branches = branches0.HandleAsync(repository.Directory)
-                    .GetAwaiter()
-                    .GetResult()
+                var branches = (await branches0.HandleAsync(repository.Directory).ConfigureAwait(false))
                     .Where(b => !b.IsRemote)
                     .ToList();
 
@@ -690,12 +705,14 @@ public static class DashboardWiring
                     return new RepositoryManaged($"{repository.Name} has no local branches.");
                 }
 
-                var chosen = FleetPicker.Choose(
-                    app,
-                    $"{repository.Name} default branch",
-                    branches.Select(b => b.Reference).ToList(),
-                    keymap,
-                    branches.FindIndex(b => b.Reference == repository.DefaultBranch));
+                var chosen = await FleetAsync
+                    .OnUi(app, () => FleetPicker.Choose(
+                        app,
+                        $"{repository.Name} default branch",
+                        branches.Select(b => b.Reference).ToList(),
+                        keymap,
+                        branches.FindIndex(b => b.Reference == repository.DefaultBranch)))
+                    .ConfigureAwait(false);
 
                 if (chosen is null)
                 {
@@ -704,10 +721,9 @@ public static class DashboardWiring
 
                 var wanted = branches[chosen.Value].Reference;
 
-                var set = defaults
+                var set = await defaults
                     .HandleAsync(repository.Directory, wanted)
-                    .GetAwaiter()
-                    .GetResult();
+                    .ConfigureAwait(false);
 
                 return new RepositoryManaged(Noted(log, project.Name, set.Succeeded
                     ? $"{repository.Name} now defaults to {wanted}. Its worktrees are untouched."
