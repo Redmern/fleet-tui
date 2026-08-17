@@ -204,17 +204,27 @@ public static class ShowDashboardView
 
         void HideAgent()
         {
+            var tab = ActiveTab();
+            var row = ActiveRow();
+
             busy = true;
 
-            try
+            Start(async () =>
             {
-                status.Text = callbacks.HideAgent(ActiveTab(), ActiveRow()) ?? string.Empty;
-                Start(RefreshAsync);
-            }
-            finally
-            {
-                busy = false;
-            }
+                try
+                {
+                    var message = await Task.Run(() => callbacks.HideAgent(tab, row))
+                        .ConfigureAwait(false);
+
+                    app.Invoke(() => status.Text = message ?? string.Empty);
+
+                    await RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    busy = false;
+                }
+            });
         }
 
         void ManageAgent()
