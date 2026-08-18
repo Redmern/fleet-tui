@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace Fleet.Shared.Orchestrations;
 
 public static class OrchestrationPaths
@@ -20,5 +23,14 @@ public static class OrchestrationPaths
 
     public static string ReportsFolder(string folder) => Path.Combine(folder, "reports");
 
-    public static string ReadyMarker(string folder) => Path.Combine(folder, ".fleet-ready");
+    public static string ReadyMarker(string folder) =>
+        Path.Combine(FleetHome.Config, "ready", Key(folder));
+
+    private static string Key(string folder)
+    {
+        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder))
+            .ToLowerInvariant();
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
+    }
 }

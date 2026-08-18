@@ -55,6 +55,7 @@ public static class McpWiring
         {
             try
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
                 File.WriteAllText(marker, string.Empty);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)

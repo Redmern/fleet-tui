@@ -1,6 +1,7 @@
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Mcp.SyncClaudeConfig;
 using Fleet.Platform.Claude;
+using Fleet.Platform.Git;
 using Fleet.Ports.Claude.Models;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Results;
@@ -46,8 +47,21 @@ public static class ClaudeWiring
         var server = McpRegistration.For(
             Adapters.Executable, project, McpCaller.ForAgent(repository, branch));
 
-        return new ClaudeConfigWriter().SyncWorktree(server, folder, permissions.Allow);
+        var result = new ClaudeConfigWriter().SyncWorktree(server, folder, permissions.Allow);
+
+        if (result.Succeeded)
+        {
+            WorktreeExcludes
+                .EnsureLocallyExcludedAsync(Adapters.Git(), folder, FleetExcludes)
+                .GetAwaiter()
+                .GetResult();
+        }
+
+        return result;
     }
+
+    private static readonly string[] FleetExcludes =
+        ["/.mcp.json", "/.claude/", "/.fleet/", "/.fleet-ready"];
 
     public static ClaudeState Inspect(string directory) =>
         new ClaudeConfigWriter().Inspect(directory, McpTools.ServerName);

@@ -1,24 +1,12 @@
+using Fleet.Shared;
+
 namespace Fleet.Platform.Storage;
 
 public static class FleetPaths
 {
-    public const string OverrideVariable = "FLEET_CONFIG_HOME";
+    public const string OverrideVariable = FleetHome.OverrideVariable;
 
-    public static string Config
-    {
-        get
-        {
-            var over = Environment.GetEnvironmentVariable(OverrideVariable);
-            if (!string.IsNullOrWhiteSpace(over))
-            {
-                return over;
-            }
-
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "fleet");
-        }
-    }
+    public static string Config => FleetHome.Config;
 
     public static string Projects => Path.Combine(Config, "projects");
 
