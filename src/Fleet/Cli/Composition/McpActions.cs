@@ -320,6 +320,8 @@ public sealed class McpActions(
             return McpResult.Error(ToolText.NotFound(Repo(request), Branch(request)));
         }
 
+        ClaudeWiring.TrustFolder(agent.Worktree);
+
         var outcome = await _opener.HandleAsync(project, agent, root, ct).ConfigureAwait(false);
 
         return From(outcome, $"opened {Repo(request)}/{Branch(request)}.");

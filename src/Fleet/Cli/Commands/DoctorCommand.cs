@@ -58,9 +58,9 @@ public static class DoctorCommand
         if (report.Projects.Count > 0)
         {
             Console.WriteLine(
-                "  note          Claude Code (2.1.196+) only honours a project's mcp approval");
+                "  note          Claude Code (2.1.196+) only honours a project's mcp approval in a");
             Console.WriteLine(
-                "                in a trusted workspace — run 'claude' there once and accept trust.");
+                "                trusted workspace; fleet now trusts each folder it opens for you.");
         }
 
         if (report.RecentSwallowed.Count > 0)

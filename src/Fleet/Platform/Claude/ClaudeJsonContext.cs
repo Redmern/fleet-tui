@@ -9,4 +9,5 @@ namespace Fleet.Platform.Claude;
 [JsonSerializable(typeof(McpJsonFile))]
 [JsonSerializable(typeof(ClaudeSettingsFile))]
 [JsonSerializable(typeof(UserSettingsFile))]
+[JsonSerializable(typeof(ClaudeGlobalFile))]
 public partial class ClaudeJsonContext : JsonSerializerContext;

@@ -492,6 +492,8 @@ public static class DashboardWiring
                     return Noted(log, project.Name, HarnessTrouble.Missing(executable));
                 }
 
+                ClaudeWiring.TrustFolder(agent.Worktree);
+
                 var outcome = await opener.HandleAsync(project.Name, agent, project.Root)
                     .ConfigureAwait(false);
 

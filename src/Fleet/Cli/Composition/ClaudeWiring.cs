@@ -35,6 +35,7 @@ public static class ClaudeWiring
         var writer = new ClaudeConfigWriter();
 
         writer.EnableServer(UserSettingsPath, server.Name);
+        TrustFolder(directory);
 
         return writer.Sync(plan);
     }
@@ -57,11 +58,19 @@ public static class ClaudeWiring
                 .GetResult();
         }
 
+        TrustFolder(folder);
+
         return result;
     }
 
+    public static void TrustFolder(string folder) =>
+        new ClaudeConfigWriter().TrustFolder(ClaudeJsonPath, folder);
+
     private static readonly string[] FleetExcludes =
         ["/.mcp.json", "/.claude/", "/.fleet/", "/.fleet-ready"];
+
+    private static string ClaudeJsonPath =>
+        Path.Combine(Adapters.HomeDirectory, ".claude.json");
 
     public static ClaudeState Inspect(string directory) =>
         new ClaudeConfigWriter().Inspect(directory, McpTools.ServerName);

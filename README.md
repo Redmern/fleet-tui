@@ -388,9 +388,9 @@ can drive fleet itself through an MCP server. `fleet mcp --project <name>` speak
 the Model Context Protocol over stdio; fleet registers it for you in the project's
 `.mcp.json` and pre-approves it in `.claude/settings.local.json` every time the
 dashboard starts, so Claude sees the `fleet` tools with no first-run prompt. (Claude
-Code only honours a project's approval in a *trusted* workspace — run `claude` there
-once and accept the trust dialog. `fleet doctor` reports whether each project is
-registered and enabled.)
+Code only honours a project's approval in a *trusted* workspace; fleet records that
+trust in `~/.claude.json` for every folder it opens, so there is no `/mcp` step.
+`fleet doctor` reports whether each project is registered and enabled.)
 
 **Permissions.** Press `P` in the menu to say, per project and per tool, whether the
 orchestrator may do the action, must ask, or can't. Reads are allowed by default;
