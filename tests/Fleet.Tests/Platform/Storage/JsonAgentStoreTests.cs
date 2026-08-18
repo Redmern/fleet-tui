@@ -127,4 +127,16 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
 
         Assert.Empty(_store.List("techweb"));
     }
+
+    [Fact]
+    public void Concurrent_writers_from_separate_stores_do_not_lose_each_others_records()
+    {
+        const int writers = 24;
+
+        Parallel.For(0, writers, i =>
+            new JsonAgentStore().Save(
+                "techweb", Agent(Path.Combine(ConfigHome, "backend", $"agent-{i}"), $"branch-{i}")));
+
+        Assert.Equal(writers, _store.List("techweb").Count);
+    }
 }

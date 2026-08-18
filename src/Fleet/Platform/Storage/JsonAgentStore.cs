@@ -17,24 +17,23 @@ public sealed class JsonAgentStore : IAgentStore
             return;
         }
 
-        var session = Read(file);
-
-        session.Agents.RemoveAll(a => SameWorktree(a.Worktree, agent.Worktree));
-        session.Agents.Add(new AgentEntry
+        Mutate(file, session =>
         {
-            Worktree = HomePath.Contract(agent.Worktree),
-            Repository = agent.Repository,
-            Branch = agent.Branch,
-            Harness = agent.Harness,
-            BaseRef = agent.BaseRef,
-            RepositoryWasBare = agent.RepositoryWasBare,
-            Hidden = agent.Hidden,
-            Open = agent.Open,
-            Owner = agent.Owner,
-            Status = agent.Status,
+            session.Agents.RemoveAll(a => SameWorktree(a.Worktree, agent.Worktree));
+            session.Agents.Add(new AgentEntry
+            {
+                Worktree = HomePath.Contract(agent.Worktree),
+                Repository = agent.Repository,
+                Branch = agent.Branch,
+                Harness = agent.Harness,
+                BaseRef = agent.BaseRef,
+                RepositoryWasBare = agent.RepositoryWasBare,
+                Hidden = agent.Hidden,
+                Open = agent.Open,
+                Owner = agent.Owner,
+                Status = agent.Status,
+            });
         });
-
-        Write(file, session);
     }
 
     public IReadOnlyList<AgentRecord> List(string project)
@@ -72,28 +71,68 @@ public sealed class JsonAgentStore : IAgentStore
             return;
         }
 
-        var session = Read(file);
-
-        if (session.Agents.RemoveAll(a => SameWorktree(a.Worktree, worktree)) > 0)
-        {
-            Write(file, session);
-        }
+        Mutate(file, session => session.Agents.RemoveAll(a => SameWorktree(a.Worktree, worktree)));
     }
 
     private static bool SameWorktree(string stored, string candidate) =>
         PathKey.Same(stored, candidate);
 
+    private static void Mutate(string file, Action<SessionFile> change)
+    {
+        FleetPaths.EnsureDirs();
+
+        using var gate = Lock(file + ".lock");
+
+        var session = Read(file);
+        change(session);
+        Write(file, session);
+    }
+
+    private static FileStream? Lock(string lockPath)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+
+        while (true)
+        {
+            try
+            {
+                return new FileStream(
+                    lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (DateTime.UtcNow < deadline)
+            {
+                Thread.Sleep(20);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+    }
+
     private static SessionFile Read(string file)
     {
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            return JsonSerializer.Deserialize(
-                File.ReadAllText(file), FleetJsonContext.Default.SessionFile) ?? new SessionFile();
-        }
-        catch (Exception e)
-            when (e is IOException or JsonException or UnauthorizedAccessException)
-        {
-            return new SessionFile();
+            try
+            {
+                if (!File.Exists(file))
+                {
+                    return new SessionFile();
+                }
+
+                return JsonSerializer.Deserialize(
+                    File.ReadAllText(file), FleetJsonContext.Default.SessionFile) ?? new SessionFile();
+            }
+            catch (IOException) when (attempt < 3)
+            {
+                Thread.Sleep(15);
+            }
+            catch (Exception e)
+                when (e is IOException or JsonException or UnauthorizedAccessException)
+            {
+                return new SessionFile();
+            }
         }
     }
 
@@ -102,8 +141,12 @@ public sealed class JsonAgentStore : IAgentStore
         try
         {
             FleetPaths.EnsureDirs();
+
+            var temp = file + ".tmp";
+
             File.WriteAllText(
-                file, JsonSerializer.Serialize(session, FleetJsonContext.Default.SessionFile));
+                temp, JsonSerializer.Serialize(session, FleetJsonContext.Default.SessionFile));
+            File.Move(temp, file, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
