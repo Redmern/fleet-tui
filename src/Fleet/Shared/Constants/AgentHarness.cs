@@ -13,7 +13,8 @@ public static class AgentHarness
         + "vim.api.nvim_create_user_command('FleetTell', function(o) "
         + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
         + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
-        + "if c then vim.fn.chansend(c, o.args..'\\r') end end end end, {nargs='+'}) "
+        + "if c then vim.fn.chansend(c, o.args) "
+        + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) end end end end, {nargs='+'}) "
         + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') end)";
 
     public const string TellPrefix = ":FleetTell ";

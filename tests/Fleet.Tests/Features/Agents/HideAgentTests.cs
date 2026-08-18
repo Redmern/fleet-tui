@@ -209,6 +209,15 @@ public class HideAgentTests
     }
 
     [Fact]
+    public void FleetTell_sends_the_enter_separately_so_claude_submits_it()
+    {
+        Assert.Contains("vim.fn.chansend(c, o.args)", AgentHarness.NvimStartup);
+        Assert.Contains("vim.defer_fn(", AgentHarness.NvimStartup);
+        Assert.Contains("vim.fn.chansend(c, '\\r')", AgentHarness.NvimStartup);
+        Assert.DoesNotContain("o.args..'\\r'", AgentHarness.NvimStartup);
+    }
+
+    [Fact]
     public void An_nvim_agent_is_not_shell_wrapped_since_its_lua_sets_the_env()
     {
         Assert.Empty(AgentHarness.SpawnEnv(AgentHarness.Nvim));
