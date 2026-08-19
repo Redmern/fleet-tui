@@ -6,11 +6,15 @@ using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
+using Fleet.Features.Projects.OpenProject;
+using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
+using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
+using Fleet.Ports.Mux;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -108,32 +112,44 @@ public static class MenuCommand
 
             case FleetAction.SwitchProject:
             {
-                var switchMux = Adapters.Mux(Adapters.Log());
-                var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
-
-                var open = panes
-                    .Select(p => p.SessionName)
-                    .Where(w => !string.IsNullOrWhiteSpace(w)
-                        && !string.Equals(w, FleetWorkspaces.Default, StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(w, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(w, project.Name, StringComparison.OrdinalIgnoreCase))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(w => w, StringComparer.OrdinalIgnoreCase)
+                var others = projects.List()
+                    .Where(p => !string.Equals(
+                        p.Name, project.Name, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                if (open.Count == 0)
+                if (others.Count == 0)
                 {
                     FleetDialog.Error(
-                        app, "Switch project", "No other projects are open right now.");
+                        app, "Switch project", "No other projects are saved yet.");
 
                     break;
                 }
 
-                var picked = FleetPicker.Choose(app, "Switch project", open, keymap);
+                var switchMux = Adapters.Mux(Adapters.Log());
+                var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
+
+                bool IsOpen(Project p) => panes.Any(x => PathKey.Same(x.Cwd, p.Root));
+
+                var labels = others
+                    .Select(p => IsOpen(p) ? $"{p.Name}  (open)" : p.Name)
+                    .ToList();
+
+                var picked = FleetPicker.Choose(app, "Switch project", labels, keymap);
 
                 if (picked is { } index)
                 {
-                    Adapters.Workspaces().Submit(open[index]);
+                    var target = others[index];
+                    var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
+
+                    if (dash is not null)
+                    {
+                        await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await OpenProjectFlow(switchMux.Driver, target).ConfigureAwait(false);
+                    }
                 }
 
                 break;
@@ -226,6 +242,30 @@ public static class MenuCommand
         await new QuitProjectHandler(mux.Driver, Adapters.Agents())
             .HandleAsync(project.Name, project.Root, agents)
             .ConfigureAwait(false);
+    }
+
+    private static async Task OpenProjectFlow(IMuxDriver mux, Project project)
+    {
+        var result = await new OpenProjectHandler(mux)
+            .HandleAsync(new OpenProjectCommand(project, "claude", Adapters.Executable))
+            .ConfigureAwait(false);
+
+        if (!result.Succeeded)
+        {
+            return;
+        }
+
+        var agents = new ListAgentsHandler(Adapters.Agents()).Handle(project.Name);
+
+        var runnable = agents
+            .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
+            .ToList();
+
+        await new RestoreSessionHandler(mux)
+            .HandleAsync(project.Name, project.Root, runnable)
+            .ConfigureAwait(false);
+
+        await mux.FocusPaneAsync(result.Value.DashPane).ConfigureAwait(false);
     }
 
     private static async Task FocusMain(Project project)
