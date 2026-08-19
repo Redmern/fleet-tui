@@ -10,6 +10,7 @@ using Fleet.Features.Projects.PickProject.Models;
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.RemoveProject;
 using Fleet.Ports.Projects.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Terminal.Gui.App;
@@ -55,9 +56,13 @@ public static class PickProjectCommand
 
         var agents = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name);
 
-        var runnable = agents.Where(a => Adapters.OnPath(a.Harness)).ToList();
+        var runnable = agents
+            .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
+            .ToList();
 
-        foreach (var stranded in agents.Except(runnable).Select(a => a.Harness).Distinct())
+        foreach (var stranded in agents.Except(runnable)
+            .Select(a => AgentHarness.CommandFor(a.Harness)[0])
+            .Distinct())
         {
             Console.Error.WriteLine(
                 $"fleet: {stranded} is not on PATH, so agents that open it stay closed.");
