@@ -185,9 +185,20 @@ public static class Adapters
         }
     }
 
-    private static string? CurrentWindow(IMuxDriver mux) =>
-        mux.ListPanesAsync().GetAwaiter().GetResult()
-            .FirstOrDefault(p => p.IsActive)?.WindowId;
+    private static string? CurrentWindow(IMuxDriver mux)
+    {
+        var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+
+        var own = Environment.GetEnvironmentVariable("WEZTERM_PANE");
+
+        if (!string.IsNullOrEmpty(own)
+            && panes.FirstOrDefault(p => p.Id.Value == own) is { } mine)
+        {
+            return mine.WindowId;
+        }
+
+        return panes.FirstOrDefault(p => p.IsActive)?.WindowId;
+    }
 
     public static ConfigWiring WireWezTermConfig()
     {
