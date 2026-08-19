@@ -7,16 +7,24 @@ namespace Fleet.Tests.Shared;
 public class SettingsTests
 {
     [Fact]
-    public void Reads_are_allowed_and_everything_that_changes_things_asks_by_default()
+    public void The_shipped_defaults_match_the_intended_policy_per_tool()
     {
         var config = SettingsConfig.Default;
 
         Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.ListAgents).Policy);
         Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.Report).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.NewAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.TellAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.Dispatch).Policy);
 
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.NewAgent).Policy);
-        Assert.Equal(AskChannel.Both, config.RuleFor(HarnessTool.NewAgent).Channel);
+        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.StopAgent).Policy);
         Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.DeleteWorktree).Policy);
+        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.PullRepository).Policy);
+
+        Assert.Equal(ActionPolicy.Forbid, config.RuleFor(HarnessTool.RemoveRepository).Policy);
+
+        Assert.Equal(ActionPolicy.Ask, config.Commit);
+        Assert.Equal(ActionPolicy.Ask, config.Push);
     }
 
     [Fact]
@@ -55,7 +63,7 @@ public class SettingsTests
     [Fact]
     public void Only_changed_rules_and_a_changed_trigger_are_written()
     {
-        var config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Allow);
+        var config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid);
 
         var diff = SettingsDiff.AgainstDefaults(config.Rules);
 
@@ -88,7 +96,7 @@ public class SettingsTests
     {
         var before = SettingsConfig.Default.Signature;
 
-        Assert.NotEqual(before, SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Allow).Signature);
+        Assert.NotEqual(before, SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid).Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithTrigger(";").Signature);
     }
 

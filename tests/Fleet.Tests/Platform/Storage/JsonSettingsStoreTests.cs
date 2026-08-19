@@ -16,7 +16,8 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
 
         Assert.Equal(",", config.Trigger);
         Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.ListAgents).Policy);
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.NewAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.NewAgent).Policy);
+        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.StopAgent).Policy);
     }
 
     [Fact]
@@ -62,10 +63,10 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     [Fact]
     public void Two_projects_keep_separate_files()
     {
-        Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Allow));
+        Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));
 
-        Assert.Equal(ActionPolicy.Allow, Store.Load("techweb").RuleFor(HarnessTool.NewAgent).Policy);
-        Assert.Equal(ActionPolicy.Ask, Store.Load("other").RuleFor(HarnessTool.NewAgent).Policy);
+        Assert.Equal(ActionPolicy.Forbid, Store.Load("techweb").RuleFor(HarnessTool.NewAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, Store.Load("other").RuleFor(HarnessTool.NewAgent).Policy);
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
 
         var config = Store.Load("techweb");
 
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.NewAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.NewAgent).Policy);
     }
 
     [Fact]

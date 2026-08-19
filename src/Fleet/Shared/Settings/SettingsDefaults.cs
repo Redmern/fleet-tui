@@ -43,8 +43,15 @@ public static class SettingsDefaults
         HarnessTool.Report,
     ];
 
-    public static ToolRule RuleFor(HarnessTool tool) =>
-        IsRead(tool) ? ToolRule.Allow : ToolRule.Ask;
+    public static ToolRule RuleFor(HarnessTool tool)
+    {
+        if (tool == HarnessTool.RemoveRepository)
+        {
+            return new ToolRule(ActionPolicy.Forbid, AskChannel.Both);
+        }
+
+        return AllowedByDefault(tool) ? ToolRule.Allow : ToolRule.Ask;
+    }
 
     public static bool IsRead(HarnessTool tool) => tool
         is HarnessTool.ListAgents
@@ -54,6 +61,15 @@ public static class SettingsDefaults
         or HarnessTool.RepositoryStatus
         or HarnessTool.LogTail
         or HarnessTool.Report;
+
+    private static bool AllowedByDefault(HarnessTool tool) =>
+        IsRead(tool)
+        || tool is HarnessTool.NewAgent
+            or HarnessTool.OpenAgent
+            or HarnessTool.SetAgentVisible
+            or HarnessTool.TellAgent
+            or HarnessTool.DistributeSecrets
+            or HarnessTool.Dispatch;
 
     public static string Describe(HarnessTool tool) => tool switch
     {

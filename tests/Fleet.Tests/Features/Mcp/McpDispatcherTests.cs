@@ -67,6 +67,7 @@ public sealed class McpDispatcherTests
     [Fact]
     public async Task An_ask_tool_prompts_the_dashboard_and_runs_when_allowed()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
         _approvals.Answer = ApprovalOutcome.Allow;
 
         var result = await Dispatcher().HandleAsync(Request("new_agent"));
@@ -79,6 +80,7 @@ public sealed class McpDispatcherTests
     [Fact]
     public async Task A_denied_ask_returns_the_reason_and_skips_the_handler()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
         _approvals.Answer = ApprovalOutcome.Deny("you said no");
 
         var result = await Dispatcher().HandleAsync(Request("new_agent"));

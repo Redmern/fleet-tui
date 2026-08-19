@@ -27,7 +27,7 @@ public sealed class McpGateTests
     [Fact]
     public void Write_tools_ask_by_default()
     {
-        var decision = McpGate.Decide(HarnessTool.NewAgent, SettingsConfig.Default);
+        var decision = McpGate.Decide(HarnessTool.StopAgent, SettingsConfig.Default);
 
         Assert.False(decision.Allowed);
         Assert.False(decision.Forbidden);
@@ -62,9 +62,9 @@ public sealed class McpGateTests
     }
 
     [Fact]
-    public void The_main_orchestrator_is_still_asked_before_creating_an_agent()
+    public void The_main_orchestrator_is_still_asked_before_an_ask_tool()
     {
-        Assert.False(McpGate.Decide(HarnessTool.NewAgent, SettingsConfig.Default, isSub: false).Allowed);
+        Assert.False(McpGate.Decide(HarnessTool.StopAgent, SettingsConfig.Default, isSub: false).Allowed);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class McpGateTests
     [Fact]
     public void A_sub_still_asks_before_destructive_tools_it_is_not_trusted_with()
     {
-        var decision = McpGate.Decide(HarnessTool.RemoveRepository, SettingsConfig.Default, isSub: true);
+        var decision = McpGate.Decide(HarnessTool.RemoveAgent, SettingsConfig.Default, isSub: true);
 
         Assert.False(decision.Allowed);
         Assert.False(decision.Forbidden);
