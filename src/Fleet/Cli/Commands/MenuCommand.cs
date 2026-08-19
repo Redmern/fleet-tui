@@ -176,7 +176,8 @@ public static class MenuCommand
                         Adapters.Settings(),
                         Adapters.SettingsSync(),
                         dashApprovals,
-                        dashLog));
+                        dashLog),
+                    menu: true);
 
                 break;
             }

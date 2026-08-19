@@ -16,9 +16,13 @@ namespace Fleet.Features.Dashboard.ShowDashboard;
 public static class ShowDashboardView
 {
     public static void Show(
-        IApplication app, string projectName, Keymap keymap, DashboardCallbacks callbacks)
+        IApplication app,
+        string projectName,
+        Keymap keymap,
+        DashboardCallbacks callbacks,
+        bool menu = false)
     {
-        var window = FleetTheme.Screen($"fleet — {projectName}");
+        var window = FleetTheme.Screen(menu ? "menu" : $"fleet — {projectName}");
 
         var keys = keymap;
         var prefix = new PrefixRecognizer(keys);
@@ -549,39 +553,50 @@ public static class ShowDashboardView
             }
         }
 
+        IReadOnlyList<(string, string, Action)> WithClose(
+            IReadOnlyList<(string, string, Action)> bar) =>
+            menu ? [.. bar, ("q/esc", "close", () => app.RequestStop(window))] : bar;
+
         IReadOnlyList<(string, string, Action)> AgentBar() =>
-        [
-            (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
-            ("enter", "open", () => Start(OpenAsync)),
-            (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
-                () => FromKey(FleetAction.RemoveAgent)),
-            (keys.DisplayFor(FleetAction.ToggleHidden),
-                board.IsHidden(FleetRows.Selected(agentList)) ? AgentWords.Show : AgentWords.Hide,
-                () => FromKey(FleetAction.ToggleHidden)),
-            (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-        ];
+            WithClose(
+            [
+                (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
+                ("enter", "open", () => Start(OpenAsync)),
+                (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
+                    () => FromKey(FleetAction.RemoveAgent)),
+                (keys.DisplayFor(FleetAction.ToggleHidden),
+                    board.IsHidden(FleetRows.Selected(agentList))
+                        ? AgentWords.Show
+                        : AgentWords.Hide,
+                    () => FromKey(FleetAction.ToggleHidden)),
+                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
+            ]);
 
         IReadOnlyList<(string, string, Action)> SubBar() =>
-        [
-            ("enter", "open", () => Start(OpenAsync)),
-            (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
-                () => FromKey(FleetAction.RemoveAgent)),
-            (keys.DisplayFor(FleetAction.ToggleHidden),
-                subs.IsHidden(FleetRows.Selected(subList)) ? AgentWords.Show : AgentWords.Hide,
-                () => FromKey(FleetAction.ToggleHidden)),
-            (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-        ];
+            WithClose(
+            [
+                ("enter", "open", () => Start(OpenAsync)),
+                (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
+                    () => FromKey(FleetAction.RemoveAgent)),
+                (keys.DisplayFor(FleetAction.ToggleHidden),
+                    subs.IsHidden(FleetRows.Selected(subList))
+                        ? AgentWords.Show
+                        : AgentWords.Hide,
+                    () => FromKey(FleetAction.ToggleHidden)),
+                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
+            ]);
 
         IReadOnlyList<(string, string, Action)> RepositoryBar() =>
-        [
-            (keys.DisplayFor(FleetAction.AddRepository), "add",
-                () => FromKey(FleetAction.AddRepository)),
-            ("enter", "open", () => Start(OpenRepositoryAsync)),
-            (keys.DisplayFor(FleetAction.ManageRepository), "manage",
-                () => FromKey(FleetAction.ManageRepository)),
-            (keys.DisplayFor(FleetAction.Refresh), "refresh", () => Start(RefreshAsync)),
-            (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-        ];
+            WithClose(
+            [
+                (keys.DisplayFor(FleetAction.AddRepository), "add",
+                    () => FromKey(FleetAction.AddRepository)),
+                ("enter", "open", () => Start(OpenRepositoryAsync)),
+                (keys.DisplayFor(FleetAction.ManageRepository), "manage",
+                    () => FromKey(FleetAction.ManageRepository)),
+                (keys.DisplayFor(FleetAction.Refresh), "refresh", () => Start(RefreshAsync)),
+                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
+            ]);
 
         void FromKey(FleetAction action)
         {
@@ -618,6 +633,13 @@ public static class ShowDashboardView
                     FromKey(result.Action);
                 }
 
+                return;
+            }
+
+            if (menu && (key == FleetKeys.Cancel || key == keys.KeyFor(FleetAction.Close)))
+            {
+                key.Handled = true;
+                app.RequestStop(window);
                 return;
             }
 
