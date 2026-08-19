@@ -46,7 +46,7 @@ public static class ShowMenuView
         bar.Show(
         [
             ("enter", "select", Accept),
-            ("esc", "close", () => app.RequestStop(window)),
+            ("q/esc", "close", () => app.RequestStop(window)),
         ]);
 
         var claim = FleetModal.Enter();
@@ -58,7 +58,7 @@ public static class ShowMenuView
                 return;
             }
 
-            if (key == FleetKeys.Cancel)
+            if (key == FleetKeys.Cancel || key == keymap.KeyFor(FleetAction.Close))
             {
                 app.RequestStop(window);
                 key.Handled = true;
