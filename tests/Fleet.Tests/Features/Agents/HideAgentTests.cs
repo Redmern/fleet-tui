@@ -93,7 +93,7 @@ public class HideAgentTests
     }
 
     [Fact]
-    public async Task Hiding_an_orchestrator_leaves_its_split_intact_and_steps_back_to_the_dashboard()
+    public async Task Hiding_an_orchestrator_moves_its_panes_to_the_hidden_workspace()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
         var claude = await _mux.SpawnAsync(
@@ -111,9 +111,10 @@ public class HideAgentTests
 
         var panes = await _mux.ListPanesAsync();
 
-        // The sub's panes are not moved to the hidden workspace — the split survives.
-        Assert.NotEqual(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
-        Assert.NotEqual(FleetWorkspaces.Hidden, panes.Single(p => p.Id == browser).SessionName);
+        // A hidden sub leaves the terminal like any agent: both its panes go to the hidden
+        // workspace, and focus steps back to the dashboard.
+        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
+        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == browser).SessionName);
         Assert.True(panes.Single(p => p.Id == dashboard).IsActive);
     }
 
