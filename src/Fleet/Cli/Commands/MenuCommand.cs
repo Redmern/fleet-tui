@@ -92,10 +92,7 @@ public static class MenuCommand
                 if (FleetDialog.Confirm(
                         app,
                         $"Quit fleet for {project.Name}?",
-                        [
-                            "Closes the dashboard and every agent pane in this project.",
-                            "Worktrees, branches and files are left as they are.",
-                        ],
+                        [],
                         "Quit"))
                 {
                     await Quit(project).ConfigureAwait(false);
