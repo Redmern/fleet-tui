@@ -74,6 +74,8 @@ public static class PickProjectCommand
 
         await mux.Driver.FocusPaneAsync(result.Value.DashPane).ConfigureAwait(false);
 
+        Adapters.Workspaces().Submit(chosen.Name);
+
         return 0;
     }
 

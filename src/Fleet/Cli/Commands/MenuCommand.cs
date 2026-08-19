@@ -142,13 +142,19 @@ public static class MenuCommand
                     var target = others[index];
                     var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
 
-                    if (dash is not null)
+                    if (dash is null)
                     {
-                        await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
+                        await OpenProjectFlow(switchMux.Driver, target).ConfigureAwait(false);
+                        Adapters.Workspaces().Submit(target.Name);
+                    }
+                    else if (string.Equals(
+                        dash.SessionName, target.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Adapters.Workspaces().Submit(target.Name);
                     }
                     else
                     {
-                        await OpenProjectFlow(switchMux.Driver, target).ConfigureAwait(false);
+                        await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
                     }
                 }
 
