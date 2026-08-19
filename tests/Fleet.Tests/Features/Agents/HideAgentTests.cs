@@ -202,6 +202,12 @@ public class HideAgentTests
     }
 
     [Fact]
+    public void Startup_drops_to_normal_mode_after_opening_claude()
+    {
+        Assert.Contains("stopinsert", AgentHarness.NvimStartup);
+    }
+
+    [Fact]
     public void Nvim_forces_session_persistence_for_the_claude_it_launches()
     {
         Assert.Contains("CLAUDE_CODE_FORCE_SESSION_PERSISTENCE='1'", AgentHarness.NvimStartup);
