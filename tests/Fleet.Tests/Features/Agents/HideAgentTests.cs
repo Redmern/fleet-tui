@@ -93,17 +93,17 @@ public class HideAgentTests
     }
 
     [Fact]
-    public async Task Hiding_an_orchestrator_moves_its_panes_to_the_hidden_workspace()
+    public async Task Hiding_a_sub_drops_its_browser_and_moves_claude_to_hidden_keeping_focus()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
         var claude = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = agent.Worktree, NewWindow = true });
         var browser = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        await _mux.SetTitleAsync(browser, $"{agent.Branch} files");
         var dashboard = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = "C:/repos/techweb", NewWindow = true });
         var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
 
-        // The user is on the fleet dashboard pane when they press hide.
         await _mux.FocusPaneAsync(dashboard);
 
         var result = await new HideAgentHandler(_mux, _store)
@@ -114,10 +114,8 @@ public class HideAgentTests
 
         var panes = await _mux.ListPanesAsync();
 
-        // A hidden sub leaves the terminal like any agent: both its panes go to the hidden
-        // workspace, and hiding never steals focus away from the fleet pane.
         Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
-        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == browser).SessionName);
+        Assert.DoesNotContain(panes, p => p.Id == browser);
         Assert.True(panes.Single(p => p.Id == dashboard).IsActive);
         Assert.False(panes.Single(p => p.Id == claude).IsActive);
     }

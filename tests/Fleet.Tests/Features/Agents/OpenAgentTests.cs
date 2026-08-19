@@ -182,22 +182,17 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_a_hidden_orchestrator_activates_its_split_in_place_without_moving_panes()
+    public async Task Opening_a_hidden_orchestrator_brings_claude_back_rebuilds_the_split_and_focuses_it()
     {
         Directory.CreateDirectory(ProjectRoot);
-        await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+        var dash = await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+        var window = (await _mux.ListPanesAsync()).Single(p => p.Id == dash).WindowId;
 
         var agent = Agent() with { Harness = AgentHarness.Orchestrator, Hidden = true };
 
+        // A hidden sub is only its claude pane in the hidden workspace; the browser was dropped on hide.
         var claude = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = agent.Worktree, Workspace = "fleet-hidden", NewWindow = true });
-        var subWindow = (await _mux.ListPanesAsync()).Single(p => p.Id == claude).WindowId;
-        var browser = await _mux.SplitAsync(
-            new SplitOptions(claude, SplitDirection.Right)
-            {
-                Cwd = agent.Worktree,
-                Args = AgentHarness.BrowseCommand,
-            });
 
         var result = await new OpenAgentHandler(_mux, _store)
             .HandleAsync("techweb", agent, ProjectRoot);
@@ -206,10 +201,11 @@ public sealed class OpenAgentTests : IDisposable
 
         var panes = await _mux.ListPanesAsync();
 
-        // The split stays put — both panes keep their window, and claude is focused.
-        Assert.Equal(subWindow, panes.Single(p => p.Id == claude).WindowId);
-        Assert.Equal(subWindow, panes.Single(p => p.Id == browser).WindowId);
+        Assert.Equal(window, panes.Single(p => p.Id == claude).WindowId);
         Assert.True(panes.Single(p => p.Id == claude).IsActive);
+        Assert.Contains(panes, p =>
+            PathKey.Same(p.Cwd, agent.Worktree)
+            && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
         Assert.False(Assert.Single(_store.Saved).Hidden);
     }
 
@@ -221,6 +217,7 @@ public sealed class OpenAgentTests : IDisposable
         // Only the browser survives — the claude pane exited.
         var browser = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = agent.Worktree, Args = AgentHarness.BrowseCommand });
+        await _mux.SetTitleAsync(browser, $"{agent.Branch} files");
 
         var result = await new OpenAgentHandler(_mux, _store)
             .HandleAsync("techweb", agent, ProjectRoot);
@@ -245,8 +242,9 @@ public sealed class OpenAgentTests : IDisposable
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
         var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
-        await _mux.SplitAsync(
+        var browser = await _mux.SplitAsync(
             new SplitOptions(claude, SplitDirection.Right) { Cwd = agent.Worktree });
+        await _mux.SetTitleAsync(browser, $"{agent.Branch} files");
 
         await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 

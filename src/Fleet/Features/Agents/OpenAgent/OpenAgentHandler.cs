@@ -24,14 +24,36 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
         if (Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness))
         {
-            if (mine.Count >= 2)
+            var main = mine.FirstOrDefault(p => !SubBrowse.Is(p));
+
+            if (main is not null)
             {
+                if (agent.Hidden)
+                {
+                    await mux.MovePaneAsync(
+                            main.Id,
+                            new MovePaneOptions { WindowId = window, NewWindow = window is null }, ct)
+                        .ConfigureAwait(false);
+                }
+                else if (window is not null && main.WindowId != window)
+                {
+                    await mux.MovePaneAsync(main.Id, new MovePaneOptions { WindowId = window }, ct)
+                        .ConfigureAwait(false);
+                }
+
+                await mux.SetTitleAsync(main.Id, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
+
+                if (!mine.Any(SubBrowse.Is))
+                {
+                    await SubBrowse.SplitAsync(mux, agent, main.Id, ct).ConfigureAwait(false);
+                }
+
                 if (agent.Hidden || !agent.Open)
                 {
                     store.Save(project, agent with { Hidden = false, Open = true });
                 }
 
-                await mux.FocusPaneAsync(running!.Id, ct).ConfigureAwait(false);
+                await mux.FocusPaneAsync(main.Id, ct).ConfigureAwait(false);
 
                 return Result.Ok();
             }
@@ -103,7 +125,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
         if (orchestrator)
         {
-            await OpenBrowseSplit(agent, pane, ct).ConfigureAwait(false);
+            await SubBrowse.SplitAsync(mux, agent, pane, ct).ConfigureAwait(false);
         }
 
         if (agent.Hidden || !agent.Open)
@@ -112,22 +134,5 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
         }
 
         return Result.Ok();
-    }
-
-    private async Task OpenBrowseSplit(AgentRecord agent, PaneId pane, CancellationToken ct)
-    {
-        var browse = await mux.SplitAsync(
-            new SplitOptions(pane, SplitDirection.Right)
-            {
-                Percent = 50,
-                Cwd = agent.Worktree,
-                Args = Shared.Constants.AgentHarness.BrowseCommand,
-            },
-            ct).ConfigureAwait(false);
-
-        if (!browse.IsNone)
-        {
-            await mux.SetTitleAsync(browse, $"{agent.Branch} files", ct).ConfigureAwait(false);
-        }
     }
 }
