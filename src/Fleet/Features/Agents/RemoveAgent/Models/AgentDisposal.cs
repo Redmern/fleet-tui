@@ -26,6 +26,8 @@ public static class AgentDisposal
 
     public const string ShowDetail = "Bring it back into the terminal";
 
+    public const string RenameDetail = "Rename its branch (close it first)";
+
     public static IReadOnlyList<PickerEntry> For(bool hidden) => For(hidden, orchestrator: false);
 
     public static IReadOnlyList<PickerEntry> For(bool hidden, bool orchestrator)
@@ -40,6 +42,7 @@ public static class AgentDisposal
         entries.Add(hidden
             ? new PickerEntry(AgentWords.Show, ShowDetail, "h")
             : new PickerEntry(AgentWords.Hide, Choices[Hide], "h"));
+        entries.Add(new("rename", RenameDetail, "r"));
         entries.Add(new("stop", Choices[Stop], "s"));
         entries.Add(new("forget", Choices[Forget], "f"));
         entries.Add(new("delete", Choices[Delete], "d"));

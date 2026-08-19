@@ -6,10 +6,12 @@ using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
+using Fleet.Features.Agents.RenameAgent;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Orchestrations.ListSubs;
+using Fleet.Features.Orchestrations.RenameOrchestration;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Menu.EditKeybinds;
@@ -19,6 +21,7 @@ using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.OpenRepository;
 using Fleet.Features.Repositories.PullRepository;
 using Fleet.Features.Repositories.RemoveRepository;
+using Fleet.Features.Repositories.RenameRepository;
 using Fleet.Features.Repositories.SetDefaultBranch;
 using Fleet.Features.Repositories.RemoveRepository.Models;
 using Fleet.Features.Repositories.Secrets;
@@ -40,6 +43,7 @@ using Fleet.Ports.Settings;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Orchestrations;
 using Fleet.Ui;
 using Terminal.Gui.App;
 
@@ -343,6 +347,9 @@ public static class DashboardWiring
         var harnesses = new ChangeHarnessHandler(agents);
         var stopper = new StopAgentHandler(mux, agents);
         var remover = new RemoveAgentHandler(git, mux, agents);
+        var agentRenamer = new RenameAgentHandler(git, agents);
+        var subRenamer = new RenameOrchestrationHandler(agents);
+        var repoRenamer = new RenameRepositoryHandler();
         var repositoryRemover = new RemoveRepositoryHandler(git);
         var puller = new PullRepositoryHandler(git);
         var defaults = new SetDefaultBranchHandler(git);
@@ -548,6 +555,67 @@ public static class DashboardWiring
                     return Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
                 }
 
+                if (choice == "r")
+                {
+                    var panes = await mux.ListPanesAsync().ConfigureAwait(false);
+
+                    if (panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree)))
+                    {
+                        return Noted(log, project.Name, $"Close {Label(agent)} before renaming it.");
+                    }
+
+                    var typed = await FleetAsync
+                        .OnUi(app, () => FleetPrompt.Text(app, $"Rename {Label(agent)}", agent.Branch))
+                        .ConfigureAwait(false);
+
+                    if (typed is null)
+                    {
+                        return null;
+                    }
+
+                    if (AgentHarness.IsOrchestrator(agent.Harness))
+                    {
+                        var slug = OrchestrationSlug.Unique(
+                            OrchestrationSlug.Of(typed),
+                            s => !string.Equals(s, agent.Branch, StringComparison.OrdinalIgnoreCase)
+                                 && Directory.Exists(OrchestrationPaths.For(project.Root, s)));
+
+                        var sub = subRenamer.Handle(project.Name, project.Root, agent, slug);
+
+                        if (!sub.Succeeded)
+                        {
+                            return Noted(log, project.Name, sub.Error);
+                        }
+
+                        ClaudeWiring.SyncFolder(project.Name, sub.Value!.Worktree, slug);
+                        ClaudeWiring.TrustFolder(sub.Value!.Worktree);
+
+                        return Noted(log, project.Name, $"{agent.Branch} renamed to {slug}.");
+                    }
+
+                    var planned = AgentBranch.Plan(typed, string.Empty);
+
+                    if (!planned.Succeeded)
+                    {
+                        return Noted(log, project.Name, planned.Error);
+                    }
+
+                    var renamedAgent = await agentRenamer
+                        .HandleAsync(project.Name, agent, planned.Value!.Branch)
+                        .ConfigureAwait(false);
+
+                    if (!renamedAgent.Succeeded)
+                    {
+                        return Noted(log, project.Name, renamedAgent.Error);
+                    }
+
+                    ClaudeWiring.ApproveFolder(
+                        project.Name, renamedAgent.Value!.Worktree,
+                        renamedAgent.Value.Repository, renamedAgent.Value.Branch);
+
+                    return Noted(log, project.Name, $"{Label(agent)} renamed to {renamedAgent.Value.Branch}.");
+                }
+
                 if (choice == "s")
                 {
                     var stopped = await stopper.HandleAsync(project.Name, agent).ConfigureAwait(false);
@@ -691,6 +759,33 @@ public static class DashboardWiring
                         Noted(log, project.Name, await FleetAsync
                             .OnUi(app, () => Secrets(app, keymap, mux, project, repository))
                             .ConfigureAwait(false)));
+                }
+
+                if (picked == RepositoryChores.Rename)
+                {
+                    var owned = lister.Handle(project.Name)
+                        .Count(a => a.Repository == repository.Name);
+
+                    if (owned > 0)
+                    {
+                        return new RepositoryManaged(
+                            $"{repository.Name} still has {owned} agent(s). Remove those first.");
+                    }
+
+                    var name = await FleetAsync
+                        .OnUi(app, () => FleetPrompt.Text(app, $"Rename {repository.Name}", repository.Name))
+                        .ConfigureAwait(false);
+
+                    if (name is null)
+                    {
+                        return RepositoryManaged.Nothing;
+                    }
+
+                    var outcome = repoRenamer.Handle(project.Root, repository.Directory, name);
+
+                    return new RepositoryManaged(Noted(log, project.Name, outcome.Succeeded
+                        ? $"{repository.Name} renamed to {name.Trim()}."
+                        : outcome.Error));
                 }
 
                 if (picked != RepositoryChores.DefaultBranch)

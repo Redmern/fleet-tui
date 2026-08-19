@@ -12,12 +12,15 @@ public static class RepositoryChores
 
     public const int Secrets = 3;
 
+    public const int Rename = 4;
+
     public static IReadOnlyList<string> Choices { get; } =
     [
         "Change the default branch",
         "Pull the default branch to latest",
         "Remove the repository from this project",
         "Files every worktree needs but git does not carry",
+        "Rename the repository folder",
     ];
 
     public static IReadOnlyList<PickerEntry> Entries { get; } =
@@ -26,5 +29,6 @@ public static class RepositoryChores
         new("pull", Choices[Pull]),
         new("remove", Choices[Remove]),
         new("secrets", Choices[Secrets]),
+        new("rename", Choices[Rename]),
     ];
 }

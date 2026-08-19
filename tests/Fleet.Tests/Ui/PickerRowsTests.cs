@@ -51,6 +51,6 @@ public class PickerRowsTests
     {
         var keys = PickerKeys.For([.. AgentDisposal.Entries.Select(e => e.Label)]);
 
-        Assert.Equal(["o", "h", "s", "f", "d"], keys);
+        Assert.Equal(["o", "h", "r", "s", "f", "d"], keys);
     }
 }

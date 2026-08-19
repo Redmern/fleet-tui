@@ -137,7 +137,7 @@ public sealed class SecretsTests : IDisposable
         Assert.Equal("secrets", RepositoryChores.Entries[RepositoryChores.Secrets].Label);
 
         Assert.Equal(
-            ["b", "p", "r", "s"],
+            ["b", "p", "r", "s", "e"],
             PickerKeys.For(RepositoryChores.Entries));
     }
 }

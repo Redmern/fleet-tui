@@ -10,10 +10,10 @@ public class RepositoryChoresTests
     [Fact]
     public void The_manage_menu_carries_pull_remove_and_secrets()
     {
-        Assert.Equal(4, RepositoryChores.Entries.Count);
+        Assert.Equal(5, RepositoryChores.Entries.Count);
 
         Assert.Equal(
-            ["branch", "pull", "remove", "secrets"],
+            ["branch", "pull", "remove", "secrets", "rename"],
             RepositoryChores.Entries.Select(e => e.Label));
 
         Assert.Equal(RepositoryChores.Choices, RepositoryChores.Entries.Select(e => e.Detail));
@@ -24,7 +24,7 @@ public class RepositoryChoresTests
     {
         var keys = PickerKeys.For([.. RepositoryChores.Entries.Select(e => e.Label)]);
 
-        Assert.Equal(["b", "p", "r", "s"], keys);
+        Assert.Equal(["b", "p", "r", "s", "e"], keys);
     }
 
     [Fact]
