@@ -70,7 +70,7 @@ public static class ClaudeWiring
     }
 
     public static void TrustFolder(string folder) =>
-        new ClaudeConfigWriter().TrustFolder(ClaudeJsonPath, folder);
+        new ClaudeConfigWriter().TrustFolder(ClaudeJsonPath, folder, McpTools.ServerName);
 
     private static readonly string[] FleetExcludes =
         ["/.mcp.json", "/.claude/", "/.fleet/", "/.fleet-ready"];

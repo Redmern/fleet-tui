@@ -40,11 +40,17 @@ public sealed class ClaudeTrustTests : IDisposable
     {
         var folder = Path.Combine(_dir, "worktree");
 
-        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder).Succeeded);
+        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet").Succeeded);
 
         var projects = Reload().GetProperty("projects");
+        var entry = projects.GetProperty(Key(folder));
 
-        Assert.True(projects.GetProperty(Key(folder)).GetProperty("hasTrustDialogAccepted").GetBoolean());
+        Assert.True(entry.GetProperty("hasTrustDialogAccepted").GetBoolean());
+
+        var enabled = entry.GetProperty("enabledMcpjsonServers").EnumerateArray()
+            .Select(e => e.GetString());
+
+        Assert.Contains("fleet", enabled);
     }
 
     [Fact]
@@ -62,7 +68,7 @@ public sealed class ClaudeTrustTests : IDisposable
         File.WriteAllText(_claudeJson, seed);
 
         var folder = Path.Combine(_dir, "worktree");
-        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder).Succeeded);
+        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet").Succeeded);
 
         var root = Reload();
 
@@ -88,7 +94,7 @@ public sealed class ClaudeTrustTests : IDisposable
             """;
         File.WriteAllText(_claudeJson, seed);
 
-        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder).Succeeded);
+        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet").Succeeded);
 
         var entry = Reload().GetProperty("projects").GetProperty(key);
 
@@ -100,13 +106,13 @@ public sealed class ClaudeTrustTests : IDisposable
     public void It_does_not_rewrite_when_already_trusted()
     {
         var folder = Path.Combine(_dir, "worktree");
-        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder).Succeeded);
+        Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet").Succeeded);
 
         File.SetAttributes(_claudeJson, FileAttributes.ReadOnly);
 
         try
         {
-            Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder).Succeeded);
+            Assert.True(new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet").Succeeded);
         }
         finally
         {
@@ -119,7 +125,7 @@ public sealed class ClaudeTrustTests : IDisposable
     {
         File.WriteAllText(_claudeJson, "{ not valid");
 
-        Assert.False(new ClaudeConfigWriter().TrustFolder(_claudeJson, _dir).Succeeded);
+        Assert.False(new ClaudeConfigWriter().TrustFolder(_claudeJson, _dir, "fleet").Succeeded);
         Assert.Equal("{ not valid", File.ReadAllText(_claudeJson));
     }
 }

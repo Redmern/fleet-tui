@@ -113,7 +113,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             : Result.Fail($"fleet could not write {settingsPath}.");
     }
 
-    public Result TrustFolder(string claudeJsonPath, string folder)
+    public Result TrustFolder(string claudeJsonPath, string folder, string serverName)
     {
         var file = Read(
             claudeJsonPath, ClaudeJsonContext.Default.ClaudeGlobalFile, () => new ClaudeGlobalFile());
@@ -130,12 +130,22 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             entry = new ClaudeProjectEntry();
             file.Projects[key] = entry;
         }
-        else if (entry.HasTrustDialogAccepted == true)
+
+        var enabled = entry.EnabledMcpjsonServers ?? [];
+        var alreadyEnabled = enabled.Contains(serverName);
+
+        if (entry.HasTrustDialogAccepted == true && alreadyEnabled)
         {
             return Result.Ok();
         }
 
         entry.HasTrustDialogAccepted = true;
+
+        if (!alreadyEnabled)
+        {
+            enabled.Add(serverName);
+            entry.EnabledMcpjsonServers = enabled;
+        }
 
         return Write(claudeJsonPath, JsonSerializer.Serialize(file, ClaudeJsonContext.Default.ClaudeGlobalFile))
             ? Result.Ok()

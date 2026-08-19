@@ -8,6 +8,9 @@ public sealed class ClaudeProjectEntry
     [JsonPropertyName("hasTrustDialogAccepted")]
     public bool? HasTrustDialogAccepted { get; set; }
 
+    [JsonPropertyName("enabledMcpjsonServers")]
+    public List<string>? EnabledMcpjsonServers { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extra { get; set; } = [];
 }
