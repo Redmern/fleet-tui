@@ -159,6 +159,30 @@ public sealed class NewAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task An_agent_branch_cut_from_a_remote_base_gets_no_mismatched_upstream()
+    {
+        var directory = await RepositoryAsync();
+        var git = new GitRunner();
+
+        var remote = Path.Combine(_root, "origin.git");
+        await git.RunAsync(_root, ["init", "--bare", remote]);
+        await git.RunAsync(directory, ["remote", "add", "origin", remote]);
+        await git.RunAsync(directory, ["push", "origin", "main"]);
+        await git.RunAsync(directory, ["fetch", "origin"]);
+
+        var result = await Handler()
+            .HandleAsync(Command(directory, "feature/login", from: "origin/main"));
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var upstream = await git.RunAsync(
+            result.Value!.Worktree,
+            ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+
+        Assert.False(upstream.Ok);
+    }
+
+    [Fact]
     public async Task A_repository_whose_trunk_is_not_main_still_cuts_from_its_own_head()
     {
         var directory = await RepositoryAsync(branch: "master");

@@ -183,7 +183,7 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
 
         string[] args = exists
             ? ["worktree", "add", plan.TargetDirectory, branch]
-            : ["worktree", "add", "-b", branch, plan.TargetDirectory, baseRef];
+            : ["worktree", "add", "--no-track", "-b", branch, plan.TargetDirectory, baseRef];
 
         var added = await git.RunAsync(plan.Anchor, args, null, ct).ConfigureAwait(false);
 
