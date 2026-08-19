@@ -33,4 +33,5 @@ public enum FleetAction
     ViewLogs,
     BrowseFiles,
     EditSettings,
+    SwitchProject,
 }

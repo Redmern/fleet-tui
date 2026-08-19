@@ -13,6 +13,7 @@ using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
@@ -29,6 +30,7 @@ public static class MenuCommand
         FleetAction.QuitFleet,
         FleetAction.EditKeybinds,
         FleetAction.FocusMain,
+        FleetAction.SwitchProject,
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
@@ -103,6 +105,39 @@ public static class MenuCommand
             case FleetAction.FocusMain:
                 await FocusMain(project).ConfigureAwait(false);
                 break;
+
+            case FleetAction.SwitchProject:
+            {
+                var switchMux = Adapters.Mux(Adapters.Log());
+                var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
+
+                var open = panes
+                    .Select(p => p.SessionName)
+                    .Where(w => !string.IsNullOrWhiteSpace(w)
+                        && !string.Equals(w, FleetWorkspaces.Default, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(w, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(w, project.Name, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(w => w, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (open.Count == 0)
+                {
+                    FleetDialog.Error(
+                        app, "Switch project", "No other projects are open right now.");
+
+                    break;
+                }
+
+                var picked = FleetPicker.Choose(app, "Switch project", open, keymap);
+
+                if (picked is { } index)
+                {
+                    Adapters.Workspaces().Submit(open[index]);
+                }
+
+                break;
+            }
 
             case FleetAction.EditKeybinds:
                 EditKeybindsView.Show(app, keymaps, keymap);

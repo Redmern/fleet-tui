@@ -23,6 +23,7 @@ public static class FleetActionIds
         FleetAction.FocusMain => "main-pane",
         FleetAction.ListAgents => "list-agents",
         FleetAction.EditSettings => "settings",
+        FleetAction.SwitchProject => "switch-project",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -45,6 +46,7 @@ public static class FleetActionIds
         "main-pane" => FleetAction.FocusMain,
         "list-agents" => FleetAction.ListAgents,
         "settings" => FleetAction.EditSettings,
+        "switch-project" => FleetAction.SwitchProject,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };
