@@ -28,20 +28,6 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
             await mux.SetTitleAsync(pane.Id, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
         }
 
-        if (hiding && dashboardWindow is not null)
-        {
-            var home = panes.FirstOrDefault(p => p.WindowId == dashboardWindow);
-
-            if (home is not null)
-            {
-                await mux.FocusPaneAsync(home.Id, ct).ConfigureAwait(false);
-            }
-        }
-        else if (!hiding && mine.Count > 0)
-        {
-            await mux.FocusPaneAsync(mine[0].Id, ct).ConfigureAwait(false);
-        }
-
         var changed = agent with { Hidden = hiding, Open = mine.Count > 0 };
         store.Save(project, changed);
 

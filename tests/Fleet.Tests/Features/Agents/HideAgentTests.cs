@@ -103,6 +103,9 @@ public class HideAgentTests
             new SpawnOptions { Cwd = "C:/repos/techweb", NewWindow = true });
         var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
 
+        // The user is on the fleet dashboard pane when they press hide.
+        await _mux.FocusPaneAsync(dashboard);
+
         var result = await new HideAgentHandler(_mux, _store)
             .HandleAsync("techweb", agent, dashboardWindow: home);
 
@@ -112,10 +115,11 @@ public class HideAgentTests
         var panes = await _mux.ListPanesAsync();
 
         // A hidden sub leaves the terminal like any agent: both its panes go to the hidden
-        // workspace, and focus steps back to the dashboard.
+        // workspace, and hiding never steals focus away from the fleet pane.
         Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
         Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == browser).SessionName);
         Assert.True(panes.Single(p => p.Id == dashboard).IsActive);
+        Assert.False(panes.Single(p => p.Id == claude).IsActive);
     }
 
     [Fact]
