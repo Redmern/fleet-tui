@@ -49,16 +49,14 @@ public sealed class RenameOrchestrationTests : IDisposable
             "origin/main", RepositoryWasBare: true, Owner: "old-slug");
         _store.Save("proj", child);
 
-        var result = new RenameOrchestrationHandler(_store)
-            .Handle("proj", _root, sub, "new-slug");
+        var result = new RenameOrchestrationHandler(_store).Handle("proj", sub, "new-slug");
 
         Assert.True(result.Succeeded, result.Error);
-        Assert.True(Directory.Exists(OrchestrationPaths.For(_root, "new-slug")));
-        Assert.False(Directory.Exists(OrchestrationPaths.For(_root, "old-slug")));
 
         var savedSub = Assert.Single(_store.List("proj"), a => AgentHarness.IsOrchestrator(a.Harness));
         Assert.Equal("new-slug", savedSub.Branch);
-        Assert.Equal(OrchestrationPaths.For(_root, "new-slug"), savedSub.Worktree);
+        Assert.Equal(OrchestrationPaths.For(_root, "old-slug"), savedSub.Worktree);
+        Assert.True(Directory.Exists(savedSub.Worktree));
 
         var savedChild = Assert.Single(_store.List("proj"), a => !AgentHarness.IsOrchestrator(a.Harness));
         Assert.Equal("new-slug", savedChild.Owner);
@@ -69,12 +67,13 @@ public sealed class RenameOrchestrationTests : IDisposable
     {
         var sub = Sub("old-slug");
         _store.Save("proj", sub);
-        Directory.CreateDirectory(OrchestrationPaths.For(_root, "taken"));
+        _store.Save("proj", Sub("taken"));
 
-        var result = new RenameOrchestrationHandler(_store).Handle("proj", _root, sub, "taken");
+        var result = new RenameOrchestrationHandler(_store).Handle("proj", sub, "taken");
 
         Assert.False(result.Succeeded);
-        Assert.True(Directory.Exists(OrchestrationPaths.For(_root, "old-slug")));
+        Assert.Equal("old-slug", Assert.Single(
+            _store.List("proj"), a => PathKey.Same(a.Worktree, sub.Worktree)).Branch);
     }
 
     private sealed class MemoryStore : IAgentStore

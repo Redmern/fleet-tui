@@ -65,7 +65,7 @@ public sealed class RenameAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task Renaming_moves_the_branch_the_worktree_and_the_record()
+    public async Task Renaming_renames_the_branch_and_record_but_keeps_the_worktree_for_history()
     {
         var repo = await RepositoryAsync();
         var agent = await AgentAsync(repo, "feature/old");
@@ -74,12 +74,14 @@ public sealed class RenameAgentTests : IDisposable
             .HandleAsync("proj", agent, "feature/new");
 
         Assert.True(result.Succeeded, result.Error);
-        Assert.True(Directory.Exists(Path.Combine(repo, "feature_new")));
-        Assert.False(Directory.Exists(Path.Combine(repo, "feature_old")));
+
+        // The worktree directory (which Claude keys its conversation by) is untouched.
+        Assert.True(Directory.Exists(Path.Combine(repo, "feature_old")));
+        Assert.False(Directory.Exists(Path.Combine(repo, "feature_new")));
 
         var saved = Assert.Single(_store.List("proj"));
         Assert.Equal("feature/new", saved.Branch);
-        Assert.Equal(Path.Combine(repo, "feature_new"), saved.Worktree);
+        Assert.Equal(Path.Combine(repo, "feature_old"), saved.Worktree);
 
         var branch = await new GitRunner().RunAsync(repo, ["branch", "--list", "feature/new"]);
         Assert.Contains("feature/new", branch.Out);

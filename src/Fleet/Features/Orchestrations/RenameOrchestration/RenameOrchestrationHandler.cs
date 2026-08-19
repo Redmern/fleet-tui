@@ -1,14 +1,14 @@
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
-using Fleet.Shared.Orchestrations;
+using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Orchestrations.RenameOrchestration;
 
 public sealed class RenameOrchestrationHandler(IAgentStore store)
 {
-    public Result<AgentRecord> Handle(
-        string project, string projectRoot, AgentRecord sub, string newSlug)
+    public Result<AgentRecord> Handle(string project, AgentRecord sub, string newSlug)
     {
         var slug = newSlug.Trim();
 
@@ -22,26 +22,19 @@ public sealed class RenameOrchestrationHandler(IAgentStore store)
             return Result<AgentRecord>.Fail("That is already its name.");
         }
 
-        var newFolder = OrchestrationPaths.For(projectRoot, slug);
+        var taken = store.List(project).Any(a =>
+            AgentHarness.IsOrchestrator(a.Harness)
+            && string.Equals(a.Branch, slug, StringComparison.OrdinalIgnoreCase)
+            && !PathKey.Same(a.Worktree, sub.Worktree));
 
-        if (Directory.Exists(newFolder))
+        if (taken)
         {
             return Result<AgentRecord>.Fail($"An orchestration named '{slug}' already exists.");
         }
 
-        try
-        {
-            Directory.Move(sub.Worktree, newFolder);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return Result<AgentRecord>.Fail($"Could not move the orchestration folder: {e.Message}");
-        }
-
-        var updated = sub with { Branch = slug, Worktree = newFolder };
+        var updated = sub with { Branch = slug };
 
         store.Save(project, updated);
-        store.Remove(project, sub.Worktree);
 
         foreach (var child in store.List(project)
             .Where(a => string.Equals(a.Owner, sub.Branch, StringComparison.OrdinalIgnoreCase)))

@@ -575,12 +575,9 @@ public static class DashboardWiring
 
                     if (AgentHarness.IsOrchestrator(agent.Harness))
                     {
-                        var slug = OrchestrationSlug.Unique(
-                            OrchestrationSlug.Of(typed),
-                            s => !string.Equals(s, agent.Branch, StringComparison.OrdinalIgnoreCase)
-                                 && Directory.Exists(OrchestrationPaths.For(project.Root, s)));
+                        var slug = OrchestrationSlug.Of(typed);
 
-                        var sub = subRenamer.Handle(project.Name, project.Root, agent, slug);
+                        var sub = subRenamer.Handle(project.Name, agent, slug);
 
                         if (!sub.Succeeded)
                         {

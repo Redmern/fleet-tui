@@ -1,7 +1,6 @@
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Git;
-using Fleet.Shared;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.RenameAgent;
@@ -44,39 +43,9 @@ public sealed class RenameAgentHandler(IGitRunner git, IAgentStore store)
             return Result<AgentRecord>.Fail($"git branch -m: {renamed.Message}");
         }
 
-        var newWorktree = agent.Worktree;
-
-        if (agent.RepositoryWasBare)
-        {
-            var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(agent.Worktree));
-
-            if (parent is not null)
-            {
-                newWorktree = Path.Combine(parent, BranchSlug.Of(target));
-
-                var moved = await git
-                    .RunAsync(anchor, ["worktree", "move", agent.Worktree, newWorktree], null, ct)
-                    .ConfigureAwait(false);
-
-                if (!moved.Ok)
-                {
-                    await git
-                        .RunAsync(anchor, ["branch", "-m", target, agent.Branch], null, ct)
-                        .ConfigureAwait(false);
-
-                    return Result<AgentRecord>.Fail($"git worktree move: {moved.Message}");
-                }
-            }
-        }
-
-        var updated = agent with { Branch = target, Worktree = newWorktree };
+        var updated = agent with { Branch = target };
 
         store.Save(project, updated);
-
-        if (!PathKey.Same(agent.Worktree, newWorktree))
-        {
-            store.Remove(project, agent.Worktree);
-        }
 
         return Result<AgentRecord>.Ok(updated);
     }
