@@ -177,7 +177,7 @@ public sealed class ClaudeConfigWriterTests : IDisposable
     public void Approving_a_worktree_registers_a_caller_stamped_server_but_no_hook()
     {
         var result = new ClaudeConfigWriter()
-            .SyncWorktree(AgentServer(), _dir, ["mcp__fleet__list_agents"]);
+            .SyncWorktree(AgentServer(), _dir, ["mcp__fleet__list_agents"], [], []);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -196,7 +196,7 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
         File.WriteAllText(SettingsPath, """{"permissions":{"allow":["Bash(ls)"]},"model":"opus"}""");
 
-        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, ["mcp__fleet__list_agents"]);
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, ["mcp__fleet__list_agents"], [], []);
 
         var settings = File.ReadAllText(SettingsPath);
 

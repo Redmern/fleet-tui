@@ -7,6 +7,14 @@ public static class SettingsDefaults
 {
     public const string Trigger = ",";
 
+    public const ActionPolicy Commit = ActionPolicy.Ask;
+
+    public const ActionPolicy Push = ActionPolicy.Ask;
+
+    public const string CommitLabel = "Agents commit changes";
+
+    public const string PushLabel = "Agents push changes";
+
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);
 

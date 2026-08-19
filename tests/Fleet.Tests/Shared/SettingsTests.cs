@@ -72,7 +72,9 @@ public class SettingsTests
             new Dictionary<HarnessTool, ToolRule>
             {
                 [HarnessTool.NewAgent] = new(ActionPolicy.Forbid, AskChannel.Both),
-            });
+            },
+            SettingsDefaults.Commit,
+            SettingsDefaults.Push);
 
         var merged = partial.MergedOverDefaults();
 

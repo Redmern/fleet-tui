@@ -42,13 +42,7 @@ public static class ClaudeWiring
 
     public static Result ApproveFolder(string project, string folder, string repository, string branch)
     {
-        var settings = Adapters.Settings().Load(project).MergedOverDefaults();
-        var permissions = ClaudePermissionPlanner.Plan(settings);
-
-        var server = McpRegistration.For(
-            Adapters.Executable, project, McpCaller.ForAgent(repository, branch));
-
-        var result = new ClaudeConfigWriter().SyncWorktree(server, folder, permissions.Allow);
+        var result = ResyncWorktree(project, folder, repository, branch);
 
         if (result.Succeeded)
         {
@@ -61,6 +55,18 @@ public static class ClaudeWiring
         TrustFolder(folder);
 
         return result;
+    }
+
+    public static Result ResyncWorktree(string project, string folder, string repository, string branch)
+    {
+        var settings = Adapters.Settings().Load(project).MergedOverDefaults();
+        var permissions = ClaudePermissionPlanner.Plan(settings);
+
+        var server = McpRegistration.For(
+            Adapters.Executable, project, McpCaller.ForAgent(repository, branch));
+
+        return new ClaudeConfigWriter()
+            .SyncWorktree(server, folder, permissions.Allow, permissions.Deny, permissions.Ask);
     }
 
     public static void TrustFolder(string folder) =>

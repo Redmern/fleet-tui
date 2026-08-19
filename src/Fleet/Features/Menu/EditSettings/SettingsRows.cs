@@ -12,9 +12,13 @@ public static class SettingsRows
 
     public static IReadOnlyList<HarnessTool> Tools => SettingsDefaults.Configurable;
 
-    public static int Count => Tools.Count + 1;
+    public static int Count => Tools.Count + 3;
 
     public static bool IsTriggerRow(int index) => index == 0;
+
+    public static bool IsCommitRow(int index) => index == Tools.Count + 1;
+
+    public static bool IsPushRow(int index) => index == Tools.Count + 2;
 
     public static HarnessTool ToolAt(int index) =>
         index >= 1 && index <= Tools.Count ? Tools[index - 1] : HarnessTool.None;
@@ -23,9 +27,14 @@ public static class SettingsRows
 
     public static IReadOnlyList<FleetRow> For(SettingsConfig config)
     {
-        var labelWidth = Math.Max(
-            TriggerLabel.Length,
-            Tools.Max(t => SettingsDefaults.Describe(t).Length));
+        var labelWidth = new[]
+            {
+                TriggerLabel.Length,
+                SettingsDefaults.CommitLabel.Length,
+                SettingsDefaults.PushLabel.Length,
+                Tools.Max(t => SettingsDefaults.Describe(t).Length),
+            }
+            .Max();
 
         List<FleetRow> rows =
         [
@@ -35,6 +44,8 @@ public static class SettingsRows
         ];
 
         rows.AddRange(Tools.Select(t => Row(t, config.RuleFor(t), labelWidth)));
+        rows.Add(GateRow(SettingsDefaults.CommitLabel, config.Commit, labelWidth));
+        rows.Add(GateRow(SettingsDefaults.PushLabel, config.Push, labelWidth));
 
         return rows;
     }
@@ -45,6 +56,25 @@ public static class SettingsRows
         new("ask", "ask before doing it", "s"),
         new("forbid", "never", "f"),
     ];
+
+    public static IReadOnlyList<PickerEntry> GatePolicyEntries() =>
+    [
+        new("auto", "do it without asking", "a"),
+        new("ask", "ask for permission", "s"),
+        new("no", "never", "f"),
+    ];
+
+    private static FleetRow GateRow(string label, ActionPolicy policy, int labelWidth) =>
+        new(
+            [FleetSpan.Plain(label.PadRight(labelWidth))],
+            [new FleetSpan(GateWord(policy).PadRight(6) + "  ", ToneFor(policy)), FleetSpan.Muted("—")]);
+
+    private static string GateWord(ActionPolicy policy) => policy switch
+    {
+        ActionPolicy.Allow => "auto",
+        ActionPolicy.Ask => "ask",
+        _ => "no",
+    };
 
     public static IReadOnlyList<PickerEntry> ChannelEntries() =>
     [

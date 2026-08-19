@@ -49,7 +49,12 @@ public sealed class JsonSettingsStore : ISettingsStore
                 rules[tool] = new ToolRule(policy, channel);
             }
 
-            return new SettingsConfig(stored.Trigger, rules).MergedOverDefaults();
+            return new SettingsConfig(
+                    stored.Trigger,
+                    rules,
+                    ParsePolicy(stored.Commit, SettingsDefaults.Commit),
+                    ParsePolicy(stored.Push, SettingsDefaults.Push))
+                .MergedOverDefaults();
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -69,6 +74,8 @@ public sealed class JsonSettingsStore : ISettingsStore
         var stored = new SettingsFile
         {
             Trigger = SettingsDiff.TriggerAgainstDefault(config.Trigger),
+            Commit = PolicyAgainstDefault(config.Commit, SettingsDefaults.Commit),
+            Push = PolicyAgainstDefault(config.Push, SettingsDefaults.Push),
             Tools = SettingsDiff.AgainstDefaults(config.Rules).ToDictionary(
                 r => HarnessToolIds.For(r.Key),
                 r => new ToolRuleEntry
@@ -88,6 +95,12 @@ public sealed class JsonSettingsStore : ISettingsStore
         {
         }
     }
+
+    private static ActionPolicy ParsePolicy(string stored, ActionPolicy fallback) =>
+        Enum.TryParse<ActionPolicy>(stored, ignoreCase: true, out var parsed) ? parsed : fallback;
+
+    private static string PolicyAgainstDefault(ActionPolicy value, ActionPolicy fallback) =>
+        value == fallback ? string.Empty : value.ToString().ToLowerInvariant();
 
     private static string? FileFor(string project)
     {

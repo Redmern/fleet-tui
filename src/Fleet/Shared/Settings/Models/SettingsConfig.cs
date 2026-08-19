@@ -3,11 +3,16 @@ using Fleet.Shared.Settings.Enums;
 namespace Fleet.Shared.Settings.Models;
 
 public sealed record SettingsConfig(
-    string Trigger, IReadOnlyDictionary<HarnessTool, ToolRule> Rules)
+    string Trigger,
+    IReadOnlyDictionary<HarnessTool, ToolRule> Rules,
+    ActionPolicy Commit,
+    ActionPolicy Push)
 {
     public static SettingsConfig Default => new(
         SettingsDefaults.Trigger,
-        SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value));
+        SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value),
+        SettingsDefaults.Commit,
+        SettingsDefaults.Push);
 
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
@@ -28,6 +33,10 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithTrigger(string trigger) => this with { Trigger = trigger };
 
+    public SettingsConfig WithCommit(ActionPolicy policy) => this with { Commit = policy };
+
+    public SettingsConfig WithPush(ActionPolicy policy) => this with { Push = policy };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -42,7 +51,9 @@ public sealed record SettingsConfig(
 
         return new SettingsConfig(
             DispatchTrigger.IsValid(Trigger) ? Trigger : SettingsDefaults.Trigger,
-            rules);
+            rules,
+            Commit,
+            Push);
     }
 
     public string Signature =>
@@ -51,5 +62,7 @@ public sealed record SettingsConfig(
             Rules
                 .OrderBy(r => r.Key)
                 .Select(r => $"{HarnessToolIds.For(r.Key)}={r.Value.Policy}:{r.Value.Channel}")
-                .Prepend($"trigger={Trigger}"));
+                .Prepend($"trigger={Trigger}")
+                .Append($"commit={Commit}")
+                .Append($"push={Push}"));
 }

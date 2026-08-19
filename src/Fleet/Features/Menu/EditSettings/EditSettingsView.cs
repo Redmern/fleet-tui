@@ -109,6 +109,29 @@ public static class EditSettingsView
             }
         }
 
+        void EditGate(bool push, int index)
+        {
+            var current = push ? config.Push : config.Commit;
+            var label = push ? SettingsDefaults.PushLabel : SettingsDefaults.CommitLabel;
+
+            var picked = FleetPicker.Choose(
+                app,
+                $"{label} — permission",
+                SettingsRows.GatePolicyEntries(),
+                keymap,
+                (int)current);
+
+            if (picked is null)
+            {
+                return;
+            }
+
+            var policy = (ActionPolicy)picked.Value;
+
+            Persist(push ? config.WithPush(policy) : config.WithCommit(policy), "Saved.");
+            Refill(index);
+        }
+
         void Change()
         {
             var index = FleetRows.Selected(list);
@@ -116,6 +139,18 @@ public static class EditSettingsView
             if (SettingsRows.IsTriggerRow(index))
             {
                 EditTrigger();
+                return;
+            }
+
+            if (SettingsRows.IsCommitRow(index))
+            {
+                EditGate(push: false, index);
+                return;
+            }
+
+            if (SettingsRows.IsPushRow(index))
+            {
+                EditGate(push: true, index);
                 return;
             }
 
@@ -145,6 +180,20 @@ public static class EditSettingsView
             if (SettingsRows.IsTriggerRow(index))
             {
                 Persist(config.WithTrigger(SettingsDefaults.Trigger), "Reset to the default.");
+                Refill(index);
+                return;
+            }
+
+            if (SettingsRows.IsCommitRow(index))
+            {
+                Persist(config.WithCommit(SettingsDefaults.Commit), "Reset to the default.");
+                Refill(index);
+                return;
+            }
+
+            if (SettingsRows.IsPushRow(index))
+            {
+                Persist(config.WithPush(SettingsDefaults.Push), "Reset to the default.");
                 Refill(index);
                 return;
             }

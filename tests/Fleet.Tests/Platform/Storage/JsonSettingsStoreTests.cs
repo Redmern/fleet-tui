@@ -38,6 +38,28 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_commit_and_push_gates_default_to_ask()
+    {
+        var config = Store.Load("techweb");
+
+        Assert.Equal(ActionPolicy.Ask, config.Commit);
+        Assert.Equal(ActionPolicy.Ask, config.Push);
+    }
+
+    [Fact]
+    public void The_commit_and_push_gates_round_trip()
+    {
+        Store.Save(
+            "techweb",
+            SettingsConfig.Default.WithCommit(ActionPolicy.Allow).WithPush(ActionPolicy.Forbid));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.Equal(ActionPolicy.Allow, loaded.Commit);
+        Assert.Equal(ActionPolicy.Forbid, loaded.Push);
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Allow));

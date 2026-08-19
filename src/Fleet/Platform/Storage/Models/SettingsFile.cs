@@ -6,6 +6,10 @@ public sealed class SettingsFile
 
     public string Trigger { get; set; } = string.Empty;
 
+    public string Commit { get; set; } = string.Empty;
+
+    public string Push { get; set; } = string.Empty;
+
     public Dictionary<string, ToolRuleEntry> Tools { get; set; } = [];
 }
 

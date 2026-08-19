@@ -40,6 +40,28 @@ public static class ClaudePermissionPlanner
             }
         }
 
+        Gate(GitGates.CommitRule, settings.Commit, allow, deny, ask);
+        Gate(GitGates.PushRule, settings.Push, allow, deny, ask);
+
         return new ClaudePermissions(allow, deny, ask);
+    }
+
+    private static void Gate(
+        string rule, ActionPolicy policy, List<string> allow, List<string> deny, List<string> ask)
+    {
+        switch (policy)
+        {
+            case ActionPolicy.Forbid:
+                deny.Add(rule);
+                break;
+
+            case ActionPolicy.Ask:
+                ask.Add(rule);
+                break;
+
+            default:
+                allow.Add(rule);
+                break;
+        }
     }
 }

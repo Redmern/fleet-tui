@@ -3,6 +3,7 @@ using Fleet.Platform.Claude.Models;
 using Fleet.Ports.Claude;
 using Fleet.Ports.Claude.Models;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings;
 
 namespace Fleet.Platform.Claude;
 
@@ -66,7 +67,12 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             : Result.Fail($"fleet could not write {userSettingsPath}.");
     }
 
-    public Result SyncWorktree(McpServerEntry server, string directory, IReadOnlyList<string> allow)
+    public Result SyncWorktree(
+        McpServerEntry server,
+        string directory,
+        IReadOnlyList<string> allow,
+        IReadOnlyList<string> deny,
+        IReadOnlyList<string> ask)
     {
         var mcpPath = Path.Combine(directory, ".mcp.json");
         var settingsPath = Path.Combine(directory, ".claude", "settings.local.json");
@@ -93,6 +99,8 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         settings.EnableAllProjectMcpServers = true;
         settings.Permissions.Allow = Merge(settings.Permissions.Allow, allow);
+        settings.Permissions.Deny = Merge(settings.Permissions.Deny, deny);
+        settings.Permissions.Ask = Merge(settings.Permissions.Ask, ask);
 
         if (!Write(mcpPath, JsonSerializer.Serialize(mcp, ClaudeJsonContext.Default.McpJsonFile)))
         {
@@ -216,7 +224,8 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
     private static bool IsOwned(string rule) =>
         rule.StartsWith("mcp__fleet__", StringComparison.Ordinal)
-        || rule.Equals("mcp__fleet", StringComparison.Ordinal);
+        || rule.Equals("mcp__fleet", StringComparison.Ordinal)
+        || GitGates.IsOwned(rule);
 
     private static McpJsonFile? ReadMcp(string path) =>
         Read(path, ClaudeJsonContext.Default.McpJsonFile, () => new McpJsonFile());
