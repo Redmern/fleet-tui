@@ -1,7 +1,7 @@
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
 using Fleet.Features.Agents.ListAgents;
-using Fleet.Features.Agents.OpenAgent;
+using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditKeybinds;
@@ -153,29 +153,33 @@ public static class MenuCommand
                 break;
 
             case FleetAction.ListAgents:
-                var agents = Adapters.Agents();
-                var mux = Adapters.Mux(Adapters.Log());
-                var opener = new OpenAgentHandler(mux.Driver, agents);
-                var listing = AgentSplit.By(new ListAgentsHandler(agents).Handle(project.Name));
+            {
+                var dashGit = Adapters.Git();
+                var dashMux = Adapters.Mux(Adapters.Log());
+                var dashLog = Adapters.Log();
+                var dashApprovals = Adapters.ApprovalInbox();
 
-                ListAgentsView.Show(app, listing, keymap, (tab, index) =>
-                {
-                    var chosen = listing.For(tab);
-
-                    if (index < 0 || index >= chosen.Count)
-                    {
-                        return null;
-                    }
-
-                    var outcome = opener
-                        .HandleAsync(project.Name, chosen[index], project.Root)
-                        .GetAwaiter()
-                        .GetResult();
-
-                    return outcome.Succeeded ? null : outcome.Error;
-                });
+                ShowDashboardView.Show(
+                    app,
+                    project.Name,
+                    keymap,
+                    DashboardWiring.For(
+                        app,
+                        project,
+                        keymap,
+                        keymaps,
+                        dashGit,
+                        dashMux.Driver,
+                        Adapters.Agents(),
+                        Adapters.Requests(),
+                        Adapters.Workspaces(),
+                        Adapters.Settings(),
+                        Adapters.SettingsSync(),
+                        dashApprovals,
+                        dashLog));
 
                 break;
+            }
         }
 
         return 0;
