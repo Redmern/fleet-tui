@@ -340,6 +340,19 @@ public static class DashboardWiring
         var remotes = new ListRemotesHandler(git);
         var adder = new AddRepositoryHandler(git);
         var lister = new ListAgentsHandler(agents);
+
+        IReadOnlyList<AgentRecord> WithBarState(IReadOnlyList<AgentRecord> records)
+        {
+            var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+
+            bool ShownInBar(AgentRecord a) => panes.Any(p =>
+                PathKey.Same(p.Cwd, a.Worktree)
+                && !string.Equals(
+                    p.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase));
+
+            return [.. records.Select(a => a with { Hidden = !ShownInBar(a) })];
+        }
+
         var spawner = new NewAgentHandler(git, mux, agents);
         var opener = new OpenAgentHandler(mux, agents);
         var hider = new HideAgentHandler(mux, agents);
@@ -426,7 +439,7 @@ public static class DashboardWiring
 
             LoadAgents: () =>
             {
-                var board = SubTree.Of(lister.Handle(project.Name)).Board;
+                var board = SubTree.Of(WithBarState(lister.Handle(project.Name))).Board;
 
                 return new AgentBoard(
                     AgentRows.For(board, Memoized(states)),
@@ -436,7 +449,7 @@ public static class DashboardWiring
 
             LoadSubs: () =>
             {
-                var listing = SubTree.Of(lister.Handle(project.Name));
+                var listing = SubTree.Of(WithBarState(lister.Handle(project.Name)));
                 var trigger = settings.Load(project.Name).Trigger;
 
                 return new SubBoard(
