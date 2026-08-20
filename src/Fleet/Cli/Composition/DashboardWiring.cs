@@ -1,3 +1,4 @@
+using Fleet.Features.Agents;
 using Fleet.Features.Agents.ChangeHarness;
 using Fleet.Features.Agents.HideAgent;
 using Fleet.Features.Agents.ListAgents;
@@ -346,7 +347,7 @@ public static class DashboardWiring
             var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
 
             bool ShownInBar(AgentRecord a) => panes.Any(p =>
-                PathKey.Same(p.Cwd, a.Worktree)
+                AgentPanes.Owns(p, a)
                 && !string.Equals(
                     p.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase));
 
@@ -389,13 +390,6 @@ public static class DashboardWiring
                 : $"could not open {Label(agent)}: {outcome.Error}");
 
             return outcome.Succeeded ? null : outcome.Error;
-        }
-
-        bool ClosedInBar(AgentRecord agent)
-        {
-            var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
-
-            return !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
         }
 
         return new DashboardCallbacks(
@@ -540,9 +534,22 @@ public static class DashboardWiring
                     return null;
                 }
 
-                return ClosedInBar(agent)
-                    ? OpenFlow(agent).GetAwaiter().GetResult()
-                    : Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
+                var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+
+                if (panes.Any(p => AgentPanes.Owns(p, agent)))
+                {
+                    return Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
+                }
+
+                var active = panes.FirstOrDefault(p => p.IsActive);
+                var message = OpenFlow(agent).GetAwaiter().GetResult();
+
+                if (active is not null)
+                {
+                    mux.FocusPaneAsync(active.Id).GetAwaiter().GetResult();
+                }
+
+                return message;
             },
 
             ManageAgent: async (tab, index) =>

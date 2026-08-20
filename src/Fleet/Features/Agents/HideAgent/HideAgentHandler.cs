@@ -17,7 +17,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
         var active = panes.FirstOrDefault(p => p.IsActive);
-        var mine = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
+        var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
 
         var changed = AgentHarness.IsOrchestrator(agent.Harness)
             ? await ToggleOrchestratorAsync(agent, dashboardWindow, mine, hiding, ct).ConfigureAwait(false)
