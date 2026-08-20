@@ -370,6 +370,34 @@ public static class DashboardWiring
         var branches0 = branches;
         var states = new BranchStates(git);
 
+        async Task<string?> OpenFlow(AgentRecord agent)
+        {
+            var executable = AgentHarness.CommandFor(agent.Harness)[0];
+
+            if (!Adapters.OnPath(executable))
+            {
+                return Noted(log, project.Name, HarnessTrouble.Missing(executable));
+            }
+
+            ClaudeWiring.TrustFolder(agent.Worktree);
+
+            var outcome = await opener.HandleAsync(project.Name, agent, project.Root)
+                .ConfigureAwait(false);
+
+            Note(log, project.Name, outcome.Succeeded
+                ? $"opened {Label(agent)}"
+                : $"could not open {Label(agent)}: {outcome.Error}");
+
+            return outcome.Succeeded ? null : outcome.Error;
+        }
+
+        bool ClosedInBar(AgentRecord agent)
+        {
+            var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+
+            return !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
+        }
+
         return new DashboardCallbacks(
             LoadRepositories: async () =>
                 (IReadOnlyList<RepositoryChoice>)(await repositories
@@ -500,36 +528,20 @@ public static class DashboardWiring
             {
                 var agent = At(lister, project.Name, tab, index);
 
-                if (agent is null)
-                {
-                    return null;
-                }
-
-                var executable = AgentHarness.CommandFor(agent.Harness)[0];
-
-                if (!Adapters.OnPath(executable))
-                {
-                    return Noted(log, project.Name, HarnessTrouble.Missing(executable));
-                }
-
-                ClaudeWiring.TrustFolder(agent.Worktree);
-
-                var outcome = await opener.HandleAsync(project.Name, agent, project.Root)
-                    .ConfigureAwait(false);
-
-                Note(log, project.Name, outcome.Succeeded
-                    ? $"opened {Label(agent)}"
-                    : $"could not open {Label(agent)}: {outcome.Error}");
-
-                return outcome.Succeeded ? null : outcome.Error;
+                return agent is null ? null : await OpenFlow(agent).ConfigureAwait(false);
             },
 
             HideAgent: (tab, index) =>
             {
                 var agent = At(lister, project.Name, tab, index);
 
-                return agent is null
-                    ? null
+                if (agent is null)
+                {
+                    return null;
+                }
+
+                return ClosedInBar(agent)
+                    ? OpenFlow(agent).GetAwaiter().GetResult()
                     : Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
             },
 
