@@ -2,7 +2,9 @@ using Fleet.Features.Projects.PickProject.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -16,6 +18,8 @@ public static class PickProjectView
     {
         Project? chosen = null;
         IReadOnlyList<ProjectChoice> entries = picker.Entries();
+        var reserved = Reserved(keymap);
+        var accelerators = Accelerators(entries, reserved);
         var prefix = new PrefixRecognizer(keymap);
 
         var window = FleetTheme.Screen("fleet — open a project");
@@ -23,7 +27,13 @@ public static class PickProjectView
         var header = FleetTheme.SectionHeader(1, 0, "Projects");
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
 
-        FleetRows.Fill(list, PickProjectHandler.Rows(entries));
+        void Refill(int selected)
+        {
+            accelerators = Accelerators(entries, reserved);
+            FleetRows.Fill(list, Rows(entries, accelerators), selected);
+        }
+
+        Refill(0);
 
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
 
@@ -54,12 +64,11 @@ public static class PickProjectView
 
             entries = picker.Entries();
 
-            FleetRows.Fill(list, PickProjectHandler.Rows(entries), index);
+            Refill(index);
         }
 
-        void Accept()
+        void OpenAt(int index)
         {
-            var index = FleetRows.Selected(list);
             if (index < 0 || index >= entries.Count)
             {
                 return;
@@ -74,6 +83,8 @@ public static class PickProjectView
             chosen = entries[index].Project;
             app.RequestStop(window);
         }
+
+        void Accept() => OpenAt(FleetRows.Selected(list));
 
         void Dispatch(FleetAction action)
         {
@@ -145,6 +156,16 @@ public static class PickProjectView
                 return;
             }
 
+            for (var i = 0; i < accelerators.Length; i++)
+            {
+                if (accelerators[i].Length == 1 && key == new Key(accelerators[i]))
+                {
+                    OpenAt(i);
+                    key.Handled = true;
+                    return;
+                }
+            }
+
             var direct = keymap.ActionFor(key);
 
             if (direct is FleetAction.Close
@@ -182,5 +203,73 @@ public static class PickProjectView
         }
 
         return chosen;
+    }
+
+    private static IReadOnlySet<char> Reserved(Keymap keymap)
+    {
+        var reserved = new HashSet<char>();
+
+        foreach (var action in new[]
+        {
+            FleetAction.MoveDown,
+            FleetAction.MoveUp,
+            FleetAction.MoveFirst,
+            FleetAction.MoveLast,
+            FleetAction.OpenProject,
+            FleetAction.NewProject,
+            FleetAction.RemoveProject,
+            FleetAction.Close,
+            FleetAction.EditKeybinds,
+        })
+        {
+            var text = keymap.TextFor(action);
+
+            if (text.Length == 1)
+            {
+                reserved.Add(char.ToLowerInvariant(text[0]));
+            }
+        }
+
+        return reserved;
+    }
+
+    private static string[] Accelerators(
+        IReadOnlyList<ProjectChoice> entries, IReadOnlySet<char> reserved)
+    {
+        var labels = entries.Where(e => !e.IsNew).Select(e => e.Label).ToList();
+        var keys = PickerKeys.For(labels, reserved);
+        var accelerators = new string[entries.Count];
+
+        var next = 0;
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            accelerators[i] = entries[i].IsNew ? string.Empty : keys[next++];
+        }
+
+        return accelerators;
+    }
+
+    private static IReadOnlyList<FleetRow> Rows(
+        IReadOnlyList<ProjectChoice> entries, IReadOnlyList<string> accelerators)
+    {
+        if (entries.Count == 0)
+        {
+            return [];
+        }
+
+        var nameWidth = entries.Max(e => e.Label.Length);
+
+        return
+        [
+            .. entries.Select((e, i) => new FleetRow(
+                [
+                    new FleetSpan(
+                        accelerators[i].Length == 0 ? "   " : $"{accelerators[i]}  ",
+                        FleetTones.Key),
+                    FleetSpan.Plain(e.Label.PadRight(nameWidth)),
+                ],
+                e.Detail.Length == 0 ? null : [FleetSpan.Muted($"{e.Detail} ")])),
+        ];
     }
 }
