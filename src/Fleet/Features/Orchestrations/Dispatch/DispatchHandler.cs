@@ -73,6 +73,7 @@ public sealed class DispatchHandler(
         store.Save(command.ProjectName, record);
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var active = panes.FirstOrDefault(p => p.IsActive);
         var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, command.ProjectRoot))?.WindowId;
 
         var pane = await mux.SpawnAsync(
@@ -107,6 +108,11 @@ public sealed class DispatchHandler(
         if (!browse.IsNone)
         {
             await mux.SetTitleAsync(browse, $"{slug} files", ct).ConfigureAwait(false);
+        }
+
+        if (active is not null)
+        {
+            await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
         }
 
         await KickOff(folder, pane, ct).ConfigureAwait(false);
