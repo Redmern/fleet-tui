@@ -1,3 +1,4 @@
+using Fleet.Features.Agents;
 using Fleet.Features.Agents.ChangeHarness;
 using Fleet.Features.Agents.HideAgent;
 using Fleet.Features.Agents.ListAgents;
@@ -279,7 +280,7 @@ public sealed class McpActions(
     private async Task<PaneId?> PaneFor(AgentRecord agent, CancellationToken ct)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
-        var pane = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, agent.Worktree));
+        var pane = panes.FirstOrDefault(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p));
 
         return pane?.Id;
     }
