@@ -1,3 +1,4 @@
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -29,7 +30,7 @@ public static class FleetPicker
 
         int? result = null;
 
-        var keys = PickerKeys.For(entries);
+        var keys = PickerKeys.For(entries, Motions(keymap));
 
         var window = FleetTheme.Overlay(title);
 
@@ -103,5 +104,28 @@ public static class FleetPicker
         }
 
         return result;
+    }
+
+    private static IReadOnlySet<char> Motions(Keymap keymap)
+    {
+        var reserved = new HashSet<char>();
+
+        foreach (var action in new[]
+        {
+            FleetAction.MoveDown,
+            FleetAction.MoveUp,
+            FleetAction.MoveFirst,
+            FleetAction.MoveLast,
+        })
+        {
+            var text = keymap.TextFor(action);
+
+            if (text.Length == 1)
+            {
+                reserved.Add(char.ToLowerInvariant(text[0]));
+            }
+        }
+
+        return reserved;
     }
 }

@@ -23,9 +23,10 @@ public static class PickerKeys
         ];
     }
 
-    public static IReadOnlyList<string> For(IReadOnlyList<string> labels)
+    public static IReadOnlyList<string> For(
+        IReadOnlyList<string> labels, IReadOnlySet<char>? reserved = null)
     {
-        var taken = new HashSet<char>();
+        var taken = new HashSet<char>((IEnumerable<char>?)reserved ?? Array.Empty<char>());
         var keys = new List<string>(labels.Count);
 
         foreach (var label in labels)
@@ -36,9 +37,10 @@ public static class PickerKeys
         return keys;
     }
 
-    public static IReadOnlyList<string> For(IReadOnlyList<PickerEntry> entries)
+    public static IReadOnlyList<string> For(
+        IReadOnlyList<PickerEntry> entries, IReadOnlySet<char>? reserved = null)
     {
-        var taken = new HashSet<char>();
+        var taken = new HashSet<char>((IEnumerable<char>?)reserved ?? Array.Empty<char>());
         var keys = new string[entries.Count];
 
         for (var i = 0; i < entries.Count; i++)

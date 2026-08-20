@@ -129,11 +129,26 @@ public static class MenuCommand
                 var switchMux = Adapters.Mux(Adapters.Log());
                 var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
 
-                bool IsOpen(Project p) => panes.Any(x => PathKey.Same(x.Cwd, p.Root));
+                var self = Environment.GetEnvironmentVariable("WEZTERM_PANE");
+                var currentWindow = panes.FirstOrDefault(p => p.Id.Value == self)?.WindowId;
 
-                var labels = others
-                    .Select(p => IsOpen(p) ? $"{p.Name}  (open)" : p.Name)
-                    .ToList();
+                string Label(Project p)
+                {
+                    var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, p.Root));
+
+                    if (dash is null)
+                    {
+                        return p.Name;
+                    }
+
+                    var where = currentWindow is not null && dash.WindowId == currentWindow
+                        ? "this window"
+                        : "another window";
+
+                    return $"{p.Name}  (open · {where})";
+                }
+
+                var labels = others.Select(Label).ToList();
 
                 var picked = FleetPicker.Choose(app, "Switch project", labels, keymap);
 
