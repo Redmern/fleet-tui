@@ -196,15 +196,19 @@ public static class DashboardWiring
     }
 
     private static string? ToggleHidden(
-        IMuxDriver mux, HideAgentHandler hider, Project project, AgentRecord agent)
+        IMuxDriver mux,
+        HideAgentHandler hider,
+        Project project,
+        AgentRecord agent,
+        IReadOnlyList<Pane>? knownPanes = null)
     {
-        var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+        var panes = knownPanes ?? mux.ListPanesAsync().GetAwaiter().GetResult();
 
         var dashboard = panes
             .FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root))?.WindowId;
 
         var outcome = hider
-            .HandleAsync(project.Name, agent, dashboard)
+            .HandleAsync(project.Name, agent, dashboard, panes)
             .GetAwaiter()
             .GetResult();
 
@@ -342,9 +346,20 @@ public static class DashboardWiring
         var adder = new AddRepositoryHandler(git);
         var lister = new ListAgentsHandler(agents);
 
+        IReadOnlyList<Pane>? barPanes = null;
+        var barPanesAt = DateTime.MinValue;
+
         IReadOnlyList<AgentRecord> WithBarState(IReadOnlyList<AgentRecord> records)
         {
-            var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
+            var now = DateTime.UtcNow;
+
+            if (barPanes is null || now - barPanesAt > TimeSpan.FromMilliseconds(300))
+            {
+                barPanes = mux.ListPanesAsync().GetAwaiter().GetResult();
+                barPanesAt = now;
+            }
+
+            var panes = barPanes;
 
             bool ShownInBar(AgentRecord a) => panes.Any(p =>
                 AgentPanes.Owns(p, a)
@@ -538,7 +553,7 @@ public static class DashboardWiring
 
                 if (panes.Any(p => AgentPanes.Owns(p, agent)))
                 {
-                    return Noted(log, project.Name, ToggleHidden(mux, hider, project, agent));
+                    return Noted(log, project.Name, ToggleHidden(mux, hider, project, agent, panes));
                 }
 
                 var active = panes.FirstOrDefault(p => p.IsActive);

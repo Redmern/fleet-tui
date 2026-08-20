@@ -11,11 +11,15 @@ namespace Fleet.Features.Agents.HideAgent;
 public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
 {
     public async Task<Result<AgentRecord>> HandleAsync(
-        string project, AgentRecord agent, string? dashboardWindow, CancellationToken ct = default)
+        string project,
+        AgentRecord agent,
+        string? dashboardWindow,
+        IReadOnlyList<Pane>? knownPanes = null,
+        CancellationToken ct = default)
     {
         var hiding = !agent.Hidden;
 
-        var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var panes = knownPanes ?? await mux.ListPanesAsync(ct).ConfigureAwait(false);
         var active = panes.FirstOrDefault(p => p.IsActive);
         var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
 

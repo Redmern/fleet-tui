@@ -351,7 +351,7 @@ public sealed class McpActions(
                 + (wantVisible ? "visible." : "hidden."));
         }
 
-        var outcome = await _hider.HandleAsync(project, agent, null, ct).ConfigureAwait(false);
+        var outcome = await _hider.HandleAsync(project, agent, null, ct: ct).ConfigureAwait(false);
 
         return outcome.Succeeded
             ? Ok($"{Repo(request)}/{Branch(request)} is now "
