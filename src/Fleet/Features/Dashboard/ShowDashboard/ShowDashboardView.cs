@@ -204,6 +204,10 @@ public static class ShowDashboardView
             {
                 app.Invoke(() => status.Text = error);
             }
+            else if (menu)
+            {
+                app.Invoke(() => app.RequestStop(window));
+            }
         }
 
         void HideAgent()
@@ -363,6 +367,10 @@ public static class ShowDashboardView
             if (error is not null)
             {
                 app.Invoke(() => status.Text = error);
+            }
+            else if (menu)
+            {
+                app.Invoke(() => app.RequestStop(window));
             }
         }
 
