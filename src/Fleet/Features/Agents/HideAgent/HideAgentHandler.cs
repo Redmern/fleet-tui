@@ -47,7 +47,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         foreach (var pane in mine)
         {
             await mux.MovePaneAsync(pane.Id, options, ct).ConfigureAwait(false);
-            await mux.SetTitleAsync(pane.Id, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
+            await mux.SetTitleAsync(pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
         }
 
         return agent with { Hidden = hiding, Open = mine.Count > 0 };
@@ -74,7 +74,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
                 await mux.MovePaneAsync(
                         pane.Id, new MovePaneOptions { Workspace = FleetWorkspaces.Hidden }, ct)
                     .ConfigureAwait(false);
-                await mux.SetTitleAsync(pane.Id, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
+                await mux.SetTitleAsync(pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
             }
         }
         else
@@ -90,7 +90,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
                         },
                         ct)
                     .ConfigureAwait(false);
-                await mux.SetTitleAsync(pane.Id, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
+                await mux.SetTitleAsync(pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
             }
 
             if (claude.FirstOrDefault() is { } main)

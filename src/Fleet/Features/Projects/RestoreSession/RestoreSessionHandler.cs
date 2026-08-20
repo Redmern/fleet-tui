@@ -35,7 +35,8 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
                 continue;
             }
 
-            await mux.SetTitleAsync(pane, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
+            await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct)
+                .ConfigureAwait(false);
 
             restored++;
         }

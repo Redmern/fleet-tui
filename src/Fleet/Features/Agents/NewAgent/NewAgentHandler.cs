@@ -90,7 +90,8 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             return Fail($"the {mux.Name} multiplexer did not respond. Run 'fleet doctor'.");
         }
 
-        await mux.SetTitleAsync(pane, BranchSlug.Of(branch), ct).ConfigureAwait(false);
+        await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct)
+            .ConfigureAwait(false);
 
         return Result<AgentRecord>.Ok(agent);
     }

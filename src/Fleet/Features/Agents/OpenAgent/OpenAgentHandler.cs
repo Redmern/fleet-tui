@@ -41,7 +41,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
                         .ConfigureAwait(false);
                 }
 
-                await mux.SetTitleAsync(main.Id, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
+                await mux.SetTitleAsync(main.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
 
                 if (!mine.Any(SubBrowse.Is))
                 {
@@ -83,7 +83,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
                 }
             }
 
-            await mux.SetTitleAsync(running.Id, BranchSlug.Of(agent.Branch), ct)
+            await mux.SetTitleAsync(running.Id, AgentTitle.For(agent.Repository, agent.Branch), ct)
                 .ConfigureAwait(false);
 
             if (agent.Hidden || !agent.Open)
@@ -121,7 +121,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
             return Result.Fail($"the {mux.Name} multiplexer did not respond. Run 'fleet doctor'.");
         }
 
-        await mux.SetTitleAsync(pane, BranchSlug.Of(agent.Branch), ct).ConfigureAwait(false);
+        await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
 
         if (orchestrator)
         {

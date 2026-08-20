@@ -44,7 +44,7 @@ public class HideAgentTests
 
         await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1");
 
-        Assert.Equal("test", _mux.TitleOf(pane));
+        Assert.Equal("backend/test", _mux.TitleOf(pane));
     }
 
     [Fact]

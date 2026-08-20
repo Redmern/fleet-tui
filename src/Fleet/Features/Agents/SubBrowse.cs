@@ -2,6 +2,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Features.Agents;
@@ -11,7 +12,8 @@ public static class SubBrowse
     public static bool Is(Pane pane) =>
         pane.Title.EndsWith(" files", StringComparison.OrdinalIgnoreCase);
 
-    public static string Title(AgentRecord agent) => $"{agent.Branch} files";
+    public static string Title(AgentRecord agent) =>
+        $"{AgentTitle.For(agent.Repository, agent.Branch)} files";
 
     public static async Task SplitAsync(
         IMuxDriver mux, AgentRecord agent, PaneId claude, CancellationToken ct = default)

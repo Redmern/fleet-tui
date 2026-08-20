@@ -9,6 +9,8 @@ public static class AgentPanes
     public static bool Owns(Pane pane, AgentRecord agent) =>
         PathKey.Same(pane.Cwd, agent.Worktree)
         || string.Equals(
-            pane.Title, BranchSlug.Of(agent.Branch), StringComparison.OrdinalIgnoreCase)
+            pane.Title,
+            AgentTitle.For(agent.Repository, agent.Branch),
+            StringComparison.OrdinalIgnoreCase)
         || string.Equals(pane.Title, SubBrowse.Title(agent), StringComparison.OrdinalIgnoreCase);
 }

@@ -67,7 +67,7 @@ public sealed class OpenAgentTests : IDisposable
 
         Assert.Equal(home, after.Single(p => p.Id == stray).WindowId);
         Assert.True(after.Single(p => p.Id == stray).IsActive);
-        Assert.Equal("feature_login", _mux.TitleOf(stray));
+        Assert.Equal("backend/feature_login", _mux.TitleOf(stray));
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class OpenAgentTests : IDisposable
 
         Assert.Equal(agent.Worktree, pane.Cwd);
         Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
-        Assert.Equal("feature_login", _mux.TitleOf(pane.Id));
+        Assert.Equal("backend/feature_login", _mux.TitleOf(pane.Id));
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public sealed class OpenAgentTests : IDisposable
 
         var browser = panes.Single(p => _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
 
-        Assert.Equal($"{agent.Branch} files", _mux.TitleOf(browser.Id));
+        Assert.Equal("backend/feature_login files", _mux.TitleOf(browser.Id));
     }
 
     [Fact]
