@@ -191,7 +191,7 @@ public sealed class McpActions(
             .HandleAsync(
                 new NewAgentCommand(
                     project, repo.Name, repo.Path, Branch(request), repo.DefaultBranch,
-                    AgentHarness.Nvim),
+                    AgentHarness.Nvim, caller),
                 ct)
             .ConfigureAwait(false);
 

@@ -6,4 +6,5 @@ public sealed record NewAgentCommand(
     string RepositoryDirectory,
     string BranchName,
     string Base,
-    string Harness);
+    string Harness,
+    string Owner = "");

@@ -71,7 +71,8 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             baseRef,
             plan.TargetDirectory != command.RepositoryDirectory,
             Hidden: false,
-            Open: true);
+            Open: true,
+            Owner: command.Owner);
 
         store.Save(command.ProjectName, agent);
 
@@ -80,7 +81,8 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             {
                 Cwd = plan.TargetDirectory,
                 SessionName = command.ProjectName,
-                Args = AgentHarness.CommandFor(command.Harness),
+                Args = AgentHarness.CommandFor(
+                    command.Harness, withClaude: command.Owner.Length > 0),
                 Env = AgentHarness.SpawnEnv(command.Harness),
             },
             ct).ConfigureAwait(false);

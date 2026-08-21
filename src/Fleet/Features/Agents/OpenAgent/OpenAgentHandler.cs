@@ -112,7 +112,8 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
                 WindowId = window,
                 Args = orchestrator
                     ? [Shared.Constants.AgentHarness.Claude, Shared.Constants.AgentHarness.ResumeArgument]
-                    : Shared.Constants.AgentHarness.CommandFor(agent.Harness),
+                    : Shared.Constants.AgentHarness.CommandFor(
+                        agent.Harness, withClaude: agent.Owner.Length > 0),
                 Env = Shared.Constants.AgentHarness.SpawnEnv(agent.Harness),
             },
             ct).ConfigureAwait(false);

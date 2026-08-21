@@ -199,6 +199,13 @@ public class HideAgentTests
     }
 
     [Fact]
+    public void Nvim_launches_claude_only_when_asked_for_an_orchestrator_child()
+    {
+        Assert.Contains("ClaudeCode", AgentHarness.CommandFor(AgentHarness.Nvim, withClaude: true)[2]);
+        Assert.DoesNotContain("ClaudeCode", AgentHarness.CommandFor(AgentHarness.Nvim)[2]);
+    }
+
+    [Fact]
     public void The_startup_commands_are_scheduled_so_lazy_plugins_have_loaded()
     {
         Assert.Contains("vim.schedule(", AgentHarness.NvimStartup);

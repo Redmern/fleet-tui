@@ -57,6 +57,6 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
             Workspace = agent.Hidden ? FleetWorkspaces.Hidden : null,
             WindowId = agent.Hidden ? null : window,
             NewWindow = agent.Hidden,
-            Args = AgentHarness.CommandFor(agent.Harness),
+            Args = AgentHarness.CommandFor(agent.Harness, withClaude: agent.Owner.Length > 0),
         };
 }
