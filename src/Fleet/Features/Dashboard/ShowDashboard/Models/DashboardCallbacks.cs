@@ -25,6 +25,7 @@ public sealed record DashboardCallbacks(
     Func<int, int, Task<string?>> OpenAgent,
     Func<int, int, Task<string?>> ManageAgent,
     Func<int, int, string?> HideAgent,
+    Func<int, IReadOnlyList<int>, string, Task<string?>> BatchAgents,
     Func<RepositoryChoice, Task<string?>> RemoveRepository,
     Func<RepositoryChoice, Task<string?>> PullRepository,
     Func<RepositoryChoice, Task<RepositoryManaged>> ManageRepository,

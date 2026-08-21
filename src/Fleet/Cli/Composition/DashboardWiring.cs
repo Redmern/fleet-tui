@@ -655,6 +655,57 @@ public static class DashboardWiring
                 return agent is null ? null : await OpenFlow(agent).ConfigureAwait(false);
             },
 
+            BatchAgents: async (tab, indexes, choice) =>
+            {
+                var picked = indexes
+                    .Select(i => At(lister, project.Name, tab, i))
+                    .OfType<AgentRecord>()
+                    .ToList();
+
+                var failures = new List<string>();
+
+                foreach (var agent in picked)
+                {
+                    switch (choice)
+                    {
+                        case "hide":
+                            ToggleHidden(mux, hider, project, agent);
+                            break;
+
+                        case "stop":
+                        {
+                            var stopped = await stopper.HandleAsync(project.Name, agent)
+                                .ConfigureAwait(false);
+
+                            if (!stopped.Succeeded)
+                            {
+                                failures.Add($"{agent.Branch}: {stopped.Error}");
+                            }
+
+                            break;
+                        }
+
+                        case "forget":
+                        {
+                            var removed = await remover
+                                .HandleAsync(project.Name, agent, deleteWorktree: false)
+                                .ConfigureAwait(false);
+
+                            if (!removed.Succeeded)
+                            {
+                                failures.Add($"{agent.Branch}: {removed.Error}");
+                            }
+
+                            break;
+                        }
+                    }
+                }
+
+                return Noted(log, project.Name, failures.Count == 0
+                    ? $"batch {choice}: {picked.Count} agent(s)."
+                    : $"batch {choice}: {string.Join("; ", failures)}");
+            },
+
             HideAgent: (tab, index) =>
             {
                 var agent = At(lister, project.Name, tab, index);

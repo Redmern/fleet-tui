@@ -69,6 +69,28 @@ public static class ShowDashboardView
         var board = new AgentBoard([], 0, []);
         var subs = SubBoard.Empty;
 
+        HashSet<int>[] marks = [[], [], []];
+
+        IReadOnlyList<FleetRow> Marked(IReadOnlyList<FleetRow> rows, int tab)
+        {
+            var set = marks[tab];
+
+            if (set.Count == 0)
+            {
+                return rows;
+            }
+
+            return
+            [
+                .. rows.Select((r, i) => new FleetRow(
+                    [
+                        new FleetSpan(set.Contains(i) ? "*  " : "   ", FleetTones.Key),
+                        .. r.Spans,
+                    ],
+                    r.Trailing)),
+            ];
+        }
+
         void ShowBarFor(int tab)
         {
             if (tabBar.Selected == tab)
@@ -91,13 +113,29 @@ public static class ShowDashboardView
             repoRows = (FleetRowSource)repoList.Source!;
             tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(loaded.Count));
 
+            if (board.Count != agentBoard.Count)
+            {
+                marks[DashboardTabs.AgentsTab].Clear();
+            }
+
+            if (subs.Rows.Count != subBoard.Rows.Count)
+            {
+                marks[DashboardTabs.SubsTab].Clear();
+            }
+
             board = agentBoard;
-            FleetRows.Fill(agentList, board.Rows, FleetRows.Selected(agentList));
+            FleetRows.Fill(
+                agentList,
+                Marked(board.Rows, DashboardTabs.AgentsTab),
+                FleetRows.Selected(agentList));
             tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(board.Count));
             ShowBarFor(DashboardTabs.AgentsTab);
 
             subs = subBoard;
-            FleetRows.Fill(subList, subs.Rows, FleetRows.Selected(subList));
+            FleetRows.Fill(
+                subList,
+                Marked(subs.Rows, DashboardTabs.SubsTab),
+                FleetRows.Selected(subList));
             tabBar.Retitle(DashboardTabs.SubsTab, DashboardTabs.Subs(subs.Count));
             ShowBarFor(DashboardTabs.SubsTab);
         }
@@ -237,6 +275,82 @@ public static class ShowDashboardView
             {
                 app.Invoke(() => app.RequestStop(window));
             }
+        }
+
+        void ToggleMark()
+        {
+            var tab = ActiveTab();
+
+            if (tab == DashboardTabs.RepositoriesTab)
+            {
+                return;
+            }
+
+            var row = ActiveRow();
+            var count = tab == DashboardTabs.SubsTab ? subs.Rows.Count : board.Count;
+
+            if (row < 0 || row >= count)
+            {
+                return;
+            }
+
+            if (!marks[tab].Add(row))
+            {
+                marks[tab].Remove(row);
+            }
+
+            var list = tab == DashboardTabs.SubsTab ? subList : agentList;
+            var rows = tab == DashboardTabs.SubsTab ? subs.Rows : board.Rows;
+
+            FleetRows.Fill(list, Marked(rows, tab), FleetRows.Selected(list));
+        }
+
+        void RunBatch(string choice)
+        {
+            var tab = ActiveTab();
+            var indexes = marks[tab].OrderBy(i => i).ToList();
+
+            marks[tab].Clear();
+            busy = true;
+
+            Start(async () =>
+            {
+                try
+                {
+                    var message = await callbacks.BatchAgents(tab, indexes, choice)
+                        .ConfigureAwait(false);
+
+                    app.Invoke(() => status.Text = message ?? string.Empty);
+
+                    await RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    busy = false;
+                }
+            });
+        }
+
+        void BatchMenu()
+        {
+            var picked = FleetPicker.Choose(
+                app,
+                $"{marks[ActiveTab()].Count} marked",
+                ["Hide or show them", "Stop them", "Remove them, keep their files"],
+                keys);
+
+            if (picked is null)
+            {
+                return;
+            }
+
+            if (picked == 2 && !FleetDialog.Confirm(
+                    app, $"Remove {marks[ActiveTab()].Count} marked?", [], "Remove"))
+            {
+                return;
+            }
+
+            RunBatch(picked switch { 0 => "hide", 1 => "stop", _ => "forget" });
         }
 
         void HideAgent()
@@ -541,10 +655,22 @@ public static class ShowDashboardView
                     break;
 
                 case FleetAction.RemoveAgent:
+                    if (marks[ActiveTab()].Count > 0)
+                    {
+                        BatchMenu();
+                        break;
+                    }
+
                     ManageAgent();
                     break;
 
                 case FleetAction.ToggleHidden:
+                    if (marks[ActiveTab()].Count > 0)
+                    {
+                        RunBatch("hide");
+                        break;
+                    }
+
                     HideAgent();
                     break;
 
@@ -671,6 +797,13 @@ public static class ShowDashboardView
                     FromKey(result.Action);
                 }
 
+                return;
+            }
+
+            if (key == Key.Space)
+            {
+                ToggleMark();
+                key.Handled = true;
                 return;
             }
 
