@@ -188,14 +188,14 @@ public class HideAgentTests
     }
 
     [Fact]
-    public void Nvim_is_started_with_neo_tree_and_claude_open()
+    public void Nvim_is_started_with_neo_tree_and_claude_closed()
     {
         var command = AgentHarness.CommandFor(AgentHarness.Nvim);
 
         Assert.Equal(AgentHarness.Nvim, command[0]);
         Assert.Equal("-c", command[1]);
         Assert.Contains("Neotree show", command[2]);
-        Assert.Contains("ClaudeCode", command[2]);
+        Assert.DoesNotContain("ClaudeCode", command[2]);
     }
 
     [Fact]
