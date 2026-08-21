@@ -154,5 +154,11 @@ public static class AddRepositoryView
     private static FleetRow Field(string label, string value) =>
         new([new FleetSpan($"{label}:".PadRight(8), FleetTones.Key), FleetSpan.Plain(value)]);
 
-    private static FleetRow Choice(string label) => FleetRow.Plain(label);
+    private static FleetRow Choice(string label) =>
+        new(
+        [
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {label} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+        ]);
 }
