@@ -160,12 +160,6 @@ public static class MenuCommand
                     if (dash is null)
                     {
                         await OpenProjectFlow(switchMux.Driver, target).ConfigureAwait(false);
-                        Adapters.Workspaces().Submit(target.Name);
-                    }
-                    else if (string.Equals(
-                        dash.SessionName, target.Name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Adapters.Workspaces().Submit(target.Name);
                     }
                     else
                     {

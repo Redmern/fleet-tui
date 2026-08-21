@@ -17,7 +17,6 @@ public sealed class OpenProjectHandler(IMuxDriver mux)
             {
                 NewWindow = true,
                 SessionName = command.Project.Name,
-                Workspace = command.Project.Name,
                 Cwd = command.Project.Root,
                 Args = [command.Harness],
             },
