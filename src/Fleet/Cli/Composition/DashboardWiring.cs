@@ -204,8 +204,8 @@ public static class DashboardWiring
     {
         var panes = knownPanes ?? mux.ListPanesAsync().GetAwaiter().GetResult();
 
-        var dashboard = panes
-            .FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root))?.WindowId;
+        var dashboard = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId
+            ?? panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root))?.WindowId;
 
         var outcome = hider
             .HandleAsync(project.Name, agent, dashboard, panes)

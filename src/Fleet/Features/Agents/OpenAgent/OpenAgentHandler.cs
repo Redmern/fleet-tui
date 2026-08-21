@@ -18,7 +18,8 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
+        var window = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId
+            ?? panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
         var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
         var running = mine.FirstOrDefault();
 

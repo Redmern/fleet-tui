@@ -74,7 +74,8 @@ public sealed class DispatchHandler(
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
         var active = panes.FirstOrDefault(p => p.IsActive);
-        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, command.ProjectRoot))?.WindowId;
+        var window = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId
+            ?? panes.FirstOrDefault(p => PathKey.Same(p.Cwd, command.ProjectRoot))?.WindowId;
 
         var pane = await mux.SpawnAsync(
             new SpawnOptions
