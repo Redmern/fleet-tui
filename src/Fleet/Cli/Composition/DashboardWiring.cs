@@ -197,6 +197,47 @@ public static class DashboardWiring
              + "next time it starts.";
     }
 
+    private static IReadOnlyList<string> ReportLines(string folder)
+    {
+        var lines = new List<string>();
+
+        void Append(string file)
+        {
+            try
+            {
+                if (File.Exists(file))
+                {
+                    if (lines.Count > 0)
+                    {
+                        lines.Add(string.Empty);
+                        lines.Add($"--- {Path.GetFileName(file)} ---");
+                        lines.Add(string.Empty);
+                    }
+
+                    lines.AddRange(File.ReadAllLines(file));
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                lines.Add($"could not read {file}: {e.Message}");
+            }
+        }
+
+        Append(OrchestrationPaths.ReportFile(folder));
+
+        var reports = OrchestrationPaths.ReportsFolder(folder);
+
+        if (Directory.Exists(reports))
+        {
+            foreach (var file in Directory.EnumerateFiles(reports).Order())
+            {
+                Append(file);
+            }
+        }
+
+        return lines.Count == 0 ? ["no report yet."] : lines;
+    }
+
     private static string? ToggleHidden(
         IMuxDriver mux,
         HideAgentHandler hider,
@@ -647,6 +688,24 @@ public static class DashboardWiring
                         log, project.Name, await FleetAsync
                             .OnUi(app, () => ChooseHarness(app, keymap, harnesses, project.Name, agent))
                             .ConfigureAwait(false));
+                }
+
+                if (choice == "v")
+                {
+                    await FleetAsync
+                        .OnUi(app, () =>
+                        {
+                            FleetTextView.Show(
+                                app,
+                                $"report — {agent.Branch}",
+                                ReportLines(agent.Worktree),
+                                keymap);
+
+                            return true;
+                        })
+                        .ConfigureAwait(false);
+
+                    return null;
                 }
 
                 if (choice == "h")

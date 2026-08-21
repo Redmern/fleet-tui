@@ -39,6 +39,11 @@ public static class AgentDisposal
             entries.Add(new("opens", Choices[Opens], "o"));
         }
 
+        if (orchestrator)
+        {
+            entries.Add(new("report", "View its report", "v"));
+        }
+
         entries.Add(hidden
             ? new PickerEntry(AgentWords.Show, ShowDetail, "h")
             : new PickerEntry(AgentWords.Hide, Choices[Hide], "h"));
