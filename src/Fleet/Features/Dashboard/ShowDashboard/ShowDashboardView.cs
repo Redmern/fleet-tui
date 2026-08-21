@@ -20,7 +20,8 @@ public static class ShowDashboardView
         string projectName,
         Keymap keymap,
         DashboardCallbacks callbacks,
-        bool menu = false)
+        bool menu = false,
+        string? notice = null)
     {
         var window = FleetTheme.Screen(menu ? "menu" : $"fleet — {projectName}");
 
@@ -810,6 +811,11 @@ public static class ShowDashboardView
             hints.Root);
 
         ShowTab(DashboardTabs.AgentsTab);
+
+        if (notice is not null)
+        {
+            status.Text = notice;
+        }
 
         callbacks.Heartbeat();
 

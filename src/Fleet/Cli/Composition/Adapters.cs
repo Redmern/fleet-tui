@@ -244,6 +244,35 @@ public static class Adapters
     private static string Home =>
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
+    public static string? SetupDrift(Keymap keymap)
+    {
+        var missing = SetupHandler.Harness.Where(t => !OnPath(t)).ToList();
+
+        if (missing.Count > 0)
+        {
+            return $"setup: {string.Join(", ", missing)} not on PATH — run 'fleet setup'.";
+        }
+
+        var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermWiring.Module);
+
+        try
+        {
+            var wanted = WezTermKeybinds.Generate(
+                keymap, Executable, FileWorkspaceRequestStore.File);
+
+            if (!File.Exists(target) || File.ReadAllText(target) != wanted)
+            {
+                return "setup: wezterm keybinds are outdated — run 'fleet setup' "
+                    + "and reload wezterm.";
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return null;
+    }
+
     public static string WriteKeybindModule(Keymap keymap)
     {
         var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermWiring.Module);

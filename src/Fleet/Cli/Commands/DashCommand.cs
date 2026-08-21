@@ -45,13 +45,21 @@ public static class DashCommand
 
         var keymap = new Keymap(keymaps.Load());
 
+        var drift = Adapters.SetupDrift(keymap);
+
+        if (drift is not null)
+        {
+            log.Write(LogTag.For(project.Name, drift));
+        }
+
         try
         {
             ShowDashboardView.Show(
                 app,
                 project.Name,
                 keymap,
-                DashboardWiring.For(
+                notice: drift,
+                callbacks: DashboardWiring.For(
                     app,
                     project,
                     keymap,
