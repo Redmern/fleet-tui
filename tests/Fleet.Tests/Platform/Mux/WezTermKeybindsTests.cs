@@ -146,7 +146,7 @@ public class WezTermKeybindsTests
 
         Assert.Contains("mods = 'LEADER'", lua);
         Assert.Contains("refusing to close the dashboard pane", lua);
-        Assert.Contains("act.CloseCurrentPane { confirm = false }", lua);
+        Assert.Contains("act.CloseCurrentPane { confirm = true }", lua);
     }
 
 }

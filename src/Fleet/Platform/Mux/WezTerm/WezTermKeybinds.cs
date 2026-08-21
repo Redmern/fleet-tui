@@ -160,7 +160,7 @@ public static class WezTermKeybinds
         sb.AppendLine("        wezterm.log_info('fleet: refusing to close the dashboard pane')");
         sb.AppendLine("        return");
         sb.AppendLine("      end");
-        sb.AppendLine("      window:perform_action(act.CloseCurrentPane { confirm = false }, pane)");
+        sb.AppendLine("      window:perform_action(act.CloseCurrentPane { confirm = true }, pane)");
         sb.AppendLine("    end),");
         sb.AppendLine("  })");
         sb.AppendLine();
