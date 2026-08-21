@@ -139,4 +139,14 @@ public class WezTermKeybindsTests
         Assert.Contains("os.remove(M.workspace_request)", lua);
     }
 
+    [Fact]
+    public void The_module_refuses_the_leader_close_binding_on_the_dashboard_pane()
+    {
+        var lua = Lua();
+
+        Assert.Contains("mods = 'LEADER'", lua);
+        Assert.Contains("refusing to close the dashboard pane", lua);
+        Assert.Contains("act.CloseCurrentPane { confirm = false }", lua);
+    }
+
 }

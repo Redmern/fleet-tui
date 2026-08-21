@@ -116,6 +116,8 @@ public static class ShowDashboardView
         var pulling = false;
         var refreshing = false;
         var queued = FleetAction.None;
+        var statusSeen = string.Empty;
+        var statusAge = 0;
 
         async Task AutoRefreshAsync()
         {
@@ -725,6 +727,17 @@ public static class ShowDashboardView
         bool Beat()
         {
             callbacks.Heartbeat();
+
+            if (status.Text != statusSeen)
+            {
+                statusSeen = status.Text;
+                statusAge = 0;
+            }
+            else if (status.Text.Length > 0 && ++statusAge >= 2)
+            {
+                status.Text = string.Empty;
+                statusSeen = string.Empty;
+            }
 
             if (!busy && !pulling && !refreshing && queued == FleetAction.None)
             {
