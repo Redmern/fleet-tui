@@ -412,6 +412,26 @@ public static class DashboardWiring
             return [.. records.Select(a => a with { Hidden = !ShownInBar(a) })];
         }
 
+        AgentRecord WithActivity(AgentRecord agent)
+        {
+            if (AgentHarness.IsOrchestrator(agent.Harness) || barPanes is null)
+            {
+                return agent;
+            }
+
+            var pane = barPanes.FirstOrDefault(
+                p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p));
+
+            if (pane is null)
+            {
+                return agent;
+            }
+
+            var text = mux.GetTextAsync(pane.Id).GetAwaiter().GetResult();
+
+            return agent with { Status = AgentActivity.Classify(text) };
+        }
+
         var spawner = new NewAgentHandler(git, mux, agents);
         var opener = new OpenAgentHandler(mux, agents);
         var hider = new HideAgentHandler(mux, agents);
@@ -519,7 +539,9 @@ public static class DashboardWiring
 
             LoadAgents: () =>
             {
-                var board = SubTree.Of(WithBarState(lister.Handle(project.Name))).Board;
+                var board = SubTree.Of(WithBarState(lister.Handle(project.Name))).Board
+                    .Select(WithActivity)
+                    .ToList();
 
                 return new AgentBoard(
                     AgentRows.For(board, Memoized(states)),

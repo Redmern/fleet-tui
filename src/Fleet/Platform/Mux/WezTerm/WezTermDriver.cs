@@ -174,6 +174,9 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             .RunAsync(["send-text", "--pane-id", id.Value, "--no-paste", text], ct)
             .ConfigureAwait(false);
 
+    public async Task<string> GetTextAsync(PaneId id, CancellationToken ct = default)
+        => await _cli.RunAsync(["get-text", "--pane-id", id.Value], ct).ConfigureAwait(false);
+
     private static string DirectionFlag(SplitDirection d) => d switch
     {
         SplitDirection.Right => "--right",

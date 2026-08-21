@@ -10,6 +10,8 @@ public sealed class FakeMuxDriver : IMuxDriver
 {
     private readonly ConcurrentDictionary<string, Entry> _panes = new();
     private readonly ConcurrentDictionary<string, List<string>> _sent = new();
+
+    private readonly ConcurrentDictionary<string, string> _text = new();
     private int _nextPane;
     private int _nextWindow;
 
@@ -128,6 +130,19 @@ public sealed class FakeMuxDriver : IMuxDriver
         _sent.GetOrAdd(id.Value, _ => []).Add(text);
 
         return Task.CompletedTask;
+    }
+
+    public Task<string> GetTextAsync(PaneId id, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        RequirePane(id);
+
+        return Task.FromResult(_text.TryGetValue(id.Value, out var text) ? text : string.Empty);
+    }
+
+    public void SetText(PaneId id, string text)
+    {
+        _text[id.Value] = text;
     }
 
     public IReadOnlyList<string> SentTo(PaneId id) =>

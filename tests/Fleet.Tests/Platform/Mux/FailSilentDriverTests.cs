@@ -90,6 +90,8 @@ public class FailSilentDriverTests
 
         public Task SetTitleAsync(PaneId id, string t, CancellationToken ct = default) => throw toThrow;
 
+        public Task<string> GetTextAsync(PaneId id, CancellationToken ct = default) => throw toThrow;
+
         public Task FocusPaneAsync(PaneId id, CancellationToken ct = default) => throw toThrow;
 
         public Task SendTextAsync(PaneId id, string text, CancellationToken ct = default) =>

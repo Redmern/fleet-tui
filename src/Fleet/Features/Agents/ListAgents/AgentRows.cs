@@ -39,8 +39,26 @@ public static class AgentRows
             FleetSpan.Muted(agent.Repository),
         ];
 
-        return new FleetRow(
-            spans,
-            agent.Hidden ? [FleetSpan.Muted($"{FleetGlyphs.Hidden} ")] : null);
+        List<FleetSpan> trailing = [];
+
+        if (agent.Status.Length > 0)
+        {
+            trailing.Add(new FleetSpan($"{agent.Status}   ", ToneFor(agent.Status)));
+        }
+
+        if (agent.Hidden)
+        {
+            trailing.Add(FleetSpan.Muted($"{FleetGlyphs.Hidden} "));
+        }
+
+        return new FleetRow(spans, trailing.Count == 0 ? null : trailing);
     }
+
+    private static string ToneFor(string status) => status switch
+    {
+        AgentActivity.Working => FleetTones.Warn,
+        AgentActivity.Waiting => FleetTones.Bad,
+        AgentActivity.Idle => FleetTones.Good,
+        _ => FleetTones.Muted,
+    };
 }

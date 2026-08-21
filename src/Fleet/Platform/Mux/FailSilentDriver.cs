@@ -40,6 +40,9 @@ public sealed class FailSilentDriver(IMuxDriver inner, Action<Exception> onSwall
     public Task SendTextAsync(PaneId id, string text, CancellationToken ct = default)
         => Guard(() => inner.SendTextAsync(id, text, ct));
 
+    public Task<string> GetTextAsync(PaneId id, CancellationToken ct = default)
+        => Guard(() => inner.GetTextAsync(id, ct), string.Empty);
+
     private static bool IsExpected(Exception e) =>
         e is MuxUnavailableException
           or IOException
