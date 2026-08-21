@@ -2,8 +2,9 @@ using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Shared.Constants;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
-using Terminal.Gui.Views;
+using Terminal.Gui.ViewBase;
 
 namespace Fleet.Features.Agents.NewAgent;
 
@@ -30,35 +31,12 @@ public static class NewAgentView
 
         var repository = Math.Clamp(prompt.Selected, 0, prompt.Repositories.Count - 1);
         var chosenBase = prompt.Repositories[repository].DefaultBranch;
+        var harness = AgentHarness.Normalize(prompt.Harness);
+        var branch = string.Empty;
 
         var window = FleetTheme.Overlay("New agent");
-
-        var harness = AgentHarness.Normalize(prompt.Harness);
-
-        var repositoryRow = FleetTheme.Choice(14, 1, prompt.Repositories[repository].Name);
-        var branchField = FleetTheme.Field(14, 3);
-        var baseRow = FleetTheme.Choice(14, 5, Shown(chosenBase));
-        var harnessRow = FleetTheme.Choice(14, 7, AgentHarness.Describe(harness));
-        var create = FleetTheme.Submit(1, 12, "Create agent");
-        var cancel = FleetTheme.Secondary(18, 12, "Cancel");
-
-        void ChooseHarness()
-        {
-            var picked = FleetPicker.Choose(
-                app,
-                "Harness",
-                AgentHarness.All.Select(AgentHarness.Describe).ToList(),
-                keymap,
-                AgentHarness.All.ToList().IndexOf(harness));
-
-            if (picked is null)
-            {
-                return;
-            }
-
-            harness = AgentHarness.All[picked.Value];
-            harnessRow.Text = AgentHarness.Describe(harness);
-        }
+        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
+        var rows = new List<(FleetRow Row, Action Act)>();
 
         void ChooseRepository()
         {
@@ -75,9 +53,7 @@ public static class NewAgentView
             }
 
             repository = picked.Value;
-            repositoryRow.Text = prompt.Repositories[repository].Name;
             chosenBase = prompt.Repositories[repository].DefaultBranch;
-            baseRow.Text = Shown(chosenBase);
         }
 
         void ChooseBase()
@@ -95,13 +71,36 @@ public static class NewAgentView
             var picked = FleetPicker.Choose(
                 app, "Base branch", branches.Select(b => b.Label).ToList(), keymap);
 
-            if (picked is null)
+            if (picked is not null)
             {
-                return;
+                chosenBase = branches[picked.Value].Reference;
             }
+        }
 
-            chosenBase = branches[picked.Value].Reference;
-            baseRow.Text = Shown(chosenBase);
+        void ChooseHarness()
+        {
+            var picked = FleetPicker.Choose(
+                app,
+                "Opens",
+                AgentHarness.All.Select(AgentHarness.Describe).ToList(),
+                keymap,
+                AgentHarness.All.ToList().IndexOf(harness));
+
+            if (picked is not null)
+            {
+                harness = AgentHarness.All[picked.Value];
+            }
+        }
+
+        void EditBranch()
+        {
+            var next = FleetPrompt.Text(
+                app, "Branch name", branch, "Branch name (empty works on the base)", allowEmpty: true);
+
+            if (next is not null)
+            {
+                branch = next;
+            }
         }
 
         void Submit()
@@ -110,46 +109,49 @@ public static class NewAgentView
                 prompt.ProjectName,
                 prompt.Repositories[repository].Name,
                 prompt.Repositories[repository].Directory,
-                branchField.Text,
+                branch,
                 chosenBase,
                 harness);
 
             app.RequestStop(window);
         }
 
-        repositoryRow.Accepting += (_, e) =>
+        void Rebuild()
         {
-            ChooseRepository();
-            e.Handled = true;
-        };
+            rows.Clear();
+            rows.Add((Field("Repo", prompt.Repositories[repository].Name), ChooseRepository));
+            rows.Add((Field("Branch", branch.Length == 0 ? "(base itself)" : branch), EditBranch));
+            rows.Add((Field("Base", Shown(chosenBase)), ChooseBase));
+            rows.Add((Field("Opens", AgentHarness.Describe(harness)), ChooseHarness));
+            rows.Add((Choice("Create agent"), Submit));
+            rows.Add((Choice("Cancel"), () => app.RequestStop(window)));
+        }
 
-        baseRow.Accepting += (_, e) =>
+        void Refill(int selected)
         {
-            ChooseBase();
-            e.Handled = true;
-        };
+            Rebuild();
+            FleetRows.Fill(list, [.. rows.Select(r => r.Row)], selected);
+        }
 
-        harnessRow.Accepting += (_, e) =>
-        {
-            ChooseHarness();
-            e.Handled = true;
-        };
+        Refill(0);
+        FleetKeys.ApplyMotions(list, keymap);
 
-        create.Accepting += (_, e) =>
+        void Activate()
         {
-            Submit();
-            e.Handled = true;
-        };
+            var index = FleetRows.Selected(list);
 
-        cancel.Accepting += (_, e) =>
-        {
-            app.RequestStop(window);
-            e.Handled = true;
-        };
+            if (index < 0 || index >= rows.Count)
+            {
+                return;
+            }
 
-        branchField.Accepting += (_, e) =>
+            rows[index].Act();
+            Refill(index);
+        }
+
+        list.Accepting += (_, e) =>
         {
-            Submit();
+            Activate();
             e.Handled = true;
         };
 
@@ -163,18 +165,11 @@ public static class NewAgentView
         };
 
         window.Add(
-            FleetTheme.Caption(1, 1, "Repo:"),
-            repositoryRow,
-            FleetTheme.Caption(1, 3, "Branch name:"),
-            branchField,
-            FleetTheme.Caption(1, 5, "Base:"),
-            baseRow,
-            FleetTheme.Caption(1, 7, "Opens:"),
-            harnessRow,
-            FleetTheme.Caption(1, 9, "Leave the branch name empty to work on the base itself."),
-            FleetTheme.Caption(1, 10, "Leave the base empty to cut from the default branch."),
-            create,
-            cancel,
+            list,
+            FleetTheme.Caption(
+                1,
+                Pos.AnchorEnd(2),
+                "Empty branch works on the base; empty base cuts from the default branch."),
             FleetTheme.HintBar(FleetHints.NewAgent));
 
         FleetModal.Enter();
@@ -191,6 +186,11 @@ public static class NewAgentView
 
         return result;
     }
+
+    private static FleetRow Field(string label, string value) =>
+        new([new FleetSpan($"{label}:".PadRight(9), FleetTones.Key), FleetSpan.Plain(value)]);
+
+    private static FleetRow Choice(string label) => FleetRow.Plain(label);
 
     private static string Shown(string branch) =>
         branch.Length == 0 ? DefaultBase : branch;

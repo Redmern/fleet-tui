@@ -1,8 +1,9 @@
 using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
-using Terminal.Gui.Views;
+using Terminal.Gui.ViewBase;
 
 namespace Fleet.Features.Repositories.AddRepository;
 
@@ -15,59 +16,114 @@ public static class AddRepositoryView
     {
         AddRepositoryCommand? result = null;
 
+        var cloning = false;
+        var name = string.Empty;
+        var url = string.Empty;
+        var branch = "main";
+
         var window = FleetTheme.Overlay("Add repository");
+        var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
+        var rows = new List<(FleetRow Row, Action Act)>();
 
-        var clone = FleetTheme.Toggle(1, 1, "Clone from a URL instead of creating a new repository");
-        var nameField = FleetTheme.Field(11, 3);
-        var urlField = FleetTheme.Field(11, 5);
-        var branchField = FleetTheme.Field(11, 9, "main");
-
-        var like = FleetTheme.Choice(11, 6, PickUrl);
-
-        like.Visible = knownUrls.Count > 0;
-        urlField.Enabled = false;
-        like.Enabled = false;
-
-        void Cloning(bool on)
+        void EditName()
         {
-            urlField.Enabled = on;
-            like.Enabled = on;
+            var next = FleetPrompt.Text(app, "Repository name", name, "Repository name", allowEmpty: true);
+
+            if (next is not null)
+            {
+                name = next;
+            }
         }
 
-        clone.ValueChanged += (_, _) => Cloning(clone.Value == CheckState.Checked);
-
-        like.Accepting += (_, e) =>
+        void EditUrl()
         {
-            var picked = FleetPicker.Choose(app, "Start from", knownUrls, keymap);
-
-            if (picked is not null)
+            if (knownUrls.Count > 0)
             {
-                urlField.Text = knownUrls[picked.Value];
-                urlField.SetFocus();
-                urlField.MoveEnd();
+                var options = knownUrls.Append("Type a URL...").ToList();
+                var picked = FleetPicker.Choose(app, "Clone from", options, keymap);
+
+                if (picked is null)
+                {
+                    return;
+                }
+
+                if (picked.Value < knownUrls.Count)
+                {
+                    url = knownUrls[picked.Value];
+                    return;
+                }
             }
 
-            e.Handled = true;
-        };
+            var typed = FleetPrompt.Text(app, "Clone URL", url, "Clone URL", allowEmpty: true);
+
+            if (typed is not null)
+            {
+                url = typed;
+            }
+        }
+
+        void EditBranch()
+        {
+            var next = FleetPrompt.Text(app, "Branch", branch, "Branch", allowEmpty: true);
+
+            if (next is not null)
+            {
+                branch = next;
+            }
+        }
 
         void Submit()
         {
-            result = clone.Value == CheckState.Checked
-                ? AddRepositoryCommand.CloneFrom(
-                    projectRoot, nameField.Text, urlField.Text, branchField.Text)
-                : AddRepositoryCommand.CreateNew(projectRoot, nameField.Text, branchField.Text);
+            result = cloning
+                ? AddRepositoryCommand.CloneFrom(projectRoot, name, url, branch)
+                : AddRepositoryCommand.CreateNew(projectRoot, name, branch);
 
             app.RequestStop(window);
         }
 
-        foreach (var field in new[] { nameField, urlField, branchField })
+        void Rebuild()
         {
-            field.Accepting += (_, e) =>
+            rows.Clear();
+            rows.Add((Field("Clone", cloning ? "from a URL" : "new repository"), () => cloning = !cloning));
+            rows.Add((Field("Name", name.Length == 0 ? "(required)" : name), EditName));
+
+            if (cloning)
             {
-                Submit();
-                e.Handled = true;
-            };
+                rows.Add((Field("URL", url.Length == 0 ? "(required)" : url), EditUrl));
+            }
+
+            rows.Add((Field("Branch", branch.Length == 0 ? "(default)" : branch), EditBranch));
+            rows.Add((Choice("Add repository"), Submit));
+            rows.Add((Choice("Cancel"), () => app.RequestStop(window)));
         }
+
+        void Refill(int selected)
+        {
+            Rebuild();
+            FleetRows.Fill(list, [.. rows.Select(r => r.Row)], selected);
+        }
+
+        Refill(0);
+        FleetKeys.ApplyMotions(list, keymap);
+
+        void Activate()
+        {
+            var index = FleetRows.Selected(list);
+
+            if (index < 0 || index >= rows.Count)
+            {
+                return;
+            }
+
+            rows[index].Act();
+            Refill(index);
+        }
+
+        list.Accepting += (_, e) =>
+        {
+            Activate();
+            e.Handled = true;
+        };
 
         window.KeyDown += (_, key) =>
         {
@@ -78,16 +134,7 @@ public static class AddRepositoryView
             }
         };
 
-        window.Add(
-            clone,
-            FleetTheme.Caption(1, 3, "Name:"),
-            nameField,
-            FleetTheme.Caption(1, 5, "URL:"),
-            urlField,
-            like,
-            FleetTheme.Caption(1, 9, "Branch:"),
-            branchField,
-            FleetTheme.HintBar(FleetHints.AddRepository));
+        window.Add(list, FleetTheme.HintBar(FleetHints.AddRepository));
 
         FleetModal.Enter();
 
@@ -103,4 +150,9 @@ public static class AddRepositoryView
 
         return result;
     }
+
+    private static FleetRow Field(string label, string value) =>
+        new([new FleetSpan($"{label}:".PadRight(8), FleetTones.Key), FleetSpan.Plain(value)]);
+
+    private static FleetRow Choice(string label) => FleetRow.Plain(label);
 }

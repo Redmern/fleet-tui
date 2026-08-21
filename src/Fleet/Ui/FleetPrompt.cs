@@ -6,7 +6,12 @@ namespace Fleet.Ui;
 
 public static class FleetPrompt
 {
-    public static string? Text(IApplication app, string title, string initial = "")
+    public static string? Text(
+        IApplication app,
+        string title,
+        string initial = "",
+        string label = "New name",
+        bool allowEmpty = false)
     {
         string? result = null;
 
@@ -17,7 +22,7 @@ public static class FleetPrompt
         {
             var value = field.Text.Trim();
 
-            if (value.Length == 0)
+            if (!allowEmpty && value.Length == 0)
             {
                 return;
             }
@@ -33,7 +38,7 @@ public static class FleetPrompt
         };
 
         window.Add(
-            FleetTheme.Caption(2, 1, "New name"),
+            FleetTheme.Caption(2, 1, label),
             field,
             FleetTheme.HintBar(FleetHints.Form));
 

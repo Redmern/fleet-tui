@@ -4,9 +4,9 @@ public static class FleetHints
 {
     public const string Form = "tab field   enter confirm   esc cancel";
 
-    public const string AddRepository = "tab field   space toggle clone   enter add   esc cancel";
+    public const string AddRepository = "j/k move   enter select   esc cancel";
 
-    public const string NewAgent = "tab field   enter activate   esc cancel";
+    public const string NewAgent = "j/k move   enter select   esc cancel";
 
     public const string AgentList = "enter open   q/esc close";
 
