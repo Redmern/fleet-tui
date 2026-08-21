@@ -531,11 +531,21 @@ public sealed class McpActions(
 
     private McpResult Report(McpRequest request)
     {
+        var status = ToolArguments.Text(request, ToolArguments.Status);
+
         var reported = _reporter.Handle(
             project,
             caller,
-            ToolArguments.Text(request, ToolArguments.Status),
+            status,
             ToolArguments.Text(request, ToolArguments.Summary));
+
+        if (reported.Succeeded
+            && OrchestrationStatus.Normalize(status)
+                is OrchestrationStatus.Done or OrchestrationStatus.Failed)
+        {
+            Adapters.Notifier().Notify(
+                $"{caller}: {OrchestrationStatus.Normalize(status)}");
+        }
 
         return reported.Succeeded ? Ok(reported.Value!) : McpResult.Error(reported.Error!);
     }

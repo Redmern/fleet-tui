@@ -81,6 +81,8 @@ public static class Adapters
 
     public static IDispatchHistory History() => new FileDispatchHistory();
 
+    public static INotifier Notifier() => new FileNotifyStore();
+
     public static MuxSelection Mux(IFleetLog log)
     {
         var chosen = DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath));
@@ -258,7 +260,7 @@ public static class Adapters
         try
         {
             var wanted = WezTermKeybinds.Generate(
-                keymap, Executable, FileWorkspaceRequestStore.File);
+                keymap, Executable, FileWorkspaceRequestStore.File, FileNotifyStore.File);
 
             if (!File.Exists(target) || File.ReadAllText(target) != wanted)
             {
@@ -280,7 +282,8 @@ public static class Adapters
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         File.WriteAllText(
             target,
-            WezTermKeybinds.Generate(keymap, Executable, FileWorkspaceRequestStore.File));
+            WezTermKeybinds.Generate(
+                keymap, Executable, FileWorkspaceRequestStore.File, FileNotifyStore.File));
 
         return target;
     }

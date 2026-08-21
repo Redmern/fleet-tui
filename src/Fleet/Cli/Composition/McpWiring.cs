@@ -30,7 +30,8 @@ public static class McpWiring
             Adapters.Settings(),
             Adapters.Approvals(),
             log,
-            actions.PerformAsync);
+            actions.PerformAsync,
+            Adapters.Notifier());
 
         var serving = new McpServing(McpTools.ServerName, ToolInfos(), dispatcher.HandleAsync)
         {

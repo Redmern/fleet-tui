@@ -15,7 +15,8 @@ public sealed class McpDispatcher(
     ISettingsStore settings,
     IApprovalChannel approvals,
     IFleetLog log,
-    Func<McpRequest, CancellationToken, Task<McpResult>> perform)
+    Func<McpRequest, CancellationToken, Task<McpResult>> perform,
+    INotifier? notifier = null)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -43,6 +44,9 @@ public sealed class McpDispatcher(
 
         if (decision.AsksFleet)
         {
+            notifier?.Notify(
+                $"approval needed: {HarnessToolIds.For(tool)} by {caller.Caller}");
+
             var outcome = await approvals
                 .AskAsync(
                     new ApprovalRequest(

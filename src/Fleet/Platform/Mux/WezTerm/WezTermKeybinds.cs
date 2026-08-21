@@ -10,11 +10,16 @@ namespace Fleet.Platform.Mux.WezTerm;
 public static class WezTermKeybinds
 {
 
-    public static string Generate(Keymap keymap, string fleetExecutable, string workspaceRequest)
+    public static string Generate(
+        Keymap keymap,
+        string fleetExecutable,
+        string workspaceRequest,
+        string notifyRequest = "")
     {
         var chord = WezTermChord.From(keymap.PrefixText);
         var exe = fleetExecutable.Replace("\\", "\\\\", StringComparison.Ordinal);
         var request = workspaceRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
+        var notify = notifyRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
 
         var sb = new StringBuilder();
 
@@ -93,7 +98,33 @@ public static class WezTermKeybinds
         sb.AppendLine("  return project and (M.ship .. '  ' .. project) or nil");
         sb.AppendLine("end");
         sb.AppendLine();
+        sb.AppendLine("-- Notifications ride the same file mechanism: fleet appends lines and the");
+        sb.AppendLine("-- next update-status tick shows each as a toast.");
+        sb.AppendLine($"M.notify_request = '{notify}'");
+        sb.AppendLine();
+        sb.AppendLine("local function drain_notifications(window)");
+        sb.AppendLine("  if M.notify_request == '' then");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  local handle = io.open(M.notify_request, 'r')");
+        sb.AppendLine();
+        sb.AppendLine("  if not handle then");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  local text = handle:read('*a')");
+        sb.AppendLine("  handle:close()");
+        sb.AppendLine("  os.remove(M.notify_request)");
+        sb.AppendLine();
+        sb.AppendLine("  for line in (text or ''):gmatch('[^\\r\\n]+') do");
+        sb.AppendLine("    window:toast_notification('fleet', line, nil, 4000)");
+        sb.AppendLine("  end");
+        sb.AppendLine("end");
+        sb.AppendLine();
         sb.AppendLine("wezterm.on('update-status', function(window, _pane)");
+        sb.AppendLine("  pcall(drain_notifications, window)");
+        sb.AppendLine();
         sb.AppendLine("  local handle = io.open(M.workspace_request, 'r')");
         sb.AppendLine();
         sb.AppendLine("  if not handle then");
