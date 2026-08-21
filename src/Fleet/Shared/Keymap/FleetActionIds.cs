@@ -24,6 +24,7 @@ public static class FleetActionIds
         FleetAction.ListAgents => "list-agents",
         FleetAction.EditSettings => "settings",
         FleetAction.SwitchProject => "switch-project",
+        FleetAction.CleanupProject => "cleanup",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -47,6 +48,7 @@ public static class FleetActionIds
         "list-agents" => FleetAction.ListAgents,
         "settings" => FleetAction.EditSettings,
         "switch-project" => FleetAction.SwitchProject,
+        "cleanup" => FleetAction.CleanupProject,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

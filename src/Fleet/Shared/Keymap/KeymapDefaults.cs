@@ -38,6 +38,7 @@ public static class KeymapDefaults
             [FleetAction.BrowseFiles] = "f",
             [FleetAction.EditSettings] = "P",
             [FleetAction.SwitchProject] = "s",
+            [FleetAction.CleanupProject] = "c",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -71,6 +72,7 @@ public static class KeymapDefaults
         FleetAction.BrowseFiles,
         FleetAction.EditSettings,
         FleetAction.SwitchProject,
+        FleetAction.CleanupProject,
     ];
 
     public static string Short(FleetAction action) =>
@@ -96,6 +98,7 @@ public static class KeymapDefaults
             FleetAction.BrowseFiles => "files",
             FleetAction.EditSettings => "permissions",
             FleetAction.SwitchProject => "switch project",
+            FleetAction.CleanupProject => "clean up",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -133,6 +136,7 @@ public static class KeymapDefaults
             FleetAction.BrowseFiles => "File navigator",
             FleetAction.EditSettings => "Permissions",
             FleetAction.SwitchProject => "Switch project",
+            FleetAction.CleanupProject => "Clean up stale agents",
             _ => action.ToString(),
         };
 }

@@ -34,4 +34,5 @@ public enum FleetAction
     BrowseFiles,
     EditSettings,
     SwitchProject,
+    CleanupProject,
 }

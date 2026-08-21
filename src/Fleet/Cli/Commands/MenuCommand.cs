@@ -1,5 +1,6 @@
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
+using Fleet.Features.Agents.CleanupAgents;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
@@ -39,6 +40,7 @@ public static class MenuCommand
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
         FleetAction.EditSettings,
+        FleetAction.CleanupProject,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -203,6 +205,15 @@ public static class MenuCommand
                     Adapters.Mux(Adapters.Log()).Driver, project.Name, project.Root);
 
                 break;
+
+            case FleetAction.CleanupProject:
+            {
+                var summary = new CleanupHandler(Adapters.Agents()).Handle(project.Name);
+
+                Adapters.Log().Write(LogTag.For(project.Name, summary));
+                FleetDialog.Error(app, "Clean up", summary);
+                break;
+            }
 
             case FleetAction.ViewLogs:
                 var log = Adapters.Log();
