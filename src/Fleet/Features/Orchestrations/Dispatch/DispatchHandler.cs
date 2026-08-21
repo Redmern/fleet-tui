@@ -3,6 +3,7 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Orchestrations;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
@@ -19,7 +20,8 @@ public sealed class DispatchHandler(
     IHarnessConfig harness,
     TimeSpan? readyTimeout = null,
     TimeSpan? pollInterval = null,
-    TimeSpan? submitGap = null)
+    TimeSpan? submitGap = null,
+    IDispatchHistory? history = null)
 {
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
 
@@ -110,6 +112,8 @@ public sealed class DispatchHandler(
         {
             await mux.SetTitleAsync(browse, $"{slug} files", ct).ConfigureAwait(false);
         }
+
+        history?.Add(command.ProjectName, prompt);
 
         if (active is not null)
         {

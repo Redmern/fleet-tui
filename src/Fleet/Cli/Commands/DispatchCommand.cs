@@ -35,7 +35,7 @@ public static class DispatchCommand
             return 1;
         }
 
-        var handler = new DispatchHandler(mux.Driver, Adapters.Agents(), Adapters.HarnessConfig());
+        var handler = new DispatchHandler(mux.Driver, Adapters.Agents(), Adapters.HarnessConfig(), history: Adapters.History());
 
         var reply = await handler
             .HandleAsync(

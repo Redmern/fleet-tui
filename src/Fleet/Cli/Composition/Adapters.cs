@@ -23,6 +23,7 @@ using Fleet.Ports.Mcp;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Orchestrations;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
@@ -77,6 +78,8 @@ public static class Adapters
     public static IWorkspaceRequestStore Workspaces() => new FileWorkspaceRequestStore();
 
     public static IAgentStore Agents() => new JsonAgentStore();
+
+    public static IDispatchHistory History() => new FileDispatchHistory();
 
     public static MuxSelection Mux(IFleetLog log)
     {

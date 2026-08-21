@@ -48,7 +48,7 @@ public static class HookDispatchCommand
         }
         else
         {
-            var reply = await new DispatchHandler(mux.Driver, Adapters.Agents(), Adapters.HarnessConfig())
+            var reply = await new DispatchHandler(mux.Driver, Adapters.Agents(), Adapters.HarnessConfig(), history: Adapters.History())
                 .HandleAsync(
                     new DispatchRequest(project.Name, project.Root, task),
                     DateTimeOffset.UtcNow.ToString("O"))
