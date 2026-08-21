@@ -132,7 +132,7 @@ public static class KeymapDefaults
             FleetAction.ViewLogs => "Show log",
             FleetAction.BrowseFiles => "File navigator",
             FleetAction.EditSettings => "Permissions",
-            FleetAction.SwitchProject => "Switch to another open project",
+            FleetAction.SwitchProject => "Switch project",
             _ => action.ToString(),
         };
 }

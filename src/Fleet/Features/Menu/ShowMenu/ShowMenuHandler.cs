@@ -34,7 +34,7 @@ public sealed class ShowMenuHandler(Keymap keymap)
     }
 
     public static int Width(IReadOnlyList<FleetRow> rows) =>
-        rows.Count == 0 ? 0 : rows.Max(r => r.Text.Length);
+        rows.Count == 0 ? 0 : rows.Max(r => r.Text.Length) + 2;
 
     public static int Height(IReadOnlyList<FleetRow> rows) => Math.Max(1, rows.Count);
 }
