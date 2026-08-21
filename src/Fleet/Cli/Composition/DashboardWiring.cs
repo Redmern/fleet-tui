@@ -11,8 +11,10 @@ using Fleet.Features.Agents.RenameAgent;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.RenameOrchestration;
+using DispatchRequest = Fleet.Features.Orchestrations.Dispatch.Models.DispatchCommand;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Menu.EditKeybinds;
@@ -531,6 +533,31 @@ public static class DashboardWiring
                     : $"could not start an agent in {request.RepositoryName}: {outcome.Error}");
 
                 return outcome.Succeeded ? null : outcome.Error;
+            },
+
+            DispatchSub: async () =>
+            {
+                var prompt = await FleetAsync
+                    .OnUi(app, () => FleetPrompt.Text(
+                        app, "New sub-orchestrator", string.Empty, "Task for the sub"))
+                    .ConfigureAwait(false);
+
+                if (string.IsNullOrWhiteSpace(prompt))
+                {
+                    return null;
+                }
+
+                var reply = await new DispatchHandler(mux, agents, Adapters.HarnessConfig())
+                    .HandleAsync(
+                        new DispatchRequest(project.Name, project.Root, prompt),
+                        DateTimeOffset.UtcNow.ToString("O"))
+                    .ConfigureAwait(false);
+
+                Note(log, project.Name, reply.Succeeded
+                    ? $"dispatched sub-orchestrator {reply.Value!.Slug}"
+                    : $"could not dispatch: {reply.Error}");
+
+                return reply.Succeeded ? null : reply.Error;
             },
 
             OpenAgent: async (tab, index) =>

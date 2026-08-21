@@ -192,6 +192,32 @@ public static class ShowDashboardView
             }
         }
 
+        async Task NewSubAsync()
+        {
+            busy = true;
+
+            try
+            {
+                var error = await callbacks.DispatchSub().ConfigureAwait(false);
+
+                app.Invoke(() =>
+                {
+                    if (error is not null)
+                    {
+                        FleetDialog.Error(app, "Could not dispatch the sub", error);
+                    }
+
+                    ShowTab(DashboardTabs.SubsTab);
+                });
+
+                await RefreshAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
         int ActiveTab() => tabBar.Selected;
 
         int ActiveRow() =>
@@ -510,7 +536,7 @@ public static class ShowDashboardView
                     break;
 
                 case FleetAction.NewAgent:
-                    Start(NewAgentAsync);
+                    Start(ActiveTab() == DashboardTabs.SubsTab ? NewSubAsync : NewAgentAsync);
                     break;
 
                 case FleetAction.RemoveAgent:
@@ -585,6 +611,7 @@ public static class ShowDashboardView
         IReadOnlyList<(string, string, Action)> SubBar() =>
             WithClose(
             [
+                (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
                 ("enter", "open", () => Start(OpenAsync)),
                 (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
                     () => FromKey(FleetAction.RemoveAgent)),

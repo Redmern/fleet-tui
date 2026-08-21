@@ -19,6 +19,7 @@ public static class DashboardKeys
 
     private static readonly FleetAction[] SubScope =
     [
+        FleetAction.NewAgent,
         FleetAction.RemoveAgent,
         FleetAction.ToggleHidden,
         FleetAction.Refresh,

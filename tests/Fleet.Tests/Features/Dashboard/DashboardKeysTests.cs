@@ -108,12 +108,11 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void The_subs_tab_manages_and_hides_but_never_starts_a_new_agent()
+    public void The_subs_tab_manages_hides_and_dispatches_a_new_sub()
     {
         Assert.Equal(FleetAction.RemoveAgent, DashboardKeys.For(Key.M, Map, Subs).Action);
         Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.X, Map, Subs).Action);
-        Assert.DoesNotContain(FleetAction.NewAgent, DashboardKeys.ScopeFor(Subs));
-        Assert.False(DashboardKeys.For(Key.N, Map, Subs).Consume);
+        Assert.Equal(FleetAction.NewAgent, DashboardKeys.For(Key.N, Map, Subs).Action);
     }
 
     [Fact]
