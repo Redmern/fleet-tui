@@ -277,7 +277,7 @@ public class HideAgentTests
     public void Every_manage_choice_pairs_a_keyword_with_its_description()
     {
         Assert.Equal(
-            ["opens", "hide", "rename", "stop", "forget", "delete"],
+            ["opens", "finish", "hide", "rename", "stop", "forget", "delete"],
             AgentDisposal.Entries.Select(e => e.Label));
 
         Assert.All(AgentDisposal.Entries, e => Assert.NotEqual(0, e.Detail.Length));
@@ -288,10 +288,10 @@ public class HideAgentTests
     {
         var hidden = AgentDisposal.For(hidden: true);
 
-        Assert.Equal(AgentWords.Show, hidden[AgentDisposal.Hide].Label);
-        Assert.Equal(AgentDisposal.ShowDetail, hidden[AgentDisposal.Hide].Detail);
+        Assert.Equal(AgentWords.Show, hidden[2].Label);
+        Assert.Equal(AgentDisposal.ShowDetail, hidden[2].Detail);
 
-        Assert.Equal(AgentWords.Hide, AgentDisposal.For(hidden: false)[AgentDisposal.Hide].Label);
+        Assert.Equal(AgentWords.Hide, AgentDisposal.For(hidden: false)[2].Label);
     }
 
     [Fact]
@@ -300,7 +300,7 @@ public class HideAgentTests
         foreach (var hidden in new[] { true, false })
         {
             Assert.Equal(
-                ["o", "h", "r", "s", "f", "d"],
+                ["o", "p", "h", "r", "s", "f", "d"],
                 PickerKeys.For(AgentDisposal.For(hidden)));
         }
     }

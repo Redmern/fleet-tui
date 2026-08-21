@@ -1,5 +1,6 @@
 using Fleet.Features.Agents;
 using Fleet.Features.Agents.ChangeHarness;
+using Fleet.Features.Agents.FinishAgent;
 using Fleet.Features.Agents.HideAgent;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.NewAgent;
@@ -761,6 +762,59 @@ public static class DashboardWiring
                         log, project.Name, await FleetAsync
                             .OnUi(app, () => ChooseHarness(app, keymap, harnesses, project.Name, agent))
                             .ConfigureAwait(false));
+                }
+
+                if (choice == "p")
+                {
+                    var baseBranch = FinishAgentHandler.LocalBase(agent);
+
+                    var go = await FleetAsync
+                        .OnUi(app, () => FleetDialog.Confirm(
+                            app,
+                            $"Finish {Label(agent)}?",
+                            [$"Merges {agent.Branch} into {baseBranch}."],
+                            "Merge"))
+                        .ConfigureAwait(false);
+
+                    if (!go)
+                    {
+                        return null;
+                    }
+
+                    var pushIt = await FleetAsync
+                        .OnUi(app, () => FleetDialog.Confirm(
+                            app, $"Push {baseBranch} to origin afterwards?", [], "Push"))
+                        .ConfigureAwait(false);
+
+                    var finished = await new FinishAgentHandler(git)
+                        .HandleAsync(agent, pushIt)
+                        .ConfigureAwait(false);
+
+                    if (!finished.Succeeded)
+                    {
+                        return Noted(log, project.Name, finished.Error);
+                    }
+
+                    var cleanup = await FleetAsync
+                        .OnUi(app, () => FleetDialog.Confirm(
+                            app,
+                            "Remove the agent and delete its worktree?",
+                            [finished.Value!],
+                            "Remove"))
+                        .ConfigureAwait(false);
+
+                    if (!cleanup)
+                    {
+                        return Noted(log, project.Name, finished.Value);
+                    }
+
+                    var gone = await remover
+                        .HandleAsync(project.Name, agent, deleteWorktree: true)
+                        .ConfigureAwait(false);
+
+                    return Noted(log, project.Name, gone.Succeeded
+                        ? $"{finished.Value} Agent removed with its worktree."
+                        : $"{finished.Value} But removal failed: {gone.Error}");
                 }
 
                 if (choice == "v")

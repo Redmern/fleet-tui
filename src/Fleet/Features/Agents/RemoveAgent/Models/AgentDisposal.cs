@@ -37,6 +37,7 @@ public static class AgentDisposal
         if (!orchestrator)
         {
             entries.Add(new("opens", Choices[Opens], "o"));
+            entries.Add(new("finish", "Merge its branch into the base", "p"));
         }
 
         if (orchestrator)

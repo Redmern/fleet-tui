@@ -49,8 +49,8 @@ public class PickerRowsTests
     [Fact]
     public void The_manage_menu_keys_read_as_mnemonics_of_their_keywords()
     {
-        var keys = PickerKeys.For([.. AgentDisposal.Entries.Select(e => e.Label)]);
+        var keys = PickerKeys.For(AgentDisposal.Entries);
 
-        Assert.Equal(["o", "h", "r", "s", "f", "d"], keys);
+        Assert.Equal(["o", "p", "h", "r", "s", "f", "d"], keys);
     }
 }
