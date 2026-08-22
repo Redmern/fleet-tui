@@ -57,7 +57,7 @@ public sealed class SubRowsTests
     }
 
     [Fact]
-    public void An_orchestrator_row_counts_its_children()
+    public void An_orchestrator_row_does_not_count_its_children()
     {
         var rows = SubRows.For(
             Listing(
@@ -67,7 +67,7 @@ public sealed class SubRowsTests
             Clean,
             ",");
 
-        Assert.Contains("2 agent(s)", rows[0].Text);
+        Assert.DoesNotContain("agent(s)", rows[0].Text);
     }
 
     [Fact]

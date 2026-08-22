@@ -27,21 +27,15 @@ public static class SubRows
             ? 0
             : children.Max(a => BranchStatus.Pill(a.Branch, state(a)).Sum(s => s.Text.Length));
 
-        var childCounts = listing.Flat
-            .Where(e => e.IsChild)
-            .GroupBy(e => e.Group, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
-
         return [.. listing.Flat.Select(e => e.IsChild
             ? Child(e.Agent, state, pillWidth)
-            : Orchestrator(e.Agent, childCounts.GetValueOrDefault(e.Agent.Branch, 0)))];
+            : Orchestrator(e.Agent))];
     }
 
-    private static FleetRow Orchestrator(AgentRecord agent, int childCount)
+    private static FleetRow Orchestrator(AgentRecord agent)
     {
         List<FleetSpan> trailing =
         [
-            FleetSpan.Muted($"{childCount} agent(s)   "),
             new FleetSpan(agent.Status.Length == 0 ? OrchestrationStatus.Working : agent.Status,
                 ToneFor(agent.Status)),
         ];
