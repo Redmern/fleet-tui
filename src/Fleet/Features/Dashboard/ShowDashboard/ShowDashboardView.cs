@@ -80,6 +80,13 @@ public static class ShowDashboardView
             window.SetNeedsDraw();
         }
 
+        var busy = false;
+        var pulling = false;
+        var refreshing = false;
+        var queued = FleetAction.None;
+        var statusSeen = string.Empty;
+        var statusAge = 0;
+
         var board = new AgentBoard([], 0, []);
         var subs = SubBoard.Empty;
 
@@ -87,6 +94,12 @@ public static class ShowDashboardView
 
         agentList.MouseEvent += (_, m) =>
         {
+            if (busy || FleetModal.Any)
+            {
+                HideTip();
+                return;
+            }
+
             if (m.Position is not { } at)
             {
                 return;
@@ -191,13 +204,6 @@ public static class ShowDashboardView
 
             app.Invoke(() => Bind(loaded, repoRowsData, agentBoard, subBoard));
         }
-
-        var busy = false;
-        var pulling = false;
-        var refreshing = false;
-        var queued = FleetAction.None;
-        var statusSeen = string.Empty;
-        var statusAge = 0;
 
         async Task AutoRefreshAsync()
         {
