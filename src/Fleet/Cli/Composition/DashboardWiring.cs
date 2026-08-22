@@ -415,7 +415,16 @@ public static class DashboardWiring
 
         AgentRecord WithActivity(AgentRecord agent)
         {
-            if (AgentHarness.IsOrchestrator(agent.Harness) || barPanes is null)
+            if (barPanes is null)
+            {
+                return agent;
+            }
+
+            var orchestrator = AgentHarness.IsOrchestrator(agent.Harness);
+
+            if (orchestrator
+                && OrchestrationStatus.Normalize(agent.Status)
+                    is OrchestrationStatus.Done or OrchestrationStatus.Failed)
             {
                 return agent;
             }
@@ -429,8 +438,9 @@ public static class DashboardWiring
             }
 
             var text = mux.GetTextAsync(pane.Id).GetAwaiter().GetResult();
+            var live = AgentActivity.Classify(text);
 
-            return agent with { Status = AgentActivity.Classify(text) };
+            return live.Length == 0 && orchestrator ? agent : agent with { Status = live };
         }
 
         var spawner = new NewAgentHandler(git, mux, agents);
@@ -553,7 +563,8 @@ public static class DashboardWiring
 
             LoadSubs: () =>
             {
-                var listing = SubTree.Of(WithBarState(lister.Handle(project.Name)));
+                var listing = SubTree.Of(
+                    [.. WithBarState(lister.Handle(project.Name)).Select(WithActivity)]);
                 var trigger = settings.Load(project.Name).Trigger;
 
                 return new SubBoard(
