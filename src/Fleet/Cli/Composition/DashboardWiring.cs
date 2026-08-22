@@ -547,7 +547,8 @@ public static class DashboardWiring
                 return new AgentBoard(
                     AgentRows.For(board, Memoized(states)),
                     board.Count,
-                    [.. board.Select(a => a.Hidden)]);
+                    [.. board.Select(a => a.Hidden)],
+                    [.. board.Select(a => a.Status)]);
             },
 
             LoadSubs: () =>

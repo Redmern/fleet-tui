@@ -43,7 +43,7 @@ public static class AgentRows
 
         if (agent.Status.Length > 0)
         {
-            trailing.Add(new FleetSpan($"{agent.Status}   ", ToneFor(agent.Status)));
+            trailing.Add(new FleetSpan($"{FleetGlyphs.Dirty}  ", ToneFor(agent.Status)));
         }
 
         if (agent.Hidden)

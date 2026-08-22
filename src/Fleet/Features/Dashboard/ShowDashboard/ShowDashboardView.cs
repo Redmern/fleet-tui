@@ -40,6 +40,19 @@ public static class ShowDashboardView
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
         var hints = new FleetActionBar(Pos.AnchorEnd(1));
 
+        var tip = FleetTheme.Caption(0, 0, string.Empty);
+        tip.Visible = false;
+
+        void HideTip()
+        {
+            if (tip.Visible)
+            {
+                tip.Visible = false;
+                window.SetNeedsDraw();
+            }
+        }
+
+
         FleetKeys.ApplyMotions(agentList, keys);
         FleetKeys.ApplyMotions(subList, keys);
         FleetKeys.ApplyMotions(repoList, keys);
@@ -53,6 +66,7 @@ public static class ShowDashboardView
 
         void ShowTab(int index)
         {
+            HideTip();
             tabBar.Select(index);
 
             for (var i = 0; i < lists.Length; i++)
@@ -68,6 +82,33 @@ public static class ShowDashboardView
 
         var board = new AgentBoard([], 0, []);
         var subs = SubBoard.Empty;
+
+        agentList.MousePositionTracking = true;
+
+        agentList.MouseEvent += (_, m) =>
+        {
+            if (m.Position is not { } at)
+            {
+                return;
+            }
+
+            var row = agentList.Viewport.Y + at.Y;
+            var text = board.StatusAt(row);
+
+            if (text.Length == 0)
+            {
+                HideTip();
+                return;
+            }
+
+            tip.Text = $" {text} ";
+            tip.X = agentList.Frame.X + Math.Max(0, at.X - 2);
+            tip.Y = agentList.Frame.Y + at.Y + 1;
+            tip.Visible = true;
+            window.SetNeedsDraw();
+        };
+
+        agentList.MouseLeave += (_, _) => HideTip();
 
         HashSet<int>[] marks = [[], [], []];
 
@@ -941,7 +982,8 @@ public static class ShowDashboardView
             subList,
             repoList,
             status,
-            hints.Root);
+            hints.Root,
+            tip);
 
         ShowTab(DashboardTabs.AgentsTab);
 
