@@ -144,9 +144,14 @@ public static class MenuCommand
                         return p.Name;
                     }
 
-                    var where = currentWindow is not null && dash.WindowId == currentWindow
-                        ? "this window"
-                        : "another window";
+                    var where = string.Equals(
+                            dash.SessionName,
+                            FleetWorkspaces.Hidden,
+                            StringComparison.OrdinalIgnoreCase)
+                        ? "hidden"
+                        : currentWindow is not null && dash.WindowId == currentWindow
+                            ? "this window"
+                            : "another window";
 
                     return $"{p.Name}  (open · {where})";
                 }
@@ -162,15 +167,25 @@ public static class MenuCommand
 
                 var target = others[index];
                 var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
+                var parked = dash is not null
+                    && string.Equals(
+                        dash.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase);
                 var here = dash is not null
+                    && !parked
                     && currentWindow is not null
                     && dash.WindowId == currentWindow;
 
                 IReadOnlyList<string> options = dash is null
                     ? ["Open in this window", "Open in a new window"]
-                    : here
-                        ? ["Focus it", "Move it to a new window"]
-                        : ["Move it into this window", "Move it to a new window", "Focus its window"];
+                    : parked
+                        ? ["Show it in this window", "Show it in a new window"]
+                        : here
+                            ? ["Focus it", "Move it to a new window"]
+                            : [
+                                "Move it into this window",
+                                "Move it to a new window",
+                                "Focus its window",
+                            ];
 
                 var chosen2 = FleetPicker.Choose(app, target.Name, options, keymap);
 
@@ -179,31 +194,44 @@ public static class MenuCommand
                     break;
                 }
 
+                var focus = dash is not null && !parked && (here ? action == 0 : action == 2);
+
+                if (focus)
+                {
+                    await switchMux.Driver.FocusPaneAsync(dash!.Id).ConfigureAwait(false);
+                    break;
+                }
+
+                var intoThisWindow = !here && action == 0;
+                var mover = new MoveProjectHandler(switchMux.Driver);
+
+                if (intoThisWindow)
+                {
+                    await mover
+                        .ParkAsync(
+                            project.Name,
+                            project.Root,
+                            new ListAgentsHandler(Adapters.Agents()).Handle(project.Name),
+                            Adapters.DashPane(project.Name),
+                            self)
+                        .ConfigureAwait(false);
+                }
+
                 if (dash is null)
                 {
                     await OpenProjectFlow(
-                            switchMux.Driver, target, action == 0 ? currentWindow : null)
+                            switchMux.Driver, target, intoThisWindow ? currentWindow : null)
                         .ConfigureAwait(false);
 
                     break;
                 }
 
-                var focus = here ? action == 0 : action == 2;
-
-                if (focus)
-                {
-                    await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
-                    break;
-                }
-
-                var dest = !here && action == 0 ? currentWindow : null;
-
-                var moved = await new MoveProjectHandler(switchMux.Driver)
+                var moved = await mover
                     .HandleAsync(
                         target.Name,
                         target.Root,
                         new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
-                        dest,
+                        intoThisWindow ? currentWindow : null,
                         Adapters.DashPane(target.Name),
                         self,
                         Adapters.Executable)

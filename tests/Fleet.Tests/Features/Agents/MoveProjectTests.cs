@@ -152,12 +152,62 @@ public class MoveProjectTests
     }
 
     [Fact]
-    public async Task A_closed_project_cannot_be_moved()
+    public async Task A_project_with_no_panes_is_reopened_with_a_resumed_claude()
     {
         var moved = await Handler().HandleAsync(
             "techweb", Root, [], null, null, null, "fleet");
 
-        Assert.False(moved.Succeeded);
-        Assert.Contains("not open", moved.Error);
+        Assert.True(moved.Succeeded, moved.Error);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.Contains(panes, p => _mux.ArgsFor(p.Id)
+            .SequenceEqual(new[] { AgentHarness.Claude, AgentHarness.ResumeArgument }));
+    }
+
+    [Fact]
+    public async Task Parking_kills_the_dash_and_moves_claude_and_agents_to_hidden()
+    {
+        var (claude, dash) = await ProjectAsync();
+        var agent = Agent();
+        var agentPane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        await _mux.SetTitleAsync(agentPane, "backend/feature_login");
+
+        var parked = await Handler().ParkAsync(
+            "techweb", Root, [agent], dash.Value, null);
+
+        Assert.True(parked.Succeeded, parked.Error);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.DoesNotContain(panes, p => p.Id == dash);
+        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
+        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == agentPane).SessionName);
+    }
+
+    [Fact]
+    public async Task A_parked_project_is_shown_again_with_its_claude_intact()
+    {
+        var (claude, dash) = await ProjectAsync();
+        var agent = Agent();
+        var agentPane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        await _mux.SetTitleAsync(agentPane, "backend/feature_login");
+
+        Assert.True((await Handler().ParkAsync(
+            "techweb", Root, [agent], dash.Value, null)).Succeeded);
+
+        var other = await _mux.SpawnAsync(new SpawnOptions { Cwd = "C:/x", NewWindow = true });
+        var dest = (await _mux.ListPanesAsync()).Single(p => p.Id == other).WindowId;
+
+        var shown = await Handler().HandleAsync(
+            "techweb", Root, [agent], dest, null, null, "fleet");
+
+        Assert.True(shown.Succeeded, shown.Error);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.Equal(dest, panes.Single(p => p.Id == claude).WindowId);
+        Assert.Equal(dest, panes.Single(p => p.Id == agentPane).WindowId);
+        Assert.Contains(panes, p => _mux.ArgsFor(p.Id).Contains("dash"));
     }
 }
