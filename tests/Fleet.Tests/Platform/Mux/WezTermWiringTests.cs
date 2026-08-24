@@ -101,6 +101,9 @@ public class WezTermWiringTests
         Assert.Contains("wezterm.config_builder()", starter);
         Assert.Contains("pcall(require, 'fleet')", starter);
         Assert.Contains(WezTermWiring.ApplyLine, starter);
+        Assert.Contains("config.leader = { key = 's', mods = 'CTRL'", starter);
+        Assert.Contains("Nerd Font", starter);
+        Assert.Contains("fleet.label(window)", starter);
         Assert.EndsWith("return config\n", starter);
         Assert.True(WezTermWiring.AlreadyWired(starter));
     }
