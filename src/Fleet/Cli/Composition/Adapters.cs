@@ -302,6 +302,10 @@ public static class Adapters
             WezTermKeybinds.Generate(
                 keymap, Executable, FileWorkspaceRequestStore.File, FileNotifyStore.File));
 
+        File.WriteAllText(
+            Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermTheme.Module),
+            WezTermTheme.Generate());
+
         return target;
     }
 

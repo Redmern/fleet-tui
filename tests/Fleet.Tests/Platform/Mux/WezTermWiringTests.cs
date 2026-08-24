@@ -99,13 +99,28 @@ public class WezTermWiringTests
 
         Assert.Contains("local wezterm = require 'wezterm'", starter);
         Assert.Contains("wezterm.config_builder()", starter);
+        Assert.Contains("pcall(require, 'fleet-theme')", starter);
         Assert.Contains("pcall(require, 'fleet')", starter);
         Assert.Contains(WezTermWiring.ApplyLine, starter);
-        Assert.Contains("config.leader = { key = 's', mods = 'CTRL'", starter);
-        Assert.Contains("Nerd Font", starter);
-        Assert.Contains("fleet.label(window)", starter);
         Assert.EndsWith("return config\n", starter);
         Assert.True(WezTermWiring.AlreadyWired(starter));
+    }
+
+    [Fact]
+    public void The_theme_module_carries_the_personal_visuals_and_tmux_keys()
+    {
+        var theme = WezTermTheme.Generate();
+
+        Assert.Contains("config.leader = { key = \"s\", mods = \"CTRL\"", theme);
+        Assert.Contains("CaskaydiaMono Nerd Font", theme);
+        Assert.Contains("#1e1e2e", theme);
+        Assert.Contains("smart_nav(\"h\", \"Left\")", theme);
+        Assert.Contains("act.CloseCurrentPane({ confirm = true })", theme);
+        Assert.Contains("format-tab-title", theme);
+        Assert.Contains("fleet.label", theme);
+        Assert.Contains("git_branch", theme);
+        Assert.Contains("SendKey({ key = \"j\", mods = \"CTRL\" })", theme);
+        Assert.EndsWith("return M\n", theme);
     }
 
     [Fact]
