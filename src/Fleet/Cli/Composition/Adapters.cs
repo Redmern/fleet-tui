@@ -218,7 +218,19 @@ public static class Adapters
 
         if (config is null)
         {
-            return new ConfigWiring(WiringState.Missing, WezTermWiring.ConfigCandidates(home)[0]);
+            var starter = WezTermWiring.DefaultConfig(home);
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(starter)!);
+                File.WriteAllText(starter, WezTermWiring.Starter());
+
+                return new ConfigWiring(WiringState.Added, starter, "created a new config");
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return new ConfigWiring(WiringState.Failed, starter, e.Message);
+            }
         }
 
         try

@@ -19,6 +19,27 @@ public static class WezTermWiring
         Path.Combine(home, ".config", "wezterm", "wezterm.lua"),
     ];
 
+    public static string DefaultConfig(string home) =>
+        OperatingSystem.IsWindows()
+            ? Path.Combine(home, ".wezterm.lua")
+            : Path.Combine(home, ".config", "wezterm", "wezterm.lua");
+
+    public static string Starter() =>
+        string.Join(
+            "\n",
+            "-- created by: fleet setup",
+            "local wezterm = require 'wezterm'",
+            "local config = wezterm.config_builder()",
+            string.Empty,
+            "-- fleet: prefix chord, menu and status helpers.",
+            "local ok_fleet, fleet = pcall(require, 'fleet')",
+            "if ok_fleet then",
+            $"  {ApplyLine}",
+            "end",
+            string.Empty,
+            "return config",
+            string.Empty);
+
     public static string[] Lines(string text) =>
         text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
 

@@ -91,4 +91,33 @@ public class WezTermWiringTests
         Assert.Equal("return config", lines[^1].Trim());
         Assert.Equal(2, lines.Count(l => l.Trim() == "return config"));
     }
+
+    [Fact]
+    public void The_starter_config_loads_fleet_and_returns_the_config()
+    {
+        var starter = WezTermWiring.Starter();
+
+        Assert.Contains("local wezterm = require 'wezterm'", starter);
+        Assert.Contains("wezterm.config_builder()", starter);
+        Assert.Contains("pcall(require, 'fleet')", starter);
+        Assert.Contains(WezTermWiring.ApplyLine, starter);
+        Assert.EndsWith("return config\n", starter);
+        Assert.True(WezTermWiring.AlreadyWired(starter));
+    }
+
+    [Fact]
+    public void The_default_config_sits_beside_the_module_off_windows()
+    {
+        var chosen = WezTermWiring.DefaultConfig("/home/u");
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.EndsWith(".wezterm.lua", chosen);
+        }
+        else
+        {
+            Assert.Equal(WezTermWiring.ModuleDirectory("/home/u"),
+                Path.GetDirectoryName(chosen));
+        }
+    }
 }
