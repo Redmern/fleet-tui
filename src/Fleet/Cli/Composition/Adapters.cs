@@ -105,6 +105,10 @@ public static class Adapters
 
     public static string? DashPane(string project) => DashPaneMarker.Read(project);
 
+    public static void PublishTabStates(
+        string project, IReadOnlyDictionary<string, string> states) =>
+        FileTabStateStore.Publish(project, states);
+
     public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
 
     public static string? PickFolder(IMuxDriver mux, string project, string startIn)
@@ -277,7 +281,11 @@ public static class Adapters
         try
         {
             var wanted = WezTermKeybinds.Generate(
-                keymap, Executable, FileWorkspaceRequestStore.File, FileNotifyStore.File);
+                keymap,
+                Executable,
+                FileWorkspaceRequestStore.File,
+                FileNotifyStore.File,
+                FileTabStateStore.Glob);
 
             if (!File.Exists(target) || File.ReadAllText(target) != wanted)
             {
@@ -300,7 +308,11 @@ public static class Adapters
         File.WriteAllText(
             target,
             WezTermKeybinds.Generate(
-                keymap, Executable, FileWorkspaceRequestStore.File, FileNotifyStore.File));
+                keymap,
+                Executable,
+                FileWorkspaceRequestStore.File,
+                FileNotifyStore.File,
+                FileTabStateStore.Glob));
 
         File.WriteAllText(
             Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermTheme.Module),

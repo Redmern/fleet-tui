@@ -563,8 +563,18 @@ public static class DashboardWiring
 
             LoadSubs: () =>
             {
-                var listing = SubTree.Of(
-                    [.. WithBarState(lister.Handle(project.Name)).Select(WithActivity)]);
+                var everyone = WithBarState(lister.Handle(project.Name))
+                    .Select(WithActivity)
+                    .ToList();
+
+                Adapters.PublishTabStates(
+                    project.Name,
+                    everyone
+                        .Where(a => a.Status.Length > 0)
+                        .GroupBy(a => AgentTitle.For(a.Repository, a.Branch))
+                        .ToDictionary(g => g.Key, g => g.First().Status));
+
+                var listing = SubTree.Of(everyone);
                 var trigger = settings.Load(project.Name).Trigger;
 
                 return new SubBoard(

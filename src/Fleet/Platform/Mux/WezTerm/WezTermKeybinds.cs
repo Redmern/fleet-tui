@@ -14,12 +14,14 @@ public static class WezTermKeybinds
         Keymap keymap,
         string fleetExecutable,
         string workspaceRequest,
-        string notifyRequest = "")
+        string notifyRequest = "",
+        string tabStateGlob = "")
     {
         var chord = WezTermChord.From(keymap.PrefixText);
         var exe = fleetExecutable.Replace("\\", "\\\\", StringComparison.Ordinal);
         var request = workspaceRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
         var notify = notifyRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
+        var tabState = tabStateGlob.Replace('\\', '/');
 
         var sb = new StringBuilder();
 
@@ -96,6 +98,59 @@ public static class WezTermKeybinds
         sb.AppendLine("  local project = M.project(window)");
         sb.AppendLine();
         sb.AppendLine("  return project and (M.ship .. '  ' .. project) or nil");
+        sb.AppendLine("end");
+        sb.AppendLine();
+        sb.AppendLine("-- Agent activity for a tab, published by the dashboard as tabstate files");
+        sb.AppendLine("-- of '<tab title>\\t<status>' lines. Cached; the bar redraws every second.");
+        sb.AppendLine($"M.tabstate_glob = '{tabState}'");
+        sb.AppendLine();
+        sb.AppendLine("local state_cache = { at = 0, map = {} }");
+        sb.AppendLine();
+        sb.AppendLine("local function tab_states()");
+        sb.AppendLine("  if M.tabstate_glob == '' then");
+        sb.AppendLine("    return state_cache.map");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  local now = os.time()");
+        sb.AppendLine("  if now - state_cache.at < 2 then");
+        sb.AppendLine("    return state_cache.map");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  local map = {}");
+        sb.AppendLine("  for _, file in ipairs(wezterm.glob(M.tabstate_glob)) do");
+        sb.AppendLine("    local handle = io.open(file, 'r')");
+        sb.AppendLine("    if handle then");
+        sb.AppendLine("      for line in handle:lines() do");
+        sb.AppendLine("        local title, status = line:match('^(.-)\\t(%a+)%s*$')");
+        sb.AppendLine("        if title and status then");
+        sb.AppendLine("          map[title] = status");
+        sb.AppendLine("        end");
+        sb.AppendLine("      end");
+        sb.AppendLine("      handle:close()");
+        sb.AppendLine("    end");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  state_cache = { at = now, map = map }");
+        sb.AppendLine("  return map");
+        sb.AppendLine("end");
+        sb.AppendLine();
+        sb.AppendLine("local state_colors = {");
+        sb.AppendLine("  working = '#f9e2af',");
+        sb.AppendLine("  waiting = '#f38ba8',");
+        sb.AppendLine("  failed = '#f38ba8',");
+        sb.AppendLine("  idle = '#a6e3a1',");
+        sb.AppendLine("  done = '#a6e3a1',");
+        sb.AppendLine("}");
+        sb.AppendLine();
+        sb.AppendLine("function M.tab_marker(tab)");
+        sb.AppendLine("  local title = tab.tab_title");
+        sb.AppendLine("  if not title or #title == 0 then");
+        sb.AppendLine("    return nil");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  local color = state_colors[tab_states()[title] or '']");
+        sb.AppendLine();
+        sb.AppendLine("  return color and { glyph = utf8.char(0x25cf), color = color } or nil");
         sb.AppendLine("end");
         sb.AppendLine();
         sb.AppendLine("-- Notifications ride the same file mechanism: fleet appends lines and the");

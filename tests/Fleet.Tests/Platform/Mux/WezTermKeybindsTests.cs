@@ -149,4 +149,26 @@ public class WezTermKeybindsTests
         Assert.Contains("act.CloseCurrentPane { confirm = true }", lua);
     }
 
+    [Fact]
+    public void The_module_maps_published_tab_states_to_colored_markers()
+    {
+        var lua = WezTermKeybinds.Generate(
+            Keymap.Default, "fleet", Request, tabStateGlob: @"C:\fleet\tabstate-*.txt");
+
+        Assert.Contains("M.tabstate_glob = 'C:/fleet/tabstate-*.txt'", lua);
+        Assert.Contains("function M.tab_marker(tab)", lua);
+        Assert.Contains("working = '#f9e2af'", lua);
+        Assert.Contains("waiting = '#f38ba8'", lua);
+        Assert.Contains("idle = '#a6e3a1'", lua);
+        Assert.Contains("utf8.char(0x25cf)", lua);
+    }
+
+    [Fact]
+    public void An_empty_tab_state_glob_disables_the_marker_lookup()
+    {
+        var lua = Lua();
+
+        Assert.Contains("M.tabstate_glob = ''", lua);
+        Assert.Contains("if M.tabstate_glob == '' then", lua);
+    }
 }
