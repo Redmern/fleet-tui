@@ -950,6 +950,8 @@ public static class ShowDashboardView
 
         bool Pump()
         {
+            callbacks.DrainSignals();
+
             if (busy)
             {
                 return true;

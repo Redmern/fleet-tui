@@ -460,6 +460,48 @@ public static class DashboardWiring
         var branches0 = branches;
         var states = new BranchStates(git);
 
+        var signalCounter = 0L;
+        string? pendingTabState = null;
+        string? sentTabState = null;
+
+        void DrainFile(string file, string name)
+        {
+            try
+            {
+                if (!File.Exists(file))
+                {
+                    return;
+                }
+
+                var text = File.ReadAllText(file);
+
+                File.Delete(file);
+
+                if (text.Trim().Length > 0)
+                {
+                    Adapters.EmitUserVar(name, $"{++signalCounter}\n{text}");
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        void DrainSignals()
+        {
+            DrainFile(Adapters.NotifyFile, "fleet-notify");
+            DrainFile(Adapters.WorkspaceFile, "fleet-workspace");
+
+            var tabs = pendingTabState;
+
+            if (tabs is not null && tabs != sentTabState)
+            {
+                sentTabState = tabs;
+                Adapters.EmitUserVar(
+                    "fleet-tabstate", $"{project.Name}\t{++signalCounter}\n{tabs}");
+            }
+        }
+
         async Task<string?> OpenFlow(AgentRecord agent)
         {
             var executable = AgentHarness.CommandFor(agent.Harness)[0];
@@ -567,12 +609,18 @@ public static class DashboardWiring
                     .Select(WithActivity)
                     .ToList();
 
-                Adapters.PublishTabStates(
-                    project.Name,
-                    everyone
-                        .Where(a => a.Status.Length > 0)
-                        .GroupBy(a => AgentTitle.For(a.Repository, a.Branch))
-                        .ToDictionary(g => g.Key, g => g.First().Status));
+                var tabStates = everyone
+                    .Where(a => a.Status.Length > 0)
+                    .GroupBy(a => AgentTitle.For(a.Repository, a.Branch))
+                    .ToDictionary(g => g.Key, g => g.First().Status);
+
+                Adapters.PublishTabStates(project.Name, tabStates);
+
+                pendingTabState = string.Join(
+                    "\n",
+                    tabStates
+                        .OrderBy(s => s.Key, StringComparer.Ordinal)
+                        .Select(s => $"{s.Key}\t{s.Value}"));
 
                 var listing = SubTree.Of(everyone);
                 var trigger = settings.Load(project.Name).Trigger;
@@ -1158,6 +1206,8 @@ public static class DashboardWiring
                 id,
                 allowed ? ApprovalDecision.Allowed : ApprovalDecision.Denied),
 
-            Heartbeat: () => approvals.Heartbeat(project.Name));
+            Heartbeat: () => approvals.Heartbeat(project.Name),
+
+            DrainSignals: DrainSignals);
     }
 }

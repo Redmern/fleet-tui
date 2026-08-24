@@ -59,7 +59,8 @@ public class WezTermKeybindsTests
         var lua = Lua();
 
         Assert.Contains("act.SpawnCommandInNewTab {", lua);
-        Assert.Contains("args = { M.fleet, 'menu', '--project', project },", lua);
+        Assert.Contains("local exe = M.fleet", lua);
+        Assert.Contains("args = { exe, 'menu', '--project', project },", lua);
     }
 
     [Fact]
@@ -170,5 +171,36 @@ public class WezTermKeybindsTests
 
         Assert.Contains("M.tabstate_glob = ''", lua);
         Assert.Contains("if M.tabstate_glob == '' then", lua);
+    }
+
+    [Fact]
+    public void User_vars_carry_the_signals_across_mux_and_ssh_domains()
+    {
+        var lua = Lua();
+
+        Assert.Contains("wezterm.on('user-var-changed'", lua);
+        Assert.Contains("'fleet-notify'", lua);
+        Assert.Contains("'fleet-workspace'", lua);
+        Assert.Contains("'fleet-tabstate'", lua);
+        Assert.Contains("pushed_states[proj] = map", lua);
+    }
+
+    [Fact]
+    public void The_file_polling_stays_as_a_local_fallback()
+    {
+        var lua = Lua();
+
+        Assert.Contains("wezterm.on('update-status'", lua);
+        Assert.Contains("os.remove(M.workspace_request)", lua);
+    }
+
+    [Fact]
+    public void The_menu_chord_spawns_from_the_remote_path_on_other_domains()
+    {
+        var lua = Lua();
+
+        Assert.Contains("pane:get_domain_name()", lua);
+        Assert.Contains("domain ~= 'local'", lua);
+        Assert.Contains("domain = 'CurrentPaneDomain',", lua);
     }
 }

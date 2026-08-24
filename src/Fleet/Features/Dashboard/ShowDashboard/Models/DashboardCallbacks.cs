@@ -34,4 +34,5 @@ public sealed record DashboardCallbacks(
     Func<RepositoryChoice, BranchState> RepositoryState,
     Func<PendingApproval?> TakeApproval,
     Action<string, bool> AnswerApproval,
-    Action Heartbeat);
+    Action Heartbeat,
+    Action DrainSignals);

@@ -109,6 +109,13 @@ public static class Adapters
         string project, IReadOnlyDictionary<string, string> states) =>
         FileTabStateStore.Publish(project, states);
 
+    public static string NotifyFile => FileNotifyStore.File;
+
+    public static string WorkspaceFile => FileWorkspaceRequestStore.File;
+
+    public static void EmitUserVar(string name, string value) =>
+        WezTermUserVars.Mark(name, value);
+
     public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
 
     public static string? PickFolder(IMuxDriver mux, string project, string startIn)
