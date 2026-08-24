@@ -125,25 +125,63 @@ public static class ShowDashboardView
 
         HashSet<int>[] marks = [[], [], []];
 
-        IReadOnlyList<FleetRow> Marked(IReadOnlyList<FleetRow> rows, int tab)
-        {
-            var set = marks[tab];
+        FleetRow Decorate(FleetRow row, int tab, int index) =>
+            marks[tab].Count == 0
+                ? row
+                : new FleetRow(
+                    [
+                        new FleetSpan(marks[tab].Contains(index) ? "*  " : "   ", FleetTones.Key),
+                        .. row.Spans,
+                    ],
+                    row.Trailing);
 
-            if (set.Count == 0)
+        IReadOnlyList<FleetRow> Marked(IReadOnlyList<FleetRow> rows, int tab) =>
+            marks[tab].Count == 0
+                ? rows
+                : [.. rows.Select((r, i) => Decorate(r, tab, i))];
+
+        bool IsHiddenAt(int tab, int row) =>
+            tab == DashboardTabs.SubsTab ? subs.IsHidden(row) : board.IsHidden(row);
+
+        FleetRow? UpdateHidden(int tab, int row, bool wanted)
+        {
+            if (tab == DashboardTabs.SubsTab)
             {
-                return rows;
+                if (row < 0 || row >= subs.Rows.Count || row >= subs.Hidden.Count)
+                {
+                    return null;
+                }
+
+                var rows = subs.Rows.ToArray();
+                var hidden = subs.Hidden.ToArray();
+
+                rows[row] = DashboardRows.WithHidden(rows[row], wanted);
+                hidden[row] = wanted;
+                subs = subs with { Rows = rows, Hidden = hidden };
+
+                return rows[row];
             }
 
-            return
-            [
-                .. rows.Select((r, i) => new FleetRow(
-                    [
-                        new FleetSpan(set.Contains(i) ? "*  " : "   ", FleetTones.Key),
-                        .. r.Spans,
-                    ],
-                    r.Trailing)),
-            ];
+            if (row < 0 || row >= board.Rows.Count || row >= board.Hidden.Count)
+            {
+                return null;
+            }
+
+            var agentRows = board.Rows.ToArray();
+            var agentHidden = board.Hidden.ToArray();
+
+            agentRows[row] = DashboardRows.WithHidden(agentRows[row], wanted);
+            agentHidden[row] = wanted;
+            board = board with { Rows = agentRows, Hidden = agentHidden };
+
+            return agentRows[row];
         }
+
+        static bool Trouble(string? message) =>
+            message is not null
+            && (message.StartsWith("could not", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("not open", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("is gone", StringComparison.OrdinalIgnoreCase));
 
         void ShowBarFor(int tab)
         {
@@ -358,6 +396,22 @@ public static class ShowDashboardView
             var indexes = marks[tab].OrderBy(i => i).ToList();
 
             marks[tab].Clear();
+
+            if (choice == "hide")
+            {
+                foreach (var index in indexes)
+                {
+                    UpdateHidden(tab, index, !IsHiddenAt(tab, index));
+                }
+
+                var list = tab == DashboardTabs.SubsTab ? subList : agentList;
+                var rows = tab == DashboardTabs.SubsTab ? subs.Rows : board.Rows;
+
+                FleetRows.Fill(list, Marked(rows, tab), FleetRows.Selected(list));
+                hints.Show(BarFor(tab));
+                status.Text = "toggling...";
+            }
+
             busy = true;
 
             Start(async () =>
@@ -369,7 +423,10 @@ public static class ShowDashboardView
 
                     app.Invoke(() => status.Text = message ?? string.Empty);
 
-                    await RefreshAsync().ConfigureAwait(false);
+                    if (choice != "hide")
+                    {
+                        await RefreshAsync().ConfigureAwait(false);
+                    }
                 }
                 finally
                 {
@@ -405,6 +462,24 @@ public static class ShowDashboardView
             var tab = ActiveTab();
             var row = ActiveRow();
 
+            if (tab == DashboardTabs.RepositoriesTab)
+            {
+                return;
+            }
+
+            var wanted = !IsHiddenAt(tab, row);
+            var patched = UpdateHidden(tab, row, wanted);
+
+            if (patched is not null)
+            {
+                var list = tab == DashboardTabs.SubsTab ? subList : agentList;
+
+                (list.Source as FleetRowSource)?.Replace(row, Decorate(patched, tab, row));
+                list.SetNeedsDraw();
+                hints.Show(BarFor(tab));
+                status.Text = wanted ? "hiding..." : "showing...";
+            }
+
             busy = true;
 
             Start(async () =>
@@ -416,7 +491,10 @@ public static class ShowDashboardView
 
                     app.Invoke(() => status.Text = message ?? string.Empty);
 
-                    await RefreshAsync().ConfigureAwait(false);
+                    if (Trouble(message))
+                    {
+                        await RefreshAsync().ConfigureAwait(false);
+                    }
                 }
                 finally
                 {

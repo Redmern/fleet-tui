@@ -2,6 +2,7 @@ using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Shared;
 using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 
 namespace Fleet.Tests.Features.Dashboard;
 
@@ -59,5 +60,38 @@ public class DashboardRowsTests
 
         Assert.DoesNotContain(FleetGlyphs.Ahead, rows[0].Text);
         Assert.DoesNotContain(FleetGlyphs.Behind, rows[0].Text);
+    }
+
+    [Fact]
+    public void WithHidden_appends_exactly_one_hidden_glyph_even_when_applied_twice()
+    {
+        var row = new FleetRow([FleetSpan.Plain("branch")]);
+
+        var hidden = DashboardRows.WithHidden(DashboardRows.WithHidden(row, true), true);
+
+        Assert.Single(hidden.Trailing!, s => s.Text.Contains(FleetGlyphs.Hidden));
+    }
+
+    [Fact]
+    public void WithHidden_false_removes_the_glyph_and_keeps_other_trailing_spans()
+    {
+        var row = new FleetRow(
+            [FleetSpan.Plain("branch")],
+            [FleetSpan.Plain("working   "), FleetSpan.Muted($"{FleetGlyphs.Hidden} ")]);
+
+        var shown = DashboardRows.WithHidden(row, false);
+
+        Assert.Single(shown.Trailing!);
+        Assert.Equal("working   ", shown.Trailing![0].Text);
+    }
+
+    [Fact]
+    public void WithHidden_round_trip_restores_an_empty_trailing()
+    {
+        var row = new FleetRow([FleetSpan.Plain("branch")]);
+
+        var back = DashboardRows.WithHidden(DashboardRows.WithHidden(row, true), false);
+
+        Assert.Null(back.Trailing);
     }
 }
