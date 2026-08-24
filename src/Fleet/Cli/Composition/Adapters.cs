@@ -97,8 +97,13 @@ public static class Adapters
 
     public static string Executable => Environment.ProcessPath ?? "fleet";
 
-    public static void MarkDashboardPane(string project) =>
+    public static void MarkDashboardPane(string project)
+    {
         WezTermUserVars.MarkDashboard(project);
+        DashPaneMarker.Write(project, Environment.GetEnvironmentVariable("WEZTERM_PANE"));
+    }
+
+    public static string? DashPane(string project) => DashPaneMarker.Read(project);
 
     public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
 

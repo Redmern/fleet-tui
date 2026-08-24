@@ -2,6 +2,7 @@ using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
 using Fleet.Features.Agents.CleanupAgents;
 using Fleet.Features.Agents.ListAgents;
+using Fleet.Features.Agents.MoveProject;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
@@ -154,19 +155,63 @@ public static class MenuCommand
 
                 var picked = FleetPicker.Choose(app, "Switch project", labels, keymap);
 
-                if (picked is { } index)
+                if (picked is not { } index)
                 {
-                    var target = others[index];
-                    var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
+                    break;
+                }
 
-                    if (dash is null)
-                    {
-                        await OpenProjectFlow(switchMux.Driver, target).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
-                    }
+                var target = others[index];
+                var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
+                var here = dash is not null
+                    && currentWindow is not null
+                    && dash.WindowId == currentWindow;
+
+                IReadOnlyList<string> options = dash is null
+                    ? ["Open in this window", "Open in a new window"]
+                    : here
+                        ? ["Focus it", "Move it to a new window"]
+                        : ["Move it into this window", "Move it to a new window", "Focus its window"];
+
+                var chosen2 = FleetPicker.Choose(app, target.Name, options, keymap);
+
+                if (chosen2 is not { } action)
+                {
+                    break;
+                }
+
+                if (dash is null)
+                {
+                    await OpenProjectFlow(
+                            switchMux.Driver, target, action == 0 ? currentWindow : null)
+                        .ConfigureAwait(false);
+
+                    break;
+                }
+
+                var focus = here ? action == 0 : action == 2;
+
+                if (focus)
+                {
+                    await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
+                    break;
+                }
+
+                var dest = !here && action == 0 ? currentWindow : null;
+
+                var moved = await new MoveProjectHandler(switchMux.Driver)
+                    .HandleAsync(
+                        target.Name,
+                        target.Root,
+                        new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
+                        dest,
+                        Adapters.DashPane(target.Name),
+                        self,
+                        Adapters.Executable)
+                    .ConfigureAwait(false);
+
+                if (!moved.Succeeded)
+                {
+                    FleetDialog.Error(app, "Switch project", moved.Error!);
                 }
 
                 break;
@@ -270,10 +315,11 @@ public static class MenuCommand
             .ConfigureAwait(false);
     }
 
-    private static async Task OpenProjectFlow(IMuxDriver mux, Project project)
+    private static async Task OpenProjectFlow(
+        IMuxDriver mux, Project project, string? windowId = null)
     {
         var result = await new OpenProjectHandler(mux)
-            .HandleAsync(new OpenProjectCommand(project, "claude", Adapters.Executable))
+            .HandleAsync(new OpenProjectCommand(project, "claude", Adapters.Executable, windowId))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)

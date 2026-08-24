@@ -15,7 +15,8 @@ public sealed class OpenProjectHandler(IMuxDriver mux)
         var harnessPane = await mux.SpawnAsync(
             new SpawnOptions
             {
-                NewWindow = true,
+                NewWindow = command.WindowId is null,
+                WindowId = command.WindowId,
                 SessionName = command.Project.Name,
                 Cwd = command.Project.Root,
                 Args = [command.Harness],
