@@ -292,15 +292,12 @@ public sealed class McpActions(
         await File.WriteAllTextAsync(
             Path.Combine(dir, AgentHarness.AgentInstructionFile), message, ct).ConfigureAwait(false);
 
-        var prompt = AgentHarness.AgentInstructionPrompt;
-
         if (AgentHarness.Normalize(agent.Harness) == AgentHarness.Nvim)
         {
-            await mux.SendTextAsync(pane, "\x1b" + AgentHarness.TellPrefix + prompt + "\r", ct)
-                .ConfigureAwait(false);
-
             return;
         }
+
+        var prompt = AgentHarness.AgentInstructionPrompt;
 
         await mux.SendTextAsync(pane, prompt, ct).ConfigureAwait(false);
         await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);

@@ -225,6 +225,16 @@ public class HideAgentTests
     }
 
     [Fact]
+    public void Nvim_watches_the_instruction_file_instead_of_trusting_keystrokes()
+    {
+        Assert.Contains("getftime('.fleet/instruction.md')", AgentHarness.NvimStartup);
+        Assert.Contains("instruction.seen", AgentHarness.NvimStartup);
+        Assert.Contains(AgentHarness.AgentInstructionPrompt, AgentHarness.NvimStartup);
+        Assert.Contains("fleet_timer:start(3000, 3000", AgentHarness.NvimStartup);
+        Assert.Contains("(vim.uv or vim.loop).new_timer()", AgentHarness.NvimStartup);
+    }
+
+    [Fact]
     public void FleetTell_sends_the_enter_separately_so_claude_submits_it()
     {
         Assert.Contains("vim.fn.chansend(c, o.args)", AgentHarness.NvimStartup);

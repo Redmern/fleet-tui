@@ -14,7 +14,24 @@ public static class AgentHarness
         + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
         + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
         + "if c then vim.fn.chansend(c, o.args) "
-        + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) end end end end, {nargs='+'}) ";
+        + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) end end end end, {nargs='+'}) "
+        + "local seenf='.fleet/instruction.seen' "
+        + "if vim.fn.filereadable(seenf)==0 then pcall(vim.fn.mkdir,'.fleet','p') "
+        + "pcall(vim.fn.writefile,{tostring(math.max(0,"
+        + "vim.fn.getftime('.fleet/" + AgentInstructionFile + "')))},seenf) end "
+        + "local function fleet_pump() "
+        + "local m=vim.fn.getftime('.fleet/" + AgentInstructionFile + "') "
+        + "if m<=0 then return end "
+        + "local seen=vim.fn.filereadable(seenf)==1 "
+        + "and tonumber(vim.fn.readfile(seenf)[1]) or 0 "
+        + "if m<=(seen or 0) then return end "
+        + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
+        + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
+        + "if c then vim.fn.chansend(c, '" + AgentInstructionPrompt + "') "
+        + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) "
+        + "pcall(vim.fn.writefile,{tostring(m)},seenf) return end end end end "
+        + "local fleet_timer=(vim.uv or vim.loop).new_timer() "
+        + "fleet_timer:start(3000, 3000, vim.schedule_wrap(fleet_pump)) ";
 
     public const string NvimStartup =
         NvimBoot + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('stopinsert') end)";
