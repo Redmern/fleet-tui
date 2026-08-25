@@ -239,6 +239,49 @@ public static class DashboardWiring
         return lines.Count == 0 ? ["no report yet."] : lines;
     }
 
+    private static string? RemoveInBackground(
+        IAgentStore store,
+        RemoveAgentHandler remover,
+        IFleetLog log,
+        string project,
+        IReadOnlyList<(AgentRecord Agent, bool Delete)> doomed)
+    {
+        foreach (var (agent, _) in doomed)
+        {
+            store.Remove(project, agent.Worktree);
+        }
+
+        _ = Task.Run(async () =>
+        {
+            var failures = new List<string>();
+
+            foreach (var (agent, delete) in doomed)
+            {
+                var gone = await remover.HandleAsync(project, agent, delete)
+                    .ConfigureAwait(false);
+
+                if (!gone.Succeeded)
+                {
+                    store.Save(project, agent);
+                    failures.Add($"{Label(agent)}: {gone.Error}");
+                }
+            }
+
+            var note = failures.Count == 0
+                ? doomed.Count == 1
+                    ? $"removed {Label(doomed[0].Agent)}."
+                    : $"removed {doomed.Count} agent(s)."
+                : $"could not remove: {string.Join("; ", failures)}";
+
+            Note(log, project, note);
+            Adapters.Notifier().Notify(note);
+        });
+
+        return Noted(log, project, doomed.Count == 1
+            ? $"removing {Label(doomed[0].Agent)} in the background..."
+            : $"removing {doomed.Count} agent(s) in the background...");
+    }
+
     private static string? ToggleHidden(
         IMuxDriver mux,
         HideAgentHandler hider,
@@ -709,6 +752,16 @@ public static class DashboardWiring
                     .OfType<AgentRecord>()
                     .ToList();
 
+                if (choice == "forget")
+                {
+                    return RemoveInBackground(
+                        agents,
+                        remover,
+                        log,
+                        project.Name,
+                        [.. picked.Select(a => (a, false))]);
+                }
+
                 var failures = new List<string>();
 
                 foreach (var agent in picked)
@@ -972,7 +1025,7 @@ public static class DashboardWiring
                     return null;
                 }
 
-                var cascaded = 0;
+                var doomed = new List<(AgentRecord Agent, bool Delete)>();
 
                 if (AgentHarness.IsOrchestrator(agent.Harness))
                 {
@@ -992,29 +1045,13 @@ public static class DashboardWiring
 
                     if (cascade)
                     {
-                        foreach (var child in children)
-                        {
-                            await remover.HandleAsync(project.Name, child, deleteWorktree: true)
-                                .ConfigureAwait(false);
-                            cascaded++;
-                        }
+                        doomed.AddRange(children.Select(c => (c, true)));
                     }
                 }
 
-                var outcome = await remover
-                    .HandleAsync(project.Name, agent, deleting)
-                    .ConfigureAwait(false);
+                doomed.Add((agent, deleting));
 
-                if (!outcome.Succeeded)
-                {
-                    return Noted(log, project.Name, outcome.Error);
-                }
-
-                var tail = cascaded > 0 ? $" and {cascaded} of its agent(s)" : string.Empty;
-
-                return Noted(log, project.Name, deleting
-                    ? $"{Label(agent)} removed with its worktree{tail}."
-                    : $"{Label(agent)} removed; its files are still on disk{tail}.");
+                return RemoveInBackground(agents, remover, log, project.Name, doomed);
             },
 
             RemoveRepository: async repository =>
