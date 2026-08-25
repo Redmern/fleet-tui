@@ -234,30 +234,10 @@ public static class WezTermTheme
               label = wezterm.truncate_right(label, max_width - 1) .. "… "
             end
 
-            local items
             if tab.is_active then
-              items = pill(label, C.lavender, C.crust)
-            else
-              items = pill(label, hover and C.surface1 or C.surface0, C.text)
+              return pill(label, C.lavender, C.crust)
             end
-
-            local ok, fleet = pcall(require, "fleet")
-            if ok and fleet.tab_marker then
-              local m = fleet.tab_marker(tab)
-              if m then
-                local out = {
-                  { Background = { Color = C.base } },
-                  { Foreground = { Color = m.color } },
-                  { Text = " " .. m.glyph },
-                }
-                for _, el in ipairs(items) do
-                  table.insert(out, el)
-                end
-                return out
-              end
-            end
-
-            return items
+            return pill(label, hover and C.surface1 or C.surface0, C.text)
           end)
 
           wezterm.on("update-status", function(win, pane)

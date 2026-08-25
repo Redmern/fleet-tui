@@ -117,7 +117,7 @@ public class WezTermWiringTests
         Assert.Contains("smart_nav(\"h\", \"Left\")", theme);
         Assert.Contains("act.CloseCurrentPane({ confirm = true })", theme);
         Assert.Contains("format-tab-title", theme);
-        Assert.Contains("fleet.tab_marker(tab)", theme);
+        Assert.DoesNotContain("tab_marker", theme);
         Assert.Contains("fleet.label", theme);
         Assert.Contains("git_branch", theme);
         Assert.Contains("SendKey({ key = \"j\", mods = \"CTRL\" })", theme);
