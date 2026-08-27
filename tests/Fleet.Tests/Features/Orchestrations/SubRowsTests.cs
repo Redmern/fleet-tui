@@ -38,6 +38,19 @@ public sealed class SubRowsTests
     private static SubListing Listing(params AgentRecord[] agents) => SubTree.Of(agents);
 
     [Fact]
+    public void A_gap_separates_each_sub_group_but_never_trails_the_last()
+    {
+        var listing = Listing(
+            Orchestrator("alpha"),
+            Agent("backend", "story", "alpha"),
+            Agent("frontend", "form", "alpha"),
+            Orchestrator("zeta"));
+
+        Assert.Equal([2], SubRows.GapsAfter(listing));
+        Assert.Empty(SubRows.GapsAfter(Listing(Orchestrator("solo"))));
+    }
+
+    [Fact]
     public void An_empty_listing_shows_the_trigger_hint()
     {
         var rows = SubRows.For(Listing(), Clean, ",");

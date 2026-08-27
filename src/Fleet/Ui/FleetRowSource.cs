@@ -20,22 +20,36 @@ public sealed class FleetRowSource : IListDataSource
 
     private readonly List<FleetRow?> _rows = [];
 
+    private readonly List<int> _itemAt = [];
+
+    private readonly List<int> _indexOf = [];
+
     public FleetRowSource(IEnumerable<FleetRow> rows, bool spaced = false)
+        : this(rows.ToList(), null, spaced)
     {
-        var items = rows.ToList();
+    }
 
-        Items = items.Count;
-        Stride = spaced ? 2 : 1;
+    public FleetRowSource(
+        IReadOnlyList<FleetRow> rows, IReadOnlyList<int>? gapsAfter, bool spaced = false)
+    {
+        var gaps = new HashSet<int>(gapsAfter ?? []);
 
-        for (var i = 0; i < items.Count; i++)
+        Items = rows.Count;
+
+        for (var i = 0; i < rows.Count; i++)
         {
-            _rows.Add(items[i]);
+            _indexOf.Add(_rows.Count);
+            _rows.Add(rows[i]);
+            _itemAt.Add(i);
 
-            if (spaced && i < items.Count - 1)
+            if ((spaced || gaps.Contains(i)) && i < rows.Count - 1)
             {
                 _rows.Add(null);
+                _itemAt.Add(i);
             }
         }
+
+        HasGaps = _rows.Count != Items;
     }
 
     public event NotifyCollectionChangedEventHandler? CollectionChanged
@@ -46,7 +60,7 @@ public sealed class FleetRowSource : IListDataSource
 
     public int Items { get; }
 
-    public int Stride { get; }
+    public bool HasGaps { get; }
 
     public int Count => _rows.Count;
 
@@ -70,9 +84,13 @@ public sealed class FleetRowSource : IListDataSource
     public bool Holds(int index) =>
         index >= 0 && index < _rows.Count && _rows[index] is not null;
 
-    public int ItemAt(int index) => Math.Max(0, index) / Stride;
+    public int ItemAt(int index) =>
+        index <= 0 || _itemAt.Count == 0
+            ? 0
+            : index >= _itemAt.Count ? Math.Max(0, Items - 1) : _itemAt[index];
 
-    public int IndexOf(int item) => item * Stride;
+    public int IndexOf(int item) =>
+        item >= 0 && item < _indexOf.Count ? _indexOf[item] : -1;
 
     public void Replace(int item, FleetRow row)
     {

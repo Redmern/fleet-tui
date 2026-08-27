@@ -6,9 +6,13 @@ namespace Fleet.Ui;
 public static class FleetRows
 {
     public static void Fill(
-        ListView list, IReadOnlyList<FleetRow> rows, int item = 0, bool spaced = false)
+        ListView list,
+        IReadOnlyList<FleetRow> rows,
+        int item = 0,
+        bool spaced = false,
+        IReadOnlyList<int>? gapsAfter = null)
     {
-        var source = new FleetRowSource(rows, spaced);
+        var source = new FleetRowSource(rows, gapsAfter, spaced);
 
         list.Source = source;
 
@@ -39,7 +43,7 @@ public static class FleetRows
 
         list.ValueChanged += (_, _) =>
         {
-            if (list.Source is not FleetRowSource source || source.Stride == 1)
+            if (list.Source is not FleetRowSource source || !source.HasGaps)
             {
                 return;
             }

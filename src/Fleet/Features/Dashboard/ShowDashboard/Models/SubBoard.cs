@@ -5,7 +5,8 @@ namespace Fleet.Features.Dashboard.ShowDashboard.Models;
 public sealed record SubBoard(
     IReadOnlyList<FleetRow> Rows,
     int Count,
-    IReadOnlyList<bool> Hidden)
+    IReadOnlyList<bool> Hidden,
+    IReadOnlyList<int>? Gaps = null)
 {
     public static readonly SubBoard Empty = new([], 0, []);
 

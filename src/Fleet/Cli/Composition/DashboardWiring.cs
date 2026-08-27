@@ -647,7 +647,8 @@ public static class DashboardWiring
                 return new SubBoard(
                     SubRows.For(listing, Memoized(states), trigger),
                     listing.Flat.Count(e => !e.IsChild),
-                    [.. listing.Flat.Select(e => e.Agent.Hidden)]);
+                    [.. listing.Flat.Select(e => e.Agent.Hidden)],
+                    SubRows.GapsAfter(listing));
             },
 
             NewAgent: async (available, selected) =>

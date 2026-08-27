@@ -227,7 +227,8 @@ public static class ShowDashboardView
             FleetRows.Fill(
                 subList,
                 Marked(subs.Rows, DashboardTabs.SubsTab),
-                FleetRows.Selected(subList));
+                FleetRows.Selected(subList),
+                gapsAfter: subs.Gaps);
             tabBar.Retitle(DashboardTabs.SubsTab, DashboardTabs.Subs(subs.Count));
             ShowBarFor(DashboardTabs.SubsTab);
         }
@@ -386,8 +387,9 @@ public static class ShowDashboardView
 
             var list = tab == DashboardTabs.SubsTab ? subList : agentList;
             var rows = tab == DashboardTabs.SubsTab ? subs.Rows : board.Rows;
+            var gaps = tab == DashboardTabs.SubsTab ? subs.Gaps : null;
 
-            FleetRows.Fill(list, Marked(rows, tab), FleetRows.Selected(list));
+            FleetRows.Fill(list, Marked(rows, tab), FleetRows.Selected(list), gapsAfter: gaps);
         }
 
         void RunBatch(string choice)
@@ -406,8 +408,9 @@ public static class ShowDashboardView
 
                 var list = tab == DashboardTabs.SubsTab ? subList : agentList;
                 var rows = tab == DashboardTabs.SubsTab ? subs.Rows : board.Rows;
+                var gaps = tab == DashboardTabs.SubsTab ? subs.Gaps : null;
 
-                FleetRows.Fill(list, Marked(rows, tab), FleetRows.Selected(list));
+                FleetRows.Fill(list, Marked(rows, tab), FleetRows.Selected(list), gapsAfter: gaps);
                 hints.Show(BarFor(tab));
                 status.Text = "toggling...";
             }

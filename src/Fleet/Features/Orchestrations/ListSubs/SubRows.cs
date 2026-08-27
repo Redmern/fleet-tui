@@ -32,6 +32,10 @@ public static class SubRows
             : Orchestrator(e.Agent))];
     }
 
+    public static IReadOnlyList<int> GapsAfter(SubListing listing) =>
+        [.. Enumerable.Range(0, Math.Max(0, listing.Flat.Count - 1))
+            .Where(i => !listing.Flat[i + 1].IsChild)];
+
     private static FleetRow Orchestrator(AgentRecord agent)
     {
         List<FleetSpan> trailing =
