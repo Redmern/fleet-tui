@@ -92,9 +92,15 @@ public sealed class FakeMuxDriver : IMuxDriver
         RequireAvailable();
         RequirePane(id);
 
+        var inherited = options.WindowId is { } window
+            ? _panes.Values
+                .Select(e => e.Pane)
+                .FirstOrDefault(p => p.Id != id && p.WindowId == window)?.SessionName
+            : null;
+
         Mutate(id, p => p with
         {
-            SessionName = options.Workspace ?? p.SessionName,
+            SessionName = options.Workspace ?? inherited ?? p.SessionName,
             WindowId = options.WindowId ?? (options.NewWindow ? NextWindowId() : p.WindowId),
         });
 

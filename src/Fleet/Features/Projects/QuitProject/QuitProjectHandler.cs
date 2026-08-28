@@ -41,7 +41,7 @@ public sealed class QuitProjectHandler(IMuxDriver mux, IAgentStore store)
     {
         foreach (var agent in agents)
         {
-            var open = panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
+            var open = panes.Any(p => AgentPaneMatch.Owns(p, agent));
 
             if (open != agent.Open)
             {

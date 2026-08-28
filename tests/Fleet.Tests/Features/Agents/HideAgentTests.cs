@@ -48,6 +48,31 @@ public class HideAgentTests
     }
 
     [Fact]
+    public async Task A_second_hidden_agent_joins_the_first_ones_hidden_window()
+    {
+        var first = Agent();
+        var second = new AgentRecord(
+            "C:/repos/techweb/backend/other", "backend", "other", AgentHarness.Claude,
+            "origin/main", true);
+
+        var firstPane = await _mux.SpawnAsync(new SpawnOptions { Cwd = first.Worktree });
+        var secondPane = await _mux.SpawnAsync(new SpawnOptions { Cwd = second.Worktree });
+
+        var handler = new HideAgentHandler(_mux, _store);
+
+        Assert.True((await handler.HandleAsync("techweb", first, "w1")).Succeeded);
+        Assert.True((await handler.HandleAsync("techweb", second, "w1")).Succeeded);
+
+        var panes = await _mux.ListPanesAsync();
+        var one = panes.Single(p => p.Id == firstPane);
+        var two = panes.Single(p => p.Id == secondPane);
+
+        Assert.Equal(FleetWorkspaces.Hidden, one.SessionName);
+        Assert.Equal(FleetWorkspaces.Hidden, two.SessionName);
+        Assert.Equal(one.WindowId, two.WindowId);
+    }
+
+    [Fact]
     public async Task A_hidden_agent_is_still_recorded_so_the_dashboard_keeps_listing_it()
     {
         var agent = Agent();

@@ -56,6 +56,23 @@ public class QuitProjectTests
     }
 
     [Fact]
+    public void A_hidden_nvim_pane_is_matched_by_its_tab_title_when_the_cwd_lies()
+    {
+        var hidden = Pane("7", "w5", cwd: "C:/somewhere/else") with
+        {
+            Title = "backend/dev",
+            SessionName = "fleet-hidden",
+        };
+
+        var doomed = QuitPlan.PanesToClose(
+            [Pane("1", "w1", "C:/repos/techweb"), hidden],
+            projectWindow: "w1",
+            agents: [Agent("C:/repos/techweb/backend/dev")]);
+
+        Assert.Equal([new PaneId("1"), new PaneId("7")], doomed);
+    }
+
+    [Fact]
     public void A_pane_that_is_both_in_the_window_and_an_agent_is_only_closed_once()
     {
         var doomed = QuitPlan.PanesToClose(

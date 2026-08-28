@@ -1,3 +1,4 @@
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
@@ -18,7 +19,7 @@ public static class QuitPlan
             var inWindow = projectWindow is not null
                 && string.Equals(pane.WindowId, projectWindow, StringComparison.Ordinal);
 
-            var isAgent = agents.Any(a => PathKey.Same(pane.Cwd, a.Worktree));
+            var isAgent = agents.Any(a => AgentPaneMatch.Owns(pane, a));
 
             if ((inWindow || isAgent) && !doomed.Contains(pane.Id))
             {

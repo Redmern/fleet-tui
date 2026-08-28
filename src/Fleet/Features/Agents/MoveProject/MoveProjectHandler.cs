@@ -1,3 +1,4 @@
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
@@ -124,7 +125,6 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
             return Result.Fail($"{project} is not open anywhere.");
         }
 
-        var away = new MovePaneOptions { Workspace = FleetWorkspaces.Hidden };
         var dash = rootPanes.FirstOrDefault(p => p.Id.Value == dashPaneId);
 
         if (dash is null && rootPanes.Count > 1)
@@ -142,16 +142,38 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
             await mux.KillPaneAsync(dash.Id, ct).ConfigureAwait(false);
         }
 
+        var hiddenWindow = HiddenNest.WindowOf(panes, agents);
+
         foreach (var pane in rootPanes.Where(p => dash is null || p.Id != dash.Id))
         {
-            await mux.MovePaneAsync(pane.Id, away, ct).ConfigureAwait(false);
+            hiddenWindow = await HiddenNest.MoveIntoAsync(mux, [pane.Id], hiddenWindow, ct)
+                .ConfigureAwait(false);
             await mux.SetTitleAsync(pane.Id, FleetTabTitles.Dashboard, ct).ConfigureAwait(false);
         }
 
         foreach (var agent in agents.Where(a => a.Open && !a.Hidden))
         {
-            await MoveAgentAsync(agent, panes, away, null, selfPaneId, split: false, ct)
+            var moving = panes
+                .Where(p => AgentPaneMatch.Owns(p, agent)
+                    && p.Id.Value != selfPaneId
+                    && !SubBrowse.Is(p))
+                .Select(p => p.Id)
+                .ToList();
+
+            foreach (var browser in panes.Where(
+                p => AgentPaneMatch.Owns(p, agent) && SubBrowse.Is(p)))
+            {
+                await mux.KillPaneAsync(browser.Id, ct).ConfigureAwait(false);
+            }
+
+            hiddenWindow = await HiddenNest.MoveIntoAsync(mux, moving, hiddenWindow, ct)
                 .ConfigureAwait(false);
+
+            foreach (var id in moving)
+            {
+                await mux.SetTitleAsync(
+                    id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
+            }
         }
 
         return Result.Ok();

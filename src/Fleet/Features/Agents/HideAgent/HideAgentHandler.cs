@@ -23,9 +23,15 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         var active = panes.FirstOrDefault(p => p.IsActive);
         var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
 
+        var hiddenWindow = hiding
+            ? HiddenNest.WindowOf(panes, store.List(project))
+            : null;
+
         var changed = AgentHarness.IsOrchestrator(agent.Harness)
-            ? await ToggleOrchestratorAsync(agent, dashboardWindow, mine, hiding, ct).ConfigureAwait(false)
-            : await ToggleAgentAsync(agent, dashboardWindow, mine, hiding, ct).ConfigureAwait(false);
+            ? await ToggleOrchestratorAsync(
+                agent, dashboardWindow, hiddenWindow, mine, hiding, ct).ConfigureAwait(false)
+            : await ToggleAgentAsync(
+                agent, dashboardWindow, hiddenWindow, mine, hiding, ct).ConfigureAwait(false);
 
         if (active is not null)
         {
@@ -40,18 +46,34 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
     private async Task<AgentRecord> ToggleAgentAsync(
         AgentRecord agent,
         string? dashboardWindow,
+        string? hiddenWindow,
         IReadOnlyList<Pane> mine,
         bool hiding,
         CancellationToken ct)
     {
-        var options = hiding
-            ? new MovePaneOptions { Workspace = FleetWorkspaces.Hidden }
-            : new MovePaneOptions { WindowId = dashboardWindow, NewWindow = dashboardWindow is null };
+        if (hiding)
+        {
+            await HiddenNest.MoveIntoAsync(mux, mine.Select(p => p.Id), hiddenWindow, ct)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            var options = new MovePaneOptions
+            {
+                WindowId = dashboardWindow,
+                NewWindow = dashboardWindow is null,
+            };
+
+            foreach (var pane in mine)
+            {
+                await mux.MovePaneAsync(pane.Id, options, ct).ConfigureAwait(false);
+            }
+        }
 
         foreach (var pane in mine)
         {
-            await mux.MovePaneAsync(pane.Id, options, ct).ConfigureAwait(false);
-            await mux.SetTitleAsync(pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
+            await mux.SetTitleAsync(
+                pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
         }
 
         return agent with { Hidden = hiding, Open = mine.Count > 0 };
@@ -60,6 +82,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
     private async Task<AgentRecord> ToggleOrchestratorAsync(
         AgentRecord agent,
         string? dashboardWindow,
+        string? hiddenWindow,
         IReadOnlyList<Pane> mine,
         bool hiding,
         CancellationToken ct)
@@ -73,12 +96,14 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
 
         if (hiding)
         {
+            await HiddenNest.MoveIntoAsync(mux, claude.Select(p => p.Id), hiddenWindow, ct)
+                .ConfigureAwait(false);
+
             foreach (var pane in claude)
             {
-                await mux.MovePaneAsync(
-                        pane.Id, new MovePaneOptions { Workspace = FleetWorkspaces.Hidden }, ct)
+                await mux.SetTitleAsync(
+                    pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct)
                     .ConfigureAwait(false);
-                await mux.SetTitleAsync(pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
             }
         }
         else
@@ -94,7 +119,9 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
                         },
                         ct)
                     .ConfigureAwait(false);
-                await mux.SetTitleAsync(pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
+                await mux.SetTitleAsync(
+                    pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct)
+                    .ConfigureAwait(false);
             }
 
             if (claude.FirstOrDefault() is { } main)
