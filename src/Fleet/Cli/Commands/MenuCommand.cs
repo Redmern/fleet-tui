@@ -40,6 +40,7 @@ public static class MenuCommand
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
+        FleetAction.RebuildDashboard,
         FleetAction.EditSettings,
         FleetAction.CleanupProject,
     ];
@@ -277,6 +278,10 @@ public static class MenuCommand
                 Adapters.BrowseFolder(
                     Adapters.Mux(Adapters.Log()).Driver, project.Name, project.Root);
 
+                break;
+
+            case FleetAction.RebuildDashboard:
+                Adapters.Requests().Submit(project.Name, FleetAction.RebuildDashboard);
                 break;
 
             case FleetAction.CleanupProject:
