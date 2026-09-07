@@ -39,6 +39,7 @@ public static class KeymapDefaults
             [FleetAction.EditSettings] = "P",
             [FleetAction.SwitchProject] = "s",
             [FleetAction.CleanupProject] = "c",
+            [FleetAction.RebuildDashboard] = "b",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -73,6 +74,7 @@ public static class KeymapDefaults
         FleetAction.EditSettings,
         FleetAction.SwitchProject,
         FleetAction.CleanupProject,
+        FleetAction.RebuildDashboard,
     ];
 
     public static string Short(FleetAction action) =>
