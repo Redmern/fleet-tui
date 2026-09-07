@@ -13,8 +13,10 @@ public static class CommandLine
 
     public const string StatusFlag = "--status";
 
+    public const string TitleFlag = Shared.Constants.AgentHarness.TitleFlag;
+
     private static readonly string[] ValueFlags =
-        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag];
+        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag];
 
     public static Invocation Parse(IReadOnlyList<string> args)
     {
@@ -28,7 +30,9 @@ public static class CommandLine
             ValueOf(options, ActionFlag),
             TextOf(options),
             ValueOf(options, CallerFlag),
-            ValueOf(options, StatusFlag));
+            ValueOf(options, StatusFlag),
+            ValueOf(options, TitleFlag),
+            TailOf(options));
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch
@@ -45,6 +49,7 @@ public static class CommandLine
         "mcp" => FleetVerb.Mcp,
         "quit" => FleetVerb.Quit,
         "doctor" => FleetVerb.Doctor,
+        Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         "help" or "--help" or "-h" => FleetVerb.Help,
         _ => FleetVerb.Unknown,
     };
@@ -55,6 +60,13 @@ public static class CommandLine
         var value = i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static IReadOnlyList<string>? TailOf(string[] args)
+    {
+        var separator = Array.IndexOf(args, "--");
+
+        return separator >= 0 ? args.Skip(separator + 1).ToList() : null;
     }
 
     private static string? TextOf(string[] args)

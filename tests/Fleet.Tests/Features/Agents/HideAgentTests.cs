@@ -1,3 +1,4 @@
+using Fleet.Features.Agents;
 using Fleet.Features.Agents.ChangeHarness;
 using Fleet.Features.Agents.HideAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
@@ -5,6 +6,7 @@ using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Ui;
 
@@ -123,8 +125,9 @@ public class HideAgentTests
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
         var claude = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = agent.Worktree, NewWindow = true });
-        var browser = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
-        await _mux.SetTitleAsync(browser, $"{agent.Branch} files");
+        await _mux.SetTitleAsync(claude, AgentTitle.For(agent.Repository, agent.Branch));
+        await SubBrowse.SplitAsync(_mux, agent, claude);
+        var browser = (await _mux.ListPanesAsync()).Single(p => p.Id != claude).Id;
         var dashboard = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = "C:/repos/techweb", NewWindow = true });
         var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
@@ -143,6 +146,51 @@ public class HideAgentTests
         Assert.DoesNotContain(panes, p => p.Id == browser);
         Assert.True(panes.Single(p => p.Id == dashboard).IsActive);
         Assert.False(panes.Single(p => p.Id == claude).IsActive);
+    }
+
+    [Fact]
+    public async Task Hiding_a_sub_whose_browser_shares_its_tab_keeps_claude_alive()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+        var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree, NewWindow = true });
+        await _mux.SetTitleAsync(claude, AgentTitle.For(agent.Repository, agent.Branch));
+        await SubBrowse.SplitAsync(_mux, agent, claude);
+        var browser = (await _mux.ListPanesAsync()).Single(p => p.Id != claude).Id;
+
+        var result = await new HideAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, dashboardWindow: "w9");
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.Equal(FleetWorkspaces.Hidden, panes.Single(p => p.Id == claude).SessionName);
+        Assert.DoesNotContain(panes, p => p.Id == browser);
+        Assert.True(result.Value!.Open);
+    }
+
+    [Fact]
+    public async Task Unhiding_a_sub_puts_a_browser_beside_claude_and_names_the_tab_after_the_sub()
+    {
+        var agent = Agent(hidden: true) with { Harness = AgentHarness.Orchestrator };
+        var dashboard = await _mux.SpawnAsync(new SpawnOptions { Cwd = "C:/repos/techweb", NewWindow = true });
+        var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
+        var claude = await _mux.SpawnAsync(
+            new SpawnOptions { Cwd = agent.Worktree, Workspace = FleetWorkspaces.Hidden, NewWindow = true });
+
+        var result = await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, home);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var panes = await _mux.ListPanesAsync();
+        var mine = panes.Single(p => p.Id == claude);
+        var browser = Assert.Single(panes, p => SubBrowse.Is(p));
+
+        Assert.Equal(home, mine.WindowId);
+        Assert.Equal(mine.TabId, browser.TabId);
+        Assert.Equal("backend/test", mine.Title);
+        Assert.Equal("backend/test", browser.Title);
+        Assert.Equal("backend/test files", browser.PaneTitle);
     }
 
     [Fact]

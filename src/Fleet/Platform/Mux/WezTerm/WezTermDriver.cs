@@ -35,7 +35,8 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             SessionName: r.Workspace,
             Title: string.IsNullOrEmpty(r.TabTitle) ? r.Title : r.TabTitle,
             Cwd: CwdUrl.Normalize(r.Cwd),
-            IsActive: r.IsActive)).ToList();
+            IsActive: r.IsActive,
+            PaneTitle: r.Title)).ToList();
     }
 
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
@@ -102,6 +103,13 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
 
     public async Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default)
     {
+        var output = await _cli.RunAsync(SplitArgs(options), ct).ConfigureAwait(false);
+
+        return options.MovePane.IsNone ? ParsePaneId(output) : options.MovePane;
+    }
+
+    public static IReadOnlyList<string> SplitArgs(SplitOptions options)
+    {
         var args = new List<string>
         {
             "split-pane",
@@ -116,6 +124,14 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             args.Add(options.Percent.ToString());
         }
 
+        if (!options.MovePane.IsNone)
+        {
+            args.Add("--move-pane-id");
+            args.Add(options.MovePane.Value);
+
+            return args;
+        }
+
         if (!string.IsNullOrEmpty(options.Cwd))
         {
             args.Add("--cwd");
@@ -128,7 +144,7 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
             args.AddRange(options.Args);
         }
 
-        return ParsePaneId(await _cli.RunAsync(args, ct).ConfigureAwait(false));
+        return args;
     }
 
     public async Task KillPaneAsync(PaneId id, CancellationToken ct = default) =>

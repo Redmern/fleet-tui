@@ -14,6 +14,7 @@ public enum FleetVerb
     Mcp,
     Quit,
     Doctor,
+    Titled,
     Help,
     Unknown,
 }

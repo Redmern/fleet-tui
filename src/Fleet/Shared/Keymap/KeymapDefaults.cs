@@ -99,6 +99,7 @@ public static class KeymapDefaults
             FleetAction.EditSettings => "permissions",
             FleetAction.SwitchProject => "switch project",
             FleetAction.CleanupProject => "clean up",
+            FleetAction.RebuildDashboard => "rebuild dash",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -137,6 +138,7 @@ public static class KeymapDefaults
             FleetAction.EditSettings => "Permissions",
             FleetAction.SwitchProject => "Switch project",
             FleetAction.CleanupProject => "Clean up stale agents",
+            FleetAction.RebuildDashboard => "Rebuild the dashboard layout",
             _ => action.ToString(),
         };
 }

@@ -48,6 +48,80 @@ public class FakeMuxDriverTests
     }
 
     [Fact]
+    public async Task Split_puts_the_new_pane_in_the_same_tab_like_wezterm_does()
+    {
+        var mux = new FakeMuxDriver();
+        var left = await mux.SpawnAsync(new SpawnOptions { NewWindow = true, Args = ["claude"] });
+        var right = await mux.SplitAsync(new SplitOptions(left, SplitDirection.Right));
+
+        var panes = await mux.ListPanesAsync();
+
+        Assert.Equal(panes.Single(p => p.Id == left).TabId, panes.Single(p => p.Id == right).TabId);
+    }
+
+    [Fact]
+    public async Task A_title_belongs_to_the_tab_so_every_pane_in_it_reports_the_last_one_set()
+    {
+        var mux = new FakeMuxDriver();
+        var left = await mux.SpawnAsync(new SpawnOptions { NewWindow = true, Args = ["claude"] });
+        var right = await mux.SplitAsync(new SplitOptions(left, SplitDirection.Right));
+
+        await mux.SetTitleAsync(left, "sub");
+        await mux.SetTitleAsync(right, "sub files");
+
+        Assert.Equal("sub files", mux.TitleOf(left));
+        Assert.Equal("sub files", mux.TitleOf(right));
+    }
+
+    [Fact]
+    public async Task A_pane_moved_to_a_new_tab_leaves_the_title_behind_and_falls_back_to_its_own()
+    {
+        var mux = new FakeMuxDriver();
+        var left = await mux.SpawnAsync(new SpawnOptions { NewWindow = true, Args = ["claude"] });
+        var right = await mux.SplitAsync(new SplitOptions(left, SplitDirection.Right));
+        mux.SetPaneTitle(right, "nvim.exe");
+        await mux.SetTitleAsync(left, "sub");
+
+        await mux.MovePaneAsync(right, new MovePaneOptions { NewWindow = true });
+
+        var panes = await mux.ListPanesAsync();
+        Assert.NotEqual(panes.Single(p => p.Id == left).TabId, panes.Single(p => p.Id == right).TabId);
+        Assert.Equal("sub", mux.TitleOf(left));
+        Assert.Equal("nvim.exe", mux.TitleOf(right));
+    }
+
+    [Fact]
+    public async Task A_titled_command_line_names_its_own_pane()
+    {
+        var mux = new FakeMuxDriver();
+        await mux.SpawnAsync(new SpawnOptions
+        {
+            NewWindow = true,
+            Args = Fleet.Shared.Constants.AgentHarness.BrowseCommandFor("sub files"),
+        });
+
+        var pane = Assert.Single(await mux.ListPanesAsync());
+        Assert.Equal("sub files", pane.PaneTitle);
+        Assert.Equal("sub files", pane.Title);
+    }
+
+    [Fact]
+    public async Task Split_can_move_an_existing_pane_into_the_source_tab_instead_of_spawning()
+    {
+        var mux = new FakeMuxDriver();
+        var host = await mux.SpawnAsync(new SpawnOptions { NewWindow = true, Args = ["claude"] });
+        var stray = await mux.SpawnAsync(new SpawnOptions { NewWindow = true, Args = ["fleet", "dash"] });
+
+        var moved = await mux.SplitAsync(new SplitOptions(host, SplitDirection.Right) { MovePane = stray });
+
+        var panes = await mux.ListPanesAsync();
+        Assert.Equal(stray, moved);
+        Assert.Equal(2, panes.Count);
+        Assert.Equal(panes.Single(p => p.Id == host).TabId, panes.Single(p => p.Id == stray).TabId);
+        Assert.Equal(panes.Single(p => p.Id == host).WindowId, panes.Single(p => p.Id == stray).WindowId);
+    }
+
+    [Fact]
     public async Task Split_inherits_the_source_pane_cwd_when_none_is_given()
     {
         var mux = new FakeMuxDriver();

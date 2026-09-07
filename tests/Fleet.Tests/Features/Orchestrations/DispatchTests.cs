@@ -102,9 +102,14 @@ public sealed class DispatchTests : IDisposable
             && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
         var browser = panes.Single(p =>
             p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
+            && _mux.ArgsFor(p.Id).SequenceEqual(
+                AgentHarness.BrowseCommandFor($"{reply.Value.Slug} files")));
 
         Assert.Equal(claude.WindowId, browser.WindowId);
+        Assert.Equal(claude.TabId, browser.TabId);
+        Assert.Equal(reply.Value!.Slug, claude.Title);
+        Assert.Equal(reply.Value!.Slug, browser.Title);
+        Assert.Equal($"{reply.Value!.Slug} files", browser.PaneTitle);
     }
 
     [Fact]

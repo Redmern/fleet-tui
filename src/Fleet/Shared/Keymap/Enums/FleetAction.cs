@@ -35,4 +35,5 @@ public enum FleetAction
     EditSettings,
     SwitchProject,
     CleanupProject,
+    RebuildDashboard,
 }

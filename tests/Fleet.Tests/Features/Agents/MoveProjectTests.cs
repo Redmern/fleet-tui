@@ -1,3 +1,4 @@
+using Fleet.Features.Agents;
 using Fleet.Features.Agents.MoveProject;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
@@ -81,8 +82,8 @@ public class MoveProjectTests
         var sub = Sub();
         var subClaude = await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
         await _mux.SetTitleAsync(subClaude, sub.Branch);
-        var browser = await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
-        await _mux.SetTitleAsync(browser, $"{sub.Branch} files");
+        await SubBrowse.SplitAsync(_mux, sub, subClaude);
+        var browser = (await _mux.ListPanesAsync()).Single(p => SubBrowse.Is(p)).Id;
 
         var moved = await Handler().HandleAsync(
             "techweb", Root, [sub], null, dash.Value, null, "fleet");
@@ -92,9 +93,8 @@ public class MoveProjectTests
         var panes = await _mux.ListPanesAsync();
 
         Assert.DoesNotContain(panes, p => p.Id == browser);
-        Assert.Contains(panes, p =>
-            p.Id != browser
-            && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.BrowseCommand));
+        Assert.Contains(panes, p => p.Id == subClaude);
+        Assert.Contains(panes, p => p.Id != browser && SubBrowse.Is(p));
     }
 
     [Fact]

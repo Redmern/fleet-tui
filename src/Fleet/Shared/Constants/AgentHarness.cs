@@ -78,6 +78,21 @@ public static class AgentHarness
 
     public static IReadOnlyList<string> BrowseCommand { get; } = [Nvim, "-c", BrowseStartup];
 
+    public const string TitledVerb = "titled";
+
+    public const string TitleFlag = "--title";
+
+    public static IReadOnlyList<string> BrowseCommandFor(string paneTitle) =>
+        [Environment.ProcessPath ?? "fleet", TitledVerb, TitleFlag, paneTitle, "--", .. BrowseCommand];
+
+    public static string? TitledPaneTitle(IReadOnlyList<string> command) =>
+        command.Count >= 5
+        && command[1] == TitledVerb
+        && command[2] == TitleFlag
+        && command[4] == "--"
+            ? command[3]
+            : null;
+
     public static bool IsOrchestrator(string harness) => Normalize(harness) == Orchestrator;
 
     public static IReadOnlyList<string> CommandFor(string harness, bool withClaude = false) =>

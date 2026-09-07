@@ -26,6 +26,17 @@ public class CommandLineTests
     }
 
     [Fact]
+    public void The_titled_verb_keeps_the_title_and_the_command_after_the_separator_intact()
+    {
+        var invocation = CommandLine.Parse(
+            ["titled", "--title", "sub files", "--", "nvim", "-c", "lua print('a b')"]);
+
+        Assert.Equal(FleetVerb.Titled, invocation.Verb);
+        Assert.Equal("sub files", invocation.Title);
+        Assert.Equal(["nvim", "-c", "lua print('a b')"], invocation.Tail);
+    }
+
+    [Fact]
     public void An_unknown_verb_keeps_its_text_so_the_error_can_name_it()
     {
         var invocation = CommandLine.Parse(["wibble"]);

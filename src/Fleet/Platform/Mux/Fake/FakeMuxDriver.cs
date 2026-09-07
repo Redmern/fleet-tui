@@ -3,17 +3,20 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Fake;
 
 public sealed class FakeMuxDriver : IMuxDriver
 {
     private readonly ConcurrentDictionary<string, Entry> _panes = new();
+    private readonly ConcurrentDictionary<string, string> _tabTitles = new();
     private readonly ConcurrentDictionary<string, List<string>> _sent = new();
 
     private readonly ConcurrentDictionary<string, string> _text = new();
     private int _nextPane;
     private int _nextWindow;
+    private int _nextTab;
 
     public string Name => "fake";
 
@@ -51,6 +54,7 @@ public sealed class FakeMuxDriver : IMuxDriver
         Add(
             id,
             window,
+            NextTabId(),
             options.Workspace ?? options.SessionName ?? "default",
             options.Cwd ?? string.Empty,
             options.Args,
@@ -67,10 +71,25 @@ public sealed class FakeMuxDriver : IMuxDriver
             throw new MuxUnavailableException($"no pane {options.Source}");
         }
 
+        if (!options.MovePane.IsNone)
+        {
+            RequirePane(options.MovePane);
+
+            Mutate(options.MovePane, p => p with
+            {
+                WindowId = source.Pane.WindowId,
+                TabId = source.Pane.TabId,
+                SessionName = source.Pane.SessionName,
+            });
+
+            return Task.FromResult(options.MovePane);
+        }
+
         var id = NextPaneId();
         Add(
             id,
             source.Pane.WindowId,
+            source.Pane.TabId,
             source.Pane.SessionName,
             options.Cwd ?? source.Pane.Cwd,
             options.Args);
@@ -102,6 +121,7 @@ public sealed class FakeMuxDriver : IMuxDriver
         {
             SessionName = options.Workspace ?? inherited ?? p.SessionName,
             WindowId = options.WindowId ?? (options.NewWindow ? NextWindowId() : p.WindowId),
+            TabId = NextTabId(),
         });
 
         return Task.CompletedTask;
@@ -111,7 +131,14 @@ public sealed class FakeMuxDriver : IMuxDriver
     {
         RequireAvailable();
         RequirePane(id);
-        Mutate(id, p => p with { Title = title });
+
+        _tabTitles[_panes[id.Value].Pane.TabId] = title;
+
+        foreach (var key in _panes.Keys)
+        {
+            Mutate(new PaneId(key), p => p);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -151,6 +178,12 @@ public sealed class FakeMuxDriver : IMuxDriver
         _text[id.Value] = text;
     }
 
+    public void SetPaneTitle(PaneId id, string title)
+    {
+        RequirePane(id);
+        Mutate(id, p => p with { PaneTitle = title });
+    }
+
     public IReadOnlyList<string> SentTo(PaneId id) =>
         _sent.TryGetValue(id.Value, out var lines) ? lines : [];
 
@@ -160,33 +193,46 @@ public sealed class FakeMuxDriver : IMuxDriver
     public string TitleOf(PaneId id) =>
         _panes.TryGetValue(id.Value, out var e) ? e.Pane.Title : string.Empty;
 
+    public IReadOnlyDictionary<string, string> EnvFor(PaneId id) =>
+        _panes.TryGetValue(id.Value, out var e) ? e.Env : new Dictionary<string, string>();
+
     private PaneId NextPaneId() => new($"p{Interlocked.Increment(ref _nextPane)}");
 
     private string NextWindowId() => $"w{Interlocked.Increment(ref _nextWindow)}";
 
+    private string NextTabId() => $"t{Interlocked.Increment(ref _nextTab)}";
+
     private void Add(
-        PaneId id, string window, string session, string cwd, IReadOnlyList<string> args,
+        PaneId id, string window, string tab, string session, string cwd, IReadOnlyList<string> args,
         IReadOnlyDictionary<string, string>? env = null)
-        => _panes[id.Value] = new Entry(
+    {
+        _panes[id.Value] = new Entry(
             new Pane(
                 id,
                 window,
-                TabId: id.Value,
+                TabId: tab,
                 SessionName: session,
                 Title: string.Empty,
                 Cwd: cwd,
-                IsActive: true),
+                IsActive: true,
+                PaneTitle: AgentHarness.TitledPaneTitle(args) ?? string.Empty),
             args,
             env ?? new Dictionary<string, string>());
 
-    public IReadOnlyDictionary<string, string> EnvFor(PaneId id) =>
-        _panes.TryGetValue(id.Value, out var e) ? e.Env : new Dictionary<string, string>();
+        Mutate(id, p => p);
+    }
 
     private void Mutate(PaneId id, Func<Pane, Pane> change)
     {
         if (_panes.TryGetValue(id.Value, out var e))
         {
-            _panes[id.Value] = e with { Pane = change(e.Pane) };
+            var next = change(e.Pane);
+            var tabTitle = _tabTitles.TryGetValue(next.TabId, out var t) ? t : string.Empty;
+
+            _panes[id.Value] = e with
+            {
+                Pane = next with { Title = tabTitle.Length > 0 ? tabTitle : next.PaneTitle },
+            };
         }
     }
 

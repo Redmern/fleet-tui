@@ -1,4 +1,5 @@
 using Fleet.Platform.Mux.WezTerm;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Tests.Platform.Mux;
@@ -56,6 +57,43 @@ public class WezTermDriverTests
         Assert.Equal("70", second.Id.Value);
         Assert.Equal("backend", second.SessionName);
         Assert.False(second.IsActive);
+    }
+
+    [Fact]
+    public void ParsePanes_keeps_the_panes_own_title_next_to_the_shared_tab_title()
+    {
+        var panes = WezTermDriver.ParsePanes(RealOutput);
+
+        Assert.Equal("~/repos/fleet", panes[0].PaneTitle);
+        Assert.Equal("~/repos/fleet", panes[0].Title);
+        Assert.Equal("claude", panes[1].PaneTitle);
+        Assert.Equal("backend", panes[1].Title);
+    }
+
+    [Fact]
+    public void SplitArgs_move_an_existing_pane_instead_of_spawning_when_asked()
+    {
+        var args = WezTermDriver.SplitArgs(
+            new SplitOptions(new PaneId("4"), SplitDirection.Right)
+            {
+                Percent = 50,
+                Cwd = "C:/ignored",
+                Args = ["ignored"],
+                MovePane = new PaneId("9"),
+            });
+
+        Assert.Equal(
+            ["split-pane", "--pane-id", "4", "--right", "--percent", "50", "--move-pane-id", "9"],
+            args);
+    }
+
+    [Fact]
+    public void SplitArgs_spawn_the_command_in_the_cwd_otherwise()
+    {
+        var args = WezTermDriver.SplitArgs(
+            new SplitOptions(new PaneId("4"), SplitDirection.Right) { Cwd = "C:/x", Args = ["nvim"] });
+
+        Assert.Equal(["split-pane", "--pane-id", "4", "--right", "--cwd", "C:/x", "--", "nvim"], args);
     }
 
     [Fact]

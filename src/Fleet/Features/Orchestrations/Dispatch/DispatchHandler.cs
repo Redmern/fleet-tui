@@ -99,19 +99,14 @@ public sealed class DispatchHandler(
 
         await mux.SetTitleAsync(pane, slug, ct).ConfigureAwait(false);
 
-        var browse = await mux.SplitAsync(
+        await mux.SplitAsync(
             new SplitOptions(pane, SplitDirection.Right)
             {
                 Percent = 50,
                 Cwd = folder,
-                Args = AgentHarness.BrowseCommand,
+                Args = AgentHarness.BrowseCommandFor(AgentPaneMatch.BrowserTitle(record)),
             },
             ct).ConfigureAwait(false);
-
-        if (!browse.IsNone)
-        {
-            await mux.SetTitleAsync(browse, $"{slug} files", ct).ConfigureAwait(false);
-        }
 
         history?.Add(command.ProjectName, prompt);
 

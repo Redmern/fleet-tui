@@ -688,6 +688,20 @@ public static class ShowDashboardView
             }
         }
 
+        void RebuildDashboard()
+        {
+            busy = true;
+
+            try
+            {
+                status.Text = callbacks.RebuildDashboard() ?? string.Empty;
+            }
+            finally
+            {
+                busy = false;
+            }
+        }
+
         void ShowLogs()
         {
             busy = true;
@@ -828,6 +842,10 @@ public static class ShowDashboardView
 
                 case FleetAction.BrowseFiles:
                     BrowseFiles();
+                    break;
+
+                case FleetAction.RebuildDashboard:
+                    RebuildDashboard();
                     break;
 
                 case FleetAction.PrevTab:

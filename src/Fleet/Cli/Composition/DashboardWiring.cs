@@ -10,6 +10,7 @@ using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.RenameAgent;
 using Fleet.Features.Agents.StopAgent;
+using Fleet.Features.Dashboard.RebuildDashboard;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Features.Orchestrations.Dispatch;
@@ -68,6 +69,7 @@ public static class DashboardWiring
         FleetAction.Refresh,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
+        FleetAction.RebuildDashboard,
         FleetAction.EditKeybinds,
         FleetAction.Close,
     ];
@@ -494,7 +496,7 @@ public static class DashboardWiring
         var stopper = new StopAgentHandler(mux, agents);
         var remover = new RemoveAgentHandler(git, mux, agents);
         var agentRenamer = new RenameAgentHandler(git, agents);
-        var subRenamer = new RenameOrchestrationHandler(agents);
+        var subRenamer = new RenameOrchestrationHandler(agents, mux);
         var repoRenamer = new RenameRepositoryHandler();
         var repositoryRemover = new RemoveRepositoryHandler(git);
         var puller = new PullRepositoryHandler(git);
@@ -615,6 +617,16 @@ public static class DashboardWiring
                         ? $"file navigator opened in {project.Root}."
                         : $"could not open {FileBrowser.Command}.")
                 : Noted(log, project.Name, HarnessTrouble.Missing(FileBrowser.Command)),
+
+            RebuildDashboard: () =>
+            {
+                var rebuilt = new RebuildDashboardHandler(mux)
+                    .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Claude)
+                    .GetAwaiter()
+                    .GetResult();
+
+                return Noted(log, project.Name, rebuilt.Succeeded ? rebuilt.Value : rebuilt.Error);
+            },
 
             ShowLogs: () => ViewLogsView.Show(
                 app,
@@ -946,9 +958,12 @@ public static class DashboardWiring
                 {
                     var panes = await mux.ListPanesAsync().ConfigureAwait(false);
 
-                    if (panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree)))
+                    if (!AgentHarness.IsOrchestrator(agent.Harness)
+                        && panes.Any(p => AgentPanes.Owns(p, agent)))
                     {
-                        return Noted(log, project.Name, $"Close {Label(agent)} before renaming it.");
+                        return Noted(
+                            log, project.Name,
+                            $"Close {Label(agent)} before renaming it; it is still running, maybe hidden.");
                     }
 
                     var typed = await FleetAsync
@@ -964,7 +979,8 @@ public static class DashboardWiring
                     {
                         var slug = OrchestrationSlug.Of(typed);
 
-                        var sub = subRenamer.Handle(project.Name, agent, slug);
+                        var sub = await subRenamer.HandleAsync(project.Name, agent, slug)
+                            .ConfigureAwait(false);
 
                         if (!sub.Succeeded)
                         {

@@ -7,4 +7,5 @@ public sealed record Pane(
     string SessionName,
     string Title,
     string Cwd,
-    bool IsActive);
+    bool IsActive,
+    string PaneTitle = "");

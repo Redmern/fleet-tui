@@ -9,4 +9,6 @@ public sealed record Invocation(
     string? Action,
     string? Text = null,
     string? Caller = null,
-    string? Status = null);
+    string? Status = null,
+    string? Title = null,
+    IReadOnlyList<string>? Tail = null);

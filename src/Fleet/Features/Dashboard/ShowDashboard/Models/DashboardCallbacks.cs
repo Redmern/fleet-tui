@@ -17,6 +17,7 @@ public sealed record DashboardCallbacks(
     Action EditSettings,
     Action ShowLogs,
     Func<string?> BrowseFiles,
+    Func<string?> RebuildDashboard,
     Func<FleetAction> TakeRequest,
     Func<AgentBoard> LoadAgents,
     Func<SubBoard> LoadSubs,

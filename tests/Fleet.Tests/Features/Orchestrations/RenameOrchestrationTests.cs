@@ -1,5 +1,8 @@
 using Fleet.Features.Orchestrations.RenameOrchestration;
+using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
+using Fleet.Ports.Mux.Enums;
+using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -60,6 +63,30 @@ public sealed class RenameOrchestrationTests : IDisposable
 
         var savedChild = Assert.Single(_store.List("proj"), a => !AgentHarness.IsOrchestrator(a.Harness));
         Assert.Equal("new-slug", savedChild.Owner);
+    }
+
+    [Fact]
+    public async Task Renaming_retitles_the_subs_open_tab_so_its_panes_stay_recognisable()
+    {
+        var mux = new FakeMuxDriver();
+        var sub = Sub("old-slug");
+        _store.Save("proj", sub);
+
+        var claude = await mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree, NewWindow = true });
+        await mux.SetTitleAsync(claude, "old-slug");
+        var browser = await mux.SplitAsync(new SplitOptions(claude, SplitDirection.Right));
+        var other = await mux.SpawnAsync(new SpawnOptions { Cwd = "C:/elsewhere", NewWindow = true });
+        await mux.SetTitleAsync(other, "dash");
+
+        var result = await new RenameOrchestrationHandler(_store, mux).HandleAsync("proj", sub, "new-slug");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal("new-slug", mux.TitleOf(claude));
+        Assert.Equal("new-slug", mux.TitleOf(browser));
+        Assert.Equal("dash", mux.TitleOf(other));
+
+        var renamed = result.Value!;
+        Assert.Contains(await mux.ListPanesAsync(), p => AgentPaneMatch.Owns(p, renamed) && p.Id == claude);
     }
 
     [Fact]
