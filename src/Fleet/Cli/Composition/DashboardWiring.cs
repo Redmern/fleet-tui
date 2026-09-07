@@ -569,7 +569,9 @@ public static class DashboardWiring
                         .ConfigureAwait(false)).Select(r => r.Path)])
                     .ConfigureAwait(false);
 
-                var request = AddRepositoryView.Show(app, project.Root, known, keymap);
+                var request = await FleetAsync
+                    .OnUi(app, () => AddRepositoryView.Show(app, project.Root, known, keymap))
+                    .ConfigureAwait(false);
 
                 if (request is null)
                 {
