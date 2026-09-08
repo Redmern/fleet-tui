@@ -664,7 +664,7 @@ In `OpenRepositoryTests.cs` add (inside the class; `Worktree`, `ProjectRoot`, `_
         var worktree = Worktree("frontend", "develop");
         await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
         var server = await _mux.SpawnAsync(new SpawnOptions { Cwd = worktree, Args = ["cmd", "/c", "npm run dev"] });
-        await _mux.SetTitleAsync(server, Fleet.Shared.Constants.FleetTabTitles.Run("frontend"));
+        await _mux.SetTitleAsync(server, FleetTabTitles.Run("frontend"));
 
         var result = await new OpenRepositoryHandler(_mux).HandleAsync(
             "techweb", "frontend", Path.Combine(ProjectRoot, "frontend"), "develop", ProjectRoot);
@@ -677,8 +677,6 @@ In `OpenRepositoryTests.cs` add (inside the class; `Worktree`, `ProjectRoot`, `_
         Assert.Contains(panes, p => p.Id != server && PathKey.Same(p.Cwd, worktree));
     }
 ```
-
-(Use `FleetTabTitles.Run("frontend")` instead of the fully qualified name once the two usings are added.)
 
 New file `tests/Fleet.Tests/Features/Agents/StopAgentTests.cs`:
 
@@ -760,7 +758,7 @@ In `RemoveAgentTests.cs`, after `The_agents_pane_is_killed_before_the_worktree_g
     }
 ```
 
-`deleteWorktree: false` because the run pane's cwd is inside the worktree; on Windows a live process there would block deletion and turn this into a filesystem test.
+`deleteWorktree: false` keeps the assertion about panes separate from git's worktree removal, which `Removing_an_agent_takes_its_worktree_with_it` already covers.
 
 In `RestoreSessionTests.cs`, after `An_agent_that_is_already_running_is_left_alone`, add:
 
@@ -780,10 +778,10 @@ In `RestoreSessionTests.cs`, after `An_agent_that_is_already_running_is_left_alo
     }
 ```
 
-- [ ] **Step 2: Run the touched classes, expect the five new tests to FAIL**
+- [ ] **Step 2: Run the touched classes, expect the six new tests to FAIL**
 
 Run: `cd C:/repos/fleet/tests/Fleet.Tests && dotnet test --filter "FullyQualifiedName~AgentPanesTests|FullyQualifiedName~OpenRepositoryTests|FullyQualifiedName~StopAgentTests|FullyQualifiedName~RemoveAgentTests|FullyQualifiedName~RestoreSessionTests" 2>&1 | grep -E "error CS|\[FAIL\]|Passed!|Failed!"`
-Expected: `Failed:     5` (the run pane is claimed, killed, or mistaken for the agent).
+Expected: `Failed:     6` (the run pane is claimed, killed, or mistaken for the agent).
 
 - [ ] **Step 3: Implement**
 
@@ -828,7 +826,7 @@ through the Ports helper that `AgentPanes` itself delegates to.
 - [ ] **Step 5: Commit**
 
 ```
-git add src/Fleet/Ports/Agents/AgentPaneMatch.cs src/Fleet/Features/Repositories/OpenRepository/OpenRepositoryHandler.cs src/Fleet/Features/Agents/StopAgent/StopAgentHandler.cs src/Fleet/Features/Agents/RemoveAgent/RemoveAgentHandler.cs src/Fleet/Features/Projects/RestoreSession/RestoreSessionHandler.cs tests/Fleet.Tests/Features/Agents tests/Fleet.Tests/Features/Repositories/OpenRepositoryTests.cs tests/Fleet.Tests/Features/Projects/RestoreSessionTests.cs && git commit -q -m "fix: run panes are never mistaken for an agent or an open repository"
+git add src/Fleet/Ports/Agents/AgentPaneMatch.cs src/Fleet/Features/Repositories/OpenRepository/OpenRepositoryHandler.cs src/Fleet/Features/Agents/StopAgent/StopAgentHandler.cs src/Fleet/Features/Agents/RemoveAgent/RemoveAgentHandler.cs src/Fleet/Features/Projects/RestoreSession/RestoreSessionHandler.cs tests/Fleet.Tests/Features/Agents/AgentPanesTests.cs tests/Fleet.Tests/Features/Agents/StopAgentTests.cs tests/Fleet.Tests/Features/Agents/RemoveAgentTests.cs tests/Fleet.Tests/Features/Repositories/OpenRepositoryTests.cs tests/Fleet.Tests/Features/Projects/RestoreSessionTests.cs && git commit -q -m "fix: run panes are never mistaken for an agent or an open repository"
 ```
 
 ---
