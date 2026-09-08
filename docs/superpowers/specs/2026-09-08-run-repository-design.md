@@ -1,6 +1,6 @@
 # Run a repository — design
 
-**Status:** approved in brainstorming, awaiting spec review.
+**Status:** approved in brainstorming, revised after spec review.
 **Date:** 2026-09-08
 **Series:** first of three. Later specs cover the browser core (headless Chromium
 driven over the DevTools protocol, exposed to agents as MCP tools) and the viewer
@@ -36,51 +36,86 @@ A repository may carry one run profile:
 | `port` | int | TCP port the server listens on. 1–65535. |
 | `path` | string | URL path appended to the host. Default `/`. Must start with `/`. |
 
-Profiles live per project in `<fleet config>/runs/<project>.json`, one file per
-project, a JSON array of profiles. A repository without a profile has no run
-profile; nothing is inferred.
+Profiles live per project in `<fleet config>/runs/<project>.json`: an object
+`{ "version": 1, "profiles": [ … ] }`, matching how the session store wraps its
+array. `FleetPaths.Runs` names the folder and `EnsureDirs` creates it. A
+repository without a profile has no run profile; nothing is inferred.
 
 The URL of a running repository is `http://localhost:<port><path>`.
 
+### The run pane and who owns it
+
+A run pane is a tab titled `FleetTabTitles.Run(repository)` = `<repository> run`.
+Its working directory is the repository's default-branch worktree, which is also
+the directory Enter opens and may be an agent's worktree. Title, not cwd, is what
+identifies it, and two existing matchers must learn to step around it:
+
+- `OpenRepositoryHandler` finds an already-open repository pane by cwd. It must
+  skip panes whose title `FleetTabTitles.IsRun(title)`, or Enter would focus the
+  dev server and never open the editor.
+- `AgentPaneMatch.Owns` claims panes by cwd too. It must return false for run
+  titles, or an agent living in that worktree would move or kill the server on
+  hide, stop and rename. `IsRun` is a suffix check on ` run`; agent titles are
+  `repo/branch-slug` and never end that way.
+
+Both live outside the new slice, so the title helpers sit in
+`Shared/Constants/FleetTabTitles` next to `Dashboard`.
+
 ### Starting
 
-Starting a repository:
+Starting a repository, given `project`, `projectRoot`, the repository choice and
+its profile:
 
-1. Loads its profile. No profile: the dashboard prompts for command and port,
-   saves the profile, and continues. Over MCP: refuse with "set a run command
-   first" (the agent has `set_run_command`).
-2. Resolves the working directory with `RepositoryWorktree.For(directory,
-   defaultBranch, Directory.Exists)`, the same directory the Repositories tab
-   opens with Enter.
-3. Refuses when a run pane for this repository already exists ("already running")
-   or when the port is already bound on localhost ("port 5173 is in use").
-4. Spawns a pane in the project's window with `Cwd` = that directory and
-   `Args` = the shell wrapper around the command, then titles its tab
-   `<repository> run`. This is the same spawn path agents use, so it works over
-   any mux driver.
+1. No profile: from the dashboard, prompt for command, port and path (path
+   prefilled `/`), save, continue; cancel does nothing. From MCP, fail: "no run
+   command for `<repo>`; set one first."
+2. Resolve the working directory with `RepositoryWorktree.For(directory,
+   defaultBranch, Directory.Exists)`. Missing: fail "`<dir>` is gone."
+3. Refuse when a run pane for this repository exists ("`<repo>` is already
+   running at `<url>`") or when the port is bound on localhost ("port `<n>` is
+   in use").
+4. Find the project window the way `OpenRepositoryHandler` does: the window of a
+   pane whose cwd is `projectRoot`. None found (an MCP call with no dashboard
+   open): spawn a new window, as `OpenAgentHandler` does.
+5. Spawn with `Cwd` = the worktree, `SessionName` = project, `Args` = the shell
+   wrapper around the command, then title the tab. Same spawn path agents use,
+   so any mux driver works.
 
 ### Stopping
 
-Kills every pane whose tab title is `<repository> run`. No pane: "not running".
-Killing the pane kills the shell and its child; that is the only process control.
+Kills every pane whose title is the run title. None: fail "`<repo>` is not
+running." Killing the pane ends the shell and its child; that is the only
+process control.
 
 ### Status
 
-`RunStatus.For(profile, panes)` is pure: it returns whether a run pane exists and,
-when a profile exists, the URL. The Repositories tab and the MCP `run_status`
-tool both call it. Nothing is stored about running state.
+`RunStatus.For(repository, profile, panes)` is pure and returns
+`(bool Running, string? Url)`: `Running` is "a run pane exists for this
+repository", `Url` is the profile's URL or null when there is no profile. Both
+the Repositories tab and `run_status` call it. Nothing is stored about running
+state.
+
+### Rename, remove, and re-setting
+
+- Rename and remove refuse while the repository is running, with the same
+  wording style as the existing "still has agents" guard.
+- Remove deletes the profile. Rename re-keys the profile to the new name.
+- "Set the run command" refuses while running ("stop `<repo>` first"), since a
+  changed port would advertise a URL the live server is not on. Empty command
+  deletes the profile.
 
 ### Surfaces
 
 **Repositories tab.** A running repository's row gets a `:5173` pill after its
-branch pill, muted like the repository name. Enter keeps opening the repository;
-running goes through the manage picker.
+branch pill, muted like the repository name. A run pane with no profile shows a
+bare `run` pill. Enter keeps opening the repository; running goes through the
+manage picker.
 
-**Manage picker** (the existing `m` chores list) gains, after "Rename":
-
-- "Run the application" when not running; "Stop the application" when running.
-- "Set the run command" — prompts for command, port and path, prefilled from the
-  current profile; empty command deletes the profile.
+**Manage picker.** `RepositoryChores.Entries(bool running)` keeps the five
+existing entries and constants and adds two stable constants: `Run` = 5, whose
+label is "Run the application" or "Stop the application" by `running`, and
+`SetRun` = 6, "Set the run command". The prompt asks command, port and path,
+prefilled from the current profile.
 
 **MCP tools** for agents, all taking `repository`:
 
@@ -91,32 +126,44 @@ running goes through the manage picker.
 | `run_status` | — | allow |
 | `set_run_command` | `command` (string, required), `port` (integer, required), `path` (string, optional) | ask |
 
-`run_status` answers with running yes/no and the URL, or "no run profile".
-Policies follow the existing settings model: they appear on the Permissions
-screen and sync to Claude's config like every other tool.
+`run_status` answers with running yes/no and the URL, or "no run profile". New
+tools go everywhere a `HarnessTool` goes: `HarnessToolIds.For`/`Parse`,
+`SettingsDefaults` (the Permissions-screen order, the allowed-by-default set, the
+label map), `McpTools.All`, `McpActions`, `ToolArguments` (`command`, `port`,
+`path`). They then appear on the Permissions screen and sync to Claude's config
+like every other tool.
 
 ## Design
 
 ### Units
 
-| Unit | Layer | Does | Depends on |
+| Unit | Location | Does | Depends on |
 |---|---|---|---|
-| `RunProfile` | Ports/Runs/Models | The record above. | — |
+| `RunProfile` | Ports/Runs/Models | The record above, plus `Url`. | — |
 | `IRunStore` | Ports/Runs | `IReadOnlyList<RunProfile> List(project)`, `Save(project, profile)`, `Remove(project, repository)`. | `RunProfile` |
-| `JsonRunStore` | Platform/Storage | File-backed `IRunStore`, source-generated JSON, atomic write like the other stores. | `FleetPaths` |
-| `ShellLine` | Shared | `Command(bool windows, string line)` → `["cmd","/c",line]` or `["sh","-c",line]`. | — |
-| `RunPanes` | Features/Repositories/RunRepository | `Title(repository)` = `<repository> run`; `Owns(pane, repository)` by tab title. | `Pane` |
-| `RunStatus` | Features/Repositories/RunRepository | Pure: `For(profile, panes)` → `(bool Running, string? Url)`. | `RunPanes` |
-| `PortProbe` | Features/Repositories/RunRepository | `InUse(port)` via `IPGlobalProperties.GetActiveTcpListeners()`; injectable `Func<int,bool>` for tests. | .NET |
-| `RunRepositoryHandler` | same slice | Steps 1–4 above. Returns `Result<string>` with the URL. | `IMuxDriver`, `IRunStore`, `PortProbe` |
+| `JsonRunStore` | Platform/Storage | File-backed `IRunStore`; `RunsFile` DTO in `FleetJsonContext`; lock-guarded atomic replace like the session store. | `FleetPaths` |
+| `FleetTabTitles.Run`, `IsRun` | Shared/Constants | Run tab title and its test. | — |
+| `ShellLine.Command(bool windows, string line)` | Shared | `["cmd","/c",line]` or `["sh","-c",line]`. `EnvLaunch.Wrap` adopts it so the rule lives once. | — |
+| `RunPanes.Owns(pane, repository)` | Features/Repositories (area root) | Title match. | `FleetTabTitles` |
+| `RunStatus.For(repository, profile, panes)` | Features/Repositories (area root) | Pure status, see above. | `RunPanes` |
+| `RunRepositoryHandler` | Features/Repositories/RunRepository | Steps 1–5. `Result<string>` with the URL. | `IMuxDriver`, `IRunStore`, `Func<int,bool>` port probe, `bool windows` |
 | `StopRunHandler` | same slice | Kills owned panes. | `IMuxDriver` |
-| `SetRunCommandHandler` | same slice | Validates and saves or removes a profile. | `IRunStore` |
-| `RunPrompt` | same slice | Dashboard form: command, port, path → `RunProfile`. Uses `FleetPrompt`/`FleetRows` like `AddRepositoryView`. | Ui |
-| MCP wiring | Features/Mcp, Shared/Settings, Cli/Composition | Four `HarnessTool` values, ids, specs, default rules, `McpActions` cases. | handlers |
-| Dashboard wiring | Cli/Composition, Features/Repositories | Chore entries, `ManageRepository` cases, row pill. | handlers, `RunStatus` |
+| `SetRunCommandHandler` | same slice | Validates; saves or removes; refuses while running. | `IRunStore`, panes |
+| `PortProbe.InUse(port)` | same slice | `IPGlobalProperties.GetActiveTcpListeners()`; the handler takes it as `Func<int,bool>` so tests never touch the network. | .NET |
+| `RunPrompt` | same slice | Dashboard form: command, port, path → `RunProfile`, built like `AddRepositoryView`. | Ui |
+| Composition | Cli/Composition | Wires handlers, evaluates `RunStatus` per row, passes `OperatingSystem.IsWindows()`. | all above |
 
-Each handler takes what it needs in its constructor and is tested against
-`FakeMuxDriver` and an in-memory `IRunStore`, the same way agent handlers are.
+One slice holds three handlers. That departs from the one-behaviour-per-folder
+habit (`StopAgent`, `RemoveAgent` are separate) because the three share the
+profile and pane rules and nothing else uses them; stated here so nobody splits
+it by reflex later.
+
+### Row data flow
+
+`DashboardRows.ForRepositories` sits in the `Dashboard/ShowDashboard` slice and
+cannot call `RunStatus`. It gains a `Func<RepositoryChoice, string?> runPill`
+argument; the composition root evaluates `RunStatus` against the panes it
+already lists for the bar state and returns `:5173`, `run`, or null.
 
 ### Validation (in `SetRunCommandHandler`)
 
@@ -136,6 +183,8 @@ Each handler takes what it needs in its constructor and is tested against
 | Worktree missing | handler | Fail: "`<dir>` is gone." |
 | Mux did not respond | handler | Fail with the existing "multiplexer did not respond" text. |
 | Stop with no pane | `StopRunHandler` | Fail: "`<repo>` is not running." |
+| Set while running | `SetRunCommandHandler` | Fail: "stop `<repo>` first." |
+| Rename or remove while running | existing handlers' wiring | Fail: "`<repo>` is running; stop it first." |
 
 Every result is logged through `Noted` like the other repository actions.
 
@@ -146,24 +195,38 @@ agent store's rule: lock-guarded, atomic replace. Two concurrent starts race on
 the pane check; the loser's spawn creates a second pane. Acceptable for v1:
 "Stop" kills all owned panes, and the port check catches most of it.
 
+### Assumptions
+
+- The mux domain is the local OS. Over an ssh domain the shell wrapper would be
+  the remote's; not handled.
+- wezterm's default `exit_behavior` closes a pane when its process exits. A
+  config that holds dead panes open would report a dead server as running.
+
 ## Testing
 
-- `RunStatusTests`: pure cases — no profile, profile not running, running.
-- `RunRepositoryTests`: spawns in the worktree with the shell wrapper and titles
-  the tab; refuses when running, when the port is bound, when no profile.
+- `RunStatusTests`: no profile and no pane; profile, not running; running with
+  URL; pane without profile.
+- `RunRepositoryTests`: spawns in the worktree with the shell wrapper, in the
+  project window, titled; new window when none; refuses when running, when the
+  port is bound, when no profile, when the worktree is gone.
 - `StopRunTests`: kills all owned panes; fails when none.
-- `SetRunCommandTests`: validation table; empty command removes.
+- `SetRunCommandTests`: validation table; empty command removes; refuses while
+  running.
 - `JsonRunStoreTests`: round trip, missing file, atomic overwrite.
-- `RepositoryChoresTests`: new entries and their order.
-- `DashboardRowsTests`: pill appears only when running.
+- `OpenRepositoryTests`: a run pane in the worktree is not "already open".
+- `AgentPanesTests`: a run-titled pane is never an agent's.
+- `RepositoryChoresTests`: seven entries, label follows `running`, constants stable.
+- `DashboardRowsTests`: pill from `runPill`, absent when null.
 - `McpToolsTests` / `HarnessToolIdsTests`: specs and id round trips.
-- Architecture tests already enforce slice boundaries and no comments; the new
-  slice is `Features/Repositories/RunRepository`.
+- Architecture tests already enforce slice boundaries and no comments.
 
 ## Verify before coding
 
 - `IPGlobalProperties.GetActiveTcpListeners()` under NativeAOT on both OSes.
-- `sh -c` is present on the Linux targets the installer supports (it is; POSIX).
+- A command line with quotes, e.g. `dotnet run --urls "http://localhost:5000"`,
+  survives `wezterm cli spawn -- cmd /c <line>`; cmd's quote stripping is the risk.
+- Killing the pane ends the child on Windows (ConPTY close) and under `sh -c`
+  with `&&` on Linux, where `sh` stays the parent.
 
 ## Open for later specs
 
