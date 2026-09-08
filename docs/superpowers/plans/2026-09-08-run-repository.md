@@ -1200,10 +1200,14 @@ Note: when the worktree directory does not exist, `RepositoryWorktree.For` falls
 
 - [ ] **Step 3: Implement**
 
-`src/Fleet/Features/Repositories/RunRepository/PortProbe.cs`:
+`src/Fleet/Features/Repositories/RunRepository/PortProbe.cs` — a bind attempt on the
+loopback address. Plain sockets, no `/proc` parsing, no reflection: identical on
+Windows and Linux and safe under NativeAOT. A server bound to any address on that
+port makes the bind fail, which is exactly "in use".
 
 ```csharp
-using System.Net.NetworkInformation;
+using System.Net;
+using System.Net.Sockets;
 
 namespace Fleet.Features.Repositories.RunRepository;
 
@@ -1211,15 +1215,21 @@ public static class PortProbe
 {
     public static bool InUse(int port)
     {
+        var listener = new TcpListener(IPAddress.Loopback, port);
+
         try
         {
-            return IPGlobalProperties.GetIPGlobalProperties()
-                .GetActiveTcpListeners()
-                .Any(e => e.Port == port);
-        }
-        catch (Exception e) when (e is NetworkInformationException or PlatformNotSupportedException or IOException)
-        {
+            listener.Start();
+
             return false;
+        }
+        catch (SocketException)
+        {
+            return true;
+        }
+        finally
+        {
+            listener.Stop();
         }
     }
 }
@@ -1495,8 +1505,8 @@ The existing `Every_configurable_tool_is_exposed_over_mcp` and `Every_tool_has_a
             HarnessTool.SetRunCommand,
             "Set how a repository's application starts: shell command, port, optional URL path. Empty command removes it.",
             Repository,
-            new ToolParam(ToolArguments.Command, "string", "One shell line, e.g. npm run dev.", true),
-            new ToolParam(ToolArguments.Port, "integer", "The TCP port it listens on.", true),
+            new ToolParam(ToolArguments.Command, "string", "One shell line, e.g. npm run dev. Empty removes the profile.", true),
+            new ToolParam(ToolArguments.Port, "integer", "The TCP port it listens on. Required unless command is empty.", true),
             new ToolParam(ToolArguments.Path, "string", "URL path, default /.", false)),
 ```
 
@@ -1584,12 +1594,21 @@ Methods (next to `PullRepository`):
 
     private async Task<McpResult> SetRunCommand(McpRequest request, CancellationToken ct)
     {
-        if (Missing(request, ToolArguments.Repository, ToolArguments.Port) is { } error)
+        if (Missing(request, ToolArguments.Repository) is { } error)
         {
             return error;
         }
 
-        var repo = await Resolve(request, ct).ConfigureAwait(false);
+        var command = ToolArguments.Text(request, ToolArguments.Command);
+
+        if (command.Length > 0 && Missing(request, ToolArguments.Port) is { } noPort)
+        {
+            return noPort;
+        }
+
+        var summaries = await _repos.HandleAsync(root, ct).ConfigureAwait(false);
+        var repo = summaries.FirstOrDefault(s =>
+            string.Equals(s.Name, Repo(request), StringComparison.OrdinalIgnoreCase));
 
         if (repo is null)
         {
@@ -1598,20 +1617,19 @@ Methods (next to `PullRepository`):
 
         var port = ToolArguments.Count(request, ToolArguments.Port, 0);
         var path = ToolArguments.Text(request, ToolArguments.Path);
-        var names = (await _repos.HandleAsync(root, ct).ConfigureAwait(false)).Select(r => r.Name).ToList();
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
         var set = _runSetter.Handle(
             project,
-            names,
+            summaries.Select(s => s.Name).ToList(),
             panes,
-            new RunProfile(repo.Name, ToolArguments.Text(request, ToolArguments.Command), port, path));
+            new RunProfile(repo.Name, command, port, path));
 
         return set.Succeeded ? Ok(set.Value) : McpResult.Error(set.Error!);
     }
 ```
 
-`command` is deliberately not in the `Missing` check: an empty command means "remove", handled by the handler.
+`command` is not required: an empty command means "remove", and then `port` is not required either. Both rules are stated in the tool description so agents do not send dummy ports. The repository list is fetched once and reused for the existence check.
 
 `McpWiring.cs`: pass `Adapters.Runs(),` after `Adapters.Agents(),`.
 
@@ -1718,14 +1736,18 @@ public static class RepositoryChores
 }
 ```
 
-The wiring call site `FleetPicker.Choose(app, repository.Name, RepositoryChores.Entries, keymap)` in `DashboardWiring.cs` will not compile until Task 12; to keep this commit green, change it now to `RepositoryChores.Entries(false)` and let Task 12 replace it with the real state.
+Three other call sites use `Entries` as a property and must change in the same commit:
+
+- `src/Fleet/Cli/Composition/DashboardWiring.cs`: `FleetPicker.Choose(app, repository.Name, RepositoryChores.Entries, keymap)` → `RepositoryChores.Entries(false)` for now; Task 12 passes the real state.
+- `tests/Fleet.Tests/Features/Repositories/RenameRepositoryTests.cs` (`The_manage_menu_offers_rename`): both `RepositoryChores.Entries` → `RepositoryChores.Entries(false)`.
+- `tests/Fleet.Tests/Features/Repositories/SecretsTests.cs` (`The_manage_menu_offers_secrets_with_its_own_key`): `Entries` → `Entries(false)` and the expected keys become `["b", "p", "r", "s", "e", "u", "c"]`.
 
 - [ ] **Step 4: Run the full suite. Expected: green.**
 
 - [ ] **Step 5: Commit**
 
 ```
-git add src/Fleet/Features/Repositories/RepositoryChores.cs src/Fleet/Cli/Composition/DashboardWiring.cs tests/Fleet.Tests/Features/Repositories/RepositoryChoresTests.cs && git commit -q -m "feat: manage picker offers run/stop and the run command editor"
+git add src/Fleet/Features/Repositories/RepositoryChores.cs src/Fleet/Cli/Composition/DashboardWiring.cs tests/Fleet.Tests/Features/Repositories/RepositoryChoresTests.cs tests/Fleet.Tests/Features/Repositories/RenameRepositoryTests.cs tests/Fleet.Tests/Features/Repositories/SecretsTests.cs && git commit -q -m "feat: manage picker offers run/stop and the run command editor"
 ```
 
 ### Task 11: Row pill through the callbacks
@@ -1823,7 +1845,11 @@ git add src/Fleet/Features/Dashboard tests/Fleet.Tests/Features/Dashboard/Dashbo
 - Modify: `src/Fleet/Cli/Commands/DashCommand.cs`, `src/Fleet/Cli/Commands/MenuCommand.cs` (pass `Adapters.Runs()`)
 - Modify: `src/Fleet/Cli/Composition/McpActions.cs` (remove path: refuse while running, delete profile)
 
-No unit tests cover `Cli/Composition` (it is composition). `UiThreadTests` and `SliceBoundaryTests` still apply: every modal opened after an `await` must go through `FleetAsync.OnUi`.
+No unit tests cover `Cli/Composition` (it is composition). `UiThreadTests` and `SliceBoundaryTests` still apply: every modal opened after an `await` must go through `FleetAsync.OnUi`. `UiThreadTests` only knows `FleetPrompt.*`, `*View.Show`, `FleetPicker`, `FleetDialog`; `RunPrompt.Show` would slip past it, so Step 0 widens the pattern first.
+
+- [ ] **Step 0: Teach UiThreadTests about `*Prompt.Show`**
+
+In `tests/Fleet.Tests/Architecture/UiThreadTests.cs` change the `UiCall` regex alternation `FleetPrompt\.\w+` to `\w+Prompt\.\w+`. Run the suite: still green (nothing calls a `*Prompt` after an await yet). Commit: `git add tests/Fleet.Tests/Architecture/UiThreadTests.cs && git commit -q -m "test: any *Prompt.Show after an await must run on the UI thread"`.
 
 - [ ] **Step 1: RunPrompt**
 
@@ -1909,7 +1935,7 @@ In `DashboardWiring.For`:
             },
 ```
 
-`barPanes` is the pane list `WithBarState` refreshes; it is already in scope and refreshed every 300 ms by `LoadAgents`/`LoadSubs`, which run in the same `RefreshAsync` as `LoadRepositories`.
+`barPanes` is the pane list `WithBarState` refreshes for `LoadAgents`/`LoadSubs`. `RefreshAsync` builds the repository rows before it calls `LoadAgents`, so the pill reads the previous cycle's panes: null on the very first paint, and one refresh behind a start or stop. The dashboard refreshes every heartbeat, so this is a blink, not a bug; accepted.
 
 4. `ManageRepository`: the picker now needs the state:
 
@@ -1985,20 +2011,30 @@ Then add, before the `if (picked != RepositoryChores.DefaultBranch)` line:
 with a local helper next to `ProfileOf`:
 
 ```csharp
-        List<string> RepositoryNames() =>
-            repositories.HandleAsync(project.Root).GetAwaiter().GetResult().Select(r => r.Name).ToList();
+        async Task<List<string>> RepositoryNamesAsync() =>
+            (await repositories.HandleAsync(project.Root).ConfigureAwait(false)).Select(r => r.Name).ToList();
 ```
 
-5. Guards. In the `Rename` branch, before the `owned` check, and in `RemoveRepository` before the `owned` check:
+and both `runSetter.Handle(project.Name, RepositoryNames(), panes, wanted)` calls written as
+`runSetter.Handle(project.Name, await RepositoryNamesAsync().ConfigureAwait(false), panes, wanted)`.
+
+5. Guards. In the `Rename` branch (inside `ManageRepository`, where `running` is already computed), before the `owned` check:
+
+```csharp
+                    if (running)
+                    {
+                        return new RepositoryManaged($"{repository.Name} is running; stop it first.");
+                    }
+```
+
+In `RemoveRepository`, before the `owned` check:
 
 ```csharp
                 if (IsRunning(repository.Name, await mux.ListPanesAsync().ConfigureAwait(false)))
                 {
-                    return new RepositoryManaged($"{repository.Name} is running; stop it first.");
+                    return $"{repository.Name} is running; stop it first.";
                 }
-```
-
-(In `RemoveRepository` the callback returns `string?`, so return the string directly.) After a successful remove: `runs.Remove(project.Name, repository.Name);`. After a successful rename: if `ProfileOf(repository.Name)` is `{ } old`, `runs.Remove(project.Name, repository.Name); runs.Save(project.Name, old with { Repository = name.Trim() });`.
+``` After a successful remove: `runs.Remove(project.Name, repository.Name);`. After a successful rename: if `ProfileOf(repository.Name)` is `{ } old`, `runs.Remove(project.Name, repository.Name); runs.Save(project.Name, old with { Repository = name.Trim() });`.
 
 6. `McpActions.RemoveRepository`: before `_repoRemover.Handle`, list panes and refuse with `McpResult.Error($"{repo.Name} is running; stop it first.")` when `RunPanes.Owns` matches; after success call `runs.Remove(project, repo.Name)`.
 
@@ -2020,9 +2056,9 @@ Run in PowerShell: `& C:\repos\fleet\install.ps1` (adds vswhere to PATH itself).
 
 Open a scratch project's dash (see memory note "Scratch project for side effects"). On the Repositories tab press `m` on a repo: pick "run", enter `cmd /c "timeout /t 60"` style command (Windows) with port 5199, path `/`. Expect: a tab `<repo> run` appears in the project window, the row shows `:5199`, `m` now offers "stop". Press `m`, "stop": tab closes, pill gone. Press Enter on the repo while running: nvim opens, the run tab is untouched.
 
-- [ ] **Step 3: Verify the two "verify before coding" items and record them**
+- [ ] **Step 3: Verify the "verify before coding" items and record them**
 
-Run `fleet doctor`? No: instead, from an agent pane call `run_status` via Claude to confirm the tools are listed. Then append a "Verified" section to the spec noting: port probe works under AOT (the installed binary refused a bound port), quotes survive `cmd /c` (test with `dotnet run --urls "http://localhost:5199"` or `python -c "print(\"x\")"`), killing the pane ended the child (check Task Manager for the process). Commit the spec update.
+From an agent pane, ask its Claude to call `run_status` to confirm the tools are listed. Then append a "Verified" section to the spec noting: the installed binary refused a bound port (start the run twice), quotes survive `cmd /c` (use `python -c "print(\"x\"); import time; time.sleep(60)"` as the command), and killing the pane ended the child (the `python` process is gone from Task Manager after "stop"). Commit the spec update.
 
 - [ ] **Step 4: Final commit if anything changed**
 

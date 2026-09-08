@@ -133,7 +133,7 @@ command, port and path, prefilled from the current profile.
 | `run_repository` | — | allow |
 | `stop_run` | — | allow |
 | `run_status` | — | allow |
-| `set_run_command` | `command` (string, required), `port` (integer, required), `path` (string, optional) | ask |
+| `set_run_command` | `command` (string; empty removes the profile), `port` (integer; required unless `command` is empty), `path` (string, optional) | ask |
 
 `run_status` answers with running yes/no and the URL, or "no run profile". New
 tools go everywhere a `HarnessTool` goes: `HarnessToolIds.For`/`Parse`,
@@ -158,7 +158,7 @@ like every other tool.
 | `RunRepositoryHandler` | Features/Repositories/RunRepository | Steps 1–5. `Result<string>` with the URL. | `IMuxDriver`, `IRunStore`, `Func<int,bool>` port probe, `bool windows` |
 | `StopRunHandler` | same slice | Kills owned panes. | `IMuxDriver` |
 | `SetRunCommandHandler` | same slice | `Handle(project, repositories, panes, profile)`: validates; saves or removes; refuses while running. | `IRunStore`; panes passed in |
-| `PortProbe.InUse(port)` | same slice | `IPGlobalProperties.GetActiveTcpListeners()`; the handler takes it as `Func<int,bool>` so tests never touch the network. | .NET |
+| `PortProbe.InUse(port)` | same slice | A loopback `TcpListener` bind attempt; `SocketException` means in use. The handler takes it as `Func<int,bool>` so tests never touch the network. | .NET |
 | `RunPrompt` | same slice | Dashboard form: command, port, path → `RunProfile`, built like `AddRepositoryView`. | Ui |
 | Composition | Cli/Composition | Wires handlers, evaluates `RunStatus` per row, passes `OperatingSystem.IsWindows()`. | all above |
 
@@ -236,7 +236,6 @@ the pane check; the loser's spawn creates a second pane. Acceptable for v1:
 
 ## Verify before coding
 
-- `IPGlobalProperties.GetActiveTcpListeners()` under NativeAOT on both OSes.
 - A command line with quotes, e.g. `dotnet run --urls "http://localhost:5000"`,
   survives `wezterm cli spawn -- cmd /c <line>`; cmd's quote stripping is the risk.
 - Killing the pane ends the child on Windows (ConPTY close) and under `sh -c`
