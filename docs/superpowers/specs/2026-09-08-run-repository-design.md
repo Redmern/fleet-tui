@@ -1,6 +1,6 @@
 # Run a repository — design
 
-**Status:** approved in brainstorming, revised after spec review.
+**Status:** approved in brainstorming; spec review passed on the second pass.
 **Date:** 2026-09-08
 **Series:** first of three. Later specs cover the browser core (headless Chromium
 driven over the DevTools protocol, exposed to agents as MCP tools) and the viewer
@@ -98,8 +98,10 @@ state.
 ### Rename, remove, and re-setting
 
 - Rename and remove refuse while the repository is running, with the same
-  wording style as the existing "still has agents" guard.
-- Remove deletes the profile. Rename re-keys the profile to the new name.
+  wording style as the existing "still has agents" guard. The refusal, the
+  profile deletion on remove and the re-key on rename live in the wiring next to
+  the existing handlers, in both `DashboardWiring` and the MCP
+  `remove_repository` path in `McpActions`.
 - "Set the run command" refuses while running ("stop `<repo>` first"), since a
   changed port would advertise a URL the live server is not on. Empty command
   deletes the profile.
@@ -111,11 +113,13 @@ branch pill, muted like the repository name. A run pane with no profile shows a
 bare `run` pill. Enter keeps opening the repository; running goes through the
 manage picker.
 
-**Manage picker.** `RepositoryChores.Entries(bool running)` keeps the five
-existing entries and constants and adds two stable constants: `Run` = 5, whose
-label is "Run the application" or "Stop the application" by `running`, and
-`SetRun` = 6, "Set the run command". The prompt asks command, port and path,
-prefilled from the current profile.
+**Manage picker.** `RepositoryChores.Choices(bool running)` and
+`Entries(bool running)` keep the five existing entries and constants and add two
+stable constants: `Run` = 5, whose label is "Run the application" or "Stop the
+application" by `running`, and `SetRun` = 6, "Edit the run command". `PickerKeys`
+derives hotkeys from labels in order, so the labels are chosen to yield the same
+hotkeys in both states; `RepositoryChoresTests` asserts that. The prompt asks
+command, port and path, prefilled from the current profile.
 
 **MCP tools** for agents, all taking `repository`:
 
@@ -148,7 +152,7 @@ like every other tool.
 | `RunStatus.For(repository, profile, panes)` | Features/Repositories (area root) | Pure status, see above. | `RunPanes` |
 | `RunRepositoryHandler` | Features/Repositories/RunRepository | Steps 1–5. `Result<string>` with the URL. | `IMuxDriver`, `IRunStore`, `Func<int,bool>` port probe, `bool windows` |
 | `StopRunHandler` | same slice | Kills owned panes. | `IMuxDriver` |
-| `SetRunCommandHandler` | same slice | Validates; saves or removes; refuses while running. | `IRunStore`, panes |
+| `SetRunCommandHandler` | same slice | `Handle(project, repositories, panes, profile)`: validates; saves or removes; refuses while running. | `IRunStore`; panes passed in |
 | `PortProbe.InUse(port)` | same slice | `IPGlobalProperties.GetActiveTcpListeners()`; the handler takes it as `Func<int,bool>` so tests never touch the network. | .NET |
 | `RunPrompt` | same slice | Dashboard form: command, port, path → `RunProfile`, built like `AddRepositoryView`. | Ui |
 | Composition | Cli/Composition | Wires handlers, evaluates `RunStatus` per row, passes `OperatingSystem.IsWindows()`. | all above |
@@ -162,7 +166,9 @@ it by reflex later.
 
 `DashboardRows.ForRepositories` sits in the `Dashboard/ShowDashboard` slice and
 cannot call `RunStatus`. It gains a `Func<RepositoryChoice, string?> runPill`
-argument; the composition root evaluates `RunStatus` against the panes it
+argument. `ShowDashboardView` calls `ForRepositories`, so the function rides
+`DashboardCallbacks` as `RepositoryRunPill`, beside `RepositoryState`; the
+composition root implements it by evaluating `RunStatus` against the panes it
 already lists for the bar state and returns `:5173`, `run`, or null.
 
 ### Validation (in `SetRunCommandHandler`)
@@ -206,9 +212,10 @@ the pane check; the loser's spawn creates a second pane. Acceptable for v1:
 
 - `RunStatusTests`: no profile and no pane; profile, not running; running with
   URL; pane without profile.
-- `RunRepositoryTests`: spawns in the worktree with the shell wrapper, in the
-  project window, titled; new window when none; refuses when running, when the
-  port is bound, when no profile, when the worktree is gone.
+- `RunRepositoryTests`: spawns in the worktree with the shell wrapper and no
+  `Env` (the driver would wrap the shell line a second time), in the project
+  window, titled; new window when none; refuses when running, when the port is
+  bound, when no profile, when the worktree is gone.
 - `StopRunTests`: kills all owned panes; fails when none.
 - `SetRunCommandTests`: validation table; empty command removes; refuses while
   running.
