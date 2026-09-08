@@ -1445,7 +1445,7 @@ In `McpToolsTests` add:
 
         Assert.Contains(spec.Params, p => p.Name == "repository" && p.Required);
         Assert.Contains(spec.Params, p => p.Name == "command" && p.Required && p.Type == "string");
-        Assert.Contains(spec.Params, p => p.Name == "port" && p.Required && p.Type == "integer");
+        Assert.Contains(spec.Params, p => p.Name == "port" && !p.Required && p.Type == "integer");
         Assert.Contains(spec.Params, p => p.Name == "path" && !p.Required);
     }
 
@@ -1504,7 +1504,7 @@ The existing `Every_configurable_tool_is_exposed_over_mcp` and `Every_tool_has_a
             "Set how a repository's application starts: shell command, port, optional URL path. Empty command removes it.",
             Repository,
             new ToolParam(ToolArguments.Command, "string", "One shell line, e.g. npm run dev. Empty removes the profile.", true),
-            new ToolParam(ToolArguments.Port, "integer", "The TCP port it listens on. Required unless command is empty.", true),
+            new ToolParam(ToolArguments.Port, "integer", "The TCP port it listens on. Required unless command is empty.", false),
             new ToolParam(ToolArguments.Path, "string", "URL path, default /.", false)),
 ```
 
@@ -1972,7 +1972,8 @@ Then add, before the `if (picked != RepositoryChores.DefaultBranch)` line:
                             return RepositoryManaged.Nothing;
                         }
 
-                        var set = runSetter.Handle(project.Name, RepositoryNames(), panes, wanted);
+                        var set = runSetter.Handle(
+                            project.Name, await RepositoryNamesAsync().ConfigureAwait(false), panes, wanted);
 
                         if (!set.Succeeded)
                         {
@@ -2000,7 +2001,8 @@ Then add, before the `if (picked != RepositoryChores.DefaultBranch)` line:
                         return RepositoryManaged.Nothing;
                     }
 
-                    var set = runSetter.Handle(project.Name, RepositoryNames(), panes, wanted);
+                    var set = runSetter.Handle(
+                        project.Name, await RepositoryNamesAsync().ConfigureAwait(false), panes, wanted);
 
                     return new RepositoryManaged(Noted(log, project.Name, set.Succeeded ? set.Value : set.Error));
                 }
@@ -2013,8 +2015,6 @@ with a local helper next to `ProfileOf`:
             (await repositories.HandleAsync(project.Root).ConfigureAwait(false)).Select(r => r.Name).ToList();
 ```
 
-and both `runSetter.Handle(project.Name, RepositoryNames(), panes, wanted)` calls written as
-`runSetter.Handle(project.Name, await RepositoryNamesAsync().ConfigureAwait(false), panes, wanted)`.
 
 5. Guards. In the `Rename` branch (inside `ManageRepository`, where `running` is already computed), before the `owned` check:
 
@@ -2032,7 +2032,8 @@ In `RemoveRepository`, before the `owned` check:
                 {
                     return $"{repository.Name} is running; stop it first.";
                 }
-``` After a successful remove: `runs.Remove(project.Name, repository.Name);`. After a successful rename: if `ProfileOf(repository.Name)` is `{ } old`, `runs.Remove(project.Name, repository.Name); runs.Save(project.Name, old with { Repository = name.Trim() });`.
+```
+ After a successful remove: `runs.Remove(project.Name, repository.Name);`. After a successful rename: if `ProfileOf(repository.Name)` is `{ } old`, `runs.Remove(project.Name, repository.Name); runs.Save(project.Name, old with { Repository = name.Trim() });`.
 
 6. `McpActions.RemoveRepository`: before `_repoRemover.Handle`, list panes and refuse with `McpResult.Error($"{repo.Name} is running; stop it first.")` when `RunPanes.Owns` matches; after success call `runs.Remove(project, repo.Name)`.
 
