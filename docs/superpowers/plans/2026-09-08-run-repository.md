@@ -66,7 +66,7 @@ public class FleetTabTitlesTests
 - [ ] **Step 2: Run it, expect a compile failure**
 
 Run: `cd C:/repos/fleet/tests/Fleet.Tests && dotnet test --filter "FullyQualifiedName~FleetTabTitlesTests" 2>&1 | grep -E "error CS|Passed!|Failed!"`
-Expected: `error CS0117: 'FleetTabTitles' does not contain a definition for 'Run'`
+Expected: two `error CS0117` lines, `'FleetTabTitles' does not contain a definition for 'Run'` and one for `'IsRun'`
 
 - [ ] **Step 3: Implement**
 
@@ -623,13 +623,25 @@ public sealed record RunStatus(bool Running, string? Url)
 git add src/Fleet/Features/Repositories/RunPanes.cs src/Fleet/Features/Repositories/RunStatus.cs tests/Fleet.Tests/Features/Repositories/RunStatusTests.cs && git commit -q -m "feat: run status is derived from live panes by tab title"
 ```
 
-### Task 5: The two cwd matchers skip run panes
+### Task 5: Every cwd matcher skips run panes
 
 **Files:**
 - Modify: `src/Fleet/Ports/Agents/AgentPaneMatch.cs`
 - Modify: `src/Fleet/Features/Repositories/OpenRepository/OpenRepositoryHandler.cs`
+- Modify: `src/Fleet/Features/Agents/StopAgent/StopAgentHandler.cs`
+- Modify: `src/Fleet/Features/Agents/RemoveAgent/RemoveAgentHandler.cs` (`StopAsync`)
+- Modify: `src/Fleet/Features/Projects/RestoreSession/RestoreSessionHandler.cs` (`Wanted`)
 - Test: `tests/Fleet.Tests/Features/Agents/AgentPanesTests.cs` (add one test)
-- Test: `tests/Fleet.Tests/Features/Repositories/OpenRepositoryTests.cs` (add one test)
+- Test: `tests/Fleet.Tests/Features/Repositories/OpenRepositoryTests.cs` (add one test; add `using Fleet.Shared;` and `using Fleet.Shared.Constants;`)
+- Test: `tests/Fleet.Tests/Features/Agents/StopAgentTests.cs` (create)
+- Test: `tests/Fleet.Tests/Features/Agents/RemoveAgentTests.cs` (add one test)
+- Test: `tests/Fleet.Tests/Features/Projects/RestoreSessionTests.cs` (add one test)
+
+Five places match an agent's pane by cwd alone. Hide and open already go through
+`AgentPaneMatch.Owns`; stop, remove and restore-session do not. All five must
+ignore a run pane, otherwise stopping an agent on the default branch kills the
+dev server, and restoring a session thinks the agent is open when only the
+server is.
 
 - [ ] **Step 1: Add the failing tests**
 
@@ -662,11 +674,116 @@ In `OpenRepositoryTests.cs` add (inside the class; `Worktree`, `ProjectRoot`, `_
         var panes = await _mux.ListPanesAsync();
 
         Assert.Equal(3, panes.Count);
-        Assert.Contains(panes, p => p.Id != server && Fleet.Shared.PathKey.Same(p.Cwd, worktree));
+        Assert.Contains(panes, p => p.Id != server && PathKey.Same(p.Cwd, worktree));
     }
 ```
 
-- [ ] **Step 2: Run both test classes, expect the two new tests to FAIL** (agent claims the run pane; Enter focuses the server instead of spawning).
+(Use `FleetTabTitles.Run("frontend")` instead of the fully qualified name once the two usings are added.)
+
+New file `tests/Fleet.Tests/Features/Agents/StopAgentTests.cs`:
+
+```csharp
+using Fleet.Features.Agents.StopAgent;
+using Fleet.Platform.Mux.Fake;
+using Fleet.Ports.Agents;
+using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux.Models;
+using Fleet.Shared;
+using Fleet.Shared.Constants;
+
+namespace Fleet.Tests.Features.Agents;
+
+public class StopAgentTests
+{
+    private readonly FakeMuxDriver _mux = new();
+
+    private readonly RecordingStore _store = new();
+
+    private static readonly AgentRecord Agent = new(
+        "C:/repos/techweb/backend/develop", "backend", "develop", AgentHarness.Nvim,
+        "origin/develop", true, Hidden: false, Open: true);
+
+    [Fact]
+    public async Task Stopping_kills_the_agents_pane_but_spares_a_run_pane_in_the_same_worktree()
+    {
+        var editor = await _mux.SpawnAsync(new SpawnOptions { Cwd = Agent.Worktree, NewWindow = true });
+        await _mux.SetTitleAsync(editor, AgentTitle.For(Agent.Repository, Agent.Branch));
+        var server = await _mux.SpawnAsync(new SpawnOptions { Cwd = Agent.Worktree, NewWindow = true });
+        await _mux.SetTitleAsync(server, FleetTabTitles.Run("backend"));
+
+        var result = await new StopAgentHandler(_mux, _store).HandleAsync("techweb", Agent);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal([server], (await _mux.ListPanesAsync()).Select(p => p.Id));
+        Assert.False(Assert.Single(_store.Saved).Open);
+    }
+
+    [Fact]
+    public async Task A_hidden_pane_titled_after_the_agent_counts_as_running_even_when_its_cwd_is_blank()
+    {
+        var hidden = await _mux.SpawnAsync(new SpawnOptions { Cwd = string.Empty, NewWindow = true });
+        await _mux.SetTitleAsync(hidden, AgentTitle.For(Agent.Repository, Agent.Branch));
+
+        var result = await new StopAgentHandler(_mux, _store).HandleAsync("techweb", Agent);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Empty(await _mux.ListPanesAsync());
+    }
+
+    private sealed class RecordingStore : IAgentStore
+    {
+        public List<AgentRecord> Saved { get; } = [];
+
+        public void Save(string project, AgentRecord agent) => Saved.Add(agent);
+
+        public IReadOnlyList<AgentRecord> List(string project) => Saved;
+
+        public void Remove(string project, string worktree) { }
+    }
+}
+```
+
+In `RemoveAgentTests.cs`, after `The_agents_pane_is_killed_before_the_worktree_goes`, add:
+
+```csharp
+    [Fact]
+    public async Task A_run_pane_in_the_agents_worktree_survives_the_removal()
+    {
+        var agent = await AgentAsync();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var server = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        await _mux.SetTitleAsync(server, FleetTabTitles.Run(agent.Repository));
+
+        await Handler().HandleAsync("techweb", agent, deleteWorktree: false);
+
+        Assert.Equal([server], (await _mux.ListPanesAsync()).Select(p => p.Id));
+    }
+```
+
+`deleteWorktree: false` because the run pane's cwd is inside the worktree; on Windows a live process there would block deletion and turn this into a filesystem test.
+
+In `RestoreSessionTests.cs`, after `An_agent_that_is_already_running_is_left_alone`, add:
+
+```csharp
+    [Fact]
+    public async Task A_run_pane_in_the_worktree_does_not_make_the_agent_look_open()
+    {
+        var agent = Agent("develop", open: true);
+        var server = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        await _mux.SetTitleAsync(server, FleetTabTitles.Run("backend"));
+
+        var restored = await new RestoreSessionHandler(_mux)
+            .HandleAsync("techweb", ProjectRoot, [agent]);
+
+        Assert.Equal(1, restored);
+        Assert.Equal(2, (await _mux.ListPanesAsync()).Count);
+    }
+```
+
+- [ ] **Step 2: Run the touched classes, expect the five new tests to FAIL**
+
+Run: `cd C:/repos/fleet/tests/Fleet.Tests && dotnet test --filter "FullyQualifiedName~AgentPanesTests|FullyQualifiedName~OpenRepositoryTests|FullyQualifiedName~StopAgentTests|FullyQualifiedName~RemoveAgentTests|FullyQualifiedName~RestoreSessionTests" 2>&1 | grep -E "error CS|\[FAIL\]|Passed!|Failed!"`
+Expected: `Failed:     5` (the run pane is claimed, killed, or mistaken for the agent).
 
 - [ ] **Step 3: Implement**
 
@@ -691,12 +808,27 @@ In `OpenRepositoryHandler.HandleAsync` change the `open` lookup to:
             PathKey.Same(p.Cwd, directory) && !FleetTabTitles.IsRun(p.Title));
 ```
 
+In `StopAgentHandler.HandleAsync` replace the `running` line with:
+
+```csharp
+        var running = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
+```
+
+(`AgentPanes` is in the parent namespace `Fleet.Features.Agents`; drop the now unused `using Fleet.Shared;` if the compiler warns.)
+
+In `RemoveAgentHandler.StopAsync` replace the `Where` predicate with `p => AgentPanes.Owns(p, agent)`.
+
+In `RestoreSessionHandler.Wanted` replace the last clause with
+`&& !panes.Any(p => AgentPaneMatch.Owns(p, agent))` and add `using Fleet.Ports.Agents;`.
+`Fleet.Features.Projects` may not reference `Fleet.Features.Agents`, so this one goes
+through the Ports helper that `AgentPanes` itself delegates to.
+
 - [ ] **Step 4: Run the full suite. Expected: green.**
 
 - [ ] **Step 5: Commit**
 
 ```
-git add src/Fleet/Ports/Agents/AgentPaneMatch.cs src/Fleet/Features/Repositories/OpenRepository/OpenRepositoryHandler.cs tests/Fleet.Tests/Features/Agents/AgentPanesTests.cs tests/Fleet.Tests/Features/Repositories/OpenRepositoryTests.cs && git commit -q -m "fix: run panes are never mistaken for an agent or an open repository"
+git add src/Fleet/Ports/Agents/AgentPaneMatch.cs src/Fleet/Features/Repositories/OpenRepository/OpenRepositoryHandler.cs src/Fleet/Features/Agents/StopAgent/StopAgentHandler.cs src/Fleet/Features/Agents/RemoveAgent/RemoveAgentHandler.cs src/Fleet/Features/Projects/RestoreSession/RestoreSessionHandler.cs tests/Fleet.Tests/Features/Agents tests/Fleet.Tests/Features/Repositories/OpenRepositoryTests.cs tests/Fleet.Tests/Features/Projects/RestoreSessionTests.cs && git commit -q -m "fix: run panes are never mistaken for an agent or an open repository"
 ```
 
 ---
@@ -945,14 +1077,11 @@ public sealed class RunRepositoryTests : IDisposable
 
     private string ProjectRoot => Path.Combine(_root, "techweb");
 
-    private string Worktree
+    private string Worktree()
     {
-        get
-        {
-            var path = Path.Combine(ProjectRoot, "frontend", "develop");
-            Directory.CreateDirectory(path);
-            return path;
-        }
+        var path = Path.Combine(ProjectRoot, "frontend", "develop");
+        Directory.CreateDirectory(path);
+        return path;
     }
 
     private static readonly RunProfile Profile = new("frontend", "npm run dev", 5173, "/");
@@ -967,7 +1096,7 @@ public sealed class RunRepositoryTests : IDisposable
     [Fact]
     public async Task It_spawns_the_command_in_the_worktree_in_the_project_window_and_titles_the_tab()
     {
-        var worktree = Worktree;
+        var worktree = Worktree();
         _store.Save("techweb", Profile);
         var dashboard = await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot, NewWindow = true });
         var home = (await _mux.ListPanesAsync()).Single(p => p.Id == dashboard).WindowId;
@@ -990,7 +1119,7 @@ public sealed class RunRepositoryTests : IDisposable
     [Fact]
     public async Task On_linux_the_command_runs_under_sh()
     {
-        _ = Worktree;
+        Worktree();
         _store.Save("techweb", Profile);
 
         await RunAsync(windows: false);
@@ -1002,7 +1131,7 @@ public sealed class RunRepositoryTests : IDisposable
     [Fact]
     public async Task Without_a_dashboard_window_it_opens_a_new_one()
     {
-        _ = Worktree;
+        Worktree();
         _store.Save("techweb", Profile);
 
         var result = await RunAsync();
@@ -1014,7 +1143,7 @@ public sealed class RunRepositoryTests : IDisposable
     [Fact]
     public async Task It_refuses_without_a_profile()
     {
-        _ = Worktree;
+        Worktree();
 
         var result = await RunAsync();
 
@@ -1026,7 +1155,7 @@ public sealed class RunRepositoryTests : IDisposable
     [Fact]
     public async Task It_refuses_when_already_running()
     {
-        var worktree = Worktree;
+        var worktree = Worktree();
         _store.Save("techweb", Profile);
         var running = await _mux.SpawnAsync(new SpawnOptions { Cwd = worktree });
         await _mux.SetTitleAsync(running, FleetTabTitles.Run("frontend"));
@@ -1041,7 +1170,7 @@ public sealed class RunRepositoryTests : IDisposable
     [Fact]
     public async Task It_refuses_when_the_port_is_bound()
     {
-        _ = Worktree;
+        Worktree();
         _store.Save("techweb", Profile);
         _boundPorts.Add(5173);
 
@@ -1088,7 +1217,7 @@ public static class PortProbe
                 .GetActiveTcpListeners()
                 .Any(e => e.Port == port);
         }
-        catch (NetworkInformationException)
+        catch (Exception e) when (e is NetworkInformationException or PlatformNotSupportedException or IOException)
         {
             return false;
         }
@@ -1215,9 +1344,7 @@ public class StopRunTests
 
         Assert.True(result.Succeeded, result.Error);
 
-        var left = (await _mux.ListPanesAsync()).Select(p => p.Id).ToList();
-
-        Assert.Equal([other, editor], left);
+        Assert.Equal([other, editor], (await _mux.ListPanesAsync()).Select(p => p.Id));
     }
 
     [Fact]

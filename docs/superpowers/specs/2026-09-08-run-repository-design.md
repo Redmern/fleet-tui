@@ -48,17 +48,22 @@ The URL of a running repository is `http://localhost:<port><path>`.
 A run pane is a tab titled `FleetTabTitles.Run(repository)` = `<repository> run`.
 Its working directory is the repository's default-branch worktree, which is also
 the directory Enter opens and may be an agent's worktree. Title, not cwd, is what
-identifies it, and two existing matchers must learn to step around it:
+identifies it, and every existing cwd matcher must learn to step around it:
 
 - `OpenRepositoryHandler` finds an already-open repository pane by cwd. It must
   skip panes whose title `FleetTabTitles.IsRun(title)`, or Enter would focus the
   dev server and never open the editor.
 - `AgentPaneMatch.Owns` claims panes by cwd too. It must return false for run
-  titles, or an agent living in that worktree would move or kill the server on
-  hide, stop and rename. `IsRun` is a suffix check on ` run`; agent titles are
-  `repo/branch-slug` and never end that way.
+  titles, or an agent living in that worktree would move or kill the server.
+  `IsRun` is a suffix check on ` run`; agent titles are `repo/branch-slug` and
+  never end that way.
+- `StopAgentHandler`, `RemoveAgentHandler.StopAsync` and
+  `RestoreSessionHandler.Wanted` match by cwd on their own instead of through
+  `Owns`. They switch to `Owns` (`AgentPanes.Owns` inside the Agents area,
+  `AgentPaneMatch.Owns` from Projects), which also makes them see hidden panes by
+  title the way hide and open already do.
 
-Both live outside the new slice, so the title helpers sit in
+All live outside the new slice, so the title helpers sit in
 `Shared/Constants/FleetTabTitles` next to `Dashboard`.
 
 ### Starting
@@ -222,6 +227,8 @@ the pane check; the loser's spawn creates a second pane. Acceptable for v1:
 - `JsonRunStoreTests`: round trip, missing file, atomic overwrite.
 - `OpenRepositoryTests`: a run pane in the worktree is not "already open".
 - `AgentPanesTests`: a run-titled pane is never an agent's.
+- `StopAgentTests`, `RemoveAgentTests`, `RestoreSessionTests`: a run pane in the
+  agent's worktree is neither killed nor mistaken for the agent being open.
 - `RepositoryChoresTests`: seven entries, label follows `running`, constants stable.
 - `DashboardRowsTests`: pill from `runPill`, absent when null.
 - `McpToolsTests` / `HarnessToolIdsTests`: specs and id round trips.
