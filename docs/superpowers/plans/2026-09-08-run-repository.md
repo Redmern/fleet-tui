@@ -2033,7 +2033,8 @@ In `RemoveRepository`, before the `owned` check:
                     return $"{repository.Name} is running; stop it first.";
                 }
 ```
- After a successful remove: `runs.Remove(project.Name, repository.Name);`. After a successful rename: if `ProfileOf(repository.Name)` is `{ } old`, `runs.Remove(project.Name, repository.Name); runs.Save(project.Name, old with { Repository = name.Trim() });`.
+
+After a successful remove: `runs.Remove(project.Name, repository.Name);`. After a successful rename: if `ProfileOf(repository.Name)` is `{ } old`, `runs.Remove(project.Name, repository.Name); runs.Save(project.Name, old with { Repository = name.Trim() });`.
 
 6. `McpActions.RemoveRepository`: before `_repoRemover.Handle`, list panes and refuse with `McpResult.Error($"{repo.Name} is running; stop it first.")` when `RunPanes.Owns` matches; after success call `runs.Remove(project, repo.Name)`.
 
