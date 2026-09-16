@@ -42,10 +42,13 @@ jobs:
         run: dotnet test Fleet.slnx --nologo -v minimal
 
       - name: Publish (NativeAOT)
-        run: >
-          dotnet publish src/Fleet/Fleet.csproj
-          -c Release -r ${{ matrix.rid }}
-          -o out/${{ matrix.rid }} --nologo
+        shell: bash
+        run: |
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          dotnet publish src/Fleet/Fleet.csproj \
+            -c Release -r ${{ matrix.rid }} \
+            -p:Version="${tag#v}" \
+            -o out/${{ matrix.rid }} --nologo
 
       - name: Name the asset and hash it
         shell: bash

@@ -20,6 +20,8 @@ public static class Runner
         FleetVerb.Mcp => await McpCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Quit => await QuitCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Doctor => await DoctorCommand.RunAsync().ConfigureAwait(false),
+        FleetVerb.Version => await VersionCommand.RunAsync().ConfigureAwait(false),
+        FleetVerb.Update => await UpdateCommand.RunAsync().ConfigureAwait(false),
         FleetVerb.Titled => TitledCommand.Run(invocation),
         FleetVerb.Help => HelpCommand.Run(),
         _ => HelpCommand.Unknown(invocation.Raw),

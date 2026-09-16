@@ -13,14 +13,15 @@ namespace Fleet.Features.Projects.PickProject;
 
 public static class PickProjectView
 {
-    public static Project? Show(
+    public static ProjectPick? Show(
         IApplication app, Keymap keymap, PickProjectHandler picker, PickProjectCallbacks callbacks)
     {
-        Project? chosen = null;
+        ProjectPick? chosen = null;
         IReadOnlyList<ProjectChoice> entries = picker.Entries();
         var reserved = Reserved(keymap);
         var accelerators = Accelerators(entries, reserved);
         var prefix = new PrefixRecognizer(keymap);
+        var openKey = keymap.KeyFor(FleetAction.OpenProject);
 
         var window = FleetTheme.Screen("fleet — open a project");
 
@@ -46,7 +47,7 @@ public static class PickProjectView
 
             if (created is not null)
             {
-                chosen = created;
+                chosen = new ProjectPick(created, NewWindow: false);
                 app.RequestStop(window);
             }
         }
@@ -67,7 +68,7 @@ public static class PickProjectView
             Refill(index);
         }
 
-        void OpenAt(int index)
+        void OpenAt(int index, bool newWindow)
         {
             if (index < 0 || index >= entries.Count)
             {
@@ -80,11 +81,11 @@ public static class PickProjectView
                 return;
             }
 
-            chosen = entries[index].Project;
+            chosen = new ProjectPick(entries[index].Project!, newWindow);
             app.RequestStop(window);
         }
 
-        void Accept() => OpenAt(FleetRows.Selected(list));
+        void Accept(bool newWindow = false) => OpenAt(FleetRows.Selected(list), newWindow);
 
         void Dispatch(FleetAction action)
         {
@@ -131,6 +132,13 @@ public static class PickProjectView
                 return;
             }
 
+            if (key == Key.Enter.WithShift || (openKey.IsValid && key == openKey.WithShift))
+            {
+                Accept(newWindow: true);
+                key.Handled = true;
+                return;
+            }
+
             var result = prefix.Feed(key);
 
             if (result.Handled)
@@ -158,9 +166,23 @@ public static class PickProjectView
 
             for (var i = 0; i < accelerators.Length; i++)
             {
-                if (accelerators[i].Length == 1 && key == new Key(accelerators[i]))
+                if (accelerators[i].Length != 1)
                 {
-                    OpenAt(i);
+                    continue;
+                }
+
+                var accelerator = new Key(accelerators[i]);
+
+                if (key == accelerator)
+                {
+                    OpenAt(i, newWindow: false);
+                    key.Handled = true;
+                    return;
+                }
+
+                if (key == accelerator.WithShift)
+                {
+                    OpenAt(i, newWindow: true);
                     key.Handled = true;
                     return;
                 }
@@ -183,7 +205,8 @@ public static class PickProjectView
 
         bar.Show(
         [
-            ($"{keymap.DisplayFor(FleetAction.OpenProject)}/enter", "open", Accept),
+            ($"{keymap.DisplayFor(FleetAction.OpenProject)}/enter/A-Z", "open", () => Accept()),
+            ("SHIFT", "new window", () => Accept(newWindow: true)),
             (keymap.DisplayFor(FleetAction.NewProject), "new", NewProject),
             (keymap.DisplayFor(FleetAction.RemoveProject), "remove", DropProject),
             ($"{keymap.DisplayFor(FleetAction.Close)}/esc", "quit", () => app.RequestStop(window)),

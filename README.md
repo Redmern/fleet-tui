@@ -133,11 +133,21 @@ fleet dispatch "<task>" --project <name>
 fleet report --caller <slug> --status <s> --project <name> -- <summary>
                             a sub-orchestrator reports its own status
 fleet doctor                check the environment
+fleet version               show the version, and check for an update
+fleet update                download and install the latest release
 ```
 
 `fleet doctor` is the end-to-end smoke test: it reports the config directory, the
 selected multiplexer driver and whether it responds, the git version, every saved
 project, and any failures fleet swallowed.
+
+`fleet version` and `fleet update` check `github.com/$FLEET_REPO/releases` — set
+`FLEET_REPO=<owner/name>` (the same variable `scripts/get-fleet.*` use) or neither
+command has anywhere to look. `fleet update` downloads the release asset for your
+platform, verifies it against the published `.sha256`, and replaces the running
+binary in place; a fleet already running keeps its old code until it is reopened.
+Only Windows and Linux x64 have published binaries — build from source with
+`install.sh`/`install.ps1` elsewhere.
 
 fleet works from any terminal, not just a wezterm pane. Inside a pane it talks to
 the mux named by `WEZTERM_UNIX_SOCKET`; outside one it finds a live wezterm socket

@@ -49,6 +49,8 @@ public static class CommandLine
         "mcp" => FleetVerb.Mcp,
         "quit" => FleetVerb.Quit,
         "doctor" => FleetVerb.Doctor,
+        "version" or "--version" or "-v" => FleetVerb.Version,
+        "update" => FleetVerb.Update,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         "help" or "--help" or "-h" => FleetVerb.Help,
         _ => FleetVerb.Unknown,

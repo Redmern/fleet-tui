@@ -20,6 +20,8 @@ public static class HelpCommand
                                           spin up a hidden sub-orchestrator for a task
               fleet apply-keybinds        write the wezterm keybinding module
               fleet doctor                check the environment
+              fleet version               show the version, and check for an update
+              fleet update                download and install the latest release
             """);
 
         return 0;

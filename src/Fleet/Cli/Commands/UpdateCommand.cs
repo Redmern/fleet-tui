@@ -1,0 +1,40 @@
+using Fleet.Cli.Composition;
+using Fleet.Features.Updates.RunUpdate;
+using Fleet.Features.Updates.RunUpdate.Models;
+using Fleet.Shared.Constants;
+using Fleet.Shared.Releases;
+
+namespace Fleet.Cli.Commands;
+
+public static class UpdateCommand
+{
+    public static async Task<int> RunAsync()
+    {
+        var repo = Adapters.ReleaseRepo;
+
+        if (string.IsNullOrWhiteSpace(repo))
+        {
+            Console.Error.WriteLine("fleet: set FLEET_REPO=<owner/name> to update from.");
+            return 2;
+        }
+
+        Console.WriteLine($"fleet: checking github.com/{repo}/releases for an update...");
+
+        var result = await new RunUpdateHandler(Adapters.Releases(), Adapters.Installer())
+            .HandleAsync(new RunUpdateCommand(
+                repo,
+                FleetVersion.Current,
+                ReleaseAssetNames.ForCurrentPlatform(),
+                Adapters.Executable))
+            .ConfigureAwait(false);
+
+        if (!result.Succeeded)
+        {
+            Console.Error.WriteLine($"fleet: {result.Error}");
+            return 1;
+        }
+
+        Console.WriteLine($"fleet: {result.Value}");
+        return 0;
+    }
+}

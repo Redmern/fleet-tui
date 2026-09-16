@@ -4,6 +4,12 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>fleet</AssemblyName>
     <RootNamespace>Fleet</RootNamespace>
+    <!--
+      The source of truth between releases. release.yml overrides this with
+      -p:Version=<tag> on a tagged build, so a forgotten bump here only affects
+      local dev builds, never a published one.
+    -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <!--

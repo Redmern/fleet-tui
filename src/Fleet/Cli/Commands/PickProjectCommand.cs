@@ -38,15 +38,18 @@ public static class PickProjectCommand
             return Fail(mux.Unsupported);
         }
 
-        var chosen = Choose();
+        var picked = Choose();
 
-        if (chosen is null)
+        if (picked is null)
         {
             return 0;
         }
 
+        var chosen = picked.Project;
+        var windowId = picked.NewWindow ? null : Adapters.CurrentWindow(mux.Driver);
+
         var result = await new OpenProjectHandler(mux.Driver)
-            .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable))
+            .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable, windowId))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -77,7 +80,7 @@ public static class PickProjectCommand
         return 0;
     }
 
-    private static Project? Choose()
+    private static ProjectPick? Choose()
     {
         var projects = Adapters.Projects();
         var keymaps = Adapters.Keymaps();

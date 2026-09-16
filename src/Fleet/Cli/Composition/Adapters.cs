@@ -25,9 +25,11 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
 using Fleet.Ports.Projects;
+using Fleet.Ports.Releases;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
+using Fleet.Platform.Releases;
 using Fleet.Ui;
 
 namespace Fleet.Cli.Composition;
@@ -39,6 +41,12 @@ public static class Adapters
     public static IProjectStore Projects() => new JsonProjectStore();
 
     public static IGitRunner Git() => new GitRunner();
+
+    public static IReleaseClient Releases() => new HttpReleaseClient();
+
+    public static IBinaryInstaller Installer() => new SelfInstall();
+
+    public static string? ReleaseRepo => Environment.GetEnvironmentVariable("FLEET_REPO");
 
     public static IKeymapStore Keymaps() => new JsonKeymapStore();
 
@@ -202,7 +210,7 @@ public static class Adapters
         }
     }
 
-    private static string? CurrentWindow(IMuxDriver mux)
+    public static string? CurrentWindow(IMuxDriver mux)
     {
         var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
 
