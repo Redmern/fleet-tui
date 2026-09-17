@@ -77,6 +77,16 @@ public static class PickProjectCommand
 
         await mux.Driver.FocusPaneAsync(result.Value.DashPane).ConfigureAwait(false);
 
+        if (!picked.NewWindow)
+        {
+            var self = mux.Driver.CurrentPane;
+
+            if (!self.IsNone)
+            {
+                await mux.Driver.KillPaneAsync(self).ConfigureAwait(false);
+            }
+        }
+
         return 0;
     }
 
