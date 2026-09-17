@@ -43,14 +43,16 @@ From a published release, with no SDK on the machine:
 
 ```powershell
 # Windows
-$env:FLEET_REPO = '<owner>/fleet'
-.\scripts\get-fleet.ps1
+irm https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-fleet.ps1 | iex
 ```
 
 ```sh
 # Linux
-FLEET_REPO=<owner>/fleet sh scripts/get-fleet.sh
+curl -fsSL https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-fleet.sh | sh
 ```
+
+Running on a fork? Point either script at it instead with `-Repo <owner>/fleet`
+(PowerShell) or `FLEET_REPO=<owner>/fleet` (sh).
 
 From source:
 
@@ -71,12 +73,12 @@ finds on Linux, then a Neovim config cloned into `%LOCALAPPDATA%\nvim` /
 
 ```powershell
 .\install.ps1 -WithDeps
-.\scripts\get-fleet.ps1 -Repo <owner>/fleet -WithDeps
+.\scripts\get-fleet.ps1 -WithDeps
 ```
 
 ```sh
 ./install.sh --with-deps
-FLEET_REPO=<owner>/fleet sh scripts/get-fleet.sh --with-deps
+sh scripts/get-fleet.sh --with-deps
 ```
 
 Which config it clones: `-NvimConfig <git-url>`, else `FLEET_NVIM_CONFIG`, else the
@@ -141,9 +143,9 @@ fleet update                download and install the latest release
 selected multiplexer driver and whether it responds, the git version, every saved
 project, and any failures fleet swallowed.
 
-`fleet version` and `fleet update` check `github.com/$FLEET_REPO/releases` — set
-`FLEET_REPO=<owner/name>` (the same variable `scripts/get-fleet.*` use) or neither
-command has anywhere to look. `fleet update` downloads the release asset for your
+`fleet version` and `fleet update` check `github.com/Redmern/fleet-tui/releases` by
+default — set `FLEET_REPO=<owner/name>` (the same variable `scripts/get-fleet.*`
+use) to check a fork instead. `fleet update` downloads the release asset for your
 platform, verifies it against the published `.sha256`, and replaces the running
 binary in place; a fleet already running keeps its old code until it is reopened.
 Only Windows and Linux x64 have published binaries — build from source with

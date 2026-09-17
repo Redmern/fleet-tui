@@ -7,8 +7,8 @@
     which writes the WezTerm module, wires the WezTerm config and reports whatever
     is still missing.
 
-    The release repository is not baked in. Pass -Repo, or set FLEET_REPO, e.g.
-    'trivium/fleet'.
+    Defaults to the upstream release repository. Pass -Repo, or set FLEET_REPO, to
+    install from a fork instead.
 
 .PARAMETER WithDeps
     Install WezTerm, Neovim, yazi and git through winget when missing, and clone a
@@ -19,18 +19,20 @@
     Git URL of the Neovim config to clone with -WithDeps.
 
 .EXAMPLE
-    .\get-fleet.ps1 -Repo trivium/fleet
+    .\get-fleet.ps1
 
 .EXAMPLE
-    .\get-fleet.ps1 -Repo trivium/fleet -WithDeps
+    .\get-fleet.ps1 -WithDeps
 
 .EXAMPLE
-    $env:FLEET_REPO = 'trivium/fleet'
-    irm https://raw.githubusercontent.com/trivium/fleet/main/scripts/get-fleet.ps1 | iex
+    irm https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-fleet.ps1 | iex
+
+.EXAMPLE
+    .\get-fleet.ps1 -Repo <owner>/fleet
 #>
 [CmdletBinding()]
 param(
-    [string]$Repo = $env:FLEET_REPO,
+    [string]$Repo = $(if ($env:FLEET_REPO) { $env:FLEET_REPO } else { 'Redmern/fleet-tui' }),
     [string]$Version = 'latest',
     [switch]$WithDeps,
     [string]$NvimConfig
@@ -44,10 +46,6 @@ $BinPath    = Join-Path $InstallDir 'fleet.exe'
 
 function Write-Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Write-Ok($m)   { Write-Host "    $m" -ForegroundColor Green }
-
-if ([string]::IsNullOrWhiteSpace($Repo)) {
-    throw "no release repository. Pass -Repo <owner/name> or set FLEET_REPO."
-}
 
 if ($WithDeps) {
     $depsUrl = "https://raw.githubusercontent.com/$Repo/main/scripts/deps.ps1"

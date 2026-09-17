@@ -12,12 +12,6 @@ public static class UpdateCommand
     {
         var repo = Adapters.ReleaseRepo;
 
-        if (string.IsNullOrWhiteSpace(repo))
-        {
-            Console.Error.WriteLine("fleet: set FLEET_REPO=<owner/name> to update from.");
-            return 2;
-        }
-
         Console.WriteLine($"fleet: checking github.com/{repo}/releases for an update...");
 
         var result = await new RunUpdateHandler(Adapters.Releases(), Adapters.Installer())

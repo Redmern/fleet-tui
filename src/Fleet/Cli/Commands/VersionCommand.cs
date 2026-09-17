@@ -10,16 +10,8 @@ public static class VersionCommand
     {
         Console.WriteLine($"fleet {FleetVersion.Current}");
 
-        var repo = Adapters.ReleaseRepo;
-
-        if (string.IsNullOrWhiteSpace(repo))
-        {
-            Console.WriteLine("  set FLEET_REPO=<owner/name> to check for updates");
-            return 0;
-        }
-
         var check = await new CheckUpdateHandler(Adapters.Releases())
-            .HandleAsync(repo, FleetVersion.Current)
+            .HandleAsync(Adapters.ReleaseRepo, FleetVersion.Current)
             .ConfigureAwait(false);
 
         if (check.Error is not null)

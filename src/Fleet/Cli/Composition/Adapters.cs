@@ -46,7 +46,12 @@ public static class Adapters
 
     public static IBinaryInstaller Installer() => new SelfInstall();
 
-    public static string? ReleaseRepo => Environment.GetEnvironmentVariable("FLEET_REPO");
+    private const string DefaultReleaseRepo = "Redmern/fleet-tui";
+
+    public static string ReleaseRepo =>
+        Environment.GetEnvironmentVariable("FLEET_REPO") is { Length: > 0 } repo
+            ? repo
+            : DefaultReleaseRepo;
 
     public static IKeymapStore Keymaps() => new JsonKeymapStore();
 

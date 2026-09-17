@@ -1,14 +1,17 @@
 #!/usr/bin/env sh
 # Install fleet on Linux from a published release. No .NET SDK needed.
 #
-# The release repository is not baked in: set FLEET_REPO, or pass it as the first
-# argument.
+# Defaults to the upstream release repository. Override it with FLEET_REPO, or
+# pass it as the first argument, if you're running this from a fork.
 #
-#   FLEET_REPO=trivium/fleet sh get-fleet.sh
-#   FLEET_REPO=trivium/fleet sh get-fleet.sh --with-deps
-#   curl -fsSL https://raw.githubusercontent.com/trivium/fleet/main/scripts/get-fleet.sh | FLEET_REPO=trivium/fleet sh
+#   sh get-fleet.sh
+#   sh get-fleet.sh --with-deps
+#   curl -fsSL https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-fleet.sh | sh
+#   FLEET_REPO=<owner>/fleet sh get-fleet.sh
 
 set -eu
+
+DEFAULT_REPO="Redmern/fleet-tui"
 
 WITH_DEPS=0
 for arg in "$@"; do
@@ -18,14 +21,9 @@ for arg in "$@"; do
     esac
 done
 
-REPO="${REPO_ARG:-${FLEET_REPO:-}}"
+REPO="${REPO_ARG:-${FLEET_REPO:-$DEFAULT_REPO}}"
 VERSION="${FLEET_VERSION:-latest}"
 BIN_DIR="${FLEET_BIN_DIR:-$HOME/.local/bin}"
-
-if [ -z "$REPO" ]; then
-    echo "fleet: no release repository. Set FLEET_REPO=<owner/name> or pass it as \$1." >&2
-    exit 2
-fi
 
 case "$(uname -m)" in
     x86_64|amd64) ASSET=fleet-linux-x64 ;;
