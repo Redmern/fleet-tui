@@ -21,14 +21,39 @@ public static class FleetPicker
         string title,
         IReadOnlyList<PickerEntry> entries,
         Keymap keymap,
-        int selected = 0)
+        int selected = 0) =>
+        ChooseCore(app, title, entries, keymap, selected, captureWindow: false)?.Index;
+
+    public static (int Index, bool NewWindow)? ChooseWithWindow(
+        IApplication app,
+        string title,
+        IReadOnlyList<string> items,
+        Keymap keymap,
+        int selected = 0) =>
+        ChooseWithWindow(app, title, PickerEntry.Plain(items), keymap, selected);
+
+    public static (int Index, bool NewWindow)? ChooseWithWindow(
+        IApplication app,
+        string title,
+        IReadOnlyList<PickerEntry> entries,
+        Keymap keymap,
+        int selected = 0) =>
+        ChooseCore(app, title, entries, keymap, selected, captureWindow: true);
+
+    private static (int Index, bool NewWindow)? ChooseCore(
+        IApplication app,
+        string title,
+        IReadOnlyList<PickerEntry> entries,
+        Keymap keymap,
+        int selected,
+        bool captureWindow)
     {
         if (entries.Count == 0)
         {
             return null;
         }
 
-        int? result = null;
+        (int Index, bool NewWindow)? result = null;
 
         var keys = PickerKeys.For(entries, Motions(keymap));
 
@@ -41,25 +66,33 @@ public static class FleetPicker
 
         FleetKeys.ApplyMotions(list, keymap);
 
-        void Take(int index)
+        void Take(int index, bool newWindow)
         {
-            result = index;
+            result = (index, newWindow);
             app.RequestStop(window);
         }
 
         list.Accepting += (_, e) =>
         {
-            Take(FleetRows.Selected(list));
+            Take(FleetRows.Selected(list), newWindow: false);
             e.Handled = true;
         };
 
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
-        bar.Show(
-        [
-            ("enter", "select", () => Take(FleetRows.Selected(list))),
-            ("esc", "cancel", () => app.RequestStop(window)),
-        ]);
+        var items = new List<(string, string, Action)>
+        {
+            ("enter", "select", () => Take(FleetRows.Selected(list), newWindow: false)),
+        };
+
+        if (captureWindow)
+        {
+            items.Add(("SHIFT", "new window", () => Take(FleetRows.Selected(list), newWindow: true)));
+        }
+
+        items.Add(("esc", "cancel", () => app.RequestStop(window)));
+
+        bar.Show(items);
 
         var claim = FleetModal.Enter();
 
@@ -67,6 +100,13 @@ public static class FleetPicker
         {
             if (!FleetModal.Owns(claim))
             {
+                return;
+            }
+
+            if (captureWindow && key == Key.Enter.WithShift)
+            {
+                Take(FleetRows.Selected(list), newWindow: true);
+                key.Handled = true;
                 return;
             }
 
@@ -79,9 +119,23 @@ public static class FleetPicker
 
             for (var i = 0; i < keys.Count; i++)
             {
-                if (keys[i].Length == 1 && key == new Key(keys[i]))
+                if (keys[i].Length != 1)
                 {
-                    Take(i);
+                    continue;
+                }
+
+                var accelerator = new Key(keys[i]);
+
+                if (key == accelerator)
+                {
+                    Take(i, newWindow: false);
+                    key.Handled = true;
+                    return;
+                }
+
+                if (captureWindow && key == accelerator.WithShift)
+                {
+                    Take(i, newWindow: true);
                     key.Handled = true;
                     return;
                 }
