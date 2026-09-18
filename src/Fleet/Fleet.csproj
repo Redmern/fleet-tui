@@ -9,7 +9,7 @@
       -p:Version=<tag> on a tagged build, so a forgotten bump here only affects
       local dev builds, never a published one.
     -->
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
   </PropertyGroup>
 
   <!--
