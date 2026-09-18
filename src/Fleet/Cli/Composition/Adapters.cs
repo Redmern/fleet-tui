@@ -325,34 +325,38 @@ public static class Adapters
         }
     }
 
-    public static bool UnwireWezTermConfig()
+    public static string? PersonalWezTermConfig() =>
+        WezTermWiring.ConfigCandidates(Home).FirstOrDefault(File.Exists);
+
+    public static UnwireResult UnwireWezTermConfig()
     {
-        var config = WezTermWiring.ConfigCandidates(Home).FirstOrDefault(File.Exists);
+        var config = PersonalWezTermConfig();
 
         if (config is null)
         {
-            return false;
+            return UnwireResult.NothingToDo;
         }
 
         try
         {
             var text = File.ReadAllText(config);
-
-            if (!WezTermWiring.AlreadyWired(text))
-            {
-                return false;
-            }
-
             var unwired = WezTermWiring.Unwire(text);
+
+            if (unwired == text)
+            {
+                return WezTermWiring.AlreadyWired(text)
+                    ? UnwireResult.NeedsManualRemoval
+                    : UnwireResult.NothingToDo;
+            }
 
             File.Copy(config, config + ".bak-fleet-unwire", overwrite: true);
             File.WriteAllText(config, unwired);
 
-            return true;
+            return UnwireResult.Removed;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return false;
+            return UnwireResult.NothingToDo;
         }
     }
 
