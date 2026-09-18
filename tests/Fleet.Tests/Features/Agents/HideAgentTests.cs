@@ -215,7 +215,7 @@ public class HideAgentTests
     }
 
     [Fact]
-    public async Task Hiding_in_a_native_project_moves_the_pane_into_a_background_tab()
+    public async Task Hiding_in_a_native_project_uses_that_projects_own_hidden_workspace()
     {
         var agent = Agent();
         var dash = await _mux.SpawnAsync(new SpawnOptions { Cwd = "C:/repos/techweb" });
@@ -231,8 +231,30 @@ public class HideAgentTests
         var panes = await _mux.ListPanesAsync();
         var agentPane = panes.Single(p => p.Id == pane);
 
-        Assert.Equal(window, agentPane.WindowId);
+        Assert.Equal("fleet-hidden-techweb", agentPane.SessionName);
         Assert.NotEqual(FleetWorkspaces.Hidden, agentPane.SessionName);
+    }
+
+    [Fact]
+    public async Task Two_different_native_projects_get_two_different_hidden_workspaces()
+    {
+        var agentA = Agent();
+        var paneA = await _mux.SpawnAsync(new SpawnOptions { Cwd = agentA.Worktree });
+
+        var agentB = new AgentRecord(
+            "C:/repos/otherapp/frontend/dev", "frontend", "dev", AgentHarness.Claude,
+            "origin/main", true);
+        var paneB = await _mux.SpawnAsync(new SpawnOptions { Cwd = agentB.Worktree });
+
+        await new HideAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agentA, dashboardWindow: "w1", workspaceNative: true);
+        await new HideAgentHandler(_mux, _store)
+            .HandleAsync("otherapp", agentB, dashboardWindow: "w2", workspaceNative: true);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.Equal("fleet-hidden-techweb", panes.Single(p => p.Id == paneA).SessionName);
+        Assert.Equal("fleet-hidden-otherapp", panes.Single(p => p.Id == paneB).SessionName);
     }
 
     [Fact]

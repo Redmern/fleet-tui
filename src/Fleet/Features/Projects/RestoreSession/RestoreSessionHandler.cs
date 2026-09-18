@@ -52,14 +52,20 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
         && !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
 
     public static SpawnOptions Options(
-        string project, AgentRecord agent, string? window, bool native) =>
-        new()
+        string project, AgentRecord agent, string? window, bool native)
+    {
+        var hiddenWorkspace = native
+            ? ProjectWorkspace.HiddenWorkspaceFor(project)
+            : FleetWorkspaces.Hidden;
+
+        return new()
         {
             Cwd = agent.Worktree,
-            SessionName = native || !agent.Hidden ? project : FleetWorkspaces.Hidden,
-            Workspace = !native && agent.Hidden ? FleetWorkspaces.Hidden : null,
-            WindowId = native || !agent.Hidden ? window : null,
-            NewWindow = !native && agent.Hidden,
+            SessionName = agent.Hidden ? hiddenWorkspace : project,
+            Workspace = agent.Hidden ? hiddenWorkspace : null,
+            WindowId = agent.Hidden ? null : window,
+            NewWindow = agent.Hidden,
             Args = AgentHarness.CommandFor(agent.Harness, withClaude: agent.Owner.Length > 0),
         };
+    }
 }

@@ -3,23 +3,22 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
-using Fleet.Shared.Constants;
 
 namespace Fleet.Features.Agents;
 
 public static class HiddenNest
 {
     public static string? WindowOf(
-        IReadOnlyList<Pane> panes, IReadOnlyList<AgentRecord> agents) =>
+        IReadOnlyList<Pane> panes, IReadOnlyList<AgentRecord> agents, string hiddenWorkspace) =>
         panes.FirstOrDefault(p =>
-            string.Equals(
-                p.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase)
+            string.Equals(p.SessionName, hiddenWorkspace, StringComparison.OrdinalIgnoreCase)
             && agents.Any(a => AgentPaneMatch.Owns(p, a)))?.WindowId;
 
     public static async Task<string?> MoveIntoAsync(
         IMuxDriver mux,
         IEnumerable<PaneId> ids,
         string? hiddenWindow,
+        string hiddenWorkspace,
         CancellationToken ct = default)
     {
         foreach (var id in ids)
@@ -27,7 +26,7 @@ public static class HiddenNest
             if (hiddenWindow is null)
             {
                 await mux.MovePaneAsync(
-                        id, new MovePaneOptions { Workspace = FleetWorkspaces.Hidden }, ct)
+                        id, new MovePaneOptions { Workspace = hiddenWorkspace }, ct)
                     .ConfigureAwait(false);
 
                 hiddenWindow = (await mux.ListPanesAsync(ct).ConfigureAwait(false))
@@ -41,18 +40,5 @@ public static class HiddenNest
         }
 
         return hiddenWindow;
-    }
-
-    public static async Task MoveIntoBackgroundAsync(
-        IMuxDriver mux,
-        IEnumerable<PaneId> ids,
-        string dashboardWindow,
-        CancellationToken ct = default)
-    {
-        foreach (var id in ids)
-        {
-            await mux.MovePaneAsync(id, new MovePaneOptions { WindowId = dashboardWindow }, ct)
-                .ConfigureAwait(false);
-        }
     }
 }

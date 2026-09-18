@@ -142,11 +142,12 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
             await mux.KillPaneAsync(dash.Id, ct).ConfigureAwait(false);
         }
 
-        var hiddenWindow = HiddenNest.WindowOf(panes, agents);
+        var hiddenWindow = HiddenNest.WindowOf(panes, agents, FleetWorkspaces.Hidden);
 
         foreach (var pane in rootPanes.Where(p => dash is null || p.Id != dash.Id))
         {
-            hiddenWindow = await HiddenNest.MoveIntoAsync(mux, [pane.Id], hiddenWindow, ct)
+            hiddenWindow = await HiddenNest
+                .MoveIntoAsync(mux, [pane.Id], hiddenWindow, FleetWorkspaces.Hidden, ct)
                 .ConfigureAwait(false);
             await mux.SetTitleAsync(pane.Id, FleetTabTitles.Dashboard, ct).ConfigureAwait(false);
         }
@@ -166,7 +167,8 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
                 await mux.KillPaneAsync(browser.Id, ct).ConfigureAwait(false);
             }
 
-            hiddenWindow = await HiddenNest.MoveIntoAsync(mux, moving, hiddenWindow, ct)
+            hiddenWindow = await HiddenNest
+                .MoveIntoAsync(mux, moving, hiddenWindow, FleetWorkspaces.Hidden, ct)
                 .ConfigureAwait(false);
 
             foreach (var id in moving)

@@ -453,11 +453,16 @@ public static class DashboardWiring
             }
 
             var panes = barPanes;
+            var dashPane = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root));
+
+            var hiddenWorkspace = ProjectWorkspace.IsNative(dashPane, project.Name)
+                ? ProjectWorkspace.HiddenWorkspaceFor(project.Name)
+                : FleetWorkspaces.Hidden;
 
             bool ShownInBar(AgentRecord a) => panes.Any(p =>
                 AgentPanes.Owns(p, a)
                 && !string.Equals(
-                    p.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase));
+                    p.SessionName, hiddenWorkspace, StringComparison.OrdinalIgnoreCase));
 
             return [.. records.Select(a => a with { Hidden = !ShownInBar(a) })];
         }
