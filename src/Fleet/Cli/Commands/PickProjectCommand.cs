@@ -46,10 +46,10 @@ public static class PickProjectCommand
         }
 
         var chosen = picked.Project;
-        var windowId = picked.NewWindow ? null : Adapters.CurrentWindow(mux.Driver);
 
         var result = await new OpenProjectHandler(mux.Driver)
-            .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable, windowId))
+            .HandleAsync(new OpenProjectCommand(
+                chosen, "claude", Adapters.Executable, WindowId: null, Workspace: chosen.Name))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -79,6 +79,10 @@ public static class PickProjectCommand
 
         if (!picked.NewWindow)
         {
+            Adapters.EmitUserVar(
+                "fleet-workspace", $"{DateTime.UtcNow.Ticks}\n{chosen.Name}");
+            Adapters.Workspaces().Submit(chosen.Name);
+
             var self = mux.Driver.CurrentPane;
 
             if (!self.IsNone)

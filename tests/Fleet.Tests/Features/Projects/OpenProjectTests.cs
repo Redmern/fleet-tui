@@ -103,4 +103,15 @@ public class OpenProjectTests
         Assert.Contains("did not respond", result.Error);
         Assert.Contains("fleet doctor", result.Error);
     }
+
+    [Fact]
+    public async Task A_workspace_tag_lands_on_both_panes()
+    {
+        var mux = new FakeMuxDriver();
+
+        await new OpenProjectHandler(mux)
+            .HandleAsync(Command with { Workspace = "backend" });
+
+        Assert.All(await mux.ListPanesAsync(), p => Assert.Equal("backend", p.SessionName));
+    }
 }
