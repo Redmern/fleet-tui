@@ -266,5 +266,5 @@ public static class WezTermTheme
 
         return M
 
-        """;
+        """.ReplaceLineEndings("\n");
 }
