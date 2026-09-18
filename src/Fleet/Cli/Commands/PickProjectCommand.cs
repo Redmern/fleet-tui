@@ -79,15 +79,24 @@ public static class PickProjectCommand
 
         if (!picked.NewWindow)
         {
-            Adapters.EmitUserVar(
-                "fleet-workspace", $"{DateTime.UtcNow.Ticks}\n{chosen.Name}");
+            var invokedInsideFleet = Adapters.InvokedInsideFleet();
+
+            if (invokedInsideFleet)
+            {
+                Adapters.EmitUserVar(
+                    "fleet-workspace", $"{DateTime.UtcNow.Ticks}\n{chosen.Name}");
+            }
+
             Adapters.Workspaces().Submit(chosen.Name);
 
-            var self = mux.Driver.CurrentPane;
-
-            if (!self.IsNone)
+            if (invokedInsideFleet)
             {
-                await mux.Driver.KillPaneAsync(self).ConfigureAwait(false);
+                var self = mux.Driver.CurrentPane;
+
+                if (!self.IsNone)
+                {
+                    await mux.Driver.KillPaneAsync(self).ConfigureAwait(false);
+                }
             }
         }
 

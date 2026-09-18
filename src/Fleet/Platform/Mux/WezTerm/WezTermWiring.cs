@@ -86,6 +86,23 @@ public static class WezTermWiring
         return (text.TrimEnd() + Environment.NewLine + block, false);
     }
 
+    public static string Unwire(string text)
+    {
+        var block = string.Join(
+            Environment.NewLine,
+            string.Empty,
+            "-- fleet: prefix chord, menu and status helpers.",
+            "local ok_fleet, fleet = pcall(require, 'fleet')",
+            "if ok_fleet then",
+            $"  {ApplyLine}",
+            "end",
+            string.Empty);
+
+        return text.Contains(block, StringComparison.Ordinal)
+            ? text.Replace(block, string.Empty, StringComparison.Ordinal)
+            : text;
+    }
+
     private static bool Returns(string line)
     {
         var trimmed = line.Trim();

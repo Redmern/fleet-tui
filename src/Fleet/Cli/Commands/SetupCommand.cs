@@ -13,12 +13,21 @@ public static class SetupCommand
         var keymap = new Keymap(Adapters.Keymaps().Load());
 
         var module = Adapters.WriteKeybindModule(keymap);
-        var wiring = Adapters.WireWezTermConfig();
+        var unwired = Adapters.UnwireWezTermConfig();
+        var wiring = Adapters.WireDedicatedInstance();
 
         var report = new SetupHandler(Adapters.OnPath)
             .Inspect(module, wiring, Adapters.ConfigDirectory);
 
         Print(report, keymap);
+
+        if (unwired)
+        {
+            Console.WriteLine();
+            Console.WriteLine(
+                "  removed fleet's old chord binding from your own wezterm config - "
+                + "fleet now runs in its own window.");
+        }
 
         return report.Blocked ? 1 : 0;
     }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Fleet.Cli.Composition.Models;
 using Fleet.Platform.Approvals;
@@ -28,6 +29,7 @@ using Fleet.Ports.Projects;
 using Fleet.Ports.Releases;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
+using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Settings;
 using Fleet.Platform.Releases;
 using Fleet.Ui;
@@ -102,8 +104,53 @@ public static class Adapters
 
         var unsupported = MuxTrouble.With(chosen, OnPath(DriverNames.WezTerm));
 
-        return new MuxSelection(
-            new FailSilentDriver(new WezTermDriver(), log.Swallowed), chosen, unsupported);
+        var socketPath = WezTermInstance.SocketPath(FleetPaths.WezTerm);
+        var configFile = WezTermInstance.ConfigFile(FleetPaths.WezTerm);
+        var probe = new WezTermCli(pinnedSocket: socketPath);
+
+        var launcher = new WezTermInstanceLauncher(
+            reachable: async ct =>
+            {
+                try
+                {
+                    await probe.RunAsync(["list", "--format", "json"], ct)
+                        .ConfigureAwait(false);
+
+                    return true;
+                }
+                catch (Exception e) when (e is MuxUnavailableException or TimeoutException)
+                {
+                    return false;
+                }
+            },
+            start: StartWezTermInstance);
+
+        var driver = new AutoStartDriver(
+            new WezTermDriver(probe), launcher, configFile, TimeSpan.FromSeconds(10));
+
+        return new MuxSelection(new FailSilentDriver(driver, log.Swallowed), chosen, unsupported);
+    }
+
+    private static void StartWezTermInstance(string configFile)
+    {
+        var psi = new ProcessStartInfo("wezterm-gui")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        psi.ArgumentList.Add("--config-file");
+        psi.ArgumentList.Add(configFile);
+        psi.ArgumentList.Add("start");
+        psi.ArgumentList.Add("--always-new-process");
+
+        try
+        {
+            Process.Start(psi);
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+        }
     }
 
     public static string ConfigDirectory => FleetPaths.Config;
@@ -277,6 +324,66 @@ public static class Adapters
             return new ConfigWiring(WiringState.Failed, config, e.Message);
         }
     }
+
+    public static bool UnwireWezTermConfig()
+    {
+        var config = WezTermWiring.ConfigCandidates(Home).FirstOrDefault(File.Exists);
+
+        if (config is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var text = File.ReadAllText(config);
+
+            if (!WezTermWiring.AlreadyWired(text))
+            {
+                return false;
+            }
+
+            var unwired = WezTermWiring.Unwire(text);
+
+            File.Copy(config, config + ".bak-fleet-unwire", overwrite: true);
+            File.WriteAllText(config, unwired);
+
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public static ConfigWiring WireDedicatedInstance()
+    {
+        FleetPaths.EnsureDirs();
+
+        var target = WezTermInstance.ConfigFile(FleetPaths.WezTerm);
+        var socketPath = WezTermInstance.SocketPath(FleetPaths.WezTerm);
+        var moduleDirectory = WezTermWiring.ModuleDirectory(Home);
+
+        try
+        {
+            var wanted = WezTermInstance.Config(socketPath, moduleDirectory);
+            var already = File.Exists(target) && File.ReadAllText(target) == wanted;
+
+            File.WriteAllText(target, wanted);
+
+            return new ConfigWiring(already ? WiringState.Already : WiringState.Added, target);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new ConfigWiring(WiringState.Failed, target, e.Message);
+        }
+    }
+
+    public static bool InvokedInsideFleet() =>
+        string.Equals(
+            Environment.GetEnvironmentVariable(WezTermSockets.Variable),
+            WezTermInstance.SocketPath(FleetPaths.WezTerm),
+            StringComparison.OrdinalIgnoreCase);
 
     public static string HomeDirectory => Home;
 

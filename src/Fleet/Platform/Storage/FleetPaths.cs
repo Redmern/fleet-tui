@@ -22,10 +22,13 @@ public static class FleetPaths
 
     public static string Approvals => Path.Combine(Config, "approvals");
 
+    public static string WezTerm => Path.Combine(Config, "wezterm");
+
     public static void EnsureDirs()
     {
         Directory.CreateDirectory(Projects);
         Directory.CreateDirectory(Sessions);
         Directory.CreateDirectory(Settings);
+        Directory.CreateDirectory(WezTerm);
     }
 }

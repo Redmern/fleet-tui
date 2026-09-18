@@ -42,23 +42,16 @@ public sealed class SetupHandler(Func<string, bool> onPath)
 
     private static SetupStep Wiring(ConfigWiring wiring) => wiring.State switch
     {
-        WiringState.Added => new SetupStep("wezterm config", true, $"wired {wiring.Path}"),
+        WiringState.Added => new SetupStep("fleet wezterm", true, $"wrote {wiring.Path}"),
 
-        WiringState.Already => new SetupStep("wezterm config", true, $"already wired {wiring.Path}"),
+        WiringState.Already => new SetupStep(
+            "fleet wezterm", true, $"already up to date {wiring.Path}"),
 
-        WiringState.Failed => new SetupStep(
-            "wezterm config",
+        _ => new SetupStep(
+            "fleet wezterm",
             false,
             wiring.Detail.Length > 0 ? wiring.Detail : $"could not write {wiring.Path}",
             false,
-            $"add \"{SetupLines.Require}\" and "
-                + $"\"{SetupLines.Apply}\" to {wiring.Path} yourself"),
-
-        _ => new SetupStep(
-            "wezterm config",
-            false,
-            "no wezterm config found",
-            false,
-            "create ~/.wezterm.lua, then run fleet setup again"),
+            $"create {wiring.Path} yourself, or fix the permission problem and rerun setup"),
     };
 }

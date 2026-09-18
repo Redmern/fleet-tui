@@ -125,6 +125,27 @@ public class WezTermWiringTests
     }
 
     [Fact]
+    public void Unwiring_a_wired_config_removes_the_block_and_nothing_else()
+    {
+        var text = "local config = wezterm.config_builder()\nconfig.font_size = 11\nreturn config\n";
+
+        var wired = WezTermWiring.Wire(text);
+        var unwired = WezTermWiring.Unwire(wired.Text);
+
+        Assert.False(WezTermWiring.AlreadyWired(unwired));
+        Assert.Contains("config.font_size = 11", unwired);
+        Assert.Contains("return config", unwired);
+    }
+
+    [Fact]
+    public void Unwiring_an_already_unwired_config_leaves_it_untouched()
+    {
+        var text = "local config = wezterm.config_builder()\nreturn config\n";
+
+        Assert.Equal(text, WezTermWiring.Unwire(text));
+    }
+
+    [Fact]
     public void The_default_config_sits_beside_the_module_off_windows()
     {
         var chosen = WezTermWiring.DefaultConfig("/home/u");
