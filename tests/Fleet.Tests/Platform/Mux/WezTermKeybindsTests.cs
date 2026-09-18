@@ -171,6 +171,20 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
+    public void The_user_var_handler_only_acts_in_the_window_that_owns_the_pane()
+    {
+        var lua = Lua();
+
+        Assert.Contains("local function owns_pane(window, pane)", lua);
+
+        var handler = lua.IndexOf(
+            "wezterm.on('user-var-changed'", StringComparison.Ordinal);
+
+        Assert.True(handler > 0);
+        Assert.Contains("if not owns_pane(window, pane) then", lua[handler..]);
+    }
+
+    [Fact]
     public void The_file_polling_stays_as_a_local_fallback()
     {
         var lua = Lua();
