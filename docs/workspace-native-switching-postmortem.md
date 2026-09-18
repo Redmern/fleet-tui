@@ -5,6 +5,50 @@
 introduced new, subtle failure modes. This document exists so a future attempt
 doesn't have to rediscover the same things the hard way.
 
+## Before picking this back up
+
+This got close. The mechanics mostly worked - workspace-native switching
+switched instantly with no pane shuffle, the dedicated instance genuinely
+isolated fleet from the user's own WezTerm, and even the last feature
+attempted (opening a project directly in whatever window `fleet` was invoked
+from) worked at the pane/window level once its bugs were found. What was
+missing was never really "can this be built," it was "build it 100%
+correctly across every code path that touches a workspace or a driver
+choice" - see "why this is hard, structurally" below - and that is
+genuinely difficult, not a small follow-up.
+
+Separately, and more importantly for whoever resumes this: the exact
+intended behavior of "open a project in the current window" went through
+several rounds of the user correcting a wrong guess during this session
+(does "current window" mean fleet's own window, or literally any window;
+does the picker distinguish lowercase/uppercase or Enter/Shift+Enter; should
+the calling pane be closed or reused after opening; should the dashboard's
+other actions - hide, dispatch - behave differently depending on where the
+project lives). Each answer changed the design in a real way. That strongly
+suggests the requirement was never fully pinned down on either side before
+implementation started.
+
+**Do not resume implementation from this document's design as if it were a
+finished spec.** Ask the user, in detail, how each of the following should
+actually work before writing any code:
+
+- What "open in the current window" is *for* - what workflow does it serve
+  that opening in fleet's dedicated instance doesn't?
+- Whether hide/dispatch/other dashboard actions should be available at all
+  for a project opened this way, given they rely on workspace-switching
+  mechanics that are only safe inside fleet's own dedicated process (see
+  point 2 under "what a real fix would need" below).
+- Whether the calling pane should be closed, reused, or left alone after
+  opening - and whether that answer depends on where the pane lives (inside
+  fleet's instance vs. the user's own).
+- Whether this is worth the added complexity at all, versus the simpler
+  alternative noted in point 4 below (keep every project inside fleet's own
+  instance, solve the "I want this from my regular terminal" need with a
+  lightweight launcher instead of actually hosting panes there).
+
+The rest of this document is a record of what was built, what broke, and why
+- useful context for that conversation, not a substitute for having it.
+
 ## The problem this was trying to solve
 
 Switching between open projects in fleet (pre-v0.4.0) was slow and visually
