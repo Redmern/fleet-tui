@@ -159,14 +159,14 @@ public static class MenuCommand
 
                 var labels = others.Select(Label).ToList();
 
-                var picked = FleetPicker.Choose(app, "Switch project", labels, keymap);
+                var picked = FleetPicker.ChooseWithWindow(app, "Switch project", labels, keymap);
 
-                if (picked is not { } index)
+                if (picked is not { } pick)
                 {
                     break;
                 }
 
-                var target = others[index];
+                var target = others[pick.Index];
                 var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
                 var parked = dash is not null
                     && string.Equals(
@@ -176,34 +176,15 @@ public static class MenuCommand
                     && currentWindow is not null
                     && dash.WindowId == currentWindow;
 
-                IReadOnlyList<string> options = dash is null
-                    ? ["Open in this window", "Open in a new window"]
-                    : parked
-                        ? ["Show it in this window", "Show it in a new window"]
-                        : here
-                            ? ["Focus it", "Move it to a new window"]
-                            : [
-                                "Move it into this window",
-                                "Move it to a new window",
-                                "Focus its window",
-                            ];
+                var plan = SwitchProjectPlan.Resolve(dash is not null, parked, here, pick.NewWindow);
 
-                var chosen2 = FleetPicker.Choose(app, target.Name, options, keymap);
-
-                if (chosen2 is not { } action)
-                {
-                    break;
-                }
-
-                var focus = dash is not null && !parked && (here ? action == 0 : action == 2);
-
-                if (focus)
+                if (plan.Focus)
                 {
                     await switchMux.Driver.FocusPaneAsync(dash!.Id).ConfigureAwait(false);
                     break;
                 }
 
-                var intoThisWindow = !here && action == 0;
+                var intoThisWindow = plan.IntoThisWindow;
                 var mover = new MoveProjectHandler(switchMux.Driver);
 
                 if (intoThisWindow)
