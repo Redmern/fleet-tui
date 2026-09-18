@@ -3,7 +3,7 @@ using Fleet.Ports.Mux.Exceptions;
 
 namespace Fleet.Platform.Mux.WezTerm;
 
-public sealed class WezTermCli(string executable = "wezterm", string? pinnedSocket = null)
+public sealed class WezTermCli(string executable = "wezterm")
 {
     private string? _socket;
     private bool _resolved;
@@ -24,11 +24,6 @@ public sealed class WezTermCli(string executable = "wezterm", string? pinnedSock
 
     private async Task<string?> SocketAsync(CancellationToken ct)
     {
-        if (pinnedSocket is not null)
-        {
-            return pinnedSocket;
-        }
-
         if (_resolved)
         {
             return _socket;

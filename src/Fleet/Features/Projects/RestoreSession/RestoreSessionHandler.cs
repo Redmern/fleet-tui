@@ -15,10 +15,8 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
         CancellationToken ct = default)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
-        var dash = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot));
 
-        var window = dash?.WindowId;
-        var native = ProjectWorkspace.IsNative(dash, project);
+        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
 
         var restored = 0;
 
@@ -29,7 +27,7 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
                 continue;
             }
 
-            var pane = await mux.SpawnAsync(Options(project, agent, window, native), ct)
+            var pane = await mux.SpawnAsync(Options(project, agent, window), ct)
                 .ConfigureAwait(false);
 
             if (pane.IsNone)
@@ -51,21 +49,14 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
         && Directory.Exists(agent.Worktree)
         && !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
 
-    public static SpawnOptions Options(
-        string project, AgentRecord agent, string? window, bool native)
-    {
-        var hiddenWorkspace = native
-            ? ProjectWorkspace.HiddenWorkspaceFor(project)
-            : FleetWorkspaces.Hidden;
-
-        return new()
+    public static SpawnOptions Options(string project, AgentRecord agent, string? window) =>
+        new()
         {
             Cwd = agent.Worktree,
-            SessionName = agent.Hidden ? hiddenWorkspace : project,
-            Workspace = agent.Hidden ? hiddenWorkspace : null,
+            SessionName = agent.Hidden ? FleetWorkspaces.Hidden : project,
+            Workspace = agent.Hidden ? FleetWorkspaces.Hidden : null,
             WindowId = agent.Hidden ? null : window,
             NewWindow = agent.Hidden,
             Args = AgentHarness.CommandFor(agent.Harness, withClaude: agent.Owner.Length > 0),
         };
-    }
 }

@@ -100,50 +100,12 @@ public sealed class RestoreSessionTests : IDisposable
     [Fact]
     public void A_visible_agent_is_restored_into_the_dashboards_window()
     {
-        var options = RestoreSessionHandler.Options(
-            "techweb", Agent("dev", open: true), "w7", native: false);
+        var options = RestoreSessionHandler.Options("techweb", Agent("dev", open: true), "w7");
 
         Assert.Equal("w7", options.WindowId);
         Assert.Equal("techweb", options.SessionName);
         Assert.False(options.NewWindow);
         Assert.Null(options.Workspace);
         Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), options.Args);
-    }
-
-    [Fact]
-    public void A_hidden_agent_is_restored_into_a_new_hidden_window_when_legacy()
-    {
-        var hidden = Agent("dev", open: true) with { Hidden = true };
-        var options = RestoreSessionHandler.Options("techweb", hidden, "w7", native: false);
-
-        Assert.Null(options.WindowId);
-        Assert.True(options.NewWindow);
-        Assert.Equal(FleetWorkspaces.Hidden, options.Workspace);
-        Assert.Equal(FleetWorkspaces.Hidden, options.SessionName);
-    }
-
-    [Fact]
-    public void A_native_projects_visible_agent_restores_the_same_as_legacy()
-    {
-        var options = RestoreSessionHandler.Options(
-            "techweb", Agent("dev", open: true), "w7", native: true);
-
-        Assert.Equal("w7", options.WindowId);
-        Assert.Equal("techweb", options.SessionName);
-        Assert.False(options.NewWindow);
-        Assert.Null(options.Workspace);
-    }
-
-    [Fact]
-    public void A_native_projects_hidden_agent_goes_to_its_own_projects_hidden_workspace()
-    {
-        var hidden = Agent("dev", open: true) with { Hidden = true };
-        var options = RestoreSessionHandler.Options("techweb", hidden, "w7", native: true);
-
-        Assert.Null(options.WindowId);
-        Assert.True(options.NewWindow);
-        Assert.Equal("fleet-hidden-techweb", options.Workspace);
-        Assert.Equal("fleet-hidden-techweb", options.SessionName);
-        Assert.NotEqual(FleetWorkspaces.Hidden, options.Workspace);
     }
 }

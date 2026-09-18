@@ -157,18 +157,6 @@ public class WezTermDriverTests
     }
 
     [Fact]
-    public void Spawning_into_a_workspace_needs_a_new_window_and_drops_the_window_id()
-    {
-        var args = WezTermDriver.SpawnArgs(
-            new SpawnOptions { Workspace = "backend", WindowId = "14", Cwd = "C:/x" });
-
-        Assert.Contains("--new-window", args);
-        Assert.Contains("--workspace", args);
-        Assert.Contains("backend", args);
-        Assert.DoesNotContain("--window-id", args);
-    }
-
-    [Fact]
     public void Every_cli_call_refuses_to_start_a_mux_server_of_its_own()
     {
         var argv = WezTermCli.Argv(["list", "--format", "json"]);

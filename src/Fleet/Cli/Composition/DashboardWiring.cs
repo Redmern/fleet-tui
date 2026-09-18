@@ -18,7 +18,6 @@ using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.RenameOrchestration;
 using DispatchRequest = Fleet.Features.Orchestrations.Dispatch.Models.DispatchCommand;
 using Fleet.Features.Files.BrowseFiles;
-using Fleet.Features.Projects;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
@@ -293,15 +292,12 @@ public static class DashboardWiring
         IReadOnlyList<Pane>? knownPanes = null)
     {
         var panes = knownPanes ?? mux.ListPanesAsync().GetAwaiter().GetResult();
-        var dashPane = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root));
 
         var dashboard = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId
-            ?? dashPane?.WindowId;
-
-        var native = ProjectWorkspace.IsNative(dashPane, project.Name);
+            ?? panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root))?.WindowId;
 
         var outcome = hider
-            .HandleAsync(project.Name, agent, dashboard, native, panes)
+            .HandleAsync(project.Name, agent, dashboard, panes)
             .GetAwaiter()
             .GetResult();
 
@@ -453,16 +449,11 @@ public static class DashboardWiring
             }
 
             var panes = barPanes;
-            var dashPane = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root));
-
-            var hiddenWorkspace = ProjectWorkspace.IsNative(dashPane, project.Name)
-                ? ProjectWorkspace.HiddenWorkspaceFor(project.Name)
-                : FleetWorkspaces.Hidden;
 
             bool ShownInBar(AgentRecord a) => panes.Any(p =>
                 AgentPanes.Owns(p, a)
                 && !string.Equals(
-                    p.SessionName, hiddenWorkspace, StringComparison.OrdinalIgnoreCase));
+                    p.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase));
 
             return [.. records.Select(a => a with { Hidden = !ShownInBar(a) })];
         }

@@ -60,31 +60,32 @@ public class SetupTests
     }
 
     [Fact]
-    public void An_unwritten_dedicated_config_is_reported_and_told_to_create_it()
+    public void An_unwired_config_is_reported_with_the_lines_to_add()
     {
         var report = new SetupHandler(_ => true).Inspect(
             "fleet.lua",
-            new ConfigWiring(WiringState.Missing, "~/.fleet/wezterm/fleet-instance.lua"),
+            new ConfigWiring(WiringState.Missing, "~/.wezterm.lua"),
             "config");
 
         var step = Assert.Single(report.Missing);
 
-        Assert.Equal("fleet wezterm", step.Name);
+        Assert.Equal("wezterm config", step.Name);
         Assert.False(report.Blocked);
-        Assert.Contains("fleet-instance.lua", step.Fix);
+        Assert.Contains("wezterm.lua", step.Fix);
     }
 
     [Fact]
-    public void A_config_that_could_not_be_written_says_why()
+    public void A_config_that_could_not_be_written_says_what_to_paste()
     {
         var report = new SetupHandler(_ => true).Inspect(
             "fleet.lua",
-            new ConfigWiring(
-                WiringState.Failed, "~/.fleet/wezterm/fleet-instance.lua", "access denied"),
+            new ConfigWiring(WiringState.Failed, "~/.wezterm.lua", "access denied"),
             "config");
 
         var step = Assert.Single(report.Missing);
 
+        Assert.Contains(SetupLines.Require, step.Fix);
+        Assert.Contains(SetupLines.Apply, step.Fix);
         Assert.Equal("access denied", step.Detail);
     }
 

@@ -8,7 +8,6 @@ using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
-using Fleet.Features.Projects;
 using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.QuitProject;
@@ -185,14 +184,6 @@ public static class MenuCommand
                     break;
                 }
 
-                if (ProjectWorkspace.IsNative(dash, target.Name))
-                {
-                    Adapters.EmitUserVar(
-                        "fleet-workspace", $"{DateTime.UtcNow.Ticks}\n{target.Name}");
-                    Adapters.Workspaces().Submit(target.Name);
-                    break;
-                }
-
                 var intoThisWindow = plan.IntoThisWindow;
                 var mover = new MoveProjectHandler(switchMux.Driver);
 
@@ -210,7 +201,8 @@ public static class MenuCommand
 
                 if (dash is null)
                 {
-                    await OpenProjectFlow(switchMux.Driver, target, intoThisWindow)
+                    await OpenProjectFlow(
+                            switchMux.Driver, target, intoThisWindow ? currentWindow : null)
                         .ConfigureAwait(false);
 
                     break;
@@ -338,11 +330,10 @@ public static class MenuCommand
     }
 
     private static async Task OpenProjectFlow(
-        IMuxDriver mux, Project project, bool intoCurrentWindow)
+        IMuxDriver mux, Project project, string? windowId = null)
     {
         var result = await new OpenProjectHandler(mux)
-            .HandleAsync(new OpenProjectCommand(
-                project, "claude", Adapters.Executable, WindowId: null, Workspace: project.Name))
+            .HandleAsync(new OpenProjectCommand(project, "claude", Adapters.Executable, windowId))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -361,12 +352,6 @@ public static class MenuCommand
             .ConfigureAwait(false);
 
         await mux.FocusPaneAsync(result.Value.DashPane).ConfigureAwait(false);
-
-        if (intoCurrentWindow)
-        {
-            Adapters.EmitUserVar("fleet-workspace", $"{DateTime.UtcNow.Ticks}\n{project.Name}");
-            Adapters.Workspaces().Submit(project.Name);
-        }
     }
 
     private static async Task FocusMain(Project project)
