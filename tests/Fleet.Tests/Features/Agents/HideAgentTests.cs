@@ -23,6 +23,23 @@ public class HideAgentTests
             "origin/main", true, hidden);
 
     [Fact]
+    public async Task Toggling_refocuses_wherever_the_dashboard_is_running_not_whatever_else_was_active()
+    {
+        var agent = Agent();
+        var agentPane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var dashboard = await _mux.SpawnAsync(new SpawnOptions { Cwd = "C:/repos/techweb" });
+        _mux.CurrentPane = dashboard;
+
+        await new HideAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, dashboardWindow: "w1", workspaceNative: false);
+
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.True(panes.Single(p => p.Id == dashboard).IsActive);
+        Assert.False(panes.Single(p => p.Id == agentPane).IsActive);
+    }
+
+    [Fact]
     public async Task Hiding_moves_the_pane_into_the_hidden_workspace()
     {
         var agent = Agent();

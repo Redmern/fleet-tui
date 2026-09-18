@@ -22,7 +22,10 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         var hiding = !agent.Hidden;
 
         var panes = knownPanes ?? await mux.ListPanesAsync(ct).ConfigureAwait(false);
-        var active = panes.FirstOrDefault(p => p.IsActive);
+
+        var active = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)
+            ?? panes.FirstOrDefault(p => p.IsActive);
+
         var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
 
         var hiddenWorkspace = workspaceNative
