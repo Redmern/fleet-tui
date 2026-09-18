@@ -29,7 +29,7 @@ public class HideAgentTests
         var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
         var result = await new HideAgentHandler(_mux, _store)
-            .HandleAsync("techweb", agent, dashboardWindow: "w1");
+            .HandleAsync("techweb", agent, dashboardWindow: "w1", workspaceNative: false);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.True(result.Value!.Hidden);
@@ -44,7 +44,7 @@ public class HideAgentTests
         var agent = Agent();
         var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
-        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1");
+        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1", false);
 
         Assert.Equal("backend/test", _mux.TitleOf(pane));
     }
@@ -62,8 +62,8 @@ public class HideAgentTests
 
         var handler = new HideAgentHandler(_mux, _store);
 
-        Assert.True((await handler.HandleAsync("techweb", first, "w1")).Succeeded);
-        Assert.True((await handler.HandleAsync("techweb", second, "w1")).Succeeded);
+        Assert.True((await handler.HandleAsync("techweb", first, "w1", false)).Succeeded);
+        Assert.True((await handler.HandleAsync("techweb", second, "w1", false)).Succeeded);
 
         var panes = await _mux.ListPanesAsync();
         var one = panes.Single(p => p.Id == firstPane);
@@ -80,7 +80,7 @@ public class HideAgentTests
         var agent = Agent();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
-        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1");
+        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1", false);
 
         var saved = Assert.Single(_store.Saved);
 
@@ -96,7 +96,7 @@ public class HideAgentTests
             new SpawnOptions { Cwd = agent.Worktree, Workspace = FleetWorkspaces.Hidden });
 
         var result = await new HideAgentHandler(_mux, _store)
-            .HandleAsync("techweb", agent, dashboardWindow: "w9");
+            .HandleAsync("techweb", agent, dashboardWindow: "w9", workspaceNative: false);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.False(result.Value!.Hidden);
@@ -111,7 +111,7 @@ public class HideAgentTests
         var agent = Agent();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
 
-        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1");
+        await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, "w1", false);
 
         var saved = Assert.Single(_store.Saved);
 
@@ -135,7 +135,7 @@ public class HideAgentTests
         await _mux.FocusPaneAsync(dashboard);
 
         var result = await new HideAgentHandler(_mux, _store)
-            .HandleAsync("techweb", agent, dashboardWindow: home);
+            .HandleAsync("techweb", agent, dashboardWindow: home, workspaceNative: false);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.True(result.Value!.Hidden);
@@ -158,7 +158,7 @@ public class HideAgentTests
         var browser = (await _mux.ListPanesAsync()).Single(p => p.Id != claude).Id;
 
         var result = await new HideAgentHandler(_mux, _store)
-            .HandleAsync("techweb", agent, dashboardWindow: "w9");
+            .HandleAsync("techweb", agent, dashboardWindow: "w9", workspaceNative: false);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -178,7 +178,8 @@ public class HideAgentTests
         var claude = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = agent.Worktree, Workspace = FleetWorkspaces.Hidden, NewWindow = true });
 
-        var result = await new HideAgentHandler(_mux, _store).HandleAsync("techweb", agent, home);
+        var result = await new HideAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, home, false);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -197,7 +198,7 @@ public class HideAgentTests
     public async Task An_agent_with_no_pane_is_recorded_as_closed()
     {
         var saved = await new HideAgentHandler(_mux, _store)
-            .HandleAsync("techweb", Agent() with { Open = true }, "w1");
+            .HandleAsync("techweb", Agent() with { Open = true }, "w1", false);
 
         Assert.False(saved.Value!.Open);
     }
@@ -206,11 +207,32 @@ public class HideAgentTests
     public async Task An_agent_with_no_pane_still_records_the_change()
     {
         var result = await new HideAgentHandler(_mux, _store)
-            .HandleAsync("techweb", Agent(), "w1");
+            .HandleAsync("techweb", Agent(), "w1", false);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.True(result.Value!.Hidden);
         Assert.Single(_store.Saved);
+    }
+
+    [Fact]
+    public async Task Hiding_in_a_native_project_moves_the_pane_into_a_background_tab()
+    {
+        var agent = Agent();
+        var dash = await _mux.SpawnAsync(new SpawnOptions { Cwd = "C:/repos/techweb" });
+        var window = (await _mux.ListPanesAsync()).Single(p => p.Id == dash).WindowId;
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+
+        var result = await new HideAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, dashboardWindow: window, workspaceNative: true);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.True(result.Value!.Hidden);
+
+        var panes = await _mux.ListPanesAsync();
+        var agentPane = panes.Single(p => p.Id == pane);
+
+        Assert.Equal(window, agentPane.WindowId);
+        Assert.NotEqual(FleetWorkspaces.Hidden, agentPane.SessionName);
     }
 
     [Fact]

@@ -100,12 +100,42 @@ public sealed class RestoreSessionTests : IDisposable
     [Fact]
     public void A_visible_agent_is_restored_into_the_dashboards_window()
     {
-        var options = RestoreSessionHandler.Options("techweb", Agent("dev", open: true), "w7");
+        var options = RestoreSessionHandler.Options(
+            "techweb", Agent("dev", open: true), "w7", native: false);
 
         Assert.Equal("w7", options.WindowId);
         Assert.Equal("techweb", options.SessionName);
         Assert.False(options.NewWindow);
         Assert.Null(options.Workspace);
         Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), options.Args);
+    }
+
+    [Fact]
+    public void A_hidden_agent_is_restored_into_a_new_hidden_window_when_legacy()
+    {
+        var hidden = Agent("dev", open: true) with { Hidden = true };
+        var options = RestoreSessionHandler.Options("techweb", hidden, "w7", native: false);
+
+        Assert.Null(options.WindowId);
+        Assert.True(options.NewWindow);
+        Assert.Equal(FleetWorkspaces.Hidden, options.Workspace);
+        Assert.Equal(FleetWorkspaces.Hidden, options.SessionName);
+    }
+
+    [Fact]
+    public void A_native_project_restores_every_agent_into_its_own_window_hidden_or_not()
+    {
+        var visible = RestoreSessionHandler.Options(
+            "techweb", Agent("dev", open: true), "w7", native: true);
+        var hidden = RestoreSessionHandler.Options(
+            "techweb", Agent("dev", open: true) with { Hidden = true }, "w7", native: true);
+
+        foreach (var options in new[] { visible, hidden })
+        {
+            Assert.Equal("w7", options.WindowId);
+            Assert.Equal("techweb", options.SessionName);
+            Assert.False(options.NewWindow);
+            Assert.Null(options.Workspace);
+        }
     }
 }

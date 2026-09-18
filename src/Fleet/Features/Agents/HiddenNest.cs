@@ -42,4 +42,17 @@ public static class HiddenNest
 
         return hiddenWindow;
     }
+
+    public static async Task MoveIntoBackgroundAsync(
+        IMuxDriver mux,
+        IEnumerable<PaneId> ids,
+        string dashboardWindow,
+        CancellationToken ct = default)
+    {
+        foreach (var id in ids)
+        {
+            await mux.MovePaneAsync(id, new MovePaneOptions { WindowId = dashboardWindow }, ct)
+                .ConfigureAwait(false);
+        }
+    }
 }
