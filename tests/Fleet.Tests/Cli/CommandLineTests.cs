@@ -146,4 +146,24 @@ public class CommandLineTests
     {
         Assert.Null(CommandLine.Parse(["update"]).Version);
     }
+
+    [Fact]
+    public void The_short_version_flag_works_the_same_as_the_long_one()
+    {
+        Assert.Equal("0.3.0", CommandLine.Parse(["update", "-v", "0.3.0"]).Version);
+    }
+
+    [Fact]
+    public void The_list_flag_is_recognised_in_either_form()
+    {
+        Assert.True(CommandLine.Parse(["update", "--list"]).ListVersions);
+        Assert.True(CommandLine.Parse(["update", "-l"]).ListVersions);
+        Assert.False(CommandLine.Parse(["update"]).ListVersions);
+    }
+
+    [Fact]
+    public void The_list_flag_does_not_get_mistaken_for_free_text()
+    {
+        Assert.Null(CommandLine.Parse(["dispatch", "--project", "p", "--list"]).Text);
+    }
 }

@@ -22,7 +22,8 @@ public static class HelpCommand
               fleet doctor                check the environment
               fleet version               show the version, and check for an update
               fleet update                download and install the latest release
-              fleet update --version <v>   install a specific release instead of latest
+              fleet update --version <v>  install a specific release instead of latest (-v)
+              fleet update --list         list every published release (-l)
             """);
 
         return 0;

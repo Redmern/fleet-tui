@@ -12,4 +12,5 @@ public sealed record Invocation(
     string? Status = null,
     string? Title = null,
     IReadOnlyList<string>? Tail = null,
-    string? Version = null);
+    string? Version = null,
+    bool ListVersions = false);

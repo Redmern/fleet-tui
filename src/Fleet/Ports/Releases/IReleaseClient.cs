@@ -8,5 +8,7 @@ public interface IReleaseClient
 
     Task<ReleaseInfo?> ForVersionAsync(string repo, string version, CancellationToken ct = default);
 
+    Task<IReadOnlyList<ReleaseInfo>> ListAsync(string repo, CancellationToken ct = default);
+
     Task<byte[]?> DownloadAsync(string url, CancellationToken ct = default);
 }

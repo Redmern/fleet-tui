@@ -17,8 +17,16 @@ public static class CommandLine
 
     public const string VersionFlag = "--version";
 
+    public const string VersionShortFlag = "-v";
+
+    public const string ListFlag = "--list";
+
+    public const string ListShortFlag = "-l";
+
     private static readonly string[] ValueFlags =
-        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag];
+        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag];
+
+    private static readonly string[] BoolFlags = [ListFlag, ListShortFlag];
 
     public static Invocation Parse(IReadOnlyList<string> args)
     {
@@ -35,7 +43,8 @@ public static class CommandLine
             ValueOf(options, StatusFlag),
             ValueOf(options, TitleFlag),
             TailOf(options),
-            ValueOf(options, VersionFlag));
+            ValueOf(options, VersionFlag, VersionShortFlag),
+            HasFlag(options, ListFlag, ListShortFlag));
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch
@@ -59,13 +68,24 @@ public static class CommandLine
         _ => FleetVerb.Unknown,
     };
 
-    private static string? ValueOf(string[] args, string flag)
+    private static string? ValueOf(string[] args, params string[] flags)
     {
-        var i = Array.IndexOf(args, flag);
-        var value = i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+        foreach (var flag in flags)
+        {
+            var i = Array.IndexOf(args, flag);
+            var value = i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 
-        return string.IsNullOrWhiteSpace(value) ? null : value;
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
+
+    private static bool HasFlag(string[] args, params string[] flags) =>
+        flags.Any(args.Contains);
 
     private static IReadOnlyList<string>? TailOf(string[] args)
     {
@@ -90,6 +110,11 @@ public static class CommandLine
             if (ValueFlags.Contains(args[i]))
             {
                 i++;
+                continue;
+            }
+
+            if (BoolFlags.Contains(args[i]))
+            {
                 continue;
             }
 

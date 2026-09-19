@@ -9,4 +9,10 @@ public sealed class GitHubReleaseJson
 
     [JsonPropertyName("assets")]
     public GitHubAssetJson[] Assets { get; set; } = [];
+
+    [JsonPropertyName("prerelease")]
+    public bool Prerelease { get; set; }
+
+    [JsonPropertyName("draft")]
+    public bool Draft { get; set; }
 }

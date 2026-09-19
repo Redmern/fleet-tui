@@ -20,6 +20,11 @@ public sealed class FakeReleaseClient : IReleaseClient
             ? release
             : null);
 
+    public IReadOnlyList<ReleaseInfo> List { get; set; } = [];
+
+    public Task<IReadOnlyList<ReleaseInfo>> ListAsync(string repo, CancellationToken ct = default) =>
+        Task.FromResult(List);
+
     public Task<byte[]?> DownloadAsync(string url, CancellationToken ct = default) =>
         Task.FromResult(Downloads.TryGetValue(url, out var bytes) ? bytes : null);
 }
