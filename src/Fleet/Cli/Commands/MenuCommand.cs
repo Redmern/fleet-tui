@@ -37,6 +37,7 @@ public static class MenuCommand
         FleetAction.EditKeybinds,
         FleetAction.FocusMain,
         FleetAction.SwitchProject,
+        FleetAction.CombineWindows,
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
@@ -136,84 +137,41 @@ public static class MenuCommand
                 var self = Environment.GetEnvironmentVariable("WEZTERM_PANE");
                 var currentWindow = panes.FirstOrDefault(p => p.Id.Value == self)?.WindowId;
 
-                string Label(Project p)
-                {
-                    var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, p.Root));
-
-                    if (dash is null)
-                    {
-                        return p.Name;
-                    }
-
-                    var where = string.Equals(
-                            dash.SessionName,
-                            FleetWorkspaces.Hidden,
-                            StringComparison.OrdinalIgnoreCase)
-                        ? "hidden"
-                        : currentWindow is not null && dash.WindowId == currentWindow
-                            ? "this window"
-                            : "another window";
-
-                    return $"{p.Name}  (open · {where})";
-                }
+                string Label(Project p) =>
+                    panes.Any(x => PathKey.Same(x.Cwd, p.Root)) ? $"{p.Name}  (open)" : p.Name;
 
                 var labels = others.Select(Label).ToList();
 
-                var picked = FleetPicker.ChooseWithWindow(app, "Switch project", labels, keymap);
+                var index = FleetPicker.Choose(app, "Switch project", labels, keymap);
 
-                if (picked is not { } pick)
+                if (index is not { } chosenIndex)
                 {
                     break;
                 }
 
-                var target = others[pick.Index];
+                var target = others[chosenIndex];
                 var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
-                var parked = dash is not null
-                    && string.Equals(
-                        dash.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase);
-                var here = dash is not null
-                    && !parked
-                    && currentWindow is not null
-                    && dash.WindowId == currentWindow;
 
-                var plan = SwitchProjectPlan.Resolve(dash is not null, parked, here, pick.NewWindow);
-
-                if (plan.Focus)
+                if (dash is not null && dash.WindowId == currentWindow)
                 {
-                    await switchMux.Driver.FocusPaneAsync(dash!.Id).ConfigureAwait(false);
+                    await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
                     break;
-                }
-
-                var intoThisWindow = plan.IntoThisWindow;
-                var mover = new MoveProjectHandler(switchMux.Driver);
-
-                if (intoThisWindow)
-                {
-                    await mover
-                        .ParkAsync(
-                            project.Name,
-                            project.Root,
-                            new ListAgentsHandler(Adapters.Agents()).Handle(project.Name),
-                            Adapters.DashPane(project.Name),
-                            self)
-                        .ConfigureAwait(false);
                 }
 
                 if (dash is null)
                 {
-                    await OpenProjectFlow(
-                            switchMux.Driver, target, intoThisWindow ? currentWindow : null)
+                    await OpenProjectFlow(switchMux.Driver, target, currentWindow)
                         .ConfigureAwait(false);
 
                     break;
                 }
 
-                var moved = await mover
+                var moved = await new MoveProjectHandler(switchMux.Driver)
                     .HandleAsync(
                         target.Name,
                         target.Root,
                         new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
-                        intoThisWindow ? currentWindow : null,
+                        currentWindow,
                         Adapters.DashPane(target.Name),
                         self,
                         Adapters.Executable)
@@ -222,6 +180,72 @@ public static class MenuCommand
                 if (!moved.Succeeded)
                 {
                     FleetDialog.Error(app, "Switch project", moved.Error!);
+                }
+
+                break;
+            }
+
+            case FleetAction.CombineWindows:
+            {
+                var allProjects = projects.List();
+                var combineMux = Adapters.Mux(Adapters.Log());
+                var combinePanes = await combineMux.Driver.ListPanesAsync().ConfigureAwait(false);
+
+                var combineSelf = Environment.GetEnvironmentVariable("WEZTERM_PANE");
+                var combineCurrentWindow = combinePanes
+                    .FirstOrDefault(p => p.Id.Value == combineSelf)?.WindowId;
+
+                var otherWindows = combinePanes
+                    .Where(p => p.WindowId != combineCurrentWindow)
+                    .GroupBy(p => p.WindowId)
+                    .Select(group => new
+                    {
+                        group.Key,
+                        Projects = allProjects
+                            .Where(proj => group.Any(p => PathKey.Same(p.Cwd, proj.Root)))
+                            .OrderBy(proj => proj.Name, StringComparer.OrdinalIgnoreCase)
+                            .ToList(),
+                    })
+                    .Where(w => w.Projects.Count > 0)
+                    .ToList();
+
+                if (otherWindows.Count == 0)
+                {
+                    FleetDialog.Error(app, "Combine windows", "No other fleet windows are open.");
+                    break;
+                }
+
+                var windowLabels = otherWindows
+                    .Select(w => string.Join(", ", w.Projects.Select(p => p.Name)))
+                    .ToList();
+
+                var windowIndex = FleetPicker.Choose(app, "Combine windows", windowLabels, keymap);
+
+                if (windowIndex is not { } chosenWindowIndex)
+                {
+                    break;
+                }
+
+                var sourceWindow = otherWindows[chosenWindowIndex];
+
+                foreach (var toMove in sourceWindow.Projects)
+                {
+                    var combineMoved = await new MoveProjectHandler(combineMux.Driver)
+                        .HandleAsync(
+                            toMove.Name,
+                            toMove.Root,
+                            new ListAgentsHandler(Adapters.Agents()).Handle(toMove.Name),
+                            combineCurrentWindow,
+                            Adapters.DashPane(toMove.Name),
+                            combineSelf,
+                            Adapters.Executable)
+                        .ConfigureAwait(false);
+
+                    if (!combineMoved.Succeeded)
+                    {
+                        FleetDialog.Error(app, "Combine windows", combineMoved.Error!);
+                        break;
+                    }
                 }
 
                 break;

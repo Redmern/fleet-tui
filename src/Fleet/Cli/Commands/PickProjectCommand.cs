@@ -9,10 +9,13 @@ using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Projects.PickProject.Models;
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.RemoveProject;
+using Fleet.Ports.Mux;
 using Fleet.Ports.Projects.Models;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
+using Fleet.Ui.Enums;
 using Terminal.Gui.App;
 
 namespace Fleet.Cli.Commands;
@@ -46,7 +49,21 @@ public static class PickProjectCommand
         }
 
         var chosen = picked.Project;
-        var windowId = picked.NewWindow ? null : Adapters.CurrentWindow(mux.Driver);
+        var newWindow = picked.NewWindow;
+        string? windowId = null;
+
+        if (!newWindow)
+        {
+            var resolved = await ResolveWindowAsync(mux.Driver).ConfigureAwait(false);
+
+            if (resolved is null)
+            {
+                return 0;
+            }
+
+            newWindow = resolved.Value.NewWindow;
+            windowId = resolved.Value.WindowId;
+        }
 
         var result = await new OpenProjectHandler(mux.Driver)
             .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable, windowId))
@@ -77,7 +94,7 @@ public static class PickProjectCommand
 
         await mux.Driver.FocusPaneAsync(result.Value.DashPane).ConfigureAwait(false);
 
-        if (!picked.NewWindow)
+        if (!newWindow)
         {
             var self = mux.Driver.CurrentPane;
 
@@ -88,6 +105,61 @@ public static class PickProjectCommand
         }
 
         return 0;
+    }
+
+    private static async Task<(string? WindowId, bool NewWindow)?> ResolveWindowAsync(
+        IMuxDriver mux)
+    {
+        var currentWindow = Adapters.CurrentWindow(mux);
+        var panes = await mux.ListPanesAsync().ConfigureAwait(false);
+        var windowPanes = panes.Where(p => p.WindowId == currentWindow).ToList();
+        var projects = Adapters.Projects().List();
+
+        var alreadyFleetWindow = windowPanes.Any(
+            p => projects.Any(project => PathKey.Same(p.Cwd, project.Root)));
+
+        if (alreadyFleetWindow || windowPanes.Count <= 1)
+        {
+            return (currentWindow, false);
+        }
+
+        var choice = PromptTakeOver(windowPanes.Count - 1);
+
+        if (choice == DialogChoice.Cancelled)
+        {
+            return null;
+        }
+
+        if (choice == DialogChoice.Secondary)
+        {
+            return (null, true);
+        }
+
+        var self = mux.CurrentPane;
+
+        foreach (var pane in windowPanes.Where(p => p.Id != self))
+        {
+            await mux.KillPaneAsync(pane.Id).ConfigureAwait(false);
+        }
+
+        return (currentWindow, false);
+    }
+
+    private static DialogChoice PromptTakeOver(int otherPaneCount)
+    {
+        using IApplication app = FleetUi.Start();
+
+        var plural = otherPaneCount == 1 ? "pane" : "panes";
+
+        return FleetDialog.Choose(
+            app,
+            "Open fleet here?",
+            [
+                $"This window has {otherPaneCount} other {plural} open.",
+                "Opening fleet here closes them.",
+            ],
+            "Continue",
+            "New window");
     }
 
     private static ProjectPick? Choose()

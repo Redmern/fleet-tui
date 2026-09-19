@@ -34,6 +34,7 @@ public enum FleetAction
     BrowseFiles,
     EditSettings,
     SwitchProject,
+    CombineWindows,
     CleanupProject,
     RebuildDashboard,
 }

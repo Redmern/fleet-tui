@@ -1,4 +1,5 @@
 using Fleet.Ui.Constants;
+using Fleet.Ui.Enums;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 
@@ -6,6 +7,76 @@ namespace Fleet.Ui;
 
 public static class FleetDialog
 {
+    public static DialogChoice Choose(
+        IApplication app,
+        string title,
+        IReadOnlyList<string> lines,
+        string primaryText,
+        string secondaryText)
+    {
+        var choice = DialogChoice.Cancelled;
+        var window = Sized(title, lines, extraRows: 5);
+
+        var y = 1;
+        foreach (var line in lines)
+        {
+            window.Add(FleetTheme.Caption(2, y, line));
+            y++;
+        }
+
+        var primary = FleetTheme.Submit(2, y + 1, primaryText);
+        var secondary = FleetTheme.Secondary(2 + primaryText.Length + 6, y + 1, secondaryText);
+
+        primary.Accepting += (_, _) =>
+        {
+            choice = DialogChoice.Primary;
+            app.RequestStop(window);
+        };
+
+        secondary.Accepting += (_, _) =>
+        {
+            choice = DialogChoice.Secondary;
+            app.RequestStop(window);
+        };
+
+        window.KeyDown += (_, key) =>
+        {
+            if (key == FleetKeys.Cancel)
+            {
+                app.RequestStop(window);
+                key.Handled = true;
+            }
+            else if (key == Key.H || key == Key.CursorLeft)
+            {
+                primary.SetFocus();
+                key.Handled = true;
+            }
+            else if (key == Key.L || key == Key.CursorRight)
+            {
+                secondary.SetFocus();
+                key.Handled = true;
+            }
+        };
+
+        window.Add(primary, secondary, FleetTheme.HintBar(FleetHints.Choose));
+
+        primary.SetFocus();
+
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
+
+        return choice;
+    }
+
     public static bool Confirm(
         IApplication app, string title, IReadOnlyList<string> lines, string confirmText = "Yes")
     {

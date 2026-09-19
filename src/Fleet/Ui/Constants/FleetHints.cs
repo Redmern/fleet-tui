@@ -12,6 +12,8 @@ public static class FleetHints
 
     public const string Confirm = "h/l move   enter select   y yes   n/esc no";
 
+    public const string Choose = "h/l move   enter select   esc cancel";
+
     public const string Dismiss = "enter/esc dismiss";
 
     public const string Keybinds = "j/k move   enter rebind   esc close";
