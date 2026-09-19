@@ -15,8 +15,10 @@ public static class CommandLine
 
     public const string TitleFlag = Shared.Constants.AgentHarness.TitleFlag;
 
+    public const string VersionFlag = "--version";
+
     private static readonly string[] ValueFlags =
-        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag];
+        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag];
 
     public static Invocation Parse(IReadOnlyList<string> args)
     {
@@ -32,7 +34,8 @@ public static class CommandLine
             ValueOf(options, CallerFlag),
             ValueOf(options, StatusFlag),
             ValueOf(options, TitleFlag),
-            TailOf(options));
+            TailOf(options),
+            ValueOf(options, VersionFlag));
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch

@@ -131,4 +131,19 @@ public class CommandLineTests
             "sub-slug",
             CommandLine.Parse(["dispatch", "--project", "p", "--caller", "sub-slug", "task"]).Caller);
     }
+
+    [Fact]
+    public void The_version_flag_is_parsed_for_update()
+    {
+        var invocation = CommandLine.Parse(["update", "--version", "0.3.0"]);
+
+        Assert.Equal(FleetVerb.Update, invocation.Verb);
+        Assert.Equal("0.3.0", invocation.Version);
+    }
+
+    [Fact]
+    public void Update_without_a_version_flag_leaves_it_null()
+    {
+        Assert.Null(CommandLine.Parse(["update"]).Version);
+    }
 }

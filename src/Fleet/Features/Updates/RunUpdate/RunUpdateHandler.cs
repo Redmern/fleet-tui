@@ -19,18 +19,28 @@ public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller i
                 + "./install.sh (or install.ps1 on Windows).");
         }
 
-        var latest = await releases.LatestAsync(command.Repo, ct).ConfigureAwait(false);
+        var pinned = command.RequestedVersion is not null;
+
+        var latest = pinned
+            ? await releases.ForVersionAsync(command.Repo, command.RequestedVersion!, ct)
+                .ConfigureAwait(false)
+            : await releases.LatestAsync(command.Repo, ct).ConfigureAwait(false);
 
         if (latest is null)
         {
-            return Result<string>.Fail(
-                $"no release found at github.com/{command.Repo}/releases (check FLEET_REPO, "
-                + "and that a release has been published).");
+            return Result<string>.Fail(pinned
+                ? $"no release {command.RequestedVersion} found at "
+                    + $"github.com/{command.Repo}/releases."
+                : $"no release found at github.com/{command.Repo}/releases (check FLEET_REPO, "
+                    + "and that a release has been published).");
         }
 
-        if (!VersionCompare.IsNewer(latest.Tag, command.CurrentVersion))
+        if (pinned
+            ? VersionCompare.AreEqual(latest.Tag, command.CurrentVersion)
+            : !VersionCompare.IsNewer(latest.Tag, command.CurrentVersion))
         {
-            return Result<string>.Ok($"already on the latest version ({command.CurrentVersion}).");
+            return Result<string>.Ok($"already on {(pinned ? latest.Tag : "the latest version")} "
+                + $"({command.CurrentVersion}).");
         }
 
         var binary = latest.Assets.FirstOrDefault(a => a.Name == command.PlatformAsset);

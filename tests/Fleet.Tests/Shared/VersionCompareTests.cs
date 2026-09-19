@@ -26,4 +26,19 @@ public class VersionCompareTests
     {
         Assert.True(VersionCompare.IsNewer("v0.1.0", "0.0.0-dev"));
     }
+
+    [Theory]
+    [InlineData("v0.3.0", "0.3.0", true)]
+    [InlineData("0.3.0", "0.3.0", true)]
+    [InlineData("v0.3.0", "0.4.0", false)]
+    public void AreEqual_ignores_a_leading_v(string a, string b, bool expected)
+    {
+        Assert.Equal(expected, VersionCompare.AreEqual(a, b));
+    }
+
+    [Fact]
+    public void AreEqual_is_false_when_either_side_does_not_parse()
+    {
+        Assert.False(VersionCompare.AreEqual("not-a-version", "0.3.0"));
+    }
 }

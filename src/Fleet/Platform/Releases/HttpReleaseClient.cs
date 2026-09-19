@@ -20,13 +20,27 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
             new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
     }
 
-    public async Task<ReleaseInfo?> LatestAsync(string repo, CancellationToken ct = default)
+    public async Task<ReleaseInfo?> LatestAsync(string repo, CancellationToken ct = default) =>
+        await FetchAsync($"https://api.github.com/repos/{repo}/releases/latest", ct)
+            .ConfigureAwait(false);
+
+    public async Task<ReleaseInfo?> ForVersionAsync(
+        string repo, string version, CancellationToken ct = default)
+    {
+        var tag = version.TrimStart('v', 'V');
+
+        var release = await FetchAsync(
+            $"https://api.github.com/repos/{repo}/releases/tags/{tag}", ct).ConfigureAwait(false);
+
+        return release ?? await FetchAsync(
+            $"https://api.github.com/repos/{repo}/releases/tags/v{tag}", ct).ConfigureAwait(false);
+    }
+
+    private async Task<ReleaseInfo?> FetchAsync(string url, CancellationToken ct)
     {
         try
         {
-            using var response = await _http
-                .GetAsync($"https://api.github.com/repos/{repo}/releases/latest", ct)
-                .ConfigureAwait(false);
+            using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {

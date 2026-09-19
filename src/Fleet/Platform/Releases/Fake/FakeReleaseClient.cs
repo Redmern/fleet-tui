@@ -7,10 +7,18 @@ public sealed class FakeReleaseClient : IReleaseClient
 {
     public ReleaseInfo? Release { get; set; }
 
+    public Dictionary<string, ReleaseInfo> Versions { get; } = [];
+
     public Dictionary<string, byte[]> Downloads { get; } = [];
 
     public Task<ReleaseInfo?> LatestAsync(string repo, CancellationToken ct = default) =>
         Task.FromResult(Release);
+
+    public Task<ReleaseInfo?> ForVersionAsync(
+        string repo, string version, CancellationToken ct = default) =>
+        Task.FromResult(Versions.TryGetValue(version.TrimStart('v', 'V'), out var release)
+            ? release
+            : null);
 
     public Task<byte[]?> DownloadAsync(string url, CancellationToken ct = default) =>
         Task.FromResult(Downloads.TryGetValue(url, out var bytes) ? bytes : null);

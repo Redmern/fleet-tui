@@ -24,8 +24,11 @@ public class RunUpdateHandlerTests : IDisposable
         }
     }
 
-    private RunUpdateCommand Command(string? platformAsset = "fleet-win-x64.exe") =>
-        new("owner/repo", "0.1.0", platformAsset, _executablePath);
+    private RunUpdateCommand Command(
+        string? platformAsset = "fleet-win-x64.exe",
+        string currentVersion = "0.1.0",
+        string? requestedVersion = null) =>
+        new("owner/repo", currentVersion, platformAsset, _executablePath, requestedVersion);
 
     [Fact]
     public async Task Refuses_a_platform_with_no_published_asset()
@@ -136,5 +139,67 @@ public class RunUpdateHandlerTests : IDisposable
         Assert.False(result.Succeeded);
         Assert.Contains("checksum", result.Error);
         Assert.Equal("old"u8.ToArray(), File.ReadAllBytes(_executablePath));
+    }
+
+    [Fact]
+    public async Task A_requested_version_is_fetched_by_tag_instead_of_latest()
+    {
+        var newBytes = "pinned"u8.ToArray();
+        var client = new FakeReleaseClient
+        {
+            Release = new ReleaseInfo("v9.9.9", [new ReleaseAsset("fleet-win-x64.exe", "https://x/should-not-use")]),
+        };
+        client.Versions["0.2.0"] =
+            new ReleaseInfo("v0.2.0", [new ReleaseAsset("fleet-win-x64.exe", "https://x/asset")]);
+        client.Downloads["https://x/asset"] = newBytes;
+
+        var result = await new RunUpdateHandler(client, new SelfInstall())
+            .HandleAsync(Command(currentVersion: "0.1.0", requestedVersion: "0.2.0"));
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("v0.2.0", result.Value);
+        Assert.Equal(newBytes, File.ReadAllBytes(_executablePath));
+    }
+
+    [Fact]
+    public async Task A_requested_version_can_be_older_than_the_current_one()
+    {
+        var oldBytes = "downgraded"u8.ToArray();
+        var client = new FakeReleaseClient();
+        client.Versions["0.3.0"] =
+            new ReleaseInfo("v0.3.0", [new ReleaseAsset("fleet-win-x64.exe", "https://x/asset")]);
+        client.Downloads["https://x/asset"] = oldBytes;
+
+        var result = await new RunUpdateHandler(client, new SelfInstall())
+            .HandleAsync(Command(currentVersion: "0.5.1", requestedVersion: "0.3.0"));
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("v0.3.0", result.Value);
+        Assert.Equal(oldBytes, File.ReadAllBytes(_executablePath));
+    }
+
+    [Fact]
+    public async Task Requesting_the_version_already_installed_does_not_touch_the_binary()
+    {
+        var client = new FakeReleaseClient();
+        client.Versions["0.1.0"] =
+            new ReleaseInfo("v0.1.0", [new ReleaseAsset("fleet-win-x64.exe", "https://x/asset")]);
+
+        var result = await new RunUpdateHandler(client, new SelfInstall())
+            .HandleAsync(Command(currentVersion: "0.1.0", requestedVersion: "0.1.0"));
+
+        Assert.True(result.Succeeded);
+        Assert.Contains("already on", result.Value);
+        Assert.Equal("old"u8.ToArray(), File.ReadAllBytes(_executablePath));
+    }
+
+    [Fact]
+    public async Task Fails_with_a_clear_message_when_the_requested_version_does_not_exist()
+    {
+        var result = await new RunUpdateHandler(new FakeReleaseClient(), new SelfInstall())
+            .HandleAsync(Command(requestedVersion: "9.9.9"));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("9.9.9", result.Error);
     }
 }

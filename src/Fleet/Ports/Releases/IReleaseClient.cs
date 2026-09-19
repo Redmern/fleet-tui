@@ -6,5 +6,7 @@ public interface IReleaseClient
 {
     Task<ReleaseInfo?> LatestAsync(string repo, CancellationToken ct = default);
 
+    Task<ReleaseInfo?> ForVersionAsync(string repo, string version, CancellationToken ct = default);
+
     Task<byte[]?> DownloadAsync(string url, CancellationToken ct = default);
 }
