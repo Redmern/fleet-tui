@@ -150,6 +150,32 @@ public static class MenuCommand
                 }
 
                 var target = others[chosenIndex];
+
+                var toPark = projects.List()
+                    .Where(p => !string.Equals(
+                        p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
+                    .Where(p => panes.Any(x => PathKey.Same(x.Cwd, p.Root)
+                        && x.WindowId == currentWindow
+                        && !string.Equals(
+                            x.SessionName,
+                            FleetWorkspaces.Hidden,
+                            StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                var mover = new MoveProjectHandler(switchMux.Driver);
+
+                foreach (var park in toPark)
+                {
+                    await mover
+                        .ParkAsync(
+                            park.Name,
+                            park.Root,
+                            new ListAgentsHandler(Adapters.Agents()).Handle(park.Name),
+                            Adapters.DashPane(park.Name),
+                            self)
+                        .ConfigureAwait(false);
+                }
+
                 var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
 
                 if (dash is not null && dash.WindowId == currentWindow)
@@ -166,7 +192,7 @@ public static class MenuCommand
                     break;
                 }
 
-                var moved = await new MoveProjectHandler(switchMux.Driver)
+                var moved = await mover
                     .HandleAsync(
                         target.Name,
                         target.Root,
