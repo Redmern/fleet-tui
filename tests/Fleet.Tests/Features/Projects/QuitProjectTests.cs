@@ -17,25 +17,22 @@ public class QuitProjectTests
         new(worktree, "backend", "dev", AgentHarness.Claude, "main", true, Hidden: true);
 
     [Fact]
-    public void Every_pane_in_the_projects_window_is_closed()
+    public void The_projects_own_root_pane_is_closed()
     {
         var doomed = QuitPlan.PanesToClose(
-            [
-                Pane("1", "w1", "C:/repos/techweb"),
-                Pane("2", "w1", "C:/repos/techweb/backend/dev"),
-            ],
-            projectWindow: "w1",
+            [Pane("1", "w1", "C:/repos/techweb")],
+            projectRoot: "C:/repos/techweb",
             agents: []);
 
-        Assert.Equal([new PaneId("1"), new PaneId("2")], doomed);
+        Assert.Equal([new PaneId("1")], doomed);
     }
 
     [Fact]
-    public void Another_windows_panes_are_left_alone()
+    public void A_coexisting_projects_panes_in_the_same_window_are_left_alone()
     {
         var doomed = QuitPlan.PanesToClose(
-            [Pane("1", "w1", "C:/repos/techweb"), Pane("9", "w2", "C:/repos/other")],
-            projectWindow: "w1",
+            [Pane("1", "w1", "C:/repos/techweb"), Pane("9", "w1", "C:/repos/other")],
+            projectRoot: "C:/repos/techweb",
             agents: []);
 
         Assert.Equal([new PaneId("1")], doomed);
@@ -49,7 +46,7 @@ public class QuitProjectTests
                 Pane("1", "w1", "C:/repos/techweb"),
                 Pane("7", "w5", "C:/repos/techweb/backend/dev"),
             ],
-            projectWindow: "w1",
+            projectRoot: "C:/repos/techweb",
             agents: [Agent("C:/repos/techweb/backend/dev")]);
 
         Assert.Equal([new PaneId("1"), new PaneId("7")], doomed);
@@ -66,18 +63,18 @@ public class QuitProjectTests
 
         var doomed = QuitPlan.PanesToClose(
             [Pane("1", "w1", "C:/repos/techweb"), hidden],
-            projectWindow: "w1",
+            projectRoot: "C:/repos/techweb",
             agents: [Agent("C:/repos/techweb/backend/dev")]);
 
         Assert.Equal([new PaneId("1"), new PaneId("7")], doomed);
     }
 
     [Fact]
-    public void A_pane_that_is_both_in_the_window_and_an_agent_is_only_closed_once()
+    public void A_pane_that_is_both_the_root_and_an_agent_is_only_closed_once()
     {
         var doomed = QuitPlan.PanesToClose(
             [Pane("1", "w1", "C:/repos/techweb/backend/dev")],
-            projectWindow: "w1",
+            projectRoot: "C:/repos/techweb/backend/dev",
             agents: [Agent("C:/repos/techweb/backend/dev")]);
 
         Assert.Single(doomed);
@@ -88,7 +85,7 @@ public class QuitProjectTests
     {
         var doomed = QuitPlan.PanesToClose(
             [Pane("3", "w4", "C:/repos/techweb/backend/dev"), Pane("4", "w4", "C:/elsewhere")],
-            projectWindow: null,
+            projectRoot: "C:/repos/techweb",
             agents: [Agent("C:/repos/techweb/backend/dev")]);
 
         Assert.Equal([new PaneId("3")], doomed);

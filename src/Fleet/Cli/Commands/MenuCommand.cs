@@ -17,12 +17,14 @@ using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
+using Fleet.Ui.Enums;
 using Terminal.Gui.App;
 
 namespace Fleet.Cli.Commands;
@@ -100,16 +102,55 @@ public static class MenuCommand
                 break;
 
             case FleetAction.QuitFleet:
-                if (FleetDialog.Confirm(
-                        app,
-                        $"Quit fleet for {project.Name}?",
-                        [],
-                        "Quit"))
+            {
+                var quitMux = Adapters.Mux(Adapters.Log());
+                var quitPanes = await quitMux.Driver.ListPanesAsync().ConfigureAwait(false);
+
+                var quitSelf = Environment.GetEnvironmentVariable("WEZTERM_PANE");
+                var quitWindow = quitPanes.FirstOrDefault(p => p.Id.Value == quitSelf)?.WindowId;
+
+                var inWindow = ProjectsVisibleInWindow(projects.List(), quitPanes, quitWindow);
+
+                if (inWindow.Count <= 1)
+                {
+                    if (FleetDialog.Confirm(
+                            app,
+                            $"Quit fleet for {project.Name}?",
+                            [],
+                            "Quit"))
+                    {
+                        await Quit(project).ConfigureAwait(false);
+                    }
+
+                    break;
+                }
+
+                var quitChoice = FleetDialog.Choose(
+                    app,
+                    "Quit fleet?",
+                    [$"This window has {inWindow.Count} projects open."],
+                    "Quit fleet",
+                    "Just this project");
+
+                if (quitChoice == DialogChoice.Cancelled)
+                {
+                    break;
+                }
+
+                if (quitChoice == DialogChoice.Primary)
+                {
+                    foreach (var toQuit in inWindow)
+                    {
+                        await Quit(toQuit).ConfigureAwait(false);
+                    }
+                }
+                else
                 {
                     await Quit(project).ConfigureAwait(false);
                 }
 
                 break;
+            }
 
             case FleetAction.FocusMain:
                 await FocusMain(project).ConfigureAwait(false);
@@ -151,15 +192,9 @@ public static class MenuCommand
 
                 var target = others[chosenIndex];
 
-                var toPark = projects.List()
+                var toPark = ProjectsVisibleInWindow(projects.List(), panes, currentWindow)
                     .Where(p => !string.Equals(
                         p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
-                    .Where(p => panes.Any(x => PathKey.Same(x.Cwd, p.Root)
-                        && x.WindowId == currentWindow
-                        && !string.Equals(
-                            x.SessionName,
-                            FleetWorkspaces.Hidden,
-                            StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
                 var mover = new MoveProjectHandler(switchMux.Driver);
@@ -368,6 +403,15 @@ public static class MenuCommand
 
         return 0;
     }
+
+    private static List<Project> ProjectsVisibleInWindow(
+        IReadOnlyList<Project> allProjects, IReadOnlyList<Pane> panes, string? windowId) =>
+        allProjects
+            .Where(p => panes.Any(x => PathKey.Same(x.Cwd, p.Root)
+                && x.WindowId == windowId
+                && !string.Equals(
+                    x.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
 
     private static async Task Quit(Project project)
     {

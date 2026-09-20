@@ -17,9 +17,7 @@ public sealed class QuitProjectHandler(IMuxDriver mux, IAgentStore store)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot));
-
-        var doomed = QuitPlan.PanesToClose(panes, dashboard?.WindowId, agents);
+        var doomed = QuitPlan.PanesToClose(panes, projectRoot, agents);
 
         if (doomed.Count == 0)
         {
