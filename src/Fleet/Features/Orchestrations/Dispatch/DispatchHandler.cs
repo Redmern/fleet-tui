@@ -21,7 +21,8 @@ public sealed class DispatchHandler(
     TimeSpan? readyTimeout = null,
     TimeSpan? pollInterval = null,
     TimeSpan? submitGap = null,
-    IDispatchHistory? history = null)
+    IDispatchHistory? history = null,
+    ISlugNamer? namer = null)
 {
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
 
@@ -44,8 +45,10 @@ public sealed class DispatchHandler(
             .Select(a => a.Branch)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        var named = await NameOrNull(prompt, ct).ConfigureAwait(false);
+
         var slug = OrchestrationSlug.Unique(
-            OrchestrationSlug.Of(prompt),
+            OrchestrationSlug.Of(string.IsNullOrWhiteSpace(named) ? prompt : named),
             s => existing.Contains(s) || Directory.Exists(OrchestrationPaths.For(command.ProjectRoot, s)));
 
         var folder = OrchestrationPaths.For(command.ProjectRoot, slug);
@@ -118,6 +121,23 @@ public sealed class DispatchHandler(
         await KickOff(folder, pane, ct).ConfigureAwait(false);
 
         return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, DispatchNote.Dispatched(slug)));
+    }
+
+    private async Task<string?> NameOrNull(string prompt, CancellationToken ct)
+    {
+        if (namer is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await namer.NameAsync(prompt, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     private async Task KickOff(string folder, PaneId pane, CancellationToken ct)

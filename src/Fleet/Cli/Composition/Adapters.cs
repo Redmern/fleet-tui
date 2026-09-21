@@ -1,6 +1,7 @@
 using System.Text;
 using Fleet.Cli.Composition.Models;
 using Fleet.Platform.Approvals;
+using Fleet.Platform.Claude;
 using Fleet.Platform.Git;
 using Fleet.Platform.Mcp;
 using Fleet.Platform.Logging;
@@ -93,6 +94,8 @@ public static class Adapters
     public static IAgentStore Agents() => new JsonAgentStore();
 
     public static IDispatchHistory History() => new FileDispatchHistory();
+
+    public static ISlugNamer SlugNamer() => new ClaudeSlugNamer();
 
     public static INotifier Notifier() => new FileNotifyStore();
 

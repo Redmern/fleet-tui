@@ -74,7 +74,7 @@ public sealed class McpActions(
 
     private readonly SecretsHandler _secrets = new();
 
-    private readonly DispatchHandler _dispatcher = new(mux, store, harnessConfig);
+    private readonly DispatchHandler _dispatcher = new(mux, store, harnessConfig, namer: Adapters.SlugNamer());
 
     private readonly ReportStatusHandler _reporter = new(store);
 

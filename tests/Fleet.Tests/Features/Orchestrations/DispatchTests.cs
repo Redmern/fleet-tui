@@ -5,6 +5,7 @@ using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Orchestrations;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 
@@ -155,6 +156,49 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_namer_that_returns_a_name_picks_the_slug_over_the_raw_prompt()
+    {
+        var namer = new FakeSlugNamer(name: "fix login timeout");
+
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            namer: namer);
+
+        var reply = await handler.HandleAsync(
+            Command("please go make the login page stop timing out so fast, it's annoying"), "t");
+
+        Assert.Equal("fix-login-timeout", reply.Value!.Slug);
+    }
+
+    [Fact]
+    public async Task A_namer_that_fails_falls_back_to_the_heuristic_slug()
+    {
+        var namer = new FakeSlugNamer(throws: true);
+
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            namer: namer);
+
+        var reply = await handler.HandleAsync(Command("upgrade the node runtime"), "t");
+
+        Assert.Equal("upgrade-the-node-runtime", reply.Value!.Slug);
+    }
+
+    [Fact]
+    public async Task A_namer_that_returns_nothing_falls_back_to_the_heuristic_slug()
+    {
+        var namer = new FakeSlugNamer(name: null);
+
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            namer: namer);
+
+        var reply = await handler.HandleAsync(Command("upgrade the node runtime"), "t");
+
+        Assert.Equal("upgrade-the-node-runtime", reply.Value!.Slug);
+    }
+
+    [Fact]
     public async Task A_blank_prompt_fails_before_touching_the_disk()
     {
         var reply = await Handler.HandleAsync(Command("   "), "t");
@@ -173,6 +217,12 @@ public sealed class DispatchTests : IDisposable
 
         Assert.True(record.Open);
         Assert.Equal(OrchestrationStatus.Working, record.Status);
+    }
+
+    private sealed class FakeSlugNamer(string? name = null, bool throws = false) : ISlugNamer
+    {
+        public Task<string?> NameAsync(string prompt, CancellationToken ct = default) =>
+            throws ? throw new InvalidOperationException("claude is unreachable") : Task.FromResult(name);
     }
 
     private sealed class RecordingStore : IAgentStore
