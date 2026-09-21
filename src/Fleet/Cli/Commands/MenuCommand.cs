@@ -39,7 +39,6 @@ public static class MenuCommand
         FleetAction.EditKeybinds,
         FleetAction.FocusMain,
         FleetAction.SwitchProject,
-        FleetAction.CombineWindows,
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
@@ -241,72 +240,6 @@ public static class MenuCommand
                 if (!moved.Succeeded)
                 {
                     FleetDialog.Error(app, "Switch project", moved.Error!);
-                }
-
-                break;
-            }
-
-            case FleetAction.CombineWindows:
-            {
-                var allProjects = projects.List();
-                var combineMux = Adapters.Mux(Adapters.Log());
-                var combinePanes = await combineMux.Driver.ListPanesAsync().ConfigureAwait(false);
-
-                var combineSelf = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-                var combineCurrentWindow = combinePanes
-                    .FirstOrDefault(p => p.Id.Value == combineSelf)?.WindowId;
-
-                var otherWindows = combinePanes
-                    .Where(p => p.WindowId != combineCurrentWindow)
-                    .GroupBy(p => p.WindowId)
-                    .Select(group => new
-                    {
-                        group.Key,
-                        Projects = allProjects
-                            .Where(proj => group.Any(p => PathKey.Same(p.Cwd, proj.Root)))
-                            .OrderBy(proj => proj.Name, StringComparer.OrdinalIgnoreCase)
-                            .ToList(),
-                    })
-                    .Where(w => w.Projects.Count > 0)
-                    .ToList();
-
-                if (otherWindows.Count == 0)
-                {
-                    FleetDialog.Error(app, "Combine windows", "No other fleet windows are open.");
-                    break;
-                }
-
-                var windowLabels = otherWindows
-                    .Select(w => string.Join(", ", w.Projects.Select(p => p.Name)))
-                    .ToList();
-
-                var windowIndex = FleetPicker.Choose(app, "Combine windows", windowLabels, keymap);
-
-                if (windowIndex is not { } chosenWindowIndex)
-                {
-                    break;
-                }
-
-                var sourceWindow = otherWindows[chosenWindowIndex];
-
-                foreach (var toMove in sourceWindow.Projects)
-                {
-                    var combineMoved = await new MoveProjectHandler(combineMux.Driver)
-                        .HandleAsync(
-                            toMove.Name,
-                            toMove.Root,
-                            new ListAgentsHandler(Adapters.Agents()).Handle(toMove.Name),
-                            combineCurrentWindow,
-                            Adapters.DashPane(toMove.Name),
-                            combineSelf,
-                            Adapters.Executable)
-                        .ConfigureAwait(false);
-
-                    if (!combineMoved.Succeeded)
-                    {
-                        FleetDialog.Error(app, "Combine windows", combineMoved.Error!);
-                        break;
-                    }
                 }
 
                 break;

@@ -38,7 +38,6 @@ public static class KeymapDefaults
             [FleetAction.BrowseFiles] = "f",
             [FleetAction.EditSettings] = "P",
             [FleetAction.SwitchProject] = "s",
-            [FleetAction.CombineWindows] = "w",
             [FleetAction.CleanupProject] = "c",
             [FleetAction.RebuildDashboard] = "b",
         };
@@ -74,7 +73,6 @@ public static class KeymapDefaults
         FleetAction.BrowseFiles,
         FleetAction.EditSettings,
         FleetAction.SwitchProject,
-        FleetAction.CombineWindows,
         FleetAction.CleanupProject,
         FleetAction.RebuildDashboard,
     ];
@@ -102,7 +100,6 @@ public static class KeymapDefaults
             FleetAction.BrowseFiles => "files",
             FleetAction.EditSettings => "permissions",
             FleetAction.SwitchProject => "switch project",
-            FleetAction.CombineWindows => "combine windows",
             FleetAction.CleanupProject => "clean up",
             FleetAction.RebuildDashboard => "rebuild dash",
             _ => Describe(action).ToLowerInvariant(),
@@ -142,7 +139,6 @@ public static class KeymapDefaults
             FleetAction.BrowseFiles => "File navigator",
             FleetAction.EditSettings => "Permissions",
             FleetAction.SwitchProject => "Switch project",
-            FleetAction.CombineWindows => "Combine another fleet window into this one",
             FleetAction.CleanupProject => "Clean up stale agents",
             FleetAction.RebuildDashboard => "Rebuild the dashboard layout",
             _ => action.ToString(),
