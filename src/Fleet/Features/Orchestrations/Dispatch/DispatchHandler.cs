@@ -57,8 +57,10 @@ public sealed class DispatchHandler(
         Directory.CreateDirectory(OrchestrationPaths.ReportsFolder(folder));
 
         var brief = new OrchestrationBrief(command.ProjectName, slug, prompt, stampUtc);
+        var howYouWork = HowYouWorkOverride(command.ProjectRoot);
 
-        File.WriteAllText(OrchestrationPaths.InstructionsFile(folder), OrchestrationText.Instructions(brief));
+        File.WriteAllText(
+            OrchestrationPaths.InstructionsFile(folder), OrchestrationText.Instructions(brief, howYouWork));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
@@ -121,6 +123,20 @@ public sealed class DispatchHandler(
         await KickOff(folder, pane, ct).ConfigureAwait(false);
 
         return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, DispatchNote.Dispatched(slug)));
+    }
+
+    private static string? HowYouWorkOverride(string projectRoot)
+    {
+        var path = ProjectConfigPaths.InstructionsFile(projectRoot);
+
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private async Task<string?> NameOrNull(string prompt, CancellationToken ct)

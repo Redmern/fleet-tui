@@ -57,6 +57,21 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_project_level_instructions_override_replaces_the_default_how_you_work_section()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(
+            ProjectConfigPaths.InstructionsFile(_root), "Only ever touch the api/ folder.");
+
+        var reply = await Handler.HandleAsync(Command("start work"), "t");
+
+        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
+
+        Assert.Contains("Only ever touch the api/ folder.", instructions);
+        Assert.DoesNotContain(OrchestrationText.DefaultHowYouWork, instructions);
+    }
+
+    [Fact]
     public async Task It_records_a_hidden_open_working_orchestrator_named_by_the_slug()
     {
         await Handler.HandleAsync(Command("upgrade the node runtime"), "t");

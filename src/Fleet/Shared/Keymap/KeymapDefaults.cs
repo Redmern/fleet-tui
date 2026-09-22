@@ -40,6 +40,7 @@ public static class KeymapDefaults
             [FleetAction.SwitchProject] = "s",
             [FleetAction.CleanupProject] = "c",
             [FleetAction.RebuildDashboard] = "b",
+            [FleetAction.EditFleetConfig] = "E",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -75,6 +76,7 @@ public static class KeymapDefaults
         FleetAction.SwitchProject,
         FleetAction.CleanupProject,
         FleetAction.RebuildDashboard,
+        FleetAction.EditFleetConfig,
     ];
 
     public static string Short(FleetAction action) =>
@@ -102,6 +104,7 @@ public static class KeymapDefaults
             FleetAction.SwitchProject => "switch project",
             FleetAction.CleanupProject => "clean up",
             FleetAction.RebuildDashboard => "rebuild dash",
+            FleetAction.EditFleetConfig => "edit fleet config",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -141,6 +144,7 @@ public static class KeymapDefaults
             FleetAction.SwitchProject => "Switch project",
             FleetAction.CleanupProject => "Clean up stale agents",
             FleetAction.RebuildDashboard => "Rebuild the dashboard layout",
+            FleetAction.EditFleetConfig => "Edit fleet config",
             _ => action.ToString(),
         };
 }

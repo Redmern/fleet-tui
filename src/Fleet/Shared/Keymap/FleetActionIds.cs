@@ -26,6 +26,7 @@ public static class FleetActionIds
         FleetAction.SwitchProject => "switch-project",
         FleetAction.CleanupProject => "cleanup",
         FleetAction.RebuildDashboard => "rebuild-dashboard",
+        FleetAction.EditFleetConfig => "edit-fleet-config",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -51,6 +52,7 @@ public static class FleetActionIds
         "switch-project" => FleetAction.SwitchProject,
         "cleanup" => FleetAction.CleanupProject,
         "rebuild-dashboard" => FleetAction.RebuildDashboard,
+        "edit-fleet-config" => FleetAction.EditFleetConfig,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

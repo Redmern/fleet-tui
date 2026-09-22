@@ -6,6 +6,7 @@ using Fleet.Features.Agents.MoveProject;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
+using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Projects.OpenProject;
@@ -36,7 +37,6 @@ public static class MenuCommand
     private static readonly FleetAction[] MenuActions =
     [
         FleetAction.QuitFleet,
-        FleetAction.EditKeybinds,
         FleetAction.FocusMain,
         FleetAction.SwitchProject,
         FleetAction.ListAgents,
@@ -44,6 +44,8 @@ public static class MenuCommand
         FleetAction.BrowseFiles,
         FleetAction.RebuildDashboard,
         FleetAction.EditSettings,
+        FleetAction.EditFleetConfig,
+        FleetAction.EditKeybinds,
         FleetAction.CleanupProject,
     ];
 
@@ -264,6 +266,41 @@ public static class MenuCommand
                     });
 
                 break;
+
+            case FleetAction.EditFleetConfig:
+            {
+                var configFolder = EditFleetConfigHandler.Ensure(project.Root);
+                var configMux = Adapters.Mux(Adapters.Log());
+
+                if (configMux.Unsupported is not null)
+                {
+                    FleetDialog.Error(app, "Edit fleet config", configMux.Unsupported);
+                    break;
+                }
+
+                var configPane = await configMux.Driver.SpawnAsync(
+                    new SpawnOptions
+                    {
+                        Cwd = configFolder,
+                        SessionName = project.Name,
+                        NewWindow = true,
+                        Args = AgentHarness.BrowseCommandFor("fleet config"),
+                    }).ConfigureAwait(false);
+
+                if (configPane.IsNone)
+                {
+                    FleetDialog.Error(
+                        app, "Edit fleet config",
+                        $"the {configMux.Driver.Name} multiplexer did not respond. Run 'fleet doctor'.");
+
+                    break;
+                }
+
+                await configMux.Driver.SetTitleAsync(configPane, "fleet config").ConfigureAwait(false);
+                await configMux.Driver.FocusPaneAsync(configPane).ConfigureAwait(false);
+
+                break;
+            }
 
             case FleetAction.BrowseFiles:
                 if (!Adapters.OnPath(FileBrowser.Command))
