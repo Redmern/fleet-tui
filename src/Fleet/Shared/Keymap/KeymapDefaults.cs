@@ -45,41 +45,7 @@ public static class KeymapDefaults
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
-    [
-        FleetAction.OpenMenu,
-        FleetAction.NewProject,
-        FleetAction.RemoveProject,
-        FleetAction.OpenProject,
-        FleetAction.Refresh,
-        FleetAction.EditKeybinds,
-        FleetAction.Close,
-        FleetAction.MoveDown,
-        FleetAction.MoveUp,
-        FleetAction.MoveFirst,
-        FleetAction.MoveLast,
-        FleetAction.PageDown,
-        FleetAction.PageUp,
-        FleetAction.PrevTab,
-        FleetAction.NextTab,
-        FleetAction.NewAgent,
-        FleetAction.RemoveAgent,
-        FleetAction.ToggleHidden,
-        FleetAction.AddRepository,
-        FleetAction.RemoveRepository,
-        FleetAction.PullRepository,
-        FleetAction.ManageRepository,
-        FleetAction.QuitFleet,
-        FleetAction.FocusMain,
-        FleetAction.ListAgents,
-        FleetAction.ViewLogs,
-        FleetAction.BrowseFiles,
-        FleetAction.EditSettings,
-        FleetAction.SwitchProject,
-        FleetAction.CleanupProject,
-        FleetAction.RebuildDashboard,
-        FleetAction.EditFleetConfig,
-        FleetAction.OpenSettings,
-    ];
+        [.. KeymapGroups.All.SelectMany(g => g.Actions)];
 
     public static string Short(FleetAction action) =>
         action switch

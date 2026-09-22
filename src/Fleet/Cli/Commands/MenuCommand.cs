@@ -40,7 +40,6 @@ public static class MenuCommand
         FleetAction.FocusMain,
         FleetAction.SwitchProject,
         FleetAction.ListAgents,
-        FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
         FleetAction.OpenSettings,
     ];
@@ -51,6 +50,7 @@ public static class MenuCommand
         FleetAction.EditSettings,
         FleetAction.EditFleetConfig,
         FleetAction.EditKeybinds,
+        FleetAction.ViewLogs,
         FleetAction.CleanupProject,
     ];
 

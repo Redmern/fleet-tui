@@ -18,7 +18,7 @@ public static class EditKeybindsView
     public static KeymapConfig Show(IApplication app, IKeymapStore store, Keymap keymap)
     {
         var config = keymap.Config;
-        var actions = KeymapDefaults.Configurable;
+        var rows = EditKeybindsRows.Build();
 
         var window = FleetTheme.Overlay("Keybinds");
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
@@ -26,20 +26,23 @@ public static class EditKeybindsView
 
         void Fill()
         {
-            var rows = new List<string> { Row("Prefix", FleetKeyText.Display(config.Prefix)) };
-            rows.AddRange(actions.Select(a => Row(KeymapDefaults.Describe(a), FleetKeyText.Display(Binding(config, a)))));
-            list.SetSource(new ObservableCollection<string>(rows));
+            var texts = rows.Select(r => r.IsHeader
+                ? Header(r.Label)
+                : Row(r.Label, FleetKeyText.Display(r.Action is null ? config.Prefix : Binding(config, r.Action.Value))));
+
+            list.SetSource(new ObservableCollection<string>(texts));
         }
 
         void Rebind()
         {
             var index = list.SelectedItem ?? -1;
-            if (index < 0)
+            if (index < 0 || index >= rows.Count || rows[index].IsHeader)
             {
                 return;
             }
 
-            var target = index == 0 ? PrefixRow : actions[index - 1].ToString();
+            var row = rows[index];
+            var target = row.Action is null ? PrefixRow : row.Action.Value.ToString();
             var captured = FleetKeyCapture.Show(app, target);
 
             if (captured is null)
@@ -48,9 +51,9 @@ public static class EditKeybindsView
                 return;
             }
 
-            config = index == 0
+            config = row.Action is null
                 ? config.WithPrefix(captured)
-                : config.With(actions[index - 1], captured);
+                : config.With(row.Action.Value, captured);
 
             store.Save(config);
             Fill();
@@ -92,7 +95,9 @@ public static class EditKeybindsView
         return config;
     }
 
-    private static string Row(string label, string key) => $"{label.PadRight(24)}   {key}";
+    private static string Row(string label, string key) => $"  {label.PadRight(24)}   {key}";
+
+    private static string Header(string label) => label;
 
     private static string Binding(KeymapConfig config, FleetAction action) =>
         config.Bindings.TryGetValue(action, out var key) ? key : string.Empty;
