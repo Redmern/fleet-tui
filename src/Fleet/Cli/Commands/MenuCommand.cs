@@ -42,6 +42,11 @@ public static class MenuCommand
         FleetAction.ListAgents,
         FleetAction.ViewLogs,
         FleetAction.BrowseFiles,
+        FleetAction.OpenSettings,
+    ];
+
+    private static readonly FleetAction[] SettingsActions =
+    [
         FleetAction.RebuildDashboard,
         FleetAction.EditSettings,
         FleetAction.EditFleetConfig,
@@ -76,6 +81,11 @@ public static class MenuCommand
         var chosen = requested != FleetAction.None
             ? requested
             : FleetUi.Menu(app, keymap, MenuActions);
+
+        if (chosen == FleetAction.OpenSettings)
+        {
+            chosen = FleetUi.Menu(app, keymap, SettingsActions);
+        }
 
         switch (chosen)
         {

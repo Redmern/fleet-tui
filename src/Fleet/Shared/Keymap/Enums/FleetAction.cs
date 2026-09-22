@@ -37,4 +37,5 @@ public enum FleetAction
     CleanupProject,
     RebuildDashboard,
     EditFleetConfig,
+    OpenSettings,
 }

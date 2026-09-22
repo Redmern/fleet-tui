@@ -41,6 +41,7 @@ public static class KeymapDefaults
             [FleetAction.CleanupProject] = "c",
             [FleetAction.RebuildDashboard] = "b",
             [FleetAction.EditFleetConfig] = "E",
+            [FleetAction.OpenSettings] = "S",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -77,6 +78,7 @@ public static class KeymapDefaults
         FleetAction.CleanupProject,
         FleetAction.RebuildDashboard,
         FleetAction.EditFleetConfig,
+        FleetAction.OpenSettings,
     ];
 
     public static string Short(FleetAction action) =>
@@ -105,6 +107,7 @@ public static class KeymapDefaults
             FleetAction.CleanupProject => "clean up",
             FleetAction.RebuildDashboard => "rebuild dash",
             FleetAction.EditFleetConfig => "edit fleet config",
+            FleetAction.OpenSettings => "settings",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -145,6 +148,7 @@ public static class KeymapDefaults
             FleetAction.CleanupProject => "Clean up stale agents",
             FleetAction.RebuildDashboard => "Rebuild the dashboard layout",
             FleetAction.EditFleetConfig => "Edit fleet config",
+            FleetAction.OpenSettings => "Settings",
             _ => action.ToString(),
         };
 }

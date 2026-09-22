@@ -11,6 +11,7 @@ public class FleetActionIdsTests
     [InlineData(FleetAction.OpenProject, "open-project")]
     [InlineData(FleetAction.NewProject, "new-project")]
     [InlineData(FleetAction.EditFleetConfig, "edit-fleet-config")]
+    [InlineData(FleetAction.OpenSettings, "settings-menu")]
     public void An_action_round_trips_through_its_id(FleetAction action, string id)
     {
         Assert.Equal(id, FleetActionIds.For(action));

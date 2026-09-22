@@ -27,6 +27,7 @@ public static class FleetActionIds
         FleetAction.CleanupProject => "cleanup",
         FleetAction.RebuildDashboard => "rebuild-dashboard",
         FleetAction.EditFleetConfig => "edit-fleet-config",
+        FleetAction.OpenSettings => "settings-menu",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -53,6 +54,7 @@ public static class FleetActionIds
         "cleanup" => FleetAction.CleanupProject,
         "rebuild-dashboard" => FleetAction.RebuildDashboard,
         "edit-fleet-config" => FleetAction.EditFleetConfig,
+        "settings-menu" => FleetAction.OpenSettings,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };
