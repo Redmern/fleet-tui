@@ -32,7 +32,22 @@ public sealed class EditFleetConfigHandlerTests : IDisposable
         var instructions = File.ReadAllText(ProjectConfigPaths.InstructionsFile(_root));
         Assert.Contains(OrchestrationText.DefaultHowYouWork, instructions);
 
+        var aidlc = File.ReadAllText(ProjectConfigPaths.AidlcFile(_root));
+        Assert.Contains(OrchestrationText.DefaultAidlc, aidlc);
+
         Assert.True(File.Exists(ProjectConfigPaths.ReadmeFile(_root)));
+    }
+
+    [Fact]
+    public void It_never_overwrites_an_aidlc_file_the_user_already_edited()
+    {
+        EditFleetConfigHandler.Ensure(_root);
+        File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), "Skip straight to implementing.");
+
+        EditFleetConfigHandler.Ensure(_root);
+
+        Assert.Equal(
+            "Skip straight to implementing.", File.ReadAllText(ProjectConfigPaths.AidlcFile(_root)));
     }
 
     [Fact]

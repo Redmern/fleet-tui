@@ -28,6 +28,7 @@ public static class FleetActionIds
         FleetAction.RebuildDashboard => "rebuild-dashboard",
         FleetAction.EditFleetConfig => "edit-fleet-config",
         FleetAction.OpenSettings => "settings-menu",
+        FleetAction.EditAidlcMode => "aidlc-mode",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -55,6 +56,7 @@ public static class FleetActionIds
         "rebuild-dashboard" => FleetAction.RebuildDashboard,
         "edit-fleet-config" => FleetAction.EditFleetConfig,
         "settings-menu" => FleetAction.OpenSettings,
+        "aidlc-mode" => FleetAction.EditAidlcMode,
         "close" => FleetAction.Close,
         _ => FleetAction.None,
     };

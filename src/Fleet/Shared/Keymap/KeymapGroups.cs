@@ -23,6 +23,7 @@ public static class KeymapGroups
             FleetAction.EditKeybinds,
             FleetAction.ViewLogs,
             FleetAction.CleanupProject,
+            FleetAction.EditAidlcMode,
         ]),
         ("dashboard",
         [

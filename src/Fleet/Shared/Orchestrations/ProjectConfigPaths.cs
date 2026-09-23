@@ -10,6 +10,9 @@ public static class ProjectConfigPaths
     public static string InstructionsFile(string projectRoot) =>
         Path.Combine(Root(projectRoot), "instructions.md");
 
+    public static string AidlcFile(string projectRoot) =>
+        Path.Combine(Root(projectRoot), "aidlc.md");
+
     public static string ReadmeFile(string projectRoot) =>
         Path.Combine(Root(projectRoot), "README.md");
 }

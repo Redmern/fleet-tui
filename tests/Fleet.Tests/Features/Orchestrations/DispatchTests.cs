@@ -6,8 +6,11 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
+using Fleet.Ports.Settings;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Orchestrations;
 
@@ -69,6 +72,87 @@ public sealed class DispatchTests : IDisposable
 
         Assert.Contains("Only ever touch the api/ folder.", instructions);
         Assert.DoesNotContain(OrchestrationText.DefaultHowYouWork, instructions);
+    }
+
+    [Fact]
+    public async Task Aidlc_mode_off_never_adds_a_process_section_even_with_a_doubled_trigger()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Off)));
+
+        var reply = await handler.HandleAsync(Command(",,do the thing"), "t");
+
+        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
+
+        Assert.DoesNotContain("## Process", instructions);
+    }
+
+    [Fact]
+    public async Task Aidlc_mode_on_adds_a_process_section_for_a_plain_prompt()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.On)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
+
+        Assert.Contains("## Process", instructions);
+        Assert.Contains(OrchestrationText.DefaultAidlc, instructions);
+    }
+
+    [Fact]
+    public async Task Aidlc_mode_manual_ignores_a_plain_prompt()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
+
+        Assert.DoesNotContain("## Process", instructions);
+    }
+
+    [Fact]
+    public async Task Aidlc_mode_manual_adds_a_process_section_when_the_prompt_still_starts_with_the_trigger()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual)));
+
+        var reply = await handler.HandleAsync(Command(",do the thing"), "t");
+
+        var folder = reply.Value!.Folder;
+        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(folder));
+        var task = File.ReadAllText(OrchestrationPaths.TaskFile(folder));
+
+        Assert.Contains("## Process", instructions);
+        Assert.Contains(OrchestrationText.DefaultAidlc, instructions);
+        Assert.Contains("do the thing", task);
+        Assert.DoesNotContain(",do the thing", task);
+        Assert.Equal("do-the-thing", reply.Value!.Slug);
+    }
+
+    [Fact]
+    public async Task A_project_level_aidlc_override_replaces_the_default_process_section()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), "Skip straight to implementing.");
+
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.On)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
+
+        Assert.Contains("Skip straight to implementing.", instructions);
+        Assert.DoesNotContain(OrchestrationText.DefaultAidlc, instructions);
     }
 
     [Fact]
@@ -232,6 +316,15 @@ public sealed class DispatchTests : IDisposable
 
         Assert.True(record.Open);
         Assert.Equal(OrchestrationStatus.Working, record.Status);
+    }
+
+    private sealed class FakeSettingsStore(SettingsConfig config) : ISettingsStore
+    {
+        public SettingsConfig Load(string project) => config;
+
+        public void Save(string project, SettingsConfig config)
+        {
+        }
     }
 
     private sealed class FakeSlugNamer(string? name = null, bool throws = false) : ISlugNamer

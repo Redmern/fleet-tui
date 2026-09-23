@@ -6,11 +6,14 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Orchestrations;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Settings;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Orchestrations.Models;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Features.Orchestrations.Dispatch;
 
@@ -22,7 +25,8 @@ public sealed class DispatchHandler(
     TimeSpan? pollInterval = null,
     TimeSpan? submitGap = null,
     IDispatchHistory? history = null,
-    ISlugNamer? namer = null)
+    ISlugNamer? namer = null,
+    ISettingsStore? settings = null)
 {
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
 
@@ -33,7 +37,14 @@ public sealed class DispatchHandler(
     public async Task<Result<DispatchReply>> HandleAsync(
         DispatchCommand command, string stampUtc, CancellationToken ct = default)
     {
-        var prompt = command.Prompt.Trim();
+        var trimmed = command.Prompt.Trim();
+
+        if (trimmed.Length == 0)
+        {
+            return Result<DispatchReply>.Fail(DispatchNote.Nothing);
+        }
+
+        var (prompt, useAidlc) = ResolveAidlc(trimmed, command.ProjectName);
 
         if (prompt.Length == 0)
         {
@@ -58,9 +69,11 @@ public sealed class DispatchHandler(
 
         var brief = new OrchestrationBrief(command.ProjectName, slug, prompt, stampUtc);
         var howYouWork = HowYouWorkOverride(command.ProjectRoot);
+        var aidlc = useAidlc ? (AidlcOverride(command.ProjectRoot) ?? OrchestrationText.DefaultAidlc) : null;
 
         File.WriteAllText(
-            OrchestrationPaths.InstructionsFile(folder), OrchestrationText.Instructions(brief, howYouWork));
+            OrchestrationPaths.InstructionsFile(folder),
+            OrchestrationText.Instructions(brief, howYouWork, aidlc));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
@@ -137,6 +150,44 @@ public sealed class DispatchHandler(
         {
             return null;
         }
+    }
+
+    private static string? AidlcOverride(string projectRoot)
+    {
+        var path = ProjectConfigPaths.AidlcFile(projectRoot);
+
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private (string Prompt, bool UseAidlc) ResolveAidlc(string prompt, string projectName)
+    {
+        var config = settings?.Load(projectName) ?? SettingsConfig.Default;
+
+        if (config.Aidlc == AidlcMode.Off)
+        {
+            return (prompt, false);
+        }
+
+        if (config.Aidlc == AidlcMode.On)
+        {
+            return (prompt, true);
+        }
+
+        var trimmed = prompt.TrimStart();
+
+        if (config.Trigger.Length > 0 && trimmed.StartsWith(config.Trigger, StringComparison.Ordinal))
+        {
+            return (trimmed[config.Trigger.Length..].TrimStart(), true);
+        }
+
+        return (prompt, false);
     }
 
     private async Task<string?> NameOrNull(string prompt, CancellationToken ct)

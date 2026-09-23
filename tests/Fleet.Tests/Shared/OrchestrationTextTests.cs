@@ -45,4 +45,35 @@ public class OrchestrationTextTests
         Assert.Contains("Read TASK.md. It holds the request verbatim. Do not edit it.", text);
         Assert.Contains("call fleet_report with", text);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void No_process_section_appears_when_aidlc_is_blank(string? aidlc)
+    {
+        var text = OrchestrationText.Instructions(Brief, aidlc: aidlc);
+
+        Assert.DoesNotContain("## Process", text);
+    }
+
+    [Fact]
+    public void A_non_blank_aidlc_value_adds_a_process_section()
+    {
+        var text = OrchestrationText.Instructions(Brief, aidlc: "  Plan, then build.  ");
+
+        Assert.Contains("## Process", text);
+        Assert.Contains("Plan, then build.", text);
+    }
+
+    [Fact]
+    public void The_fixed_sections_stay_put_when_a_process_section_is_added()
+    {
+        var text = OrchestrationText.Instructions(Brief, howYouWork: "Custom rules.", aidlc: "Follow the plan.");
+
+        Assert.Contains("# Sub-orchestrator: add-endpoint", text);
+        Assert.Contains("Read TASK.md. It holds the request verbatim. Do not edit it.", text);
+        Assert.Contains("Custom rules.", text);
+        Assert.Contains("call fleet_report with", text);
+    }
 }

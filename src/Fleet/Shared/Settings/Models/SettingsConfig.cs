@@ -6,13 +6,15 @@ public sealed record SettingsConfig(
     string Trigger,
     IReadOnlyDictionary<HarnessTool, ToolRule> Rules,
     ActionPolicy Commit,
-    ActionPolicy Push)
+    ActionPolicy Push,
+    AidlcMode Aidlc)
 {
     public static SettingsConfig Default => new(
         SettingsDefaults.Trigger,
         SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value),
         SettingsDefaults.Commit,
-        SettingsDefaults.Push);
+        SettingsDefaults.Push,
+        SettingsDefaults.Aidlc);
 
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
@@ -37,6 +39,8 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithPush(ActionPolicy policy) => this with { Push = policy };
 
+    public SettingsConfig WithAidlcMode(AidlcMode mode) => this with { Aidlc = mode };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -53,7 +57,8 @@ public sealed record SettingsConfig(
             DispatchTrigger.IsValid(Trigger) ? Trigger : SettingsDefaults.Trigger,
             rules,
             Commit,
-            Push);
+            Push,
+            Aidlc);
     }
 
     public string Signature =>
@@ -64,5 +69,6 @@ public sealed record SettingsConfig(
                 .Select(r => $"{HarnessToolIds.For(r.Key)}={r.Value.Policy}:{r.Value.Channel}")
                 .Prepend($"trigger={Trigger}")
                 .Append($"commit={Commit}")
-                .Append($"push={Push}"));
+                .Append($"push={Push}")
+                .Append($"aidlc={Aidlc}"));
 }

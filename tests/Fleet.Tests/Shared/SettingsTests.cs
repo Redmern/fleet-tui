@@ -25,6 +25,7 @@ public class SettingsTests
 
         Assert.Equal(ActionPolicy.Ask, config.Commit);
         Assert.Equal(ActionPolicy.Ask, config.Push);
+        Assert.Equal(AidlcMode.Off, config.Aidlc);
     }
 
     [Fact]
@@ -73,6 +74,24 @@ public class SettingsTests
     }
 
     [Fact]
+    public void With_aidlc_mode_keeps_everything_else()
+    {
+        var config = SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual);
+
+        Assert.Equal(AidlcMode.Manual, config.Aidlc);
+        Assert.Equal(SettingsDefaults.Commit, config.Commit);
+        Assert.Equal(SettingsDefaults.Trigger, config.Trigger);
+    }
+
+    [Fact]
+    public void Merging_keeps_the_aidlc_mode()
+    {
+        var merged = SettingsConfig.Default.WithAidlcMode(AidlcMode.On).MergedOverDefaults();
+
+        Assert.Equal(AidlcMode.On, merged.Aidlc);
+    }
+
+    [Fact]
     public void Merging_fills_gaps_from_defaults_and_rejects_an_invalid_trigger()
     {
         var partial = new SettingsConfig(
@@ -82,7 +101,8 @@ public class SettingsTests
                 [HarnessTool.NewAgent] = new(ActionPolicy.Forbid, AskChannel.Both),
             },
             SettingsDefaults.Commit,
-            SettingsDefaults.Push);
+            SettingsDefaults.Push,
+            SettingsDefaults.Aidlc);
 
         var merged = partial.MergedOverDefaults();
 
@@ -98,6 +118,7 @@ public class SettingsTests
 
         Assert.NotEqual(before, SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid).Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithTrigger(";").Signature);
+        Assert.NotEqual(before, SettingsConfig.Default.WithAidlcMode(AidlcMode.On).Signature);
     }
 
     [Theory]

@@ -53,7 +53,8 @@ public sealed class JsonSettingsStore : ISettingsStore
                     stored.Trigger,
                     rules,
                     ParsePolicy(stored.Commit, SettingsDefaults.Commit),
-                    ParsePolicy(stored.Push, SettingsDefaults.Push))
+                    ParsePolicy(stored.Push, SettingsDefaults.Push),
+                    ParseAidlc(stored.Aidlc, SettingsDefaults.Aidlc))
                 .MergedOverDefaults();
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -76,6 +77,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             Trigger = SettingsDiff.TriggerAgainstDefault(config.Trigger),
             Commit = PolicyAgainstDefault(config.Commit, SettingsDefaults.Commit),
             Push = PolicyAgainstDefault(config.Push, SettingsDefaults.Push),
+            Aidlc = AidlcAgainstDefault(config.Aidlc, SettingsDefaults.Aidlc),
             Tools = SettingsDiff.AgainstDefaults(config.Rules).ToDictionary(
                 r => HarnessToolIds.For(r.Key),
                 r => new ToolRuleEntry
@@ -100,6 +102,12 @@ public sealed class JsonSettingsStore : ISettingsStore
         Enum.TryParse<ActionPolicy>(stored, ignoreCase: true, out var parsed) ? parsed : fallback;
 
     private static string PolicyAgainstDefault(ActionPolicy value, ActionPolicy fallback) =>
+        value == fallback ? string.Empty : value.ToString().ToLowerInvariant();
+
+    private static AidlcMode ParseAidlc(string stored, AidlcMode fallback) =>
+        Enum.TryParse<AidlcMode>(stored, ignoreCase: true, out var parsed) ? parsed : fallback;
+
+    private static string AidlcAgainstDefault(AidlcMode value, AidlcMode fallback) =>
         value == fallback ? string.Empty : value.ToString().ToLowerInvariant();
 
     private static string? FileFor(string project)

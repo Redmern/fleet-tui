@@ -38,4 +38,5 @@ public enum FleetAction
     RebuildDashboard,
     EditFleetConfig,
     OpenSettings,
+    EditAidlcMode,
 }

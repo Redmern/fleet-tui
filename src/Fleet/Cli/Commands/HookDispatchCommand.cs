@@ -50,7 +50,7 @@ public static class HookDispatchCommand
         {
             var reply = await new DispatchHandler(
                     mux.Driver, Adapters.Agents(), Adapters.HarnessConfig(),
-                    history: Adapters.History(), namer: Adapters.SlugNamer())
+                    history: Adapters.History(), namer: Adapters.SlugNamer(), settings: Adapters.Settings())
                 .HandleAsync(
                     new DispatchRequest(project.Name, project.Root, task),
                     DateTimeOffset.UtcNow.ToString("O"))

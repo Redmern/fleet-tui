@@ -61,6 +61,30 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_aidlc_mode_defaults_to_off()
+    {
+        Assert.Equal(AidlcMode.Off, Store.Load("techweb").Aidlc);
+    }
+
+    [Fact]
+    public void The_aidlc_mode_round_trips()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual));
+
+        Assert.Equal(AidlcMode.Manual, Store.Load("techweb").Aidlc);
+    }
+
+    [Fact]
+    public void A_default_aidlc_mode_is_written_as_an_empty_value()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithAidlcMode(AidlcMode.On).WithAidlcMode(AidlcMode.Off));
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"aidlc\": \"\"", raw);
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));

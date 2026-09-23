@@ -24,8 +24,11 @@ using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Enums;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
 
 namespace Fleet.Cli.Commands;
@@ -52,6 +55,7 @@ public static class MenuCommand
         FleetAction.EditKeybinds,
         FleetAction.ViewLogs,
         FleetAction.CleanupProject,
+        FleetAction.EditAidlcMode,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -277,9 +281,33 @@ public static class MenuCommand
 
                 break;
 
+            case FleetAction.EditAidlcMode:
+            {
+                var aidlcSettings = Adapters.Settings();
+                var current = aidlcSettings.Load(project.Name);
+
+                var picked = FleetPicker.Choose(
+                    app,
+                    $"{SettingsDefaults.AidlcLabel} — {project.Name}",
+                    [
+                        new PickerEntry("off", "sub-orchestrators never get AIDLC guidance", "o"),
+                        new PickerEntry("on", "every dispatch gets AIDLC guidance", "n"),
+                        new PickerEntry("manual", "only when the prompt doubles the dispatch trigger", "m"),
+                    ],
+                    keymap,
+                    (int)current.Aidlc);
+
+                if (picked is not null)
+                {
+                    aidlcSettings.Save(project.Name, current.WithAidlcMode((AidlcMode)picked.Value));
+                }
+
+                break;
+            }
+
             case FleetAction.EditFleetConfig:
             {
-                var configFolder = EditFleetConfigHandler.Ensure(project.Root);
+                EditFleetConfigHandler.Ensure(project.Root);
                 var configMux = Adapters.Mux(Adapters.Log());
 
                 if (configMux.Unsupported is not null)
@@ -291,7 +319,7 @@ public static class MenuCommand
                 var configPane = await configMux.Driver.SpawnAsync(
                     new SpawnOptions
                     {
-                        Cwd = configFolder,
+                        Cwd = project.Root,
                         SessionName = project.Name,
                         NewWindow = true,
                         Args = AgentHarness.BrowseCommandFor("fleet config"),

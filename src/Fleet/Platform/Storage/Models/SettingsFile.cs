@@ -10,6 +10,8 @@ public sealed class SettingsFile
 
     public string Push { get; set; } = string.Empty;
 
+    public string Aidlc { get; set; } = string.Empty;
+
     public Dictionary<string, ToolRuleEntry> Tools { get; set; } = [];
 }
 

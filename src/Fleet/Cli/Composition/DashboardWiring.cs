@@ -740,7 +740,8 @@ public static class DashboardWiring
                 }
 
                 var reply = await new DispatchHandler(
-                        mux, agents, Adapters.HarnessConfig(), history: history, namer: Adapters.SlugNamer())
+                        mux, agents, Adapters.HarnessConfig(),
+                        history: history, namer: Adapters.SlugNamer(), settings: Adapters.Settings())
                     .HandleAsync(
                         new DispatchRequest(project.Name, project.Root, prompt),
                         DateTimeOffset.UtcNow.ToString("O"))

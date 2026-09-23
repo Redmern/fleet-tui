@@ -11,9 +11,13 @@ public static class SettingsDefaults
 
     public const ActionPolicy Push = ActionPolicy.Ask;
 
+    public const AidlcMode Aidlc = AidlcMode.Off;
+
     public const string CommitLabel = "Agents commit changes";
 
     public const string PushLabel = "Agents push changes";
+
+    public const string AidlcLabel = "AIDLC mode";
 
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);

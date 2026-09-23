@@ -42,6 +42,7 @@ public static class KeymapDefaults
             [FleetAction.RebuildDashboard] = "b",
             [FleetAction.EditFleetConfig] = "E",
             [FleetAction.OpenSettings] = "S",
+            [FleetAction.EditAidlcMode] = "A",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -74,6 +75,7 @@ public static class KeymapDefaults
             FleetAction.RebuildDashboard => "rebuild dash",
             FleetAction.EditFleetConfig => "edit fleet config",
             FleetAction.OpenSettings => "settings",
+            FleetAction.EditAidlcMode => "aidlc mode",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -115,6 +117,7 @@ public static class KeymapDefaults
             FleetAction.RebuildDashboard => "Rebuild the dashboard layout",
             FleetAction.EditFleetConfig => "Edit fleet config",
             FleetAction.OpenSettings => "Settings",
+            FleetAction.EditAidlcMode => "AIDLC mode",
             _ => action.ToString(),
         };
 }
