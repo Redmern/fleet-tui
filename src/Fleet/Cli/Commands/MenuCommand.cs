@@ -321,7 +321,7 @@ public static class MenuCommand
                     {
                         Cwd = project.Root,
                         SessionName = project.Name,
-                        NewWindow = true,
+                        WindowId = Adapters.CurrentWindow(configMux.Driver),
                         Args = AgentHarness.BrowseCommandFor("fleet config"),
                     }).ConfigureAwait(false);
 
