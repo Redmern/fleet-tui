@@ -65,6 +65,12 @@ protocol) — was true of the emulators available then, not of Ghostty's. The
 Phase 0 spike showed nvim and claude intact through it. See *The `embedded`
 driver, Phase 0 spike* and *Remote attach* below.
 
+**Revised again 2026-09-24:** tiling *within a workspace* is now in scope. Each
+project is a workspace with its split layout (claude, dashboard, agents,
+sub-orchestrator browsers), and a client shows one workspace at a time. The
+emulator per pane is what makes that affordable: the daemon composites several
+pane grids into one frame. See *Instant project switching on `embedded`*.
+
 **Build order:** `fake`, then `wezterm`, then `tmux`, then `embedded`. WezTerm
 first because it is the daily driver and `fleet-win` supplies a debugged
 reference, so it is the shortest path to a fleet worth using. tmux second, early
@@ -2410,6 +2416,12 @@ something looks wrong.
    not submit each line. WezTerm: note that its own Ctrl+S leader (this machine)
    wins. Ghostty and kitty: the host's kitty keyboard mode is not left on after
    exit.
+9. **Project switching (once Phase 1 lands).** Open two projects, each with
+   nvim, claude and a sub-orchestrator running. Switch back and forth several
+   times: nothing redraws from scratch, scrollback and cursor positions are
+   kept, the hidden dashboard keeps polling, and `switch A -> B` in the log
+   reads low tens of milliseconds. Attach a second client showing the other
+   project; switching in the first never changes the second.
 
 ## Remote attach, 2026-09-24
 
@@ -2491,14 +2503,171 @@ rather than a second protocol.
 
 ### Plan
 
-1. Protocol in `src/Fleet` with unit tests: message codec, handshake, the neutral
-   key event with both encoders, and the spike's renderer as a frame producer.
-   None of it needs a terminal to test.
-2. fleetd plus local `fleet attach`: detach, reattach and an exact screen on
-   reattach.
-3. `fleet bridge` and `fleet attach --ssh`: Linux→Linux first (two containers),
-   then Windows→Linux, then Linux→Windows over OpenSSH, the hard case.
-4. `EmbeddedDriver` behind `IMuxDriver`, then `DriverSelector`.
+Folded into the combined plan at the end of *Instant project switching on
+`embedded`*, which supersedes the four-step list that was here.
+
+## Instant project switching on `embedded`, 2026-09-24
+
+A core requirement, not later polish. Read together with
+`docs/workspace-native-switching-postmortem.md`, whose two WezTerm attempts
+failed for reasons this design has to rule out by construction.
+
+### Behaviour
+
+- **Each project is a workspace in fleetd** holding its claude pane, dashboard,
+  agent panes and sub-orchestrator browser panes, in their split layout.
+- **Switching hides one workspace and shows another.** Nothing is killed,
+  spawned, restarted or moved. Every process keeps running while hidden,
+  including the dashboard, which keeps polling.
+- **It is instant:** one control round trip to fleetd, then the target is drawn
+  from screen state that already exists. No program is asked to repaint.
+- **Hidden agents use the same mechanism.** A hidden agent lives in its
+  project's hidden workspace, which no client is ever told to show. On
+  `embedded` this replaces `HiddenNest` and the pane moves in
+  `MoveProjectHandler`.
+- **Visibility is per client.** Hiding a project in one attached client never
+  changes what another client shows. That is exactly what WezTerm could not do:
+  its workspace visibility is global to a GUI process (postmortem, attempt 1).
+- **Opening a project for the first time creates its workspace.** Quitting a
+  project closes its workspace, its hidden workspace and every pane in them, as
+  today.
+
+### Why this works on `embedded` when it failed on WezTerm
+
+fleetd owns the whole model, so "hidden" is a fact fleetd records, not a
+side effect of some other feature:
+
+```
+fleetd
+  workspaces   name -> layout tree of pane ids      ("fleet", "fleet~hidden", ...)
+  panes        id   -> PTY + libghostty-vt terminal (runs whether shown or not)
+  clients      id   -> showing: workspace name, size, focused pane
+```
+
+- **Switching** is one message, `Show { workspace }`, from a client. fleetd
+  changes that client's `showing`, composites a full frame of the target from
+  its panes' emulators, and sends it. That frame is the entire round trip.
+  Scrollback and cursor positions survive because they live in each pane's
+  emulator, which never stopped. Nothing touches a PTY, so no child notices.
+- **Per-client visibility** falls out of the data: `showing` belongs to a
+  client, and no operation writes it for any client but the sender. A test
+  asserts this.
+- **"Instant from existing state"** means fleetd's emulators, not a client-side
+  cache. A client-side frame cache per workspace could skip even the round trip,
+  but it would have to reconcile anything that changed while hidden. Not worth
+  it unless measurement says the round trip is slow.
+- **Size.** A hidden workspace keeps its panes at their last size. When it is
+  shown in a client of a different size, its panes are resized once, which does
+  make those programs redraw. Same-size switches, the common case, redraw
+  nothing. When two clients show the same workspace at different sizes, the
+  most recently active client's size wins, as in tmux's `latest`.
+
+### The postmortem's structural lesson: decide once, pass it down
+
+The WezTerm attempts broke because each call site re-derived which instance and
+which window it was acting on (`DashCommand` cold-starting a second GUI). Here:
+
+- **The client is explicit.** When a client's prefix opens the fleet menu,
+  fleetd starts the menu process with `FLEET_CLIENT=<client id>` (and
+  `FLEET_PANE`). A switch from that menu sends `Show` for that client and no
+  other. A command with no `FLEET_CLIENT` — a hook, cron, MCP, a plain shell —
+  may create, close or hide panes but never changes any client's view.
+- **The switch strategy is chosen once per driver.** `MenuCommand` stops calling
+  `MoveProjectHandler` directly and asks for the driver's switch strategy, so the
+  moving approach is no longer hard-coded in the command.
+
+### Port changes
+
+- `MuxCaps.Workspaces`: the driver has real workspaces with per-client
+  visibility. `embedded` sets it. `wezterm` does not, and keeps its move-based
+  switching (including the `perf/switch-without-kills` behaviour if that merges
+  to `main` first; it is not on `main`, so nothing here depends on it).
+- `IMuxDriver` gains three operations, which the WezTerm driver implements the
+  way it can:
+  - `ListWorkspacesAsync()`: each workspace's name and whether the *current
+    client* is showing it. WezTerm derives the latter from panes in the current
+    window, which is what `ProjectsVisibleInWindow` computes today.
+  - `ShowWorkspaceAsync(name)`: on `embedded`, one `Show`. On WezTerm, not
+    supported (`Caps` says so); the move strategy is used instead.
+  - `CloseWorkspaceAsync(name)`: kills every pane in it.
+- A feature-level `IProjectSwitch` with two implementations:
+  - `WorkspaceSwitch` for drivers with `MuxCaps.Workspaces`: hide the current
+    project and show the target with one `ShowWorkspaceAsync`, creating the
+    workspace through `OpenProjectHandler` if the project is not open yet.
+  - `MoveSwitch`: today's `MoveProjectHandler.ParkAsync` + `HandleAsync`,
+    unchanged.
+
+  `ProjectSwitch.For(driver)` picks between them from `Caps`, in one place.
+- **"Is this project open, and where"** moves out of `MenuCommand` into one
+  query shared by the switch picker's `(open)` labels, `QuitFleet`'s
+  `ProjectsVisibleInWindow` and `FocusMain`: open = its workspace exists (on
+  WezTerm: any pane has its root as cwd); visible here = the current client is
+  showing it. A hidden project still counts as open.
+- `HideAgentHandler` on `embedded` moves the agent's panes into
+  `<project>~hidden`, a data-structure change inside fleetd that leaves every
+  process alone. `HiddenNest` stays for WezTerm.
+
+### Measuring it
+
+Every switch logs `switch A -> B: N ms` on both drivers, measured in the menu
+around the strategy call, as the WezTerm branch does. fleetd also logs its side:
+time to composite and send the frame. Target on `embedded`: low tens of
+milliseconds end to end. A 200x50 frame is about 10,000 cells; the spike's
+per-cell reads run well inside that budget. If it does not, the first lever is
+caching each workspace's last composited frame in fleetd.
+
+### Acceptance
+
+Tests, against the fake driver and against fleetd's in-process model:
+
+- a switch never calls kill or spawn (the fake driver records both);
+- pane ids, and the fake processes behind them, are identical after hide → show
+  → hide;
+- two clients show two different projects at once, and a switch by one leaves
+  the other's `showing` and last frame unchanged;
+- a command without `FLEET_CLIENT` cannot change any client's view;
+- hidden agents are not in any shown frame but still receive output;
+- quitting a project closes both its workspaces and nothing else.
+
+Manual, added to the checklist below: with nvim, claude and a sub-orchestrator
+running in two projects, switch back and forth repeatedly. Nothing redraws from
+scratch, scrollback and cursor positions are kept, the dashboard keeps updating
+while hidden, and the logged switch times are in the low tens of milliseconds.
+In a second attached client showing the other project, nothing changes.
+
+### Cost, stated
+
+This pulls tiling into Phase 1. The earlier design attached one pane,
+fullscreen; a workspace with a split layout needs:
+
+- a layout tree per workspace;
+- a compositor drawing several pane grids plus borders into one frame;
+- focus and input routing to the focused pane;
+- mouse hit-testing across panes;
+- per-pane PTY sizes derived from the layout.
+
+The spike's renderer is the per-pane half of the compositor. The layout half is
+new. It is the largest single item in Phase 1.
+
+### Combined Phase 1 plan
+
+1. **Protocol** in `src/Fleet`, unit-tested: codec, handshake, neutral key
+   events with both encoders, `Show`/workspace and client messages, frame
+   messages.
+2. **fleetd model**: workspaces, layout trees, panes, clients, per-client
+   visibility. Pure and in-process first, so the acceptance tests above run
+   without a terminal.
+3. **Compositor**: the spike's renderer generalised to a layout of panes with
+   borders and focus.
+4. **fleetd process plus local `fleet attach`**: detach, reattach, exact screen,
+   and switching with timing logs.
+5. **Port changes**: `MuxCaps.Workspaces`, the three `IMuxDriver` operations,
+   `IProjectSwitch`, the shared open/visible query, and `MenuCommand` rewired
+   through them. The WezTerm behaviour is unchanged and covered by its existing
+   tests.
+6. **`fleet bridge` and `fleet attach --ssh`**: Linux→Linux, Windows→Linux,
+   Linux→Windows.
+7. **`EmbeddedDriver` behind `IMuxDriver`**, then `DriverSelector`.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
