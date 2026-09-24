@@ -261,10 +261,8 @@ public sealed class OpenAgentTests : IDisposable
         var atWorktree = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
         Assert.Equal(2, atWorktree.Count);
         Assert.Contains(atWorktree, p => SubBrowse.Is(p));
-        var claude = atWorktree.Single(p =>
-            _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude, AgentHarness.ResumeArgument }));
-
-        Assert.Equal("1", _mux.EnvFor(claude.Id)["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"]);
+        Assert.Single(atWorktree, p =>
+            _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.OrchestratorCommand(resume: true)));
     }
 
     [Fact]

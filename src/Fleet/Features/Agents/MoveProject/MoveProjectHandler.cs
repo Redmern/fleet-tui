@@ -64,8 +64,7 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
                     SessionName = project,
                     WindowId = destWindow,
                     NewWindow = destWindow is null,
-                    Args = [AgentHarness.Claude, AgentHarness.ResumeArgument],
-                    Env = AgentHarness.SessionPersistence,
+                    Args = AgentHarness.OrchestratorCommand(resume: true),
                 },
                 ct).ConfigureAwait(false);
 

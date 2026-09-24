@@ -39,11 +39,13 @@ public class OrchestrationSlugTests
     }
 
     [Fact]
-    public void An_orchestrator_opens_a_bare_interactive_claude()
+    public void An_orchestrator_opens_claude_alone_inside_nvim()
     {
-        Assert.Equal(
-            [AgentHarness.Claude],
-            AgentHarness.CommandFor(AgentHarness.Orchestrator));
+        var command = AgentHarness.CommandFor(AgentHarness.Orchestrator);
+
+        Assert.Equal([AgentHarness.Nvim, "-c"], command.Take(2));
+        Assert.Contains("vim.cmd('ClaudeCode')", command[2]);
+        Assert.DoesNotContain("Neotree", command[2]);
 
         Assert.True(AgentHarness.IsOrchestrator(AgentHarness.Orchestrator));
     }

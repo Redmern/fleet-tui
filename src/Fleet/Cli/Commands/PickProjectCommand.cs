@@ -66,7 +66,7 @@ public static class PickProjectCommand
         }
 
         var result = await new OpenProjectHandler(mux.Driver)
-            .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable, windowId))
+            .HandleAsync(new OpenProjectCommand(chosen, AgentHarness.Orchestrator, Adapters.Executable, windowId))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)

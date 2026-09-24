@@ -46,6 +46,23 @@ public static class AgentHarness
         + "and vim.api.nvim_buf_line_count(b)<=1 then "
         + "pcall(vim.api.nvim_win_close, w, true) end end vim.cmd('stopinsert') end, 150) end)";
 
+    public static string NvimStartupClaudeOnly(string claudeArgs) =>
+        NvimBoot
+        + "vim.schedule(function() vim.cmd('ClaudeCode" + claudeArgs + "') "
+        + "vim.defer_fn(function() local term "
+        + "for _,w in ipairs(vim.api.nvim_list_wins()) do "
+        + "if vim.bo[vim.api.nvim_win_get_buf(w)].buftype=='terminal' then term=w end end "
+        + "if not term then return end "
+        + "for _,w in ipairs(vim.api.nvim_list_wins()) do "
+        + "if w~=term and vim.api.nvim_win_get_config(w).relative=='' then "
+        + "pcall(vim.api.nvim_win_close, w, true) end end "
+        + "vim.api.nvim_set_current_win(term) vim.cmd('startinsert') end, 150) end)";
+
+    public static IReadOnlyList<string> OrchestratorCommand(bool resume) =>
+        [Nvim, "-c", NvimStartupClaudeOnly(resume ? " " + ResumeArgument : string.Empty)];
+
+    public static bool HostedInNvim(string harness) => CommandFor(harness)[0] == Nvim;
+
     public const string TellPrefix = ":FleetTell ";
 
     public const string AgentInstructionFile = "instruction.md";
@@ -54,7 +71,7 @@ public static class AgentHarness
         "Read .fleet/instruction.md in this folder and do what it says.";
 
     public const string OrchestratorKickoff =
-        "Read CLAUDE.md and TASK.md in this folder, then begin.";
+        "Read CLAUDE.md and TASK.md in your working directory, then begin.";
 
     public const string ResumeArgument = "--continue";
 
@@ -99,7 +116,7 @@ public static class AgentHarness
         Normalize(harness) switch
         {
             Nvim => [Nvim, "-c", withClaude ? NvimStartupWithClaude : NvimStartup],
-            Orchestrator => [Claude],
+            Orchestrator => OrchestratorCommand(resume: false),
             _ => [Claude],
         };
 

@@ -293,7 +293,7 @@ public sealed class McpActions(
         await File.WriteAllTextAsync(
             Path.Combine(dir, AgentHarness.AgentInstructionFile), message, ct).ConfigureAwait(false);
 
-        if (AgentHarness.Normalize(agent.Harness) == AgentHarness.Nvim)
+        if (AgentHarness.HostedInNvim(agent.Harness))
         {
             return;
         }

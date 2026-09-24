@@ -36,7 +36,7 @@ public class RebuildDashboardTests
     {
         var (harness, dash) = await ProjectAsync();
 
-        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Claude);
+        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Orchestrator);
 
         Assert.True(result.Succeeded, result.Error);
         Assert.Contains("intact", result.Value);
@@ -61,7 +61,7 @@ public class RebuildDashboardTests
         await _mux.SplitAsync(new SplitOptions(dash, SplitDirection.Right) { MovePane = browser });
         await _mux.SetTitleAsync(dash, "remove-pr-pipeline files");
 
-        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Claude);
+        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Orchestrator);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -84,7 +84,7 @@ public class RebuildDashboardTests
         var (harness, dash) = await ProjectAsync();
         await _mux.KillPaneAsync(harness);
 
-        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Claude);
+        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Orchestrator);
 
         Assert.True(result.Succeeded, result.Error);
 
@@ -94,7 +94,7 @@ public class RebuildDashboardTests
 
         Assert.Equal(mine.TabId, fresh.TabId);
         Assert.Equal(Root, fresh.Cwd);
-        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(fresh.Id));
+        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Orchestrator), _mux.ArgsFor(fresh.Id));
         Assert.Equal(FleetTabTitles.Dashboard, mine.Title);
     }
 
@@ -106,7 +106,7 @@ public class RebuildDashboardTests
         var subClaude = await _mux.SpawnAsync(new SpawnOptions { Cwd = Root, Args = [AgentHarness.Claude] });
         await _mux.SetTitleAsync(subClaude, "remove-pr-pipeline");
 
-        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Claude);
+        var result = await Handler.HandleAsync(Root, [Sub], AgentHarness.Orchestrator);
 
         Assert.True(result.Succeeded, result.Error);
 
