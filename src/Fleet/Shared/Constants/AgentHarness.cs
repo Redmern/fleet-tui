@@ -56,6 +56,17 @@ public static class AgentHarness
         + "for _,w in ipairs(vim.api.nvim_list_wins()) do "
         + "if w~=term and vim.api.nvim_win_get_config(w).relative=='' then "
         + "pcall(vim.api.nvim_win_close, w, true) end end "
+        + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
+        + "if b~=vim.api.nvim_win_get_buf(term) and vim.api.nvim_buf_get_name(b)=='' "
+        + "and vim.bo[b].buftype=='' and not vim.bo[b].modified "
+        + "and vim.api.nvim_buf_line_count(b)<=1 then "
+        + "pcall(vim.api.nvim_buf_delete, b, {force=true}) end end "
+        + "local tb=vim.api.nvim_win_get_buf(term) "
+        + "vim.defer_fn(function() if not vim.api.nvim_buf_is_valid(tb) then return end "
+        + "for k,d in pairs({h='Left',j='Down',k='Up',l='Right'}) do "
+        + "vim.keymap.set({'t','n'},'<C-'..k..'>',function() "
+        + "vim.fn.jobstart({vim.env.WEZTERM_EXECUTABLE or 'wezterm','cli','activate-pane-direction',d}) "
+        + "end,{buffer=tb}) end end, 400) "
         + "vim.api.nvim_set_current_win(term) vim.cmd('startinsert') end, 150) end)";
 
     public static IReadOnlyList<string> OrchestratorCommand(bool resume) =>

@@ -76,13 +76,13 @@ public class MoveProjectTests
     }
 
     [Fact]
-    public async Task A_subs_browser_is_killed_and_rebuilt_beside_its_moved_claude()
+    public async Task A_subs_leftover_browser_is_killed_and_not_rebuilt_beside_its_moved_claude()
     {
         var (_, dash) = await ProjectAsync();
         var sub = Sub();
         var subClaude = await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
         await _mux.SetTitleAsync(subClaude, sub.Branch);
-        await SubBrowse.SplitAsync(_mux, sub, subClaude);
+        await LegacyBrowser.SplitAsync(_mux, sub, subClaude);
         var browser = (await _mux.ListPanesAsync()).Single(p => SubBrowse.Is(p)).Id;
 
         var moved = await Handler().HandleAsync(
@@ -94,7 +94,7 @@ public class MoveProjectTests
 
         Assert.DoesNotContain(panes, p => p.Id == browser);
         Assert.Contains(panes, p => p.Id == subClaude);
-        Assert.Contains(panes, p => p.Id != browser && SubBrowse.Is(p));
+        Assert.DoesNotContain(panes, p => SubBrowse.Is(p));
     }
 
     [Fact]

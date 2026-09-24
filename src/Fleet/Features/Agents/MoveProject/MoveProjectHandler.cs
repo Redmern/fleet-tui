@@ -190,7 +190,6 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
             new MovePaneOptions { WindowId = destWindow, NewWindow = destWindow is null },
             destWindow,
             selfPaneId,
-            split: true,
             ct).ConfigureAwait(false);
 
     private async Task MoveAgentAsync(
@@ -199,7 +198,6 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
         MovePaneOptions options,
         string? destWindow,
         string? selfPaneId,
-        bool split,
         CancellationToken ct)
     {
         var mine = panes
@@ -230,11 +228,6 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
             await mux.MovePaneAsync(main.Id, options, ct).ConfigureAwait(false);
             await mux.SetTitleAsync(
                 main.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
-
-            if (split)
-            {
-                await SubBrowse.SplitAsync(mux, agent, main.Id, ct).ConfigureAwait(false);
-            }
 
             return;
         }

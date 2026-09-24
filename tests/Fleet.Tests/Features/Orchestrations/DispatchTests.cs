@@ -191,25 +191,16 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task It_opens_a_file_browser_beside_claude_in_the_same_window()
+    public async Task It_opens_claude_alone_with_no_file_browser()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
         var panes = await _mux.ListPanesAsync();
 
-        var claude = panes.Single(p =>
-            p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.CommandFor(AgentHarness.Orchestrator)));
-        var browser = panes.Single(p =>
-            p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(
-                AgentHarness.BrowseCommandFor($"{reply.Value.Slug} files")));
+        var claude = Assert.Single(panes, p => p.Cwd == reply.Value!.Folder);
 
-        Assert.Equal(claude.WindowId, browser.WindowId);
-        Assert.Equal(claude.TabId, browser.TabId);
+        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Orchestrator), _mux.ArgsFor(claude.Id));
         Assert.Equal(reply.Value!.Slug, claude.Title);
-        Assert.Equal(reply.Value!.Slug, browser.Title);
-        Assert.Equal($"{reply.Value!.Slug} files", browser.PaneTitle);
     }
 
     [Fact]
@@ -232,6 +223,25 @@ public sealed class DispatchTests : IDisposable
 
         Assert.Equal(AgentHarness.OrchestratorKickoff, File.ReadAllText(inbox));
         Assert.All(await _mux.ListPanesAsync(), p => Assert.Empty(_mux.SentTo(p.Id)));
+    }
+
+    [Fact]
+    public void The_claude_only_nvim_drops_the_empty_no_name_buffer()
+    {
+        var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
+
+        Assert.Contains("pcall(vim.api.nvim_buf_delete, b, {force=true})", boot);
+        Assert.Contains("vim.api.nvim_buf_get_name(b)==''", boot);
+    }
+
+    [Fact]
+    public void Ctrl_hjkl_in_the_claude_only_nvim_moves_between_wezterm_panes()
+    {
+        var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
+
+        Assert.Contains("{h='Left',j='Down',k='Up',l='Right'}", boot);
+        Assert.Contains("'cli','activate-pane-direction',d", boot);
+        Assert.Contains("{buffer=tb}", boot);
     }
 
     [Fact]

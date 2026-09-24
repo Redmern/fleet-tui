@@ -113,15 +113,6 @@ public sealed class DispatchHandler(
 
         await mux.SetTitleAsync(pane, slug, ct).ConfigureAwait(false);
 
-        await mux.SplitAsync(
-            new SplitOptions(pane, SplitDirection.Right)
-            {
-                Percent = 50,
-                Cwd = folder,
-                Args = AgentHarness.BrowseCommandFor(AgentPaneMatch.BrowserTitle(record)),
-            },
-            ct).ConfigureAwait(false);
-
         history?.Add(command.ProjectName, prompt);
 
         if (active is not null)
