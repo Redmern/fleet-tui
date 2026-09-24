@@ -2115,6 +2115,282 @@ from the dashboard both. yazi is an optional dependency: without it the browse b
 hides itself and the menu entry reports what to install, which is why `fleet setup`
 lists it as costing "no folder picker or file navigator" rather than blocking.
 
+## The `embedded` driver, Phase 0 spike, 2026-09-24
+
+Branch `feat/embedded-mux`, code in `spikes/EmbeddedSpike`. The question was whether
+fleet can own one pane end to end, from the PTY through a real terminal emulator
+to the host terminal, with a prefix key that works while nvim or claude has focus.
+This goes further than the attach model above ("no terminal emulator"): with an
+emulator in the path, repaint on attach becomes an exact screen dump rather than
+a ring-buffer replay, which is the upgrade *Repaint on attach* named.
+
+**Verdict: go.** libghostty-vt from .NET NativeAOT works on Windows and Linux,
+statically linked, with no warnings. Everything the spike set out to prove was
+observed working, not just compiled. The one design change it forces is on the
+Windows input path; see *Keys on Windows go to ConPTY as records* below.
+
+### What was built
+
+One NativeAOT console app with one pane:
+
+```
+host console/tty --records/bytes--> prefix check --> ConPTY | pty master
+       ^                                                    |
+       |                                                    v
+  diffed render <-- render state <-- libghostty-vt <-- PTY output
+```
+
+- **PTY.** Windows uses ConPTY through `RoyalApps.RoyalTerminal.Terminal.Pty.Windows`
+  0.5.0, as the 2026-08-08 entry recommended. Only the Windows package is
+  referenced, because the `Platform` package also pulls in the Unix one, which
+  P/Invokes `forkpty` and returns into managed code in the child. Linux uses
+  hand-written `openpty` + `posix_spawnp` (see the next point).
+- **A controlling terminal without fork.** The PTY section above says
+  `posix_spawn` cannot issue `TIOCSCTTY`. It does not need to. With
+  `POSIX_SPAWN_SETSID` plus a file action that opens `/dev/pts/N` as fd 0, glibc
+  runs `setsid` and then `open` in the child, and a session leader with no
+  controlling terminal acquires the tty it opens. Verified: nvim runs, gets
+  `SIGWINCH` on resize, and redraws. Signal dispositions and the mask are reset
+  with `SETSIGDEF`/`SETSIGMASK`. This is glibc-specific (macOS numbers the flag
+  differently) and removes the need for a helper binary.
+- **Emulator.** One libghostty-vt terminal fed from the PTY. Its `write_pty`
+  callback sends terminal replies (DSR, DA, mode reports) back to the child. A
+  DA1/DA2 callback answers as a VT220-class terminal. Without it, nvim waits
+  out its query timeout.
+- **Render.** The render-state API (`ghostty_render_state_*`) gives dirty rows.
+  Each dirty row is read cell by cell and diffed against a shadow of what the
+  host already shows, and only changed cells are written, wrapped in
+  synchronized output (`?2026`). Palette colours stay palette indices, so the
+  host theme still applies. RGB stays RGB, and "no colour" becomes SGR 39/49.
+  Wide characters and their spacer tails are handled. On Windows the console
+  code page is set to UTF-8 (65001) and restored on exit, the 2026-08-08 fix.
+- **Input, Windows.** `ReadConsoleInputW` records with
+  `ENABLE_VIRTUAL_TERMINAL_INPUT` off, as herdr does. The prefix is decided on
+  the virtual key and modifier state, so whatever mode the pane has put the
+  terminal in cannot change what the prefix looks like. This retires the
+  2026-08-08 finding that win32-input-mode broke a byte-level scanner.
+- **Input, Linux.** Raw stdin bytes with a byte-level prefix check (Ctrl+B is
+  `0x02`), passed through otherwise. Good enough for the spike. Phase 1 needs a
+  host input parser here too (see what did not work).
+- **Prefix.** `Ctrl+B` by default (`--prefix ctrl+<letter>`). `prefix q` quits,
+  `prefix prefix` sends the chord through, `prefix d` dumps the screen, and
+  `prefix r` redraws. Unbound keys after the prefix are swallowed, as in tmux.
+  While the prefix is armed, a badge shows top right.
+- **Resize.** Host → emulator (`ghostty_terminal_resize`) → PTY. Windows sees it
+  from `WINDOW_BUFFER_SIZE_EVENT` plus polling, Linux from `SIGWINCH` via
+  `PosixSignalRegistration` plus `TIOCGWINSZ`.
+- **Restore.** On exit: SGR reset, mouse modes 1000/1002/1003/1006, focus 1004,
+  bracketed paste 2004, DECCKM, keypad mode, cursor shape and visibility, then
+  leave the alt screen. Console modes and code pages are restored on Windows,
+  termios on Linux.
+- **Test hooks.** `--dump FILE` keeps the emulator's screen as plain text (via
+  `ghostty_formatter`) with size and counters. `--log FILE` records every key
+  record and the bytes sent. `--inject PID tokens…` attaches to the spike's
+  console and writes real `INPUT_RECORD`s with `WriteConsoleInputW`, so the
+  Windows tests go through the same `ReadConsoleInputW` path as a keyboard.
+
+### libghostty-vt: pin and build
+
+| | |
+|---|---|
+| Source | `ghostty-org/ghostty` @ `44f2a44df7e8c4a0c6df3f7d872ef3d7ead88e51` (reports `1.3.2-HEAD`). The same commit herdr vendors, so it is known-good on Windows MSVC |
+| Toolchain | Zig **0.16.0** (`build.zig.zon` requires it) |
+| Pins | `spikes/EmbeddedSpike/native/pins.env`: Zig version, the SHA-256 of both Zig archives, the ghostty commit and the SHA-256 of its GitHub tarball |
+| Windows | `native/build.ps1` → `zig build -Demit-lib-vt -Doptimize=ReleaseFast -Dsimd=true -Dtarget=x86_64-windows-msvc` → `ghostty-vt-static.lib` (12 MB) |
+| Linux | `native/build.sh` → same flags with `-Dtarget=x86_64-linux-gnu` → `libghostty-vt.a` (18 MB) |
+| Linking | `<DirectPInvoke Include="ghostty-vt" />` plus `<NativeLibrary>` pointing at the archive, and `ntdll.lib` on Windows. Every `[LibraryImport("ghostty-vt")]` becomes a direct call resolved at link time, so there is no DLL at runtime |
+| Result | `embeddedspike.exe` 3.99 MB. Linux `embeddedspike` 4.18 MB, depending only on `libc`/`libm`. Zero IL, trim, AOT or link warnings with `TreatWarningsAsErrors` |
+
+The scripts download Zig and the source into `native/.cache`, check both hashes,
+and install nothing system-wide, so a CI runner needs only what NativeAOT already
+needs: MSVC and the Windows SDK on Windows, `clang` on Linux. Zig fetches
+ghostty's own dependencies at build time; `build.zig.zon` pins their hashes. A
+cold build takes minutes, so CI should cache `native/.cache`.
+
+One Zig 0.16 trap on Windows: with `ZIG_GLOBAL_CACHE_DIR` pointing at a fresh
+directory, the dependency fetch fails with `FileNotFound` unless `<cache>/p`
+already exists. Both scripts create it.
+
+The bindings are hand-written from the C headers
+(`Ghostty/Native.cs`), about 45 functions and the struct layouts they need. No
+generator was used. The headers are the ABI, and the render and formatter
+structs carry a `size` field, so a mismatch shows up as an error code rather
+than a crash. Alternatives seen along the way, not used: RoyalApps ships
+`RoyalApps.RoyalTerminal.GhosttySharp` with a prebuilt dynamic `ghostty-vt.dll`,
+and `DeBlasis.GhosttyVt` (Parked). Both trade the Zig build for someone else's
+pin and a DLL next to the binary.
+
+**XtermSharp was not evaluated.** It was the fallback in case libghostty-vt
+turned out impractical from .NET, and it did not: Zig, MSVC linking and AOT all
+worked on the first try. The reasons for the pick are fidelity, since this is
+Ghostty's own parser, screen and key encoder with kitty keyboard, mouse modes
+and grapheme handling, and one pinned upstream on both OSes.
+
+### Credit: herdr
+
+[herdr](https://github.com/ogulcancelik/herdr) (Apache-2.0) is a Rust terminal
+multiplexer built on libghostty-vt that ships on Windows. This spike takes from
+it: the Zig invocation and target triples from its `build.rs`, the ghostty pin,
+the Windows input rules in `Input/WindowsKeys.cs` (AltGr as `LEFT_CTRL|RIGHT_ALT`
+is text, not a chord; modifier-only records produce nothing; Alt+numpad codes
+arrive as a `VK_MENU` key-up carrying the character; surrogate pairs span two
+records; `vk == 0` is synthesized text), and the Windows checklist below, taken
+from its CHANGELOG. The files that port its logic say so in a comment.
+
+### Keys on Windows go to ConPTY as records
+
+The spike first encoded every key with libghostty-vt's key encoder, which honours
+the pane's modes, and that broke in a way that matters. Claude Code turns on the
+kitty keyboard protocol, so the encoder sent Ctrl+U as `CSI 117;5u`, **and Claude
+did not clear its prompt.** The child never sees our bytes directly. ConPTY
+parses them back into console records, and ConPTY does not understand kitty's
+CSI-u.
+
+ConPTY says what it wants. The first bytes of every session are
+`ESC[?9001h ESC[?1004h`, a request for win32-input-mode and focus events. The
+spike already holds the `KEY_EVENT_RECORD`, so when 9001 is on it forwards the
+record verbatim as `ESC[Vk;Sc;Uc;Kd;Cs;Rc_`, the spec Windows Terminal
+implements. ConPTY rebuilds the identical record for the child, and the child's
+own console mode decides the rest. With that, Ctrl+U clears Claude's prompt.
+Focus events go through as `CSI I`/`CSI O` when 1004 is on.
+
+Consequences:
+
+- On **Windows**, libghostty-vt's key encoder is the fallback (`--keys ghostty`,
+  or a ConPTY that never asks for 9001), not the main path. Records are lossless
+  and cheaper.
+- On **Linux** the encoder is the right tool. It is what fleet needs to turn
+  parsed host input into whatever the pane asked for (kitty flags,
+  modifyOtherKeys, DECCKM).
+- The prefix check stays on the translated key in both paths.
+
+### Verified
+
+Windows 11, conhost, driven by `--inject` (real console input records) with
+`--dump` screen captures:
+
+| Check | Result |
+|---|---|
+| `nvim --clean file` renders into the grid | ✓ text, `─ ✓ 日本語`, status line at full width |
+| typing in insert mode | ✓ |
+| `i`, `Ctrl+V`, `prefix prefix` | ✓ nvim inserts a literal `^B`, so the chord reaches the pane |
+| `prefix r` redraw, `prefix d` dump, unbound `prefix z` swallowed | ✓ |
+| `prefix q` quits and restores the console | ✓ exits cleanly; entry logged mode `0x1F7→0x1A8`, CP `437→65001`. The restore is the saved values written back, not read back afterwards |
+| resize by dragging the window (`MoveWindow`) | ✓ 120x30 → 95x22 → 181x41. nvim and claude both re-lay out |
+| `claude` trust dialog and main prompt render | ✓ box drawing, logo, status line |
+| typing into claude, `Ctrl+U` clears the line | ✓ with win32-input-mode, ✗ with the ghostty encoder |
+| `prefix d`, `prefix q` while claude is focused | ✓ |
+| nvim with modifyOtherKeys, encoder path | ✓ `|` arrives as `CSI 27;2;124~` and is inserted |
+
+Linux, in `mcr.microsoft.com/dotnet/sdk:10.0` (Debian) under Docker Desktop,
+with `script` providing the host pty:
+
+| Check | Result |
+|---|---|
+| `build.sh` + AOT publish | ✓ from a clean container |
+| nvim renders through `openpty` + `posix_spawn` | ✓ |
+| typing, `Ctrl+V` `prefix prefix` inserts `^B` | ✓ |
+| host pty resized 100x30 → 72x20 | ✓ emulator and nvim both at 72x20 |
+| `prefix d`, `prefix q`, restore sequence emitted, exit 0 | ✓ |
+
+Setting `SetConsoleScreenBufferSize` from another process fails with
+`ERROR_INVALID_PARAMETER` while the alt screen is active. That is why the resize
+test moves the window instead. Worth knowing for any future scripted test.
+
+`dotnet build Fleet.slnx` and `dotnet test` stay green (0 warnings, 926 passed).
+The spike is not in the solution, as with the earlier spikes.
+
+### What did not work, or was not done
+
+- **Not tested by the spike:** Windows Terminal, WezTerm, PowerShell as the pane,
+  Ghostty/kitty on Linux, claude on Linux (not installed in the container), macOS
+  (not built). The manual checklist below covers these.
+- **Mouse** is not forwarded: `ENABLE_MOUSE_INPUT` is off, and the host is never
+  asked for mouse modes. On Windows, mouse records can go to ConPTY the same way
+  keys do.
+- **Host-side modes** the pane asks for are not mirrored to the host: bracketed
+  paste, focus reporting on Linux, the window title (OSC 0/2), clipboard
+  (OSC 52), cursor colour, hyperlinks and kitty graphics. On Windows a paste
+  arrives as key records, which is correct but not bracketed.
+- **Linux input is raw bytes.** A kitty-mode pane on Linux gets legacy keys, and
+  the prefix check would misfire on a `0x02` inside a paste. Phase 1 needs a host
+  input parser that feeds the key encoder.
+- **Underline style** is re-emitted as `4:n`. Terminals without styled
+  underlines may show a plain underline or none.
+- **Dead keys** are untested. The translator passes whatever character the
+  console reports, which is exactly the herdr bug on the checklist.
+- **No scrollback view.** Only the active screen is drawn.
+
+### Windows input checklist for later phases
+
+From herdr's CHANGELOG. Each item is a bug herdr shipped and fixed on Windows.
+The records path avoids some of them by construction; each needs a test before
+`embedded` is called done.
+
+- [ ] **Alt combinations.** Alt+letter, Alt+Shift+letter (must not collapse to
+      uppercase), Alt+Backspace, Ctrl+Alt+letter (fish decodes these as both
+      modifiers). Right Alt is AltGr only with `LEFT_CTRL` also set.
+- [ ] **Ctrl+S** reaches the pane (not taken as XOFF, not claimed by the host;
+      WezTerm on this machine claims it as a leader). Also Ctrl+/, Ctrl+1..9 as
+      keys rather than control bytes, and Ctrl+J as LF, distinct from Enter.
+- [ ] **Dead keys and AltGr text.** US-International `'` + `e` gives `é` once,
+      with no extra base character; AltGr+dead key; non-US shifted text such as
+      `@` on German layouts; IME commits; emoji from the Windows picker
+      (surrogate pairs, or CSI-u with associated text under WezTerm).
+- [ ] **SGR mouse past column 95.** Coordinates must use SGR (1006) encoding end
+      to end. Legacy encodings stop at 95/223. Reattach must restore mouse
+      reporting.
+- [ ] **Pasted Enter.** A multi-line paste from Windows Terminal arrives as key
+      records with `VK_RETURN`. It must reach the pane as one bracketed paste with
+      its newlines, and must not submit each line (herdr: Codex lost Enter after
+      long pastes; OMP/Pi submitted per line). LF-only pastes keep their
+      newlines.
+- [ ] **Mode restore.** On exit and on detach, reset mouse (1000/1002/1003/1006),
+      focus (1004), bracketed paste (2004), cursor keys, keypad, cursor shape and
+      visibility, and the alt screen. Restore console modes and code pages even
+      on a crash (herdr #4055 still had a Git Bash report open).
+- [ ] **Escape** is sent at once, not held as a possible Alt prefix, and a lone
+      Esc beside another key is not fused into an Alt chord.
+- [ ] **Shift+Enter** keeps its modifier. **Shift+Tab** reaches the pane as
+      CSI Z; the permission-mode cycle depends on it.
+- [ ] **Key repeat and release** stay with the pane that got the press.
+- [ ] **Incomplete host replies** (split `ESC ]` OSC colour answers) are not
+      mistaken for Alt+`]`.
+
+### Manual test checklist
+
+For a human, on each host: PowerShell in conhost, Windows Terminal, WezTerm on
+Windows, and Ghostty and kitty on Linux. Build with `native/build.ps1` or
+`native/build.sh`, then `dotnet publish -c Release -r <rid> -o out/<rid>` in
+`spikes/EmbeddedSpike`. Add `--log log.txt` to capture key records when
+something looks wrong.
+
+1. **nvim renders.** `embeddedspike -- nvim <some file with unicode>`. Colours
+   match the host theme, box drawing and CJK align, the cursor shape changes
+   between normal and insert, and scrolling with `Ctrl+D`/`Ctrl+U` has no
+   leftovers.
+2. **claude renders.** `embeddedspike -- claude`. Logo, prompt box and status
+   line are intact. Spinner updates leave no trails. The trust dialog's
+   selection highlight moves.
+3. **Prefix under nvim.** In insert mode, `Ctrl+V` then `Ctrl+B Ctrl+B` inserts
+   `^B`. `Ctrl+B` shows the badge top right. `Ctrl+B d` writes the dump.
+   `Ctrl+B q` quits.
+4. **Prefix under claude.** Type text, `Ctrl+U` clears it, `Ctrl+B Ctrl+B`
+   reaches claude, and `Ctrl+B q` quits even while claude is busy streaming.
+5. **Alt, Ctrl+S, Shift+Tab** under claude: Alt+B/F move by word, Shift+Tab
+   cycles permission mode, Ctrl+S does what claude does with it.
+6. **Resize.** Drag the window smaller and larger, maximise, restore. nvim's
+   status line and claude's prompt box follow within a frame and nothing is
+   left behind at the old edge.
+7. **Restore.** After `Ctrl+B q`: the prompt returns on the normal screen, the
+   cursor is visible with its usual shape, typing echoes, mouse clicks do not
+   print escape codes, and a paste is not wrapped in `200~`. On Windows,
+   `chcp` reports the original code page.
+8. **Host specifics.** Windows Terminal: pasting multiple lines into claude does
+   not submit each line. WezTerm: note that its own Ctrl+S leader (this machine)
+   wins. Ghostty and kitty: the host's kitty keyboard mode is not left on after
+   exit.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
