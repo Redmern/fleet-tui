@@ -44,9 +44,9 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
                 await mux.SetTitleAsync(main.Id, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
 
-                if (!mine.Any(SubBrowse.Is))
+                foreach (var browser in mine.Where(SubBrowse.Is))
                 {
-                    await SubBrowse.SplitAsync(mux, agent, main.Id, ct).ConfigureAwait(false);
+                    await mux.KillPaneAsync(browser.Id, ct).ConfigureAwait(false);
                 }
 
                 if (agent.Hidden || !agent.Open)
@@ -124,11 +124,6 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
         }
 
         await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
-
-        if (orchestrator)
-        {
-            await SubBrowse.SplitAsync(mux, agent, pane, ct).ConfigureAwait(false);
-        }
 
         if (agent.Hidden || !agent.Open)
         {

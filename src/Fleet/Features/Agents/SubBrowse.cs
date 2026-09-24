@@ -1,9 +1,6 @@
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
-using Fleet.Ports.Mux;
-using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
-using Fleet.Shared.Constants;
 
 namespace Fleet.Features.Agents;
 
@@ -13,17 +10,4 @@ public static class SubBrowse
         pane.PaneTitle.EndsWith(" files", StringComparison.OrdinalIgnoreCase);
 
     public static string Title(AgentRecord agent) => AgentPaneMatch.BrowserTitle(agent);
-
-    public static async Task SplitAsync(
-        IMuxDriver mux, AgentRecord agent, PaneId claude, CancellationToken ct = default)
-    {
-        await mux.SplitAsync(
-            new SplitOptions(claude, SplitDirection.Right)
-            {
-                Percent = 50,
-                Cwd = agent.Worktree,
-                Args = AgentHarness.BrowseCommandFor(Title(agent)),
-            },
-            ct).ConfigureAwait(false);
-    }
 }
