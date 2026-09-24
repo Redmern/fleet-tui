@@ -30,4 +30,10 @@ public interface IMuxDriver
     Task SendTextAsync(PaneId id, string text, CancellationToken ct = default);
 
     Task<string> GetTextAsync(PaneId id, CancellationToken ct = default);
+
+    Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default);
+
+    Task ShowWorkspaceAsync(string name, CancellationToken ct = default);
+
+    Task CloseWorkspaceAsync(string name, CancellationToken ct = default);
 }

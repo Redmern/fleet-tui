@@ -96,5 +96,14 @@ public class FailSilentDriverTests
 
         public Task SendTextAsync(PaneId id, string text, CancellationToken ct = default) =>
             throw toThrow;
+
+        public Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default) =>
+            throw toThrow;
+
+        public Task ShowWorkspaceAsync(string name, CancellationToken ct = default) =>
+            throw toThrow;
+
+        public Task CloseWorkspaceAsync(string name, CancellationToken ct = default) =>
+            throw toThrow;
     }
 }

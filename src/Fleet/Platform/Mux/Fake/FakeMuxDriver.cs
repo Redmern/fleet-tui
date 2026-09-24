@@ -7,8 +7,10 @@ using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Fake;
 
-public sealed class FakeMuxDriver : IMuxDriver
+public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
 {
+    private readonly ConcurrentDictionary<string, string> _showing = new();
+    private readonly ConcurrentQueue<string> _calls = new();
     private readonly ConcurrentDictionary<string, Entry> _panes = new();
     private readonly ConcurrentDictionary<string, string> _tabTitles = new();
     private readonly ConcurrentDictionary<string, List<string>> _sent = new();
@@ -20,7 +22,15 @@ public sealed class FakeMuxDriver : IMuxDriver
 
     public string Name => "fake";
 
-    public MuxCaps Caps => MuxCaps.Split | MuxCaps.Zoom | MuxCaps.Persist;
+    public MuxCaps Caps => MuxCaps.Split | MuxCaps.Zoom | MuxCaps.Persist
+        | (workspaces ? MuxCaps.Workspaces | MuxCaps.Detach : MuxCaps.None);
+
+    public string CurrentClient { get; set; } = "c1";
+
+    public IReadOnlyList<string> Calls => [.. _calls];
+
+    public string? ShowingFor(string client) =>
+        _showing.TryGetValue(client, out var name) ? name : null;
 
     public bool Available { get; set; } = true;
 
@@ -44,8 +54,20 @@ public sealed class FakeMuxDriver : IMuxDriver
     public Task<PaneId> SpawnAsync(SpawnOptions options, CancellationToken ct = default)
     {
         RequireAvailable();
+        _calls.Enqueue("spawn");
 
         var id = NextPaneId();
+
+        if (workspaces)
+        {
+            var name = options.Workspace
+                ?? (options.NewWindow ? null : options.WindowId)
+                ?? options.SessionName
+                ?? "default";
+
+            Add(id, name, NextTabId(), name, options.Cwd ?? string.Empty, options.Args, options.Env);
+            return Task.FromResult(id);
+        }
 
         var window = options.NewWindow
             ? NextWindowId()
@@ -65,6 +87,7 @@ public sealed class FakeMuxDriver : IMuxDriver
     public Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default)
     {
         RequireAvailable();
+        _calls.Enqueue("split");
 
         if (!_panes.TryGetValue(options.Source.Value, out var source))
         {
@@ -100,6 +123,7 @@ public sealed class FakeMuxDriver : IMuxDriver
     public Task KillPaneAsync(PaneId id, CancellationToken ct = default)
     {
         RequireAvailable();
+        _calls.Enqueue("kill");
         _panes.TryRemove(id.Value, out _);
 
         return Task.CompletedTask;
@@ -110,6 +134,15 @@ public sealed class FakeMuxDriver : IMuxDriver
     {
         RequireAvailable();
         RequirePane(id);
+        _calls.Enqueue("move");
+
+        if (workspaces)
+        {
+            var target = options.Workspace ?? options.WindowId ?? _panes[id.Value].Pane.SessionName;
+
+            Mutate(id, p => p with { SessionName = target, WindowId = target, TabId = NextTabId() });
+            return Task.CompletedTask;
+        }
 
         var inherited = options.WindowId is { } window
             ? _panes.Values
@@ -171,6 +204,67 @@ public sealed class FakeMuxDriver : IMuxDriver
         RequirePane(id);
 
         return Task.FromResult(_text.TryGetValue(id.Value, out var text) ? text : string.Empty);
+    }
+
+    public Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default)
+    {
+        RequireAvailable();
+
+        if (!workspaces)
+        {
+            return Task.FromResult<IReadOnlyList<Workspace>>([]);
+        }
+
+        var shown = ShowingFor(CurrentClient);
+
+        IReadOnlyList<Workspace> list = _panes.Values
+            .Select(e => e.Pane.SessionName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Select(n => new Workspace(n, string.Equals(n, shown, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        return Task.FromResult(list);
+    }
+
+    public Task ShowWorkspaceAsync(string name, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        _calls.Enqueue("show");
+
+        if (!workspaces)
+        {
+            throw new NotSupportedException("this fake has no workspaces");
+        }
+
+        if (!_panes.Values.Any(e =>
+                string.Equals(e.Pane.SessionName, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new MuxUnavailableException($"no workspace {name}");
+        }
+
+        _showing[CurrentClient] = name;
+        return Task.CompletedTask;
+    }
+
+    public Task CloseWorkspaceAsync(string name, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        _calls.Enqueue("close");
+
+        foreach (var e in _panes.Values.Where(e =>
+                     string.Equals(e.Pane.SessionName, name, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            _panes.TryRemove(e.Pane.Id.Value, out _);
+        }
+
+        foreach (var client in _showing.Where(kv =>
+                     string.Equals(kv.Value, name, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            _showing.TryRemove(client.Key, out _);
+        }
+
+        return Task.CompletedTask;
     }
 
     public void SetText(PaneId id, string text)

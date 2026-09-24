@@ -9,4 +9,5 @@ public enum MuxCaps
     Detach = 1 << 2,
     Persist = 1 << 3,
     Popup = 1 << 4,
+    Workspaces = 1 << 5,
 }
