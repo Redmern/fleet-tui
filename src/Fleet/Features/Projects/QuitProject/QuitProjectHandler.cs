@@ -1,8 +1,10 @@
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Projects.QuitProject;
@@ -29,6 +31,12 @@ public sealed class QuitProjectHandler(IMuxDriver mux, IAgentStore store)
         foreach (var pane in doomed)
         {
             await mux.KillPaneAsync(pane, ct).ConfigureAwait(false);
+        }
+
+        if (mux.Caps.HasFlag(MuxCaps.Workspaces))
+        {
+            await mux.CloseWorkspaceAsync(project, ct).ConfigureAwait(false);
+            await mux.CloseWorkspaceAsync(FleetWorkspaces.HiddenFor(project), ct).ConfigureAwait(false);
         }
 
         return Result.Ok();

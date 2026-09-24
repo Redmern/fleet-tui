@@ -9,11 +9,14 @@ using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
+using Fleet.Features.Projects.LocateProject;
+using Fleet.Features.Projects.LocateProject.Models;
 using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Projects.RestoreSession;
+using Fleet.Features.Projects.SwitchProject;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
@@ -119,12 +122,9 @@ public static class MenuCommand
             case FleetAction.QuitFleet:
             {
                 var quitMux = Adapters.Mux(Adapters.Log());
-                var quitPanes = await quitMux.Driver.ListPanesAsync().ConfigureAwait(false);
 
-                var quitSelf = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-                var quitWindow = quitPanes.FirstOrDefault(p => p.Id.Value == quitSelf)?.WindowId;
-
-                var inWindow = ProjectsVisibleInWindow(projects.List(), quitPanes, quitWindow);
+                var inWindow = await ProjectsShownHere(quitMux.Driver, projects.List())
+                    .ConfigureAwait(false);
 
                 if (inWindow.Count <= 1)
                 {
@@ -187,14 +187,14 @@ public static class MenuCommand
                     break;
                 }
 
-                var switchMux = Adapters.Mux(Adapters.Log());
-                var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
-
-                var self = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-                var currentWindow = panes.FirstOrDefault(p => p.Id.Value == self)?.WindowId;
+                var switchLog = Adapters.Log();
+                var switchMux = Adapters.Mux(switchLog);
+                var located = await new LocateProjectHandler(switchMux.Driver)
+                    .HandleAsync(projects.List())
+                    .ConfigureAwait(false);
 
                 string Label(Project p) =>
-                    panes.Any(x => PathKey.Same(x.Cwd, p.Root)) ? $"{p.Name}  (open)" : p.Name;
+                    Where(located, p).Open ? $"{p.Name}  (open)" : p.Name;
 
                 var labels = others.Select(Label).ToList();
 
@@ -206,56 +206,20 @@ public static class MenuCommand
                 }
 
                 var target = others[chosenIndex];
+                var clock = System.Diagnostics.Stopwatch.StartNew();
 
-                var toPark = ProjectsVisibleInWindow(projects.List(), panes, currentWindow)
-                    .Where(p => !string.Equals(
-                        p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                var mover = new MoveProjectHandler(switchMux.Driver);
-
-                foreach (var park in toPark)
-                {
-                    await mover
-                        .ParkAsync(
-                            park.Name,
-                            park.Root,
-                            new ListAgentsHandler(Adapters.Agents()).Handle(park.Name),
-                            Adapters.DashPane(park.Name),
-                            self)
-                        .ConfigureAwait(false);
-                }
-
-                var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
-
-                if (dash is not null && dash.WindowId == currentWindow)
-                {
-                    await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
-                    break;
-                }
-
-                if (dash is null)
-                {
-                    await OpenProjectFlow(switchMux.Driver, target, currentWindow)
+                var switched = SwitchProjectHandler.Applies(switchMux.Driver)
+                    ? await SwitchByWorkspace(switchMux.Driver, target, Where(located, target))
+                        .ConfigureAwait(false)
+                    : await SwitchByMoving(switchMux.Driver, projects.List(), target)
                         .ConfigureAwait(false);
 
-                    break;
-                }
+                switchLog.Write(
+                    $"switch {project.Name} -> {target.Name}: {clock.ElapsedMilliseconds} ms ({switchMux.Driver.Name})");
 
-                var moved = await mover
-                    .HandleAsync(
-                        target.Name,
-                        target.Root,
-                        new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
-                        currentWindow,
-                        Adapters.DashPane(target.Name),
-                        self,
-                        Adapters.Executable)
-                    .ConfigureAwait(false);
-
-                if (!moved.Succeeded)
+                if (switched is not null)
                 {
-                    FleetDialog.Error(app, "Switch project", moved.Error!);
+                    FleetDialog.Error(app, "Switch project", switched);
                 }
 
                 break;
@@ -412,14 +376,85 @@ public static class MenuCommand
         return 0;
     }
 
-    private static List<Project> ProjectsVisibleInWindow(
-        IReadOnlyList<Project> allProjects, IReadOnlyList<Pane> panes, string? windowId) =>
-        allProjects
-            .Where(p => panes.Any(x => PathKey.Same(x.Cwd, p.Root)
-                && x.WindowId == windowId
-                && !string.Equals(
-                    x.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase)))
+    private static ProjectLocation Where(
+        IReadOnlyDictionary<string, ProjectLocation> located, Project project) =>
+        located.TryGetValue(project.Name, out var at) ? at : ProjectLocation.Closed;
+
+    private static async Task<List<Project>> ProjectsShownHere(
+        IMuxDriver mux, IReadOnlyList<Project> allProjects)
+    {
+        var located = await new LocateProjectHandler(mux).HandleAsync(allProjects)
+            .ConfigureAwait(false);
+
+        return allProjects.Where(p => Where(located, p).ShownHere).ToList();
+    }
+
+    private static async Task<string?> SwitchByWorkspace(
+        IMuxDriver mux, Project target, ProjectLocation where)
+    {
+        if (!where.Open)
+        {
+            await OpenProjectFlow(mux, target).ConfigureAwait(false);
+        }
+
+        var shown = await new SwitchProjectHandler(mux).HandleAsync(target.Name)
+            .ConfigureAwait(false);
+
+        return shown.Succeeded ? null : shown.Error;
+    }
+
+    private static async Task<string?> SwitchByMoving(
+        IMuxDriver mux, IReadOnlyList<Project> allProjects, Project target)
+    {
+        var panes = await mux.ListPanesAsync().ConfigureAwait(false);
+        var self = mux.CurrentPane.IsNone ? null : mux.CurrentPane.Value;
+        var currentWindow = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId;
+
+        var toPark = (await ProjectsShownHere(mux, allProjects).ConfigureAwait(false))
+            .Where(p => !string.Equals(p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
             .ToList();
+
+        var mover = new MoveProjectHandler(mux);
+
+        foreach (var park in toPark)
+        {
+            await mover
+                .ParkAsync(
+                    park.Name,
+                    park.Root,
+                    new ListAgentsHandler(Adapters.Agents()).Handle(park.Name),
+                    Adapters.DashPane(park.Name),
+                    self)
+                .ConfigureAwait(false);
+        }
+
+        var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
+
+        if (dash is not null && dash.WindowId == currentWindow)
+        {
+            await mux.FocusPaneAsync(dash.Id).ConfigureAwait(false);
+            return null;
+        }
+
+        if (dash is null)
+        {
+            await OpenProjectFlow(mux, target, currentWindow).ConfigureAwait(false);
+            return null;
+        }
+
+        var moved = await mover
+            .HandleAsync(
+                target.Name,
+                target.Root,
+                new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
+                currentWindow,
+                Adapters.DashPane(target.Name),
+                self,
+                Adapters.Executable)
+            .ConfigureAwait(false);
+
+        return moved.Succeeded ? null : moved.Error;
+    }
 
     private static async Task Quit(Project project)
     {
@@ -458,14 +493,27 @@ public static class MenuCommand
 
     private static async Task FocusMain(Project project)
     {
-        var mux = Adapters.Mux(Adapters.Log());
-        var panes = await mux.Driver.ListPanesAsync().ConfigureAwait(false);
+        var mux = Adapters.Mux(Adapters.Log()).Driver;
 
-        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root));
+        if (SwitchProjectHandler.Applies(mux))
+        {
+            var located = await new LocateProjectHandler(mux).HandleAsync([project])
+                .ConfigureAwait(false);
+
+            if (Where(located, project) is { Open: true, ShownHere: false })
+            {
+                await new SwitchProjectHandler(mux).HandleAsync(project.Name).ConfigureAwait(false);
+            }
+        }
+
+        var panes = await mux.ListPanesAsync().ConfigureAwait(false);
+
+        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root)
+            && !FleetWorkspaces.IsHidden(p.SessionName));
 
         if (dashboard is not null)
         {
-            await mux.Driver.FocusPaneAsync(dashboard.Id).ConfigureAwait(false);
+            await mux.FocusPaneAsync(dashboard.Id).ConfigureAwait(false);
         }
     }
 }
