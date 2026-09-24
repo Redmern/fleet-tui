@@ -54,11 +54,16 @@ no WezTerm — over SSH, on a headless box, or on a machine that never installed
 it.
 
 The `embedded` driver is an attach-model daemon: it owns the PTYs, outlives its
-clients, and attaches one pane at a time as fullscreen raw passthrough.
-Deliberately no tiling and no terminal emulator — attach/detach and tiling are
-separable, and tiling is the expensive half. Tiling forces a VT emulator, and a
-VT emulator is what mangles Neovim (truecolor, undercurl, SGR mouse, bracketed
-paste, focus events, kitty keyboard protocol).
+clients, and attaches one pane at a time, fullscreen. Deliberately no tiling —
+attach/detach and tiling are separable, and tiling is the expensive half.
+
+**Revised 2026-09-24:** each pane runs through a libghostty-vt terminal emulator
+inside the daemon, and clients receive frames the daemon renders from it. The
+earlier position — no emulator, because an emulator is what mangles Neovim
+(truecolor, undercurl, SGR mouse, bracketed paste, focus events, kitty keyboard
+protocol) — was true of the emulators available then, not of Ghostty's. The
+Phase 0 spike showed nvim and claude intact through it. See *The `embedded`
+driver, Phase 0 spike* and *Remote attach* below.
 
 **Build order:** `fake`, then `wezterm`, then `tmux`, then `embedded`. WezTerm
 first because it is the daily driver and `fleet-win` supplies a debugged
@@ -399,12 +404,16 @@ the multiplexer itself and run no daemon. Everything in this section applies to
 `embedded` alone.
 
 ```
-  fleet (client)                 fleetd (daemon)              children
-  -------------                  ---------------              --------
-  Terminal.Gui dash --socket-->  session registry     --pty-->  nvim
-  raw-mode attach   <-stream-->  pane table                     claude
-  fleet CLI verbs   --socket-->  PTY owner + ring buf           shell
+  fleet (client)                 fleetd (daemon)                   children
+  -------------                  ---------------                   --------
+  Terminal.Gui dash --stream-->  session registry         --pty-->  nvim
+  attach client     <-frames---  pane table                         claude
+                    --input--->  per pane: PTY + libghostty-vt      shell
+  fleet CLI verbs   --stream-->    terminal + frame renderer
 ```
+
+The arrows are one protocol over any byte stream: a local pipe or socket, or SSH
+stdio for a remote machine (*Remote attach*, below).
 
 ### fleetd
 
@@ -414,13 +423,16 @@ that single property is what buys detach and reattach.
 Spawning it detached is platform-specific and easy to get subtly wrong: on
 Windows, `CreateProcess` with `DETACHED_PROCESS` and no inherited handles; on
 Unix, `setsid` with stdio redirected away from the parent's terminal. Double-fork
-daemonization is not safe in .NET.
+daemonization is not safe in .NET. On Windows it must also survive logout of the
+OpenSSH session that started it (herdr hit exactly this).
 
 ### Transport
 
-`\\.\pipe\fleet` on Windows, `$XDG_RUNTIME_DIR/fleet/<name>.sock` on Linux.
-ndjson control frames plus a raw byte stream for attach. Both sides are BCL
-types; this is the cheapest part of the driver.
+`\\.\pipe\fleet` on Windows, `$XDG_RUNTIME_DIR/fleet/<name>.sock` on Linux, and
+`ssh -T <host> fleet bridge` for a remote daemon. Length-prefixed messages in both
+directions, versioned by a handshake. The rules that keep SSH working are in
+*Remote attach*. Both local sides are BCL types; this is the cheapest part of the
+driver.
 
 ### Panes
 
@@ -428,28 +440,34 @@ Everything is a pane, Neovim included. This is the driver's private
 representation; it satisfies the interface's `Pane` but carries more:
 
 ```
-Pane { Id, Kind: Editor|Agent|Shell, Cwd, Argv, Pty, Ring, Status }
+Pane { Id, Kind: Editor|Agent|Shell, Cwd, Argv, Pty, Terminal, Status }
 ```
+
+`Terminal` is the pane's libghostty-vt instance. It is fed every byte the child
+writes, whether or not anyone is attached, and it answers the child's terminal
+queries (DSR, DA, mode reports) itself, so a pane with no client does not stall
+on a query.
 
 Consequence worth wanting: the editor session survives a dropped SSH connection
 the same way the agents do.
 
 ### Attach
 
-Fullscreen raw passthrough. The client puts its console in raw mode, copies
-stdin to the PTY and PTY to stdout verbatim, and forwards resize events. Nothing
-in the path parses the stream, so Neovim gets truecolor, SGR mouse, kitty
-keyboard, and undercurl intact.
+Fullscreen, one pane at a time. The client puts its console in raw mode, sends
+input and resizes, and writes the frames it receives to stdout. fleetd renders
+each frame by diffing the pane's emulator grid against what that client already
+shows, as `spikes/EmbeddedSpike/Render/GridRenderer.cs` does, and sends only the
+changed cells. Keys are encoded for the pane on the daemon side (see *Remote
+attach*, rule 3).
 
-### Repaint on attach — known soft spot
+### Repaint on attach — resolved 2026-09-24
 
-The daemon keeps a per-pane ring buffer of recent output. On attach it replays
-the ring, then pokes a resize so full-screen applications redraw themselves.
-
-This is a heuristic, not a screen model. tmux instead runs a headless terminal
-emulator per pane and dumps exact screen state on attach. If replay proves
-unreliable, that is the upgrade — and it is the same component tiling would
-later need, so the work would not be wasted.
+The earlier plan replayed a per-pane ring buffer on attach and then poked a resize
+so full-screen programs would redraw — a heuristic, not a screen model. It named
+the upgrade: a headless emulator per pane that dumps exact screen state, as tmux
+does. That is now the design. Attach, reattach, resize and reconnect after a
+dropped link all send one full frame rendered from the emulator, and incremental
+frames after it.
 
 ## Agent status and data flow
 
@@ -2302,9 +2320,11 @@ The spike is not in the solution, as with the earlier spikes.
 
 ### What did not work, or was not done
 
-- **Not tested by the spike:** Windows Terminal, WezTerm, PowerShell as the pane,
+- **Not tested by the spike:** Windows Terminal, PowerShell as the pane,
   Ghostty/kitty on Linux, claude on Linux (not installed in the container), macOS
-  (not built). The manual checklist below covers these.
+  (not built). The manual checklist below covers these. **WezTerm on Windows was
+  checked by hand afterwards (2026-09-24): nvim and claude render and take input
+  correctly, and the prefix works in both.**
 - **Mouse** is not forwarded: `ENABLE_MOUSE_INPUT` is off, and the host is never
   asked for mouse modes. On Windows, mouse records can go to ConPTY the same way
   keys do.
@@ -2390,6 +2410,95 @@ something looks wrong.
    not submit each line. WezTerm: note that its own Ctrl+S leader (this machine)
    wins. Ghostty and kitty: the host's kitty keyboard mode is not left on after
    exit.
+
+## Remote attach, 2026-09-24
+
+Goal: from a laptop, attach to panes that live on another machine over SSH, as
+herdr's `--remote` does. Linux→Linux, Windows→Linux, Linux→Windows and
+Windows→Windows all count. This does not need a different design. It needs the
+fleetd protocol to follow a few rules from the start, because each rule is cheap
+now and expensive to retrofit once clients exist.
+
+### How herdr does it
+
+`herdr --remote host` starts a local thin client and runs
+`ssh -T host herdr remote-client-bridge` (herdr `src/remote/attach.rs`). On the
+remote, the bridge makes sure the server is running, connects to the server's
+**local** client socket, and copies SSH stdin and stdout to and from it
+(`src/remote/host.rs`). That is all it does. The client speaks the same protocol
+whether the server is local or remote, and SSH is one more byte pipe. Around that
+core herdr adds a protocol version check (offering to install or update the
+remote binary), strict host-key checking, a managed SSH config with a control
+socket, and ssh-agent forwarding.
+
+Its wire format, `src/protocol/wire.rs`: length-prefixed messages. Clients send a
+hello with size and cell pixels, then input and resize messages. The server sends
+`TerminalFrame { seq, width, height, full, bytes }`, already-diffed escape bytes
+the client writes to stdout, plus separate messages for window title, clipboard,
+notifications and mouse capture.
+
+### The rules for fleetd's protocol
+
+1. **Byte stream only.** Length-prefixed messages over any duplex stream: a named
+   pipe, a Unix socket, or SSH stdio. No passing file descriptors or handles, no
+   shared files or memory, and no assumption that client and daemon share an OS
+   or a filesystem. `fleet bridge` on the remote side is then a stream copy
+   between stdio and the local endpoint.
+2. **Versioned handshake.** The client's hello carries the protocol version, its
+   OS, its terminal size and what its terminal supports (truecolor, styled
+   underline, synchronized output, kitty keyboard). The daemon refuses an
+   incompatible version with a message naming both versions, and renders for
+   what the client can show.
+3. **Input goes over the wire as neutral key events.** A key event is key,
+   modifiers, text, and press/repeat/release, plus the raw Windows
+   `KEY_EVENT_RECORD` when the client has one. The daemon encodes it for the
+   pane:
+   - ConPTY pane that asked for win32-input-mode: the raw record if present,
+     otherwise one built from the neutral fields;
+   - any other pane: libghostty-vt's key encoder under the pane's modes.
+
+   This is the one place the Phase 0 finding (*Keys on Windows go to ConPTY as
+   records*) shapes the protocol. A Linux client attaching to a Windows fleetd has
+   no records to forward, so the neutral form must be enough on its own. herdr's
+   `ClientKeySource::{WindowsConsole, Vt, Synthesized}` makes the same split.
+   Mouse, paste and focus are their own messages. A paste is text, never
+   keystrokes, so the daemon can bracket it for the pane.
+4. **The daemon renders; the client writes bytes.** Frames carry a sequence
+   number and a `full` flag. Attach, resize and reconnect get one full frame,
+   then diffs. Diffs are small, which is what makes SSH usable, and reconnecting
+   after a dropped link is only "send a full frame".
+5. **Host effects are messages, not escape sequences inside frames.** Window
+   title, clipboard (OSC 52), notifications, bell, and mouse-capture and
+   bracketed-paste state all have to act on the machine the user is sitting at.
+   The client applies them to its own terminal and restores them on detach.
+6. **fleetd outlives the SSH session.** It is already a detached daemon. On
+   Windows it must also survive logout of the OpenSSH session that started it,
+   and the bridge must start it if it is not running.
+
+Control traffic — the `fleet` CLI verbs, the dashboard, MCP — goes over the same
+protocol. That makes remote orchestration a later option at no extra cost,
+rather than a second protocol.
+
+### Two ways to reach a remote pane
+
+- **Bridge (the main path).** `fleet attach --ssh host`: the keyboard is read
+  locally (console records on Windows, parsed bytes on Linux), and frames come
+  back over SSH. Terminal fidelity is the local terminal's.
+- **Plain SSH (works for free).** `ssh host`, then `fleet attach` on the remote.
+  Input then goes through the remote's terminal layer. On a Windows OpenSSH
+  server that is sshd's ConPTY, where herdr's CHANGELOG lists several
+  OpenSSH-specific input and mouse bugs. Supported, but not the path to optimise.
+
+### Plan
+
+1. Protocol in `src/Fleet` with unit tests: message codec, handshake, the neutral
+   key event with both encoders, and the spike's renderer as a frame producer.
+   None of it needs a terminal to test.
+2. fleetd plus local `fleet attach`: detach, reattach and an exact screen on
+   reattach.
+3. `fleet bridge` and `fleet attach --ssh`: Linux→Linux first (two containers),
+   then Windows→Linux, then Linux→Windows over OpenSSH, the hard case.
+4. `EmbeddedDriver` behind `IMuxDriver`, then `DriverSelector`.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
