@@ -108,4 +108,17 @@ public sealed class RestoreSessionTests : IDisposable
         Assert.Null(options.Workspace);
         Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), options.Args);
     }
+
+    [Fact]
+    public void A_sub_orchestrator_is_restored_resuming_its_claude_inside_nvim()
+    {
+        var worktree = Path.Combine(ProjectRoot, "orchestrations", "sub");
+        Directory.CreateDirectory(worktree);
+        var sub = new AgentRecord(
+            worktree, "orchestrations", "sub", AgentHarness.Orchestrator, string.Empty, false, false, true);
+
+        var options = RestoreSessionHandler.Options("techweb", sub, "w7");
+
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), options.Args);
+    }
 }
