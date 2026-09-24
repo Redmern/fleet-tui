@@ -37,7 +37,7 @@ public sealed class DispatchTests : IDisposable
     }
 
     private DispatchHandler Handler =>
-        new(_mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero);
+        new(_mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero);
 
     private DispatchCommand Command(string prompt, string caller = "") =>
         new("techweb", _root, prompt, caller);
@@ -78,7 +78,7 @@ public sealed class DispatchTests : IDisposable
     public async Task Aidlc_mode_off_never_adds_a_process_section_even_with_a_doubled_trigger()
     {
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Off)));
 
         var reply = await handler.HandleAsync(Command(",,do the thing"), "t");
@@ -92,7 +92,7 @@ public sealed class DispatchTests : IDisposable
     public async Task Aidlc_mode_on_adds_a_process_section_for_a_plain_prompt()
     {
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.On)));
 
         var reply = await handler.HandleAsync(Command("do the thing"), "t");
@@ -107,7 +107,7 @@ public sealed class DispatchTests : IDisposable
     public async Task Aidlc_mode_manual_ignores_a_plain_prompt()
     {
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual)));
 
         var reply = await handler.HandleAsync(Command("do the thing"), "t");
@@ -121,7 +121,7 @@ public sealed class DispatchTests : IDisposable
     public async Task Aidlc_mode_manual_adds_a_process_section_when_the_prompt_still_starts_with_the_trigger()
     {
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual)));
 
         var reply = await handler.HandleAsync(Command(",do the thing"), "t");
@@ -144,7 +144,7 @@ public sealed class DispatchTests : IDisposable
         File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), "Skip straight to implementing.");
 
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.On)));
 
         var reply = await handler.HandleAsync(Command("do the thing"), "t");
@@ -179,7 +179,7 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task The_pane_runs_an_interactive_claude()
+    public async Task The_pane_runs_claude_alone_inside_nvim()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
@@ -187,61 +187,61 @@ public sealed class DispatchTests : IDisposable
 
         Assert.Single(panes, p =>
             p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
+            && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.CommandFor(AgentHarness.Orchestrator)));
     }
 
     [Fact]
-    public async Task It_opens_a_file_browser_beside_claude_in_the_same_window()
+    public async Task It_opens_claude_alone_with_no_file_browser()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
         var panes = await _mux.ListPanesAsync();
 
-        var claude = panes.Single(p =>
-            p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
-        var browser = panes.Single(p =>
-            p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(
-                AgentHarness.BrowseCommandFor($"{reply.Value.Slug} files")));
+        var claude = Assert.Single(panes, p => p.Cwd == reply.Value!.Folder);
 
-        Assert.Equal(claude.WindowId, browser.WindowId);
-        Assert.Equal(claude.TabId, browser.TabId);
+        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Orchestrator), _mux.ArgsFor(claude.Id));
         Assert.Equal(reply.Value!.Slug, claude.Title);
-        Assert.Equal(reply.Value!.Slug, browser.Title);
-        Assert.Equal($"{reply.Value!.Slug} files", browser.PaneTitle);
     }
 
     [Fact]
-    public async Task The_claude_pane_forces_session_persistence_so_it_can_be_resumed()
+    public async Task The_nvim_host_forces_session_persistence_so_claude_can_be_resumed()
     {
-        var reply = await Handler.HandleAsync(Command("start work"), "t");
+        await Handler.HandleAsync(Command("start work"), "t");
 
-        var panes = await _mux.ListPanesAsync();
-        var claude = panes.Single(p =>
-            p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
+        var boot = AgentHarness.CommandFor(AgentHarness.Orchestrator)[2];
 
-        var env = _mux.EnvFor(claude.Id);
-
-        Assert.Equal("1", env["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"]);
-        Assert.Equal(string.Empty, env["CLAUDE_CODE_CHILD_SESSION"]);
+        Assert.Contains("CLAUDE_CODE_FORCE_SESSION_PERSISTENCE='1'", boot);
+        Assert.Contains("CLAUDE_CODE_CHILD_SESSION=nil", boot);
     }
 
     [Fact]
-    public async Task It_types_the_kickoff_into_the_claude_pane_so_the_sub_starts_itself()
+    public async Task It_leaves_the_kickoff_in_the_instruction_file_so_nvim_hands_it_to_claude()
     {
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
-        var panes = await _mux.ListPanesAsync();
-        var claude = panes.Single(p =>
-            p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude }));
+        var inbox = Path.Combine(reply.Value!.Folder, ".fleet", AgentHarness.AgentInstructionFile);
 
-        var sent = _mux.SentTo(claude.Id);
+        Assert.Equal(AgentHarness.OrchestratorKickoff, File.ReadAllText(inbox));
+        Assert.All(await _mux.ListPanesAsync(), p => Assert.Empty(_mux.SentTo(p.Id)));
+    }
 
-        Assert.Contains(sent, s => s.Contains(AgentHarness.OrchestratorKickoff));
-        Assert.Contains("\r", sent);
+    [Fact]
+    public void The_claude_only_nvim_drops_the_empty_no_name_buffer()
+    {
+        var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
+
+        Assert.Contains("pcall(vim.api.nvim_buf_delete, b, {force=true})", boot);
+        Assert.Contains("vim.api.nvim_buf_get_name(b)==''", boot);
+    }
+
+    [Fact]
+    public void Ctrl_hjkl_in_the_claude_only_nvim_moves_between_wezterm_panes()
+    {
+        var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
+
+        Assert.Contains("{h='Left',j='Down',k='Up',l='Right'}", boot);
+        Assert.Contains("'cli','activate-pane-direction',d", boot);
+        Assert.Contains("{buffer=tb}", boot);
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public sealed class DispatchTests : IDisposable
         var namer = new FakeSlugNamer(name: "fix login timeout");
 
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             namer: namer);
 
         var reply = await handler.HandleAsync(
@@ -275,7 +275,7 @@ public sealed class DispatchTests : IDisposable
         var namer = new FakeSlugNamer(throws: true);
 
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             namer: namer);
 
         var reply = await handler.HandleAsync(Command("upgrade the node runtime"), "t");
@@ -289,7 +289,7 @@ public sealed class DispatchTests : IDisposable
         var namer = new FakeSlugNamer(name: null);
 
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero,
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             namer: namer);
 
         var reply = await handler.HandleAsync(Command("upgrade the node runtime"), "t");

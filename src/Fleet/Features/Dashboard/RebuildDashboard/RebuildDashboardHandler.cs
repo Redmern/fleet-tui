@@ -61,7 +61,7 @@ public sealed class RebuildDashboardHandler(IMuxDriver mux)
                     {
                         Percent = 50,
                         Cwd = projectRoot,
-                        Args = [harness],
+                        Args = AgentHarness.CommandFor(harness),
                     },
                     ct)
                 .ConfigureAwait(false);

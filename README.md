@@ -24,10 +24,12 @@ To run fleet:
 
 - [WezTerm](https://wezterm.org) on `PATH` — fleet has nothing to drive without it
 - git
-- [Neovim](https://neovim.io) with `neo-tree` and `claudecode.nvim`, for the default
-  harness; agents can also open Claude Code alone
+- [Neovim](https://neovim.io) with `neo-tree` and `claudecode.nvim`. The main
+  orchestrator and every sub-orchestrator run Claude inside nvim through
+  `claudecode.nvim`, with no file tree and no file open, so only Claude shows. Agents
+  use nvim by default and can also open Claude Code alone
 - [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
-- Claude Code, for the pane fleet opens on the left
+- Claude Code, which nvim starts in the pane fleet opens on the left
 - a Nerd Font in WezTerm, or the branch pills and icons render as boxes
 
 To build it yourself, additionally:

@@ -28,24 +28,4 @@ public class SubBrowseTests
         Assert.False(SubBrowse.Is(Pane("remove-pr-pipeline files", "\u2733 Claude Code")));
         Assert.False(SubBrowse.Is(Pane("remove-pr-pipeline files", string.Empty)));
     }
-
-    [Fact]
-    public async Task Splitting_a_browser_names_its_pane_and_leaves_the_tab_named_after_the_sub()
-    {
-        var mux = new FakeMuxDriver();
-        var claude = await mux.SpawnAsync(new SpawnOptions { Cwd = Sub.Worktree, NewWindow = true });
-        await mux.SetTitleAsync(claude, AgentTitle.For(Sub.Repository, Sub.Branch));
-
-        await SubBrowse.SplitAsync(mux, Sub, claude);
-
-        var panes = await mux.ListPanesAsync();
-        var browser = panes.Single(p => p.Id != claude);
-
-        Assert.Equal(claude, panes.Single(p => !SubBrowse.Is(p)).Id);
-        Assert.Equal(AgentHarness.BrowseCommandFor("remove-pr-pipeline files"), mux.ArgsFor(browser.Id));
-        Assert.Equal("remove-pr-pipeline files", browser.PaneTitle);
-        Assert.Equal("remove-pr-pipeline", browser.Title);
-        Assert.Equal("remove-pr-pipeline", mux.TitleOf(claude));
-        Assert.Equal(Sub.Worktree, browser.Cwd);
-    }
 }

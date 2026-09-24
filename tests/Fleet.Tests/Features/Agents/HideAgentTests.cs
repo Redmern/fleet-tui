@@ -126,7 +126,7 @@ public class HideAgentTests
         var claude = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = agent.Worktree, NewWindow = true });
         await _mux.SetTitleAsync(claude, AgentTitle.For(agent.Repository, agent.Branch));
-        await SubBrowse.SplitAsync(_mux, agent, claude);
+        await LegacyBrowser.SplitAsync(_mux, agent, claude);
         var browser = (await _mux.ListPanesAsync()).Single(p => p.Id != claude).Id;
         var dashboard = await _mux.SpawnAsync(
             new SpawnOptions { Cwd = "C:/repos/techweb", NewWindow = true });
@@ -154,7 +154,7 @@ public class HideAgentTests
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
         var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree, NewWindow = true });
         await _mux.SetTitleAsync(claude, AgentTitle.For(agent.Repository, agent.Branch));
-        await SubBrowse.SplitAsync(_mux, agent, claude);
+        await LegacyBrowser.SplitAsync(_mux, agent, claude);
         var browser = (await _mux.ListPanesAsync()).Single(p => p.Id != claude).Id;
 
         var result = await new HideAgentHandler(_mux, _store)
@@ -170,7 +170,7 @@ public class HideAgentTests
     }
 
     [Fact]
-    public async Task Unhiding_a_sub_puts_a_browser_beside_claude_and_names_the_tab_after_the_sub()
+    public async Task Unhiding_a_sub_brings_back_claude_alone_and_names_the_tab_after_the_sub()
     {
         var agent = Agent(hidden: true) with { Harness = AgentHarness.Orchestrator };
         var dashboard = await _mux.SpawnAsync(new SpawnOptions { Cwd = "C:/repos/techweb", NewWindow = true });
@@ -184,13 +184,10 @@ public class HideAgentTests
 
         var panes = await _mux.ListPanesAsync();
         var mine = panes.Single(p => p.Id == claude);
-        var browser = Assert.Single(panes, p => SubBrowse.Is(p));
 
         Assert.Equal(home, mine.WindowId);
-        Assert.Equal(mine.TabId, browser.TabId);
         Assert.Equal("backend/test", mine.Title);
-        Assert.Equal("backend/test", browser.Title);
-        Assert.Equal("backend/test files", browser.PaneTitle);
+        Assert.DoesNotContain(panes, p => SubBrowse.Is(p));
     }
 
     [Fact]
