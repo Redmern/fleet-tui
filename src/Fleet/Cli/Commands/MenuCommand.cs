@@ -117,22 +117,49 @@ public static class MenuCommand
                 break;
 
             case FleetAction.QuitFleet:
-            {
-                var quitMux = Adapters.Mux(Adapters.Log());
-                var quitPanes = await quitMux.Driver.ListPanesAsync().ConfigureAwait(false);
-
-                var quitSelf = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-                var quitWindow = quitPanes.FirstOrDefault(p => p.Id.Value == quitSelf)?.WindowId;
-
-                var inWindow = ProjectsVisibleInWindow(projects.List(), quitPanes, quitWindow);
-
-                if (inWindow.Count <= 1)
                 {
-                    if (FleetDialog.Confirm(
-                            app,
-                            $"Quit fleet for {project.Name}?",
-                            [],
-                            "Quit"))
+                    var quitMux = Adapters.Mux(Adapters.Log());
+                    var quitPanes = await quitMux.Driver.ListPanesAsync().ConfigureAwait(false);
+
+                    var quitSelf = Environment.GetEnvironmentVariable("WEZTERM_PANE");
+                    var quitWindow = quitPanes.FirstOrDefault(p => p.Id.Value == quitSelf)?.WindowId;
+
+                    var inWindow = ProjectsVisibleInWindow(projects.List(), quitPanes, quitWindow);
+
+                    if (inWindow.Count <= 1)
+                    {
+                        if (FleetDialog.Confirm(
+                                app,
+                                $"Quit fleet for {project.Name}?",
+                                [],
+                                "Quit"))
+                        {
+                            await Quit(project).ConfigureAwait(false);
+                        }
+
+                        break;
+                    }
+
+                    var quitChoice = FleetDialog.Choose(
+                        app,
+                        "Quit fleet?",
+                        [$"This window has {inWindow.Count} projects open."],
+                        "Quit fleet",
+                        "Just this project");
+
+                    if (quitChoice == DialogChoice.Cancelled)
+                    {
+                        break;
+                    }
+
+                    if (quitChoice == DialogChoice.Primary)
+                    {
+                        foreach (var toQuit in inWindow)
+                        {
+                            await Quit(toQuit).ConfigureAwait(false);
+                        }
+                    }
+                    else
                     {
                         await Quit(project).ConfigureAwait(false);
                     }
@@ -140,126 +167,99 @@ public static class MenuCommand
                     break;
                 }
 
-                var quitChoice = FleetDialog.Choose(
-                    app,
-                    "Quit fleet?",
-                    [$"This window has {inWindow.Count} projects open."],
-                    "Quit fleet",
-                    "Just this project");
-
-                if (quitChoice == DialogChoice.Cancelled)
-                {
-                    break;
-                }
-
-                if (quitChoice == DialogChoice.Primary)
-                {
-                    foreach (var toQuit in inWindow)
-                    {
-                        await Quit(toQuit).ConfigureAwait(false);
-                    }
-                }
-                else
-                {
-                    await Quit(project).ConfigureAwait(false);
-                }
-
-                break;
-            }
-
             case FleetAction.FocusMain:
                 await FocusMain(project).ConfigureAwait(false);
                 break;
 
             case FleetAction.SwitchProject:
-            {
-                var others = projects.List()
-                    .Where(p => !string.Equals(
-                        p.Name, project.Name, StringComparison.OrdinalIgnoreCase))
-                    .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                if (others.Count == 0)
                 {
-                    FleetDialog.Error(
-                        app, "Switch project", "No other projects are saved yet.");
+                    var others = projects.List()
+                        .Where(p => !string.Equals(
+                            p.Name, project.Name, StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
 
-                    break;
-                }
+                    if (others.Count == 0)
+                    {
+                        FleetDialog.Error(
+                            app, "Switch project", "No other projects are saved yet.");
 
-                var switchMux = Adapters.Mux(Adapters.Log());
-                var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
+                        break;
+                    }
 
-                var self = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-                var currentWindow = panes.FirstOrDefault(p => p.Id.Value == self)?.WindowId;
+                    var switchMux = Adapters.Mux(Adapters.Log());
+                    var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
 
-                string Label(Project p) =>
-                    panes.Any(x => PathKey.Same(x.Cwd, p.Root)) ? $"{p.Name}  (open)" : p.Name;
+                    var self = Environment.GetEnvironmentVariable("WEZTERM_PANE");
+                    var currentWindow = panes.FirstOrDefault(p => p.Id.Value == self)?.WindowId;
 
-                var labels = others.Select(Label).ToList();
+                    string Label(Project p) =>
+                        panes.Any(x => PathKey.Same(x.Cwd, p.Root)) ? $"{p.Name}  (open)" : p.Name;
 
-                var index = FleetPicker.Choose(app, "Switch project", labels, keymap);
+                    var labels = others.Select(Label).ToList();
 
-                if (index is not { } chosenIndex)
-                {
-                    break;
-                }
+                    var index = FleetPicker.Choose(app, "Switch project", labels, keymap);
 
-                var target = others[chosenIndex];
+                    if (index is not { } chosenIndex)
+                    {
+                        break;
+                    }
 
-                var toPark = ProjectsVisibleInWindow(projects.List(), panes, currentWindow)
-                    .Where(p => !string.Equals(
-                        p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                    var target = others[chosenIndex];
 
-                var mover = new MoveProjectHandler(switchMux.Driver);
+                    var toPark = ProjectsVisibleInWindow(projects.List(), panes, currentWindow)
+                        .Where(p => !string.Equals(
+                            p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
 
-                foreach (var park in toPark)
-                {
-                    await mover
-                        .ParkAsync(
-                            park.Name,
-                            park.Root,
-                            new ListAgentsHandler(Adapters.Agents()).Handle(park.Name),
-                            Adapters.DashPane(park.Name),
-                            self)
+                    var mover = new MoveProjectHandler(switchMux.Driver);
+
+                    foreach (var park in toPark)
+                    {
+                        await mover
+                            .ParkAsync(
+                                park.Name,
+                                park.Root,
+                                new ListAgentsHandler(Adapters.Agents()).Handle(park.Name),
+                                Adapters.DashPane(park.Name),
+                                self)
+                            .ConfigureAwait(false);
+                    }
+
+                    var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
+
+                    if (dash is not null && dash.WindowId == currentWindow)
+                    {
+                        await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
+                        break;
+                    }
+
+                    if (dash is null)
+                    {
+                        await OpenProjectFlow(switchMux.Driver, target, currentWindow)
+                            .ConfigureAwait(false);
+
+                        break;
+                    }
+
+                    var moved = await mover
+                        .HandleAsync(
+                            target.Name,
+                            target.Root,
+                            new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
+                            currentWindow,
+                            Adapters.DashPane(target.Name),
+                            self,
+                            Adapters.Executable)
                         .ConfigureAwait(false);
-                }
 
-                var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
-
-                if (dash is not null && dash.WindowId == currentWindow)
-                {
-                    await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
-                    break;
-                }
-
-                if (dash is null)
-                {
-                    await OpenProjectFlow(switchMux.Driver, target, currentWindow)
-                        .ConfigureAwait(false);
+                    if (!moved.Succeeded)
+                    {
+                        FleetDialog.Error(app, "Switch project", moved.Error!);
+                    }
 
                     break;
                 }
-
-                var moved = await mover
-                    .HandleAsync(
-                        target.Name,
-                        target.Root,
-                        new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
-                        currentWindow,
-                        Adapters.DashPane(target.Name),
-                        self,
-                        Adapters.Executable)
-                    .ConfigureAwait(false);
-
-                if (!moved.Succeeded)
-                {
-                    FleetDialog.Error(app, "Switch project", moved.Error!);
-                }
-
-                break;
-            }
 
             case FleetAction.EditKeybinds:
                 EditKeybindsView.Show(app, keymaps, keymap);
@@ -282,63 +282,63 @@ public static class MenuCommand
                 break;
 
             case FleetAction.EditAidlcMode:
-            {
-                var aidlcSettings = Adapters.Settings();
-                var current = aidlcSettings.Load(project.Name);
+                {
+                    var aidlcSettings = Adapters.Settings();
+                    var current = aidlcSettings.Load(project.Name);
 
-                var picked = FleetPicker.Choose(
-                    app,
-                    $"{SettingsDefaults.AidlcLabel} — {project.Name}",
-                    [
-                        new PickerEntry("off", "sub-orchestrators never get AIDLC guidance", "o"),
+                    var picked = FleetPicker.Choose(
+                        app,
+                        $"{SettingsDefaults.AidlcLabel} — {project.Name}",
+                        [
+                            new PickerEntry("off", "sub-orchestrators never get AIDLC guidance", "o"),
                         new PickerEntry("on", "every dispatch gets AIDLC guidance", "n"),
                         new PickerEntry("manual", "only when the prompt doubles the dispatch trigger", "m"),
-                    ],
-                    keymap,
-                    (int)current.Aidlc);
+                        ],
+                        keymap,
+                        (int)current.Aidlc);
 
-                if (picked is not null)
-                {
-                    aidlcSettings.Save(project.Name, current.WithAidlcMode((AidlcMode)picked.Value));
+                    if (picked is not null)
+                    {
+                        aidlcSettings.Save(project.Name, current.WithAidlcMode((AidlcMode)picked.Value));
+                    }
+
+                    break;
                 }
-
-                break;
-            }
 
             case FleetAction.EditFleetConfig:
-            {
-                EditFleetConfigHandler.Ensure(project.Root);
-                var configMux = Adapters.Mux(Adapters.Log());
-
-                if (configMux.Unsupported is not null)
                 {
-                    FleetDialog.Error(app, "Edit fleet config", configMux.Unsupported);
-                    break;
-                }
+                    EditFleetConfigHandler.Ensure(project.Root);
+                    var configMux = Adapters.Mux(Adapters.Log());
 
-                var configPane = await configMux.Driver.SpawnAsync(
-                    new SpawnOptions
+                    if (configMux.Unsupported is not null)
                     {
-                        Cwd = project.Root,
-                        SessionName = project.Name,
-                        WindowId = Adapters.CurrentWindow(configMux.Driver),
-                        Args = AgentHarness.BrowseCommandFor("fleet config"),
-                    }).ConfigureAwait(false);
+                        FleetDialog.Error(app, "Edit fleet config", configMux.Unsupported);
+                        break;
+                    }
 
-                if (configPane.IsNone)
-                {
-                    FleetDialog.Error(
-                        app, "Edit fleet config",
-                        $"the {configMux.Driver.Name} multiplexer did not respond. Run 'fleet doctor'.");
+                    var configPane = await configMux.Driver.SpawnAsync(
+                        new SpawnOptions
+                        {
+                            Cwd = project.Root,
+                            SessionName = project.Name,
+                            WindowId = Adapters.CurrentWindow(configMux.Driver),
+                            Args = AgentHarness.BrowseCommandFor("fleet config"),
+                        }).ConfigureAwait(false);
+
+                    if (configPane.IsNone)
+                    {
+                        FleetDialog.Error(
+                            app, "Edit fleet config",
+                            $"the {configMux.Driver.Name} multiplexer did not respond. Run 'fleet doctor'.");
+
+                        break;
+                    }
+
+                    await configMux.Driver.SetTitleAsync(configPane, "fleet config").ConfigureAwait(false);
+                    await configMux.Driver.FocusPaneAsync(configPane).ConfigureAwait(false);
 
                     break;
                 }
-
-                await configMux.Driver.SetTitleAsync(configPane, "fleet config").ConfigureAwait(false);
-                await configMux.Driver.FocusPaneAsync(configPane).ConfigureAwait(false);
-
-                break;
-            }
 
             case FleetAction.BrowseFiles:
                 if (!Adapters.OnPath(FileBrowser.Command))
@@ -359,13 +359,13 @@ public static class MenuCommand
                 break;
 
             case FleetAction.CleanupProject:
-            {
-                var summary = new CleanupHandler(Adapters.Agents()).Handle(project.Name);
+                {
+                    var summary = new CleanupHandler(Adapters.Agents()).Handle(project.Name);
 
-                Adapters.Log().Write(LogTag.For(project.Name, summary));
-                FleetDialog.Error(app, "Clean up", summary);
-                break;
-            }
+                    Adapters.Log().Write(LogTag.For(project.Name, summary));
+                    FleetDialog.Error(app, "Clean up", summary);
+                    break;
+                }
 
             case FleetAction.ViewLogs:
                 var log = Adapters.Log();
@@ -379,34 +379,34 @@ public static class MenuCommand
                 break;
 
             case FleetAction.ListAgents:
-            {
-                var dashGit = Adapters.Git();
-                var dashMux = Adapters.Mux(Adapters.Log());
-                var dashLog = Adapters.Log();
-                var dashApprovals = Adapters.ApprovalInbox();
+                {
+                    var dashGit = Adapters.Git();
+                    var dashMux = Adapters.Mux(Adapters.Log());
+                    var dashLog = Adapters.Log();
+                    var dashApprovals = Adapters.ApprovalInbox();
 
-                ShowDashboardView.Show(
-                    app,
-                    project.Name,
-                    keymap,
-                    DashboardWiring.For(
+                    ShowDashboardView.Show(
                         app,
-                        project,
+                        project.Name,
                         keymap,
-                        keymaps,
-                        dashGit,
-                        dashMux.Driver,
-                        Adapters.Agents(),
-                        Adapters.Requests(),
-                        Adapters.Workspaces(),
-                        Adapters.Settings(),
-                        Adapters.SettingsSync(),
-                        dashApprovals,
-                        dashLog),
-                    menu: true);
+                        DashboardWiring.For(
+                            app,
+                            project,
+                            keymap,
+                            keymaps,
+                            dashGit,
+                            dashMux.Driver,
+                            Adapters.Agents(),
+                            Adapters.Requests(),
+                            Adapters.Workspaces(),
+                            Adapters.Settings(),
+                            Adapters.SettingsSync(),
+                            dashApprovals,
+                            dashLog),
+                        menu: true);
 
-                break;
-            }
+                    break;
+                }
         }
 
         return 0;
