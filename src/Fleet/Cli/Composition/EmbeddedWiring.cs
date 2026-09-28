@@ -125,6 +125,20 @@ public static class EmbeddedWiring
         return 0;
     }
 
+    public static bool OpenMenu(string? action)
+    {
+        try
+        {
+            using var driver = new EmbeddedDriver(Endpoint.Default());
+            driver.OpenMenuAsync(action).GetAwaiter().GetResult();
+            return true;
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return false;
+        }
+    }
+
     public static string KeysFile => Path.Combine(FleetPaths.Config, MuxKeys.FileName);
 
     public static MuxKeys Keys(IFleetLog log) =>

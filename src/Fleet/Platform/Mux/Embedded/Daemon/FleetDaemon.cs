@@ -108,6 +108,19 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "spawn-float":
                         response.Pane = SpawnFloat(request);
                         break;
+                    case "menu":
+                        {
+                            var caller = request.Pane ?? request.Caller ?? string.Empty;
+                            var home = CallerWorkspace(caller) ?? throw new InvalidOperationException($"no pane {caller}");
+                            var client = _model.Clients
+                                .Where(c => string.Equals(c.Showing, home, StringComparison.OrdinalIgnoreCase))
+                                .OrderByDescending(c => c.LastActive)
+                                .FirstOrDefault()
+                                ?? throw new InvalidOperationException($"no client shows {home}");
+                            OpenMenu(client.Id, request.Text);
+                            break;
+                        }
+
                     case "focus-from":
                         {
                             var (dx, dy) = Direction(request.Direction);
@@ -592,7 +605,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     Show(session.Client, workspace);
                     break;
                 case "menu":
-                    OpenMenu(session.Client, command.Arg);
+                    OpenMenu(session.Client, command.Arg ?? MenuFor(session.Client));
                     break;
                 case "redraw":
                     session.Shown = null;
@@ -862,6 +875,11 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
     public const string MenuTitle = "fleet menu";
+
+    private string? MenuFor(string client) =>
+        _model.View(client)?.Focused is { } focused && _model.DashboardProject(focused) is not null
+            ? Fleet.Shared.Keymap.FleetActionIds.DashboardMenu
+            : null;
 
     private void OpenMenu(string client, string? action)
     {

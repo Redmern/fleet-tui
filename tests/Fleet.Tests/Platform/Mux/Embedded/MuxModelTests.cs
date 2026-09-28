@@ -292,4 +292,14 @@ public class MuxModelTests
         Assert.False(_model.IsNvim(shell.Id));
         Assert.True(_model.IsNvim(renamed.Id));
     }
+
+    [Fact]
+    public void A_dashboard_pane_is_recognised_by_its_command()
+    {
+        var dash = _model.Spawn("techweb", "C:/x", ["C:/tools/fleet.exe", "dash", "--project", "techweb"]);
+        var claude = _model.Spawn("techweb", "C:/x", ["claude"]);
+
+        Assert.Equal("techweb", _model.DashboardProject(dash.Id));
+        Assert.Null(_model.DashboardProject(claude.Id));
+    }
 }

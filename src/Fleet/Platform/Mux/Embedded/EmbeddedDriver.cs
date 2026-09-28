@@ -157,6 +157,9 @@ public sealed class EmbeddedDriver(
             .ConfigureAwait(false);
     }
 
+    public Task OpenMenuAsync(string? action, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "menu", Text = action }, ct);
+
     public Task FocusFromAsync(string direction, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "focus-from", Direction = direction }, ct);
 

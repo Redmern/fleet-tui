@@ -41,12 +41,14 @@ using Fleet.Ports.Approvals.Enums;
 using Fleet.Ports.Git;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Orchestrations;
 using Fleet.Ui;
@@ -58,7 +60,7 @@ public static class DashboardWiring
 {
     private const int LogTail = 400;
 
-    private static readonly FleetAction[] MenuActions =
+    public static readonly FleetAction[] MenuActions =
     [
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
@@ -589,7 +591,11 @@ public static class DashboardWiring
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
-            ShowMenu: () => FleetUi.Menu(app, keymap, MenuActions),
+            ShowMenu: () =>
+                mux.Caps.HasFlag(MuxCaps.Popup) && !mux.CurrentPane.IsNone
+                && EmbeddedWiring.OpenMenu(FleetActionIds.DashboardMenu)
+                    ? FleetAction.None
+                    : FleetUi.Menu(app, keymap, MenuActions),
 
             EditKeybinds: () => new Keymap(EditKeybindsView.Show(app, keymaps, keymap)),
 

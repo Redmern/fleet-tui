@@ -747,6 +747,45 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.Equal("fleet", _panes.ByProgram("left")!.Env["WEZTERM_EXECUTABLE"]);
     }
     [Fact]
+    public async Task The_menu_key_over_a_dashboard_opens_that_dashboards_menu_as_a_float()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var dash = await control.RequestAsync(new ControlRequest
+        {
+            Op = "spawn",
+            Session = "techweb",
+            NewWindow = false,
+            Window = "techweb",
+            Args = ["fleet", "dash", "--project", "techweb"],
+        });
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        await control.RequestAsync(new ControlRequest { Op = "focus", Pane = dash.Pane });
+
+        await client.SendCommandAsync("menu");
+
+        await Eventually(() => _panes.Started.Any(p => p.Args.Contains("menu")));
+        var menu = _panes.Started.Single(p => p.Args.Contains("menu"));
+        Assert.Equal(["menu", "--project", "techweb", "--action", "dashboard-menu"], menu.Args);
+    }
+
+    [Fact]
+    public async Task A_dashboard_asks_for_its_menu_and_it_opens_for_the_client_showing_it()
+    {
+        var control = await ControlAsync();
+        var dash = await SpawnAsync(control, "techweb", "dash");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        var asked = await control.RequestAsync(new ControlRequest { Op = "menu", Caller = dash, Text = "dashboard-menu" });
+
+        Assert.True(asked.Ok, asked.Error);
+        await Eventually(() => _panes.ByProgram("fleet") is { } menu && menu.Env[FleetDaemon.ClientVariable] == client.Id);
+        var panes = (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!;
+        Assert.Contains(panes, p => p.Tab == "float" && p.Title == FleetDaemon.MenuTitle);
+    }
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();

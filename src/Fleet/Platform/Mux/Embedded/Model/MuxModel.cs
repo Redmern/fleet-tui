@@ -550,6 +550,9 @@ public sealed class MuxModel
         return DragDivider(client, index, divider.X + (vertical ? toward : 0), divider.Y + (vertical ? 0 : toward));
     }
 
+    public string? DashboardProject(string pane) =>
+        _panes.TryGetValue(pane, out var state) && state.Args is [_, "dash", "--project", var project, ..] ? project : null;
+
     public bool IsNvim(string pane)
     {
         if (!_panes.TryGetValue(pane, out var state))

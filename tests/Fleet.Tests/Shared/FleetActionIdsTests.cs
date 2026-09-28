@@ -20,6 +20,15 @@ public class FleetActionIdsTests
     }
 
     [Fact]
+    public void Every_action_round_trips_so_a_request_file_never_loses_one()
+    {
+        foreach (var action in Enum.GetValues<FleetAction>())
+        {
+            Assert.Equal(action, FleetActionIds.Parse(FleetActionIds.For(action)));
+        }
+    }
+
+    [Fact]
     public void Parsing_is_case_and_whitespace_tolerant()
     {
         Assert.Equal(FleetAction.AddRepository, FleetActionIds.Parse("  Add-Repository "));

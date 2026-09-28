@@ -4,6 +4,8 @@ namespace Fleet.Shared.Keymap;
 
 public static class FleetActionIds
 {
+    public const string DashboardMenu = "dashboard-menu";
+
     public static string For(FleetAction action) => action switch
     {
         FleetAction.AddRepository => "add-repository",
@@ -58,6 +60,6 @@ public static class FleetActionIds
         "settings-menu" => FleetAction.OpenSettings,
         "aidlc-mode" => FleetAction.EditAidlcMode,
         "close" => FleetAction.Close,
-        _ => FleetAction.None,
+        var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };
 }

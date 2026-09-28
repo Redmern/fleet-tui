@@ -73,6 +73,17 @@ public static class MenuCommand
             ? FleetActionIds.Parse(id)
             : FleetAction.None;
 
+        if (invocation.Action == FleetActionIds.DashboardMenu && project is not null)
+        {
+            requested = DashboardMenu(project);
+
+            if (requested is not (FleetAction.ViewLogs or FleetAction.EditKeybinds
+                or FleetAction.BrowseFiles or FleetAction.AddRepository))
+            {
+                return 0;
+            }
+        }
+
         if (requested is FleetAction.OpenProject or FleetAction.NewProject || project is null)
         {
             return await PickProjectCommand.RunAsync().ConfigureAwait(false);
@@ -375,6 +386,24 @@ public static class MenuCommand
         }
 
         return 0;
+    }
+
+    private static FleetAction DashboardMenu(Project project)
+    {
+        FleetAction chosen;
+        using (IApplication app = FleetUi.Start())
+        {
+            chosen = FleetUi.Menu(app, new Keymap(Adapters.Keymaps().Load()), DashboardWiring.MenuActions);
+        }
+
+        if (chosen is FleetAction.None or FleetAction.Close
+            or FleetAction.ViewLogs or FleetAction.EditKeybinds or FleetAction.BrowseFiles or FleetAction.AddRepository)
+        {
+            return chosen;
+        }
+
+        Adapters.Requests().Submit(project.Name, chosen);
+        return FleetAction.None;
     }
 
     private static ProjectLocation Where(
