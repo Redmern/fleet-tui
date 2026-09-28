@@ -36,6 +36,11 @@ public static class Program
             return OperatingSystem.IsWindows() ? Injector.Run(args[1..]) : 2;
         }
 
+        if (args.Length > 1 && args[0] == "--launch-quiet")
+        {
+            return OperatingSystem.IsWindows() ? Injector.LaunchQuiet(string.Join(' ', args[1..])) : 2;
+        }
+
         return new Session(Options.Parse(args)).Run();
     }
 }

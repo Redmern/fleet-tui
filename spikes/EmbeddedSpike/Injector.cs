@@ -54,6 +54,13 @@ internal static unsafe partial class Injector
                 continue;
             }
 
+            if (token == "paste")
+            {
+                SendMessageW(GetConsoleWindow(), 0x0112, 0xFFF1, 0);
+                Thread.Sleep(200);
+                continue;
+            }
+
             if (token.StartsWith("dump:", StringComparison.Ordinal))
             {
                 Dump(token[5..]);
@@ -68,6 +75,66 @@ internal static unsafe partial class Injector
 
         return 0;
     }
+
+    // Starts a command in a new console window that is minimized and never
+    // activated (SW_SHOWMINNOACTIVE), so a test window cannot take the user's
+    // keyboard focus. Prints the new process id.
+    public static int LaunchQuiet(string commandLine)
+    {
+        var startup = new StartupInfo { Size = Marshal.SizeOf<StartupInfo>(), Flags = 0x1, ShowWindow = 7 };
+        var line = commandLine + "\0";
+
+        fixed (char* p = line)
+        {
+            if (!CreateProcessW(null, p, 0, 0, false, 0x10, 0, null, ref startup, out var info))
+            {
+                Console.Error.WriteLine($"CreateProcess failed: {Marshal.GetLastPInvokeError()}");
+                return 1;
+            }
+
+            Console.WriteLine(info.ProcessId);
+            return 0;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct StartupInfo
+    {
+        public int Size;
+        public nint Reserved;
+        public nint Desktop;
+        public nint Title;
+        public int X;
+        public int Y;
+        public int XSize;
+        public int YSize;
+        public int XCountChars;
+        public int YCountChars;
+        public int FillAttribute;
+        public int Flags;
+        public short ShowWindow;
+        public short Reserved2Size;
+        public nint Reserved2;
+        public nint StdInput;
+        public nint StdOutput;
+        public nint StdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessInfo
+    {
+        public nint Process;
+        public nint Thread;
+        public int ProcessId;
+        public int ThreadId;
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CreateProcessW(
+        string? application, char* commandLine, nint processAttributes, nint threadAttributes,
+        [MarshalAs(UnmanagedType.Bool)] bool inherit, int flags, nint environment, string? directory,
+        ref StartupInfo startup, out ProcessInfo info);
 
     private static IEnumerable<(ushort Vk, char Ch, uint State)> Keys(string token)
     {
@@ -195,6 +262,9 @@ internal static unsafe partial class Injector
 
     [LibraryImport("kernel32.dll")]
     private static partial nint GetConsoleWindow();
+
+    [LibraryImport("user32.dll")]
+    private static partial nint SendMessageW(nint hwnd, uint message, nint wParam, nint lParam);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
