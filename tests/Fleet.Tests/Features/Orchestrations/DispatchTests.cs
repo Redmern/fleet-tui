@@ -245,6 +245,15 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public void An_orchestrator_nvim_sets_the_fleet_orchestrator_flag_before_the_user_config_loads()
+    {
+        var command = AgentHarness.OrchestratorCommand(resume: true);
+
+        Assert.Equal(AgentHarness.Nvim, command[0]);
+        Assert.Equal(["--cmd", "let g:fleet_orchestrator=1"], command.Skip(3));
+    }
+
+    [Fact]
     public void Ctrl_hjkl_moves_to_an_nvim_window_first_when_one_is_in_that_direction()
     {
         var boot = AgentHarness.OrchestratorCommand(resume: false)[2];

@@ -26,8 +26,10 @@ To run fleet:
 - git
 - [Neovim](https://neovim.io) with `neo-tree` and `claudecode.nvim`. The main
   orchestrator and every sub-orchestrator run Claude inside nvim through
-  `claudecode.nvim`, with no file tree and no file open, so only Claude shows. Agents
-  use nvim by default and can also open Claude Code alone
+  `claudecode.nvim`, with no file tree and no file open, so only Claude shows. Those
+  nvims start with `g:fleet_orchestrator` set before your config loads, so the config
+  can skip what an orchestrator doesn't need. Agents use nvim by default and can also
+  open Claude Code alone
 - [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
 - Claude Code, which nvim starts in the pane fleet opens on the left
 - a Nerd Font in WezTerm, or the branch pills and icons render as boxes

@@ -70,8 +70,10 @@ public static class AgentHarness
         + "end,{buffer=tb}) end end, 400) "
         + "vim.api.nvim_set_current_win(term) vim.cmd('startinsert') end, 150) end)";
 
+    public const string OrchestratorFlag = "let g:fleet_orchestrator=1";
+
     public static IReadOnlyList<string> OrchestratorCommand(bool resume) =>
-        [Nvim, "-c", NvimStartupClaudeOnly(resume ? " " + ResumeArgument : string.Empty)];
+        [Nvim, "-c", NvimStartupClaudeOnly(resume ? " " + ResumeArgument : string.Empty), "--cmd", OrchestratorFlag];
 
     public static bool HostedInNvim(string harness) => CommandFor(harness)[0] == Nvim;
 
