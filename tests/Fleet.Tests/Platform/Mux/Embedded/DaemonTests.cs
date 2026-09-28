@@ -626,6 +626,23 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.Equal(string.Empty, shell.Written);
     }
     [Fact]
+    public async Task A_float_asked_for_from_a_pane_opens_in_that_panes_workspace_as_an_ordinary_float()
+    {
+        var control = await ControlAsync();
+        var menu = await SpawnAsync(control, "techweb", "menu");
+        await SpawnAsync(control, "fleet", "other");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        var spawned = await control.RequestAsync(new ControlRequest { Op = "spawn-float", Caller = menu, Args = ["yazi"] });
+        await client.SendCommandAsync("float-toggle");
+        await client.SendKeyAsync("m");
+
+        var listed = (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!.Single(p => p.Id == spawned.Pane);
+        Assert.Equal(("techweb", "float"), (listed.Session, listed.Tab));
+        await Eventually(() => _panes.ByProgram("menu")!.Written == "m");
+    }
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();

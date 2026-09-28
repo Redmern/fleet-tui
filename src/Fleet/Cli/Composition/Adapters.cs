@@ -23,6 +23,7 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Mcp;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
 using Fleet.Ports.Projects;
@@ -138,8 +139,7 @@ public static class Adapters
         var file = Path.Combine(
             Path.GetTempPath(), $"fleet-folder-{Guid.NewGuid():N}");
 
-        var pane = mux
-            .SpawnAsync(FileBrowser.Choose(startIn, project, CurrentWindow(mux), file))
+        var pane = SpawnHereAsync(mux, FileBrowser.Choose(startIn, project, CurrentWindow(mux), file))
             .GetAwaiter()
             .GetResult();
 
@@ -169,8 +169,7 @@ public static class Adapters
 
     public static string? BrowseFolder(IMuxDriver mux, string project, string root)
     {
-        var pane = mux
-            .SpawnAsync(FileBrowser.Browse(root, project, CurrentWindow(mux)))
+        var pane = SpawnHereAsync(mux, FileBrowser.Browse(root, project, CurrentWindow(mux)))
             .GetAwaiter()
             .GetResult();
 
@@ -220,6 +219,11 @@ public static class Adapters
             return null;
         }
     }
+
+    public static Task<PaneId> SpawnHereAsync(IMuxDriver mux, SpawnOptions options) =>
+        mux.Caps.HasFlag(MuxCaps.Popup) && !mux.CurrentPane.IsNone
+            ? mux.SpawnFloatingAsync(PaneId.None, options with { Workspace = null, SessionName = null, WindowId = null })
+            : mux.SpawnAsync(options);
 
     public static string? CurrentWindow(IMuxDriver mux)
     {

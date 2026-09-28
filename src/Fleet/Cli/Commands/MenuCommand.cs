@@ -280,7 +280,8 @@ public static class MenuCommand
                     break;
                 }
 
-                var configPane = await configMux.Driver.SpawnAsync(
+                var configPane = await Adapters.SpawnHereAsync(
+                    configMux.Driver,
                     new SpawnOptions
                     {
                         Cwd = project.Root,

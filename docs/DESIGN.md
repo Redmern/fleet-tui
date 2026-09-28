@@ -3188,6 +3188,20 @@ phases"), checked against `embedded`.
   its own pane (before, it read `WEZTERM_PANE` only). So *Edit fleet config*
   and *Browse files* open in that workspace. On `embedded` they used to take
   the first active pane anywhere, which could be another project.
+- **Its tools open as floats too** (added later the same day). The file
+  navigator (menu `f`, and the dashboard's browse), *Edit fleet config*
+  (menu `S` `E`) and the folder picker use `Adapters.SpawnHereAsync`:
+  - when the multiplexer has floats and fleet runs inside one of its panes,
+    they open as an ordinary float (60%, movable and resizable, closing with
+    the program) in the caller's workspace;
+  - otherwise they open a pane as before (WezTerm, or a plain terminal).
+
+  `SpawnFloatingAsync` with no `over` pane means exactly this.
+  - Verified with the real binary: menu `f` opened yazi as a float titled
+    `files` in the project's workspace, and `q` closed it and the float.
+    Menu `S` `E` opened a `fleet config` float there.
+  - Tests: the helper in all three cases, and `spawn-float` from a pane in
+    fleetd.
 - **The overlay is only a fallback,** for a client that shows no workspace.
 - **Modal floats** (the menu, approvals):
   - are drawn even while the workspace's floats are hidden, and do not reveal

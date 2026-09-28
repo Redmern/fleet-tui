@@ -94,13 +94,15 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
             throw new NotSupportedException("this fake has no floating panes");
         }
 
-        if (!_panes.TryGetValue(over.Value, out var below))
+        var near = over.IsNone ? CurrentPane : over;
+        if (!_panes.TryGetValue(near.Value, out var below))
         {
-            throw new MuxUnavailableException($"no pane {over}");
+            throw new MuxUnavailableException($"no pane {near}");
         }
 
+        var session = options.Workspace ?? options.SessionName ?? below.Pane.SessionName;
         var id = NextPaneId();
-        Add(id, below.Pane.WindowId, "float", below.Pane.SessionName, options.Cwd ?? below.Pane.Cwd, options.Args, options.Env);
+        Add(id, session, "float", session, options.Cwd ?? below.Pane.Cwd, options.Args, options.Env);
         return Task.FromResult(id);
     }
 
