@@ -202,7 +202,7 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_menu_opens_as_an_overlay_that_knows_which_client_opened_it()
+    public async Task The_menu_opens_as_a_float_in_the_workspace_you_are_in_and_gives_the_keys_back()
     {
         var control = await ControlAsync();
         await SpawnAsync(control, "techweb", "claude");
@@ -210,11 +210,36 @@ public sealed class DaemonTests : IAsyncLifetime
         await client.WaitForFramesAsync(1);
 
         await client.SendCommandAsync("menu");
+        await client.SendCommandAsync("menu");
+        await client.SendKeyAsync("m");
 
-        await Eventually(() => _panes.ByProgram("fleet") is not null);
+        await Eventually(() => _panes.ByProgram("fleet") is { Written: "m" });
         var menu = _panes.ByProgram("fleet")!;
         Assert.Equal(["menu", "--project", "techweb"], menu.Args);
         Assert.Equal(client.Id, menu.Env[FleetDaemon.ClientVariable]);
+        Assert.Single(_panes.Started, p => p.Program == "fleet");
+        var panes = await control.RequestAsync(new ControlRequest { Op = "list-panes" });
+        var listed = panes.Panes!.Single(p => p.Id == menu.Env[FleetDaemon.PaneVariable]);
+        Assert.Equal(("techweb", "float", FleetDaemon.MenuTitle), (listed.Session, listed.Tab, listed.Title));
+
+        menu.Exit();
+        await Eventually(async () => (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!.Count == 1);
+        await client.SendKeyAsync("c");
+
+        await Eventually(() => _panes.ByProgram("claude")!.Written == "c");
+    }
+
+    [Fact]
+    public async Task Without_a_workspace_on_screen_the_menu_falls_back_to_the_clients_overlay()
+    {
+        var control = await ControlAsync();
+        var client = await AttachAsync();
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("menu");
+
+        await Eventually(() => _panes.ByProgram("fleet") is not null);
+        var menu = _panes.ByProgram("fleet")!;
         var panes = await control.RequestAsync(new ControlRequest { Op = "list-panes" });
         Assert.DoesNotContain(panes.Panes!, p => p.Id == menu.Env[FleetDaemon.PaneVariable]);
     }
@@ -522,6 +547,22 @@ public sealed class DaemonTests : IAsyncLifetime
         await Eventually(() => _panes.ByProgram("conpty")!.Written == "\e[88;45;120;1;0;3_");
     }
 
+    [Fact]
+    public async Task A_float_over_an_agent_pane_opens_in_its_workspace_and_takes_the_keys()
+    {
+        var control = await ControlAsync();
+        var agent = await SpawnAsync(control, "techweb", "claude");
+        await SpawnAsync(control, "fleet", "other");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        var spawned = await control.RequestAsync(new ControlRequest { Op = "spawn-float", Pane = agent, Args = ["approve"] });
+        await client.SendKeyAsync("y");
+
+        await Eventually(() => _panes.ByProgram("approve")?.Written == "y");
+        var listed = (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!.Single(p => p.Id == spawned.Pane);
+        Assert.Equal(("techweb", "float"), (listed.Session, listed.Tab));
+    }
     [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {

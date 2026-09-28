@@ -23,7 +23,7 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
     public string Name => "fake";
 
     public MuxCaps Caps => MuxCaps.Split | MuxCaps.Zoom | MuxCaps.Persist
-        | (workspaces ? MuxCaps.Workspaces | MuxCaps.Detach : MuxCaps.None);
+        | (workspaces ? MuxCaps.Workspaces | MuxCaps.Detach | MuxCaps.Popup : MuxCaps.None);
 
     public string CurrentClient { get; set; } = "c1";
 
@@ -81,6 +81,26 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
             options.Cwd ?? string.Empty,
             options.Args,
             options.Env);
+        return Task.FromResult(id);
+    }
+
+    public Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        _calls.Enqueue("spawn-float");
+
+        if (!workspaces)
+        {
+            throw new NotSupportedException("this fake has no floating panes");
+        }
+
+        if (!_panes.TryGetValue(over.Value, out var below))
+        {
+            throw new MuxUnavailableException($"no pane {over}");
+        }
+
+        var id = NextPaneId();
+        Add(id, below.Pane.WindowId, "float", below.Pane.SessionName, options.Cwd ?? below.Pane.Cwd, options.Args, options.Env);
         return Task.FromResult(id);
     }
 

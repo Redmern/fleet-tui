@@ -3080,10 +3080,9 @@ workspace, drawn in a bordered box over the tiled layout instead of in it.
 
 ### Not done
 
-- **No port operation.** `IMuxDriver` has no "open a float" yet, although
-  `MuxCaps.Popup` is there for it. It gets added with the first fleet feature
-  that opens one (for example the file navigator in a float); until then the
-  prefix keys and `spawn-float` cover it.
+- ~~**No port operation.**~~ Added with the approval float:
+  `IMuxDriver.SpawnFloatingAsync`, behind `MuxCaps.Popup`. See "The menu and
+  approvals as floats".
 - **Float mode on Unix was not run end to end.** Its byte path (letters,
   arrows, shift+arrows) is unit-tested; the Windows key path was run for real.
 - **Float layout is not saved** across fleetd restarts. Neither is anything
@@ -3175,6 +3174,80 @@ phases"), checked against `embedded`.
   leader on Ctrl+S. That is host configuration.
 - **The encoder path (Windows client, Linux pane) was checked with unit tests
   only,** not end to end.
+## The menu and approvals as floats, 2026-09-28
+
+### Behaviour
+
+- **The menu is a float in the workspace you are in.** `ctrl+b space` opens
+  `fleet menu` as a modal float (80% of the screen, titled `fleet menu`) in
+  the workspace the client is showing, instead of in a per-client overlay
+  workspace. A second press brings the open menu forward rather than opening
+  another. When the menu exits, the keys go back to the pane you were in.
+- **Its actions happen where you are.** The menu's own pane now belongs to
+  the project's workspace, and `Adapters.CurrentWindow` asks the driver for
+  its own pane (before, it read `WEZTERM_PANE` only). So *Edit fleet config*
+  and *Browse files* open in that workspace. On `embedded` they used to take
+  the first active pane anywhere, which could be another project.
+- **The overlay is only a fallback,** for a client that shows no workspace.
+- **Modal floats** (the menu, approvals):
+  - are drawn even while the workspace's floats are hidden, and do not reveal
+    them;
+  - are not counted in ` float N ` and not affected by `ctrl+b w`;
+  - cannot be tiled with `ctrl+b e`.
+- **Every client showing the workspace sees the menu,** because floats belong
+  to the workspace. The overlay was per client.
+- **An agent's approval request opens over the agent's pane.** The agent's
+  fleet MCP server runs inside that pane and knows its id.
+  1. On a multiplexer with floats (`MuxCaps.Popup`), the MCP server tags the
+     request with its pane.
+  2. It opens `fleet approve --project <p> <pane>` in a modal float centred
+     over that pane (50–72 columns by 10–14 rows, kept on screen).
+  3. That float shows the same Allow/No dialog as the dashboard, answers,
+     and exits. The MCP side closes the float if it is still there when the
+     answer arrives by some other route.
+- **The dashboard stays the fallback.** It takes a pane-tagged request only
+  after 5 seconds, i.e. when no float picked it up (it failed to start, or
+  the agent's workspace is not shown anywhere). Untagged requests reach it at
+  once, as before. On WezTerm nothing changes: no floats, so no tag.
+- **Port:** `IMuxDriver.SpawnFloatingAsync(over, options)`. `embedded`
+  implements it (control op `spawn-float` with `pane`). WezTerm refuses it,
+  the fake supports it when it has workspaces, and `FailSilentDriver` guards
+  it.
+
+### Verified
+
+- **Tests (10 new, 1084 in all):**
+  - menu float in the shown workspace, single instance, keys back afterwards;
+  - overlay fallback;
+  - modal floats over hidden floats, not toggled, not counted, not tiled;
+  - float-over-pane placement;
+  - `spawn-float` over a pane in fleetd;
+  - approval requests taken only by their pane's float, then the dashboard's
+    grace;
+  - the MCP-side decorator: opens the float over the asking pane, closes it
+    after the answer, and does nothing without a pane or without floats.
+- **Windows, windowless, real binary** (outer fleetd running `fleet attach`
+  against an inner fleetd):
+  - `ctrl+b space` drew `╭─ fleet menu ─…` over the agent pane, listed as
+    tab `float` in workspace `probe`. `esc` closed it, and
+    `echo BACK-IN-PANE` then ran in the pane underneath.
+  - A pane-tagged request written the way the MCP side writes it, plus
+    `spawn-float` over the agent pane running `fleet approve`, drew the dialog
+    centred over the agent (column 24, row 12 on 120x39). Enter wrote
+    `Allowed` to the reply file, and the float closed.
+
+### Not verified / limits
+
+- **The full MCP round trip** (Claude calling a gated fleet tool, then the
+  float) was not run end to end. The pieces were: the MCP-side decorator in
+  tests, the float and `fleet approve` for real.
+- **An approval float takes the keyboard in that workspace** when it opens,
+  as a dialog does. If the agent's workspace is not on any screen, the float
+  waits there until you switch to it, or the dashboard takes the request
+  after 5 seconds.
+- **Underscores in the tool name are eaten** by the dialog's hotkey marker
+  (`new_agent` shows as `newagent`). This was already the case in the
+  dashboard's dialog.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

@@ -100,6 +100,9 @@ public class FailSilentDriverTests
         public Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default) =>
             throw toThrow;
 
+        public Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default) =>
+            throw toThrow;
+
         public Task ShowWorkspaceAsync(string name, CancellationToken ct = default) =>
             throw toThrow;
 

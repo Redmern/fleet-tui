@@ -592,6 +592,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         Show(client, visible[(current + 1) % visible.Count].Name);
     }
 
+    public const string MenuTitle = "fleet menu";
+
     private void OpenMenu(string client, string? action)
     {
         if (_model.Client(client) is not { Overlay: null } state)
@@ -611,10 +613,29 @@ public sealed class FleetDaemon(DaemonOptions options)
             args.AddRange(["--action", action]);
         }
 
+        var env = new Dictionary<string, string> { [ClientVariable] = client };
+
+        if (state.Showing is { } shown && _model.Workspace(shown) is not null)
+        {
+            if (state.Menu is { } open && _model.FloatBounds(open) is not null)
+            {
+                _model.Focus(open);
+                return;
+            }
+
+            var menu = _model.SpawnFloat(
+                shown, Environment.CurrentDirectory, args, MuxModel.OverlayArea(state.Cols, state.Rows), modal: true);
+            _model.SetTitle(menu.Id, MenuTitle);
+            state.Menu = menu.Id;
+            ApplyResizes();
+            Start(menu, env);
+            return;
+        }
+
         var pane = _model.Spawn(MuxModel.OverlayWorkspace, Environment.CurrentDirectory, args);
         _model.SetOverlay(client, pane.Id);
         ApplyResizes();
-        Start(pane, new Dictionary<string, string> { [ClientVariable] = client });
+        Start(pane, env);
     }
 
     private double Show(string? client, string? workspace)
@@ -657,6 +678,21 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private string SpawnFloat(ControlRequest request)
     {
+        if (request.Pane is { Length: > 0 } over)
+        {
+            var home = CallerWorkspace(over) ?? throw new InvalidOperationException($"no pane {over}");
+            var below = _model.PaneArea(over) ?? _model.FloatBounds(over);
+            var box = _model.SpawnFloat(
+                home,
+                request.Cwd ?? _model.Pane(over)?.Cwd ?? Environment.CurrentDirectory,
+                request.Args ?? [],
+                below is { } area ? MuxModel.Over(area) : null,
+                modal: true);
+            ApplyResizes();
+            Start(box, request.Env);
+            return box.Id;
+        }
+
         var workspace = request.Workspace
             ?? request.Session
             ?? CallerWorkspace(request.Caller)

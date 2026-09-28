@@ -20,6 +20,7 @@ public enum FleetVerb
     Daemon,
     Attach,
     Bridge,
+    Approve,
     Help,
     Unknown,
 }

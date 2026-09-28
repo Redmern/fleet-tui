@@ -203,14 +203,14 @@ public static class Composer
 
     public static (int Start, int End, string Label)? FloatSpan(ClientView view)
     {
-        if (view.Workspace is not { Floats.Count: > 0 } workspace)
+        if (view.Workspace is not { } workspace || workspace.Floats.All(f => f.Modal))
         {
             return null;
         }
 
         var spans = TabSpans(view);
         var start = (spans.Count > 0 ? spans[^1].End : workspace.Name.Length + 2) + 1;
-        var label = $" float {workspace.Floats.Count} ";
+        var label = $" float {workspace.Floats.Count(f => !f.Modal)} ";
         return (start, start + label.Length, label);
     }
 

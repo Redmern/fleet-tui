@@ -225,10 +225,8 @@ public static class Adapters
     {
         var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
 
-        var own = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-
-        if (!string.IsNullOrEmpty(own)
-            && panes.FirstOrDefault(p => p.Id.Value == own) is { } mine)
+        if (!mux.CurrentPane.IsNone
+            && panes.FirstOrDefault(p => p.Id == mux.CurrentPane) is { } mine)
         {
             return mine.WindowId;
         }

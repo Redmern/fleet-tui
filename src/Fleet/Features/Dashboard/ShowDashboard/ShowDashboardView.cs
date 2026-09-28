@@ -1015,8 +1015,7 @@ public static class ShowDashboardView
 
             try
             {
-                var allowed = FleetDialog.Confirm(
-                    app, "Approve this action?", ApprovalLines(approval.Request), confirmText: "Allow");
+                var allowed = ApprovalDialog.Ask(app, approval.Request.Summary, approval.Request.Tool);
 
                 callbacks.AnswerApproval(approval.Id, allowed);
 
@@ -1030,8 +1029,6 @@ public static class ShowDashboardView
             }
         }
 
-        static IReadOnlyList<string> ApprovalLines(ApprovalRequest request) =>
-            [request.Summary, string.Empty, $"tool: {request.Tool}"];
 
         bool Beat()
         {

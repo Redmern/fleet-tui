@@ -196,6 +196,9 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
     public Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<Workspace>>([]);
 
+    public Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default) =>
+        throw new NotSupportedException("wezterm has no floating panes");
+
     public Task ShowWorkspaceAsync(string name, CancellationToken ct = default) =>
         throw new NotSupportedException(
             "wezterm workspaces are global to the GUI process; fleet switches by moving panes");

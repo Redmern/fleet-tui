@@ -131,6 +131,33 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
         Assert.Null(channel.TakePending("other"));
     }
 
+    [Fact]
+    public void A_request_from_a_pane_is_taken_only_by_that_panes_float()
+    {
+        var channel = Channel(TimeSpan.FromSeconds(60));
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Pane = "p7" });
+
+        Assert.Null(channel.TakePending("techweb", "p9"));
+        Assert.Null(channel.TakePending("techweb"));
+        Assert.Equal("p7", channel.TakePending("techweb", "p7")!.Request.Pane);
+    }
+
+    [Fact]
+    public void The_dashboard_takes_a_panes_request_when_no_float_took_it_in_time()
+    {
+        var channel = Channel(TimeSpan.FromSeconds(60));
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Pane = "p7" });
+        Assert.Null(channel.TakePending("techweb"));
+
+        _now += TimeSpan.FromSeconds(6);
+
+        Assert.NotNull(channel.TakePending("techweb"));
+    }
+
     private async Task Answer(FileApprovalChannel channel, ApprovalDecision decision)
     {
         var pending = SpinForPending(channel, "techweb");

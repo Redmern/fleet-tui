@@ -49,6 +49,55 @@ public class FloatTests
     }
 
     [Fact]
+    public void A_modal_float_shows_over_hidden_floats_without_revealing_them_and_cannot_be_tiled()
+    {
+        var (tile, client) = Workspace("techweb");
+        var box = _model.SpawnFloat("techweb", "C:/x", ["pwsh"]);
+        _model.ToggleFloats(client.Id);
+
+        var menu = _model.SpawnFloat("techweb", "C:/x", ["fleet", "menu"], new Rect(5, 5, 40, 10), modal: true);
+
+        var view = _model.View(client.Id)!;
+        Assert.Equal([menu.Id], view.FloatingPanes.Select(p => p.Pane));
+        Assert.Equal(new Rect(5, 5, 40, 10), view.FloatingPanes.Single().Area);
+        Assert.Equal(menu.Id, view.Focused);
+        Assert.False(_model.ToTile(menu.Id));
+
+        _model.Kill(menu.Id);
+
+        view = _model.View(client.Id)!;
+        Assert.Empty(view.FloatingPanes);
+        Assert.Equal(tile.Id, view.Focused);
+        Assert.Contains(box.Id, _model.PanesIn("techweb"));
+    }
+
+    [Fact]
+    public void Only_a_modal_float_is_nothing_to_toggle_or_count()
+    {
+        var (_, client) = Workspace("techweb", cols: 60, rows: 11);
+        _model.SpawnFloat("techweb", "C:/x", ["fleet", "menu"], modal: true);
+        _model.Resizes();
+
+        Assert.False(_model.ToggleFloats(client.Id));
+        Assert.Null(Composer.FloatSpan(_model.View(client.Id)!));
+    }
+
+    [Fact]
+    public void A_float_over_a_pane_is_centred_on_it_and_sized_for_a_dialog()
+    {
+        var (tile, client) = Workspace("techweb");
+        var agent = _model.Split(tile.Id, true, false, 50, "C:/x", ["claude"])!;
+
+        var area = _model.PaneArea(agent.Id)!.Value;
+        var over = MuxModel.Over(area);
+
+        Assert.Equal(_model.View(client.Id)!.Panes.Single(p => p.Pane == agent.Id).Area, area);
+        Assert.Equal((50, 14), (over.Width, over.Height));
+        Assert.Equal(area.X + (area.Width - 50) / 2, over.X);
+        Assert.Equal(area.Y + (area.Height - 14) / 2, over.Y);
+    }
+
+    [Fact]
     public void Toggling_without_floats_does_nothing()
     {
         var (_, client) = Workspace("techweb");

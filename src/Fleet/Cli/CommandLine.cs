@@ -69,6 +69,7 @@ public static class CommandLine
         "daemon" => FleetVerb.Daemon,
         "attach" => FleetVerb.Attach,
         "bridge" => FleetVerb.Bridge,
+        "approve" => FleetVerb.Approve,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         "help" or "--help" or "-h" => FleetVerb.Help,
         _ => FleetVerb.Unknown,

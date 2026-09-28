@@ -21,7 +21,7 @@ public sealed class EmbeddedDriver(
 
     public string Name => "embedded";
 
-    public MuxCaps Caps => MuxCaps.Split | MuxCaps.Detach | MuxCaps.Persist | MuxCaps.Workspaces;
+    public MuxCaps Caps => MuxCaps.Split | MuxCaps.Detach | MuxCaps.Persist | MuxCaps.Workspaces | MuxCaps.Popup;
 
     public PaneId CurrentPane =>
         Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable) is { Length: > 0 } pane
@@ -64,6 +64,24 @@ public sealed class EmbeddedDriver(
                 Session = options.SessionName,
                 Window = options.WindowId,
                 NewWindow = options.NewWindow,
+                Cwd = options.Cwd,
+                Args = [.. options.Args],
+                Env = new Dictionary<string, string>(options.Env),
+            },
+            ct).ConfigureAwait(false);
+
+        return new PaneId(response.Pane ?? string.Empty);
+    }
+
+    public async Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default)
+    {
+        var response = await RequestAsync(
+            new ControlRequest
+            {
+                Op = "spawn-float",
+                Pane = over.IsNone ? null : over.Value,
+                Workspace = options.Workspace,
+                Session = options.SessionName,
                 Cwd = options.Cwd,
                 Args = [.. options.Args],
                 Env = new Dictionary<string, string>(options.Env),
