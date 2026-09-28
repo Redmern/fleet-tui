@@ -19,5 +19,5 @@ public interface IPanePty : IDisposable
     void Resize(int cols, int rows);
 
     static IPanePty Create() =>
-        OperatingSystem.IsWindows() ? new WindowsPanePty() : new UnixPanePty();
+        OperatingSystem.IsWindows() ? new ConPtyPane(ConPtyApi.Current) : new UnixPanePty();
 }

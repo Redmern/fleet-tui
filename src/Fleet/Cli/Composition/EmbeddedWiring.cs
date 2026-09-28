@@ -41,6 +41,11 @@ public static class EmbeddedWiring
             log.Write("fleetd: released redirected std handles so pane children use their pseudoconsole");
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            log.Write($"fleetd: panes use the {ConPtyApi.Current.Name} ConPTY");
+        }
+
         var daemon = new FleetDaemon(new DaemonOptions
         {
             Endpoint = Endpoint.Default(),
