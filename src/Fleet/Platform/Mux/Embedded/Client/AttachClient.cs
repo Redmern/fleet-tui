@@ -14,6 +14,9 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
         "\e[?2026l\e[0m\e[?1000l\e[?1002l\e[?1003l\e[?1006l\e[?1004l\e[?2004l" +
         "\e[?1l\e>\e[0 q\e[?25h\e[?1049l";
 
+    private const string PushTitle = "\e[22;0t";
+    private const string PopTitle = "\e[23;0t";
+
     private readonly HashSet<ushort> _swallowed = [];
     private volatile bool _running = true;
     private string? _farewell;
@@ -68,7 +71,11 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
 
         var client = Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome).Client;
         log($"attached as {client} at {cols}x{rows}");
-        write(Encoding.UTF8.GetBytes(EnterHost + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)));
+        var savedTitle = HostEffectsOut.CurrentConsoleTitle();
+        write(Encoding.UTF8.GetBytes(
+            (OperatingSystem.IsWindows() ? string.Empty : PushTitle)
+            + EnterHost
+            + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)));
 
         try
         {
@@ -93,7 +100,12 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
         }
         finally
         {
-            write(Encoding.UTF8.GetBytes(RestoreHost));
+            write(Encoding.UTF8.GetBytes(RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : PopTitle)));
+
+            if (savedTitle is not null)
+            {
+                HostEffectsOut.SetConsoleTitle(savedTitle);
+            }
         }
 
         if (_farewell is not null)
@@ -102,6 +114,29 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
         }
 
         return 0;
+    }
+
+    private void Apply(HostEffect effect, Action<byte[]> write)
+    {
+        switch (effect.Kind)
+        {
+            case HostEffects.Title when effect.Value is { } title:
+                write(Encoding.UTF8.GetBytes(HostEffectsOut.TitleSequence(title)));
+                break;
+
+            case HostEffects.Clipboard when effect.Value is { } text:
+                var done = OperatingSystem.IsWindows()
+                    ? HostEffectsOut.SetWindowsClipboard(text)
+                    : WriteAndReport(write, HostEffectsOut.ClipboardSequence(text));
+                log($"clipboard: {text.Length} chars {(done ? "set" : "NOT set")}");
+                break;
+        }
+    }
+
+    private static bool WriteAndReport(Action<byte[]> write, string sequence)
+    {
+        write(Encoding.UTF8.GetBytes(sequence));
+        return true;
     }
 
     private async Task ReadFramesAsync(Wire wire, Action<byte[]> write)
@@ -114,6 +149,9 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
                 {
                     case MessageType.Frame:
                         write(Wire.ReadFrame(message.Payload).Bytes);
+                        break;
+                    case MessageType.HostEffect:
+                        Apply(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect), write);
                         break;
                     case MessageType.Bye:
                         _farewell = "fleetd ended the session";

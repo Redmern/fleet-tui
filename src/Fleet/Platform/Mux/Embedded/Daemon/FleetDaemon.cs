@@ -35,6 +35,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly Dictionary<string, PaneRuntime> _runtimes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AttachSession> _sessions = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(string Pane, string Text)> _copies = new();
     private readonly CancellationTokenSource _stop = new();
     private DateTime _lastBusy = DateTime.UtcNow;
 
@@ -625,6 +626,18 @@ public sealed class FleetDaemon(DaemonOptions options)
         var runtime = new PaneRuntime(pane.Id, pty, options.Terminal, cols, rows);
         _runtimes[pane.Id] = runtime;
 
+        runtime.Terminal.TitleChanged += () =>
+        {
+            runtime.TitleDirty = true;
+            _wake.Release();
+        };
+
+        runtime.Terminal.Copied += text =>
+        {
+            _copies.Enqueue((pane.Id, text));
+            _wake.Release();
+        };
+
         pty.Output += (buffer, count) =>
         {
             if (runtime.Feed(buffer, count))
@@ -754,12 +767,40 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
 
             List<(AttachSession Session, long Seq, bool Full, string Bytes, Stopwatch? Switching)> sends = [];
+            List<(AttachSession Session, HostEffect Effect)> effects = [];
 
             lock (_gate)
             {
                 foreach (var runtime in _runtimes.Values)
                 {
                     runtime.Snapshot();
+
+                    if (runtime.TitleDirty && _model.Pane(runtime.Id) is { } state)
+                    {
+                        runtime.TitleDirty = false;
+                        lock (runtime.Gate)
+                        {
+                            state.Title = runtime.Terminal.Title;
+                        }
+                    }
+                }
+
+                while (_copies.TryDequeue(out var copy))
+                {
+                    if (CopyTarget(copy.Pane) is { } target)
+                    {
+                        effects.Add((target, new HostEffect { Kind = HostEffects.Clipboard, Value = copy.Text }));
+                        options.Log($"{copy.Pane} copied {copy.Text.Length} chars to {target.Client}'s clipboard");
+                    }
+                }
+
+                foreach (var session in _sessions.Values)
+                {
+                    if (_model.WindowTitle(session.Client) is { } title && title != session.Title)
+                    {
+                        session.Title = title;
+                        effects.Add((session, new HostEffect { Kind = HostEffects.Title, Value = title }));
+                    }
                 }
 
                 foreach (var session in _sessions.Values)
@@ -794,6 +835,18 @@ public sealed class FleetDaemon(DaemonOptions options)
                 }
             }
 
+            foreach (var (session, effect) in effects)
+            {
+                try
+                {
+                    await session.Wire.SendAsync(MessageType.HostEffect, effect, WireJsonContext.Default.HostEffect, ct)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+                {
+                }
+            }
+
             foreach (var (session, seq, full, bytes, switching) in sends)
             {
                 try
@@ -809,6 +862,21 @@ public sealed class FleetDaemon(DaemonOptions options)
                 }
             }
         }
+    }
+
+    private AttachSession? CopyTarget(string pane)
+    {
+        var showing = _sessions.Values
+            .Select(s => (Session: s, View: _model.View(s.Client)))
+            .Where(x => x.View is not null
+                        && (x.View.Panes.Any(p => p.Pane == pane) || x.View.Overlay?.Pane == pane))
+            .OrderByDescending(x => x.View!.Client.LastActive)
+            .Select(x => x.Session)
+            .FirstOrDefault();
+
+        return showing ?? _sessions.Values
+            .OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0)
+            .FirstOrDefault();
     }
 
     private static bool Same(ClientFrame a, ClientFrame b) =>
@@ -855,6 +923,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         public Stopwatch? Switching { get; set; }
 
         public MouseCapture? Capture { get; set; }
+
+        public string? Title { get; set; }
     }
 
     private sealed record MouseCapture(string? Pane, int Divider);

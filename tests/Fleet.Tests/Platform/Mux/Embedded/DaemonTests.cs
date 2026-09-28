@@ -329,6 +329,43 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_window_title_follows_the_focused_panes_title_and_the_workspace()
+    {
+        var control = await ControlAsync();
+        var pane = await SpawnAsync(control, "techweb", "nvim");
+        await SpawnAsync(control, "fleet", "claude");
+        var client = await AttachAsync(workspace: "techweb");
+        await Eventually(() => client.LastTitle == "techweb · fleet");
+
+        _panes.ByProgram("nvim")!.Terminal.SetTitle("README.md - NVIM");
+
+        await Eventually(() => client.LastTitle == "README.md - NVIM · techweb");
+        var listed = await control.RequestAsync(new ControlRequest { Op = "list-panes" });
+        Assert.Equal("README.md - NVIM", listed.Panes!.Single(p => p.Id == pane).PaneTitle);
+
+        await client.RequestAsync(new ControlRequest { Op = "show", Workspace = "fleet" });
+        await Eventually(() => client.LastTitle == "fleet · fleet");
+    }
+
+    [Fact]
+    public async Task A_copy_in_a_pane_reaches_the_clipboard_of_the_client_showing_it_only()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "nvim");
+        await SpawnAsync(control, "fleet", "claude");
+        var laptop = await AttachAsync(workspace: "techweb");
+        var desktop = await AttachAsync(workspace: "fleet");
+        await laptop.WaitForFramesAsync(1);
+        await desktop.WaitForFramesAsync(1);
+
+        _panes.ByProgram("nvim")!.Terminal.Copy("yanked text");
+
+        await Eventually(() => laptop.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "yanked text"));
+        await Task.Delay(100);
+        Assert.DoesNotContain(desktop.Effects, e => e.Kind == HostEffects.Clipboard);
+    }
+
+    [Fact]
     public async Task Fleets_own_handlers_switch_projects_through_the_embedded_driver()
     {
         using var mux = new EmbeddedDriver(_endpoint);
@@ -415,6 +452,10 @@ public sealed class DaemonTests : IAsyncLifetime
 
         public string Id { get; }
 
+        public ConcurrentQueue<HostEffect> Effects { get; } = new();
+
+        public string? LastTitle => Effects.LastOrDefault(e => e.Kind == HostEffects.Title)?.Value;
+
         public int FrameCount => _frames.Count;
 
         public string AllText => string.Concat(_frames);
@@ -481,7 +522,11 @@ public sealed class DaemonTests : IAsyncLifetime
             {
                 while (await _wire.ReceiveAsync() is { } message)
                 {
-                    if (message.Type == MessageType.Frame)
+                    if (message.Type == MessageType.HostEffect)
+                    {
+                        Effects.Enqueue(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect));
+                    }
+                    else if (message.Type == MessageType.Frame)
                     {
                         _frames.Enqueue(Encoding.UTF8.GetString(Wire.ReadFrame(message.Payload).Bytes));
                     }

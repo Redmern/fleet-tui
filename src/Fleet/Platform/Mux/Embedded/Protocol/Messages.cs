@@ -186,6 +186,12 @@ public sealed class BadgeMessage
     public string? Text { get; set; }
 }
 
+public static class HostEffects
+{
+    public const string Title = "title";
+    public const string Clipboard = "clipboard";
+}
+
 public sealed class HostEffect
 {
     [JsonPropertyName("kind")]

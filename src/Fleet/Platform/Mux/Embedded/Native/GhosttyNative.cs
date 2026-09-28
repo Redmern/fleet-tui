@@ -180,6 +180,32 @@ public static unsafe partial class GhosttyNative
     public static partial void MouseEventSetPosition(nint mouseEvent, MousePosition position);
 }
 
+[StructLayout(LayoutKind.Explicit, Size = 72)]
+public unsafe struct ClipboardWrite
+{
+    [FieldOffset(0)] public nuint Size;
+    [FieldOffset(8)] public int Location;
+    [FieldOffset(16)] public ClipboardContent* Contents;
+    [FieldOffset(24)] public nuint ContentsLength;
+    [FieldOffset(56)] public nint Context;
+    [FieldOffset(64)] public delegate* unmanaged[Cdecl]<ClipboardWrite*, ClipboardWriteReply*, void> Reply;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct ClipboardContent
+{
+    public GhosttyString Mime;
+    public GhosttyString Data;
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 16)]
+public struct ClipboardWriteReply
+{
+    [FieldOffset(0)] public nuint Size;
+    [FieldOffset(8)] public int Result;
+    [FieldOffset(12)] public byte Remember;
+}
+
 public enum MouseEncoderOption
 {
     Event = 0,
@@ -214,7 +240,9 @@ public enum TerminalOption
 {
     Userdata = 0,
     WritePty = 1,
+    TitleChanged = 5,
     DeviceAttributes = 8,
+    ClipboardWrite = 26,
 }
 
 public enum TerminalData

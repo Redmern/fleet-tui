@@ -16,6 +16,12 @@ public interface IPaneTerminal : IDisposable
     byte[] EncodeMouse(MouseMessage mouse, int x, int y);
 
     string PlainText();
+
+    string Title { get; }
+
+    event Action? TitleChanged;
+
+    event Action<string>? Copied;
 }
 
 public delegate IPaneTerminal PaneTerminalFactory(int cols, int rows, Action<byte[]> reply);

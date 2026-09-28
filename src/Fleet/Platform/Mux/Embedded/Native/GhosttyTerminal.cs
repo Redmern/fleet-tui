@@ -38,6 +38,12 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         delegate* unmanaged[Cdecl]<nint, nint, DeviceAttributes*, byte> da = &OnDeviceAttributes;
         GhosttyNative.TerminalSet(_terminal, TerminalOption.DeviceAttributes, da);
 
+        delegate* unmanaged[Cdecl]<nint, nint, void> title = &OnTitleChanged;
+        GhosttyNative.TerminalSet(_terminal, TerminalOption.TitleChanged, title);
+
+        delegate* unmanaged[Cdecl]<nint, nint, ClipboardWrite*, void> clipboard = &OnClipboardWrite;
+        GhosttyNative.TerminalSet(_terminal, TerminalOption.ClipboardWrite, clipboard);
+
         Check(GhosttyNative.RenderStateNew(0, out _state), "ghostty_render_state_new");
         Check(GhosttyNative.RowIteratorNew(0, out _rows), "ghostty_render_state_row_iterator_new");
         Check(GhosttyNative.RowCellsNew(0, out _cells), "ghostty_render_state_row_cells_new");
@@ -45,8 +51,26 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         Check(GhosttyNative.KeyEventNew(0, out _event), "ghostty_key_event_new");
     }
 
+    public const int MaxClipboard = 1024 * 1024;
+
     public static IPaneTerminal Create(int cols, int rows, Action<byte[]> reply) =>
         new GhosttyTerminal(cols, rows, reply);
+
+    public event Action? TitleChanged;
+
+    public event Action<string>? Copied;
+
+    public string Title
+    {
+        get
+        {
+            var value = default(GhosttyString);
+            return GhosttyNative.TerminalGet(_terminal, TerminalData.Title, &value) == GhosttyNative.Success
+                   && value.Ptr != null && value.Len > 0
+                ? Encoding.UTF8.GetString(value.Ptr, (int)value.Len)
+                : string.Empty;
+        }
+    }
 
     public void Write(ReadOnlySpan<byte> data)
     {
@@ -354,6 +378,48 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         {
             self._reply(new ReadOnlySpan<byte>(data, (int)len).ToArray());
         }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnTitleChanged(nint terminal, nint userdata)
+    {
+        if (GCHandle.FromIntPtr(userdata).Target is GhosttyTerminal self)
+        {
+            self.TitleChanged?.Invoke();
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnClipboardWrite(nint terminal, nint userdata, ClipboardWrite* write)
+    {
+        var result = 1;
+
+        if (GCHandle.FromIntPtr(userdata).Target is GhosttyTerminal self && write->ContentsLength > 0)
+        {
+            string? text = null;
+
+            for (nuint i = 0; i < write->ContentsLength; i++)
+            {
+                var content = write->Contents[i];
+                var mime = content.Mime.Ptr == null ? string.Empty : Encoding.UTF8.GetString(content.Mime.Ptr, (int)content.Mime.Len);
+
+                if ((mime.Length == 0 || mime.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase))
+                    && content.Data.Len <= MaxClipboard)
+                {
+                    text = content.Data.Ptr == null ? string.Empty : Encoding.UTF8.GetString(content.Data.Ptr, (int)content.Data.Len);
+                    break;
+                }
+            }
+
+            if (text is not null)
+            {
+                self.Copied?.Invoke(text);
+                result = 0;
+            }
+        }
+
+        var reply = new ClipboardWriteReply { Size = (nuint)sizeof(ClipboardWriteReply), Result = result };
+        write->Reply(write, &reply);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

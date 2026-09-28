@@ -36,6 +36,8 @@ public sealed class PaneRuntime : IDisposable
 
     public bool Dirty { get; set; } = true;
 
+    public volatile bool TitleDirty;
+
     public bool Exited { get; set; }
 
     public void Send(byte[] bytes)

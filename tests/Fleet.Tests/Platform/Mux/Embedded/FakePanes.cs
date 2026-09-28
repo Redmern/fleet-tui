@@ -17,7 +17,14 @@ public sealed class FakePanes
 
     public IPanePty NewPty() => new FakePty(this);
 
-    public IPaneTerminal NewTerminal(int cols, int rows, Action<byte[]> reply) => new FakeTerminal(cols, rows);
+    public ConcurrentQueue<FakeTerminal> Terminals { get; } = new();
+
+    public IPaneTerminal NewTerminal(int cols, int rows, Action<byte[]> reply)
+    {
+        var terminal = new FakeTerminal(cols, rows);
+        Terminals.Enqueue(terminal);
+        return terminal;
+    }
 
     public sealed class FakePty(FakePanes owner) : IPanePty
     {
@@ -37,6 +44,8 @@ public sealed class FakePanes
 
         public bool IsDisposed { get; private set; }
 
+        public FakeTerminal Terminal { get; private set; } = null!;
+
         public string Written => string.Concat(_written.Select(b => Encoding.UTF8.GetString(b)));
 
         public void Start(
@@ -47,6 +56,7 @@ public sealed class FakePanes
             Args = args;
             Env = env;
             Size = (cols, rows);
+            Terminal = owner.Terminals.Last();
             owner.Started.Enqueue(this);
         }
 
@@ -65,7 +75,7 @@ public sealed class FakePanes
         public void Dispose() => IsDisposed = true;
     }
 
-    private sealed class FakeTerminal(int cols, int rows) : IPaneTerminal
+    public sealed class FakeTerminal(int cols, int rows) : IPaneTerminal
     {
         private readonly StringBuilder _text = new();
         private (int Cols, int Rows) _size = (cols, rows);
@@ -87,6 +97,20 @@ public sealed class FakePanes
 
         public byte[] EncodeMouse(MouseMessage mouse, int x, int y) =>
             Encoding.UTF8.GetBytes($"<mouse b{mouse.Button} a{mouse.Action} {x},{y}>");
+
+        public string Title { get; private set; } = string.Empty;
+
+        public event Action? TitleChanged;
+
+        public event Action<string>? Copied;
+
+        public void SetTitle(string title)
+        {
+            Title = title;
+            TitleChanged?.Invoke();
+        }
+
+        public void Copy(string text) => Copied?.Invoke(text);
 
         public string PlainText() => _text.ToString();
 

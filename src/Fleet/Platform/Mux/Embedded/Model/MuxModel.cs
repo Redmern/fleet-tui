@@ -184,6 +184,23 @@ public sealed class MuxModel
         return true;
     }
 
+    public string? WindowTitle(string client)
+    {
+        if (View(client) is not { } view)
+        {
+            return null;
+        }
+
+        if (view.Workspace is not { } workspace)
+        {
+            return "fleet";
+        }
+
+        var title = view.Focused is { } focused ? Pane(focused)?.Title : null;
+
+        return string.IsNullOrWhiteSpace(title) ? $"{workspace.Name} · fleet" : $"{title} · {workspace.Name}";
+    }
+
     public MouseHit Hit(string client, int x, int y)
     {
         if (View(client) is not { } view)
