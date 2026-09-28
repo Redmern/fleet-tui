@@ -185,7 +185,7 @@ public sealed class FileApprovalChannel(
         Enum.TryParse<ApprovalDecision>(reply.Trim(), out var decision)
         && decision == ApprovalDecision.Allowed
             ? ApprovalOutcome.Allow
-            : ApprovalOutcome.Deny("The dashboard declined this action.");
+            : ApprovalOutcome.Deny("Declined by the user in fleet.");
 
     private static string Serialize(ApprovalRequest request) =>
         JsonSerializer.Serialize(

@@ -85,6 +85,7 @@ public static class FleetTheme
         Y = y,
         Text = text,
         SchemeName = FleetSchemes.Screen,
+        HotKeySpecifier = NoHotKey,
     };
 
     public static Label StatusLine(Pos y) => new()

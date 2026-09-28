@@ -3252,16 +3252,31 @@ phases"), checked against `embedded`.
 
 ### Not verified / limits
 
-- **The full MCP round trip** (Claude calling a gated fleet tool, then the
-  float) was not run end to end. The pieces were: the MCP-side decorator in
-  tests, the float and `fleet approve` for real.
+- ~~**The full MCP round trip**~~ was run later the same day with a real
+  agent (windowless, isolated config). The setup:
+  - an inner fleetd ran the real `fleet dash` and Claude Code (`claude -p`)
+    with this build's `fleet mcp` as its MCP server;
+  - an outer fleetd ran `fleet attach`, so the float was drawn in a real
+    client;
+  - Claude was asked to call `stop_agent` (Ask by default) for a
+    non-existent agent.
+
+  What happened:
+  - The float `approve?` opened over the Claude pane 8–10 s after the prompt
+    started, showing "the main orchestrator wants to: Stop an agent —
+    nobody/none".
+  - **Allow** (Enter): the tool ran, and Claude reported its real result, "No
+    agent nobody/none in this project".
+  - **No** (Esc): Claude reported that the stop was declined in fleet.
+  - Both times the float closed, and the fleet log recorded the request and
+    the outcome.
 - **An approval float takes the keyboard in that workspace** when it opens,
   as a dialog does. If the agent's workspace is not on any screen, the float
   waits there until you switch to it, or the dashboard takes the request
   after 5 seconds.
-- **Underscores in the tool name are eaten** by the dialog's hotkey marker
-  (`new_agent` shows as `newagent`). This was already the case in the
-  dashboard's dialog.
+- ~~**Underscores in the tool name are eaten.**~~ Fixed: dialog lines
+  (`FleetTheme.Caption`) no longer treat `_` as a hotkey marker. A decline now
+  reads "Declined by the user in fleet." instead of naming the dashboard.
 ## Scrollback and copy mode, 2026-09-28
 
 ### Behaviour
@@ -3343,6 +3358,25 @@ phases"), checked against `embedded`.
 - **Scrolling with the wheel while in copy mode** can move the copy cursor out
   of view. It is then hidden until a key brings the view back to it.
 - **Unix clients were covered by unit tests only,** not end to end.
+## Running the embedded build, 2026-09-28
+
+`scripts\embedded.ps1` runs this checkout's fleet with `FLEET_MUX=embedded`,
+next to an installed fleet and without touching it. It builds on first use:
+libghostty-vt if it is missing, then `dotnet publish`, with the Visual
+Studio installer folder put on `PATH` for NativeAOT's `vswhere`.
+
+| Command | Does |
+|---|---|
+| `scripts\embedded.ps1` | pick a project; fleetd starts and this terminal attaches |
+| `scripts\embedded.ps1 -Project <p>` | attach straight to a project |
+| `scripts\embedded.ps1 attach` | reattach after `ctrl+b q` |
+| `scripts\embedded.ps1 build` | stop this build's fleetd and rebuild |
+| `scripts\embedded.ps1 stop` | stop this build's fleetd (matched by path, so an installed fleet is left alone) |
+| `scripts\embedded.ps1 status` | binary age against the last code commit, and whether fleetd runs |
+
+`-Isolated` uses a separate config under `artifacts\embedded-config`, so no
+real projects are touched. The script restores `FLEET_MUX` and
+`FLEET_CONFIG_HOME` in the calling session when it returns.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
