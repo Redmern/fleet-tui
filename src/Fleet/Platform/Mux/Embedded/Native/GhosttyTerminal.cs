@@ -144,6 +144,10 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         screen.CursorVisible = visible;
         screen.CursorShape = shape;
 
+        var viewport = Viewport;
+        changed |= screen.Viewport != viewport;
+        screen.Viewport = viewport;
+
         if (changed)
         {
             screen.Version++;
@@ -259,6 +263,75 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         }
     }
 
+    public Viewport Viewport
+    {
+        get
+        {
+            var bar = default(TerminalScrollbar);
+            byte active = 1;
+            var screen = 0;
+            GhosttyNative.TerminalGet(_terminal, TerminalData.Scrollbar, &bar);
+            GhosttyNative.TerminalGet(_terminal, TerminalData.ViewportActive, &active);
+            GhosttyNative.TerminalGet(_terminal, TerminalData.ActiveScreen, &screen);
+            return new Viewport((long)bar.Offset, (long)bar.Total, (int)bar.Len, active != 0, screen == 1);
+        }
+    }
+
+    public void Scroll(ScrollTo target, long value = 0)
+    {
+        GhosttyNative.TerminalScrollViewport(_terminal, new ScrollViewport { Tag = (int)target, Value = value });
+        _resized = true;
+    }
+
+    public string Text(TextPoint from, TextPoint to)
+    {
+        if (to.CompareTo(from) < 0)
+        {
+            (from, to) = (to, from);
+        }
+
+        var start = Viewport;
+        var lines = new List<string>();
+
+        try
+        {
+            var row = from.Row;
+            while (row <= to.Row)
+            {
+                Scroll(ScrollTo.Row, row);
+                var top = Viewport.Top;
+                var page = new ScreenBuffer();
+                Snapshot(page);
+
+                var y = (int)(row - top);
+                if (y < 0 || y >= page.Rows)
+                {
+                    break;
+                }
+
+                for (; y < page.Rows && row <= to.Row; y++, row++)
+                {
+                    var first = row == from.Row ? from.Col : 0;
+                    var last = row == to.Row ? to.Col : page.Cols - 1;
+                    lines.Add(RowText(page, y, first, last));
+                }
+            }
+        }
+        finally
+        {
+            if (start.AtBottom)
+            {
+                Scroll(ScrollTo.Bottom);
+            }
+            else
+            {
+                Scroll(ScrollTo.Row, start.Top);
+            }
+        }
+
+        return string.Join('\n', lines);
+    }
+
     public void Dispose()
     {
         if (_terminal == 0)
@@ -284,6 +357,21 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         {
             _self.Free();
         }
+    }
+
+    private static string RowText(ScreenBuffer page, int y, int first, int last)
+    {
+        var text = new StringBuilder();
+        for (var x = Math.Max(0, first); x <= Math.Min(last, page.Cols - 1); x++)
+        {
+            var cell = page.At(x, y);
+            if (!cell.IsWideTail)
+            {
+                text.Append(cell.Text == "\0" ? " " : cell.Text);
+            }
+        }
+
+        return text.ToString().TrimEnd();
     }
 
     private void ReadRow(Span<Cell> row)

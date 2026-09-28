@@ -564,6 +564,68 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.Equal(("techweb", "float"), (listed.Session, listed.Tab));
     }
     [Fact]
+    public async Task The_wheel_scrolls_history_when_the_program_did_not_ask_for_the_mouse_and_typing_snaps_back()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "shell");
+        var client = await AttachAsync(cols: 30, rows: 8, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var shell = _panes.ByProgram("shell")!;
+        shell.Terminal.MouseTracking = false;
+        shell.Emit(string.Join('\n', Enumerable.Range(1, 40).Select(i => $"line {i}")));
+
+        await client.SendMouseAsync(3, 2, MouseButtons.WheelUp, MouseActions.Press);
+
+        await Eventually(() => shell.Terminal.Viewport is { AtBottom: false } v && v.Below == FleetDaemon.WheelLines);
+        await client.WaitForAsync($"[{FleetDaemon.WheelLines}/");
+        Assert.Equal(string.Empty, shell.Written);
+
+        await client.SendKeyAsync("x");
+
+        await Eventually(() => shell.Terminal.Viewport.AtBottom && shell.Written == "x");
+    }
+
+    [Fact]
+    public async Task The_wheel_on_a_full_screen_program_without_mouse_becomes_arrow_keys()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "less");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var less = _panes.ByProgram("less")!;
+        less.Terminal.MouseTracking = false;
+        less.Terminal.AltScreen = true;
+
+        await client.SendMouseAsync(3, 2, MouseButtons.WheelDown, MouseActions.Press);
+
+        await Eventually(() => less.Written == "<key ArrowDown><key ArrowDown><key ArrowDown>");
+        Assert.True(less.Terminal.Viewport.AtBottom);
+    }
+
+    [Fact]
+    public async Task Copy_mode_yanks_a_line_from_history_into_the_clipboard_of_the_client_that_copied()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "shell");
+        var client = await AttachAsync(cols: 30, rows: 8, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var shell = _panes.ByProgram("shell")!;
+        shell.Emit(string.Join('\n', Enumerable.Range(1, 40).Select(i => $"line {i}")));
+
+        await client.SendCommandAsync("copy-mode");
+        foreach (var step in Enumerable.Repeat("up", 10))
+        {
+            await client.SendCommandAsync("copy", step);
+        }
+
+        await Eventually(() => !shell.Terminal.Viewport.AtBottom);
+        await client.SendCommandAsync("copy", "yank");
+
+        await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "line 30"));
+        Assert.True(shell.Terminal.Viewport.AtBottom);
+        Assert.Equal(string.Empty, shell.Written);
+    }
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();

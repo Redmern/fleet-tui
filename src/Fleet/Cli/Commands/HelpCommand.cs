@@ -33,6 +33,7 @@ public static class HelpCommand
               prefix is ctrl+b (FLEET_PREFIX): q detach, space menu, n/p tab, s next project,
               h/j/k/l focus, r redraw, f new float, w show/hide floats, e float/tile the pane,
               g float mode (hjkl/arrows move, HJKL/shift+arrows size, esc done),
+              [ copy mode (hjkl/arrows, g/G, ctrl+u/d, v select, y copy, q quit), wheel scrolls,
               ctrl+b again sends ctrl+b
             """);
 

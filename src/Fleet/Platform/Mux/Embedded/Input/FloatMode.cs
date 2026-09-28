@@ -3,7 +3,7 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 
 namespace Fleet.Platform.Mux.Embedded.Input;
 
-public sealed class FloatMode
+public sealed class FloatMode : IStickyMode
 {
     public const string Badge = "float: hjkl move, HJKL size, esc done";
 
@@ -11,7 +11,7 @@ public sealed class FloatMode
 
     public void Enter() => Active = true;
 
-    public CommandMessage? OnKey(Key key, Mods mods)
+    public CommandMessage? OnKey(Key key, Mods mods, string? text = null)
     {
         var direction = key switch
         {

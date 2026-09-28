@@ -79,6 +79,61 @@ public sealed class FakePanes
     {
         private readonly StringBuilder _text = new();
         private (int Cols, int Rows) _size = (cols, rows);
+        private long _top;
+        private bool _following = true;
+
+        public bool MouseTracking { get; set; } = true;
+
+        public bool AltScreen { get; set; }
+
+        public List<(ScrollTo Target, long Value)> Scrolls { get; } = [];
+
+        private string[] Lines => _text.ToString().Split('\n');
+
+        public Viewport Viewport
+        {
+            get
+            {
+                var total = Math.Max(Lines.Length, _size.Rows);
+                var bottom = total - _size.Rows;
+                var top = _following ? bottom : Math.Clamp(_top, 0, bottom);
+                return new Viewport(top, total, _size.Rows, top == bottom, AltScreen);
+            }
+        }
+
+        public void Scroll(ScrollTo target, long value = 0)
+        {
+            Scrolls.Add((target, value));
+            var now = Viewport;
+            _top = target switch
+            {
+                ScrollTo.Top => 0,
+                ScrollTo.Delta => now.Top + value,
+                ScrollTo.Row => value,
+                _ => now.Total,
+            };
+            _following = target == ScrollTo.Bottom || _top >= now.Total - now.Rows;
+        }
+
+        public string Text(TextPoint from, TextPoint to)
+        {
+            if (to.CompareTo(from) < 0)
+            {
+                (from, to) = (to, from);
+            }
+
+            var lines = Lines;
+            var picked = new List<string>();
+            for (var row = from.Row; row <= to.Row && row < lines.Length; row++)
+            {
+                var line = lines[row].PadRight(_size.Cols);
+                var first = row == from.Row ? from.Col : 0;
+                var last = row == to.Row ? to.Col : _size.Cols - 1;
+                picked.Add(line[first..Math.Min(line.Length, last + 1)].TrimEnd());
+            }
+
+            return string.Join('\n', picked);
+        }
 
         public void Write(ReadOnlySpan<byte> data) => _text.Append(Encoding.UTF8.GetString(data));
 
@@ -87,16 +142,26 @@ public sealed class FakePanes
         public bool Snapshot(ScreenBuffer screen)
         {
             screen.Resize(_size.Cols, _size.Rows);
-            var line = _text.ToString().Split('\n').Last();
-            screen.Write(0, 0, line.PadRight(_size.Cols)[.._size.Cols]);
-            screen.CursorX = Math.Min(line.Length, _size.Cols - 1);
+            var viewport = Viewport;
+            var lines = Lines;
+
+            for (var y = 0; y < _size.Rows; y++)
+            {
+                var index = viewport.Top + y;
+                var line = index < lines.Length ? lines[index] : string.Empty;
+                screen.Write(0, y, line.PadRight(_size.Cols)[.._size.Cols]);
+            }
+
+            screen.CursorX = Math.Min(lines[^1].Length, _size.Cols - 1);
+            screen.CursorY = (int)Math.Clamp(lines.Length - 1 - viewport.Top, 0, _size.Rows - 1);
+            screen.Viewport = viewport;
             return true;
         }
 
-        public byte[] Encode(KeyMessage key) => Encoding.UTF8.GetBytes(key.Text ?? string.Empty);
+        public byte[] Encode(KeyMessage key) => Encoding.UTF8.GetBytes(key.Text ?? $"<key {(Key)key.Key}>");
 
         public byte[] EncodeMouse(MouseMessage mouse, int x, int y) =>
-            Encoding.UTF8.GetBytes($"<mouse b{mouse.Button} a{mouse.Action} {x},{y}>");
+            MouseTracking ? Encoding.UTF8.GetBytes($"<mouse b{mouse.Button} a{mouse.Action} {x},{y}>") : [];
 
         public string Title { get; private set; } = string.Empty;
 

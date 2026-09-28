@@ -3248,6 +3248,87 @@ phases"), checked against `embedded`.
 - **Underscores in the tool name are eaten** by the dialog's hotkey marker
   (`new_agent` shows as `newagent`). This was already the case in the
   dashboard's dialog.
+## Scrollback and copy mode, 2026-09-28
+
+### Behaviour
+
+- **History lives in the emulator.** libghostty-vt keeps each pane's
+  scrollback (its default limits) and can scroll its own viewport, so fleetd
+  stores nothing extra. Rendering follows the viewport.
+- **The mouse wheel over a pane:**
+  - goes to the program if it turned on mouse reporting (vim, less `--mouse`,
+    TUIs), as before;
+  - on the alternate screen without mouse reporting (less, man), becomes three
+    arrow keys, like "alternate scroll" in other terminals;
+  - otherwise scrolls the pane's history three lines at a time.
+- **A scrolled-back pane shows where it is.** A marker `[below/history]` sits
+  at its top-right corner (lines below the view / lines of history).
+- **Typing snaps back.** Any key or text sent to a scrolled-back pane first
+  returns it to the live output.
+- **Copy mode** (`ctrl+b [`, tmux's key). It works on the focused pane
+  (tiled or floating), and the status bar shows its keys while it is on.
+
+  | Key | Does |
+  |---|---|
+  | `h/j/k/l`, arrows | move |
+  | `0` / `^` / Home, `$` / End | line start / end |
+  | `g`, `G` | top / bottom of history |
+  | `ctrl+u` / `ctrl+d` | half page |
+  | PgUp / PgDn | full page |
+  | `v` or space | start/stop a selection |
+  | `y` or Enter | copy and leave |
+  | `q`, Esc, `ctrl+c` | leave |
+
+  - The view scrolls to keep the cursor visible, and the selection is shown
+    inverted.
+  - `y` without a selection copies the cursor's line.
+  - The copy goes to the client's clipboard by the existing path (natively on
+    Windows, OSC 52 on Unix). Leaving returns the pane to live output.
+  - Other keys are swallowed, so nothing typed in copy mode reaches the pane.
+- **How it is split:**
+  - The client maps keys to `copy <step>` commands, from Windows key records
+    or Unix bytes (including the arrow, Home/End and PgUp/PgDn sequences),
+    through the same sticky-mode path as float mode.
+  - fleetd keeps the copy state per client (`CopySession`): cursor and
+    anchor in absolute history rows.
+  - To extract the text, fleetd pages the viewport through the selected rows
+    and restores it afterwards.
+
+### Verified
+
+- **Tests (24 new, 1108 in all):**
+  - copy-mode movement, the view following the cursor, clamping, selections
+    across lines, yank without a selection, and leaving back to the live
+    output;
+  - the scrolled-back marker, and the inverted selection with the copy
+    cursor;
+  - key mapping for Unix bytes and Windows keys;
+  - the `[` chord;
+  - in fleetd: the wheel scrolling history and typing snapping back, the
+    wheel becoming arrows on a full-screen program, and a copy-mode yank
+    reaching the clipboard of the client that copied.
+- **Windows, windowless, real binary and libghostty** (outer fleetd running
+  `fleet attach` against an inner fleetd whose pane printed `LINE-1` to
+  `LINE-200`):
+  - five wheel-ups (SGR reports, which ConPTY hands the client as wheel
+    events) showed `LINE-151` at the top with `[15/165]`. One wheel-down gave
+    `[12/165]`, and typing `x` snapped back.
+  - `ctrl+b [` showed the copy-mode keys in the status bar, and `g` jumped to
+    `LINE-1` with `[165/165]`.
+  - `0 v j $ y` put `LINE-1\nLINE-2` on the Windows clipboard and returned the
+    pane to live output.
+
+### Limits
+
+- **One viewport per pane.** Two clients showing the same pane share its
+  scroll position.
+- **Soft-wrapped lines are copied as separate lines.** The copy joins screen
+  rows with `\n`, and the copied line breaks are `\n`, not `\r\n`.
+- **No mouse selection** (drag to select in panes that do not use the mouse)
+  and **no search** (`/`) in copy mode yet.
+- **Scrolling with the wheel while in copy mode** can move the copy cursor out
+  of view. It is then hidden until a key brings the view back to it.
+- **Unix clients were covered by unit tests only,** not end to end.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

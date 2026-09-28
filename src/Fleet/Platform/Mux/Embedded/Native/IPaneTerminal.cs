@@ -17,6 +17,12 @@ public interface IPaneTerminal : IDisposable
 
     string PlainText();
 
+    Viewport Viewport { get; }
+
+    void Scroll(ScrollTo target, long value = 0);
+
+    string Text(TextPoint from, TextPoint to);
+
     string Title { get; }
 
     event Action? TitleChanged;
@@ -25,3 +31,11 @@ public interface IPaneTerminal : IDisposable
 }
 
 public delegate IPaneTerminal PaneTerminalFactory(int cols, int rows, Action<byte[]> reply);
+
+public enum ScrollTo
+{
+    Top = 0,
+    Bottom = 1,
+    Delta = 2,
+    Row = 3,
+}

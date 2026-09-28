@@ -303,6 +303,8 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
+        FollowOutput(target);
+
         if (target.Modes.Win32Input && key.Win32 is { } w)
         {
             target.Send(Input.ConPtyModes.Encode(w.Vk, w.Sc, w.Uc, w.Down, w.State, w.Repeat));
@@ -358,6 +360,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             return;
         }
+
+        FollowOutput(target);
 
         if (text.Bytes is { } raw)
         {
@@ -469,6 +473,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             lock (target.Gate)
             {
                 bytes = target.Terminal.EncodeMouse(mouse, x, y);
+
+                if (bytes.Length == 0 && mouse.Button >= MouseButtons.WheelUp && mouse.Action == MouseActions.Press)
+                {
+                    bytes = Wheel(target, mouse.Button == MouseButtons.WheelUp);
+                    redraw |= bytes.Length == 0;
+                }
             }
 
             target.Send(bytes);
@@ -478,6 +488,38 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             _wake.Release();
         }
+    }
+
+    public const int WheelLines = 3;
+
+    private static byte[] Wheel(PaneRuntime pane, bool up)
+    {
+        if (pane.Terminal.Viewport.AltScreen)
+        {
+            var arrow = new KeyMessage { Key = (int)(up ? Key.ArrowUp : Key.ArrowDown), Action = (int)KeyAction.Press };
+            var once = pane.Terminal.Encode(arrow);
+            return [.. once, .. once, .. once];
+        }
+
+        pane.Terminal.Scroll(ScrollTo.Delta, up ? -WheelLines : WheelLines);
+        pane.Dirty = true;
+        return [];
+    }
+
+    private void FollowOutput(PaneRuntime pane)
+    {
+        lock (pane.Gate)
+        {
+            if (pane.Terminal.Viewport.AtBottom)
+            {
+                return;
+            }
+
+            pane.Terminal.Scroll(ScrollTo.Bottom);
+            pane.Dirty = true;
+        }
+
+        _wake.Release();
     }
 
     public static string PasteBytes(TextMessage text, bool bracketed)
@@ -530,6 +572,21 @@ public sealed class FleetDaemon(DaemonOptions options)
                 case "redraw":
                     session.Shown = null;
                     break;
+                case "copy-mode":
+                    if (FocusedRuntime(session.Client) is { } scrolled)
+                    {
+                        lock (scrolled.Gate)
+                        {
+                            scrolled.Terminal.Snapshot(scrolled.Screen);
+                            session.Copy = CopySession.Enter(scrolled.Id, scrolled.Terminal, scrolled.Screen);
+                            scrolled.Dirty = true;
+                        }
+                    }
+
+                    break;
+                case "copy":
+                    CopyStep(session, command.Arg ?? string.Empty);
+                    break;
                 case "float-new":
                     NewFloat(session.Client);
                     break;
@@ -575,6 +632,32 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         _wake.Release();
+    }
+
+    private void CopyStep(AttachSession session, string step)
+    {
+        if (session.Copy is not { } copy || !_runtimes.TryGetValue(copy.Pane, out var pane))
+        {
+            session.Copy = null;
+            return;
+        }
+
+        string? text;
+        lock (pane.Gate)
+        {
+            text = copy.Apply(step, pane.Terminal, pane.Screen.Cols);
+            pane.Dirty = true;
+        }
+
+        if (text is { Length: > 0 })
+        {
+            _copies.Enqueue((pane.Id, text));
+        }
+
+        if (copy.Done)
+        {
+            session.Copy = null;
+        }
     }
 
     private void NextWorkspace(string client)
@@ -974,7 +1057,10 @@ public sealed class FleetDaemon(DaemonOptions options)
                         continue;
                     }
 
-                    var frame = Composer.Compose(view, id => _runtimes.GetValueOrDefault(id)?.Screen, session.Badge);
+                    var copying = session.Copy is { } copy && _runtimes.TryGetValue(copy.Pane, out var copied)
+                        ? copy.Overlay(copied.Screen.Viewport)
+                        : null;
+                    var frame = Composer.Compose(view, id => _runtimes.GetValueOrDefault(id)?.Screen, session.Badge, copying);
                     if (session.Shown is not null && Same(session.Shown, frame))
                     {
                         continue;
@@ -1033,7 +1119,9 @@ public sealed class FleetDaemon(DaemonOptions options)
         var showing = _sessions.Values
             .Select(s => (Session: s, View: _model.View(s.Client)))
             .Where(x => x.View is not null
-                        && (x.View.Panes.Any(p => p.Pane == pane) || x.View.Overlay?.Pane == pane))
+                        && (x.View.Panes.Any(p => p.Pane == pane)
+                            || x.View.FloatingPanes.Any(p => p.Pane == pane)
+                            || x.View.Overlay?.Pane == pane))
             .OrderByDescending(x => x.View!.Client.LastActive)
             .Select(x => x.Session)
             .FirstOrDefault();
@@ -1089,6 +1177,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         public MouseCapture? Capture { get; set; }
 
         public string? Title { get; set; }
+
+        public CopySession? Copy { get; set; }
     }
 
     private sealed record MouseCapture(

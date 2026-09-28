@@ -56,6 +56,8 @@ public sealed class ScreenBuffer
 
     public long Version { get; set; }
 
+    public Viewport Viewport { get; set; } = Viewport.Live;
+
     public ReadOnlySpan<Cell> Cells => _cells;
 
     public void Resize(int cols, int rows)

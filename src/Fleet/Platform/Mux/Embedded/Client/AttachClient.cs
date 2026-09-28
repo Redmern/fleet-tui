@@ -19,6 +19,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
 
     private readonly HashSet<ushort> _swallowed = [];
     private readonly FloatMode _floatMode = new();
+    private readonly CopyMode _copyMode = new();
     private volatile bool _running = true;
     private int _left;
     private string? _farewell;
@@ -228,7 +229,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
 
             IReadOnlyList<WindowsConsole.InputRecord> batch = records[..n];
 
-            if (!prefix.Armed && !_floatMode.Active && PasteBurst.Starts(records.AsSpan(0, n)))
+            if (!prefix.Armed && Sticky is null && PasteBurst.Starts(records.AsSpan(0, n)))
             {
                 var burst = new List<WindowsConsole.InputRecord>(batch);
                 int more;
@@ -287,7 +288,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             Repeat = record.RepeatCount,
         };
 
-        if (_floatMode.Active)
+        if (Sticky is { } mode)
         {
             if (inputs.Count > 0 && inputs[0] is { IsRawText: false } step)
             {
@@ -298,7 +299,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
                 else
                 {
                     _swallowed.Add(step.VirtualKey);
-                    await FloatStep(wire, _floatMode.OnKey(step.Key, step.Mods)).ConfigureAwait(false);
+                    await ModeStep(wire, mode, mode.OnKey(step.Key, step.Mods, step.Utf8)).ConfigureAwait(false);
                 }
             }
 
@@ -397,11 +398,11 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
         {
             var b = bytes[i];
 
-            if (_floatMode.Active)
+            if (Sticky is { } mode)
             {
                 await Flush(wire, pending).ConfigureAwait(false);
-                i += _floatMode.OnBytes(bytes.AsSpan(i), out var step) - 1;
-                await FloatStep(wire, step).ConfigureAwait(false);
+                i += mode.OnBytes(bytes.AsSpan(i), out var step) - 1;
+                await ModeStep(wire, mode, step).ConfigureAwait(false);
                 continue;
             }
 
@@ -465,17 +466,27 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             return;
         }
 
+        if (command == "copy-mode")
+        {
+            _copyMode.Enter();
+            await Command(wire, command).ConfigureAwait(false);
+            await Badge(wire, CopyMode.Badge).ConfigureAwait(false);
+            return;
+        }
+
         await Command(wire, command).ConfigureAwait(false);
     }
 
-    private async Task FloatStep(Wire wire, CommandMessage? step)
+    private IStickyMode? Sticky => _floatMode.Active ? _floatMode : _copyMode.Active ? _copyMode : null;
+
+    private async Task ModeStep(Wire wire, IStickyMode mode, CommandMessage? step)
     {
         if (step is not null)
         {
             await Send(wire, MessageType.Command, step, WireJsonContext.Default.CommandMessage).ConfigureAwait(false);
         }
 
-        if (!_floatMode.Active)
+        if (!mode.Active)
         {
             await Badge(wire, null).ConfigureAwait(false);
         }

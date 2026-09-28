@@ -78,6 +78,7 @@ public sealed class Prefix(char letter)
         Key.W => "float-toggle",
         Key.E => "float-embed",
         Key.G => "float-mode",
+        Key.BracketLeft => "copy-mode",
         _ => null,
     };
 
@@ -86,6 +87,7 @@ public sealed class Prefix(char letter)
         >= 'a' and <= 'z' and var c => CommandFor(Key.A + (c - 'a')),
         ' ' => "menu",
         '\t' => "next-tab",
+        '[' => "copy-mode",
         _ => null,
     };
 }

@@ -42,6 +42,9 @@ public static unsafe partial class GhosttyNative
     [LibraryImport(Lib, EntryPoint = "ghostty_terminal_vt_write")]
     public static partial void TerminalVtWrite(nint terminal, byte* data, nuint len);
 
+    [LibraryImport(Lib, EntryPoint = "ghostty_terminal_scroll_viewport")]
+    public static partial void TerminalScrollViewport(nint terminal, ScrollViewport behavior);
+
     [LibraryImport(Lib, EntryPoint = "ghostty_terminal_get")]
     public static partial int TerminalGet(nint terminal, TerminalData data, void* value);
 
@@ -251,8 +254,28 @@ public enum TerminalData
     Rows = 2,
     ActiveScreen = 6,
     KittyKeyboardFlags = 8,
+    Scrollbar = 9,
     MouseTracking = 11,
     Title = 12,
+    ViewportActive = 32,
+}
+
+[StructLayout(LayoutKind.Explicit, Size = 24)]
+public struct ScrollViewport
+{
+    [FieldOffset(0)]
+    public int Tag;
+
+    [FieldOffset(8)]
+    public long Value;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct TerminalScrollbar
+{
+    public ulong Total;
+    public ulong Offset;
+    public ulong Len;
 }
 
 public enum RenderStateData

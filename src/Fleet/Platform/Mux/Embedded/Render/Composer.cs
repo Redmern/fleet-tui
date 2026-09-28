@@ -13,7 +13,8 @@ public static class Composer
     public static readonly uint BadgeBg = Cell.Palette(11);
     public static readonly uint BadgeFg = Cell.Palette(0);
 
-    public static ClientFrame Compose(ClientView view, Func<string, ScreenBuffer?> screens, string? badge)
+    public static ClientFrame Compose(
+        ClientView view, Func<string, ScreenBuffer?> screens, string? badge, CopyOverlay? copy = null)
     {
         var frame = new ClientFrame(view.Client.Cols, view.Client.Rows);
 
@@ -42,6 +43,11 @@ public static class Composer
             Draw(frame, divider, focused);
         }
 
+        foreach (var placed in view.Panes)
+        {
+            Decorate(frame, placed.Pane, placed.Area, screens, copy);
+        }
+
         foreach (var box in view.FloatingPanes)
         {
             var isFocused = box.Pane == view.Focused;
@@ -63,6 +69,8 @@ public static class Composer
                     frame.CursorShape = screen.CursorShape;
                 }
             }
+
+            Decorate(frame, box.Pane, inner, screens, copy);
         }
 
         if (view.Overlay is { } overlay)
@@ -104,6 +112,65 @@ public static class Composer
 
                 target[x] = cell;
             }
+        }
+    }
+
+    private static void Decorate(
+        ClientFrame frame, string pane, Rect area, Func<string, ScreenBuffer?> screens, CopyOverlay? copy)
+    {
+        if (screens(pane) is { Viewport.AtBottom: false } scrolled)
+        {
+            Marker(frame, area, $"[{scrolled.Viewport.Below}/{scrolled.Viewport.History}]");
+        }
+
+        if (copy is not null && copy.Pane == pane)
+        {
+            Copying(frame, area, copy);
+        }
+    }
+
+    private static void Marker(ClientFrame frame, Rect area, string text)
+    {
+        if (area.Height <= 0 || text.Length > area.Width || area.Y >= frame.Rows - MuxModel.StatusRows)
+        {
+            return;
+        }
+
+        var x = area.X + area.Width - text.Length;
+        for (var i = 0; i < text.Length && x + i < frame.Cols; i++)
+        {
+            frame.Cells[area.Y * frame.Cols + x + i] = Cell.Of(text[i], BadgeFg, BadgeBg, CellAttr.Bold);
+        }
+    }
+
+    private static void Copying(ClientFrame frame, Rect area, CopyOverlay copy)
+    {
+        if (copy.Anchor is { } anchor)
+        {
+            var (from, to) = anchor.CompareTo(copy.Cursor) <= 0 ? (anchor, copy.Cursor) : (copy.Cursor, anchor);
+
+            for (var y = 0; y < area.Height && area.Y + y < frame.Rows - MuxModel.StatusRows; y++)
+            {
+                for (var x = 0; x < area.Width && area.X + x < frame.Cols; x++)
+                {
+                    var here = new TextPoint(y, x);
+                    if (here.CompareTo(from) >= 0 && here.CompareTo(to) <= 0)
+                    {
+                        ref var cell = ref frame.Cells[(area.Y + y) * frame.Cols + area.X + x];
+                        cell = cell with { Attrs = cell.Attrs ^ CellAttr.Inverse };
+                    }
+                }
+            }
+        }
+
+        var visible = copy.Cursor.Row >= 0 && copy.Cursor.Row < area.Height;
+        frame.CursorVisible = visible;
+        frame.CursorShape = 2;
+
+        if (visible)
+        {
+            frame.CursorX = area.X + Math.Min(copy.Cursor.Col, Math.Max(0, area.Width - 1));
+            frame.CursorY = area.Y + (int)copy.Cursor.Row;
         }
     }
 
