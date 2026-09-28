@@ -46,13 +46,18 @@ public sealed class PaneRuntime : IDisposable
         }
     }
 
-    public void Feed(byte[] buffer, int count)
+    public string ModeSummary =>
+        $"win32-input={Modes.Win32Input} bracketed-paste={Modes.BracketedPaste} focus={Modes.FocusEvents}";
+
+    public bool Feed(byte[] buffer, int count)
     {
         lock (Gate)
         {
+            var before = ModeSummary;
             Terminal.Write(buffer.AsSpan(0, count));
             Modes.Feed(buffer.AsSpan(0, count));
             Dirty = true;
+            return before != ModeSummary;
         }
     }
 

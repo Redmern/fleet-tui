@@ -335,9 +335,19 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
+        target.Send(Encoding.UTF8.GetBytes(PasteBytes(text, target.Modes.BracketedPaste)));
+    }
+
+    public static string PasteBytes(TextMessage text, bool bracketed)
+    {
         var body = text.Text ?? string.Empty;
-        target.Send(Encoding.UTF8.GetBytes(
-            text.Paste && target.Modes.BracketedPaste ? $"\e[200~{body}\e[201~" : body));
+
+        if (!text.Paste || !bracketed)
+        {
+            return body;
+        }
+
+        return $"\e[200~{body.Replace("\e[201~", string.Empty, StringComparison.Ordinal)}\e[201~";
     }
 
     private void Command(AttachSession session, CommandMessage command)
@@ -525,7 +535,11 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         pty.Output += (buffer, count) =>
         {
-            runtime.Feed(buffer, count);
+            if (runtime.Feed(buffer, count))
+            {
+                options.Log($"{pane.Id} modes: {runtime.ModeSummary}");
+            }
+
             _wake.Release();
         };
 

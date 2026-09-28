@@ -150,7 +150,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     private async Task WindowsInputAsync(Wire wire, WindowsConsole console)
     {
         var keys = new WindowsKeys();
-        var records = new WindowsConsole.InputRecord[64];
+        var records = new WindowsConsole.InputRecord[512];
 
         while (_running)
         {
@@ -161,15 +161,37 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
                 return;
             }
 
-            for (var i = 0; i < n && _running; i++)
+            IReadOnlyList<WindowsConsole.InputRecord> batch = records[..n];
+
+            if (!prefix.Armed && PasteBurst.Starts(records.AsSpan(0, n)))
             {
-                switch (records[i].EventType)
+                var burst = new List<WindowsConsole.InputRecord>(batch);
+                int more;
+                while ((more = console.Read(records, PasteBurst.QuietMs)) > 0)
+                {
+                    burst.AddRange(records[..more]);
+                }
+
+                if (PasteBurst.Paste(burst) is { } pasted)
+                {
+                    log($"paste: {pasted.Length} chars in {burst.Count} records");
+                    await Send(wire, MessageType.Text, new TextMessage { Text = pasted, Paste = true },
+                        WireJsonContext.Default.TextMessage).ConfigureAwait(false);
+                    continue;
+                }
+
+                batch = burst;
+            }
+
+            for (var i = 0; i < batch.Count && _running; i++)
+            {
+                switch (batch[i].EventType)
                 {
                     case WindowsConsole.KeyEvent:
-                        await OnKeyRecordAsync(wire, keys, records[i].Key).ConfigureAwait(false);
+                        await OnKeyRecordAsync(wire, keys, batch[i].Key).ConfigureAwait(false);
                         break;
                     case WindowsConsole.FocusEvent:
-                        await Command(wire, records[i].SetFocus != 0 ? "focus-in" : "focus-out").ConfigureAwait(false);
+                        await Command(wire, batch[i].SetFocus != 0 ? "focus-in" : "focus-out").ConfigureAwait(false);
                         break;
                 }
             }
