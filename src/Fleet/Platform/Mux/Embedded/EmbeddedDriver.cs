@@ -157,6 +157,9 @@ public sealed class EmbeddedDriver(
             .ConfigureAwait(false);
     }
 
+    public Task FocusFromAsync(string direction, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "focus-from", Direction = direction }, ct);
+
     public Task CloseWorkspaceAsync(string name, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "close-workspace", Workspace = name }, ct);
 

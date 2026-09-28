@@ -21,6 +21,7 @@ public enum FleetVerb
     Attach,
     Bridge,
     Approve,
+    Cli,
     Help,
     Unknown,
 }

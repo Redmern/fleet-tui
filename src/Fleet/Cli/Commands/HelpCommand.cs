@@ -31,11 +31,12 @@ public static class HelpCommand
               fleet attach --ssh <host>   attach to fleetd on another machine over ssh
               fleet daemon                run fleetd in the foreground
               fleet bridge                ssh's remote end: pipe stdio to the local fleetd
-              prefix is ctrl+b (FLEET_PREFIX): q detach, space menu, n/p tab, s next project,
-              h/j/k/l focus, r redraw, f new float, w show/hide floats, e float/tile the pane,
-              g float mode (hjkl/arrows move, HJKL/shift+arrows size, esc done),
-              [ copy mode (hjkl/arrows, g/G, ctrl+u/d, v select, y copy, q quit), wheel scrolls,
-              ctrl+b again sends ctrl+b
+              prefix is ctrl+s (FLEET_PREFIX; keys in <fleet config>\embedded-keys.json), and it shows
+              the keys: h/j/k/l focus, arrows resize, % " split, c new tab, n/p/1-9 tabs, z zoom,
+              x/& close pane/tab, o next pane, s switch project, space menu, [ copy, ] paste,
+              f/t/e/g floats, r reload keys, d detach; ctrl+s again sends ctrl+s
+              without prefix: ctrl/alt+h/j/k/l move focus (nvim gets them), alt+left/right tabs,
+              ctrl+enter menu, shift+enter newline for claude
             """);
 
         return 0;

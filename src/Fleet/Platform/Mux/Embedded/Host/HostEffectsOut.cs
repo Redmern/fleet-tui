@@ -94,6 +94,40 @@ public static unsafe partial class HostEffectsOut
         return false;
     }
 
+    public static string? ReadClipboard()
+    {
+        if (!OperatingSystem.IsWindows() || !OpenClipboard(0))
+        {
+            return null;
+        }
+
+        try
+        {
+            var memory = GetClipboardData(UnicodeText);
+            if (memory == 0)
+            {
+                return null;
+            }
+
+            var text = GlobalLock(memory);
+            try
+            {
+                return text == 0 ? null : new string((char*)text);
+            }
+            finally
+            {
+                GlobalUnlock(memory);
+            }
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
+
+    [LibraryImport("user32.dll")]
+    private static partial nint GetClipboardData(uint format);
+
     [LibraryImport("kernel32.dll")]
     private static partial uint GetConsoleTitleW(char* title, uint size);
 

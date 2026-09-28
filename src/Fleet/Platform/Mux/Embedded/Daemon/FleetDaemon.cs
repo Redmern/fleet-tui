@@ -108,6 +108,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "spawn-float":
                         response.Pane = SpawnFloat(request);
                         break;
+                    case "focus-from":
+                        {
+                            var (dx, dy) = Direction(request.Direction);
+                            _model.FocusDirectionFrom(request.Pane ?? request.Caller ?? string.Empty, dx, dy);
+                            break;
+                        }
                     case "split":
                         response.Pane = Split(request);
                         break;
@@ -279,9 +285,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                 break;
 
             case MessageType.Badge when session is not null:
-                session.Badge = Wire.Read(payload, WireJsonContext.Default.BadgeMessage).Text;
-                _wake.Release();
-                break;
+                {
+                    var badge = Wire.Read(payload, WireJsonContext.Default.BadgeMessage);
+                    session.Badge = badge.Text;
+                    session.WhichKey = badge.Text is null ? null : badge.Keys;
+                    _wake.Release();
+                    break;
+                }
 
             case MessageType.Command when session is not null:
                 Command(session, Wire.Read(payload, WireJsonContext.Default.CommandMessage));
@@ -536,6 +546,21 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Command(AttachSession session, CommandMessage command)
     {
+        if (command.Name is not ("focus-in" or "focus-out" or "copy" or "float-move" or "float-size"))
+        {
+            options.Log($"{session.Client}: {command.Name}{(command.Arg is null ? string.Empty : " " + command.Arg)}");
+        }
+
+        switch (command.Name)
+        {
+            case "smart-focus":
+                SmartFocus(session, command);
+                return;
+            case "newline":
+                Newline(session, command);
+                return;
+        }
+
         lock (_gate)
         {
             _model.Touch(session.Client);
@@ -571,6 +596,44 @@ public sealed class FleetDaemon(DaemonOptions options)
                     break;
                 case "redraw":
                     session.Shown = null;
+                    break;
+                case "split-right" or "split-down":
+                    SplitFocused(session.Client, command.Name == "split-right");
+                    break;
+                case "new-tab":
+                    NewTab(session.Client);
+                    break;
+                case "tab" when int.TryParse(command.Arg, out var number):
+                    _model.FocusTabIndex(session.Client, number - 1);
+                    break;
+                case "resize":
+                    _model.ResizeFocused(session.Client, command.Arg ?? string.Empty, ResizeCells);
+                    break;
+                case "zoom":
+                    _model.ToggleZoom(session.Client);
+                    break;
+                case "next-pane":
+                    _model.NextPane(session.Client);
+                    break;
+                case "kill-pane":
+                    if (_model.View(session.Client)?.Focused is { } doomed)
+                    {
+                        Kill(doomed);
+                    }
+
+                    break;
+                case "kill-tab":
+                    if (_model.View(session.Client)?.Tab is { } closing)
+                    {
+                        foreach (var id in closing.Root.Panes().ToList())
+                        {
+                            Kill(id);
+                        }
+                    }
+
+                    break;
+                case "switch-project":
+                    OpenMenu(session.Client, "switch-project");
                     break;
                 case "copy-mode":
                     if (FocusedRuntime(session.Client) is { } scrolled)
@@ -659,6 +722,129 @@ public sealed class FleetDaemon(DaemonOptions options)
             session.Copy = null;
         }
     }
+
+    public const int ResizeCells = 5;
+
+    private void SplitFocused(string client, bool sideBySide)
+    {
+        if (_model.View(client) is not { Focused: { } focused } view || view.Panes.All(p => p.Pane != focused))
+        {
+            return;
+        }
+
+        var cwd = _model.Pane(focused)?.Cwd ?? Environment.CurrentDirectory;
+        if (_model.Split(focused, sideBySide, newFirst: false, 50, cwd, []) is { } pane)
+        {
+            ApplyResizes();
+            StartQuietly(pane, client);
+        }
+    }
+
+    private void NewTab(string client)
+    {
+        if (_model.View(client) is not { Workspace: { } workspace } view)
+        {
+            return;
+        }
+
+        var cwd = view.Focused is { } focused ? _model.Pane(focused)?.Cwd : null;
+        var pane = _model.Spawn(workspace.Name, cwd ?? Environment.CurrentDirectory, []);
+        ApplyResizes();
+        StartQuietly(pane, client);
+    }
+
+    private void StartQuietly(PaneState pane, string client)
+    {
+        try
+        {
+            Start(pane, new Dictionary<string, string> { [ClientVariable] = client });
+        }
+        catch (InvalidOperationException e)
+        {
+            options.Log(e.Message);
+        }
+    }
+
+    private void SmartFocus(AttachSession session, CommandMessage command)
+    {
+        var (dx, dy) = Direction(command.Arg);
+        bool nvim;
+
+        lock (_gate)
+        {
+            _model.Touch(session.Client);
+            nvim = _model.View(session.Client)?.Focused is { } focused && _model.IsNvim(focused);
+
+            if (!nvim)
+            {
+                _model.FocusDirection(session.Client, dx, dy);
+                ApplyResizes();
+            }
+        }
+
+        if (nvim)
+        {
+            Forward(session, command);
+        }
+
+        _wake.Release();
+    }
+
+    private void Newline(AttachSession session, CommandMessage command)
+    {
+        PaneRuntime? target;
+        bool nvim;
+
+        lock (_gate)
+        {
+            _model.Touch(session.Client);
+            target = FocusedRuntime(session.Client);
+            nvim = target is not null && _model.IsNvim(target.Id);
+        }
+
+        if (target is null)
+        {
+            return;
+        }
+
+        if (target.Modes.Win32Input)
+        {
+            if (nvim)
+            {
+                Forward(session, command);
+            }
+            else
+            {
+                target.Send([.. Input.ConPtyModes.Encode(0x4A, 0x24, 0x0A, true, 0x08, 1),
+                    .. Input.ConPtyModes.Encode(0x4A, 0x24, 0x0A, false, 0x08, 1)]);
+            }
+
+            return;
+        }
+
+        target.Send(nvim ? "\e[13;2u"u8.ToArray() : "\n"u8.ToArray());
+    }
+
+    private void Forward(AttachSession session, CommandMessage command)
+    {
+        if (command.Key is { } key)
+        {
+            Route(session, key);
+        }
+        else if (command.Bytes is { } bytes)
+        {
+            Route(session, new TextMessage { Bytes = bytes });
+        }
+    }
+
+    public static (int Dx, int Dy) Direction(string? name) => name?.ToLowerInvariant() switch
+    {
+        "left" => (-1, 0),
+        "right" => (1, 0),
+        "up" => (0, -1),
+        "down" => (0, 1),
+        _ => (0, 0),
+    };
 
     private void NextWorkspace(string client)
     {
@@ -863,6 +1049,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             [PaneVariable] = pane.Id,
             [Endpoint.Variable] = options.Endpoint.Address,
             ["WEZTERM_PANE"] = string.Empty,
+            ["WEZTERM_EXECUTABLE"] = options.FleetExecutable,
             ["WEZTERM_UNIX_SOCKET"] = string.Empty,
             ["TMUX"] = string.Empty,
         };
@@ -1060,7 +1247,8 @@ public sealed class FleetDaemon(DaemonOptions options)
                     var copying = session.Copy is { } copy && _runtimes.TryGetValue(copy.Pane, out var copied)
                         ? copy.Overlay(copied.Screen.Viewport)
                         : null;
-                    var frame = Composer.Compose(view, id => _runtimes.GetValueOrDefault(id)?.Screen, session.Badge, copying);
+                    var frame = Composer.Compose(
+                        view, id => _runtimes.GetValueOrDefault(id)?.Screen, session.Badge, copying, session.WhichKey);
                     if (session.Shown is not null && Same(session.Shown, frame))
                     {
                         continue;
@@ -1179,6 +1367,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         public string? Title { get; set; }
 
         public CopySession? Copy { get; set; }
+
+        public List<WhichKeyEntry>? WhichKey { get; set; }
     }
 
     private sealed record MouseCapture(

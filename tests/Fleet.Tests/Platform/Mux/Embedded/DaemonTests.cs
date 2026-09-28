@@ -645,6 +645,108 @@ public sealed class DaemonTests : IAsyncLifetime
         await Eventually(() => _panes.ByProgram("menu")!.Written == "m");
     }
     [Fact]
+    public async Task Split_right_opens_a_shell_beside_the_focused_pane_that_then_takes_the_keys()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("split-right");
+        await client.SendKeyAsync("s");
+
+        await Eventually(() => _panes.Started.Count == 2 && _panes.Started.Last().Written == "s");
+        var panes = (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!;
+        Assert.Single(panes.Select(p => p.Tab).Distinct());
+    }
+
+    [Fact]
+    public async Task Smart_focus_moves_between_panes_but_leaves_the_key_to_nvim()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "nvim");
+        await control.RequestAsync(new ControlRequest { Op = "split", Pane = left, Direction = "right", Args = ["shell"] });
+        var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var ctrlH = new KeyMessage { Key = (int)Fleet.Platform.Mux.Embedded.Native.Key.H, Mods = 2, Action = 1, Text = "<ctrl+h>" };
+
+        await client.SendCommandAsync(new CommandMessage { Name = "smart-focus", Arg = "left", Key = ctrlH });
+        await client.SendKeyAsync("a");
+        await client.SendCommandAsync(new CommandMessage { Name = "smart-focus", Arg = "right", Key = ctrlH });
+        await client.SendKeyAsync("b");
+
+        await Eventually(() => _panes.ByProgram("nvim")!.Written == "a<ctrl+h>b");
+        Assert.Equal(string.Empty, _panes.ByProgram("shell")!.Written);
+    }
+
+    [Fact]
+    public async Task Shift_enter_becomes_a_newline_for_a_shell_and_a_csi_u_key_for_nvim()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        await SpawnAsync(control, "fleet", "nvim");
+        var laptop = await AttachAsync(workspace: "techweb");
+        var desktop = await AttachAsync(workspace: "fleet");
+        await laptop.WaitForFramesAsync(1);
+        await desktop.WaitForFramesAsync(1);
+
+        await laptop.SendCommandAsync("newline");
+        await desktop.SendCommandAsync("newline");
+
+        await Eventually(() => _panes.ByProgram("claude")!.Written == "\n" && _panes.ByProgram("nvim")!.Written == "\e[13;2u");
+    }
+
+    [Fact]
+    public async Task Kill_pane_closes_the_focused_pane_only()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "left");
+        await control.RequestAsync(new ControlRequest { Op = "split", Pane = left, Direction = "right", Args = ["right"] });
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("kill-pane");
+
+        await Eventually(() => _panes.ByProgram("right")!.IsDisposed);
+        Assert.False(_panes.ByProgram("left")!.IsDisposed);
+    }
+
+    [Fact]
+    public async Task The_prefix_badge_draws_the_which_key_box()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendBadgeAsync(new BadgeMessage
+        {
+            Text = "ctrl+s",
+            Keys = [new WhichKeyEntry { Key = "%", Label = "split right" }, new WhichKeyEntry { Key = "z", Label = "zoom" }],
+        });
+
+        await client.WaitForAsync("split right");
+        await client.WaitForAsync("zoom");
+    }
+
+    [Fact]
+    public async Task A_pane_can_move_focus_from_itself_like_wezterm_cli()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "left");
+        await control.RequestAsync(new ControlRequest { Op = "split", Pane = left, Direction = "right", Args = ["right"] });
+        var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        var moved = await control.RequestAsync(new ControlRequest { Op = "focus-from", Caller = left, Direction = "Left" });
+        Assert.True(moved.Ok, moved.Error);
+        await control.RequestAsync(new ControlRequest { Op = "focus-from", Pane = _panes.ByProgram("right")!.Env[FleetDaemon.PaneVariable], Direction = "Left" });
+        await client.SendKeyAsync("x");
+
+        await Eventually(() => _panes.ByProgram("left")!.Written == "x");
+        Assert.Equal("fleet", _panes.ByProgram("left")!.Env["WEZTERM_EXECUTABLE"]);
+    }
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();
@@ -728,6 +830,11 @@ public sealed class DaemonTests : IAsyncLifetime
             return await reply.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
 
+        public Task SendCommandAsync(CommandMessage command) =>
+            _wire.SendAsync(MessageType.Command, command, WireJsonContext.Default.CommandMessage);
+
+        public Task SendBadgeAsync(BadgeMessage badge) =>
+            _wire.SendAsync(MessageType.Badge, badge, WireJsonContext.Default.BadgeMessage);
         public Task SendKeyAsync(KeyMessage key) =>
             _wire.SendAsync(MessageType.Key, key, WireJsonContext.Default.KeyMessage);
 

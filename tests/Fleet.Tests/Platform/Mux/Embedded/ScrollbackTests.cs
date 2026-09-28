@@ -190,7 +190,7 @@ public class ScrollbackTests
     [Fact]
     public void The_prefix_bracket_enters_copy_mode()
     {
-        Assert.Equal("copy-mode", Prefix.CommandFor(Key.BracketLeft));
-        Assert.Equal("copy-mode", Prefix.CommandFor((byte)'['));
+        Assert.Equal("copy-mode", MuxKeys.Defaults.PrefixCommand(Key.BracketLeft, Mods.None, "["));
+        Assert.Equal(("copy-mode", 1), MuxKeys.Defaults.PrefixBytes("["u8));
     }
 }

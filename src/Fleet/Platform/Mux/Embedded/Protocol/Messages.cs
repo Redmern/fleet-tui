@@ -181,12 +181,30 @@ public sealed class CommandMessage
 
     [JsonPropertyName("arg")]
     public string? Arg { get; set; }
+
+    [JsonPropertyName("key")]
+    public KeyMessage? Key { get; set; }
+
+    [JsonPropertyName("bytes")]
+    public string? Bytes { get; set; }
 }
 
 public sealed class BadgeMessage
 {
     [JsonPropertyName("text")]
     public string? Text { get; set; }
+
+    [JsonPropertyName("keys")]
+    public List<WhichKeyEntry>? Keys { get; set; }
+}
+
+public sealed class WhichKeyEntry
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = string.Empty;
 }
 
 public static class HostEffects

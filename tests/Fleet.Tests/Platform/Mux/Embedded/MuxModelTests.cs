@@ -203,4 +203,93 @@ public class MuxModelTests
 
         Assert.Equal("techweb", client.Showing);
     }
+
+    [Fact]
+    public void Resizing_moves_the_divider_on_the_side_asked_for()
+    {
+        var (claude, dash) = Project("techweb");
+        var client = _model.Connect(101, 41, "techweb");
+        _model.Resizes();
+        var before = claude.Cols;
+
+        Assert.True(_model.ResizeFocused(client.Id, "left", 5));
+        _model.Resizes();
+
+        Assert.Equal(before - 5, claude.Cols);
+        Assert.Equal(101, claude.Cols + 1 + dash.Cols);
+        Assert.False(_model.ResizeFocused(client.Id, "up", 5));
+    }
+
+    [Fact]
+    public void Zoom_gives_the_focused_pane_the_whole_tab_until_toggled_or_navigated()
+    {
+        var (claude, dash) = Project("techweb");
+        var client = _model.Connect(100, 41, "techweb");
+
+        Assert.True(_model.ToggleZoom(client.Id));
+        var zoomed = _model.View(client.Id)!;
+        Assert.Equal(new Rect(0, 1, 100, 40), zoomed.Panes.Single(p => p.Pane == dash.Id).Area);
+        Assert.Empty(zoomed.Dividers);
+
+        _model.FocusDirection(client.Id, -1, 0);
+
+        var view = _model.View(client.Id)!;
+        Assert.Equal(2, view.Panes.Count);
+        Assert.Equal(claude.Id, view.Focused);
+    }
+
+    [Fact]
+    public void A_lone_pane_does_not_zoom()
+    {
+        _model.Spawn("techweb", "C:/x", ["claude"]);
+        var client = _model.Connect(100, 41, "techweb");
+
+        _model.ToggleZoom(client.Id);
+
+        Assert.Null(_model.View(client.Id)!.Tab!.Zoomed);
+    }
+
+    [Fact]
+    public void Next_pane_cycles_through_the_tab_and_tabs_are_chosen_by_number()
+    {
+        var (claude, dash) = Project("techweb");
+        var other = _model.Spawn("techweb", "C:/x", ["shell"]);
+        var client = _model.Connect(100, 41, "techweb");
+
+        Assert.True(_model.FocusTabIndex(client.Id, 0));
+        Assert.Equal(dash.Id, _model.View(client.Id)!.Focused);
+        _model.NextPane(client.Id);
+        Assert.Equal(claude.Id, _model.View(client.Id)!.Focused);
+
+        Assert.True(_model.FocusTabIndex(client.Id, 1));
+        Assert.Equal(other.Id, _model.View(client.Id)!.Focused);
+        Assert.False(_model.FocusTabIndex(client.Id, 5));
+    }
+
+    [Fact]
+    public void Focus_can_move_from_a_named_pane_without_a_client_asking()
+    {
+        var (claude, dash) = Project("techweb");
+        _model.Connect(100, 41, "techweb");
+
+        Assert.True(_model.FocusDirectionFrom(dash.Id, -1, 0));
+
+        Assert.Equal(claude.Id, _model.Workspace("techweb")!.Tabs[0].ActivePane);
+        Assert.False(_model.FocusDirectionFrom(claude.Id, -1, 0));
+    }
+
+    [Fact]
+    public void Nvim_is_recognised_by_program_wrapper_or_title()
+    {
+        var plain = _model.Spawn("a", "C:/x", ["C:/tools/nvim.exe"]);
+        var titled = _model.Spawn("b", "C:/x", ["fleet", "titled", "--title", "files", "--", "nvim", "-c", "x"]);
+        var shell = _model.Spawn("c", "C:/x", ["pwsh"]);
+        var renamed = _model.Spawn("d", "C:/x", ["pwsh"]);
+        renamed.Title = "README.md - NVIM";
+
+        Assert.True(_model.IsNvim(plain.Id));
+        Assert.True(_model.IsNvim(titled.Id));
+        Assert.False(_model.IsNvim(shell.Id));
+        Assert.True(_model.IsNvim(renamed.Id));
+    }
 }

@@ -6,7 +6,7 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 
 namespace Fleet.Platform.Mux.Embedded.Client;
 
-public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix, Action<string> log, bool mouse = true)
+public sealed class AttachClient(Stream stream, string? workspace, Func<MuxKeys> loadKeys, Action<string> log, bool mouse = true)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -20,6 +20,11 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     private readonly HashSet<ushort> _swallowed = [];
     private readonly FloatMode _floatMode = new();
     private readonly CopyMode _copyMode = new();
+    private readonly ConfirmMode _confirm = new();
+    private MuxKeys _keys = loadKeys();
+    private Prefix? _prefixState;
+
+    private Prefix PrefixState => _prefixState ??= new Prefix(_keys.Prefix);
     private volatile bool _running = true;
     private int _left;
     private string? _farewell;
@@ -229,7 +234,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
 
             IReadOnlyList<WindowsConsole.InputRecord> batch = records[..n];
 
-            if (!prefix.Armed && Sticky is null && PasteBurst.Starts(records.AsSpan(0, n)))
+            if (!PrefixState.Armed && Sticky is null && PasteBurst.Starts(records.AsSpan(0, n)))
             {
                 var burst = new List<WindowsConsole.InputRecord>(batch);
                 int more;
@@ -327,39 +332,44 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             return;
         }
 
-        var command = input.Action == KeyAction.Release ? PrefixCommand.None : prefix.OnKey(input.Key, input.Mods);
+        var key = new KeyMessage
+        {
+            Key = (int)input.Key,
+            Mods = (int)input.Mods,
+            Consumed = (int)input.Consumed,
+            Text = input.Utf8,
+            Action = (int)input.Action,
+            Unshifted = input.Unshifted,
+            Repeat = inputs.Count,
+            Win32 = win32,
+        };
+
+        var command = input.Action == KeyAction.Release
+            ? PrefixCommand.None
+            : PrefixState.OnKey(input.Key, input.Mods, input.Utf8);
 
         switch (command)
         {
             case PrefixCommand.Armed:
                 _swallowed.Add(input.VirtualKey);
-                await Badge(wire, prefix.Label).ConfigureAwait(false);
+                await ShowWhichKey(wire).ConfigureAwait(false);
                 return;
             case PrefixCommand.Chord:
                 _swallowed.Add(input.VirtualKey);
                 await Badge(wire, null).ConfigureAwait(false);
-                await Chord(wire, Prefix.CommandFor(input.Key)).ConfigureAwait(false);
+                await Chord(wire, _keys.PrefixCommand(input.Key, input.Mods, input.Utf8), key, null).ConfigureAwait(false);
                 return;
             case PrefixCommand.SendPrefix:
                 await Badge(wire, null).ConfigureAwait(false);
                 break;
+            case PrefixCommand.None when input.Action != KeyAction.Release
+                                         && _keys.DirectCommand(input.Key, input.Mods, input.Utf8) is { } direct:
+                _swallowed.Add(input.VirtualKey);
+                await Chord(wire, direct, key, null).ConfigureAwait(false);
+                return;
         }
 
-        await Send(
-            wire,
-            MessageType.Key,
-            new KeyMessage
-            {
-                Key = (int)input.Key,
-                Mods = (int)input.Mods,
-                Consumed = (int)input.Consumed,
-                Text = input.Utf8,
-                Action = (int)input.Action,
-                Unshifted = input.Unshifted,
-                Repeat = inputs.Count,
-                Win32 = win32,
-            },
-            WireJsonContext.Default.KeyMessage).ConfigureAwait(false);
+        await Send(wire, MessageType.Key, key, WireJsonContext.Default.KeyMessage).ConfigureAwait(false);
     }
 
     private async Task UnixInputAsync(Wire wire, UnixTerminal terminal)
@@ -394,46 +404,63 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     private async Task TypedBytesAsync(Wire wire, byte[] bytes, List<byte> pending)
     {
         pending.Clear();
-        for (var i = 0; i < bytes.Length; i++)
-        {
-            var b = bytes[i];
+        var prefixBytes = PrefixState.Bytes;
+        var i = 0;
 
+        while (i < bytes.Length)
+        {
             if (Sticky is { } mode)
             {
                 await Flush(wire, pending).ConfigureAwait(false);
-                i += mode.OnBytes(bytes.AsSpan(i), out var step) - 1;
+                i += mode.OnBytes(bytes.AsSpan(i), out var step);
                 await ModeStep(wire, mode, step).ConfigureAwait(false);
                 continue;
             }
 
-            var command = prefix.OnByte(b);
-            if (command == PrefixCommand.None)
+            var startsWithPrefix = prefixBytes is not null && bytes.AsSpan(i).StartsWith(prefixBytes);
+
+            if (PrefixState.Armed)
             {
-                pending.Add(b);
+                await Flush(wire, pending).ConfigureAwait(false);
+                PrefixState.Disarm();
+                await Badge(wire, null).ConfigureAwait(false);
+
+                if (startsWithPrefix)
+                {
+                    pending.AddRange(prefixBytes!);
+                    i += prefixBytes!.Length;
+                    continue;
+                }
+
+                var (chord, length) = _keys.PrefixBytes(bytes.AsSpan(i));
+                var original = bytes.AsSpan(i, Math.Max(1, length)).ToArray();
+                i += original.Length;
+                await Chord(wire, chord, null, original).ConfigureAwait(false);
                 continue;
             }
 
-            await Flush(wire, pending).ConfigureAwait(false);
-
-            switch (command)
+            if (startsWithPrefix)
             {
-                case PrefixCommand.Armed:
-                    await Badge(wire, prefix.Label).ConfigureAwait(false);
-                    break;
-                case PrefixCommand.SendPrefix:
-                    await Badge(wire, null).ConfigureAwait(false);
-                    pending.Add(prefix.ControlByte);
-                    break;
-                case PrefixCommand.Chord:
-                    await Badge(wire, null).ConfigureAwait(false);
-                    await Chord(wire, Prefix.CommandFor(b)).ConfigureAwait(false);
-                    break;
+                await Flush(wire, pending).ConfigureAwait(false);
+                PrefixState.Arm();
+                i += prefixBytes!.Length;
+                await ShowWhichKey(wire).ConfigureAwait(false);
+                continue;
             }
+
+            if (i == 0 && _keys.DirectBytes(bytes) is { Command: { } direct, Length: var whole } && whole == bytes.Length)
+            {
+                i += whole;
+                await Chord(wire, direct, null, bytes).ConfigureAwait(false);
+                continue;
+            }
+
+            pending.Add(bytes[i]);
+            i++;
         }
 
         await Flush(wire, pending).ConfigureAwait(false);
     }
-
     private async Task Flush(Wire wire, List<byte> pending)
     {
         if (pending.Count == 0)
@@ -446,39 +473,76 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
         pending.Clear();
     }
 
-    private async Task Chord(Wire wire, string? command)
+    private async Task Chord(Wire wire, string? binding, KeyMessage? key, byte[]? bytes)
     {
-        if (command is null)
+        if (binding is null)
         {
             return;
         }
 
-        if (command == "detach")
+        var space = binding.IndexOf(' ');
+        var (name, arg) = space < 0 ? (binding, null) : (binding[..space], binding[(space + 1)..].Trim());
+
+        switch (name)
         {
-            _running = false;
-            return;
+            case "detach":
+                _running = false;
+                return;
+            case "float-mode":
+                _floatMode.Enter();
+                await Badge(wire, FloatMode.Badge).ConfigureAwait(false);
+                return;
+            case "copy-mode":
+                _copyMode.Enter();
+                await Command(wire, name).ConfigureAwait(false);
+                await Badge(wire, CopyMode.Badge).ConfigureAwait(false);
+                return;
+            case "kill-pane" or "kill-tab":
+                _confirm.Ask(name, name == "kill-pane" ? "close this pane?" : "close this tab?");
+                await Badge(wire, _confirm.Badge).ConfigureAwait(false);
+                return;
+            case "paste":
+                await PasteClipboard(wire).ConfigureAwait(false);
+                return;
+            case "reload":
+                _keys = loadKeys();
+                _prefixState = null;
+                log($"keys reloaded: prefix {_keys.Prefix.Label}, {_keys.PrefixKeys.Count} prefix keys, {_keys.DirectKeys.Count} direct keys");
+                await Command(wire, "redraw").ConfigureAwait(false);
+                return;
         }
 
-        if (command == "float-mode")
-        {
-            _floatMode.Enter();
-            await Badge(wire, FloatMode.Badge).ConfigureAwait(false);
-            return;
-        }
-
-        if (command == "copy-mode")
-        {
-            _copyMode.Enter();
-            await Command(wire, command).ConfigureAwait(false);
-            await Badge(wire, CopyMode.Badge).ConfigureAwait(false);
-            return;
-        }
-
-        await Command(wire, command).ConfigureAwait(false);
+        await Send(
+            wire,
+            MessageType.Command,
+            new CommandMessage
+            {
+                Name = name,
+                Arg = arg,
+                Key = key,
+                Bytes = bytes is null ? null : Convert.ToBase64String(bytes),
+            },
+            WireJsonContext.Default.CommandMessage).ConfigureAwait(false);
     }
 
-    private IStickyMode? Sticky => _floatMode.Active ? _floatMode : _copyMode.Active ? _copyMode : null;
+    private async Task PasteClipboard(Wire wire)
+    {
+        if (HostEffectsOut.ReadClipboard() is { Length: > 0 } text)
+        {
+            await Send(wire, MessageType.Text, new TextMessage { Text = text, Paste = true },
+                WireJsonContext.Default.TextMessage).ConfigureAwait(false);
+        }
+    }
 
+    private Task ShowWhichKey(Wire wire) =>
+        Send(
+            wire,
+            MessageType.Badge,
+            new BadgeMessage { Text = PrefixState.Label, Keys = WhichKey.For(_keys) },
+            WireJsonContext.Default.BadgeMessage);
+
+    private IStickyMode? Sticky =>
+        _floatMode.Active ? _floatMode : _copyMode.Active ? _copyMode : _confirm.Active ? _confirm : null;
     private async Task ModeStep(Wire wire, IStickyMode mode, CommandMessage? step)
     {
         if (step is not null)

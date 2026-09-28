@@ -78,7 +78,7 @@ public sealed class MuxModel
             .First();
 
         var placed = new List<Placed>();
-        tab.Root.Place(Content(cols, rows), placed, []);
+        Arrange(tab, Content(cols, rows), placed, []);
         return placed.FirstOrDefault(p => p.Pane == pane).Area;
     }
 
@@ -454,25 +454,162 @@ public sealed class MuxModel
 
     public bool FocusDirection(string client, int dx, int dy)
     {
+        if (View(client) is { Tab.Zoomed: not null } zoomed)
+        {
+            zoomed.Tab!.Zoomed = null;
+        }
+
         if (View(client) is not { Focused: not null } view || view.Panes.All(p => p.Pane != view.Focused))
         {
             return false;
         }
 
-        var from = view.Panes.First(p => p.Pane == view.Focused).Area;
+        return Neighbour(view.Panes, view.Focused, dx, dy) is { } best && Focus(best);
+    }
+
+    public bool FocusDirectionFrom(string pane, int dx, int dy)
+    {
+        if (!_panes.TryGetValue(pane, out var state) || TabOf(state) is not var (workspace, tab))
+        {
+            return false;
+        }
+
+        tab.Zoomed = null;
+        var (cols, rows) = SizeFor(workspace);
+        var placed = new List<Placed>();
+        Arrange(tab, Content(cols, rows), placed, []);
+        return Neighbour(placed, pane, dx, dy) is { } best && Focus(best);
+    }
+
+    public bool FocusTabIndex(string client, int index)
+    {
+        if (View(client)?.Workspace is not { } workspace || index < 0 || index >= workspace.Tabs.Count)
+        {
+            return false;
+        }
+
+        workspace.ActiveTab = workspace.Tabs[index].Id;
+        workspace.FloatFocused = false;
+        return true;
+    }
+
+    public bool NextPane(string client)
+    {
+        if (View(client) is not { Tab: { } tab, Focused: { } focused })
+        {
+            return false;
+        }
+
+        var order = tab.Root.Panes().ToList();
+        var at = order.IndexOf(focused);
+        tab.Zoomed = null;
+        return order.Count > 1 && Focus(order[(at + 1 + order.Count) % order.Count]);
+    }
+
+    public bool ToggleZoom(string client)
+    {
+        if (View(client) is not { Tab: { } tab, Focused: { } focused } || !tab.Root.Contains(focused))
+        {
+            return false;
+        }
+
+        tab.Zoomed = tab.Zoomed is null && tab.Root.Panes().Count() > 1 ? focused : null;
+        return true;
+    }
+
+    public bool ResizeFocused(string client, string direction, int cells)
+    {
+        if (View(client) is not { Focused: { } focused } view || view.Panes.All(p => p.Pane != focused))
+        {
+            return false;
+        }
+
+        var area = view.Panes.First(p => p.Pane == focused).Area;
+        var vertical = direction is "left" or "right";
+        var toward = direction is "right" or "down" ? cells : -cells;
+
+        bool Touches(Divider d, bool before) => vertical
+            ? d.Vertical && d.X == (before ? area.X - 1 : area.X + area.Width)
+              && d.Y <= area.Y && d.Y + d.Length >= area.Y + area.Height
+            : !d.Vertical && d.Y == (before ? area.Y - 1 : area.Y + area.Height)
+              && d.X <= area.X && d.X + d.Length >= area.X + area.Width;
+
+        var after = direction is "right" or "down";
+        var index = FindDivider(view.Dividers, d => Touches(d, before: !after));
+        if (index < 0)
+        {
+            index = FindDivider(view.Dividers, d => Touches(d, before: after));
+        }
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var divider = view.Dividers[index];
+        return DragDivider(client, index, divider.X + (vertical ? toward : 0), divider.Y + (vertical ? 0 : toward));
+    }
+
+    public bool IsNvim(string pane)
+    {
+        if (!_panes.TryGetValue(pane, out var state))
+        {
+            return false;
+        }
+
+        var program = state.Args.Count > 0 ? Path.GetFileNameWithoutExtension(state.Args[0]) : string.Empty;
+        return program is "nvim" or "vim"
+               || state.Args.Any(a => Path.GetFileNameWithoutExtension(a) is "nvim" or "vim")
+               || state.Title.Contains("nvim", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int FindDivider(IReadOnlyList<Divider> dividers, Func<Divider, bool> match)
+    {
+        for (var i = 0; i < dividers.Count; i++)
+        {
+            if (match(dividers[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static string? Neighbour(IReadOnlyList<Placed> panes, string focused, int dx, int dy)
+    {
+        var from = panes.First(p => p.Pane == focused).Area;
         var cx = from.X + from.Width / 2;
         var cy = from.Y + from.Height / 2;
 
-        var best = view.Panes
-            .Where(p => p.Pane != view.Focused)
+        return panes
+            .Where(p => p.Pane != focused)
             .Where(p => dx > 0 ? p.Area.X >= from.X + from.Width
                 : dx < 0 ? p.Area.X + p.Area.Width <= from.X
                 : dy > 0 ? p.Area.Y >= from.Y + from.Height
                 : p.Area.Y + p.Area.Height <= from.Y)
             .OrderBy(p => Math.Abs(p.Area.X + p.Area.Width / 2 - cx) + Math.Abs(p.Area.Y + p.Area.Height / 2 - cy))
+            .Select(p => p.Pane)
             .FirstOrDefault();
+    }
 
-        return best.Pane is not null && Focus(best.Pane);
+    private (int Cols, int Rows) SizeFor(WorkspaceState workspace) =>
+        _clients.Values
+            .Where(c => Same(c.Showing, workspace.Name))
+            .OrderByDescending(c => c.LastActive)
+            .Select(c => (c.Cols, c.Rows))
+            .DefaultIfEmpty(Reference())
+            .First();
+
+    private static void Arrange(TabState tab, Rect area, List<Placed> placed, List<Divider> dividers)
+    {
+        if (tab.Zoomed is { } zoomed && tab.Root.Contains(zoomed))
+        {
+            placed.Add(new Placed(zoomed, area));
+            return;
+        }
+
+        tab.Root.Place(area, placed, dividers);
     }
 
     public bool SetOverlay(string client, string pane)
@@ -552,7 +689,10 @@ public sealed class MuxModel
         var area = Content(c.Cols, c.Rows);
         var placed = new List<Placed>();
         var dividers = new List<Divider>();
-        tab?.Root.Place(area, placed, dividers);
+        if (tab is not null)
+        {
+            Arrange(tab, area, placed, dividers);
+        }
 
         var overlay = c.Overlay is { } o && _panes.ContainsKey(o)
             ? new Placed(o, OverlayArea(c.Cols, c.Rows))
@@ -620,8 +760,7 @@ public sealed class MuxModel
                     ? (shownBy.Cols, shownBy.Rows)
                     : Reference();
                 var placed = new List<Placed>();
-                tab.Root.Place(
-                    Content(size.Item1, size.Item2), placed, []);
+                Arrange(tab, Content(size.Item1, size.Item2), placed, []);
 
                 foreach (var p in placed)
                 {
@@ -722,6 +861,7 @@ public sealed class MuxModel
 
         tab.Root = tab.Root.Split(anchor.Id, pane.Id, sideBySide, newFirst, percent);
         tab.ActivePane = pane.Id;
+        tab.Zoomed = null;
         pane.Cols = 0;
     }
 
@@ -802,6 +942,11 @@ public sealed class MuxModel
 
         var rest = tab.Root.Remove(pane.Id);
 
+        if (tab.Zoomed == pane.Id)
+        {
+            tab.Zoomed = null;
+        }
+
         if (rest is not null)
         {
             tab.Root = rest;
@@ -876,6 +1021,8 @@ public sealed class TabState(string id, Layout root)
     public string Title { get; set; } = string.Empty;
 
     public string ActivePane { get; set; } = string.Empty;
+
+    public string? Zoomed { get; set; }
 }
 
 public sealed class WorkspaceState(string name)

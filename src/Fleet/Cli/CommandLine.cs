@@ -49,7 +49,8 @@ public static class CommandLine
             ValueOf(options, VersionFlag, VersionShortFlag)
                 ?? (verb == FleetVerb.Update ? TextOf(options) : null),
             HasFlag(options, ListFlag, ListShortFlag),
-            ValueOf(options, SshFlag));
+            ValueOf(options, SshFlag),
+            options);
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch
@@ -72,6 +73,7 @@ public static class CommandLine
         "attach" => FleetVerb.Attach,
         "bridge" => FleetVerb.Bridge,
         "approve" => FleetVerb.Approve,
+        "cli" => FleetVerb.Cli,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         "help" or "--help" or "-h" => FleetVerb.Help,
         _ => FleetVerb.Unknown,

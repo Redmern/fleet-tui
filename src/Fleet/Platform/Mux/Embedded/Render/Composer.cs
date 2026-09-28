@@ -1,4 +1,5 @@
 using Fleet.Platform.Mux.Embedded.Model;
+using Fleet.Platform.Mux.Embedded.Protocol;
 
 namespace Fleet.Platform.Mux.Embedded.Render;
 
@@ -22,7 +23,11 @@ public static class Composer
     public const char RightCap = '';
 
     public static ClientFrame Compose(
-        ClientView view, Func<string, ScreenBuffer?> screens, string? badge, CopyOverlay? copy = null)
+        ClientView view,
+        Func<string, ScreenBuffer?> screens,
+        string? badge,
+        CopyOverlay? copy = null,
+        IReadOnlyList<WhichKeyEntry>? whichKey = null)
     {
         var frame = new ClientFrame(view.Client.Cols, view.Client.Rows);
 
@@ -94,6 +99,11 @@ public static class Composer
                 frame.CursorVisible = screen.CursorVisible;
                 frame.CursorShape = screen.CursorShape;
             }
+        }
+
+        if (badge is not null && whichKey is { Count: > 0 })
+        {
+            WhichKeyBox(frame, badge, whichKey);
         }
 
         StatusBar(frame, view, badge);
@@ -179,6 +189,44 @@ public static class Composer
         {
             frame.CursorX = area.X + Math.Min(copy.Cursor.Col, Math.Max(0, area.Width - 1));
             frame.CursorY = area.Y + (int)copy.Cursor.Row;
+        }
+    }
+
+    private static void WhichKeyBox(ClientFrame frame, string title, IReadOnlyList<WhichKeyEntry> entries)
+    {
+        var keyWidth = entries.Max(e => e.Key.Length);
+        var labelWidth = entries.Max(e => e.Label.Length);
+        var cell = keyWidth + 2 + labelWidth;
+        var columns = Math.Clamp((frame.Cols - 4 + 3) / (cell + 3), 1, entries.Count);
+        var rows = (entries.Count + columns - 1) / columns;
+        var width = Math.Min(frame.Cols, columns * (cell + 3) - 3 + 4);
+        var height = Math.Min(frame.Rows - MuxModel.StatusRows, rows + 2);
+        var area = new Rect((frame.Cols - width) / 2, frame.Rows - height, width, height);
+        var inner = ClientView.Inner(area);
+
+        Box(frame, area, Lavender, title);
+        Clear(frame, inner);
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var row = i % rows;
+            if (row >= inner.Height)
+            {
+                continue;
+            }
+
+            var x = inner.X + 1 + i / rows * (cell + 3);
+            var y = inner.Y + row;
+            Write(frame, x, y, entries[i].Key.PadRight(keyWidth), Lavender, CellAttr.Bold, inner);
+            Write(frame, x + keyWidth + 2, y, entries[i].Label, Text, CellAttr.None, inner);
+        }
+    }
+
+    private static void Write(ClientFrame frame, int x, int y, string text, uint fg, CellAttr attrs, Rect clip)
+    {
+        for (var i = 0; i < text.Length && x + i < clip.X + clip.Width; i++)
+        {
+            frame.Cells[y * frame.Cols + x + i] = Cell.Of(text[i], fg, Cell.Default, attrs);
         }
     }
 
@@ -280,7 +328,7 @@ public static class Composer
         for (var i = 0; i < workspace.Tabs.Count; i++)
         {
             var tab = workspace.Tabs[i];
-            var label = $"{i + 1}:{(tab.Title.Length > 0 ? tab.Title : "shell")}";
+            var label = $"{i + 1}:{(tab.Title.Length > 0 ? tab.Title : "shell")}{(tab.Zoomed is not null ? " Z" : string.Empty)}";
             parts.Add(new BarSegment(" ", Cell.Default, Cell.Default));
 
             if (tab.Id == workspace.ActiveTab)

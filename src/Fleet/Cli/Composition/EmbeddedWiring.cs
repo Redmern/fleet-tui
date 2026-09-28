@@ -6,6 +6,7 @@ using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Pty;
+using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Mux;
 
@@ -94,9 +95,8 @@ public static class EmbeddedWiring
             stream = local;
         }
 
-        var prefix = Prefix.Parse(Environment.GetEnvironmentVariable(PrefixVariable) ?? "ctrl+b");
         var mouse = !string.Equals(Environment.GetEnvironmentVariable(MouseVariable), "off", StringComparison.OrdinalIgnoreCase);
-        var code = await new AttachClient(stream, workspace, prefix, line => log.Write($"attach: {line}"), mouse)
+        var code = await new AttachClient(stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse)
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -110,6 +110,25 @@ public static class EmbeddedWiring
 
         return code;
     }
+
+    public static async Task<int> CliAsync(IReadOnlyList<string> args)
+    {
+        if (args is not ["activate-pane-direction", var direction, ..])
+        {
+            await Console.Error.WriteLineAsync("fleet cli: only 'activate-pane-direction <Left|Right|Up|Down>' is supported")
+                .ConfigureAwait(false);
+            return 2;
+        }
+
+        using var driver = new EmbeddedDriver(Endpoint.Default());
+        await driver.FocusFromAsync(direction).ConfigureAwait(false);
+        return 0;
+    }
+
+    public static string KeysFile => Path.Combine(FleetPaths.Config, MuxKeys.FileName);
+
+    public static MuxKeys Keys(IFleetLog log) =>
+        MuxKeys.Load(KeysFile, Environment.GetEnvironmentVariable(PrefixVariable), line => log.Write(line));
 
     public static async Task<int> BridgeAsync()
     {

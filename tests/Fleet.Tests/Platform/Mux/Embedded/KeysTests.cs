@@ -1,0 +1,187 @@
+using System.Text;
+using Fleet.Platform.Mux.Embedded.Input;
+using Fleet.Platform.Mux.Embedded.Native;
+
+namespace Fleet.Tests.Platform.Mux.Embedded;
+
+public class KeysTests
+{
+    [Theory]
+    [InlineData("ctrl+s", "\u0013")]
+    [InlineData("ctrl+h", "\b")]
+    [InlineData("alt+h", "\eh")]
+    [InlineData("alt+left", "\e[1;3D")]
+    [InlineData("left", "\e[D")]
+    [InlineData("shift+tab", "\e[Z")]
+    [InlineData("%", "%")]
+    [InlineData("\"", "\"")]
+    [InlineData("space", " ")]
+    [InlineData("pageup", "\e[5~")]
+    public void A_chord_knows_the_bytes_a_unix_terminal_sends_for_it(string spec, string bytes)
+    {
+        Assert.Equal(Encoding.ASCII.GetBytes(bytes), KeyChord.Parse(spec)!.Value.Bytes());
+    }
+
+    [Theory]
+    [InlineData("ctrl+enter")]
+    [InlineData("shift+enter")]
+    [InlineData("ctrl+tab")]
+    public void Chords_a_unix_terminal_cannot_tell_apart_have_no_bytes(string spec)
+    {
+        Assert.Null(KeyChord.Parse(spec)!.Value.Bytes());
+    }
+
+    [Fact]
+    public void A_character_chord_matches_by_text_and_a_named_chord_by_key_and_modifiers()
+    {
+        var percent = KeyChord.Parse("%")!.Value;
+        var ctrlH = KeyChord.Parse("ctrl+h")!.Value;
+
+        Assert.True(percent.Matches(Key.Digit5, Mods.Shift, "%"));
+        Assert.False(percent.Matches(Key.Digit5, Mods.Ctrl | Mods.Shift, "%"));
+        Assert.True(ctrlH.Matches(Key.H, Mods.Ctrl | Mods.NumLock, null));
+        Assert.False(ctrlH.Matches(Key.H, Mods.Ctrl | Mods.Shift, null));
+        Assert.False(ctrlH.Matches(Key.H, Mods.None, "h"));
+    }
+
+    [Fact]
+    public void An_unknown_key_or_modifier_is_reported()
+    {
+        Assert.Throws<FormatException>(() => KeyChord.Parse("hyper+x"));
+        Assert.Throws<FormatException>(() => KeyChord.Parse("ctrl+banana"));
+    }
+
+    [Fact]
+    public void The_defaults_follow_the_wezterm_tmux_layout()
+    {
+        var keys = MuxKeys.Defaults;
+
+        Assert.Equal("ctrl+s", keys.Prefix.Label);
+        Assert.Equal("focus-left", keys.PrefixCommand(Key.H, Mods.None, "h"));
+        Assert.Equal("split-right", keys.PrefixCommand(Key.Digit5, Mods.Shift, "%"));
+        Assert.Equal("split-down", keys.PrefixCommand(Key.Quote, Mods.Shift, "\""));
+        Assert.Equal("resize left", keys.PrefixCommand(Key.ArrowLeft, Mods.None, null));
+        Assert.Equal("tab 3", keys.PrefixCommand(Key.Digit3, Mods.None, "3"));
+        Assert.Equal("menu", keys.DirectCommand(Key.Enter, Mods.Ctrl, null));
+        Assert.Equal("smart-focus left", keys.DirectCommand(Key.H, Mods.Ctrl, null));
+        Assert.Equal("prev-tab", keys.DirectCommand(Key.ArrowLeft, Mods.Alt, null));
+        Assert.Null(keys.DirectCommand(Key.H, Mods.None, "h"));
+    }
+
+    [Fact]
+    public void Unix_bytes_find_the_longest_binding()
+    {
+        var keys = MuxKeys.Defaults;
+
+        Assert.Equal(("resize left", 3), keys.PrefixBytes("\e[D"u8));
+        Assert.Equal(("smart-focus left", 2), keys.DirectBytes("\eh"u8));
+        Assert.Equal(("prev-tab", 6), keys.DirectBytes("\e[1;3D"u8));
+        Assert.Equal((null, 0), keys.DirectBytes("x"u8));
+    }
+
+    [Fact]
+    public void A_keys_file_overrides_rebinds_and_unbinds_over_the_defaults()
+    {
+        var keys = MuxKeys.From(
+            new MuxKeysFile
+            {
+                Prefix = "ctrl+b",
+                PrefixKeys = new() { ["x"] = "none", ["v"] = "split-right" },
+                Keys = new() { ["ctrl+h"] = "none" },
+            },
+            null);
+
+        Assert.Equal("ctrl+b", keys.Prefix.Label);
+        Assert.Null(keys.PrefixCommand(Key.X, Mods.None, "x"));
+        Assert.Equal("split-right", keys.PrefixCommand(Key.V, Mods.None, "v"));
+        Assert.Equal("split-right", keys.PrefixCommand(Key.Digit5, Mods.Shift, "%"));
+        Assert.Null(keys.DirectCommand(Key.H, Mods.Ctrl, null));
+        Assert.Equal("smart-focus down", keys.DirectCommand(Key.J, Mods.Ctrl, null));
+    }
+
+    [Fact]
+    public void The_environment_prefix_wins_over_the_file()
+    {
+        var keys = MuxKeys.From(new MuxKeysFile { Prefix = "ctrl+b" }, "ctrl+a");
+
+        Assert.Equal("ctrl+a", keys.Prefix.Label);
+    }
+
+    [Fact]
+    public void A_broken_keys_file_falls_back_to_the_defaults_and_says_why()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"fleet-keys-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{ \"prefix\": \"ctrl+banana\" }");
+        var lines = new List<string>();
+
+        try
+        {
+            var keys = MuxKeys.Load(path, null, lines.Add);
+
+            Assert.Equal("ctrl+s", keys.Prefix.Label);
+            Assert.Contains(lines, l => l.Contains("banana", StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void A_keys_file_may_have_comments_and_trailing_commas()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"fleet-keys-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, "{\n  // my prefix\n  \"prefix\": \"ctrl+b\",\n}");
+
+        try
+        {
+            Assert.Equal("ctrl+b", MuxKeys.Load(path, null, _ => { }).Prefix.Label);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Which_key_groups_directions_arrows_and_tab_numbers()
+    {
+        var entries = WhichKey.For(MuxKeys.Defaults);
+
+        Assert.Contains(entries, e => e.Key == "h j k l" && e.Label == "focus");
+        Assert.Contains(entries, e => e.Key == "← → ↑ ↓" && e.Label == "resize");
+        Assert.Contains(entries, e => e.Key == "1 2 3 4 5 6 7 8 9" && e.Label == "go to tab");
+        Assert.Contains(entries, e => e.Key == "%" && e.Label == "split right");
+        Assert.Contains(entries, e => e.Key == "ctrl+s" && e.Label == "send ctrl+s");
+        Assert.DoesNotContain(entries, e => e.Label == "tab 1");
+    }
+
+    [Fact]
+    public void The_prefix_arms_then_takes_the_next_key_and_a_second_prefix_sends_itself()
+    {
+        var prefix = new Prefix(KeyChord.Parse("ctrl+s")!.Value);
+
+        Assert.Equal(PrefixCommand.None, prefix.OnKey(Key.S, Mods.None, "s"));
+        Assert.Equal(PrefixCommand.Armed, prefix.OnKey(Key.S, Mods.Ctrl));
+        Assert.Equal(PrefixCommand.Chord, prefix.OnKey(Key.H, Mods.None, "h"));
+        Assert.Equal(PrefixCommand.Armed, prefix.OnKey(Key.S, Mods.Ctrl));
+        Assert.Equal(PrefixCommand.SendPrefix, prefix.OnKey(Key.S, Mods.Ctrl));
+    }
+
+    [Fact]
+    public void Closing_asks_first_and_only_y_confirms()
+    {
+        var confirm = new ConfirmMode();
+
+        confirm.Ask("kill-pane", "close this pane?");
+        Assert.True(confirm.Active);
+        Assert.Equal("close this pane? y/n", confirm.Badge);
+        Assert.Equal("kill-pane", confirm.OnKey(Key.Y, Mods.None, "y")!.Name);
+        Assert.False(confirm.Active);
+
+        confirm.Ask("kill-tab", "close this tab?");
+        Assert.Equal(1, confirm.OnBytes("n"u8, out var no));
+        Assert.Null(no);
+        Assert.False(confirm.Active);
+    }
+}
