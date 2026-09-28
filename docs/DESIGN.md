@@ -2363,9 +2363,10 @@ The records path avoids some of them by construction; each needs a test before
       with no extra base character; AltGr+dead key; non-US shifted text such as
       `@` on German layouts; IME commits; emoji from the Windows picker
       (surrogate pairs, or CSI-u with associated text under WezTerm).
-- [ ] **SGR mouse past column 95.** Coordinates must use SGR (1006) encoding end
+- [x] **SGR mouse past column 95.** Coordinates must use SGR (1006) encoding end
       to end. Legacy encodings stop at 95/223. Reattach must restore mouse
-      reporting.
+      reporting. *Done 2026-09-28 for `embedded`: a click at column 110 reached
+      an SGR app intact. See "Mouse".*
 - [x] **Pasted Enter.** A multi-line paste from Windows Terminal arrives as key
       records with `VK_RETURN`. It must reach the pane as one bracketed paste with
       its newlines, and must not submit each line (herdr: Codex lost Enter after
@@ -2896,6 +2897,69 @@ and anything after `cmd /c` passed as written.
   runs used conhost's Paste command and the windowless nested setup instead.
   Paste into Claude inside `fleet attach` under WezTerm belongs on the manual
   checklist.
+
+## Mouse, 2026-09-28
+
+tmux-style mouse support for `embedded`.
+
+### Behaviour
+
+- **Click** focuses the pane under the pointer, and the click also reaches that
+  pane.
+- **Drag** stays with the pane it started in. Coordinates are clamped to that
+  pane, so a selection drag in nvim that leaves the pane keeps working.
+- **Wheel** goes to the pane under the pointer, without moving focus.
+- **Status bar:** clicking a tab label shows that tab.
+- **Dividers:** dragging one resizes the split. Both panes are resized and
+  their programs get SIGWINCH or a ConPTY resize.
+- **Menu overlay:** it takes the clicks inside its box.
+- A pane's program only receives mouse input if it asked for it (1000, 1002,
+  1003). libghostty-vt's mouse encoder decides this from the pane's terminal
+  state and encodes in the format the program chose (X10, UTF-8, SGR, urxvt).
+  Coordinates are pane-relative.
+
+### How it gets there
+
+- **Windows client:** `ENABLE_MOUSE_INPUT` on the attach client's console, and
+  `WindowsMouse` turns `MOUSE_EVENT` records into press, release, motion and
+  wheel. Motion is sent only when the cell changes, and coordinates are made
+  relative to the visible window. This also covers WezTerm and Windows
+  Terminal: their ConPTY turns the terminal's SGR reports into those records.
+- **Unix client:** asks the host for `?1002h?1006h` and takes the SGR reports
+  out of stdin (`SgrMouse`). Everything else passes on untouched, and a lone
+  Esc is never held back.
+- **Wire:** a `Mouse` message (x, y, button, action, mods, whether a button is
+  held).
+- **fleetd:** `MuxModel.Hit` for panes, the overlay, dividers and the status
+  bar; `Composer.TabSpans` for tab labels, shared with the renderer so they
+  cannot disagree. A per-client capture keeps a drag with its target.
+- **Opting out:** `FLEET_MOUSE=off` leaves the mouse to the host terminal. With
+  mouse capture on, native text selection needs Shift in WezTerm, Windows
+  Terminal, Ghostty and kitty, and is off in conhost.
+
+### Verified
+
+- **Tests:** 17 new, for record translation, SGR parsing (split reads, a lone
+  Esc, other sequences untouched, hover vs drag), hit-testing, divider drags
+  and clamping. fleetd's routing is tested end to end with fake panes: click to
+  focus, a drag that leaves its pane, wheel without focus, and tab clicks.
+- **Windows, windowless:** SGR reports sent through a ConPTY into
+  `fleet attach`, the WezTerm/Windows Terminal path, reached an SGR app
+  exactly: press, release, wheel, and column 110.
+- **Windows, nvim:** five wheel-downs scrolled a 200-line file to `line 16`.
+- **Linux in Docker:** SGR wheel reports into `fleet attach` scrolled nvim to
+  `line 16`, read back from fleetd.
+
+### Not verified
+
+- **conhost's own mouse records from a physical mouse.** Test windows take
+  focus, so none were opened; the record format is the same one the ConPTY
+  path produces.
+- **Divider dragging and tab clicks in a real terminal.** They are covered by
+  the model and daemon tests.
+- **Clicking in a pane focuses and passes the click on in one go.** A program
+  that treats a click as an action (e.g. a TUI button) acts on the focusing
+  click too. tmux behaves the same with `mouse on`.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
