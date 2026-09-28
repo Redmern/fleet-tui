@@ -3025,7 +3025,12 @@ workspace, drawn in a bordered box over the tiled layout instead of in it.
   - `f` opens a float with the default shell, in the focused pane's directory;
   - `w` shows or hides the workspace's floats;
   - `e` tiles the focused float beside the active pane, or floats the focused
-    tile.
+    tile;
+  - `g` enters float mode for the focused float: `h/j/k/l` or the arrows move
+    it one cell, `H/J/K/L` or shift+arrows make it narrower, taller, shorter
+    or wider by one cell, and `esc`, `enter`, `q` or `g` leave. The status bar
+    shows the keys while the mode is on. Other keys are swallowed, so nothing
+    typed in the mode reaches a pane.
 - **Focus.** A new or clicked float comes to the top and takes the keys. A
   click on a tile, or `w` to hide, gives the keys back to the tiles. `h/j/k/l`
   move between tiles only.
@@ -3049,14 +3054,17 @@ workspace, drawn in a bordered box over the tiled layout instead of in it.
 
 ### Verified
 
-- **Tests** (16 new, 1042 in all):
+- **Tests** (33 new, 1059 in all):
   - model: placement, hit-testing (border, corner, inside, topmost wins),
     raise and lower on focus, clamping on move and resize, float to tile and
     back, workspace lifetime, per-workspace floats;
   - compositor: box, title and cursor;
   - fleetd with fake panes: `f` then keys reach the float and `w` hands them
     back; dragging the border moves the float without the pane seeing the
-    drag; `e` tiles and floats again.
+    drag; `e` tiles and floats again; `float-move`/`float-size` nudge the
+    focused float;
+  - float mode: keys and shifted keys, and the Unix byte path including
+    arrow and shift+arrow sequences.
 - **Windows, windowless, real binary and emulator:** an outer fleetd ran
   `fleet attach` in a pane against an inner fleetd, and the chords and SGR
   mouse went into that pane the way a terminal sends them through ConPTY.
@@ -3065,6 +3073,10 @@ workspace, drawn in a bordered box over the tiled layout instead of in it.
   - A drag of the top border from (30,8) to (20,4) moved it to (14,4).
   - `ctrl+b w` hid it; the pane survived.
   - `ctrl+b w`, `ctrl+b e` tiled it next to the existing pane (both in `t1`).
+  - Float mode, in a second run: `ctrl+b g`, `lll`, `j` moved the box from
+    (24,8) to (27,9); `LL` widened it from 72 to 74 columns. `esc` left the
+    mode, and `echo AFTER-ESC` then ran in the float. The float's own text had
+    none of the mode's keys in it.
 
 ### Not done
 
@@ -3072,8 +3084,8 @@ workspace, drawn in a bordered box over the tiled layout instead of in it.
   `MuxCaps.Popup` is there for it. It gets added with the first fleet feature
   that opens one (for example the file navigator in a float); until then the
   prefix keys and `spawn-float` cover it.
-- **Keyboard move and resize** (zellij's resize mode) are not there; the
-  mouse is the only way to move a float.
+- **Float mode on Unix was not run end to end.** Its byte path (letters,
+  arrows, shift+arrows) is unit-tested; the Windows key path was run for real.
 - **Float layout is not saved** across fleetd restarts. Neither is anything
   else yet.
 

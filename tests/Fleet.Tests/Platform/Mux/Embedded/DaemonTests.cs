@@ -457,6 +457,23 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Float_move_and_size_commands_nudge_the_focused_float()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["box"] });
+
+        await client.SendCommandAsync("float-move", "down");
+        await client.SendCommandAsync("float-size", "right");
+        await client.SendMouseAsync(13, 4, MouseButtons.Left, MouseActions.Press, held: true);
+
+        await Eventually(() => _panes.ByProgram("box")!.Written == "<mouse b1 a0 0,0>");
+        await Eventually(() => _panes.ByProgram("box")!.Size == (35, 4));
+    }
+
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();
@@ -549,8 +566,8 @@ public sealed class DaemonTests : IAsyncLifetime
                 new MouseMessage { X = x, Y = y, Button = button, Action = action, Held = held },
                 WireJsonContext.Default.MouseMessage);
 
-        public Task SendCommandAsync(string name) =>
-            _wire.SendAsync(MessageType.Command, new CommandMessage { Name = name }, WireJsonContext.Default.CommandMessage);
+        public Task SendCommandAsync(string name, string? arg = null) =>
+            _wire.SendAsync(MessageType.Command, new CommandMessage { Name = name, Arg = arg }, WireJsonContext.Default.CommandMessage);
 
         public async Task WaitForAsync(string text)
         {

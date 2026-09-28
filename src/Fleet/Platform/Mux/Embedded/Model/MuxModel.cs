@@ -84,6 +84,19 @@ public sealed class MuxModel
         return true;
     }
 
+    public bool NudgeFloat(string client, int dx, int dy, int dw, int dh)
+    {
+        if (View(client) is not { Focused: { } focused } view
+            || view.FloatingPanes.FirstOrDefault(p => p.Pane == focused) is not { Pane: not null } box)
+        {
+            return false;
+        }
+
+        var area = box.Area;
+        return ResizeFloat(focused, area.Width + dw, area.Height + dh)
+            && MoveFloat(focused, area.X + dx, area.Y + dy);
+    }
+
     public bool ToFloat(string id)
     {
         if (!_panes.TryGetValue(id, out var pane)

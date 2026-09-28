@@ -514,6 +514,23 @@ public sealed class FleetDaemon(DaemonOptions options)
                 case "float-toggle":
                     _model.ToggleFloats(session.Client);
                     break;
+                case "float-move" or "float-size":
+                {
+                    var (dx, dy) = command.Arg switch
+                    {
+                        "left" => (-1, 0),
+                        "right" => (1, 0),
+                        "up" => (0, -1),
+                        "down" => (0, 1),
+                        _ => (0, 0),
+                    };
+
+                    _ = command.Name == "float-move"
+                        ? _model.NudgeFloat(session.Client, dx, dy, 0, 0)
+                        : _model.NudgeFloat(session.Client, 0, 0, dx, dy);
+                    break;
+                }
+
                 case "float-embed":
                     if (_model.View(session.Client)?.Focused is { } focused)
                     {

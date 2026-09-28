@@ -18,6 +18,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     private const string PopTitle = "\e[23;0t";
 
     private readonly HashSet<ushort> _swallowed = [];
+    private readonly FloatMode _floatMode = new();
     private volatile bool _running = true;
     private string? _farewell;
 
@@ -202,7 +203,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
 
             IReadOnlyList<WindowsConsole.InputRecord> batch = records[..n];
 
-            if (!prefix.Armed && PasteBurst.Starts(records.AsSpan(0, n)))
+            if (!prefix.Armed && !_floatMode.Active && PasteBurst.Starts(records.AsSpan(0, n)))
             {
                 var burst = new List<WindowsConsole.InputRecord>(batch);
                 int more;
@@ -260,6 +261,24 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             State = record.ControlKeyState,
             Repeat = record.RepeatCount,
         };
+
+        if (_floatMode.Active)
+        {
+            if (inputs.Count > 0 && inputs[0] is { IsRawText: false } step)
+            {
+                if (step.Action == KeyAction.Release)
+                {
+                    _swallowed.Remove(step.VirtualKey);
+                }
+                else
+                {
+                    _swallowed.Add(step.VirtualKey);
+                    await FloatStep(wire, _floatMode.OnKey(step.Key, step.Mods)).ConfigureAwait(false);
+                }
+            }
+
+            return;
+        }
 
         if (inputs.Count == 0)
         {
@@ -351,8 +370,18 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     private async Task TypedBytesAsync(Wire wire, byte[] bytes, List<byte> pending)
     {
         pending.Clear();
-        foreach (var b in bytes)
+        for (var i = 0; i < bytes.Length; i++)
         {
+            var b = bytes[i];
+
+            if (_floatMode.Active)
+            {
+                await Flush(wire, pending).ConfigureAwait(false);
+                i += _floatMode.OnBytes(bytes.AsSpan(i), out var step) - 1;
+                await FloatStep(wire, step).ConfigureAwait(false);
+                continue;
+            }
+
             var command = prefix.OnByte(b);
             if (command == PrefixCommand.None)
             {
@@ -406,7 +435,27 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             return;
         }
 
+        if (command == "float-mode")
+        {
+            _floatMode.Enter();
+            await Badge(wire, FloatMode.Badge).ConfigureAwait(false);
+            return;
+        }
+
         await Command(wire, command).ConfigureAwait(false);
+    }
+
+    private async Task FloatStep(Wire wire, CommandMessage? step)
+    {
+        if (step is not null)
+        {
+            await Send(wire, MessageType.Command, step, WireJsonContext.Default.CommandMessage).ConfigureAwait(false);
+        }
+
+        if (!_floatMode.Active)
+        {
+            await Badge(wire, null).ConfigureAwait(false);
+        }
     }
 
     private Task Command(Wire wire, string name) =>

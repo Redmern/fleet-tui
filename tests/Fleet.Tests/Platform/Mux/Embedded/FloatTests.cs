@@ -119,6 +119,23 @@ public class FloatTests
     }
 
     [Fact]
+    public void The_keyboard_nudges_the_focused_float_from_where_it_is_drawn()
+    {
+        var (tile, client) = Workspace("techweb");
+        var box = _model.SpawnFloat("techweb", "C:/x", ["pwsh"]);
+        _model.MoveFloat(box.Id, 500, 8);
+
+        Assert.True(_model.NudgeFloat(client.Id, -1, 1, 0, 0));
+        Assert.Equal(new Rect(39, 9, 60, 24), _model.View(client.Id)!.FloatingPanes.Single().Area);
+
+        Assert.True(_model.NudgeFloat(client.Id, 0, 0, -1, 2));
+        Assert.Equal(new Rect(39, 9, 59, 26), _model.View(client.Id)!.FloatingPanes.Single().Area);
+
+        _model.Focus(tile.Id);
+        Assert.False(_model.NudgeFloat(client.Id, 1, 0, 0, 0));
+    }
+
+    [Fact]
     public void A_tile_can_float_and_come_back_beside_the_active_pane()
     {
         var (tile, client) = Workspace("techweb");

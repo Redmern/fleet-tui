@@ -77,6 +77,7 @@ public sealed class Prefix(char letter)
         Key.F => "float-new",
         Key.W => "float-toggle",
         Key.E => "float-embed",
+        Key.G => "float-mode",
         _ => null,
     };
 
