@@ -9,6 +9,12 @@ public sealed class MuxModel
 
     public const string OverlayWorkspace = "fleet~overlay";
 
+    public const string FloatTab = "float";
+
+    public const int MinFloatWidth = 10;
+
+    public const int MinFloatHeight = 4;
+
     private readonly List<WorkspaceState> _workspaces = [];
     private readonly Dictionary<string, PaneState> _panes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ClientState> _clients = new(StringComparer.Ordinal);
@@ -37,10 +43,90 @@ public sealed class MuxModel
         return pane;
     }
 
+    public PaneState SpawnFloat(string workspace, string cwd, IReadOnlyList<string> args)
+    {
+        var pane = NewPane(cwd, args);
+        AddFloat(WorkspaceOrNew(workspace), pane);
+        return pane;
+    }
+
+    public bool ToggleFloats(string client)
+    {
+        if (View(client)?.Workspace is not { Floats.Count: > 0 } workspace)
+        {
+            return false;
+        }
+
+        workspace.FloatsShown = !workspace.FloatsShown;
+        workspace.FloatFocused = workspace.FloatsShown;
+        return true;
+    }
+
+    public bool MoveFloat(string pane, int x, int y)
+    {
+        if (FloatOf(pane) is not var (_, box))
+        {
+            return false;
+        }
+
+        box.Bounds = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(0, y) };
+        return true;
+    }
+
+    public bool ResizeFloat(string pane, int width, int height)
+    {
+        if (FloatOf(pane) is not var (_, box))
+        {
+            return false;
+        }
+
+        box.Bounds = box.Bounds with { Width = Math.Max(MinFloatWidth, width), Height = Math.Max(MinFloatHeight, height) };
+        return true;
+    }
+
+    public bool ToFloat(string id)
+    {
+        if (!_panes.TryGetValue(id, out var pane)
+            || TabOf(pane) is not var (workspace, _)
+            || Same(workspace.Name, OverlayWorkspace))
+        {
+            return false;
+        }
+
+        AddFloat(workspace, pane);
+        Detach(pane);
+        return true;
+    }
+
+    public bool ToTile(string id)
+    {
+        if (!_panes.TryGetValue(id, out var pane) || FloatOf(id) is not var (workspace, box))
+        {
+            return false;
+        }
+
+        if (workspace.Tabs.FirstOrDefault(t => t.Id == workspace.ActiveTab) is { } tab
+            && _panes.TryGetValue(tab.ActivePane, out var anchor))
+        {
+            Join(anchor, pane, sideBySide: true, newFirst: false, 50);
+        }
+        else
+        {
+            AddTab(workspace, pane);
+        }
+
+        RemoveFloat(workspace, box);
+        workspace.FloatFocused = false;
+        pane.Cols = 0;
+        return true;
+    }
+
+    public Rect? FloatBounds(string pane) => FloatOf(pane)?.Float.Bounds;
+
     public PaneState? Split(
         string source, bool sideBySide, bool newFirst, int percent, string cwd, IReadOnlyList<string> args)
     {
-        if (!_panes.TryGetValue(source, out var anchor))
+        if (!_panes.TryGetValue(source, out var anchor) || TabOf(anchor) is null)
         {
             return null;
         }
@@ -95,22 +181,45 @@ public sealed class MuxModel
     }
 
     public IReadOnlyList<string> PanesIn(string workspace) =>
-        Workspace(workspace)?.Tabs.SelectMany(t => t.Root.Panes()).ToList() ?? [];
+        Workspace(workspace) is { } found
+            ? found.Tabs.SelectMany(t => t.Root.Panes()).Concat(found.Floats.Select(f => f.Pane)).ToList()
+            : [];
 
     public bool Focus(string id)
     {
-        if (!_panes.TryGetValue(id, out var pane) || TabOf(pane) is not var (workspace, tab))
+        if (!_panes.TryGetValue(id, out var pane))
+        {
+            return false;
+        }
+
+        if (FloatOf(id) is var (floatWorkspace, box))
+        {
+            floatWorkspace.Floats.Remove(box);
+            floatWorkspace.Floats.Add(box);
+            floatWorkspace.FloatsShown = true;
+            floatWorkspace.FloatFocused = true;
+            return true;
+        }
+
+        if (TabOf(pane) is not var (workspace, tab))
         {
             return false;
         }
 
         workspace.ActiveTab = tab.Id;
         tab.ActivePane = pane.Id;
+        workspace.FloatFocused = false;
         return true;
     }
 
     public bool SetTitle(string id, string title)
     {
+        if (FloatOf(id) is var (_, box))
+        {
+            box.Title = title;
+            return true;
+        }
+
         if (!_panes.TryGetValue(id, out var pane) || TabOf(pane) is not var (_, tab))
         {
             return false;
@@ -221,6 +330,24 @@ public sealed class MuxModel
             return new MouseHit(MouseHitKind.StatusBar, null, x, y);
         }
 
+        for (var i = view.FloatingPanes.Count - 1; i >= 0; i--)
+        {
+            var box = view.FloatingPanes[i];
+            if (!box.Area.Contains(x, y))
+            {
+                continue;
+            }
+
+            var inner = ClientView.Inner(box.Area);
+            if (inner.Contains(x, y))
+            {
+                return new MouseHit(MouseHitKind.Pane, box.Pane, x - inner.X, y - inner.Y);
+            }
+
+            var corner = x == box.Area.X + box.Area.Width - 1 && y == box.Area.Y + box.Area.Height - 1;
+            return new MouseHit(corner ? MouseHitKind.FloatResize : MouseHitKind.FloatMove, box.Pane, x, y);
+        }
+
         for (var i = 0; i < view.Dividers.Count; i++)
         {
             if (view.Dividers[i].Contains(x, y))
@@ -249,7 +376,9 @@ public sealed class MuxModel
 
         var area = view.Overlay is { } overlay && overlay.Pane == pane
             ? new Rect(overlay.Area.X + 1, overlay.Area.Y + 1, overlay.Area.Width - 2, overlay.Area.Height - 2)
-            : view.Panes.FirstOrDefault(p => p.Pane == pane).Area;
+            : view.FloatingPanes.Any(p => p.Pane == pane)
+                ? ClientView.Inner(view.FloatingPanes.First(p => p.Pane == pane).Area)
+                : view.Panes.FirstOrDefault(p => p.Pane == pane).Area;
 
         if (area.Width <= 0 || area.Height <= 0)
         {
@@ -292,7 +421,7 @@ public sealed class MuxModel
 
     public bool FocusDirection(string client, int dx, int dy)
     {
-        if (View(client) is not { Focused: not null } view)
+        if (View(client) is not { Focused: not null } view || view.Panes.All(p => p.Pane != view.Focused))
         {
             return false;
         }
@@ -359,6 +488,21 @@ public sealed class MuxModel
                     x.w.ActiveTab == x.t.Id && x.t.ActivePane == pane.Id,
                     pane.Title);
             })
+            .Concat(_workspaces
+                .Where(w => !Same(w.Name, OverlayWorkspace))
+                .SelectMany(w => w.Floats.Select(f =>
+                {
+                    var pane = _panes[f.Pane];
+                    return new Pane(
+                        new PaneId(pane.Id),
+                        w.Name,
+                        FloatTab,
+                        w.Name,
+                        f.Title.Length > 0 ? f.Title : pane.Title,
+                        pane.Cwd,
+                        w.FloatFocused && w.Floats[^1] == f,
+                        pane.Title);
+                })))
             .ToList();
 
     public ClientView? View(string client)
@@ -379,14 +523,30 @@ public sealed class MuxModel
             ? new Placed(o, OverlayArea(c.Cols, c.Rows))
             : (Placed?)null;
 
-        return new ClientView(
-            c,
-            workspace,
-            tab,
-            placed,
-            dividers,
-            overlay?.Pane ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null),
-            overlay);
+        var floats = workspace is { FloatsShown: true }
+            ? workspace.Floats.Select(f => new Placed(f.Pane, FloatArea(f.Bounds, area))).ToList()
+            : [];
+
+        var focused = overlay?.Pane
+            ?? (floats.Count > 0 && (workspace!.FloatFocused || tab is null) ? floats[^1].Pane : null)
+            ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
+
+        var labels = workspace is { FloatsShown: true }
+            ? workspace.Floats.ToDictionary(f => f.Pane, f => f.Title.Length > 0 ? f.Title : _panes[f.Pane].Title)
+            : null;
+
+        return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels);
+    }
+
+    public static Rect FloatArea(Rect bounds, Rect content)
+    {
+        var width = Math.Min(bounds.Width, content.Width);
+        var height = Math.Min(bounds.Height, content.Height);
+        return new Rect(
+            Math.Clamp(bounds.X, content.X, content.X + content.Width - width),
+            Math.Clamp(bounds.Y, content.Y, content.Y + content.Height - height),
+            width,
+            height);
     }
 
     public IReadOnlyList<(PaneState Pane, int Cols, int Rows)> Resizes()
@@ -428,6 +588,29 @@ public sealed class MuxModel
                         pane.Rows = rows;
                         changed.Add((pane, cols, rows));
                     }
+                }
+            }
+
+            foreach (var box in workspace.Floats)
+            {
+                var pane = _panes[box.Pane];
+
+                if (shownBy is null && pane.Cols != 0)
+                {
+                    continue;
+                }
+
+                var size = shownBy is not null ? (shownBy.Cols, shownBy.Rows) : Reference();
+                var inner = ClientView.Inner(
+                    FloatArea(box.Bounds, new Rect(0, 0, size.Item1, Math.Max(1, size.Item2 - StatusRows))));
+                var cols = Math.Max(1, inner.Width);
+                var rows = Math.Max(1, inner.Height);
+
+                if (pane.Cols != cols || pane.Rows != rows)
+                {
+                    pane.Cols = cols;
+                    pane.Rows = rows;
+                    changed.Add((pane, cols, rows));
                 }
             }
         }
@@ -495,10 +678,70 @@ public sealed class MuxModel
         pane.Cols = 0;
     }
 
+    private void AddFloat(WorkspaceState workspace, PaneState pane)
+    {
+        var (cols, rows) = Reference();
+        var usable = Math.Max(1, rows - StatusRows);
+        var width = Math.Max(MinFloatWidth, cols * 3 / 5);
+        var height = Math.Max(MinFloatHeight, usable * 3 / 5);
+        var cascade = workspace.Floats.Count * 2;
+
+        workspace.Floats.Add(new FloatState(
+            pane.Id,
+            new Rect((cols - width) / 2 + cascade, (usable - height) / 2 + cascade / 2, width, height)));
+        workspace.FloatsShown = true;
+        workspace.FloatFocused = true;
+        pane.Cols = 0;
+    }
+
+    private void RemoveFloat(WorkspaceState workspace, FloatState box)
+    {
+        workspace.Floats.Remove(box);
+
+        if (workspace.Floats.Count == 0)
+        {
+            workspace.FloatsShown = false;
+            workspace.FloatFocused = false;
+        }
+
+        if (workspace.Tabs.Count == 0 && workspace.Floats.Count == 0)
+        {
+            DropWorkspace(workspace);
+        }
+    }
+
+    private void DropWorkspace(WorkspaceState workspace)
+    {
+        _workspaces.Remove(workspace);
+
+        foreach (var client in _clients.Values.Where(c => Same(c.Showing, workspace.Name)))
+        {
+            client.Showing = null;
+        }
+    }
+
+    private (WorkspaceState Workspace, FloatState Float)? FloatOf(string pane)
+    {
+        foreach (var workspace in _workspaces)
+        {
+            if (workspace.Floats.FirstOrDefault(f => f.Pane == pane) is { } box)
+            {
+                return (workspace, box);
+            }
+        }
+
+        return null;
+    }
+
     private void Detach(PaneState pane)
     {
         if (TabOf(pane) is not var (workspace, tab))
         {
+            if (FloatOf(pane.Id) is var (floatWorkspace, box))
+            {
+                RemoveFloat(floatWorkspace, box);
+            }
+
             return;
         }
 
@@ -528,11 +771,9 @@ public sealed class MuxModel
             return;
         }
 
-        _workspaces.Remove(workspace);
-
-        foreach (var client in _clients.Values.Where(c => Same(c.Showing, workspace.Name)))
+        if (workspace.Floats.Count == 0)
         {
-            client.Showing = null;
+            DropWorkspace(workspace);
         }
     }
 
@@ -589,6 +830,21 @@ public sealed class WorkspaceState(string name)
     public List<TabState> Tabs { get; } = [];
 
     public string ActiveTab { get; set; } = string.Empty;
+
+    public List<FloatState> Floats { get; } = [];
+
+    public bool FloatsShown { get; set; }
+
+    public bool FloatFocused { get; set; }
+}
+
+public sealed class FloatState(string pane, Rect bounds)
+{
+    public string Pane { get; } = pane;
+
+    public Rect Bounds { get; set; } = bounds;
+
+    public string Title { get; set; } = string.Empty;
 }
 
 public sealed class ClientState(string id)
@@ -612,6 +868,8 @@ public enum MouseHitKind
     Pane,
     Divider,
     StatusBar,
+    FloatMove,
+    FloatResize,
 }
 
 public sealed record MouseHit(MouseHitKind Kind, string? Pane, int X, int Y, int Divider = -1)
@@ -626,4 +884,13 @@ public sealed record ClientView(
     IReadOnlyList<Placed> Panes,
     IReadOnlyList<Divider> Dividers,
     string? Focused,
-    Placed? Overlay = null);
+    Placed? Overlay = null,
+    IReadOnlyList<Placed>? Floats = null,
+    IReadOnlyDictionary<string, string>? FloatLabels = null)
+{
+    public IReadOnlyList<Placed> FloatingPanes => Floats ?? [];
+
+    public string? FloatLabel(string pane) => FloatLabels?.GetValueOrDefault(pane);
+
+    public static Rect Inner(Rect box) => new(box.X + 1, box.Y + 1, Math.Max(0, box.Width - 2), Math.Max(0, box.Height - 2));
+}

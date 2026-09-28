@@ -74,6 +74,9 @@ public sealed class Prefix(char letter)
         Key.K or Key.ArrowUp => "focus-up",
         Key.L or Key.ArrowRight => "focus-right",
         Key.R => "redraw",
+        Key.F => "float-new",
+        Key.W => "float-toggle",
+        Key.E => "float-embed",
         _ => null,
     };
 

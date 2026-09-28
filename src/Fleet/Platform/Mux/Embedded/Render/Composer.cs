@@ -42,9 +42,32 @@ public static class Composer
             Draw(frame, divider, focused);
         }
 
+        foreach (var box in view.FloatingPanes)
+        {
+            var isFocused = box.Pane == view.Focused;
+            var inner = ClientView.Inner(box.Area);
+            Box(frame, box.Area, isFocused ? FocusFg : DividerFg, view.FloatLabel(box.Pane));
+            Clear(frame, inner);
+
+            if (screens(box.Pane) is { } screen)
+            {
+                Blit(frame, screen, inner);
+
+                if (isFocused)
+                {
+                    frame.CursorX = inner.X + Math.Min(screen.CursorX, Math.Max(0, inner.Width - 1));
+                    frame.CursorY = inner.Y + Math.Min(screen.CursorY, Math.Max(0, inner.Height - 1));
+                    frame.CursorVisible = screen.CursorVisible
+                        && screen.CursorX < inner.Width
+                        && screen.CursorY < inner.Height;
+                    frame.CursorShape = screen.CursorShape;
+                }
+            }
+        }
+
         if (view.Overlay is { } overlay)
         {
-            Box(frame, overlay.Area);
+            Box(frame, overlay.Area, FocusFg, null);
             var inner = new Rect(overlay.Area.X + 1, overlay.Area.Y + 1, Math.Max(0, overlay.Area.Width - 2), Math.Max(0, overlay.Area.Height - 2));
 
             if (screens(overlay.Pane) is { } screen)
@@ -84,7 +107,18 @@ public static class Composer
         }
     }
 
-    private static void Box(ClientFrame frame, Rect area)
+    private static void Clear(ClientFrame frame, Rect area)
+    {
+        for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows - MuxModel.StatusRows; y++)
+        {
+            for (var x = area.X; x < area.X + area.Width && x < frame.Cols; x++)
+            {
+                frame.Cells[y * frame.Cols + x] = Cell.Blank;
+            }
+        }
+    }
+
+    private static void Box(ClientFrame frame, Rect area, uint fg, string? title)
     {
         for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows - MuxModel.StatusRows; y++)
         {
@@ -106,7 +140,18 @@ public static class Composer
                     _ => ' ',
                 };
 
-                frame.Cells[y * frame.Cols + x] = Cell.Of(c, FocusFg);
+                frame.Cells[y * frame.Cols + x] = Cell.Of(c, fg);
+            }
+        }
+
+        if (title is { Length: > 0 } && area.Width > 6 && area.Y < frame.Rows - MuxModel.StatusRows)
+        {
+            var label = $" {title} ";
+            label = label.Length > area.Width - 4 ? label[..(area.Width - 4)] : label;
+
+            for (var i = 0; i < label.Length && area.X + 2 + i < frame.Cols; i++)
+            {
+                frame.Cells[area.Y * frame.Cols + area.X + 2 + i] = Cell.Of(label[i], fg);
             }
         }
     }
@@ -156,6 +201,19 @@ public static class Composer
         return spans;
     }
 
+    public static (int Start, int End, string Label)? FloatSpan(ClientView view)
+    {
+        if (view.Workspace is not { Floats.Count: > 0 } workspace)
+        {
+            return null;
+        }
+
+        var spans = TabSpans(view);
+        var start = (spans.Count > 0 ? spans[^1].End : workspace.Name.Length + 2) + 1;
+        var label = $" float {workspace.Floats.Count} ";
+        return (start, start + label.Length, label);
+    }
+
     private static void StatusBar(ClientFrame frame, ClientView view, string? badge)
     {
         var y = frame.Rows - 1;
@@ -189,6 +247,12 @@ public static class Composer
             {
                 var active = tab == view.Workspace.ActiveTab;
                 Put(label, active ? ActiveFg : BarFg, active ? ActiveBg : BarBg);
+            }
+
+            if (FloatSpan(view) is var (start, _, floats))
+            {
+                x = start;
+                Put(floats, view.Workspace.FloatsShown ? ActiveFg : BarFg, view.Workspace.FloatsShown ? ActiveBg : BarBg);
             }
         }
 

@@ -31,7 +31,8 @@ public static class HelpCommand
               fleet daemon                run fleetd in the foreground
               fleet bridge                ssh's remote end: pipe stdio to the local fleetd
               prefix is ctrl+b (FLEET_PREFIX): q detach, space menu, n/p tab, s next project,
-              h/j/k/l focus, r redraw, ctrl+b again sends ctrl+b
+              h/j/k/l focus, r redraw, f new float, w show/hide floats, e float/tile the pane,
+              ctrl+b again sends ctrl+b
             """);
 
         return 0;

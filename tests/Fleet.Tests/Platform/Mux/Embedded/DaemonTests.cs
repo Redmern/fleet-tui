@@ -417,6 +417,64 @@ public sealed class DaemonTests : IAsyncLifetime
         await Assert.ThrowsAsync<MuxUnavailableException>(() => mux.ListPanesAsync());
     }
 
+    [Fact]
+    public async Task A_new_float_takes_the_keys_until_the_floats_are_hidden()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("float-new");
+        await client.SendKeyAsync("k");
+        await client.SendCommandAsync("float-toggle");
+        await client.SendKeyAsync("j");
+
+        await Eventually(() => _panes.Started.Count == 2
+                                && _panes.Started.Last().Written == "k"
+                                && _panes.ByProgram("tile")!.Written == "j");
+        Assert.True(_panes.Started.Last().Env.ContainsKey(FleetDaemon.ClientVariable));
+    }
+
+    [Fact]
+    public async Task Dragging_a_floats_border_moves_it_without_the_pane_seeing_the_drag()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var spawned = await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["box"] });
+        Assert.True(spawned.Ok, spawned.Error);
+
+        await client.SendMouseAsync(20, 2, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(25, 4, MouseButtons.Left, MouseActions.Motion, held: true);
+        await client.SendMouseAsync(25, 4, MouseButtons.Left, MouseActions.Release);
+        await client.SendMouseAsync(18, 5, MouseButtons.Left, MouseActions.Press, held: true);
+
+        await Eventually(() => _panes.ByProgram("box")!.Written == "<mouse b1 a0 0,0>");
+        var listed = await control.RequestAsync(new ControlRequest { Op = "list-panes" });
+        Assert.Equal("float", listed.Panes!.Single(p => p.Id == spawned.Pane).Tab);
+    }
+
+    [Fact]
+    public async Task A_float_can_be_tiled_and_floated_again()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var box = (await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["box"] })).Pane;
+
+        async Task<string?> TabOfBox() =>
+            (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!.Single(p => p.Id == box).Tab;
+
+        await client.SendCommandAsync("float-embed");
+        await Eventually(async () => await TabOfBox() != "float");
+
+        await client.SendCommandAsync("float-embed");
+        await Eventually(async () => await TabOfBox() == "float");
+    }
+
     private static async Task Eventually(Func<bool> condition) => await Eventually(() => Task.FromResult(condition()));
 
     private static async Task Eventually(Func<Task<bool>> condition)

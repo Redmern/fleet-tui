@@ -105,6 +105,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "spawn":
                         response.Pane = Spawn(request);
                         break;
+                    case "spawn-float":
+                        response.Pane = SpawnFloat(request);
+                        break;
                     case "split":
                         response.Pane = Split(request);
                         break;
@@ -364,7 +367,15 @@ public sealed class FleetDaemon(DaemonOptions options)
                     session.Capture = null;
                 }
 
-                if (capture.Divider >= 0)
+                if (capture.Kind is MouseHitKind.FloatMove or MouseHitKind.FloatResize)
+                {
+                    if (mouse.Action == MouseActions.Motion && DragFloat(capture, mouse.X, mouse.Y))
+                    {
+                        ApplyResizes();
+                        redraw = true;
+                    }
+                }
+                else if (capture.Divider >= 0)
                 {
                     if (mouse.Action == MouseActions.Motion && _model.DragDivider(session.Client, capture.Divider, mouse.X, mouse.Y))
                     {
@@ -389,6 +400,22 @@ public sealed class FleetDaemon(DaemonOptions options)
                             && Composer.TabSpans(view).FirstOrDefault(s => mouse.X >= s.Start && mouse.X < s.End) is { Tab: { } tab })
                         {
                             redraw = _model.FocusTab(session.Client, tab);
+                        }
+                        else if (_model.View(session.Client) is { } bar
+                                 && Composer.FloatSpan(bar) is var (start, end, _)
+                                 && mouse.X >= start && mouse.X < end)
+                        {
+                            redraw = _model.ToggleFloats(session.Client);
+                        }
+
+                        break;
+
+                    case MouseHitKind.FloatMove or MouseHitKind.FloatResize when press && mouse.Button == MouseButtons.Left:
+                        if (_model.View(session.Client)?.FloatingPanes.FirstOrDefault(p => p.Pane == hit.Pane) is { Pane: not null } box)
+                        {
+                            _model.Focus(hit.Pane!);
+                            session.Capture = new MouseCapture(hit.Pane, -1, hit.Kind, box.Area, mouse.X, mouse.Y);
+                            redraw = true;
                         }
 
                         break;
@@ -480,6 +507,19 @@ public sealed class FleetDaemon(DaemonOptions options)
                     break;
                 case "redraw":
                     session.Shown = null;
+                    break;
+                case "float-new":
+                    NewFloat(session.Client);
+                    break;
+                case "float-toggle":
+                    _model.ToggleFloats(session.Client);
+                    break;
+                case "float-embed":
+                    if (_model.View(session.Client)?.Focused is { } focused)
+                    {
+                        _ = _model.ToTile(focused) || _model.ToFloat(focused);
+                    }
+
                     break;
                 case "focus-in" or "focus-out":
                 {
@@ -574,6 +614,55 @@ public sealed class FleetDaemon(DaemonOptions options)
         ApplyResizes();
         Start(pane, request.Env);
         return pane.Id;
+    }
+
+    private string SpawnFloat(ControlRequest request)
+    {
+        var workspace = request.Workspace
+            ?? request.Session
+            ?? CallerWorkspace(request.Caller)
+            ?? Fleet.Shared.Constants.FleetWorkspaces.Default;
+
+        var pane = _model.SpawnFloat(workspace, request.Cwd ?? Environment.CurrentDirectory, request.Args ?? []);
+        ApplyResizes();
+        Start(pane, request.Env);
+        return pane.Id;
+    }
+
+    private void NewFloat(string client)
+    {
+        if (_model.View(client) is not { Workspace: { } workspace } view)
+        {
+            return;
+        }
+
+        var cwd = view.Focused is { } focused && _model.Pane(focused) is { } pane
+            ? pane.Cwd
+            : Environment.CurrentDirectory;
+
+        var created = _model.SpawnFloat(workspace.Name, cwd, []);
+        ApplyResizes();
+
+        try
+        {
+            Start(created, new Dictionary<string, string> { [ClientVariable] = client });
+        }
+        catch (InvalidOperationException e)
+        {
+            options.Log(e.Message);
+        }
+    }
+
+    private bool DragFloat(MouseCapture capture, int x, int y)
+    {
+        var start = capture.Start;
+        var dx = x - capture.FromX;
+        var dy = y - capture.FromY;
+
+        return capture.Kind == MouseHitKind.FloatMove
+            ? _model.MoveFloat(capture.Pane!, start.X + dx, start.Y + dy)
+            : _model.ResizeFloat(capture.Pane!, start.Width + dx, start.Height + dy)
+              && _model.MoveFloat(capture.Pane!, start.X, start.Y);
     }
 
     private string Split(ControlRequest request)
@@ -927,5 +1016,11 @@ public sealed class FleetDaemon(DaemonOptions options)
         public string? Title { get; set; }
     }
 
-    private sealed record MouseCapture(string? Pane, int Divider);
+    private sealed record MouseCapture(
+        string? Pane,
+        int Divider,
+        MouseHitKind Kind = MouseHitKind.Pane,
+        Rect Start = default,
+        int FromX = 0,
+        int FromY = 0);
 }
