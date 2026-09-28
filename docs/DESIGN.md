@@ -2366,11 +2366,13 @@ The records path avoids some of them by construction; each needs a test before
 - [ ] **SGR mouse past column 95.** Coordinates must use SGR (1006) encoding end
       to end. Legacy encodings stop at 95/223. Reattach must restore mouse
       reporting.
-- [ ] **Pasted Enter.** A multi-line paste from Windows Terminal arrives as key
+- [x] **Pasted Enter.** A multi-line paste from Windows Terminal arrives as key
       records with `VK_RETURN`. It must reach the pane as one bracketed paste with
       its newlines, and must not submit each line (herdr: Codex lost Enter after
       long pastes; OMP/Pi submitted per line). LF-only pastes keep their
-      newlines.
+      newlines. *Done 2026-09-28 for `embedded`, see "Paste on Windows"; the
+      conhost path and the ConPTY (WezTerm/WT) path were verified, not a real
+      WezTerm or Windows Terminal window.*
 - [ ] **Mode restore.** On exit and on detach, reset mouse (1000/1002/1003/1006),
       focus (1004), bracketed paste (2004), cursor keys, keypad, cursor shape and
       visibility, and the alt screen. Restore console modes and code pages even
@@ -2790,6 +2792,110 @@ switch can cost under 100 bytes.
   before exit detection was fixed, and it did not reproduce afterwards.
 - **The dashboard's other WezTerm-only actions** (e.g. its keybind hints) have
   not been audited for `embedded`.
+
+## Paste on Windows, 2026-09-28
+
+The gap: a multi-line paste into a Windows pane submitted each line. Pasting
+two lines into Claude sent the first as a prompt.
+
+### What the probes showed
+
+Two probes ran inside fleetd panes: one reads console records (like
+PowerShell's `ReadKey`), and one reads VT input (`ENABLE_VIRTUAL_TERMINAL_INPUT`,
+as modern TUIs do). Both enable bracketed paste (`?2004h`).
+
+| Path | What the program receives |
+|---|---|
+| `ESC[200~alpha CR bravo ESC[201~` into a pane, record reader, inbox ConPTY | `a l p h a`, an **Enter key press**, `b r a v o`. No markers |
+| same, record reader, app-local ConPTY (WezTerm's OpenConsole 1.22) | the same |
+| same, **VT-input** reader, inbox ConPTY | `ESC[200~alpha<CR>bravo ESC[201~` intact |
+| same, VT-input reader, app-local 1.22 | intact |
+| the app's `?2004h`, seen by fleetd through ConPTY | yes: `bracketed-paste=True` |
+
+So a VT-input app, Claude included, gets a real bracketed paste as long as
+something sends one. The markers must come from fleetd, and fleetd must know
+the host pasted.
+
+On the host side, where `fleet attach` reads its own console:
+
+| Host | How a paste arrives |
+|---|---|
+| conhost, native Paste | one read of key records, CR as an ordinary key, **no markers** even though the client asked for `?2004h`. conhost also ignored `?9001h` |
+| a terminal pasting through its ConPTY (WezTerm, Windows Terminal), reproduced with an outer fleetd | key records, **split into two reads at the newline**, markers stripped |
+
+In record mode typed keys arrive one or two records per read, and a paste
+arrives as a burst.
+
+### Design
+
+- **Client (Windows).** `PasteBurst` recognises a paste as a burst. A read
+  with two or more text key-downs and no Ctrl/Alt chord (AltGr counts as text)
+  starts a candidate; the client keeps reading while more input arrives within
+  15 ms. The burst is a paste if it contains a newline or is at least 8
+  characters long. Otherwise it is replayed as keys, so `dd` typed quickly in
+  nvim still deletes a line. CRLF and LF become CR, as a terminal sends. A paste
+  goes to fleetd as one `Text { paste: true }` message.
+- **fleetd.** A paste is wrapped in `ESC[200~ … ESC[201~` when the pane asked
+  for bracketed paste, and `ESC[201~` inside the text is removed so a paste
+  cannot close its bracket early. A pane that did not ask gets the text as
+  typed, Enters included, which is what a terminal does too.
+- **Linux clients** are unchanged: their paste arrives as raw bytes, already
+  bracketed if the host terminal does it.
+
+Rejected along the way:
+- **Reading the host as VT input** and asking it for `?9001h`/`?2004h`, as
+  herdr does. conhost honours neither, and VT input loses key fidelity where
+  `?9001h` is ignored.
+- **Shipping an app-local ConPTY for paste.** The inbox ConPTY passes
+  bracketed paste to VT-input apps just as well.
+
+### fleet's own ConPTY replaces RoyalApps
+
+To test the app-local ConPTY question, Windows panes moved to fleet's own
+ConPTY code (`Pty/ConPtyPane.cs`). It stays, and the RoyalApps package is gone:
+- it owns the process handle, so exit is seen from the handle rather than an
+  event that did not fire;
+- the child gets null std handles, so it can never inherit fleetd's;
+- it builds the child's environment block itself.
+
+It binds `CreatePseudoConsole`, `ResizePseudoConsole` and `ClosePseudoConsole`
+from `kernel32` (the inbox ConPTY, the default) or from an app-local
+`conpty.dll`. `FLEET_CONPTY` may name one, or say `inbox`. A `conpty.dll` with
+its `OpenConsole.exe` next to `fleet.exe` is also picked up. Microsoft ships
+that pair as the `Microsoft.Windows.Console.ConPTY` NuGet package (1.25
+preview), should a newer ConPTY become worth shipping. `WindowsCommandLine`
+builds the command line: C-runtime quoting, `.cmd`/`.bat` shims through `cmd`,
+and anything after `cmd /c` passed as written.
+
+### Verified
+
+- Unit tests: `PasteBurst` (bursts, split reads, chords, AltGr, surrogates,
+  newline normalisation), `PasteBytes` (bracketing only when asked; an embedded
+  `ESC[201~` removed) and `WindowsCommandLine`. 1003 tests.
+- conhost's native Paste into a real attach client → the VT app received one
+  bracketed paste.
+- A paste through a ConPTY into the attach client, which is the
+  WezTerm/Windows Terminal path, run windowless with an outer fleetd → one
+  bracketed paste.
+- Claude (plan mode) in a pane: two pasted lines sat in its prompt box as one
+  paste, and nothing was submitted.
+
+### Limits
+
+- **A single-line paste under 8 characters** reaches the pane as keys, not as
+  a bracketed paste. That is deliberate, so short fast input in nvim stays
+  keys.
+- **A human typing two keys within one read** is treated as a burst. It still
+  becomes a paste only with a newline or 8+ characters, which typing does not
+  produce.
+- **Programs that read console records** (PowerShell/PSReadLine) receive a
+  paste as keys with Enters, since the inbox ConPTY strips the markers for
+  them. That is the same as pasting into them in any terminal.
+- **Not tried in a real WezTerm or Windows Terminal window.** Test windows take
+  the keyboard focus, even when launched minimized and not activated, so these
+  runs used conhost's Paste command and the windowless nested setup instead.
+  Paste into Claude inside `fleet attach` under WezTerm belongs on the manual
+  checklist.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
