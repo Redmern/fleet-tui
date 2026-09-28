@@ -67,7 +67,11 @@ public sealed class DaemonTests : IAsyncLifetime
     {
         var spawned = await control.RequestAsync(new ControlRequest
         {
-            Op = "spawn", Session = workspace, NewWindow = true, Cwd = ".", Args = [program],
+            Op = "spawn",
+            Session = workspace,
+            NewWindow = true,
+            Cwd = ".",
+            Args = [program],
         });
 
         Assert.True(spawned.Ok, spawned.Error);
@@ -182,7 +186,9 @@ public sealed class DaemonTests : IAsyncLifetime
         var agent = await SpawnAsync(control, "techweb", "agent");
         var moved = await control.RequestAsync(new ControlRequest
         {
-            Op = "move", Pane = agent, Workspace = FleetWorkspaces.HiddenFor("techweb"),
+            Op = "move",
+            Pane = agent,
+            Workspace = FleetWorkspaces.HiddenFor("techweb"),
         });
         Assert.True(moved.Ok, moved.Error);
         var client = await AttachAsync(workspace: "techweb");
