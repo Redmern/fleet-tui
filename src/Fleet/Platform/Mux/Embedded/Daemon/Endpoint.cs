@@ -107,7 +107,7 @@ public sealed class Endpoint(string address)
         {
             _path = path;
             var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir))
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
             {
                 Directory.CreateDirectory(dir);
                 if (!OperatingSystem.IsWindows())
