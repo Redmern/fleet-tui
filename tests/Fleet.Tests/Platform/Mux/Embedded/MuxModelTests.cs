@@ -105,7 +105,7 @@ public class MuxModelTests
         _model.Kill(dash.Id);
 
         var view = _model.View(client.Id)!;
-        Assert.Equal(new Rect(0, 0, 100, 40), view.Panes.Single().Area);
+        Assert.Equal(new Rect(0, 1, 100, 40), view.Panes.Single().Area);
         Assert.Equal(claude.Id, view.Focused);
     }
 

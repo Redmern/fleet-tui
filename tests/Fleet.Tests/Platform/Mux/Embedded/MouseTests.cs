@@ -123,13 +123,13 @@ public class MouseTests
         var client = model.Connect(21, 6, "techweb");
         var divider = model.View(client.Id)!.Dividers.Single().X;
 
-        var left = model.Hit(client.Id, 2, 1);
-        var right = model.Hit(client.Id, divider + 3, 2);
+        var left = model.Hit(client.Id, 2, 2);
+        var right = model.Hit(client.Id, divider + 3, 3);
 
         Assert.Equal((MouseHitKind.Pane, claude.Id, 2, 1), (left.Kind, left.Pane, left.X, left.Y));
         Assert.Equal((MouseHitKind.Pane, dash.Id, 2, 2), (right.Kind, right.Pane, right.X, right.Y));
-        Assert.Equal(MouseHitKind.Divider, model.Hit(client.Id, divider, 0).Kind);
-        Assert.Equal(MouseHitKind.StatusBar, model.Hit(client.Id, 0, 5).Kind);
+        Assert.Equal(MouseHitKind.Divider, model.Hit(client.Id, divider, 1).Kind);
+        Assert.Equal(MouseHitKind.StatusBar, model.Hit(client.Id, 0, 0).Kind);
     }
 
     [Fact]

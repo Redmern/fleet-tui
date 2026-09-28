@@ -12,6 +12,14 @@ public static class Composer
     public static readonly uint ActiveFg = Cell.Palette(15);
     public static readonly uint BadgeBg = Cell.Palette(11);
     public static readonly uint BadgeFg = Cell.Palette(0);
+    public static readonly uint Crust = Cell.Rgb(0x11, 0x11, 0x1b);
+    public static readonly uint Lavender = Cell.Rgb(0xb4, 0xbe, 0xfe);
+    public static readonly uint Overlay0 = Cell.Rgb(0x6c, 0x70, 0x86);
+    public static readonly uint Text = Cell.Rgb(0xcd, 0xd6, 0xf4);
+    public static readonly uint Surface0 = Cell.Rgb(0x31, 0x32, 0x44);
+    public static readonly uint Yellow = Cell.Rgb(0xf9, 0xe2, 0xaf);
+    public const char LeftCap = '';
+    public const char RightCap = '';
 
     public static ClientFrame Compose(
         ClientView view, Func<string, ScreenBuffer?> screens, string? badge, CopyOverlay? copy = null)
@@ -97,7 +105,7 @@ public static class Composer
         var rows = Math.Min(area.Height, screen.Rows);
         var cols = Math.Min(area.Width, screen.Cols);
 
-        for (var y = 0; y < rows && area.Y + y < frame.Rows - MuxModel.StatusRows; y++)
+        for (var y = 0; y < rows && area.Y + y < frame.Rows; y++)
         {
             var source = screen.Row(y);
             var target = frame.Cells.AsSpan((area.Y + y) * frame.Cols + area.X, Math.Min(area.Width, frame.Cols - area.X));
@@ -131,7 +139,7 @@ public static class Composer
 
     private static void Marker(ClientFrame frame, Rect area, string text)
     {
-        if (area.Height <= 0 || text.Length > area.Width || area.Y >= frame.Rows - MuxModel.StatusRows)
+        if (area.Height <= 0 || text.Length > area.Width || area.Y >= frame.Rows)
         {
             return;
         }
@@ -149,7 +157,7 @@ public static class Composer
         {
             var (from, to) = anchor.CompareTo(copy.Cursor) <= 0 ? (anchor, copy.Cursor) : (copy.Cursor, anchor);
 
-            for (var y = 0; y < area.Height && area.Y + y < frame.Rows - MuxModel.StatusRows; y++)
+            for (var y = 0; y < area.Height && area.Y + y < frame.Rows; y++)
             {
                 for (var x = 0; x < area.Width && area.X + x < frame.Cols; x++)
                 {
@@ -176,7 +184,7 @@ public static class Composer
 
     private static void Clear(ClientFrame frame, Rect area)
     {
-        for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows - MuxModel.StatusRows; y++)
+        for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows; y++)
         {
             for (var x = area.X; x < area.X + area.Width && x < frame.Cols; x++)
             {
@@ -187,7 +195,7 @@ public static class Composer
 
     private static void Box(ClientFrame frame, Rect area, uint fg, string? title)
     {
-        for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows - MuxModel.StatusRows; y++)
+        for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows; y++)
         {
             for (var x = area.X; x < area.X + area.Width && x < frame.Cols; x++)
             {
@@ -211,7 +219,7 @@ public static class Composer
             }
         }
 
-        if (title is { Length: > 0 } && area.Width > 6 && area.Y < frame.Rows - MuxModel.StatusRows)
+        if (title is { Length: > 0 } && area.Width > 6 && area.Y < frame.Rows)
         {
             var label = $" {title} ";
             label = label.Length > area.Width - 4 ? label[..(area.Width - 4)] : label;
@@ -230,7 +238,7 @@ public static class Composer
             var x = divider.Vertical ? divider.X : divider.X + i;
             var y = divider.Vertical ? divider.Y + i : divider.Y;
 
-            if (x < 0 || y < 0 || x >= frame.Cols || y >= frame.Rows - MuxModel.StatusRows)
+            if (x < 0 || y < 0 || x >= frame.Cols || y >= frame.Rows)
             {
                 continue;
             }
@@ -246,87 +254,103 @@ public static class Composer
         }
     }
 
-    public static IReadOnlyList<(string Tab, int Start, int End, string Label)> TabSpans(ClientView view)
+    public static IReadOnlyList<(string Tab, int Start, int End, string Label)> TabSpans(ClientView view) =>
+        Bar(view)
+            .Where(s => s.Segment.Tab is not null)
+            .Select(s => (s.Segment.Tab!, s.Start, s.Start + s.Segment.Text.Length, s.Segment.Text))
+            .ToList();
+
+    public static (int Start, int End, string Label)? FloatSpan(ClientView view) =>
+        Bar(view).Where(s => s.Segment.Floats).Select(s => (s.Start, s.Start + s.Segment.Text.Length, s.Segment.Text))
+            .Cast<(int, int, string)?>()
+            .FirstOrDefault();
+
+    public static IReadOnlyList<(BarSegment Segment, int Start)> Bar(ClientView view)
     {
-        var spans = new List<(string, int, int, string)>();
+        var parts = new List<BarSegment> { new(" ", Cell.Default, Cell.Default) };
 
-        if (view.Workspace is null)
+        if (view.Workspace is not { } workspace)
         {
-            return spans;
+            parts.Add(new BarSegment(" nothing to show ", Overlay0, Cell.Default));
+            return Place(parts);
         }
 
-        var x = view.Workspace.Name.Length + 2;
+        parts.AddRange(Pill($" {workspace.Name} ", Lavender, Crust, CellAttr.Bold));
 
-        for (var i = 0; i < view.Workspace.Tabs.Count; i++)
+        for (var i = 0; i < workspace.Tabs.Count; i++)
         {
-            var tab = view.Workspace.Tabs[i];
-            var label = $" {i + 1}:{(tab.Title.Length > 0 ? tab.Title : "shell")} ";
-            spans.Add((tab.Id, x, x + label.Length, label));
-            x += label.Length;
+            var tab = workspace.Tabs[i];
+            var label = $"{i + 1}:{(tab.Title.Length > 0 ? tab.Title : "shell")}";
+            parts.Add(new BarSegment(" ", Cell.Default, Cell.Default));
+
+            if (tab.Id == workspace.ActiveTab)
+            {
+                parts.Add(new BarSegment($"{LeftCap} {label} {RightCap}", Crust, Lavender, CellAttr.Bold, tab.Id, Caps: true));
+            }
+            else
+            {
+                parts.Add(new BarSegment($" {label} ", Overlay0, Cell.Default, CellAttr.None, tab.Id));
+            }
         }
 
-        return spans;
+        var floats = workspace.Floats.Count(f => !f.Modal);
+        if (floats > 0)
+        {
+            parts.Add(new BarSegment("  ", Cell.Default, Cell.Default));
+            parts.Add(workspace.FloatsShown
+                ? new BarSegment($"{LeftCap} float {floats} {RightCap}", Text, Surface0, CellAttr.None, Floats: true, Caps: true)
+                : new BarSegment($" float {floats} ", Overlay0, Cell.Default, CellAttr.None, Floats: true));
+        }
+
+        return Place(parts);
     }
 
-    public static (int Start, int End, string Label)? FloatSpan(ClientView view)
+    private static IEnumerable<BarSegment> Pill(string text, uint accent, uint fg, CellAttr attrs) =>
+        [new BarSegment($"{LeftCap}{text}{RightCap}", fg, accent, attrs, Caps: true)];
+
+    private static List<(BarSegment Segment, int Start)> Place(List<BarSegment> parts)
     {
-        if (view.Workspace is not { } workspace || workspace.Floats.All(f => f.Modal))
+        var placed = new List<(BarSegment, int)>();
+        var x = 0;
+
+        foreach (var part in parts)
         {
-            return null;
+            placed.Add((part, x));
+            x += part.Text.Length;
         }
 
-        var spans = TabSpans(view);
-        var start = (spans.Count > 0 ? spans[^1].End : workspace.Name.Length + 2) + 1;
-        var label = $" float {workspace.Floats.Count(f => !f.Modal)} ";
-        return (start, start + label.Length, label);
+        return placed;
     }
 
     private static void StatusBar(ClientFrame frame, ClientView view, string? badge)
     {
-        var y = frame.Rows - 1;
-        var x = 0;
+        const int y = 0;
 
-        void Put(string text, uint fg, uint bg, CellAttr attrs = CellAttr.None)
+        void Put(int x, string text, uint fg, uint bg, CellAttr attrs, bool caps)
         {
-            foreach (var c in text)
+            for (var i = 0; i < text.Length && x + i < frame.Cols; i++)
             {
-                if (x >= frame.Cols)
-                {
-                    return;
-                }
-
-                frame.Cells[y * frame.Cols + x++] = Cell.Of(c, fg, bg, attrs);
+                var cap = caps && (i == 0 || i == text.Length - 1);
+                frame.Cells[y * frame.Cols + x + i] = cap
+                    ? Cell.Of(text[i], bg, Cell.Default)
+                    : Cell.Of(text[i], fg, bg, attrs);
             }
         }
 
-        Put(new string(' ', frame.Cols), BarFg, BarBg);
-        x = 0;
+        Put(0, new string(' ', frame.Cols), Cell.Default, Cell.Default, CellAttr.None, false);
 
-        if (view.Workspace is null)
+        foreach (var (segment, start) in Bar(view))
         {
-            Put(" nothing to show ", BarFg, BarBg);
-        }
-        else
-        {
-            Put($" {view.Workspace.Name} ", ActiveFg, BarBg, CellAttr.Bold);
-
-            foreach (var (tab, _, _, label) in TabSpans(view))
-            {
-                var active = tab == view.Workspace.ActiveTab;
-                Put(label, active ? ActiveFg : BarFg, active ? ActiveBg : BarBg);
-            }
-
-            if (FloatSpan(view) is var (start, _, floats))
-            {
-                x = start;
-                Put(floats, view.Workspace.FloatsShown ? ActiveFg : BarFg, view.Workspace.FloatsShown ? ActiveBg : BarBg);
-            }
+            Put(start, segment.Text, segment.Fg, segment.Bg, segment.Attrs, segment.Caps);
         }
 
         if (badge is { Length: > 0 })
         {
-            x = Math.Max(0, frame.Cols - badge.Length - 2);
-            Put($" {badge} ", BadgeFg, BadgeBg, CellAttr.Bold);
+            var text = $"{LeftCap} {badge} {RightCap}";
+            Put(Math.Max(0, frame.Cols - text.Length - 1), text, Crust, Yellow, CellAttr.Bold, true);
         }
     }
 }
+
+public sealed record BarSegment(
+    string Text, uint Fg, uint Bg, CellAttr Attrs = CellAttr.None, string? Tab = null, bool Floats = false, bool Caps = false);

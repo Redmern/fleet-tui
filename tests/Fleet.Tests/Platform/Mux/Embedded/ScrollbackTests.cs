@@ -113,8 +113,8 @@ public class ScrollbackTests
 
         var frame = Composer.Compose(model.View(client.Id)!, id => id == pane.Id ? screen : null, null);
 
-        Assert.EndsWith("[10/25]", frame.RowText(0));
-        Assert.StartsWith("line 16", frame.RowText(0));
+        Assert.EndsWith("[10/25]", frame.RowText(1));
+        Assert.StartsWith("line 16", frame.RowText(1));
     }
 
     [Fact]
@@ -129,12 +129,12 @@ public class ScrollbackTests
 
         var frame = Composer.Compose(model.View(client.Id)!, id => id == pane.Id ? screen : null, null, copy);
 
-        Assert.Equal((2, 1, true), (frame.CursorX, frame.CursorY, frame.CursorVisible));
-        Assert.True(frame.At(18, 0).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.True(frame.At(0, 1).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.True(frame.At(2, 1).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.False(frame.At(3, 1).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.False(frame.At(17, 0).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.Equal((2, 2, true), (frame.CursorX, frame.CursorY, frame.CursorVisible));
+        Assert.True(frame.At(18, 1).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.True(frame.At(0, 2).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.True(frame.At(2, 2).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.False(frame.At(3, 2).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.False(frame.At(17, 1).Attrs.HasFlag(CellAttr.Inverse));
     }
 
     [Theory]

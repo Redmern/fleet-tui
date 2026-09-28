@@ -24,7 +24,7 @@ public class FloatTests
 
         var view = _model.View(client.Id)!;
         var area = view.FloatingPanes.Single().Area;
-        Assert.Equal(new Rect(20, 8, 60, 24), area);
+        Assert.Equal(new Rect(20, 9, 60, 24), area);
         Assert.Equal(box.Id, view.Focused);
         Assert.Equal((58, 22), (box.Cols, box.Rows));
         Assert.Equal(tile.Id, view.Panes.Single().Pane);
@@ -111,10 +111,10 @@ public class FloatTests
         var (tile, client) = Workspace("techweb");
         var box = _model.SpawnFloat("techweb", "C:/x", ["pwsh"]);
 
-        Assert.Equal(new MouseHit(MouseHitKind.FloatMove, box.Id, 30, 8), _model.Hit(client.Id, 30, 8));
-        Assert.Equal(MouseHitKind.FloatMove, _model.Hit(client.Id, 20, 15).Kind);
-        Assert.Equal(new MouseHit(MouseHitKind.FloatResize, box.Id, 79, 31), _model.Hit(client.Id, 79, 31));
-        Assert.Equal(new MouseHit(MouseHitKind.Pane, box.Id, 4, 2), _model.Hit(client.Id, 25, 11));
+        Assert.Equal(new MouseHit(MouseHitKind.FloatMove, box.Id, 30, 9), _model.Hit(client.Id, 30, 9));
+        Assert.Equal(MouseHitKind.FloatMove, _model.Hit(client.Id, 20, 16).Kind);
+        Assert.Equal(new MouseHit(MouseHitKind.FloatResize, box.Id, 79, 32), _model.Hit(client.Id, 79, 32));
+        Assert.Equal(new MouseHit(MouseHitKind.Pane, box.Id, 4, 2), _model.Hit(client.Id, 25, 12));
         Assert.Equal(tile.Id, _model.Hit(client.Id, 5, 5).Pane);
     }
 
@@ -155,7 +155,7 @@ public class FloatTests
         _model.MoveFloat(box.Id, 90, 35);
         _model.Resizes();
         var area = _model.View(client.Id)!.FloatingPanes.Single().Area;
-        Assert.Equal(new Rect(40, 16, 60, 24), area);
+        Assert.Equal(new Rect(40, 17, 60, 24), area);
 
         _model.ResizeFloat(box.Id, 2, 1);
         _model.Resizes();
@@ -163,7 +163,7 @@ public class FloatTests
 
         _model.ResizeFloat(box.Id, 500, 500);
         _model.Resizes();
-        Assert.Equal(new Rect(0, 0, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
+        Assert.Equal(new Rect(0, 1, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
         Assert.Equal((98, 38), (box.Cols, box.Rows));
     }
 
@@ -258,7 +258,7 @@ public class FloatTests
     [Fact]
     public void A_float_is_drawn_over_the_tiles_with_its_title_and_owns_the_cursor()
     {
-        var (tile, client) = Workspace("techweb", cols: 30, rows: 11);
+        var (tile, client) = Workspace("techweb", cols: 40, rows: 11);
         var box = _model.SpawnFloat("techweb", "C:/x", ["pwsh"]);
         _model.SetTitle(box.Id, "scratch");
         _model.Resizes();
@@ -278,7 +278,7 @@ public class FloatTests
         Assert.Equal('f', frame.At(area.X + 1, area.Y + 1).Text[0]);
         Assert.Equal('x', frame.At(area.X - 1, area.Y + 1).Text[0]);
         Assert.Equal((area.X + 2, area.Y + 2), (frame.CursorX, frame.CursorY));
-        Assert.Contains("float 1", frame.RowText(10));
+        Assert.Contains("float 1", frame.RowText(0));
     }
 
     private static ScreenBuffer Filled(PaneState pane, char c)

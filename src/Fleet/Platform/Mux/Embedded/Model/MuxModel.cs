@@ -78,7 +78,7 @@ public sealed class MuxModel
             .First();
 
         var placed = new List<Placed>();
-        tab.Root.Place(new Rect(0, 0, cols, Math.Max(1, rows - StatusRows)), placed, []);
+        tab.Root.Place(Content(cols, rows), placed, []);
         return placed.FirstOrDefault(p => p.Pane == pane).Area;
     }
 
@@ -89,7 +89,7 @@ public sealed class MuxModel
             return false;
         }
 
-        box.Bounds = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(0, y) };
+        box.Bounds = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(StatusRows, y) };
         return true;
     }
 
@@ -358,7 +358,7 @@ public sealed class MuxModel
                 : MouseHit.Nothing;
         }
 
-        if (y >= view.Client.Rows - StatusRows)
+        if (y < StatusRows)
         {
             return new MouseHit(MouseHitKind.StatusBar, null, x, y);
         }
@@ -491,8 +491,10 @@ public sealed class MuxModel
         var usable = Math.Max(1, rows - StatusRows);
         var width = Math.Clamp(cols * 4 / 5, Math.Min(cols, 40), cols);
         var height = Math.Clamp(usable * 4 / 5, Math.Min(usable, 12), usable);
-        return new Rect((cols - width) / 2, (usable - height) / 2, width, height);
+        return new Rect((cols - width) / 2, StatusRows + (usable - height) / 2, width, height);
     }
+
+    public static Rect Content(int cols, int rows) => new(0, StatusRows, cols, Math.Max(1, rows - StatusRows));
 
     public IReadOnlyList<Workspace> ListWorkspaces(string? client)
     {
@@ -547,7 +549,7 @@ public sealed class MuxModel
 
         var workspace = c.Showing is null ? null : Workspace(c.Showing);
         var tab = workspace?.Tabs.FirstOrDefault(t => t.Id == workspace.ActiveTab);
-        var area = new Rect(0, 0, c.Cols, Math.Max(1, c.Rows - StatusRows));
+        var area = Content(c.Cols, c.Rows);
         var placed = new List<Placed>();
         var dividers = new List<Divider>();
         tab?.Root.Place(area, placed, dividers);
@@ -619,7 +621,7 @@ public sealed class MuxModel
                     : Reference();
                 var placed = new List<Placed>();
                 tab.Root.Place(
-                    new Rect(0, 0, size.Item1, Math.Max(1, size.Item2 - StatusRows)), placed, []);
+                    Content(size.Item1, size.Item2), placed, []);
 
                 foreach (var p in placed)
                 {
@@ -647,7 +649,7 @@ public sealed class MuxModel
 
                 var size = shownBy is not null ? (shownBy.Cols, shownBy.Rows) : Reference();
                 var inner = ClientView.Inner(
-                    FloatArea(box.Bounds, new Rect(0, 0, size.Item1, Math.Max(1, size.Item2 - StatusRows))));
+                    FloatArea(box.Bounds, Content(size.Item1, size.Item2)));
                 var cols = Math.Max(1, inner.Width);
                 var rows = Math.Max(1, inner.Height);
 
@@ -733,7 +735,7 @@ public sealed class MuxModel
 
         workspace.Floats.Add(new FloatState(
             pane.Id,
-            bounds ?? new Rect((cols - width) / 2 + cascade, (usable - height) / 2 + cascade / 2, width, height))
+            bounds ?? new Rect((cols - width) / 2 + cascade, StatusRows + (usable - height) / 2 + cascade / 2, width, height))
         {
             Modal = modal,
         });

@@ -27,18 +27,18 @@ public class RenderTests
         var claude = _model.Spawn("techweb", "C:/x", ["claude"]);
         var dash = _model.Split(claude.Id, true, false, 50, "C:/x", ["fleet"])!;
         _model.SetTitle(claude.Id, "dashboard");
-        var client = _model.Connect(21, 5, "techweb");
+        var client = _model.Connect(41, 5, "techweb");
         _model.Resizes();
         Screen(claude, "left");
         Screen(dash, "right");
 
         var frame = Compose(client.Id);
 
-        Assert.StartsWith("left", frame.RowText(0));
-        Assert.Equal('│', frame.At(claude.Cols, 0).Text[0]);
-        Assert.Equal("right", frame.RowText(0)[(claude.Cols + 1)..].TrimEnd());
-        Assert.Contains("techweb", frame.RowText(4));
-        Assert.Contains("1:dashboard", frame.RowText(4));
+        Assert.StartsWith("left", frame.RowText(1));
+        Assert.Equal('│', frame.At(claude.Cols, 1).Text[0]);
+        Assert.Equal("right", frame.RowText(1)[(claude.Cols + 1)..].TrimEnd());
+        Assert.Contains("techweb", frame.RowText(0));
+        Assert.Contains("1:dashboard", frame.RowText(0));
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public class RenderTests
         var frame = Compose(client.Id);
 
         Assert.Equal(claude.Cols + 1 + 2, frame.CursorX);
-        Assert.Equal(0, frame.CursorY);
+        Assert.Equal(1, frame.CursorY);
         Assert.True(frame.CursorVisible);
     }
 
@@ -66,7 +66,7 @@ public class RenderTests
 
         var frame = Compose(client.Id, "ctrl+b");
 
-        Assert.EndsWith(" ctrl+b ", frame.RowText(3));
+        Assert.Contains(" ctrl+b ", frame.RowText(0));
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class RenderTests
         screen.Write(1, 0, "a");
         var diff = FrameEncoder.Encode(first, Compose(client.Id));
 
-        Assert.Contains("\e[1;2H", diff);
+        Assert.Contains("\e[2;2H", diff);
         Assert.DoesNotContain("hello", diff);
         Assert.DoesNotContain("hallo", diff);
     }
@@ -130,7 +130,7 @@ public class RenderTests
         _model.Show(client.Id, "fleet");
         var next = Compose(client.Id);
 
-        Assert.StartsWith("fl", next.RowText(0));
+        Assert.StartsWith("fl", next.RowText(1));
         Assert.Contains("fl", FrameEncoder.Encode(shown, next));
         Assert.Equal(version, fleetScreen.Version);
     }
