@@ -55,13 +55,13 @@ public sealed class CopySession(string pane, TextPoint cursor)
                 Anchor = Anchor is null ? Cursor : null;
                 break;
             case "yank":
-            {
-                var text = Anchor is { } anchor
-                    ? terminal.Text(anchor, Cursor)
-                    : terminal.Text(Cursor with { Col = 0 }, Cursor with { Col = cols - 1 });
-                Finish(terminal);
-                return text;
-            }
+                {
+                    var text = Anchor is { } anchor
+                        ? terminal.Text(anchor, Cursor)
+                        : terminal.Text(Cursor with { Col = 0 }, Cursor with { Col = cols - 1 });
+                    Finish(terminal);
+                    return text;
+                }
 
             case "exit":
                 Finish(terminal);

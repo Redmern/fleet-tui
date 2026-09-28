@@ -260,16 +260,16 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
                         await Command(wire, batch[i].SetFocus != 0 ? "focus-in" : "focus-out").ConfigureAwait(false);
                         break;
                     case WindowsConsole.MouseEvent when mouse:
-                    {
-                        var (left, top) = console.WindowOrigin();
-                        foreach (var message in pointer.Translate(batch[i].Mouse, left, top))
                         {
-                            await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage)
-                                .ConfigureAwait(false);
-                        }
+                            var (left, top) = console.WindowOrigin();
+                            foreach (var message in pointer.Translate(batch[i].Mouse, left, top))
+                            {
+                                await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage)
+                                    .ConfigureAwait(false);
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
                 }
             }
         }

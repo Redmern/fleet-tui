@@ -397,10 +397,11 @@ public sealed class DaemonTests : IAsyncLifetime
         var techweb = new Project("techweb", ".");
         var fleet = new Project("fleet", ".");
         Assert.True((await new OpenProjectHandler(mux)
-            .HandleAsync(new OpenProjectCommand(techweb, "claude-techweb", "fleet", null))).Succeeded);
-        Assert.True((await new OpenProjectHandler(mux)
-            .HandleAsync(new OpenProjectCommand(fleet, "claude-fleet", "fleet", null))).Succeeded);
-        _panes.ByProgram("claude-fleet")!.Emit("fleet-prompt");
+            .HandleAsync(new OpenProjectCommand(techweb, AgentHarness.Claude, "fleet", null))).Succeeded);
+        var opened = await new OpenProjectHandler(mux)
+            .HandleAsync(new OpenProjectCommand(fleet, AgentHarness.Claude, "fleet", null));
+        Assert.True(opened.Succeeded);
+        _panes.Started.Single(p => p.Env[FleetDaemon.PaneVariable] == opened.Value.HarnessPane.Value).Emit("fleet-prompt");
 
         var client = await AttachAsync(workspace: "techweb");
         await client.WaitForFramesAsync(1);

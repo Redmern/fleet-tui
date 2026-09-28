@@ -44,27 +44,27 @@ public abstract record Layout
                 panes.Add(new Placed(leaf.Pane, area));
                 break;
             case LayoutSplit split:
-            {
-                var total = split.SideBySide ? area.Width : area.Height;
-                var usable = Math.Max(0, total - 1);
-                var first = Math.Clamp((int)Math.Round(usable * split.Ratio), 1, Math.Max(1, usable - 1));
-                var second = Math.Max(0, usable - first);
-
-                if (split.SideBySide)
                 {
-                    split.First.Place(area with { Width = first }, panes, dividers);
-                    dividers.Add(new Divider(area.X + first, area.Y, true, area.Height, split, area));
-                    split.Second.Place(area with { X = area.X + first + 1, Width = second }, panes, dividers);
-                }
-                else
-                {
-                    split.First.Place(area with { Height = first }, panes, dividers);
-                    dividers.Add(new Divider(area.X, area.Y + first, false, area.Width, split, area));
-                    split.Second.Place(area with { Y = area.Y + first + 1, Height = second }, panes, dividers);
-                }
+                    var total = split.SideBySide ? area.Width : area.Height;
+                    var usable = Math.Max(0, total - 1);
+                    var first = Math.Clamp((int)Math.Round(usable * split.Ratio), 1, Math.Max(1, usable - 1));
+                    var second = Math.Max(0, usable - first);
 
-                break;
-            }
+                    if (split.SideBySide)
+                    {
+                        split.First.Place(area with { Width = first }, panes, dividers);
+                        dividers.Add(new Divider(area.X + first, area.Y, true, area.Height, split, area));
+                        split.Second.Place(area with { X = area.X + first + 1, Width = second }, panes, dividers);
+                    }
+                    else
+                    {
+                        split.First.Place(area with { Height = first }, panes, dividers);
+                        dividers.Add(new Divider(area.X, area.Y + first, false, area.Width, split, area));
+                        split.Second.Place(area with { Y = area.Y + first + 1, Height = second }, panes, dividers);
+                    }
+
+                    break;
+                }
         }
     }
 

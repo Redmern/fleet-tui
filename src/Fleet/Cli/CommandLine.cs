@@ -34,9 +34,10 @@ public static class CommandLine
     {
         var raw = args.Count > 0 ? args[0] : string.Empty;
         var options = args.Count > 1 ? args.Skip(1).ToArray() : [];
+        var verb = VerbFor(raw);
 
         return new Invocation(
-            VerbFor(raw),
+            verb,
             raw,
             ValueOf(options, ProjectFlag),
             ValueOf(options, ActionFlag),
@@ -45,7 +46,8 @@ public static class CommandLine
             ValueOf(options, StatusFlag),
             ValueOf(options, TitleFlag),
             TailOf(options),
-            ValueOf(options, VersionFlag, VersionShortFlag),
+            ValueOf(options, VersionFlag, VersionShortFlag)
+                ?? (verb == FleetVerb.Update ? TextOf(options) : null),
             HasFlag(options, ListFlag, ListShortFlag),
             ValueOf(options, SshFlag));
     }

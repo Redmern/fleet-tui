@@ -75,7 +75,7 @@ public static class PickProjectCommand
         }
 
         var result = await new OpenProjectHandler(mux.Driver)
-            .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable, windowId))
+            .HandleAsync(new OpenProjectCommand(chosen, AgentHarness.Orchestrator, Adapters.Executable, windowId))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -123,7 +123,7 @@ public static class PickProjectCommand
         if (!located.TryGetValue(chosen.Name, out var where) || !where.Open)
         {
             var opened = await new OpenProjectHandler(mux)
-                .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable, null))
+                .HandleAsync(new OpenProjectCommand(chosen, AgentHarness.Orchestrator, Adapters.Executable, null))
                 .ConfigureAwait(false);
 
             if (!opened.Succeeded)

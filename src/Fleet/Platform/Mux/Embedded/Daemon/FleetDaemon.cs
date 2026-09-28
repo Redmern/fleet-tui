@@ -127,15 +127,15 @@ public sealed class FleetDaemon(DaemonOptions options)
                         Runtime(request).Send(Encoding.UTF8.GetBytes(request.Text ?? string.Empty));
                         break;
                     case "get-text":
-                    {
-                        var runtime = Runtime(request);
-                        lock (runtime.Gate)
                         {
-                            response.Text = runtime.Terminal.PlainText();
-                        }
+                            var runtime = Runtime(request);
+                            lock (runtime.Gate)
+                            {
+                                response.Text = runtime.Terminal.PlainText();
+                            }
 
-                        break;
-                    }
+                            break;
+                        }
 
                     case "show":
                         response.Ms = Show(request.Client ?? attachedClient, request.Workspace);
@@ -245,13 +245,13 @@ public sealed class FleetDaemon(DaemonOptions options)
         switch (type)
         {
             case MessageType.Request:
-            {
-                var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
-                var response = Execute(request, session?.Client);
-                await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
-                    .ConfigureAwait(false);
-                break;
-            }
+                {
+                    var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
+                    var response = Execute(request, session?.Client);
+                    await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                        .ConfigureAwait(false);
+                    break;
+                }
 
             case MessageType.Key when session is not null:
                 Route(session, Wire.Read(payload, WireJsonContext.Default.KeyMessage));
@@ -262,17 +262,17 @@ public sealed class FleetDaemon(DaemonOptions options)
                 break;
 
             case MessageType.Resize when session is not null:
-            {
-                var resize = Wire.Read(payload, WireJsonContext.Default.ResizeMessage);
-                lock (_gate)
                 {
-                    _model.Resize(session.Client, resize.Cols, resize.Rows);
-                    ApplyResizes();
-                }
+                    var resize = Wire.Read(payload, WireJsonContext.Default.ResizeMessage);
+                    lock (_gate)
+                    {
+                        _model.Resize(session.Client, resize.Cols, resize.Rows);
+                        ApplyResizes();
+                    }
 
-                _wake.Release();
-                break;
-            }
+                    _wake.Release();
+                    break;
+                }
 
             case MessageType.Mouse when session is not null:
                 Mouse(session, Wire.Read(payload, WireJsonContext.Default.MouseMessage));
@@ -594,21 +594,21 @@ public sealed class FleetDaemon(DaemonOptions options)
                     _model.ToggleFloats(session.Client);
                     break;
                 case "float-move" or "float-size":
-                {
-                    var (dx, dy) = command.Arg switch
                     {
-                        "left" => (-1, 0),
-                        "right" => (1, 0),
-                        "up" => (0, -1),
-                        "down" => (0, 1),
-                        _ => (0, 0),
-                    };
+                        var (dx, dy) = command.Arg switch
+                        {
+                            "left" => (-1, 0),
+                            "right" => (1, 0),
+                            "up" => (0, -1),
+                            "down" => (0, 1),
+                            _ => (0, 0),
+                        };
 
-                    _ = command.Name == "float-move"
-                        ? _model.NudgeFloat(session.Client, dx, dy, 0, 0)
-                        : _model.NudgeFloat(session.Client, 0, 0, dx, dy);
-                    break;
-                }
+                        _ = command.Name == "float-move"
+                            ? _model.NudgeFloat(session.Client, dx, dy, 0, 0)
+                            : _model.NudgeFloat(session.Client, 0, 0, dx, dy);
+                        break;
+                    }
 
                 case "float-embed":
                     if (_model.View(session.Client)?.Focused is { } focused)
@@ -618,14 +618,14 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     break;
                 case "focus-in" or "focus-out":
-                {
-                    if (FocusedRuntime(session.Client) is { Modes.FocusEvents: true } pane)
                     {
-                        pane.Send(command.Name == "focus-in" ? "\e[I"u8.ToArray() : "\e[O"u8.ToArray());
-                    }
+                        if (FocusedRuntime(session.Client) is { Modes.FocusEvents: true } pane)
+                        {
+                            pane.Send(command.Name == "focus-in" ? "\e[I"u8.ToArray() : "\e[O"u8.ToArray());
+                        }
 
-                    break;
-                }
+                        break;
+                    }
             }
 
             ApplyResizes();

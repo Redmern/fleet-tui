@@ -12,7 +12,7 @@ public class OpenProjectTests
     private static readonly Project Backend = new("backend", "/repos/backend");
 
     private static OpenProjectCommand Command =>
-        new(Backend, Harness: "claude", FleetExecutable: "fleet");
+        new(Backend, Harness: AgentHarness.Orchestrator, FleetExecutable: "fleet");
 
     [Fact]
     public async Task Opens_a_harness_pane_and_a_dashboard_pane_in_one_window()
@@ -29,13 +29,13 @@ public class OpenProjectTests
     }
 
     [Fact]
-    public async Task The_left_pane_runs_the_harness()
+    public async Task The_left_pane_runs_claude_alone_inside_nvim()
     {
         var mux = new FakeMuxDriver();
 
         var result = await new OpenProjectHandler(mux).HandleAsync(Command);
 
-        Assert.Equal(["claude"], mux.ArgsFor(result.Value.HarnessPane));
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), mux.ArgsFor(result.Value.HarnessPane));
     }
 
     [Fact]

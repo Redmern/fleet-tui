@@ -68,7 +68,8 @@ public class PasteTests
         Assert.Equal("a\rb", PasteBurst.Paste(Typed("a\rb")));
     }
 
-    [Fact]    public void A_long_single_line_burst_is_a_paste()
+    [Fact]
+    public void A_long_single_line_burst_is_a_paste()
     {
         Assert.Equal("git status --short", PasteBurst.Paste(Typed("git status --short")));
     }

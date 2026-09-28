@@ -23,7 +23,6 @@ public sealed class DispatchHandler(
     IHarnessConfig harness,
     TimeSpan? readyTimeout = null,
     TimeSpan? pollInterval = null,
-    TimeSpan? submitGap = null,
     IDispatchHistory? history = null,
     ISlugNamer? namer = null,
     ISettingsStore? settings = null)
@@ -31,8 +30,6 @@ public sealed class DispatchHandler(
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
 
     private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(200);
-
-    private readonly TimeSpan _submitGap = submitGap ?? TimeSpan.FromMilliseconds(500);
 
     public async Task<Result<DispatchReply>> HandleAsync(
         DispatchCommand command, string stampUtc, CancellationToken ct = default)
@@ -105,7 +102,6 @@ public sealed class DispatchHandler(
                 WindowId = window,
                 NewWindow = window is null,
                 Args = AgentHarness.CommandFor(AgentHarness.Orchestrator),
-                Env = AgentHarness.SessionPersistence,
             },
             ct).ConfigureAwait(false);
 
@@ -117,15 +113,6 @@ public sealed class DispatchHandler(
 
         await mux.SetTitleAsync(pane, slug, ct).ConfigureAwait(false);
 
-        await mux.SplitAsync(
-            new SplitOptions(pane, SplitDirection.Right)
-            {
-                Percent = 50,
-                Cwd = folder,
-                Args = AgentHarness.BrowseCommandFor(AgentPaneMatch.BrowserTitle(record)),
-            },
-            ct).ConfigureAwait(false);
-
         history?.Add(command.ProjectName, prompt);
 
         if (active is not null)
@@ -133,7 +120,7 @@ public sealed class DispatchHandler(
             await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
         }
 
-        await KickOff(folder, pane, ct).ConfigureAwait(false);
+        await KickOff(folder, ct).ConfigureAwait(false);
 
         return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, DispatchNote.Dispatched(slug)));
     }
@@ -207,7 +194,7 @@ public sealed class DispatchHandler(
         }
     }
 
-    private async Task KickOff(string folder, PaneId pane, CancellationToken ct)
+    private async Task KickOff(string folder, CancellationToken ct)
     {
         var marker = OrchestrationPaths.ReadyMarker(folder);
 
@@ -220,13 +207,13 @@ public sealed class DispatchHandler(
             await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
         }
 
-        await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff, ct).ConfigureAwait(false);
+        var inbox = Path.Combine(folder, ".fleet");
+        Directory.CreateDirectory(inbox);
 
-        if (_submitGap > TimeSpan.Zero)
-        {
-            await Task.Delay(_submitGap, ct).ConfigureAwait(false);
-        }
-
-        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
+        await File.WriteAllTextAsync(
+                Path.Combine(inbox, AgentHarness.AgentInstructionFile),
+                AgentHarness.OrchestratorKickoff,
+                ct)
+            .ConfigureAwait(false);
     }
 }

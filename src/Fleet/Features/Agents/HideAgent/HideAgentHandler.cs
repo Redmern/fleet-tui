@@ -151,11 +151,6 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
                     pane.Id, AgentTitle.For(agent.Repository, agent.Branch), ct)
                     .ConfigureAwait(false);
             }
-
-            if (claude.FirstOrDefault() is { } main)
-            {
-                await SubBrowse.SplitAsync(mux, agent, main.Id, ct).ConfigureAwait(false);
-            }
         }
 
         return agent with { Hidden = hiding, Open = claude.Count > 0 };
@@ -192,10 +187,6 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
             await mux.SplitAsync(
                 new SplitOptions(main.Id, SplitDirection.Right) { Percent = 50, MovePane = browser.Id },
                 ct).ConfigureAwait(false);
-        }
-        else if (!hiding)
-        {
-            await SubBrowse.SplitAsync(mux, agent, main.Id, ct).ConfigureAwait(false);
         }
 
         return agent with { Hidden = hiding, Open = true };
