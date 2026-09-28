@@ -789,31 +789,31 @@ public static class DashboardWiring
                             break;
 
                         case "stop":
-                        {
-                            var stopped = await stopper.HandleAsync(project.Name, agent)
-                                .ConfigureAwait(false);
-
-                            if (!stopped.Succeeded)
                             {
-                                failures.Add($"{agent.Branch}: {stopped.Error}");
-                            }
+                                var stopped = await stopper.HandleAsync(project.Name, agent)
+                                    .ConfigureAwait(false);
 
-                            break;
-                        }
+                                if (!stopped.Succeeded)
+                                {
+                                    failures.Add($"{agent.Branch}: {stopped.Error}");
+                                }
+
+                                break;
+                            }
 
                         case "forget":
-                        {
-                            var removed = await remover
-                                .HandleAsync(project.Name, agent, deleteWorktree: false)
-                                .ConfigureAwait(false);
-
-                            if (!removed.Succeeded)
                             {
-                                failures.Add($"{agent.Branch}: {removed.Error}");
-                            }
+                                var removed = await remover
+                                    .HandleAsync(project.Name, agent, deleteWorktree: false)
+                                    .ConfigureAwait(false);
 
-                            break;
-                        }
+                                if (!removed.Succeeded)
+                                {
+                                    failures.Add($"{agent.Branch}: {removed.Error}");
+                                }
+
+                                break;
+                            }
                     }
                 }
 
