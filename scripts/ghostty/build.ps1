@@ -57,17 +57,24 @@ $env:ZIG_LOCAL_CACHE_DIR = Join-Path $cache 'zig-local'
 # global cache's package directory does not exist yet.
 New-Item -ItemType Directory -Force (Join-Path $env:ZIG_GLOBAL_CACHE_DIR 'p') | Out-Null
 
+# Zig 0.16 on Windows can also fail the first fetch of a dependency with
+# "failed to check cache: 'zig-pkg\<pkg>\build.zig' file_hash FileNotFound"
+# after downloading it; the next run finds the package in place. So retry.
 Push-Location $srcDir
 try {
-    & $zig build `
-        -Demit-lib-vt `
-        -Doptimize=ReleaseFast `
-        -Dsimd=true `
-        -Dtarget=x86_64-windows-msvc `
-        "-Dversion-string=$($pins.GHOSTTY_VERSION_STRING)" `
-        -Demit-xcframework=false `
-        --prefix $out
-    if ($LASTEXITCODE -ne 0) { throw "zig build failed with $LASTEXITCODE" }
+    foreach ($attempt in 1..3) {
+        & $zig build `
+            -Demit-lib-vt `
+            -Doptimize=ReleaseFast `
+            -Dsimd=true `
+            -Dtarget=x86_64-windows-msvc `
+            "-Dversion-string=$($pins.GHOSTTY_VERSION_STRING)" `
+            -Demit-xcframework=false `
+            --prefix $out
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -eq 3) { throw "zig build failed with $LASTEXITCODE after $attempt attempts" }
+        Write-Host "zig build failed with $LASTEXITCODE (attempt $attempt); retrying"
+    }
 }
 finally {
     Pop-Location
