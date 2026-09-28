@@ -2961,6 +2961,73 @@ tmux-style mouse support for `embedded`.
   that treats a click as an action (e.g. a TUI button) acts on the focusing
   click too. tmux behaves the same with `mouse on`.
 
+## Window title and clipboard, 2026-09-28
+
+Rule 5 of *Remote attach*, implemented: a pane's title and its clipboard writes
+act on the machine the user is sitting at, as messages rather than escape
+sequences passed through.
+
+### Behaviour
+
+- **Window title.** Each client's terminal title is the focused pane's title
+  (OSC 0/2) and the workspace, e.g. `README.md - NVIM · techweb`, or
+  `techweb · fleet` when the pane set none. It is sent only when it changes,
+  and it follows focus, switching and overlays. The original title comes back
+  on detach: `GetConsoleTitle`/`SetConsoleTitle` on Windows, the xterm title
+  stack (`CSI 22 t` / `CSI 23 t`) on Unix.
+- **The emulator's title is also the model's pane title.** fleet's own
+  features read it, e.g. `SubBrowse.Is` recognises a sub-orchestrator's
+  browser by a title ending in ` files`, so on `embedded` it now comes from
+  the program itself.
+- **Clipboard writes.** OSC 52, and the iTerm2 and kitty variants that
+  libghostty-vt normalises, deliver plain text up to 1 MiB to one client: the
+  most recently active client showing that pane, or else the most recently
+  active client. That client sets the clipboard:
+  - natively on Windows (`SetClipboardData`), which works in conhost, Windows
+    Terminal and WezTerm alike;
+  - as OSC 52 to its host terminal on Unix, which also works when the client
+    is on the far side of SSH.
+- **Clipboard reads** (OSC 52 `?`) stay refused. A program in a pane never
+  reads the user's clipboard.
+- **Titles are sanitised** (control characters removed, 256 characters
+  maximum), so a pane cannot put escape sequences onto the host through its
+  title.
+
+### Verified
+
+- **Tests:** fleetd with fake panes. The title follows the pane and the
+  workspace, including after a switch. A copy reaches only the client showing
+  that pane. The emulator's title shows up in `list-panes`. Sanitising and the
+  OSC 52 encoding have their own tests (1026 tests).
+- **Windows, windowless, real emulator:** a probe pane's OSC 52 landed on the
+  Windows clipboard. The attach client's own title, as its outer fleetd saw
+  it, became `effects probe title · probe`.
+- **Linux in Docker:** `fleet attach` wrote the title push, the OSC 0 title,
+  the OSC 52 copy with the right base64, and the title pop.
+
+### Not verified
+
+- **Whether each host terminal honours OSC 52 writes.** Ghostty, kitty,
+  WezTerm and Windows Terminal do by default; others may need a setting. On
+  Windows this does not matter, because the client sets the clipboard
+  natively.
+
+## Next: floating panes (proposed, 2026-09-28)
+
+The menu overlay is already a floating pane: a real pane drawn in a bordered
+box over the layout, taking input first. Generalising it gives:
+- zellij-style floating panes per workspace (a shell, a log viewer, the file
+  navigator), toggled with a prefix key;
+- moved by dragging the border and resized from the corner with the mouse;
+- kept running while hidden, like everything else.
+
+The work:
+- the model: floats with position, size, z-order and owning workspace;
+- the compositor: drawing floats in order;
+- mouse move and resize;
+- a driver operation to open one. `MuxCaps.Popup` already exists in the port
+  for exactly this.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
