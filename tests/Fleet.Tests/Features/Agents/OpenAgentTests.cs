@@ -154,7 +154,7 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_an_orchestrator_splits_a_file_browser_alongside_it()
+    public async Task Opening_an_orchestrator_opens_claude_alone_with_no_file_browser()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
 
@@ -163,40 +163,28 @@ public sealed class OpenAgentTests : IDisposable
 
         Assert.True(result.Succeeded, result.Error);
 
-        var panes = await _mux.ListPanesAsync();
+        var claude = Assert.Single(await _mux.ListPanesAsync());
 
-        Assert.Equal(2, panes.Count);
-
-        var browser = panes.Single(p => SubBrowse.Is(p));
-        var claude = panes.Single(p => !SubBrowse.Is(p));
-
-        Assert.Equal(
-            AgentHarness.BrowseCommandFor("backend/feature_login files"), _mux.ArgsFor(browser.Id));
-        Assert.Equal("backend/feature_login files", browser.PaneTitle);
-        Assert.Equal(claude.TabId, browser.TabId);
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), _mux.ArgsFor(claude.Id));
         Assert.Equal("backend/feature_login", _mux.TitleOf(claude.Id));
-        Assert.Equal("backend/feature_login", _mux.TitleOf(browser.Id));
     }
 
     [Fact]
-    public async Task Opening_a_sub_that_is_already_open_leaves_both_of_its_panes_alone()
+    public async Task Opening_a_sub_that_is_already_open_keeps_claude_and_drops_a_leftover_browser()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
         var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
         await _mux.SetTitleAsync(claude, AgentTitle.For(agent.Repository, agent.Branch));
-        await SubBrowse.SplitAsync(_mux, agent, claude);
-        var browser = (await _mux.ListPanesAsync()).Single(p => p.Id != claude).Id;
+        await LegacyBrowser.SplitAsync(_mux, agent, claude);
 
         var result = await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         Assert.True(result.Succeeded, result.Error);
 
-        var panes = await _mux.ListPanesAsync();
+        var only = Assert.Single(await _mux.ListPanesAsync());
 
-        Assert.Equal(2, panes.Count);
-        Assert.Contains(panes, p => p.Id == claude);
-        Assert.Contains(panes, p => p.Id == browser);
-        Assert.True(panes.Single(p => p.Id == claude).IsActive);
+        Assert.Equal(claude, only.Id);
+        Assert.True(only.IsActive);
     }
 
     [Fact]
@@ -210,7 +198,7 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_a_hidden_orchestrator_brings_claude_back_rebuilds_the_split_and_focuses_it()
+    public async Task Opening_a_hidden_orchestrator_brings_claude_back_alone_and_focuses_it()
     {
         Directory.CreateDirectory(ProjectRoot);
         var dash = await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
@@ -231,12 +219,12 @@ public sealed class OpenAgentTests : IDisposable
 
         Assert.Equal(window, panes.Single(p => p.Id == claude).WindowId);
         Assert.True(panes.Single(p => p.Id == claude).IsActive);
-        Assert.Contains(panes, p => PathKey.Same(p.Cwd, agent.Worktree) && SubBrowse.Is(p));
+        Assert.DoesNotContain(panes, p => SubBrowse.Is(p));
         Assert.False(Assert.Single(_store.Saved).Hidden);
     }
 
     [Fact]
-    public async Task Opening_an_orchestrator_whose_claude_died_rebuilds_the_split()
+    public async Task Opening_an_orchestrator_whose_claude_died_restarts_claude_alone()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
 
@@ -256,15 +244,9 @@ public sealed class OpenAgentTests : IDisposable
 
         var panes = await _mux.ListPanesAsync();
 
-        // The stale lone pane is gone; a fresh claude + browser split stands in its place.
         Assert.DoesNotContain(panes, p => p.Id == browser);
-        var atWorktree = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
-        Assert.Equal(2, atWorktree.Count);
-        Assert.Contains(atWorktree, p => SubBrowse.Is(p));
-        var claude = atWorktree.Single(p =>
-            _mux.ArgsFor(p.Id).SequenceEqual(new[] { AgentHarness.Claude, AgentHarness.ResumeArgument }));
-
-        Assert.Equal("1", _mux.EnvFor(claude.Id)["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"]);
+        var claude = Assert.Single(panes, p => PathKey.Same(p.Cwd, agent.Worktree));
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), _mux.ArgsFor(claude.Id));
     }
 
     [Fact]
@@ -273,14 +255,13 @@ public sealed class OpenAgentTests : IDisposable
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
         var claude = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
         await _mux.SetTitleAsync(claude, AgentTitle.For(agent.Repository, agent.Branch));
-        await SubBrowse.SplitAsync(_mux, agent, claude);
 
         await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
 
         var atWorktree = (await _mux.ListPanesAsync())
             .Count(p => PathKey.Same(p.Cwd, agent.Worktree));
 
-        Assert.Equal(2, atWorktree);
+        Assert.Equal(1, atWorktree);
     }
 
     private sealed class RecordingStore : IAgentStore

@@ -435,7 +435,7 @@ public static class MenuCommand
         IMuxDriver mux, Project project, string? windowId = null)
     {
         var result = await new OpenProjectHandler(mux)
-            .HandleAsync(new OpenProjectCommand(project, "claude", Adapters.Executable, windowId))
+            .HandleAsync(new OpenProjectCommand(project, AgentHarness.Orchestrator, Adapters.Executable, windowId))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)

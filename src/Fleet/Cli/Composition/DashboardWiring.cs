@@ -621,7 +621,7 @@ public static class DashboardWiring
             RebuildDashboard: () =>
             {
                 var rebuilt = new RebuildDashboardHandler(mux)
-                    .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Claude)
+                    .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Orchestrator)
                     .GetAwaiter()
                     .GetResult();
 

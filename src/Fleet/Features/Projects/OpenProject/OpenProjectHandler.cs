@@ -19,7 +19,7 @@ public sealed class OpenProjectHandler(IMuxDriver mux)
                 WindowId = command.WindowId,
                 SessionName = command.Project.Name,
                 Cwd = command.Project.Root,
-                Args = [command.Harness],
+                Args = AgentHarness.CommandFor(command.Harness),
             },
             ct).ConfigureAwait(false);
 
