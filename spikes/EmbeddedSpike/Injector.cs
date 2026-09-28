@@ -54,6 +54,12 @@ internal static unsafe partial class Injector
                 continue;
             }
 
+            if (token.StartsWith("dump:", StringComparison.Ordinal))
+            {
+                Dump(token[5..]);
+                continue;
+            }
+
             foreach (var (vk, ch, state) in Keys(token))
             {
                 Tap(input, vk, ch, state);
@@ -94,6 +100,7 @@ internal static unsafe partial class Injector
         yield return token switch
         {
             "enter" => ((ushort)0x0D, '\r', 0u),
+            "space" => ((ushort)0x20, ' ', 0u),
             "esc" => ((ushort)0x1B, '\e', 0u),
             "tab" => ((ushort)0x09, '\t', 0u),
             "bs" => ((ushort)0x08, '\b', 0u),
@@ -125,6 +132,57 @@ internal static unsafe partial class Injector
         WriteConsoleInputW(input, records, 2, out _);
         Thread.Sleep(15);
     }
+
+    // dump:FILE writes the console's visible window as text: what a person
+    // looking at the window would read, after the host terminal rendered it.
+    private static void Dump(string path)
+    {
+        var output = CreateFileW("CONOUT$", GenericRead | GenericWrite, ShareReadWrite, 0, OpenExisting, 0, 0);
+        if (!GetConsoleScreenBufferInfo(output, out var info))
+        {
+            File.WriteAllText(path, $"(no screen buffer, error {Marshal.GetLastPInvokeError()})");
+            return;
+        }
+
+        var width = info.Right - info.Left + 1;
+        var lines = new List<string> { $"window {width}x{info.Bottom - info.Top + 1}" };
+        var buffer = new char[width];
+
+        for (var y = info.Top; y <= info.Bottom; y++)
+        {
+            fixed (char* p = buffer)
+            {
+                ReadConsoleOutputCharacterW(output, p, (uint)width, (uint)(ushort)info.Left | ((uint)(ushort)y << 16), out var read);
+                lines.Add(new string(buffer, 0, (int)read).TrimEnd());
+            }
+        }
+
+        File.WriteAllLines(path, lines, System.Text.Encoding.UTF8);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BufferInfo
+    {
+        public short SizeX;
+        public short SizeY;
+        public short CursorX;
+        public short CursorY;
+        public ushort Attributes;
+        public short Left;
+        public short Top;
+        public short Right;
+        public short Bottom;
+        public short MaxX;
+        public short MaxY;
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetConsoleScreenBufferInfo(nint handle, out BufferInfo info);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ReadConsoleOutputCharacterW(nint handle, char* buffer, uint length, uint coord, out uint read);
 
     private static void Trace(string line)
     {
