@@ -7,6 +7,8 @@ public sealed class MuxModel
 {
     public const int StatusRows = 1;
 
+    public const string OverlayWorkspace = "fleet~overlay";
+
     private readonly List<WorkspaceState> _workspaces = [];
     private readonly Dictionary<string, PaneState> _panes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ClientState> _clients = new(StringComparer.Ordinal);
@@ -83,6 +85,12 @@ public sealed class MuxModel
 
         Detach(pane);
         _panes.Remove(id);
+
+        foreach (var client in _clients.Values.Where(c => c.Overlay == id))
+        {
+            client.Overlay = null;
+        }
+
         return true;
     }
 
@@ -123,7 +131,7 @@ public sealed class MuxModel
 
         client.Showing = showing is not null && Workspace(showing) is not null
             ? Workspace(showing)!.Name
-            : _workspaces.FirstOrDefault(w => !FleetWorkspaces.IsHidden(w.Name))?.Name;
+            : _workspaces.FirstOrDefault(w => !FleetWorkspaces.IsHidden(w.Name) && !Same(w.Name, OverlayWorkspace))?.Name;
 
         _clients[client.Id] = client;
         return client;
@@ -199,17 +207,38 @@ public sealed class MuxModel
         return best.Pane is not null && Focus(best.Pane);
     }
 
+    public bool SetOverlay(string client, string pane)
+    {
+        if (!_clients.TryGetValue(client, out var c) || !_panes.ContainsKey(pane))
+        {
+            return false;
+        }
+
+        c.Overlay = pane;
+        return true;
+    }
+
+    public static Rect OverlayArea(int cols, int rows)
+    {
+        var usable = Math.Max(1, rows - StatusRows);
+        var width = Math.Clamp(cols * 4 / 5, Math.Min(cols, 40), cols);
+        var height = Math.Clamp(usable * 4 / 5, Math.Min(usable, 12), usable);
+        return new Rect((cols - width) / 2, (usable - height) / 2, width, height);
+    }
+
     public IReadOnlyList<Workspace> ListWorkspaces(string? client)
     {
         var showing = client is not null ? Client(client)?.Showing : null;
 
         return _workspaces
+            .Where(w => !Same(w.Name, OverlayWorkspace))
             .Select(w => new Workspace(w.Name, Same(w.Name, showing)))
             .ToList();
     }
 
     public IReadOnlyList<Pane> ListPanes() =>
         _workspaces
+            .Where(w => !Same(w.Name, OverlayWorkspace))
             .SelectMany(w => w.Tabs.SelectMany(t => t.Root.Panes().Select(id => (w, t, id))))
             .Select(x =>
             {
@@ -240,20 +269,25 @@ public sealed class MuxModel
         var dividers = new List<Divider>();
         tab?.Root.Place(area, placed, dividers);
 
+        var overlay = c.Overlay is { } o && _panes.ContainsKey(o)
+            ? new Placed(o, OverlayArea(c.Cols, c.Rows))
+            : (Placed?)null;
+
         return new ClientView(
             c,
             workspace,
             tab,
             placed,
             dividers,
-            tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
+            overlay?.Pane ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null),
+            overlay);
     }
 
     public IReadOnlyList<(PaneState Pane, int Cols, int Rows)> Resizes()
     {
         var changed = new List<(PaneState, int, int)>();
 
-        foreach (var workspace in _workspaces)
+        foreach (var workspace in _workspaces.Where(w => !Same(w.Name, OverlayWorkspace)))
         {
             var shownBy = _clients.Values
                 .Where(c => Same(c.Showing, workspace.Name))
@@ -288,6 +322,23 @@ public sealed class MuxModel
                         pane.Rows = rows;
                         changed.Add((pane, cols, rows));
                     }
+                }
+            }
+        }
+
+        foreach (var client in _clients.Values)
+        {
+            if (client.Overlay is { } id && _panes.TryGetValue(id, out var pane))
+            {
+                var area = OverlayArea(client.Cols, client.Rows);
+                var cols = Math.Max(1, area.Width - 2);
+                var rows = Math.Max(1, area.Height - 2);
+
+                if (pane.Cols != cols || pane.Rows != rows)
+                {
+                    pane.Cols = cols;
+                    pane.Rows = rows;
+                    changed.Add((pane, cols, rows));
                 }
             }
         }
@@ -445,6 +496,8 @@ public sealed class ClientState(string id)
     public int Rows { get; set; }
 
     public long LastActive { get; set; }
+
+    public string? Overlay { get; set; }
 }
 
 public sealed record ClientView(
@@ -453,4 +506,5 @@ public sealed record ClientView(
     TabState? Tab,
     IReadOnlyList<Placed> Panes,
     IReadOnlyList<Divider> Dividers,
-    string? Focused);
+    string? Focused,
+    Placed? Overlay = null);

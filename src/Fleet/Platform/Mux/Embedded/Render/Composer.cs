@@ -42,6 +42,21 @@ public static class Composer
             Draw(frame, divider, focused);
         }
 
+        if (view.Overlay is { } overlay)
+        {
+            Box(frame, overlay.Area);
+            var inner = new Rect(overlay.Area.X + 1, overlay.Area.Y + 1, Math.Max(0, overlay.Area.Width - 2), Math.Max(0, overlay.Area.Height - 2));
+
+            if (screens(overlay.Pane) is { } screen)
+            {
+                Blit(frame, screen, inner);
+                frame.CursorX = inner.X + Math.Min(screen.CursorX, Math.Max(0, inner.Width - 1));
+                frame.CursorY = inner.Y + Math.Min(screen.CursorY, Math.Max(0, inner.Height - 1));
+                frame.CursorVisible = screen.CursorVisible;
+                frame.CursorShape = screen.CursorShape;
+            }
+        }
+
         StatusBar(frame, view, badge);
         return frame;
     }
@@ -65,6 +80,33 @@ public static class Composer
                 }
 
                 target[x] = cell;
+            }
+        }
+    }
+
+    private static void Box(ClientFrame frame, Rect area)
+    {
+        for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows - MuxModel.StatusRows; y++)
+        {
+            for (var x = area.X; x < area.X + area.Width && x < frame.Cols; x++)
+            {
+                var top = y == area.Y;
+                var bottom = y == area.Y + area.Height - 1;
+                var left = x == area.X;
+                var right = x == area.X + area.Width - 1;
+
+                var c = (top, bottom, left, right) switch
+                {
+                    (true, _, true, _) => '╭',
+                    (true, _, _, true) => '╮',
+                    (_, true, true, _) => '╰',
+                    (_, true, _, true) => '╯',
+                    (true, _, _, _) or (_, true, _, _) => '─',
+                    (_, _, true, _) or (_, _, _, true) => '│',
+                    _ => ' ',
+                };
+
+                frame.Cells[y * frame.Cols + x] = Cell.Of(c, FocusFg);
             }
         }
     }
