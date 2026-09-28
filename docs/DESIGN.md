@@ -3012,21 +3012,70 @@ sequences passed through.
   Windows this does not matter, because the client sets the clipboard
   natively.
 
-## Next: floating panes (proposed, 2026-09-28)
+## Floating panes, 2026-09-28
 
-The menu overlay is already a floating pane: a real pane drawn in a bordered
-box over the layout, taking input first. Generalising it gives:
-- zellij-style floating panes per workspace (a shell, a log viewer, the file
-  navigator), toggled with a prefix key;
-- moved by dragging the border and resized from the corner with the mouse;
-- kept running while hidden, like everything else.
+zellij-style floating panes on `embedded`. A float is an ordinary pane of a
+workspace, drawn in a bordered box over the tiled layout instead of in it.
 
-The work:
-- the model: floats with position, size, z-order and owning workspace;
-- the compositor: drawing floats in order;
-- mouse move and resize;
-- a driver operation to open one. `MuxCaps.Popup` already exists in the port
-  for exactly this.
+### Behaviour
+
+- **Per workspace.** Each workspace has its own floats, in z-order, and one
+  shown/hidden switch. Every client showing that workspace sees the same floats.
+- **Prefix keys** (`ctrl+b` by default):
+  - `f` opens a float with the default shell, in the focused pane's directory;
+  - `w` shows or hides the workspace's floats;
+  - `e` tiles the focused float beside the active pane, or floats the focused
+    tile.
+- **Focus.** A new or clicked float comes to the top and takes the keys. A
+  click on a tile, or `w` to hide, gives the keys back to the tiles. `h/j/k/l`
+  move between tiles only.
+- **Hidden floats keep running**, like hidden workspaces. The status bar shows
+  ` float N ` whenever a workspace has floats (highlighted while they are shown),
+  and clicking it toggles them.
+- **Mouse.** Dragging the border moves a float. Dragging the bottom-right corner
+  resizes it (at least 10x4). A float never leaves the screen: it is clamped to
+  the client's size at draw time, and its pane is sized to the inside of the
+  box. Clicks and wheel inside it reach the program in its own coordinates, as
+  they do for tiles.
+- **Default size and placement.** 60% of the width and height, centred, with
+  each further float offset so none hides the one before it exactly.
+- **Titles.** The border shows the float's title: the one set through
+  `title`, or else the program's own (OSC 0/2).
+- **Lifetime.** Floating the last tile keeps the workspace alive. A workspace
+  goes away only when its last tile and its last float are gone. A float cannot
+  be split.
+- **Control.** `spawn-float` opens one from outside (fleetctl, scripts);
+  `list-panes` reports floats with tab `float`.
+
+### Verified
+
+- **Tests** (16 new, 1042 in all):
+  - model: placement, hit-testing (border, corner, inside, topmost wins),
+    raise and lower on focus, clamping on move and resize, float to tile and
+    back, workspace lifetime, per-workspace floats;
+  - compositor: box, title and cursor;
+  - fleetd with fake panes: `f` then keys reach the float and `w` hands them
+    back; dragging the border moves the float without the pane seeing the
+    drag; `e` tiles and floats again.
+- **Windows, windowless, real binary and emulator:** an outer fleetd ran
+  `fleet attach` in a pane against an inner fleetd, and the chords and SGR
+  mouse went into that pane the way a terminal sends them through ConPTY.
+  - `ctrl+b f` drew the box at column 24, row 8, and `echo FLOAT-OK` ran
+    inside it.
+  - A drag of the top border from (30,8) to (20,4) moved it to (14,4).
+  - `ctrl+b w` hid it; the pane survived.
+  - `ctrl+b w`, `ctrl+b e` tiled it next to the existing pane (both in `t1`).
+
+### Not done
+
+- **No port operation.** `IMuxDriver` has no "open a float" yet, although
+  `MuxCaps.Popup` is there for it. It gets added with the first fleet feature
+  that opens one (for example the file navigator in a float); until then the
+  prefix keys and `spawn-float` cover it.
+- **Keyboard move and resize** (zellij's resize mode) are not there; the
+  mouse is the only way to move a float.
+- **Float layout is not saved** across fleetd restarts. Neither is anything
+  else yet.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
