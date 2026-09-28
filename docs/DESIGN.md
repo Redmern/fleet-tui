@@ -3377,6 +3377,132 @@ Studio installer folder put on `PATH` for NativeAOT's `vswhere`.
 `-Isolated` uses a separate config under `artifacts\embedded-config`, so no
 real projects are touched. The script restores `FLEET_MUX` and
 `FLEET_CONFIG_HOME` in the calling session when it returns.
+## Keys, which-key, the tab bar and dashboard menus, 2026-09-29
+
+After merging `main` (orchestrators' Claude inside nvim, `update <version>`,
+`CLAUDE.md`), the embedded client took over the WezTerm tmux-mode layout.
+
+### Tab bar
+
+The status row is at the **top** now, drawn as Catppuccin pills like the
+tmux-mode bar:
+- the project;
+- the active tab as a pill, the other tabs as dim text, with ` Z` on a
+  zoomed tab;
+- the float count;
+- the badge on the right.
+
+Panes start on row 1, and `MuxModel.Content` is the one place that defines
+the content area. Clicks on tabs and the float count use the same segment
+list as the drawing.
+
+### Keys (`<fleet config>\embedded-keys.json`)
+
+The defaults mirror `~/.wezterm/tmux-mode.lua`. The file only needs
+overrides; `"none"` unbinds a key, comments and trailing commas are allowed,
+and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
+
+```json
+{
+  "prefix": "ctrl+s",
+  "prefixKeys": { "v": "split-right", "x": "none" },
+  "keys": { "ctrl+h": "none" }
+}
+```
+
+| Prefix key (default `ctrl+s`) | Does |
+|---|---|
+| `h j k l` | move focus |
+| arrows | resize the focused pane by 5 cells |
+| `%`, `"` | split right / down (a shell in the pane's folder) |
+| `c`, `n`, `p`, `1`–`9` | new tab, next, previous, go to tab |
+| `z` | zoom the focused pane (toggle; moving focus unzooms) |
+| `x`, `&` | close pane / tab, after a `y/n` |
+| `o` | next pane |
+| `s`, `w` | switch project (the picker, as a float) / next project |
+| `space` | menu |
+| `[`, `]` | copy mode / paste the Windows clipboard |
+| `f t e g` | new float / show-hide floats / float↔tile / move-resize float |
+| `r`, `d`, `q` | reload keys / detach |
+| the prefix again | sends the prefix to the pane |
+
+| Key without the prefix | Does |
+|---|---|
+| `ctrl`/`alt` + `h j k l` | move focus; when the pane runs nvim the key goes to nvim (the `is_nvim` rule) |
+| `alt+←/→`, `ctrl+tab`, `ctrl+shift+tab` | previous / next tab |
+| `ctrl+enter` | the menu: the dashboard's over a dashboard, fleet's elsewhere |
+| `shift+enter` | Claude's newline: Ctrl+J for a shell or Claude, Shift+Enter (CSI-u off Windows) for nvim |
+
+- **Which-key.** Pressing the prefix draws a box at the bottom listing the
+  prefix keys, with directions, arrows and tab numbers grouped.
+- **Nvim at the edge of its splits.** main's orchestrator (Claude inside nvim)
+  runs `$WEZTERM_EXECUTABLE cli activate-pane-direction <dir>` there. fleetd
+  sets `WEZTERM_EXECUTABLE` to fleet itself, and `fleet cli
+  activate-pane-direction` moves focus from the calling pane, so Ctrl+h/j/k/l
+  crosses from nvim into fleet's panes.
+- **Unix clients** get the same bindings from byte sequences (ctrl+letter,
+  alt+x, arrows with modifiers, PgUp and friends). A direct binding only fires
+  when it is the whole read, so a pasted newline is never taken for Ctrl+J.
+  Ctrl+Enter, Shift+Enter and Ctrl+Tab have no distinct legacy encoding, so
+  they work from Windows clients only.
+
+### Dashboard menus as floats
+
+- **One menu per place.** Ctrl+Enter over a dashboard opens that dashboard's
+  menu (new agent, hide, manage, repositories, refresh, log, files, rebuild,
+  keybinds) as a float. The dashboard's own menu button asks fleetd for the
+  same float through a new `menu` control op.
+- **What runs where.**
+  - Views that need nothing from the dashboard run inside the float: show
+    log, keybinds, file navigator, add repository.
+  - Actions on the selected agent or repository go back to the dashboard
+    through the existing request file, and the dashboard runs them as before.
+- **Fixed on the way.** `FleetActionIds.Parse` did not know ids that fall back
+  to the enum name (`viewlogs`, `browsefiles`, …), so such requests were
+  silently dropped. It is now the inverse of `For` for every action, with a
+  test over all of them.
+
+### Verified
+
+- **Tests:** 1158, format-clean.
+  - key chords and their Unix bytes;
+  - defaults, overrides, unbinding, a broken file, comments;
+  - which-key grouping, the prefix state machine, the close confirmation;
+  - model: resize, zoom, next pane, tab by number, focus from a pane, nvim
+    and dashboard detection;
+  - fleetd: split, smart focus with and without nvim, newline, close pane,
+    the which-key box, `focus-from`, the dashboard menu float both ways;
+  - every action id round-trips.
+- **Windows, windowless, real binary** (outer fleetd running `fleet attach`
+  against an inner fleetd; key records injected at the client):
+  - Ctrl+S drew the which-key box, and `%` split right.
+  - `z` zoomed and showed `1:shell Z`; a second `z` unzoomed.
+  - Ctrl+H moved to the left shell, and typing reached it.
+  - Ctrl+Enter opened the fleet menu float, and Esc closed it.
+  - Ctrl+L then `x` `y` closed the right pane.
+  - With a real `fleet dash`, Ctrl+Enter over it opened the dashboard menu
+    float, and Shift+L (*Show log*) showed the log inside the float while the
+    dashboard stayed as it was.
+
+### Limits
+
+- **Inside WezTerm with tmux-mode,** WezTerm takes Ctrl+S (its leader),
+  Ctrl/Alt+h/j/k/l and Alt+arrows before `fleet attach` sees them.
+  - Ctrl+Enter still reaches fleet: `fleet.lua` forwards it when no dashboard
+    user var is present.
+  - To pass the navigation keys through, add `or base == "fleet"` to
+    `is_nvim` in `~/.wezterm/tmux-mode.lua`.
+  - The leader cannot be made conditional in WezTerm. Either press Ctrl+S
+    twice (WezTerm then sends a literal Ctrl+S), or give fleet another prefix
+    in `embedded-keys.json`.
+  - In Windows Terminal all keys reach fleet.
+- **Not ported from tmux-mode:** rotate panes (`o` moves to the next pane
+  instead), rename tab/workspace (`,`/`$`), and the tab navigator (`w` goes to
+  the next project).
+- **Keybinds edited from the dashboard menu float** are picked up by the
+  dashboard the next time it starts, not at once.
+- **Not run end to end:** the dashboard menu button's click path (fleetd
+  tests cover the control op it uses), and the Unix byte bindings.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
