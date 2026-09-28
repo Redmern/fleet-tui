@@ -11,18 +11,25 @@ public sealed class WindowsPanePty : IPanePty
 
     public event Action<int>? Exited;
 
-    public void Start(string program, IReadOnlyList<string> args, int cols, int rows)
+    public void Start(
+        string program,
+        IReadOnlyList<string> args,
+        int cols,
+        int rows,
+        string cwd,
+        IReadOnlyDictionary<string, string> env)
     {
         _pty.DataReceived += (buffer, count) => Output?.Invoke(buffer, count);
         _pty.ProcessExited += code => Exited?.Invoke(code);
 
-        var environment = new Dictionary<string, string>
+        var environment = new Dictionary<string, string>(env)
         {
             ["TERM"] = "xterm-256color",
             ["COLORTERM"] = "truecolor",
         };
 
-        _pty.Start(ResolveProgram(program), cols, rows, Environment.CurrentDirectory, environment, [.. args]);
+        var directory = Directory.Exists(cwd) ? cwd : Environment.CurrentDirectory;
+        _pty.Start(ResolveProgram(program), cols, rows, directory, environment, [.. args]);
     }
 
     public void Write(ReadOnlySpan<byte> data)

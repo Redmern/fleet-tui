@@ -1,0 +1,122 @@
+using System.Threading.Channels;
+using Fleet.Platform.Mux.Embedded.Input;
+using Fleet.Platform.Mux.Embedded.Native;
+using Fleet.Platform.Mux.Embedded.Pty;
+using Fleet.Platform.Mux.Embedded.Render;
+
+namespace Fleet.Platform.Mux.Embedded.Daemon;
+
+public sealed class PaneRuntime : IDisposable
+{
+    private readonly Channel<byte[]> _toPty = Channel.CreateUnbounded<byte[]>(
+        new UnboundedChannelOptions { SingleReader = true });
+
+    private readonly Task _writer;
+
+    public PaneRuntime(string id, IPanePty pty, PaneTerminalFactory terminals, int cols, int rows)
+    {
+        Id = id;
+        Pty = pty;
+        Terminal = terminals(cols, rows, Send);
+        Screen.Resize(cols, rows);
+        _writer = Task.Run(WriteLoopAsync);
+    }
+
+    public string Id { get; }
+
+    public IPanePty Pty { get; }
+
+    public IPaneTerminal Terminal { get; }
+
+    public ScreenBuffer Screen { get; } = new();
+
+    public ConPtyModes Modes { get; } = new();
+
+    public Lock Gate { get; } = new();
+
+    public bool Dirty { get; set; } = true;
+
+    public bool Exited { get; set; }
+
+    public void Send(byte[] bytes)
+    {
+        if (bytes.Length > 0)
+        {
+            _toPty.Writer.TryWrite(bytes);
+        }
+    }
+
+    public void Feed(byte[] buffer, int count)
+    {
+        lock (Gate)
+        {
+            Terminal.Write(buffer.AsSpan(0, count));
+            Modes.Feed(buffer.AsSpan(0, count));
+            Dirty = true;
+        }
+    }
+
+    public void Resize(int cols, int rows)
+    {
+        lock (Gate)
+        {
+            Terminal.Resize(cols, rows);
+            Dirty = true;
+        }
+
+        try
+        {
+            Pty.Resize(cols, rows);
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+        }
+    }
+
+    public bool Snapshot()
+    {
+        lock (Gate)
+        {
+            if (!Dirty)
+            {
+                return false;
+            }
+
+            Dirty = false;
+            return Terminal.Snapshot(Screen);
+        }
+    }
+
+    public void Dispose()
+    {
+        _toPty.Writer.TryComplete();
+
+        try
+        {
+            Pty.Dispose();
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+        }
+
+        lock (Gate)
+        {
+            Terminal.Dispose();
+        }
+    }
+
+    private async Task WriteLoopAsync()
+    {
+        await foreach (var bytes in _toPty.Reader.ReadAllAsync().ConfigureAwait(false))
+        {
+            try
+            {
+                Pty.Write(bytes);
+            }
+            catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException)
+            {
+                return;
+            }
+        }
+    }
+}

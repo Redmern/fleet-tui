@@ -6,7 +6,13 @@ public interface IPanePty : IDisposable
 
     event Action<int>? Exited;
 
-    void Start(string program, IReadOnlyList<string> args, int cols, int rows);
+    void Start(
+        string program,
+        IReadOnlyList<string> args,
+        int cols,
+        int rows,
+        string cwd,
+        IReadOnlyDictionary<string, string> env);
 
     void Write(ReadOnlySpan<byte> data);
 

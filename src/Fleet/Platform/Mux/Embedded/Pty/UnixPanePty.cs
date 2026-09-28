@@ -23,7 +23,13 @@ public sealed unsafe partial class UnixPanePty : IPanePty
 
     public event Action<int>? Exited;
 
-    public void Start(string program, IReadOnlyList<string> args, int cols, int rows)
+    public void Start(
+        string program,
+        IReadOnlyList<string> args,
+        int cols,
+        int rows,
+        string cwd,
+        IReadOnlyDictionary<string, string> extraEnv)
     {
         var size = new WinSize { Rows = (ushort)rows, Cols = (ushort)cols };
         if (OpenPty(out var master, out var slave, null, null, &size) != 0)
@@ -49,6 +55,11 @@ public sealed unsafe partial class UnixPanePty : IPanePty
             Check(posix_spawn_file_actions_adddup2(fileActions, 0, 1), "dup2 stdout");
             Check(posix_spawn_file_actions_adddup2(fileActions, 0, 2), "dup2 stderr");
 
+            if (Directory.Exists(cwd))
+            {
+                Check(posix_spawn_file_actions_addchdir_np(fileActions, cwd), "addchdir");
+            }
+
             sigemptyset(sigset);
             Check(posix_spawnattr_setsigmask(attr, sigset), "setsigmask");
             sigemptyset(sigset);
@@ -66,7 +77,9 @@ public sealed unsafe partial class UnixPanePty : IPanePty
             var env = Environment.GetEnvironmentVariables()
                 .Cast<System.Collections.DictionaryEntry>()
                 .Where(e => (string)e.Key is not ("TERM" or "COLORTERM" or "COLUMNS" or "LINES"))
+                .Where(e => !extraEnv.ContainsKey((string)e.Key))
                 .Select(e => $"{e.Key}={e.Value}")
+                .Concat(extraEnv.Where(kv => kv.Value.Length > 0).Select(kv => $"{kv.Key}={kv.Value}"))
                 .Append("TERM=xterm-256color")
                 .Append("COLORTERM=truecolor")
                 .ToList();
@@ -263,6 +276,9 @@ public sealed unsafe partial class UnixPanePty : IPanePty
 
     [LibraryImport(Libc)]
     private static partial int posix_spawn_file_actions_adddup2(void* actions, int fd, int newfd);
+
+    [LibraryImport(Libc, StringMarshalling = StringMarshalling.Utf8)]
+    private static partial int posix_spawn_file_actions_addchdir_np(void* actions, string path);
 
     [LibraryImport(Libc)]
     private static partial int posix_spawnattr_init(void* attr);
