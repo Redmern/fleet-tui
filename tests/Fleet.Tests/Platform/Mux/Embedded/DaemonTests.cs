@@ -1,7 +1,15 @@
 using System.Collections.Concurrent;
 using System.Text;
+using Fleet.Features.Projects.LocateProject;
+using Fleet.Features.Projects.OpenProject;
+using Fleet.Features.Projects.OpenProject.Models;
+using Fleet.Features.Projects.SwitchProject;
+using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports.Mux.Exceptions;
+using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
@@ -244,6 +252,58 @@ public sealed class DaemonTests : IAsyncLifetime
 
         Assert.Equal(MessageType.Error, reply!.Value.Type);
         Assert.Contains("999", Wire.Read(reply.Value.Payload, WireJsonContext.Default.ErrorMessage).Message);
+    }
+
+    [Fact]
+    public async Task Fleets_own_handlers_switch_projects_through_the_embedded_driver()
+    {
+        using var mux = new EmbeddedDriver(_endpoint);
+        var techweb = new Project("techweb", ".");
+        var fleet = new Project("fleet", ".");
+        Assert.True((await new OpenProjectHandler(mux)
+            .HandleAsync(new OpenProjectCommand(techweb, "claude-techweb", "fleet", null))).Succeeded);
+        Assert.True((await new OpenProjectHandler(mux)
+            .HandleAsync(new OpenProjectCommand(fleet, "claude-fleet", "fleet", null))).Succeeded);
+        _panes.ByProgram("claude-fleet")!.Emit("fleet-prompt");
+
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        using var inClient = new EmbeddedDriver(_endpoint, client: client.Id);
+        var started = _panes.Started.Count;
+
+        var switched = await new SwitchProjectHandler(inClient).HandleAsync("fleet");
+
+        Assert.True(switched.Succeeded, switched.Error);
+        await client.WaitForAsync("fleet-prompt");
+        Assert.Equal(started, _panes.Started.Count);
+        Assert.Equal(0, _panes.Disposed);
+
+        var located = await new LocateProjectHandler(inClient).HandleAsync([techweb, fleet]);
+        Assert.True(located["techweb"].Open);
+        Assert.False(located["techweb"].ShownHere);
+        Assert.True(located["fleet"].ShownHere);
+    }
+
+    [Fact]
+    public async Task Without_an_attached_client_the_driver_refuses_to_show_rather_than_guess()
+    {
+        using var mux = new EmbeddedDriver(_endpoint);
+        await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", NewWindow = true, Args = ["a"] });
+
+        if (Environment.GetEnvironmentVariable(FleetDaemon.ClientVariable) is null)
+        {
+            await Assert.ThrowsAsync<MuxUnavailableException>(() => mux.ShowWorkspaceAsync("techweb"));
+        }
+    }
+
+    [Fact]
+    public async Task The_driver_reports_an_unreachable_daemon_as_unavailable()
+    {
+        using var mux = new EmbeddedDriver(new Endpoint(
+            OperatingSystem.IsWindows() ? "fleet-test-nobody-home" : Path.Combine(Path.GetTempPath(), "fleet-nobody.sock")));
+
+        Assert.False(await mux.IsAvailableAsync());
+        await Assert.ThrowsAsync<MuxUnavailableException>(() => mux.ListPanesAsync());
     }
 
     private static async Task Eventually(Func<bool> condition) => await Eventually(() => Task.FromResult(condition()));
