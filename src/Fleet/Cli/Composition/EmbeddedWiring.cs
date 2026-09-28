@@ -17,6 +17,8 @@ public static class EmbeddedWiring
 
     public const string RemoteCommandVariable = "FLEET_REMOTE_COMMAND";
 
+    public const string MouseVariable = "FLEET_MOUSE";
+
     private static readonly TimeSpan IdleExit = TimeSpan.FromSeconds(10);
 
     public static bool Ready => GhosttyNative.Available();
@@ -93,7 +95,8 @@ public static class EmbeddedWiring
         }
 
         var prefix = Prefix.Parse(Environment.GetEnvironmentVariable(PrefixVariable) ?? "ctrl+b");
-        var code = await new AttachClient(stream, workspace, prefix, line => log.Write($"attach: {line}"))
+        var mouse = !string.Equals(Environment.GetEnvironmentVariable(MouseVariable), "off", StringComparison.OrdinalIgnoreCase);
+        var code = await new AttachClient(stream, workspace, prefix, line => log.Write($"attach: {line}"), mouse)
             .RunAsync()
             .ConfigureAwait(false);
 

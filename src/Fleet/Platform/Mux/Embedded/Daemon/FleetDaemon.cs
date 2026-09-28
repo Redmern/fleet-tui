@@ -270,6 +270,10 @@ public sealed class FleetDaemon(DaemonOptions options)
                 break;
             }
 
+            case MessageType.Mouse when session is not null:
+                Mouse(session, Wire.Read(payload, WireJsonContext.Default.MouseMessage));
+                break;
+
             case MessageType.Badge when session is not null:
                 session.Badge = Wire.Read(payload, WireJsonContext.Default.BadgeMessage).Text;
                 _wake.Release();
@@ -336,6 +340,94 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         target.Send(Encoding.UTF8.GetBytes(PasteBytes(text, target.Modes.BracketedPaste)));
+    }
+
+    private void Mouse(AttachSession session, MouseMessage mouse)
+    {
+        PaneRuntime? target = null;
+        var x = 0;
+        var y = 0;
+        var redraw = false;
+
+        lock (_gate)
+        {
+            _model.Touch(session.Client);
+
+            var wheel = mouse.Button >= MouseButtons.WheelUp;
+            var press = mouse.Action == MouseActions.Press && !wheel;
+
+            if (session.Capture is { } capture && !press)
+            {
+                if (mouse.Action == MouseActions.Release && !mouse.Held)
+                {
+                    session.Capture = null;
+                }
+
+                if (capture.Divider >= 0)
+                {
+                    if (mouse.Action == MouseActions.Motion && _model.DragDivider(session.Client, capture.Divider, mouse.X, mouse.Y))
+                    {
+                        ApplyResizes();
+                        redraw = true;
+                    }
+                }
+                else if (_model.Relative(session.Client, capture.Pane!, mouse.X, mouse.Y) is { } relative)
+                {
+                    target = _runtimes.GetValueOrDefault(capture.Pane!);
+                    (x, y) = relative;
+                }
+            }
+            else
+            {
+                var hit = _model.Hit(session.Client, mouse.X, mouse.Y);
+
+                switch (hit.Kind)
+                {
+                    case MouseHitKind.StatusBar when press && mouse.Button == MouseButtons.Left:
+                        if (_model.View(session.Client) is { } view
+                            && Composer.TabSpans(view).FirstOrDefault(s => mouse.X >= s.Start && mouse.X < s.End) is { Tab: { } tab })
+                        {
+                            redraw = _model.FocusTab(session.Client, tab);
+                        }
+
+                        break;
+
+                    case MouseHitKind.Divider when press:
+                        session.Capture = new MouseCapture(null, hit.Divider);
+                        break;
+
+                    case MouseHitKind.Pane:
+                        if (press)
+                        {
+                            session.Capture = new MouseCapture(hit.Pane, -1);
+                            if (_model.View(session.Client)?.Focused != hit.Pane && _model.Focus(hit.Pane!))
+                            {
+                                redraw = true;
+                            }
+                        }
+
+                        target = _runtimes.GetValueOrDefault(hit.Pane!);
+                        (x, y) = (hit.X, hit.Y);
+                        break;
+                }
+            }
+        }
+
+        if (target is not null)
+        {
+            byte[] bytes;
+            lock (target.Gate)
+            {
+                bytes = target.Terminal.EncodeMouse(mouse, x, y);
+            }
+
+            target.Send(bytes);
+        }
+
+        if (redraw)
+        {
+            _wake.Release();
+        }
     }
 
     public static string PasteBytes(TextMessage text, bool bracketed)
@@ -761,5 +853,9 @@ public sealed class FleetDaemon(DaemonOptions options)
         public long Seq { get; set; }
 
         public Stopwatch? Switching { get; set; }
+
+        public MouseCapture? Capture { get; set; }
     }
+
+    private sealed record MouseCapture(string? Pane, int Divider);
 }

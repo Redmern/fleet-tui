@@ -16,8 +16,13 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
     private nint _state;
     private nint _rows;
     private nint _cells;
+    private const uint CellWidth = 8;
+    private const uint CellHeight = 16;
+
     private nint _encoder;
     private nint _event;
+    private nint _mouseEncoder;
+    private nint _mouseEvent;
     private bool _resized = true;
 
     public GhosttyTerminal(int cols, int rows, Action<byte[]> reply)
@@ -53,7 +58,7 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
 
     public void Resize(int cols, int rows)
     {
-        Check(GhosttyNative.TerminalResize(_terminal, (ushort)cols, (ushort)rows, 8, 16), "ghostty_terminal_resize");
+        Check(GhosttyNative.TerminalResize(_terminal, (ushort)cols, (ushort)rows, CellWidth, CellHeight), "ghostty_terminal_resize");
         _resized = true;
     }
 
@@ -146,6 +151,60 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         }
     }
 
+    public byte[] EncodeMouse(MouseMessage mouse, int x, int y)
+    {
+        if (_mouseEncoder == 0)
+        {
+            Check(GhosttyNative.MouseEncoderNew(0, out _mouseEncoder), "ghostty_mouse_encoder_new");
+            Check(GhosttyNative.MouseEventNew(0, out _mouseEvent), "ghostty_mouse_event_new");
+            byte on = 1;
+            GhosttyNative.MouseEncoderSetopt(_mouseEncoder, MouseEncoderOption.TrackLastCell, &on);
+        }
+
+        ushort cols = 0;
+        ushort rows = 0;
+        GhosttyNative.TerminalGet(_terminal, TerminalData.Cols, &cols);
+        GhosttyNative.TerminalGet(_terminal, TerminalData.Rows, &rows);
+
+        GhosttyNative.MouseEncoderSetoptFromTerminal(_mouseEncoder, _terminal);
+
+        var size = new MouseEncoderSize
+        {
+            Size = (nuint)sizeof(MouseEncoderSize),
+            ScreenWidth = (uint)(cols * CellWidth),
+            ScreenHeight = (uint)(rows * CellHeight),
+            CellWidth = CellWidth,
+            CellHeight = CellHeight,
+        };
+        GhosttyNative.MouseEncoderSetopt(_mouseEncoder, MouseEncoderOption.Size, &size);
+
+        byte held = mouse.Held ? (byte)1 : (byte)0;
+        GhosttyNative.MouseEncoderSetopt(_mouseEncoder, MouseEncoderOption.AnyButtonPressed, &held);
+
+        GhosttyNative.MouseEventSetAction(_mouseEvent, mouse.Action);
+        if (mouse.Button == Protocol.MouseButtons.None)
+        {
+            GhosttyNative.MouseEventClearButton(_mouseEvent);
+        }
+        else
+        {
+            GhosttyNative.MouseEventSetButton(_mouseEvent, mouse.Button);
+        }
+
+        GhosttyNative.MouseEventSetMods(_mouseEvent, (ushort)mouse.Mods);
+        GhosttyNative.MouseEventSetPosition(_mouseEvent, new MousePosition
+        {
+            X = x * CellWidth + CellWidth / 2f,
+            Y = y * CellHeight + CellHeight / 2f,
+        });
+
+        fixed (byte* output = _keyBuffer)
+        {
+            var rc = GhosttyNative.MouseEncoderEncode(_mouseEncoder, _mouseEvent, output, (nuint)_keyBuffer.Length, out var written);
+            return rc == GhosttyNative.Success ? _keyBuffer.AsSpan(0, (int)written).ToArray() : [];
+        }
+    }
+
     public string PlainText()
     {
         var options = new FormatterTerminalOptions
@@ -185,6 +244,12 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
 
         GhosttyNative.KeyEventFree(_event);
         GhosttyNative.KeyEncoderFree(_encoder);
+
+        if (_mouseEncoder != 0)
+        {
+            GhosttyNative.MouseEventFree(_mouseEvent);
+            GhosttyNative.MouseEncoderFree(_mouseEncoder);
+        }
         GhosttyNative.RowCellsFree(_cells);
         GhosttyNative.RowIteratorFree(_rows);
         GhosttyNative.RenderStateFree(_state);

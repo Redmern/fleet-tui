@@ -142,6 +142,72 @@ public static unsafe partial class GhosttyNative
 
     [LibraryImport(Lib, EntryPoint = "ghostty_key_event_set_unshifted_codepoint")]
     public static partial void KeyEventSetUnshiftedCodepoint(nint keyEvent, uint codepoint);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_encoder_new")]
+    public static partial int MouseEncoderNew(nint allocator, out nint encoder);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_encoder_free")]
+    public static partial void MouseEncoderFree(nint encoder);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_encoder_setopt")]
+    public static partial void MouseEncoderSetopt(nint encoder, MouseEncoderOption option, void* value);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_encoder_setopt_from_terminal")]
+    public static partial void MouseEncoderSetoptFromTerminal(nint encoder, nint terminal);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_encoder_encode")]
+    public static partial int MouseEncoderEncode(nint encoder, nint mouseEvent, byte* outBuf, nuint outBufSize, out nuint outLen);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_event_new")]
+    public static partial int MouseEventNew(nint allocator, out nint mouseEvent);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_event_free")]
+    public static partial void MouseEventFree(nint mouseEvent);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_event_set_action")]
+    public static partial void MouseEventSetAction(nint mouseEvent, int action);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_event_set_button")]
+    public static partial void MouseEventSetButton(nint mouseEvent, int button);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_event_clear_button")]
+    public static partial void MouseEventClearButton(nint mouseEvent);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_event_set_mods")]
+    public static partial void MouseEventSetMods(nint mouseEvent, ushort mods);
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_mouse_event_set_position")]
+    public static partial void MouseEventSetPosition(nint mouseEvent, MousePosition position);
+}
+
+public enum MouseEncoderOption
+{
+    Event = 0,
+    Format = 1,
+    Size = 2,
+    AnyButtonPressed = 3,
+    TrackLastCell = 4,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct MousePosition
+{
+    public float X;
+    public float Y;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct MouseEncoderSize
+{
+    public nuint Size;
+    public uint ScreenWidth;
+    public uint ScreenHeight;
+    public uint CellWidth;
+    public uint CellHeight;
+    public uint PaddingTop;
+    public uint PaddingBottom;
+    public uint PaddingRight;
+    public uint PaddingLeft;
 }
 
 public enum TerminalOption
@@ -157,6 +223,7 @@ public enum TerminalData
     Rows = 2,
     ActiveScreen = 6,
     KittyKeyboardFlags = 8,
+    MouseTracking = 11,
     Title = 12,
 }
 

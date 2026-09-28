@@ -53,13 +53,13 @@ public abstract record Layout
                 if (split.SideBySide)
                 {
                     split.First.Place(area with { Width = first }, panes, dividers);
-                    dividers.Add(new Divider(area.X + first, area.Y, true, area.Height));
+                    dividers.Add(new Divider(area.X + first, area.Y, true, area.Height, split, area));
                     split.Second.Place(area with { X = area.X + first + 1, Width = second }, panes, dividers);
                 }
                 else
                 {
                     split.First.Place(area with { Height = first }, panes, dividers);
-                    dividers.Add(new Divider(area.X, area.Y + first, false, area.Width));
+                    dividers.Add(new Divider(area.X, area.Y + first, false, area.Width, split, area));
                     split.Second.Place(area with { Y = area.Y + first + 1, Height = second }, panes, dividers);
                 }
 
@@ -67,6 +67,17 @@ public abstract record Layout
             }
         }
     }
+
+    public Layout WithRatio(LayoutSplit target, double ratio) => this switch
+    {
+        LayoutSplit split when ReferenceEquals(split, target) => split with { Ratio = Math.Clamp(ratio, 0.05, 0.95) },
+        LayoutSplit split => split with
+        {
+            First = split.First.WithRatio(target, ratio),
+            Second = split.Second.WithRatio(target, ratio),
+        },
+        _ => this,
+    };
 
     private static int Share(int percent) => percent <= 0 ? 50 : percent;
 
@@ -94,4 +105,9 @@ public readonly record struct Rect(int X, int Y, int Width, int Height)
 
 public readonly record struct Placed(string Pane, Rect Area);
 
-public readonly record struct Divider(int X, int Y, bool Vertical, int Length);
+public readonly record struct Divider(int X, int Y, bool Vertical, int Length, LayoutSplit? Split = null, Rect Area = default)
+{
+    public bool Contains(int x, int y) => Vertical
+        ? x == X && y >= Y && y < Y + Length
+        : y == Y && x >= X && x < X + Length;
+}

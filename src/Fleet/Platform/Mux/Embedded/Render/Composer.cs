@@ -134,6 +134,28 @@ public static class Composer
         }
     }
 
+    public static IReadOnlyList<(string Tab, int Start, int End, string Label)> TabSpans(ClientView view)
+    {
+        var spans = new List<(string, int, int, string)>();
+
+        if (view.Workspace is null)
+        {
+            return spans;
+        }
+
+        var x = view.Workspace.Name.Length + 2;
+
+        for (var i = 0; i < view.Workspace.Tabs.Count; i++)
+        {
+            var tab = view.Workspace.Tabs[i];
+            var label = $" {i + 1}:{(tab.Title.Length > 0 ? tab.Title : "shell")} ";
+            spans.Add((tab.Id, x, x + label.Length, label));
+            x += label.Length;
+        }
+
+        return spans;
+    }
+
     private static void StatusBar(ClientFrame frame, ClientView view, string? badge)
     {
         var y = frame.Rows - 1;
@@ -163,12 +185,10 @@ public static class Composer
         {
             Put($" {view.Workspace.Name} ", ActiveFg, BarBg, CellAttr.Bold);
 
-            for (var i = 0; i < view.Workspace.Tabs.Count; i++)
+            foreach (var (tab, _, _, label) in TabSpans(view))
             {
-                var tab = view.Workspace.Tabs[i];
-                var active = tab.Id == view.Workspace.ActiveTab;
-                var title = tab.Title.Length > 0 ? tab.Title : "shell";
-                Put($" {i + 1}:{title} ", active ? ActiveFg : BarFg, active ? ActiveBg : BarBg);
+                var active = tab == view.Workspace.ActiveTab;
+                Put(label, active ? ActiveFg : BarFg, active ? ActiveBg : BarBg);
             }
         }
 

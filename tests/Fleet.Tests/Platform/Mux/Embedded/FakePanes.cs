@@ -85,6 +85,9 @@ public sealed class FakePanes
 
         public byte[] Encode(KeyMessage key) => Encoding.UTF8.GetBytes(key.Text ?? string.Empty);
 
+        public byte[] EncodeMouse(MouseMessage mouse, int x, int y) =>
+            Encoding.UTF8.GetBytes($"<mouse b{mouse.Button} a{mouse.Action} {x},{y}>");
+
         public string PlainText() => _text.ToString();
 
         public void Dispose()

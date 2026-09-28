@@ -13,6 +13,8 @@ public interface IPaneTerminal : IDisposable
 
     byte[] Encode(KeyMessage key);
 
+    byte[] EncodeMouse(MouseMessage mouse, int x, int y);
+
     string PlainText();
 }
 

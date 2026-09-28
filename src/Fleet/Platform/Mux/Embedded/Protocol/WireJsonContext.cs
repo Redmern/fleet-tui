@@ -8,6 +8,7 @@ namespace Fleet.Platform.Mux.Embedded.Protocol;
 [JsonSerializable(typeof(ErrorMessage))]
 [JsonSerializable(typeof(KeyMessage))]
 [JsonSerializable(typeof(TextMessage))]
+[JsonSerializable(typeof(MouseMessage))]
 [JsonSerializable(typeof(ResizeMessage))]
 [JsonSerializable(typeof(CommandMessage))]
 [JsonSerializable(typeof(BadgeMessage))]

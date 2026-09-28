@@ -36,7 +36,7 @@ public sealed unsafe partial class WindowsConsole : IDisposable
     private readonly uint _inputCp;
     private bool _restored;
 
-    public WindowsConsole()
+    public WindowsConsole(bool mouse = false)
     {
         _in = GetStdHandle(StdInput);
         _out = GetStdHandle(StdOutput);
@@ -44,7 +44,7 @@ public sealed unsafe partial class WindowsConsole : IDisposable
         if (!GetConsoleMode(_in, out _inMode) || !GetConsoleMode(_out, out _outMode))
         {
             throw new InvalidOperationException(
-                "embeddedspike needs a real console: stdin/stdout are redirected");
+                "fleet attach needs a real console: stdin/stdout are redirected");
         }
 
         _outputCp = GetConsoleOutputCP();
@@ -52,9 +52,9 @@ public sealed unsafe partial class WindowsConsole : IDisposable
         SetConsoleOutputCP(Utf8);
         SetConsoleCP(Utf8);
 
-        var inMode = (_inMode | EnableWindowInput | EnableExtendedFlags)
+        var inMode = (_inMode | EnableWindowInput | EnableExtendedFlags | (mouse ? EnableMouseInput : 0))
                      & ~(EnableProcessedInput | EnableLineInput | EnableEchoInput
-                         | EnableVirtualTerminalInput | EnableQuickEditMode | EnableMouseInput);
+                         | EnableVirtualTerminalInput | EnableQuickEditMode | (mouse ? 0 : EnableMouseInput));
         var outMode = EnableProcessedOutput | EnableWrapAtEolOutput
                       | EnableVirtualTerminalProcessing | DisableNewlineAutoReturn;
 
@@ -134,7 +134,21 @@ public sealed unsafe partial class WindowsConsole : IDisposable
         [FieldOffset(4)] public short BufferSizeX;
         [FieldOffset(6)] public short BufferSizeY;
         [FieldOffset(4)] public int SetFocus;
+        [FieldOffset(4)] public MouseEventRecord Mouse;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MouseEventRecord
+    {
+        public short X;
+        public short Y;
+        public uint ButtonState;
+        public uint ControlKeyState;
+        public uint EventFlags;
+    }
+
+    public (int Left, int Top) WindowOrigin() =>
+        GetConsoleScreenBufferInfo(_out, out var info) ? (info.WindowLeft, info.WindowTop) : (0, 0);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct KeyEventRecord

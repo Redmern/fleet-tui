@@ -184,6 +184,95 @@ public sealed class MuxModel
         return true;
     }
 
+    public MouseHit Hit(string client, int x, int y)
+    {
+        if (View(client) is not { } view)
+        {
+            return MouseHit.Nothing;
+        }
+
+        if (view.Overlay is { } overlay)
+        {
+            var inner = new Rect(overlay.Area.X + 1, overlay.Area.Y + 1, overlay.Area.Width - 2, overlay.Area.Height - 2);
+            return inner.Contains(x, y)
+                ? new MouseHit(MouseHitKind.Pane, overlay.Pane, x - inner.X, y - inner.Y)
+                : MouseHit.Nothing;
+        }
+
+        if (y >= view.Client.Rows - StatusRows)
+        {
+            return new MouseHit(MouseHitKind.StatusBar, null, x, y);
+        }
+
+        for (var i = 0; i < view.Dividers.Count; i++)
+        {
+            if (view.Dividers[i].Contains(x, y))
+            {
+                return new MouseHit(MouseHitKind.Divider, null, x, y, i);
+            }
+        }
+
+        foreach (var placed in view.Panes)
+        {
+            if (placed.Area.Contains(x, y))
+            {
+                return new MouseHit(MouseHitKind.Pane, placed.Pane, x - placed.Area.X, y - placed.Area.Y);
+            }
+        }
+
+        return MouseHit.Nothing;
+    }
+
+    public (int X, int Y)? Relative(string client, string pane, int x, int y)
+    {
+        if (View(client) is not { } view)
+        {
+            return null;
+        }
+
+        var area = view.Overlay is { } overlay && overlay.Pane == pane
+            ? new Rect(overlay.Area.X + 1, overlay.Area.Y + 1, overlay.Area.Width - 2, overlay.Area.Height - 2)
+            : view.Panes.FirstOrDefault(p => p.Pane == pane).Area;
+
+        if (area.Width <= 0 || area.Height <= 0)
+        {
+            return null;
+        }
+
+        return (Math.Clamp(x - area.X, 0, area.Width - 1), Math.Clamp(y - area.Y, 0, area.Height - 1));
+    }
+
+    public bool FocusTab(string client, string tab)
+    {
+        if (View(client)?.Workspace is not { } workspace || workspace.Tabs.All(t => t.Id != tab))
+        {
+            return false;
+        }
+
+        workspace.ActiveTab = tab;
+        return true;
+    }
+
+    public bool DragDivider(string client, int index, int x, int y)
+    {
+        if (View(client) is not { Tab: { } tab } view || index < 0 || index >= view.Dividers.Count)
+        {
+            return false;
+        }
+
+        var divider = view.Dividers[index];
+        if (divider.Split is not { } split)
+        {
+            return false;
+        }
+
+        var area = divider.Area;
+        var usable = Math.Max(2, (divider.Vertical ? area.Width : area.Height) - 1);
+        var offset = divider.Vertical ? x - area.X : y - area.Y;
+        tab.Root = tab.Root.WithRatio(split, (double)Math.Clamp(offset, 1, usable - 1) / usable);
+        return true;
+    }
+
     public bool FocusDirection(string client, int dx, int dy)
     {
         if (View(client) is not { Focused: not null } view)
@@ -498,6 +587,19 @@ public sealed class ClientState(string id)
     public long LastActive { get; set; }
 
     public string? Overlay { get; set; }
+}
+
+public enum MouseHitKind
+{
+    None,
+    Pane,
+    Divider,
+    StatusBar,
+}
+
+public sealed record MouseHit(MouseHitKind Kind, string? Pane, int X, int Y, int Divider = -1)
+{
+    public static readonly MouseHit Nothing = new(MouseHitKind.None, null, 0, 0);
 }
 
 public sealed record ClientView(

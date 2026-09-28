@@ -6,7 +6,7 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 
 namespace Fleet.Platform.Mux.Embedded.Client;
 
-public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix, Action<string> log)
+public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix, Action<string> log, bool mouse = true)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -24,7 +24,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
 
         if (OperatingSystem.IsWindows())
         {
-            using var console = new WindowsConsole();
+            using var console = new WindowsConsole(mouse);
             var stdout = Console.OpenStandardOutput();
             return await RunAsync(wire, console.Size, bytes => { stdout.Write(bytes); stdout.Flush(); },
                 () => WindowsInputAsync(wire, console)).ConfigureAwait(false);
@@ -68,7 +68,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
 
         var client = Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome).Client;
         log($"attached as {client} at {cols}x{rows}");
-        write(Encoding.UTF8.GetBytes(EnterHost));
+        write(Encoding.UTF8.GetBytes(EnterHost + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)));
 
         try
         {
@@ -150,6 +150,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     private async Task WindowsInputAsync(Wire wire, WindowsConsole console)
     {
         var keys = new WindowsKeys();
+        var pointer = new WindowsMouse();
         var records = new WindowsConsole.InputRecord[512];
 
         while (_running)
@@ -193,6 +194,17 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
                     case WindowsConsole.FocusEvent:
                         await Command(wire, batch[i].SetFocus != 0 ? "focus-in" : "focus-out").ConfigureAwait(false);
                         break;
+                    case WindowsConsole.MouseEvent when mouse:
+                    {
+                        var (left, top) = console.WindowOrigin();
+                        foreach (var message in pointer.Translate(batch[i].Mouse, left, top))
+                        {
+                            await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage)
+                                .ConfigureAwait(false);
+                        }
+
+                        break;
+                    }
                 }
             }
         }
@@ -273,6 +285,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     {
         var buffer = new byte[4096];
         var pending = new List<byte>(4096);
+        var sgr = new SgrMouse();
 
         while (_running)
         {
@@ -282,36 +295,52 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
                 return;
             }
 
-            pending.Clear();
-            for (var i = 0; i < n; i++)
+            var items = mouse ? sgr.Feed(buffer.AsSpan(0, n)) : [buffer[..n]];
+
+            foreach (var item in items)
             {
-                var command = prefix.OnByte(buffer[i]);
-                if (command == PrefixCommand.None)
+                if (item is MouseMessage message)
                 {
-                    pending.Add(buffer[i]);
+                    await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage).ConfigureAwait(false);
                     continue;
                 }
 
-                await Flush(wire, pending).ConfigureAwait(false);
+                await TypedBytesAsync(wire, (byte[])item, pending).ConfigureAwait(false);
+            }
+        }
+    }
 
-                switch (command)
-                {
-                    case PrefixCommand.Armed:
-                        await Badge(wire, prefix.Label).ConfigureAwait(false);
-                        break;
-                    case PrefixCommand.SendPrefix:
-                        await Badge(wire, null).ConfigureAwait(false);
-                        pending.Add(prefix.ControlByte);
-                        break;
-                    case PrefixCommand.Chord:
-                        await Badge(wire, null).ConfigureAwait(false);
-                        await Chord(wire, Prefix.CommandFor(buffer[i])).ConfigureAwait(false);
-                        break;
-                }
+    private async Task TypedBytesAsync(Wire wire, byte[] bytes, List<byte> pending)
+    {
+        pending.Clear();
+        foreach (var b in bytes)
+        {
+            var command = prefix.OnByte(b);
+            if (command == PrefixCommand.None)
+            {
+                pending.Add(b);
+                continue;
             }
 
             await Flush(wire, pending).ConfigureAwait(false);
+
+            switch (command)
+            {
+                case PrefixCommand.Armed:
+                    await Badge(wire, prefix.Label).ConfigureAwait(false);
+                    break;
+                case PrefixCommand.SendPrefix:
+                    await Badge(wire, null).ConfigureAwait(false);
+                    pending.Add(prefix.ControlByte);
+                    break;
+                case PrefixCommand.Chord:
+                    await Badge(wire, null).ConfigureAwait(false);
+                    await Chord(wire, Prefix.CommandFor(b)).ConfigureAwait(false);
+                    break;
+            }
         }
+
+        await Flush(wire, pending).ConfigureAwait(false);
     }
 
     private async Task Flush(Wire wire, List<byte> pending)

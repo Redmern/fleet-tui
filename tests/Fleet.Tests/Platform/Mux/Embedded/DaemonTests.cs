@@ -261,6 +261,74 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_click_focuses_the_pane_under_it_and_reaches_it_in_its_own_coordinates()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "left");
+        await control.RequestAsync(new ControlRequest { Op = "split", Pane = left, Direction = "right", Args = ["right"] });
+        var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendMouseAsync(3, 2, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(3, 2, MouseButtons.Left, MouseActions.Release);
+        await client.SendKeyAsync("k");
+
+        await Eventually(() => _panes.ByProgram("left")!.Written == "<mouse b1 a0 3,2><mouse b1 a1 3,2>k");
+        Assert.DoesNotContain("<mouse", _panes.ByProgram("right")!.Written);
+    }
+
+    [Fact]
+    public async Task A_drag_that_leaves_the_pane_stays_with_the_pane_it_started_in()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "left");
+        await control.RequestAsync(new ControlRequest { Op = "split", Pane = left, Direction = "right", Args = ["right"] });
+        var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendMouseAsync(3, 2, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(35, 2, MouseButtons.Left, MouseActions.Motion, held: true);
+        await client.SendMouseAsync(35, 2, MouseButtons.Left, MouseActions.Release);
+
+        await Eventually(() => _panes.ByProgram("left")!.Written.EndsWith(" a1 19,2>", StringComparison.Ordinal));
+        Assert.Equal(string.Empty, _panes.ByProgram("right")!.Written);
+    }
+
+    [Fact]
+    public async Task The_wheel_goes_to_the_pane_under_the_pointer_without_moving_focus()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "left");
+        await control.RequestAsync(new ControlRequest { Op = "split", Pane = left, Direction = "right", Args = ["right"] });
+        var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendMouseAsync(2, 2, MouseButtons.WheelDown, MouseActions.Press);
+        await client.SendKeyAsync("k");
+
+        await Eventually(() => _panes.ByProgram("left")!.Written == "<mouse b5 a0 2,2>"
+                                && _panes.ByProgram("right")!.Written == "k");
+    }
+
+    [Fact]
+    public async Task Clicking_a_tab_in_the_status_bar_shows_that_tab()
+    {
+        var control = await ControlAsync();
+        var first = await SpawnAsync(control, "techweb", "first");
+        await control.RequestAsync(new ControlRequest { Op = "title", Pane = first, Text = "one" });
+        var second = await SpawnAsync(control, "techweb", "second");
+        await control.RequestAsync(new ControlRequest { Op = "title", Pane = second, Text = "two" });
+        var client = await AttachAsync(cols: 40, rows: 6, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendMouseAsync(" techweb ".Length + 2, 5, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(" techweb ".Length + 2, 5, MouseButtons.Left, MouseActions.Release);
+        await client.SendKeyAsync("k");
+
+        await Eventually(() => _panes.ByProgram("first")!.Written == "k");
+    }
+
+    [Fact]
     public async Task Fleets_own_handlers_switch_projects_through_the_embedded_driver()
     {
         using var mux = new EmbeddedDriver(_endpoint);
@@ -375,6 +443,12 @@ public sealed class DaemonTests : IAsyncLifetime
 
         public Task SendKeyAsync(string text) =>
             _wire.SendAsync(MessageType.Key, new KeyMessage { Text = text, Action = 1 }, WireJsonContext.Default.KeyMessage);
+
+        public Task SendMouseAsync(int x, int y, int button, int action, bool held = false) =>
+            _wire.SendAsync(
+                MessageType.Mouse,
+                new MouseMessage { X = x, Y = y, Button = button, Action = action, Held = held },
+                WireJsonContext.Default.MouseMessage);
 
         public Task SendCommandAsync(string name) =>
             _wire.SendAsync(MessageType.Command, new CommandMessage { Name = name }, WireJsonContext.Default.CommandMessage);

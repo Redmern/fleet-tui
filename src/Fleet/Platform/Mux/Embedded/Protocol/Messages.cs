@@ -110,6 +110,46 @@ public sealed class KeyMessage
     public Win32Key? Win32 { get; set; }
 }
 
+public static class MouseButtons
+{
+    public const int None = 0;
+    public const int Left = 1;
+    public const int Right = 2;
+    public const int Middle = 3;
+    public const int WheelUp = 4;
+    public const int WheelDown = 5;
+    public const int WheelLeft = 6;
+    public const int WheelRight = 7;
+}
+
+public static class MouseActions
+{
+    public const int Press = 0;
+    public const int Release = 1;
+    public const int Motion = 2;
+}
+
+public sealed class MouseMessage
+{
+    [JsonPropertyName("x")]
+    public int X { get; set; }
+
+    [JsonPropertyName("y")]
+    public int Y { get; set; }
+
+    [JsonPropertyName("button")]
+    public int Button { get; set; }
+
+    [JsonPropertyName("action")]
+    public int Action { get; set; }
+
+    [JsonPropertyName("mods")]
+    public int Mods { get; set; }
+
+    [JsonPropertyName("held")]
+    public bool Held { get; set; }
+}
+
 public sealed class TextMessage
 {
     [JsonPropertyName("text")]
