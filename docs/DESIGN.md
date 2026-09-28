@@ -2353,16 +2353,16 @@ From herdr's CHANGELOG. Each item is a bug herdr shipped and fixed on Windows.
 The records path avoids some of them by construction; each needs a test before
 `embedded` is called done.
 
-- [ ] **Alt combinations.** Alt+letter, Alt+Shift+letter (must not collapse to
+- [x] **Alt combinations.** Alt+letter, Alt+Shift+letter (must not collapse to
       uppercase), Alt+Backspace, Ctrl+Alt+letter (fish decodes these as both
-      modifiers). Right Alt is AltGr only with `LEFT_CTRL` also set.
-- [ ] **Ctrl+S** reaches the pane (not taken as XOFF, not claimed by the host;
+      modifiers). Right Alt is AltGr only with `LEFT_CTRL` also set. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Ctrl+S** reaches the pane (not taken as XOFF, not claimed by the host;
       WezTerm on this machine claims it as a leader). Also Ctrl+/, Ctrl+1..9 as
-      keys rather than control bytes, and Ctrl+J as LF, distinct from Enter.
-- [ ] **Dead keys and AltGr text.** US-International `'` + `e` gives `é` once,
+      keys rather than control bytes, and Ctrl+J as LF, distinct from Enter. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Dead keys and AltGr text.** US-International `'` + `e` gives `é` once,
       with no extra base character; AltGr+dead key; non-US shifted text such as
       `@` on German layouts; IME commits; emoji from the Windows picker
-      (surrogate pairs, or CSI-u with associated text under WezTerm).
+      (surrogate pairs, or CSI-u with associated text under WezTerm). *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
 - [x] **SGR mouse past column 95.** Coordinates must use SGR (1006) encoding end
       to end. Legacy encodings stop at 95/223. Reattach must restore mouse
       reporting. *Done 2026-09-28 for `embedded`: a click at column 110 reached
@@ -2374,17 +2374,17 @@ The records path avoids some of them by construction; each needs a test before
       newlines. *Done 2026-09-28 for `embedded`, see "Paste on Windows"; the
       conhost path and the ConPTY (WezTerm/WT) path were verified, not a real
       WezTerm or Windows Terminal window.*
-- [ ] **Mode restore.** On exit and on detach, reset mouse (1000/1002/1003/1006),
+- [x] **Mode restore.** On exit and on detach, reset mouse (1000/1002/1003/1006),
       focus (1004), bracketed paste (2004), cursor keys, keypad, cursor shape and
       visibility, and the alt screen. Restore console modes and code pages even
-      on a crash (herdr #4055 still had a Git Bash report open).
-- [ ] **Escape** is sent at once, not held as a possible Alt prefix, and a lone
-      Esc beside another key is not fused into an Alt chord.
-- [ ] **Shift+Enter** keeps its modifier. **Shift+Tab** reaches the pane as
-      CSI Z; the permission-mode cycle depends on it.
-- [ ] **Key repeat and release** stay with the pane that got the press.
-- [ ] **Incomplete host replies** (split `ESC ]` OSC colour answers) are not
-      mistaken for Alt+`]`.
+      on a crash (herdr #4055 still had a Git Bash report open). *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Escape** is sent at once, not held as a possible Alt prefix, and a lone
+      Esc beside another key is not fused into an Alt chord. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Shift+Enter** keeps its modifier. **Shift+Tab** reaches the pane as
+      CSI Z; the permission-mode cycle depends on it. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Key repeat and release** stay with the pane that got the press. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Incomplete host replies** (split `ESC ]` OSC colour answers) are not
+      mistaken for Alt+`]`. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
 
 ### Manual test checklist
 
@@ -3089,6 +3089,92 @@ workspace, drawn in a bordered box over the tiled layout instead of in it.
 - **Float layout is not saved** across fleetd restarts. Neither is anything
   else yet.
 
+## Windows input checklist, 2026-09-28
+
+The items from herdr's CHANGELOG (see "Windows input checklist for later
+phases"), checked against `embedded`.
+
+### How keys reach a pane
+
+- **A ConPTY pane** (every pane on Windows) asks for win32-input-mode
+  (`?9001h`). fleet then hands it the client's own key records, as Windows
+  Terminal does. ConPTY rebuilds exactly those records for the program, and
+  conhost does any VT translation as it would under Windows Terminal.
+- **Any other pane** (a Linux pane reached from a Windows client) gets the
+  key encoded by libghostty-vt from fleet's translation of the record.
+- **A Unix client** passes the bytes it reads straight through. It only takes
+  out the prefix, SGR mouse reports and float-mode keys.
+
+### Found and fixed
+
+- **Key repeat was multiplied.** A record with repeat count 3 reached the
+  pane as the record *plus* two extra encoded keys: five `x` instead of three.
+  The key message now carries a `repeat` count. fleetd passes the one record
+  through to a ConPTY pane, and encodes N presses for any other pane.
+- **Dead keys** have no text. On the encoder path, the dead key's press could
+  have become a stray base character. fleet now marks a dead key (Windows
+  flags it in `MapVirtualKey`) and encodes nothing for it. The composed
+  character arrives once, with the next key.
+- **`y` + Enter typed in one console read counted as a paste**, so the pane
+  got it bracketed and Claude Code would not submit. A burst under 8
+  characters is now a paste only when a newline sits between text.
+- **The host was not restored when the client was killed.** SIGTERM, SIGHUP
+  (also console close on Windows), SIGQUIT and process exit now restore it,
+  exactly once. The restore resets mouse (1000/1002/1003/1006), focus (1004),
+  bracketed paste (2004), cursor keys, keypad, cursor shape and visibility,
+  synchronized output, attributes and the alt screen. It also restores
+  console modes, code pages, the console title and termios.
+
+### Verified
+
+- **End to end on Windows, real binary, windowless.** An outer fleetd ran
+  `fleet attach` in a pane. Each key was injected as win32-input-mode input,
+  which makes the outer ConPTY produce exactly those records for the client.
+  In the inner pane, a probe printed what it received.
+  - **Record mode:** the program got every injected record unchanged, with
+    virtual key, character, key-down, control state and repeat count all
+    matching. That covered Shift+Tab, Shift+Enter, Esc, Alt+a, Alt+Shift+a,
+    Alt+Backspace, Ctrl+Alt+a, Ctrl+S, Ctrl+J, Ctrl+/, Ctrl+1, AltGr+q (`@`),
+    Right Alt+a, the dead key `'` then `é`, a surrogate-pair emoji, and `x`
+    with repeat 3.
+  - **VT-input mode, as conhost translates it:**
+
+    | Key | Program got |
+    |---|---|
+    | Shift+Tab | `\e[Z` |
+    | Shift+Enter | `\r` |
+    | Esc | `\e` |
+    | Alt+a | `\ea` |
+    | Alt+Shift+a | `\eA` |
+    | Alt+Backspace | `\e\x7f` |
+    | Ctrl+S | `^S` |
+    | Ctrl+J | `^J` |
+    | Ctrl+/ | `^_` |
+    | AltGr+q | `@` |
+    | `'` then `e` | `é` (UTF-8, once) |
+- **Tests (15 new, 1074 in all):**
+  - key translation: modifiers, AltGr, Ctrl letters, dead keys, surrogate
+    pairs, repeat counts;
+  - chords never taken for a paste; the short-burst rule;
+  - the restore sequence;
+  - a split OSC reply passing through the Unix byte path whole;
+  - in fleetd: repeat encoding for both kinds of pane, and a dead key putting
+    nothing into an encoder pane.
+
+### Limits
+
+- **Emoji for VT-input programs.** A program that reads console input with
+  `ReadFile` in VT mode gets U+FFFD for each half of a surrogate pair. This
+  happens even when the emoji arrives as plain UTF-8 text, so it is the inbox
+  conhost, not fleet. Programs that read records (node/libuv, PSReadLine) get
+  the right character. A newer `conpty.dll` via `FLEET_CONPTY` may fix it;
+  not tried.
+- **What conhost makes of a record is conhost's.** Shift+Enter reaches a
+  VT-input program as a plain `\r`, the same as under Windows Terminal.
+- **The host can still claim a key before fleet sees it,** e.g. WezTerm's
+  leader on Ctrl+S. That is host configuration.
+- **The encoder path (Windows client, Linux pane) was checked with unit tests
+  only,** not end to end.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

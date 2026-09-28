@@ -5,7 +5,7 @@ using Fleet.Platform.Mux.Embedded.Host;
 
 namespace Fleet.Platform.Mux.Embedded.Input;
 
-public sealed partial class WindowsKeys
+public sealed partial class WindowsKeys(Func<ushort, bool>? isDeadKey = null)
 {
     private const uint RightAlt = 0x0001;
     private const uint LeftAlt = 0x0002;
@@ -53,6 +53,14 @@ public sealed partial class WindowsKeys
         }
 
         var mods = Mods(record.ControlKeyState);
+
+        if (unit == 0 && (isDeadKey ?? IsDeadKey)(vk))
+        {
+            yield return new KeyInput(Key.Unidentified, mods, Native.Mods.None, null,
+                down ? KeyAction.Press : KeyAction.Release, 0, vk);
+            yield break;
+        }
+
         var key = MapKey(vk, (record.ControlKeyState & Enhanced) != 0);
 
         if ((mods & Native.Mods.Ctrl) != 0)
@@ -113,6 +121,9 @@ public sealed partial class WindowsKeys
 
     private static bool IsModifierOnly(ushort vk) =>
         vk is 0x10 or 0x11 or 0x12 or 0x14 or 0x5B or 0x5C or 0x90 or 0x91 or (>= 0xA0 and <= 0xA5);
+
+    private static bool IsDeadKey(ushort vk) =>
+        vk is not (>= 0x41 and <= 0x5A or >= 0x30 and <= 0x39) && (MapVirtualKeyW(vk, 2) & 0x80000000) != 0;
 
     private static uint Unshifted(ushort vk)
     {

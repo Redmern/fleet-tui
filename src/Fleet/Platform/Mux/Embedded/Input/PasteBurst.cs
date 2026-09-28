@@ -62,7 +62,7 @@ public static class PasteBurst
         }
 
         var normalized = text.ToString().Replace("\r\n", "\r", StringComparison.Ordinal).Replace('\n', '\r');
-        var newline = normalized.Contains('\r', StringComparison.Ordinal);
+        var newline = normalized.TrimEnd('\r').Contains('\r', StringComparison.Ordinal);
 
         return newline || normalized.Length >= MinimumWithoutNewline ? normalized : null;
     }

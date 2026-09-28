@@ -474,6 +474,55 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_repeated_key_is_encoded_once_per_repeat_for_a_pane_without_win32_input()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "shell");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendKeyAsync(new KeyMessage { Text = "x", Action = 1, Repeat = 3 });
+        await client.SendKeyAsync(new KeyMessage { Text = "y", Action = 0, Repeat = 2 });
+
+        await client.SendKeyAsync("z");
+        await Eventually(() => _panes.ByProgram("shell")!.Written == "xxxz");
+    }
+
+    [Fact]
+    public async Task A_dead_key_press_puts_nothing_into_a_pane_without_win32_input()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "shell");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendKeyAsync(new KeyMessage { Key = 0, Text = null, Action = 1, Win32 = new Win32Key { Vk = 0xDE, Down = true } });
+        await client.SendKeyAsync("é");
+
+        await Eventually(() => _panes.ByProgram("shell")!.Written == "é");
+    }
+    [Fact]
+    public async Task A_repeated_key_reaches_a_win32_input_pane_as_one_record_with_its_count()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "conpty");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        _panes.ByProgram("conpty")!.Emit("\e[?9001h");
+        await Task.Delay(100);
+
+        await client.SendKeyAsync(new KeyMessage
+        {
+            Text = "x",
+            Action = 1,
+            Repeat = 3,
+            Win32 = new Win32Key { Vk = 0x58, Sc = 45, Uc = 'x', Down = true, State = 0, Repeat = 3 },
+        });
+
+        await Eventually(() => _panes.ByProgram("conpty")!.Written == "\e[88;45;120;1;0;3_");
+    }
+
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();
@@ -556,6 +605,9 @@ public sealed class DaemonTests : IAsyncLifetime
             await _wire.SendAsync(MessageType.Request, request, WireJsonContext.Default.ControlRequest);
             return await reply.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
+
+        public Task SendKeyAsync(KeyMessage key) =>
+            _wire.SendAsync(MessageType.Key, key, WireJsonContext.Default.KeyMessage);
 
         public Task SendKeyAsync(string text) =>
             _wire.SendAsync(MessageType.Key, new KeyMessage { Text = text, Action = 1 }, WireJsonContext.Default.KeyMessage);

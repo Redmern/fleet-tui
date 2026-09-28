@@ -106,6 +106,9 @@ public sealed class KeyMessage
     [JsonPropertyName("unshifted")]
     public uint Unshifted { get; set; }
 
+    [JsonPropertyName("repeat")]
+    public int Repeat { get; set; } = 1;
+
     [JsonPropertyName("win32")]
     public Win32Key? Win32 { get; set; }
 }

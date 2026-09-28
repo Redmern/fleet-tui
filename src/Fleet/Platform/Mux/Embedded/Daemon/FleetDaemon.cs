@@ -309,7 +309,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
-        if (key.Action == 0)
+        if (key.Action == 0 || (key.Key == (int)Key.Unidentified && string.IsNullOrEmpty(key.Text)))
         {
             return;
         }
@@ -318,10 +318,32 @@ public sealed class FleetDaemon(DaemonOptions options)
         lock (target.Gate)
         {
             bytes = target.Terminal.Encode(key);
+
+            if (key.Repeat > 1 && key.Action == (int)KeyAction.Press)
+            {
+                var again = Repeated(key);
+                var more = new List<byte>(bytes);
+                for (var i = 1; i < key.Repeat; i++)
+                {
+                    more.AddRange(target.Terminal.Encode(again));
+                }
+
+                bytes = [.. more];
+            }
         }
 
         target.Send(bytes);
     }
+
+    private static KeyMessage Repeated(KeyMessage key) => new()
+    {
+        Key = key.Key,
+        Mods = key.Mods,
+        Consumed = key.Consumed,
+        Text = key.Text,
+        Action = (int)KeyAction.Repeat,
+        Unshifted = key.Unshifted,
+    };
 
     private void Route(AttachSession session, TextMessage text)
     {

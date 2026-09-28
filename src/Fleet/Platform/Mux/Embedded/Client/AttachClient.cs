@@ -20,6 +20,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
     private readonly HashSet<ushort> _swallowed = [];
     private readonly FloatMode _floatMode = new();
     private volatile bool _running = true;
+    private int _left;
     private string? _farewell;
 
     public async Task<int> RunAsync()
@@ -31,16 +32,16 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             using var console = new WindowsConsole(mouse);
             var stdout = Console.OpenStandardOutput();
             return await RunAsync(wire, console.Size, bytes => { stdout.Write(bytes); stdout.Flush(); },
-                () => WindowsInputAsync(wire, console)).ConfigureAwait(false);
+                () => WindowsInputAsync(wire, console), console.Dispose).ConfigureAwait(false);
         }
 
         using var terminal = new UnixTerminal();
-        return await RunAsync(wire, terminal.Size, UnixOut.Write, () => UnixInputAsync(wire, terminal))
+        return await RunAsync(wire, terminal.Size, UnixOut.Write, () => UnixInputAsync(wire, terminal), terminal.Dispose)
             .ConfigureAwait(false);
     }
 
     private async Task<int> RunAsync(
-        Wire wire, Func<(int Cols, int Rows)> size, Action<byte[]> write, Func<Task> input)
+        Wire wire, Func<(int Cols, int Rows)> size, Action<byte[]> write, Func<Task> input, Action release)
     {
         var (cols, rows) = size();
 
@@ -78,6 +79,10 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             + EnterHost
             + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)));
 
+        void Leave() => this.Leave(write, savedTitle, release);
+
+        using var signals = HostSignals.OnExit(Leave);
+
         try
         {
             var reader = Task.Run(() => ReadFramesAsync(wire, write));
@@ -101,12 +106,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
         }
         finally
         {
-            write(Encoding.UTF8.GetBytes(RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : PopTitle)));
-
-            if (savedTitle is not null)
-            {
-                HostEffectsOut.SetConsoleTitle(savedTitle);
-            }
+            Leave();
         }
 
         if (_farewell is not null)
@@ -115,6 +115,31 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
         }
 
         return 0;
+    }
+
+    public static string RestoreSequence => RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : PopTitle);
+
+    private void Leave(Action<byte[]> write, string? savedTitle, Action release)
+    {
+        if (Interlocked.Exchange(ref _left, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            write(Encoding.UTF8.GetBytes(RestoreSequence));
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException)
+        {
+        }
+
+        if (savedTitle is not null)
+        {
+            HostEffectsOut.SetConsoleTitle(savedTitle);
+        }
+
+        release();
     }
 
     private void Apply(HostEffect effect, Action<byte[]> write)
@@ -319,23 +344,21 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
                 break;
         }
 
-        foreach (var each in inputs)
-        {
-            await Send(
-                wire,
-                MessageType.Key,
-                new KeyMessage
-                {
-                    Key = (int)each.Key,
-                    Mods = (int)each.Mods,
-                    Consumed = (int)each.Consumed,
-                    Text = each.Utf8,
-                    Action = (int)each.Action,
-                    Unshifted = each.Unshifted,
-                    Win32 = each == input ? win32 : null,
-                },
-                WireJsonContext.Default.KeyMessage).ConfigureAwait(false);
-        }
+        await Send(
+            wire,
+            MessageType.Key,
+            new KeyMessage
+            {
+                Key = (int)input.Key,
+                Mods = (int)input.Mods,
+                Consumed = (int)input.Consumed,
+                Text = input.Utf8,
+                Action = (int)input.Action,
+                Unshifted = input.Unshifted,
+                Repeat = inputs.Count,
+                Win32 = win32,
+            },
+            WireJsonContext.Default.KeyMessage).ConfigureAwait(false);
     }
 
     private async Task UnixInputAsync(Wire wire, UnixTerminal terminal)

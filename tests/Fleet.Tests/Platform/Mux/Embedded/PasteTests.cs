@@ -61,7 +61,14 @@ public class PasteTests
     }
 
     [Fact]
-    public void A_long_single_line_burst_is_a_paste()
+    public void A_short_burst_ending_in_enter_stays_keys_so_y_enter_still_submits()
+    {
+        Assert.Null(PasteBurst.Paste(Typed("y\r")));
+        Assert.Null(PasteBurst.Paste(Typed("ls -la\r")));
+        Assert.Equal("a\rb", PasteBurst.Paste(Typed("a\rb")));
+    }
+
+    [Fact]    public void A_long_single_line_burst_is_a_paste()
     {
         Assert.Equal("git status --short", PasteBurst.Paste(Typed("git status --short")));
     }
