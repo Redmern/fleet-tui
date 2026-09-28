@@ -2669,6 +2669,128 @@ new. It is the largest single item in Phase 1.
    Linux→Windows.
 7. **`EmbeddedDriver` behind `IMuxDriver`**, then `DriverSelector`.
 
+## Phase 1 status, 2026-09-28
+
+Steps 1–7 of the combined plan are built on `feat/embedded-mux` and run
+end to end on Windows and Linux. `DriverSelector` needed no change: it already
+falls back to `embedded`, and `FLEET_MUX=embedded` forces it. What changed is
+that choosing it now works, because the build carries libghostty-vt.
+
+### Where things are
+
+| Piece | Code |
+|---|---|
+| Workspace port and switching | `Ports/Mux` (`Workspace`, `MuxCaps.Workspaces`, three operations), `Features/Projects/SwitchProject`, `Features/Projects/LocateProject`, `MenuCommand` |
+| fleetd model: workspaces, tabs, split layouts, per-client views and overlays | `Platform/Mux/Embedded/Model` |
+| Compositor and diff encoder | `Platform/Mux/Embedded/Render` |
+| Wire protocol | `Platform/Mux/Embedded/Protocol` |
+| Emulator, PTYs, host consoles, key translation | `Platform/Mux/Embedded/{Native,Pty,Host,Input}` (ported from the spike) |
+| The daemon | `Platform/Mux/Embedded/Daemon` |
+| Driver and attach client | `Platform/Mux/Embedded/EmbeddedDriver.cs`, `Platform/Mux/Embedded/Client` |
+| Commands | `fleet daemon`, `fleet attach [--project p] [--ssh host]`, `fleet bridge` |
+| Native build | `scripts/ghostty/build.{ps1,sh}`, into `artifacts/ghostty/<rid>`. `Fleet.csproj` links it when present; CI builds it |
+
+fleetd starts on demand, from `fleet`, `fleet attach` or the driver, and exits
+ten seconds after its last pane and client are gone. The client prefix is
+Ctrl+B (`FLEET_PREFIX`): `q` detach, `space` fleet menu, `n`/`p` tab, `s`
+next project, `h`/`j`/`k`/`l` or the arrows to move focus, `r` redraw, and
+Ctrl+B again to send it through.
+
+### Verified
+
+Unit and daemon tests: 982, green on Windows, on Linux in Docker, and in CI on
+both runners. The daemon tests run a real fleetd over a real pipe or socket
+with fake PTYs. The switching acceptance tests pass there:
+- a switch never spawns or kills;
+- panes and processes survive hide/show round trips;
+- two clients show different projects;
+- a connection with no client cannot change a view;
+- hidden agents keep receiving output.
+
+Real consoles on Windows (conhost, driven by console input records), with
+`FLEET_CONFIG_HOME` pointing at a scratch config:
+
+| Check | Result |
+|---|---|
+| `fleet` picker → project opens as a workspace, fleetd started on demand | ✓ claude and the dashboard side by side, divider, status bar |
+| Terminal.Gui dashboard rendered through the emulator | ✓ |
+| Ctrl+B Space | ✓ fleet menu as an overlay over this client only |
+| Menu → Switch project → a project not yet open | ✓ its workspace is created and shown. `switch demo1 -> demo2: 50–93 ms` including the two spawns |
+| Ctrl+B S between open projects | ✓ fleetd frame 13–16 ms, 1.9–3.8 KB |
+| Second client attached to `demo1` while the first switches four times | ✓ the second never changes |
+| Ctrl+B Q, then attach again | ✓ clean exit, then a character-for-character identical screen |
+
+Linux in Docker, under `script`, with a shell standing in for claude:
+
+| Check | Result |
+|---|---|
+| Cold `build.sh`, `dotnet test`, AOT publish | ✓ 26.5 MB, needs only libc and libm |
+| picker → open → menu overlay → open second project → switch → detach | ✓ `switch demo1 -> demo2: 6 ms`, frames 3–4 ms, fleetd still running after detach |
+| `fleet attach --ssh localhost` against a fleetd on the "remote" | ✓ frames arrive over `ssh -T host fleet bridge`, typed input runs in the remote pane |
+
+Switch frames are small because they are diffs against what the client
+already shows. Two workspaces laid out alike differ in a few cells, so a
+switch can cost under 100 bytes.
+
+### Found by running it, and fixed
+
+- **ConPTY children inherited redirected std handles.** fleetd was started
+  with pipes for stdin, stdout and stderr, and a pane child (claude, cmd) took
+  those pipes as its stdout instead of the pseudoconsole. It printed nowhere
+  and died. The Terminal.Gui dashboard worked only because it opens `CONOUT$`
+  by name. fleetd is no longer started redirected on Windows, and it releases
+  any redirected std handles it finds at startup.
+- **RoyalApps' `ProcessExited` does not fire.** Dead panes, and the menu
+  overlay, stayed forever. Each Windows pane now also waits on its child
+  process by PID and raises the exit once.
+- **The socket directory chmod.** The listener made the socket's directory
+  0700 even when it already existed, which fails for a non-root user on
+  `/tmp`. Only CI caught it, because the Docker runs were root.
+- **ssh prompts in raw mode.** An unknown host key or a password prompt
+  cannot be answered once the terminal is raw, so `--ssh` hung. ssh now runs
+  with `BatchMode=yes`, and a failed attach says what ssh needs.
+- **Zig 0.16 on Windows, intermittently.** The first fetch of a dependency
+  can fail with `file_hash FileNotFound` under `zig-pkg`; a second run
+  succeeds. Two of three cold local builds hit it. `build.ps1` retries up to
+  three times.
+
+### Deviations from the plan
+
+- **Linux clients send raw bytes.** DESIGN rule 3 asks for neutral key events.
+  Windows clients send them (plus the raw record). Linux clients still send
+  stdin bytes, and the prefix is a byte check, because there is no host input
+  parser yet. A pane asking for the kitty keyboard gets legacy keys from a
+  Linux client.
+- **Layouts come only from fleet's own splits.** There is no interactive pane
+  splitting or resizing by the user.
+- **Size policy** is "most recently active client wins" for a workspace shown
+  in two clients of different sizes. With two differently sized clients on
+  one workspace, the panes resize whenever activity moves between them.
+
+### Still open
+
+- **Not exercised in a real console:**
+  - hiding and unhiding a real agent (covered by feature and daemon tests only);
+  - scrollback;
+  - mouse, which is not forwarded at all yet;
+  - clipboard, title and other host effects (rule 5);
+  - bracketed paste into a ConPTY pane: the herdr pasted-Enter item.
+- **Hosts I could not drive:** Windows Terminal, WezTerm, and Ghostty/kitty
+  for the attach client. Also Linux→Windows over OpenSSH, which needs a
+  Windows sshd.
+- **Whether fleetd survives closing the terminal that started it.** On
+  Windows it is a separate windowless process, but that is untested.
+- **The conhost window grew after the picker.** In the automated runs the
+  window reported 200x48 or 215x53 after `fleet`'s Terminal.Gui picker exited
+  and the attach began. An attach started directly stayed at 120x30. The
+  cause is unconfirmed; Terminal.Gui resizing the buffer on shutdown is a
+  guess.
+- **One unexplained client exit.** A second attached client left once,
+  shortly after the first client's menu overlay ended. That was on the build
+  before exit detection was fixed, and it did not reproduce afterwards.
+- **The dashboard's other WezTerm-only actions** (e.g. its keybind hints) have
+  not been audited for `embedded`.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
