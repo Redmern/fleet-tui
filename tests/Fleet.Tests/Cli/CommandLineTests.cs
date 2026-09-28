@@ -148,6 +148,25 @@ public class CommandLineTests
     }
 
     [Fact]
+    public void A_bare_version_after_update_is_taken_as_the_version()
+    {
+        Assert.Equal("0.5.22", CommandLine.Parse(["update", "0.5.22"]).Version);
+        Assert.Equal("v0.5.22", CommandLine.Parse(["update", "v0.5.22"]).Version);
+    }
+
+    [Fact]
+    public void The_version_flag_wins_over_a_bare_argument()
+    {
+        Assert.Equal("0.3.0", CommandLine.Parse(["update", "0.5.22", "--version", "0.3.0"]).Version);
+    }
+
+    [Fact]
+    public void A_bare_argument_is_not_a_version_for_other_verbs()
+    {
+        Assert.Null(CommandLine.Parse(["dispatch", "0.5.22"]).Version);
+    }
+
+    [Fact]
     public void The_short_version_flag_works_the_same_as_the_long_one()
     {
         Assert.Equal("0.3.0", CommandLine.Parse(["update", "-v", "0.3.0"]).Version);
