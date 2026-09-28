@@ -76,7 +76,9 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             var resizer = Task.Run(() => WatchSizeAsync(wire, size, (cols, rows)));
             var typing = Task.Run(input);
 
-            await Task.WhenAny(reader, typing).ConfigureAwait(false);
+            var first = await Task.WhenAny(reader, typing).ConfigureAwait(false);
+            log($"leaving: {(first == reader ? "frames ended" : "input ended")}, running={_running}, " +
+                $"farewell={_farewell ?? "none"}, fault={first.Exception?.GetBaseException().Message ?? "none"}");
             _running = false;
 
             try
@@ -155,6 +157,7 @@ public sealed class AttachClient(Stream stream, string? workspace, Prefix prefix
             var n = console.Read(records, 50);
             if (n < 0)
             {
+                log($"console input failed, error {System.Runtime.InteropServices.Marshal.GetLastPInvokeError()}");
                 return;
             }
 

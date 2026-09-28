@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
+using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Pty;
@@ -33,6 +34,11 @@ public static class EmbeddedWiring
                 "fleet: this build carries no libghostty-vt, so it cannot run the embedded multiplexer")
                 .ConfigureAwait(false);
             return 1;
+        }
+
+        if (OperatingSystem.IsWindows() && WindowsConsole.ReleaseRedirectedStdHandles() > 0)
+        {
+            log.Write("fleetd: released redirected std handles so pane children use their pseudoconsole");
         }
 
         var daemon = new FleetDaemon(new DaemonOptions
@@ -134,9 +140,13 @@ public static class EmbeddedWiring
 
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
-        start.RedirectStandardInput = true;
-        start.RedirectStandardOutput = true;
-        start.RedirectStandardError = true;
+
+        if (!OperatingSystem.IsWindows())
+        {
+            start.RedirectStandardInput = true;
+            start.RedirectStandardOutput = true;
+            start.RedirectStandardError = true;
+        }
 
         try
         {

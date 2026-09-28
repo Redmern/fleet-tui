@@ -105,6 +105,27 @@ public sealed unsafe partial class WindowsConsole : IDisposable
 
     private static uint Mode(nint handle) => GetConsoleMode(handle, out var mode) ? mode : 0;
 
+    public static int ReleaseRedirectedStdHandles()
+    {
+        var released = 0;
+
+        foreach (var which in new[] { StdInput, StdOutput, -12 })
+        {
+            var handle = GetStdHandle(which);
+            if (handle != 0 && handle != -1 && !GetConsoleMode(handle, out _))
+            {
+                SetStdHandle(which, 0);
+                released++;
+            }
+        }
+
+        return released;
+    }
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetStdHandle(int handle, nint value);
+
     [StructLayout(LayoutKind.Explicit, Size = 20)]
     public struct InputRecord
     {

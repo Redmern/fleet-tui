@@ -298,6 +298,11 @@ public static class Adapters
             return $"setup: {string.Join(", ", missing)} not on PATH — run 'fleet setup'.";
         }
 
+        if (DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath)) != DriverNames.WezTerm)
+        {
+            return null;
+        }
+
         var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermWiring.Module);
 
         try
