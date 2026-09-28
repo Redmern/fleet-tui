@@ -65,7 +65,8 @@ public static class AgentHarness
         + "vim.defer_fn(function() if not vim.api.nvim_buf_is_valid(tb) then return end "
         + "for k,d in pairs({h='Left',j='Down',k='Up',l='Right'}) do "
         + "vim.keymap.set({'t','n'},'<C-'..k..'>',function() "
-        + "vim.fn.jobstart({vim.env.WEZTERM_EXECUTABLE or 'wezterm','cli','activate-pane-direction',d}) "
+        + "if vim.fn.winnr(k)~=vim.fn.winnr() then vim.cmd('stopinsert') vim.cmd('wincmd '..k) "
+        + "else vim.fn.jobstart({vim.env.WEZTERM_EXECUTABLE or 'wezterm','cli','activate-pane-direction',d}) end "
         + "end,{buffer=tb}) end end, 400) "
         + "vim.api.nvim_set_current_win(term) vim.cmd('startinsert') end, 150) end)";
 

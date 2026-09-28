@@ -245,6 +245,14 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public void Ctrl_hjkl_moves_to_an_nvim_window_first_when_one_is_in_that_direction()
+    {
+        var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
+
+        Assert.Contains("if vim.fn.winnr(k)~=vim.fn.winnr() then vim.cmd('stopinsert') vim.cmd('wincmd '..k)", boot);
+    }
+
+    [Fact]
     public async Task Two_dispatches_of_the_same_prompt_get_distinct_slugs()
     {
         var first = await Handler.HandleAsync(Command("same task"), "t");
