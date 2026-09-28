@@ -12,6 +12,21 @@ public static unsafe partial class GhosttyNative
     public const int OutOfSpace = -3;
     public const int NoValue = -4;
 
+    public static bool Available()
+    {
+        try
+        {
+            return TypeJson() != 0;
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+        {
+            return false;
+        }
+    }
+
+    [LibraryImport(Lib, EntryPoint = "ghostty_type_json")]
+    private static partial nint TypeJson();
+
     [LibraryImport(Lib, EntryPoint = "ghostty_terminal_new")]
     public static partial int TerminalNew(nint allocator, out nint terminal, ushort cols, ushort rows);
 

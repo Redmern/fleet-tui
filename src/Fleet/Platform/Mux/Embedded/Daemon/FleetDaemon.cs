@@ -375,6 +375,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                 case "menu":
                     OpenMenu(session.Client, command.Arg);
                     break;
+                case "redraw":
+                    session.Shown = null;
+                    break;
                 case "focus-in" or "focus-out":
                 {
                     if (FocusedRuntime(session.Client) is { Modes.FocusEvents: true } pane)

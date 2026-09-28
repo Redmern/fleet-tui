@@ -25,6 +25,25 @@ public class CommandLineTests
         Assert.Equal(expected, CommandLine.Parse([arg]).Verb);
     }
 
+    [Theory]
+    [InlineData("daemon", FleetVerb.Daemon)]
+    [InlineData("attach", FleetVerb.Attach)]
+    [InlineData("bridge", FleetVerb.Bridge)]
+    public void The_embedded_verbs_are_recognised(string arg, FleetVerb expected)
+    {
+        Assert.Equal(expected, CommandLine.Parse([arg]).Verb);
+    }
+
+    [Fact]
+    public void Attach_takes_a_project_and_a_remote_host()
+    {
+        var invocation = CommandLine.Parse(["attach", "--project", "techweb", "--ssh", "red@box"]);
+
+        Assert.Equal("techweb", invocation.Project);
+        Assert.Equal("red@box", invocation.Ssh);
+        Assert.Null(invocation.Text);
+    }
+
     [Fact]
     public void The_titled_verb_keeps_the_title_and_the_command_after_the_separator_intact()
     {

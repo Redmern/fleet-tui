@@ -23,6 +23,12 @@ public class TroubleTests
     }
 
     [Fact]
+    public void Embedded_chosen_in_a_build_that_carries_the_emulator_is_fine()
+    {
+        Assert.Null(MuxTrouble.With("embedded", wezTermOnPath: false, embeddedReady: true));
+    }
+
+    [Fact]
     public void Inside_tmux_with_wezterm_present_the_driver_is_the_real_gap()
     {
         var trouble = MuxTrouble.With("tmux", wezTermOnPath: true);

@@ -24,6 +24,14 @@ public static class HelpCommand
               fleet update                download and install the latest release
               fleet update --version <v>  install a specific release instead of latest (-v)
               fleet update --list         list every published release (-l)
+
+            embedded multiplexer (FLEET_MUX=embedded, or no wezterm/tmux):
+              fleet attach [--project <p>] attach this terminal to fleetd, starting it if needed
+              fleet attach --ssh <host>   attach to fleetd on another machine over ssh
+              fleet daemon                run fleetd in the foreground
+              fleet bridge                ssh's remote end: pipe stdio to the local fleetd
+              prefix is ctrl+b (FLEET_PREFIX): q detach, space menu, n/p tab, s next project,
+              h/j/k/l focus, r redraw, ctrl+b again sends ctrl+b
             """);
 
         return 0;

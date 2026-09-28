@@ -103,10 +103,13 @@ public static class Adapters
     {
         var chosen = DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath));
 
-        var unsupported = MuxTrouble.With(chosen, OnPath(DriverNames.WezTerm));
+        var embedded = chosen == DriverNames.Embedded;
+        var unsupported = MuxTrouble.With(
+            chosen, OnPath(DriverNames.WezTerm), embeddedReady: embedded && EmbeddedWiring.Ready);
 
-        return new MuxSelection(
-            new FailSilentDriver(new WezTermDriver(), log.Swallowed), chosen, unsupported);
+        IMuxDriver inner = embedded ? EmbeddedWiring.Driver() : new WezTermDriver();
+
+        return new MuxSelection(new FailSilentDriver(inner, log.Swallowed), chosen, unsupported);
     }
 
     public static string ConfigDirectory => FleetPaths.Config;

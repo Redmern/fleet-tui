@@ -17,6 +17,9 @@ public enum FleetVerb
     Version,
     Update,
     Titled,
+    Daemon,
+    Attach,
+    Bridge,
     Help,
     Unknown,
 }

@@ -23,8 +23,10 @@ public static class CommandLine
 
     public const string ListShortFlag = "-l";
 
+    public const string SshFlag = "--ssh";
+
     private static readonly string[] ValueFlags =
-        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag];
+        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag, SshFlag];
 
     private static readonly string[] BoolFlags = [ListFlag, ListShortFlag];
 
@@ -44,7 +46,8 @@ public static class CommandLine
             ValueOf(options, TitleFlag),
             TailOf(options),
             ValueOf(options, VersionFlag, VersionShortFlag),
-            HasFlag(options, ListFlag, ListShortFlag));
+            HasFlag(options, ListFlag, ListShortFlag),
+            ValueOf(options, SshFlag));
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch
@@ -63,6 +66,9 @@ public static class CommandLine
         "doctor" => FleetVerb.Doctor,
         "version" or "--version" or "-v" => FleetVerb.Version,
         "update" => FleetVerb.Update,
+        "daemon" => FleetVerb.Daemon,
+        "attach" => FleetVerb.Attach,
+        "bridge" => FleetVerb.Bridge,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         "help" or "--help" or "-h" => FleetVerb.Help,
         _ => FleetVerb.Unknown,

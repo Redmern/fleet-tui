@@ -6,11 +6,8 @@ public enum PrefixCommand
 {
     None,
     Armed,
-    Quit,
     SendPrefix,
-    Dump,
-    Redraw,
-    Unbound,
+    Chord,
 }
 
 public sealed class Prefix(char letter)
@@ -24,6 +21,8 @@ public sealed class Prefix(char letter)
     public Key Key => Key.A + (Letter - 'a');
 
     public bool Armed => _armed;
+
+    public string Label => $"ctrl+{Letter}";
 
     public static Prefix Parse(string spec)
     {
@@ -43,56 +42,46 @@ public sealed class Prefix(char letter)
 
         if (!_armed)
         {
-            if (isPrefix)
-            {
-                _armed = true;
-                return PrefixCommand.Armed;
-            }
-
-            return PrefixCommand.None;
+            _armed = isPrefix;
+            return isPrefix ? PrefixCommand.Armed : PrefixCommand.None;
         }
 
         _armed = false;
-        if (isPrefix)
-        {
-            return PrefixCommand.SendPrefix;
-        }
-
-        if (chord is Mods.None)
-        {
-            return key switch
-            {
-                Key.Q => PrefixCommand.Quit,
-                Key.D => PrefixCommand.Dump,
-                Key.R => PrefixCommand.Redraw,
-                _ => PrefixCommand.Unbound,
-            };
-        }
-
-        return PrefixCommand.Unbound;
+        return isPrefix ? PrefixCommand.SendPrefix : PrefixCommand.Chord;
     }
 
     public PrefixCommand OnByte(byte b)
     {
         if (!_armed)
         {
-            if (b == ControlByte)
-            {
-                _armed = true;
-                return PrefixCommand.Armed;
-            }
-
-            return PrefixCommand.None;
+            _armed = b == ControlByte;
+            return _armed ? PrefixCommand.Armed : PrefixCommand.None;
         }
 
         _armed = false;
-        return b switch
-        {
-            _ when b == ControlByte => PrefixCommand.SendPrefix,
-            (byte)'q' => PrefixCommand.Quit,
-            (byte)'d' => PrefixCommand.Dump,
-            (byte)'r' => PrefixCommand.Redraw,
-            _ => PrefixCommand.Unbound,
-        };
+        return b == ControlByte ? PrefixCommand.SendPrefix : PrefixCommand.Chord;
     }
+
+    public static string? CommandFor(Key key) => key switch
+    {
+        Key.Q or Key.D => "detach",
+        Key.Space or Key.M => "menu",
+        Key.N or Key.Tab => "next-tab",
+        Key.P => "prev-tab",
+        Key.S => "next-workspace",
+        Key.H or Key.ArrowLeft => "focus-left",
+        Key.J or Key.ArrowDown => "focus-down",
+        Key.K or Key.ArrowUp => "focus-up",
+        Key.L or Key.ArrowRight => "focus-right",
+        Key.R => "redraw",
+        _ => null,
+    };
+
+    public static string? CommandFor(byte b) => char.ToLowerInvariant((char)b) switch
+    {
+        >= 'a' and <= 'z' and var c => CommandFor(Key.A + (c - 'a')),
+        ' ' => "menu",
+        '\t' => "next-tab",
+        _ => null,
+    };
 }

@@ -9,6 +9,9 @@ using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Projects.PickProject.Models;
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.RemoveProject;
+using Fleet.Features.Projects.LocateProject;
+using Fleet.Features.Projects.SwitchProject;
+using Fleet.Ports;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
@@ -49,6 +52,12 @@ public static class PickProjectCommand
         }
 
         var chosen = picked.Project;
+
+        if (SwitchProjectHandler.Applies(mux.Driver))
+        {
+            return await OpenAsWorkspaceAsync(mux.Driver, chosen, log).ConfigureAwait(false);
+        }
+
         var newWindow = picked.NewWindow;
         string? windowId = null;
 
@@ -105,6 +114,41 @@ public static class PickProjectCommand
         }
 
         return 0;
+    }
+
+    private static async Task<int> OpenAsWorkspaceAsync(IMuxDriver mux, Project chosen, IFleetLog log)
+    {
+        var located = await new LocateProjectHandler(mux).HandleAsync([chosen]).ConfigureAwait(false);
+
+        if (!located.TryGetValue(chosen.Name, out var where) || !where.Open)
+        {
+            var opened = await new OpenProjectHandler(mux)
+                .HandleAsync(new OpenProjectCommand(chosen, "claude", Adapters.Executable, null))
+                .ConfigureAwait(false);
+
+            if (!opened.Succeeded)
+            {
+                return Fail(opened.Error!);
+            }
+
+            var runnable = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name)
+                .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
+                .ToList();
+
+            await new RestoreSessionHandler(mux)
+                .HandleAsync(chosen.Name, chosen.Root, runnable)
+                .ConfigureAwait(false);
+
+            await mux.FocusPaneAsync(opened.Value.DashPane).ConfigureAwait(false);
+        }
+
+        if (EmbeddedWiring.InsideClient)
+        {
+            var shown = await new SwitchProjectHandler(mux).HandleAsync(chosen.Name).ConfigureAwait(false);
+            return shown.Succeeded ? 0 : Fail(shown.Error!);
+        }
+
+        return await EmbeddedWiring.AttachAsync(chosen.Name, null, log).ConfigureAwait(false);
     }
 
     private static async Task<(string? WindowId, bool NewWindow)?> ResolveWindowAsync(
