@@ -33,7 +33,7 @@ public sealed class SelfInstall : IBinaryInstaller
         {
             File.Move(targetPath, stale, overwrite: true);
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
 
@@ -52,7 +52,7 @@ public sealed class SelfInstall : IBinaryInstaller
             {
                 File.Delete(old);
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
         }
