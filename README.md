@@ -194,7 +194,7 @@ itself when done.
 - **List agents** opens a list with **Open** and **Hidden** tabs, switched with
   `h`/`l` or the arrows; `enter` goes to the agent.
 - **Notifications** (`n`) opens the notification center: an **All** tab and one tab per
-  project. `enter` goes to the agent, `d` dismisses the selected notice, `D` all shown ones,
+  project, switched with `h`/`l` or the arrows. `enter` goes to the agent, `d` dismisses the selected notice, `D` all shown ones,
   `b` turns the terminal bell on or off and `t` the desktop toasts.
 
 ### Notifications

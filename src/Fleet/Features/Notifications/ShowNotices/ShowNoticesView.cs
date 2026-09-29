@@ -146,9 +146,13 @@ public static class ShowNoticesView
             {
                 app.RequestStop(window);
             }
-            else if (key == Key.CursorLeft || key == Key.CursorRight)
+            else if (key == Key.CursorLeft || key == keymap.KeyFor(FleetAction.PrevTab))
             {
-                ShowTab((tabBar.Selected + (key == Key.CursorLeft ? -1 : 1) + names.Count) % names.Count);
+                ShowTab((tabBar.Selected - 1 + names.Count) % names.Count);
+            }
+            else if (key == Key.CursorRight || key == keymap.KeyFor(FleetAction.NextTab))
+            {
+                ShowTab((tabBar.Selected + 1) % names.Count);
             }
             else if (key == keymap.KeyFor(FleetAction.DismissNotice))
             {
