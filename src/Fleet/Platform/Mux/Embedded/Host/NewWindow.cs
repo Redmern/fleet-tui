@@ -23,12 +23,13 @@ public static class NewWindow
 
             if (!string.IsNullOrEmpty(variable("WT_SESSION")) && onPath("wt"))
             {
-                return new WindowLaunch("wt", ["-w", "new", .. command]);
+                string[] profile = variable("WT_PROFILE_ID") is { Length: > 0 } id ? ["-p", id] : [];
+                return new WindowLaunch("wt", ["-w", "new", .. profile, .. command]);
             }
 
-            if (IsWezTerm(variable) && onPath("wezterm"))
+            if (WezTerm(variable, onPath) is { } wezterm)
             {
-                return new WindowLaunch("wezterm", ["start", "--", .. command]);
+                return new WindowLaunch(wezterm, [.. WezTermConfig(variable), "start", "--", .. command]);
             }
 
             return new WindowLaunch(command[0], command[1..], ShellExecute: true);
@@ -38,9 +39,9 @@ public static class NewWindow
             ? [executable, .. args]
             : ["env", .. env.Select(e => $"{e.Key}={e.Value}"), executable, .. args];
 
-        if (IsWezTerm(variable) && onPath("wezterm"))
+        if (WezTerm(variable, onPath) is { } unixWezTerm)
         {
-            return new WindowLaunch("wezterm", ["start", "--", .. unix]);
+            return new WindowLaunch(unixWezTerm, [.. WezTermConfig(variable), "start", "--", .. unix]);
         }
 
         if (variable("TERMINAL") is { Length: > 0 } terminal && onPath(terminal))
@@ -72,8 +73,24 @@ public static class NewWindow
         }
     }
 
-    private static bool IsWezTerm(Func<string, string?> variable) =>
-        string.Equals(variable("TERM_PROGRAM"), "WezTerm", StringComparison.OrdinalIgnoreCase);
+    private static string? WezTerm(Func<string, string?> variable, Func<string, bool> onPath)
+    {
+        if (!string.Equals(variable("TERM_PROGRAM"), "WezTerm", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (variable("WEZTERM_EXECUTABLE") is { Length: > 0 } own
+            && Path.GetFileNameWithoutExtension(own).StartsWith("wezterm", StringComparison.OrdinalIgnoreCase))
+        {
+            return own;
+        }
+
+        return onPath("wezterm") ? "wezterm" : null;
+    }
+
+    private static string[] WezTermConfig(Func<string, string?> variable) =>
+        variable("WEZTERM_CONFIG_FILE") is { Length: > 0 } config ? ["--config-file", config] : [];
 
     private static string[] WithEnv(string executable, IReadOnlyList<string> args, IReadOnlyDictionary<string, string> env) =>
     [

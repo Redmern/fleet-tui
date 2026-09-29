@@ -3833,9 +3833,17 @@ show the same project (attaching from a second machine).
   - otherwise, on Windows, a new console window.
 
   The window runs `fleet attach --project <name>` (plus `--ssh <host>` when
-  this window came over ssh). `FLEET_ENDPOINT` and `FLEET_CONFIG_HOME` are
-  set in its command, because Windows Terminal does not reliably pass on the
-  caller's environment.
+  this window came over ssh).
+- **The new window uses the same terminal profile as the window it came
+  from:**
+  - Windows Terminal: `wt -w new -p <WT_PROFILE_ID>`.
+  - WezTerm: the running `WEZTERM_EXECUTABLE` with
+    `--config-file <WEZTERM_CONFIG_FILE>`, so a pinned window (such as
+    `.wezterm-rib.lua`) opens another pinned window.
+  - Both terminals start the window from their own process, so the caller's
+    environment doesn't reach it. `FLEET_ENDPOINT`, `FLEET_CONFIG_HOME` and the
+    account-profile variables (`ACCOUNT_PROFILE`, `ACCOUNT_PROFILE_AUTO`,
+    `CLAUDE_CONFIG_DIR`) are therefore set in the window's command.
 - **`prefix w`** cycles only through this window's projects, in a stable
   order (a project is added when first shown, never moved).
 - WezTerm mode is unchanged. Its driver refuses `OpenWindowAsync`, and the

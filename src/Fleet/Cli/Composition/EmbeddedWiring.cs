@@ -107,7 +107,14 @@ public static class EmbeddedWiring
 
     private static bool OpenAttachWindow(string project, string? sshHost, IFleetLog log)
     {
-        var env = new[] { Endpoint.Variable, FleetHome.OverrideVariable }
+        var env = new[]
+            {
+                Endpoint.Variable,
+                FleetHome.OverrideVariable,
+                AccountProfiles.PinnedVariable,
+                AccountProfiles.AutoVariable,
+                AccountProfiles.ConfigDirVariable,
+            }
             .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
             .Where(v => !string.IsNullOrEmpty(v.Value))
             .ToDictionary(v => v.Name, v => v.Value!);
