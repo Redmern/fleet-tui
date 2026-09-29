@@ -59,6 +59,6 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
             NewWindow = agent.Hidden,
             Args = AgentHarness.IsOrchestrator(agent.Harness)
                 ? AgentHarness.OrchestratorCommand(resume: true)
-                : AgentHarness.CommandFor(agent.Harness, withClaude: agent.Owner.Length > 0),
+                : AgentHarness.CommandFor(agent.Harness, withClaude: agent.RunsClaude),
         };
 }

@@ -99,6 +99,43 @@ public sealed class NewAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task An_agent_the_main_orchestrator_starts_runs_claude_even_without_an_owner()
+    {
+        var directory = await RepositoryAsync();
+
+        var result = await Handler().HandleAsync(
+            new NewAgentCommand("techweb", "backend", directory, "feature/health", string.Empty, AgentHarness.Nvim, Owner: string.Empty, Claude: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Contains(_mux.ArgsFor(pane.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+        Assert.True(Assert.Single(_store.Saved).Agent.Claude);
+    }
+
+    [Fact]
+    public async Task A_manual_nvim_agent_stays_editor_only_and_says_so_in_its_record()
+    {
+        var directory = await RepositoryAsync();
+
+        await Handler().HandleAsync(new NewAgentCommand("techweb", "backend", directory, "feature/notes", string.Empty, AgentHarness.Nvim));
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.DoesNotContain(_mux.ArgsFor(pane.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+        Assert.False(Assert.Single(_store.Saved).Agent.Claude);
+    }
+
+    [Fact]
+    public void A_record_from_before_the_flag_runs_claude_when_a_sub_orchestrator_owns_it()
+    {
+        var legacy = new AgentRecord("C:/w", "api", "b", AgentHarness.Nvim, "origin/main", false);
+
+        Assert.False(legacy.RunsClaude);
+        Assert.True((legacy with { Owner = "sub-1" }).RunsClaude);
+        Assert.True((legacy with { Claude = true }).RunsClaude);
+        Assert.False((legacy with { Owner = "sub-1", Claude = false }).RunsClaude);
+    }
+
+    [Fact]
     public async Task A_new_agent_forces_session_persistence_so_its_claude_saves_transcripts()
     {
         var directory = await RepositoryAsync();

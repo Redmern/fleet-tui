@@ -57,6 +57,22 @@ public sealed class RestoreSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task An_orchestrator_started_agent_comes_back_with_claude_and_a_manual_one_without()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+
+        await new RestoreSessionHandler(_mux).HandleAsync(
+            "techweb", ProjectRoot, [Agent("health", open: true) with { Claude = true }, Agent("notes", open: true)]);
+
+        var panes = await _mux.ListPanesAsync();
+        var health = panes.Single(p => p.Cwd.EndsWith("health", StringComparison.Ordinal));
+        var notes = panes.Single(p => p.Cwd.EndsWith("notes", StringComparison.Ordinal));
+        Assert.Contains(_mux.ArgsFor(health.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+        Assert.DoesNotContain(_mux.ArgsFor(notes.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_hidden_agent_comes_back_hidden()
     {
         Directory.CreateDirectory(ProjectRoot);

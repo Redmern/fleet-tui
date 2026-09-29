@@ -32,6 +32,7 @@ public sealed class JsonAgentStore : IAgentStore
                 Open = agent.Open,
                 Owner = agent.Owner,
                 Status = agent.Status,
+                Claude = agent.Claude,
             });
         });
     }
@@ -56,7 +57,8 @@ public sealed class JsonAgentStore : IAgentStore
                 a.Hidden,
                 a.Open,
                 a.Owner,
-                a.Status))
+                a.Status,
+                a.Claude))
             .OrderBy(a => a.Repository, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Branch, StringComparer.OrdinalIgnoreCase)
             .ToList();

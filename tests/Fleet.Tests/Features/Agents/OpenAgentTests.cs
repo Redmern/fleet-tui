@@ -72,6 +72,19 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task Reopening_an_agent_the_main_orchestrator_started_brings_claude_back()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Nvim, Claude = true };
+        Directory.CreateDirectory(ProjectRoot);
+
+        var result = await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Contains(_mux.ArgsFor(pane.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_running_agent_is_found_by_its_worktree_not_by_a_pane_id()
     {
         var agent = Agent();

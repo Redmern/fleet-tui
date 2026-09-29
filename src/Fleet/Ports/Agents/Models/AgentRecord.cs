@@ -10,4 +10,8 @@ public sealed record AgentRecord(
     bool Hidden = false,
     bool Open = false,
     string Owner = "",
-    string Status = "");
+    string Status = "",
+    bool? Claude = null)
+{
+    public bool RunsClaude => Claude ?? Owner.Length > 0;
+}
