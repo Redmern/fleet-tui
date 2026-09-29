@@ -1054,6 +1054,14 @@ public static class ShowDashboardView
             return true;
         }
 
+        tabBar.Chosen += index =>
+        {
+            if (!busy && !FleetModal.Any && index != tabBar.Selected)
+            {
+                ShowTab(index);
+            }
+        };
+
         agentList.ValueChanged += (_, _) => ShowBarFor(DashboardTabs.AgentsTab);
         subList.ValueChanged += (_, _) => ShowBarFor(DashboardTabs.SubsTab);
 
