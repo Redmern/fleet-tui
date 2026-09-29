@@ -3523,6 +3523,37 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
   tests cover the control op it uses), and the Unix byte bindings.
 - **A float that becomes a tile** (`prefix e`) keeps `FLEET_FLOAT`, so a fleet
   screen in it stays borderless.
+## Menu opening, hidden agents and repeated keys, 2026-09-29
+
+- **Menu size.** The fleet menu and pickers have more room around their rows
+  (menu: row width + 20 columns, at least 52, and 6 rows of padding).
+- **No flash on opening.** A new menu float is created hidden; keys still
+  reach it.
+  - It is shown once it has fitted and its pane has drawn at that size. After
+    a resize, it waits for content that differs from the cropped first
+    drawing.
+  - fleetd remembers the menu's size, so later menus start at it and need no
+    resize at all.
+  - Caps: 1.2 s after the fit, 2.5 s in all.
+  - Measured with the real binary: the first open after fleetd starts goes
+    from nothing to the full menu in about 0.7 s (cold start); later opens
+    take about 0.1 s. Nothing large or empty shows in between.
+- **Hidden agents stay hidden on the dashboard.** The dashboard's refresh
+  took an agent as shown unless its panes sat in the global hidden workspace.
+  `embedded` hides into `<project>~hidden`, so the hidden icon vanished on the
+  next refresh. `AgentPanes.Shown` now treats any hidden workspace as hidden.
+- **Repeated keys in Terminal.Gui programs.**
+  - The problem: libghostty answered the kitty keyboard query that ConPTY
+    passes through. Terminal.Gui then expects each key twice (kitty event and
+    plain character) and swallows the next identical plain key. So `x` to
+    show an agent right after hiding it, `j j`, and double letters were lost
+    in the dashboard and fleet's menus.
+  - Why it only happened here: the inbox ConPTY never delivers kitty keys.
+    WezTerm with kitty off never answers the query.
+  - The fix: fleetd drops the kitty flags report from a ConPTY pane's replies.
+    Panes elsewhere keep it, because fleet's encoder can send them kitty keys.
+  - Verified end to end: `z z`, `z z z` and hide → show all reach the real
+    dashboard.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
