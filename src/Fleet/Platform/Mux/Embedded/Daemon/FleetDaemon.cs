@@ -872,20 +872,15 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         if (target.Modes.Win32Input)
         {
-            if (nvim)
-            {
-                Forward(session, command);
-            }
-            else
-            {
-                target.Send([.. Input.ConPtyModes.Encode(0x4A, 0x24, 0x0A, true, 0x08, 1),
+            target.Send(nvim
+                ? [.. Input.ConPtyModes.Encode(0x0D, 0x1C, 0x0D, true, 0x02, 1),
+                    .. Input.ConPtyModes.Encode(0x0D, 0x1C, 0x0D, false, 0x02, 1)]
+                : [.. Input.ConPtyModes.Encode(0x4A, 0x24, 0x0A, true, 0x08, 1),
                     .. Input.ConPtyModes.Encode(0x4A, 0x24, 0x0A, false, 0x08, 1)]);
-            }
-
             return;
         }
 
-        target.Send(nvim ? "\e[13;2u"u8.ToArray() : "\n"u8.ToArray());
+        target.Send(nvim ? "\e\r"u8.ToArray() : "\n"u8.ToArray());
     }
 
     private void Forward(AttachSession session, CommandMessage command)

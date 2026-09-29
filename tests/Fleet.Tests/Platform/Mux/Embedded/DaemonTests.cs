@@ -681,7 +681,7 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Shift_enter_becomes_a_newline_for_a_shell_and_a_csi_u_key_for_nvim()
+    public async Task Shift_enter_becomes_a_newline_for_claude_and_alt_enter_for_claude_inside_nvim()
     {
         var control = await ControlAsync();
         await SpawnAsync(control, "techweb", "claude");
@@ -694,7 +694,7 @@ public sealed class DaemonTests : IAsyncLifetime
         await laptop.SendCommandAsync("newline");
         await desktop.SendCommandAsync("newline");
 
-        await Eventually(() => _panes.ByProgram("claude")!.Written == "\n" && _panes.ByProgram("nvim")!.Written == "\e[13;2u");
+        await Eventually(() => _panes.ByProgram("claude")!.Written == "\n" && _panes.ByProgram("nvim")!.Written == "\e\r");
     }
 
     [Fact]
