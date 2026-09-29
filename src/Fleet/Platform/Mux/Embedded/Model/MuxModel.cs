@@ -552,6 +552,10 @@ public sealed class MuxModel
 
     public bool IsOverlay(string pane) => _clients.Values.Any(c => c.Overlay == pane);
 
+    public FloatState? Float(string pane) => FloatOf(pane)?.Float;
+
+    public IEnumerable<FloatState> HiddenFloats() => _workspaces.SelectMany(w => w.Floats).Where(f => f.Hidden);
+
     public bool FitFloat(string pane, int cols, int rows)
     {
         if (FloatOf(pane) is not var (workspace, box))
@@ -744,15 +748,16 @@ public sealed class MuxModel
             ? new Placed(o, OverlayArea(c.Cols, c.Rows))
             : (Placed?)null;
 
-        var floats = workspace is not null
-            ? workspace.Floats
-                .Where(f => workspace.FloatsShown || f.Modal)
-                .Select(f => new Placed(f.Pane, FloatArea(f.Bounds, area)))
-                .ToList()
+        var candidates = workspace is not null
+            ? workspace.Floats.Where(f => workspace.FloatsShown || f.Modal).ToList()
             : [];
+        var floats = candidates
+            .Where(f => !f.Hidden)
+            .Select(f => new Placed(f.Pane, FloatArea(f.Bounds, area)))
+            .ToList();
 
         var focused = overlay?.Pane
-            ?? (floats.Count > 0 && (workspace!.FloatFocused || tab is null) ? floats[^1].Pane : null)
+            ?? (candidates.Count > 0 && (workspace!.FloatFocused || tab is null) ? candidates[^1].Pane : null)
             ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
 
         var labels = workspace?.Floats.ToDictionary(f => f.Pane, FloatLabel);
@@ -1095,6 +1100,16 @@ public sealed class FloatState(string pane, Rect bounds)
     public string Title { get; set; } = string.Empty;
 
     public bool Modal { get; init; }
+
+    public bool Hidden { get; set; }
+
+    public DateTime HiddenSince { get; set; }
+
+    public long RevealAfterOutput { get; set; } = -1;
+
+    public bool NeedsBaseline { get; set; }
+
+    public string? Baseline { get; set; }
 }
 
 public sealed class ClientState(string id)

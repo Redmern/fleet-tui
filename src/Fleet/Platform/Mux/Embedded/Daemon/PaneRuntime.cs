@@ -40,6 +40,8 @@ public sealed class PaneRuntime : IDisposable
 
     public bool Exited { get; set; }
 
+    public long Outputs { get; private set; }
+
     public void Send(byte[] bytes)
     {
         if (bytes.Length > 0)
@@ -59,6 +61,7 @@ public sealed class PaneRuntime : IDisposable
             Terminal.Write(buffer.AsSpan(0, count));
             Modes.Feed(buffer.AsSpan(0, count));
             Dirty = true;
+            Outputs++;
             return before != ModeSummary;
         }
     }

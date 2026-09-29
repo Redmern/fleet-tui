@@ -18,7 +18,7 @@ public static class ShowMenuView
         var width = ShowMenuHandler.Width(rows);
         var height = ShowMenuHandler.Height(rows);
 
-        var window = FleetTheme.Overlay("fleet menu", Math.Max(width + 6, 32), height + 3);
+        var window = FleetTheme.Overlay("fleet menu", Math.Max(width + 20, 52), height + 6);
 
         var list = FleetTheme.CenteredRows(width, height);
 

@@ -803,6 +803,39 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.False((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = "p404", Cols = 30, Rows = 8 })).Ok);
     }
     [Fact]
+    public async Task The_menu_float_appears_only_once_it_has_its_size_and_has_drawn_and_keys_reach_it_meanwhile()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(cols: 100, rows: 30, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("menu");
+        await Eventually(() => _panes.ByProgram("fleet") is not null);
+        var menu = _panes.ByProgram("fleet")!;
+        var id = menu.Env[FleetDaemon.PaneVariable];
+        await client.SendKeyAsync("s");
+        await Task.Delay(150);
+
+        Assert.DoesNotContain("fleet menu", client.AllText);
+        await Eventually(() => menu.Written == "s");
+
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = id, Cols = 60, Rows = 12 })).Ok);
+        await Task.Delay(100);
+        Assert.DoesNotContain("fleet menu", client.AllText);
+        menu.Emit("MENU-DRAWN\nsecond row");
+
+        await client.WaitForAsync("fleet menu");
+        await client.WaitForAsync("MENU-DRAWN");
+
+        menu.Exit();
+        await Eventually(async () => (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!.Count == 1);
+        await client.SendCommandAsync("menu");
+
+        await Eventually(() => _panes.Started.Count(p => p.Program == "fleet") == 2);
+        Assert.Equal((60, 12), _panes.Started.Last(p => p.Program == "fleet").Size);
+    }
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();

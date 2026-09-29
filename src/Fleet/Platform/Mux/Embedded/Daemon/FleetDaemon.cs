@@ -123,7 +123,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         }
 
                     case "fit":
-                        Require(_model.FitFloat(request.Pane ?? request.Caller ?? string.Empty, request.Cols, request.Rows), request);
+                        Fit(request.Pane ?? request.Caller ?? string.Empty, request.Cols, request.Rows, request);
                         break;
                     case "focus-from":
                         {
@@ -880,6 +880,90 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string MenuTitle = "fleet menu";
 
+    public static readonly TimeSpan RevealAnyway = TimeSpan.FromMilliseconds(2500);
+
+    public static readonly TimeSpan RevealAfterFit = TimeSpan.FromMilliseconds(1200);
+
+    private (int Cols, int Rows)? _menuFit;
+
+    private void Fit(string pane, int cols, int rows, ControlRequest request)
+    {
+        var before = _model.FloatBounds(pane);
+        Require(_model.FitFloat(pane, cols, rows), request);
+
+        if (_model.Pane(pane)?.Args is [_, "menu", ..])
+        {
+            _menuFit = (cols, rows);
+        }
+
+        if (_model.Float(pane) is { Hidden: true } box && _runtimes.TryGetValue(pane, out var runtime))
+        {
+            box.RevealAfterOutput = runtime.Outputs;
+            box.HiddenSince = DateTime.UtcNow - RevealAnyway + RevealAfterFit;
+            box.NeedsBaseline = before != _model.FloatBounds(pane);
+            box.Baseline = null;
+        }
+    }
+
+    private static string Signature(ScreenBuffer screen)
+    {
+        var text = new StringBuilder();
+        for (var y = 0; y < screen.Rows; y++)
+        {
+            foreach (var cell in screen.Row(y))
+            {
+                text.Append(cell.Text);
+            }
+
+            text.Append('\n');
+        }
+
+        return text.ToString();
+    }
+
+    private static bool HasContent(ScreenBuffer screen)
+    {
+        var rows = 0;
+        for (var y = 0; y < screen.Rows && rows < 2; y++)
+        {
+            foreach (var cell in screen.Row(y))
+            {
+                if (cell.Text.Length > 0 && !string.IsNullOrWhiteSpace(cell.Text) && cell.Text != "\0")
+                {
+                    rows++;
+                    break;
+                }
+            }
+        }
+
+        return rows >= 2;
+    }
+
+    private void RevealReadyFloats()
+    {
+        foreach (var box in _model.HiddenFloats().ToList())
+        {
+            _runtimes.TryGetValue(box.Pane, out var runtime);
+
+            if (box.NeedsBaseline && runtime is not null)
+            {
+                box.Baseline = Signature(runtime.Screen);
+                box.NeedsBaseline = false;
+            }
+
+            var drawn = box.RevealAfterOutput >= 0
+                        && runtime is not null
+                        && runtime.Outputs > box.RevealAfterOutput
+                        && HasContent(runtime.Screen)
+                        && (box.Baseline is null || Signature(runtime.Screen) != box.Baseline);
+
+            if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
+            {
+                box.Hidden = false;
+            }
+        }
+    }
+
 
     private void OpenMenu(string client, string? action)
     {
@@ -913,6 +997,17 @@ public sealed class FleetDaemon(DaemonOptions options)
             var menu = _model.SpawnFloat(
                 shown, Environment.CurrentDirectory, args, MuxModel.OverlayArea(state.Cols, state.Rows), modal: true);
             _model.SetTitle(menu.Id, MenuTitle);
+
+            if (_menuFit is var (fitCols, fitRows))
+            {
+                _model.FitFloat(menu.Id, fitCols, fitRows);
+            }
+
+            if (_model.Float(menu.Id) is { } hidden)
+            {
+                hidden.Hidden = true;
+                hidden.HiddenSince = DateTime.UtcNow;
+            }
             state.Menu = menu.Id;
             ApplyResizes();
             Start(menu, env);
@@ -1237,6 +1332,8 @@ public sealed class FleetDaemon(DaemonOptions options)
                         }
                     }
                 }
+
+                RevealReadyFloats();
 
                 while (_copies.TryDequeue(out var copy))
                 {
