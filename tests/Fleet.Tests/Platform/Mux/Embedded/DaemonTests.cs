@@ -865,6 +865,41 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_held_float_keeps_its_last_screen_until_the_next_one_has_drawn_at_its_new_size()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(cols: 100, rows: 30, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("menu");
+        await Eventually(() => _panes.ByProgram("fleet") is not null);
+        var menu = _panes.ByProgram("fleet")!;
+        var id = menu.Env[FleetDaemon.PaneVariable];
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = id, Cols = 40, Rows = 8 })).Ok);
+        menu.Emit("MENU-SCREEN\nitems\n");
+        await client.WaitForAsync("MENU-SCREEN");
+
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "hold", Caller = id })).Ok);
+        menu.Emit("PARTIAL-DRAW\n");
+        await Task.Delay(500);
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = id, Cols = 60, Rows = 14 })).Ok);
+        await Eventually(() => menu.Size == (60, 14));
+
+        for (var pass = 0; pass < 6; pass++)
+        {
+            menu.Emit($"settings pass {pass}\n");
+            await Task.Delay(15);
+        }
+
+        menu.Emit("SETTINGS-SCREEN\n");
+        await client.WaitForAsync("SETTINGS-SCREEN");
+
+        var partial = client.Frames.First(f => f.Contains("PARTIAL-DRAW", StringComparison.Ordinal));
+        Assert.Contains("SETTINGS-SCREEN", partial, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();

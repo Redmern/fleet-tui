@@ -16,6 +16,7 @@ public static class FleetUi
         if (FloatPane.Inside)
         {
             FloatScreens.Fit = EmbeddedWiring.FitOwnFloat;
+            FloatScreens.Hold = EmbeddedWiring.HoldOwnFloat;
         }
 
         return app;

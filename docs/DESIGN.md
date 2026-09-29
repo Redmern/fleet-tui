@@ -3646,6 +3646,23 @@ partial draw and corrected it a moment later.
   redrawn after it. A later open appears after about 130 ms. A daemon test
   feeds eight quick passes and checks that the first frame showing the menu
   already holds the last one; it fails without the quiet window.
+- **Screens opened from the menu** (Settings, dialogs, pickers, the
+  dashboard) had the same problem one step later. The next window starts,
+  draws at the float's old size (with a blank moment in between), and only
+  then asks fleetd to fit the float, so it is drawn twice.
+  - When a screen inside a float closes, `FloatScreens` now sends `hold`
+    (`EmbeddedWiring.HoldOwnFloat`). fleetd keeps showing that float's last
+    screen at its old bounds (`FloatState.Held`) and stops taking snapshots
+    of the pane.
+  - The next screen's `fit` resizes the pane behind the held picture. Once
+    the pane has written after the fit and been quiet for `RevealWhenQuiet`,
+    the hold ends, and the new screen appears at its new size in one frame.
+  - A `fit` that changes the size of a visible float holds it in the same
+    way, even without a `hold`. A hold that never gets its redraw ends after
+    `RevealAnyway`.
+  - Verified with the real binary: menu, then `S`. Settings appears 296 ms
+    later as a single frame and nothing is redrawn after it. A daemon test
+    (partial draw, resize, several passes) fails without the hold.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

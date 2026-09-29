@@ -160,6 +160,9 @@ public sealed class EmbeddedDriver(
     public Task FitAsync(int cols, int rows, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "fit", Cols = cols, Rows = rows }, ct);
 
+    public Task HoldAsync(CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "hold" }, ct);
+
     public Task OpenMenuAsync(string? action, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "menu", Text = action }, ct);
 

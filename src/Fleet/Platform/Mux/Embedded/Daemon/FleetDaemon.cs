@@ -136,6 +136,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "fit":
                         Fit(request.Pane ?? request.Caller ?? string.Empty, request.Cols, request.Rows, request);
                         break;
+                    case "hold":
+                        Hold(request.Pane ?? request.Caller ?? string.Empty);
+                        break;
                     case "focus-from":
                         {
                             var (dx, dy) = Direction(request.Direction);
@@ -909,12 +912,61 @@ public sealed class FleetDaemon(DaemonOptions options)
             _menuFit = (cols, rows);
         }
 
-        if (_model.Float(pane) is { Hidden: true } box && _runtimes.TryGetValue(pane, out var runtime))
+        if (_model.Float(pane) is not { } box || !_runtimes.TryGetValue(pane, out var runtime))
+        {
+            return;
+        }
+
+        if (box.Hidden)
         {
             box.RevealAfterOutput = runtime.Outputs;
             box.HiddenSince = DateTime.UtcNow - RevealAnyway + RevealAfterFit;
             box.NeedsBaseline = before != _model.FloatBounds(pane);
             box.Baseline = null;
+            return;
+        }
+
+        if (box.Held is null && before is { } shown && shown != box.Bounds)
+        {
+            box.Held = shown;
+        }
+
+        if (box.Held is not null)
+        {
+            box.ReleaseAfterOutput = runtime.Outputs;
+            box.HeldSince = DateTime.UtcNow - RevealAnyway + RevealAfterFit;
+        }
+    }
+
+    private void Hold(string pane)
+    {
+        if (_model.Float(pane) is { Hidden: false } box)
+        {
+            box.Held ??= box.Bounds;
+            box.HeldSince = DateTime.UtcNow;
+            box.ReleaseAfterOutput = -1;
+            _revealing = true;
+        }
+    }
+
+    private void ReleaseHeldFloats()
+    {
+        foreach (var box in _model.HeldFloats().ToList())
+        {
+            var redrawn = box.ReleaseAfterOutput >= 0
+                          && _runtimes.TryGetValue(box.Pane, out var runtime)
+                          && runtime.Outputs > box.ReleaseAfterOutput
+                          && Environment.TickCount64 - runtime.LastOutputAt >= options.RevealWhenQuiet.TotalMilliseconds;
+
+            if (redrawn || DateTime.UtcNow - box.HeldSince > RevealAnyway)
+            {
+                box.Held = null;
+                box.ReleaseAfterOutput = -1;
+            }
+            else
+            {
+                _revealing = true;
+            }
         }
     }
 
@@ -954,8 +1006,6 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void RevealReadyFloats()
     {
-        _revealing = false;
-
         foreach (var box in _model.HiddenFloats().ToList())
         {
             _runtimes.TryGetValue(box.Pane, out var runtime);
@@ -1344,9 +1394,15 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             lock (_gate)
             {
+                _revealing = false;
+                ReleaseHeldFloats();
+
                 foreach (var runtime in _runtimes.Values)
                 {
-                    runtime.Snapshot();
+                    if (_model.Float(runtime.Id) is not { Held: not null })
+                    {
+                        runtime.Snapshot();
+                    }
 
                     if (runtime.TitleDirty && _model.Pane(runtime.Id) is { } state)
                     {

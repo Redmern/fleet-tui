@@ -556,6 +556,8 @@ public sealed class MuxModel
 
     public IEnumerable<FloatState> HiddenFloats() => _workspaces.SelectMany(w => w.Floats).Where(f => f.Hidden);
 
+    public IEnumerable<FloatState> HeldFloats() => _workspaces.SelectMany(w => w.Floats).Where(f => f.Held is not null);
+
     public bool FitFloat(string pane, int cols, int rows)
     {
         if (FloatOf(pane) is not var (workspace, box))
@@ -891,7 +893,7 @@ public sealed class MuxModel
             : [];
         var floats = candidates
             .Where(f => !f.Hidden)
-            .Select(f => new Placed(f.Pane, FloatArea(f.Bounds, area)))
+            .Select(f => new Placed(f.Pane, FloatArea(f.Drawn, area)))
             .ToList();
 
         var focused = overlay?.Pane
@@ -1250,6 +1252,14 @@ public sealed class FloatState(string pane, Rect bounds)
     public bool NeedsBaseline { get; set; }
 
     public string? Baseline { get; set; }
+
+    public Rect? Held { get; set; }
+
+    public DateTime HeldSince { get; set; }
+
+    public long ReleaseAfterOutput { get; set; } = -1;
+
+    public Rect Drawn => Held ?? Bounds;
 }
 
 public sealed class ClientState(string id)

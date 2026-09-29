@@ -12,6 +12,8 @@ public static class FloatScreens
 
     public static Action<int, int>? Fit { get; set; }
 
+    public static Action? Hold { get; set; }
+
     public static void Running(FloatScreen screen, bool running)
     {
         if (running)
@@ -21,6 +23,7 @@ public static class FloatScreens
         else if (Stack.LastIndexOf(screen) is var at and >= 0)
         {
             Stack.RemoveAt(at);
+            Hold?.Invoke();
         }
 
         if (Current is { } shown)

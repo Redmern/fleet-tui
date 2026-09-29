@@ -167,6 +167,18 @@ public static class EmbeddedWiring
         }
     }
 
+    public static void HoldOwnFloat()
+    {
+        try
+        {
+            _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
+            _ownFloat.HoldAsync().GetAwaiter().GetResult();
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+        }
+    }
+
     public static bool OpenMenu(string? action)
     {
         try

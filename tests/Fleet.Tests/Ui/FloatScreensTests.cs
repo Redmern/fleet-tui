@@ -32,4 +32,31 @@ public class FloatScreensTests
             (FloatScreens.ShowTitle, FloatScreens.Fit) = (title, fit);
         }
     }
+
+    [Fact]
+    public void Closing_a_screen_holds_the_float_before_the_next_screen_is_fitted()
+    {
+        var calls = new List<string>();
+        var (title, fit, hold) = (FloatScreens.ShowTitle, FloatScreens.Fit, FloatScreens.Hold);
+        FloatScreens.ShowTitle = _ => { };
+        FloatScreens.Fit = (cols, rows) => calls.Add($"fit {cols}x{rows}");
+        FloatScreens.Hold = () => calls.Add("hold");
+
+        try
+        {
+            var menu = new FloatScreen("fleet menu", 40, 10);
+            var settings = new FloatScreen("settings", 50, 12);
+
+            FloatScreens.Running(menu, true);
+            FloatScreens.Running(menu, false);
+            FloatScreens.Running(settings, true);
+            FloatScreens.Running(settings, false);
+
+            Assert.Equal(["fit 40x10", "hold", "fit 50x12", "hold"], calls);
+        }
+        finally
+        {
+            (FloatScreens.ShowTitle, FloatScreens.Fit, FloatScreens.Hold) = (title, fit, hold);
+        }
+    }
 }
