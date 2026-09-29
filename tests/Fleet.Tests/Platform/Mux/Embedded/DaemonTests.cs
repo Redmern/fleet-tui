@@ -851,11 +851,7 @@ public sealed class DaemonTests : IAsyncLifetime
         var id = menu.Env[FleetDaemon.PaneVariable];
         Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = id, Cols = 60, Rows = 12 })).Ok);
 
-        for (var pass = 0; pass < 8; pass++)
-        {
-            menu.Emit($"pass {pass}\nrow\n");
-            await Task.Delay(15);
-        }
+        await PacedAsync(8, pass => menu.Emit($"pass {pass}\nrow\n"));
 
         Assert.DoesNotContain("fleet menu", client.AllText);
         menu.Emit("FINAL\n");
@@ -887,11 +883,7 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = id, Cols = 60, Rows = 14 })).Ok);
         await Eventually(() => menu.Size == (60, 14));
 
-        for (var pass = 0; pass < 6; pass++)
-        {
-            menu.Emit($"settings pass {pass}\n");
-            await Task.Delay(15);
-        }
+        await PacedAsync(6, pass => menu.Emit($"settings pass {pass}\n"));
 
         menu.Emit("SETTINGS-SCREEN\n");
         await client.WaitForAsync("SETTINGS-SCREEN");
@@ -933,6 +925,26 @@ public sealed class DaemonTests : IAsyncLifetime
 
         await client.SendCommandAsync("float-embed");
         await Eventually(async () => await TabOfBox() == "float");
+    }
+
+    // Draw passes 15 ms apart from a thread of their own: Task.Delay continuations wait for the
+    // thread pool, which a busy CI runner can starve for longer than the reveal's quiet window.
+    private static Task PacedAsync(int passes, Action<int> pass)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        new Thread(() =>
+        {
+            for (var i = 0; i < passes; i++)
+            {
+                pass(i);
+                Thread.Sleep(15);
+            }
+
+            done.SetResult();
+        })
+        { IsBackground = true }.Start();
+
+        return done.Task;
     }
 
     private static async Task Eventually(Func<bool> condition) => await Eventually(() => Task.FromResult(condition()));
