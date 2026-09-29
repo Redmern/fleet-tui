@@ -3801,6 +3801,16 @@ show the same project (attaching from a second machine).
   `fleet attach`): quitting the shown project of two switched the window to
   the other one, and quitting the last one ended `fleet attach` with that line
   and the `cmd` prompt.
+- **The quit question counts this window's projects.** `list-workspaces`
+  now also reports, per workspace, whether it is `InWindow` (this window holds
+  it) or `InOtherWindow`, and `ProjectLocation` carries both. On WezTerm,
+  in-window means shown in this window, as before. With two or more projects
+  in the window, quitting asks "Quit all in this window" or "Just <project>".
+  Projects in other windows are never touched. "Quit all" quits the current
+  project last, because the menu runs inside it and would otherwise kill
+  itself halfway. Verified with the real menu: Enter quit both projects and
+  sent the window home; Tab, Enter quit only the current one, and the window
+  moved to the other.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

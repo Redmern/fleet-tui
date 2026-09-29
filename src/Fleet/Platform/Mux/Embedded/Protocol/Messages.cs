@@ -313,6 +313,12 @@ public sealed class WorkspaceDto
 
     [JsonPropertyName("shownHere")]
     public bool ShownHere { get; set; }
+
+    [JsonPropertyName("inWindow")]
+    public bool InWindow { get; set; }
+
+    [JsonPropertyName("inOtherWindow")]
+    public bool InOtherWindow { get; set; }
 }
 
 public sealed class ControlResponse

@@ -26,7 +26,7 @@ public sealed class LocateProjectHandler(IMuxDriver mux)
 
                 located[project.Name] = own is null
                     ? ProjectLocation.Closed
-                    : new ProjectLocation(true, own.ShownHere);
+                    : new ProjectLocation(true, own.ShownHere, own.InWindow || own.ShownHere, own.InOtherWindow);
             }
 
             return located;
@@ -39,9 +39,12 @@ public sealed class LocateProjectHandler(IMuxDriver mux)
         {
             var mine = panes.Where(p => PathKey.Same(p.Cwd, project.Root)).ToList();
 
+            var here = window is not null && mine.Any(p => p.WindowId == window && !IsHidden(p));
             located[project.Name] = new ProjectLocation(
                 mine.Count > 0,
-                window is not null && mine.Any(p => p.WindowId == window && !IsHidden(p)));
+                here,
+                here,
+                mine.Any(p => p.WindowId != window && !IsHidden(p)));
         }
 
         return located;

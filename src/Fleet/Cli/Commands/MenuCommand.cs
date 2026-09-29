@@ -124,7 +124,7 @@ public static class MenuCommand
                 {
                     var quitMux = Adapters.Mux(Adapters.Log());
 
-                    var inWindow = await ProjectsShownHere(quitMux.Driver, projects.List())
+                    var inWindow = await ProjectsInWindow(quitMux.Driver, projects.List())
                         .ConfigureAwait(false);
 
                     if (inWindow.Count <= 1)
@@ -145,8 +145,8 @@ public static class MenuCommand
                         app,
                         "Quit fleet?",
                         [$"This window has {inWindow.Count} projects open."],
-                        "Quit fleet",
-                        "Just this project");
+                        "Quit all in this window",
+                        $"Just {project.Name}");
 
                     if (quitChoice == DialogChoice.Cancelled)
                     {
@@ -155,7 +155,7 @@ public static class MenuCommand
 
                     if (quitChoice == DialogChoice.Primary)
                     {
-                        foreach (var toQuit in inWindow)
+                        foreach (var toQuit in inWindow.OrderBy(p => SameProject(p, project)))
                         {
                             await Quit(toQuit).ConfigureAwait(false);
                         }
@@ -379,17 +379,20 @@ public static class MenuCommand
     }
 
 
+    private static bool SameProject(Project a, Project b) =>
+        string.Equals(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+
     private static ProjectLocation Where(
         IReadOnlyDictionary<string, ProjectLocation> located, Project project) =>
         located.TryGetValue(project.Name, out var at) ? at : ProjectLocation.Closed;
 
-    private static async Task<List<Project>> ProjectsShownHere(
+    private static async Task<List<Project>> ProjectsInWindow(
         IMuxDriver mux, IReadOnlyList<Project> allProjects)
     {
         var located = await new LocateProjectHandler(mux).HandleAsync(allProjects)
             .ConfigureAwait(false);
 
-        return allProjects.Where(p => Where(located, p).ShownHere).ToList();
+        return allProjects.Where(p => Where(located, p).InWindow).ToList();
     }
 
     private static async Task<string?> SwitchByWorkspace(
@@ -413,7 +416,7 @@ public static class MenuCommand
         var self = mux.CurrentPane.IsNone ? null : mux.CurrentPane.Value;
         var currentWindow = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId;
 
-        var toPark = (await ProjectsShownHere(mux, allProjects).ConfigureAwait(false))
+        var toPark = (await ProjectsInWindow(mux, allProjects).ConfigureAwait(false))
             .Where(p => !string.Equals(p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
             .ToList();
 

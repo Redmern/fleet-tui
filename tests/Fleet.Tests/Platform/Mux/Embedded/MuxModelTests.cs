@@ -312,4 +312,26 @@ public class MuxModelTests
         Assert.Equal("Switch project", _model.FloatLabel(floats[0]));
         Assert.Equal("files", _model.FloatLabel(floats[1]));
     }
+
+    [Fact]
+    public void A_window_holds_the_projects_it_has_shown_and_knows_which_are_in_another_window()
+    {
+        Project("alpha");
+        Project("beta");
+        Project("gamma");
+        _model.Spawn(FleetWorkspaces.HiddenFor("alpha"), "C:/repos/alpha", ["claude"]);
+        var here = _model.Connect(100, 30, "alpha");
+        _model.Show(here.Id, "beta");
+        _model.Show(here.Id, FleetWorkspaces.HiddenFor("alpha"));
+        var there = _model.Connect(100, 30, "gamma");
+
+        var seen = _model.ListWorkspaces(here.Id).ToDictionary(w => w.Name);
+
+        Assert.Equal(["alpha", "beta"], here.Projects);
+        Assert.True(seen["alpha"].InWindow && seen["beta"].InWindow);
+        Assert.False(seen["gamma"].InWindow);
+        Assert.True(seen["gamma"].InOtherWindow);
+        Assert.False(seen["alpha"].InOtherWindow);
+        Assert.Equal(["gamma"], there.Projects);
+    }
 }

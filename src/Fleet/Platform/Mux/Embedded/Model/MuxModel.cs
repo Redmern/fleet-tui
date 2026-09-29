@@ -881,11 +881,15 @@ public sealed class MuxModel
 
     public IReadOnlyList<Workspace> ListWorkspaces(string? client)
     {
-        var showing = client is not null ? Client(client)?.Showing : null;
+        var mine = client is not null ? Client(client) : null;
 
         return _workspaces
             .Where(w => !Same(w.Name, OverlayWorkspace))
-            .Select(w => new Workspace(w.Name, Same(w.Name, showing)))
+            .Select(w => new Workspace(
+                w.Name,
+                Same(w.Name, mine?.Showing),
+                mine is not null && (Same(w.Name, mine.Showing) || mine.Projects.Any(p => Same(p, w.Name))),
+                _clients.Values.Any(c => c != mine && (Same(c.Showing, w.Name) || c.Projects.Any(p => Same(p, w.Name))))))
             .ToList();
     }
 

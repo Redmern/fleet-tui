@@ -125,7 +125,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
                     case "list-workspaces":
                         response.Workspaces = _model.ListWorkspaces(ClientFor(request, attachedClient))
-                            .Select(w => new WorkspaceDto { Name = w.Name, ShownHere = w.ShownHere })
+                            .Select(w => new WorkspaceDto
+                            {
+                                Name = w.Name,
+                                ShownHere = w.ShownHere,
+                                InWindow = w.InWindow,
+                                InOtherWindow = w.InOtherWindow,
+                            })
                             .ToList();
                         break;
                     case "spawn":
