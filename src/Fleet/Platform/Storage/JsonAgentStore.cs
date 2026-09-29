@@ -8,8 +8,6 @@ namespace Fleet.Platform.Storage;
 
 public sealed class JsonAgentStore : IAgentStore
 {
-    private static readonly TimeSpan WhileBusy = TimeSpan.FromSeconds(2);
-
     public void Save(string project, AgentRecord agent)
     {
         var file = FileFor(project);
@@ -85,7 +83,7 @@ public sealed class JsonAgentStore : IAgentStore
 
         using var gate = Lock(file + ".lock");
 
-        if (TryRead(file, WhileBusy) is not { } session)
+        if (TryRead(file, BusyFiles.Patience) is not { } session)
         {
             return;
         }
@@ -119,19 +117,16 @@ public sealed class JsonAgentStore : IAgentStore
     private static SessionFile Read(string file) =>
         TryRead(file, TimeSpan.FromMilliseconds(50)) ?? new SessionFile();
 
-    private static SessionFile? TryRead(string file, TimeSpan patience)
-    {
-        var deadline = DateTime.UtcNow + patience;
-
-        while (true)
+    private static SessionFile? TryRead(string file, TimeSpan patience) =>
+        BusyFiles.Retry(() =>
         {
+            if (!File.Exists(file))
+            {
+                return new SessionFile();
+            }
+
             try
             {
-                if (!File.Exists(file))
-                {
-                    return new SessionFile();
-                }
-
                 return JsonSerializer.Deserialize(
                     File.ReadAllText(file), FleetJsonContext.Default.SessionFile) ?? new SessionFile();
             }
@@ -139,43 +134,12 @@ public sealed class JsonAgentStore : IAgentStore
             {
                 return new SessionFile();
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                if (DateTime.UtcNow >= deadline)
-                {
-                    return null;
-                }
-
-                Thread.Sleep(15);
-            }
-        }
-    }
+        }, patience);
 
     private static void Write(string file, SessionFile session)
     {
-        var temp = file + ".tmp";
         var json = JsonSerializer.Serialize(session, FleetJsonContext.Default.SessionFile);
-        var deadline = DateTime.UtcNow + WhileBusy;
-
-        while (true)
-        {
-            try
-            {
-                FleetPaths.EnsureDirs();
-                File.WriteAllText(temp, json);
-                File.Move(temp, file, overwrite: true);
-                return;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                if (DateTime.UtcNow >= deadline)
-                {
-                    return;
-                }
-
-                Thread.Sleep(15);
-            }
-        }
+        BusyFiles.Replace(file, temp => File.WriteAllText(temp, json));
     }
 
     private static string? FileFor(string project)
