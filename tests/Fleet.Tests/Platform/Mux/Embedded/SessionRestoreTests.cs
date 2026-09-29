@@ -255,7 +255,7 @@ public sealed class SessionRestoreTests
             Terminal = panes.NewTerminal,
             FleetExecutable = "fleet",
             SessionFile = file,
-            SaveEvery = TimeSpan.FromHours(1),
+            SaveEvery = TimeSpan.FromMilliseconds(50),
         });
 
         try
@@ -265,14 +265,15 @@ public sealed class SessionRestoreTests
             {
                 Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "techweb", Cwd = dir, Args = ["claude"] })).Ok);
 
-                // The first render tick saves; the shutdown must remove that save, not refresh it.
-                await Task.Delay(300);
-                Assert.Contains("\"techweb\"", Saved(file), StringComparison.Ordinal);
+                // fleetd keeps saving while it runs; the shutdown must remove that save and no later tick may bring it back.
+                await WaitForAsync(() => Saved(file).Contains("\"techweb\"", StringComparison.Ordinal));
                 Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "api", Cwd = dir, Args = ["claude"] })).Ok);
                 _ = control.RequestAsync(new ControlRequest { Op = "shutdown" });
                 await running.WaitAsync(TimeSpan.FromSeconds(10));
             }
 
+            Assert.False(File.Exists(file));
+            await Task.Delay(200);
             Assert.False(File.Exists(file));
         }
         finally
