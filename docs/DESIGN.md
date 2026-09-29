@@ -3783,6 +3783,24 @@ An unreadable session file is the one new *problem* (doctor exits 1): fleetd
 would start empty. The rest is information. The feature gets it as a plain
 model (`EmbeddedHealth`), gathered by `EmbeddedWiring.HealthAsync` in the
 composition root, the way it already gets git's version.
+## Windows and their projects, 2026-09-29
+
+A *window* is one attached client, one terminal window. Each window keeps the
+projects it has shown, most recent last (`ClientState.Projects`). Hidden-agent
+workspaces and the overlay workspace are never projects. Two windows may still
+show the same project (attaching from a second machine).
+
+- **Quitting no longer leaves a dead window.** Before, the window drew an
+  empty screen with "nothing to show" in the bar and never gave the prompt
+  back. When a project's workspace goes away, every window showing it moves to
+  its most recent remaining project. A window with none left is `Leaving`:
+  fleetd sends it `Bye` with a reason, the client restores the terminal and
+  prints `fleet: no project left in this window`, and the shell prompt is
+  back. fleetd itself exits once nothing runs.
+- Verified with the real binary (nested fleetd, `cmd` running
+  `fleet attach`): quitting the shown project of two switched the window to
+  the other one, and quitting the last one ended `fleet attach` with that line
+  and the `cmd` prompt.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

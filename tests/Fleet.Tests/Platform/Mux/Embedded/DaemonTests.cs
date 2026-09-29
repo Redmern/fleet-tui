@@ -893,6 +893,40 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_window_whose_last_project_goes_away_is_sent_home()
+    {
+        var control = await ControlAsync();
+        var only = await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "kill", Pane = only })).Ok);
+
+        await Eventually(() => client.Farewell is not null);
+        Assert.Equal(FleetDaemon.NothingLeft, client.Farewell);
+    }
+
+    [Fact]
+    public async Task A_window_whose_project_goes_away_shows_its_previous_project()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "fleet", "fleet-shell");
+        var techweb = await SpawnAsync(control, "techweb", "claude");
+        _panes.ByProgram("fleet-shell")!.Emit("FLEET-SCREEN");
+        var client = await AttachAsync(workspace: "fleet");
+        await client.WaitForAsync("FLEET-SCREEN");
+        await client.SendCommandAsync("show", "techweb");
+        await Eventually(async () => (await control.RequestAsync(new ControlRequest { Op = "list-workspaces", Client = client.Id }))
+            .Workspaces!.Single(w => w.ShownHere).Name == "techweb");
+
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "kill", Pane = techweb })).Ok);
+
+        await Eventually(async () => (await control.RequestAsync(new ControlRequest { Op = "list-workspaces", Client = client.Id }))
+            .Workspaces!.SingleOrDefault(w => w.ShownHere)?.Name == "fleet");
+        Assert.Null(client.Farewell);
+    }
+
+    [Fact]
     public async Task Status_reports_the_process_and_what_it_runs()
     {
         var control = await ControlAsync();
@@ -992,6 +1026,8 @@ public sealed class DaemonTests : IAsyncLifetime
 
         public IReadOnlyList<string> Frames => [.. _frames];
 
+        public string? Farewell { get; private set; }
+
         public static async Task<TestClient> ConnectAsync(Endpoint endpoint, string role, int cols, int rows, string? workspace)
         {
             var wire = new Wire(await endpoint.ConnectAsync(TimeSpan.FromSeconds(5)));
@@ -1069,6 +1105,10 @@ public sealed class DaemonTests : IAsyncLifetime
                     else if (message.Type == MessageType.Frame)
                     {
                         _frames.Enqueue(Encoding.UTF8.GetString(Wire.ReadFrame(message.Payload).Bytes));
+                    }
+                    else if (message.Type == MessageType.Bye)
+                    {
+                        Farewell = Encoding.UTF8.GetString(message.Payload);
                     }
                     else if (message.Type == MessageType.Response)
                     {

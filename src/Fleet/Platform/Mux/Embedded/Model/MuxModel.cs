@@ -311,6 +311,7 @@ public sealed class MuxModel
         client.Showing = showing is not null && Workspace(showing) is not null
             ? Workspace(showing)!.Name
             : _workspaces.FirstOrDefault(w => !FleetWorkspaces.IsHidden(w.Name) && !Same(w.Name, OverlayWorkspace))?.Name;
+        Remember(client, client.Showing);
 
         _clients[client.Id] = client;
         return client;
@@ -345,7 +346,22 @@ public sealed class MuxModel
 
         c.Showing = target.Name;
         c.LastActive = ++_clock;
+        Remember(c, target.Name);
         return true;
+    }
+
+    public static bool IsProject(string? workspace) =>
+        workspace is not null && !FleetWorkspaces.IsHidden(workspace) && !Same(workspace, OverlayWorkspace);
+
+    private static void Remember(ClientState client, string? workspace)
+    {
+        if (!IsProject(workspace))
+        {
+            return;
+        }
+
+        client.Projects.RemoveAll(p => Same(p, workspace));
+        client.Projects.Add(workspace!);
     }
 
     public bool CycleTab(string client, int delta)
@@ -1140,9 +1156,17 @@ public sealed class MuxModel
     {
         _workspaces.Remove(workspace);
 
-        foreach (var client in _clients.Values.Where(c => Same(c.Showing, workspace.Name)))
+        foreach (var client in _clients.Values)
         {
-            client.Showing = null;
+            client.Projects.RemoveAll(p => Same(p, workspace.Name) || Workspace(p) is null);
+
+            if (!Same(client.Showing, workspace.Name))
+            {
+                continue;
+            }
+
+            client.Showing = client.Projects.LastOrDefault();
+            client.Leaving = client.Showing is null;
         }
     }
 
@@ -1321,6 +1345,10 @@ public sealed class ClientState(string id)
     public string? Overlay { get; set; }
 
     public string? Menu { get; set; }
+
+    public List<string> Projects { get; } = [];
+
+    public bool Leaving { get; set; }
 }
 
 public enum MouseHitKind

@@ -913,6 +913,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string MenuTitle = "fleet menu";
 
+    public const string NothingLeft = "no project left in this window";
+
     public static readonly TimeSpan RevealAnyway = TimeSpan.FromMilliseconds(2500);
 
     public static readonly TimeSpan RevealAfterFit = TimeSpan.FromMilliseconds(1200);
@@ -1486,6 +1488,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             List<(AttachSession Session, long Seq, bool Full, string Bytes, Stopwatch? Switching)> sends = [];
             List<(AttachSession Session, HostEffect Effect)> effects = [];
+            List<AttachSession> farewells = [];
             string? persisted;
 
             lock (_gate)
@@ -1532,6 +1535,14 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                 foreach (var session in _sessions.Values)
                 {
+                    if (_model.Client(session.Client) is { Leaving: true } && !session.SaidBye)
+                    {
+                        session.SaidBye = true;
+                        farewells.Add(session);
+                        options.Log($"{session.Client} has no project left; sending it home");
+                        continue;
+                    }
+
                     if (_model.View(session.Client) is not { } view)
                     {
                         continue;
@@ -1573,6 +1584,17 @@ public sealed class FleetDaemon(DaemonOptions options)
             if (persisted is not null)
             {
                 SaveSession(persisted);
+            }
+
+            foreach (var session in farewells)
+            {
+                try
+                {
+                    await session.Wire.SendAsync(MessageType.Bye, Encoding.UTF8.GetBytes(NothingLeft), ct).ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+                {
+                }
             }
 
             foreach (var (session, effect) in effects)
@@ -1766,6 +1788,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         public CopySession? Copy { get; set; }
 
         public List<WhichKeyEntry>? WhichKey { get; set; }
+
+        public bool SaidBye { get; set; }
     }
 
     private sealed record MouseCapture(

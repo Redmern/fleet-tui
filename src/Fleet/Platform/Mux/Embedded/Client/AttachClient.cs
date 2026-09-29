@@ -186,7 +186,9 @@ public sealed class AttachClient(Stream stream, string? workspace, Func<MuxKeys>
                         Apply(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect), write);
                         break;
                     case MessageType.Bye:
-                        _farewell = "fleetd ended the session";
+                        _farewell = message.Payload.Length > 0
+                            ? Encoding.UTF8.GetString(message.Payload)
+                            : "fleetd ended the session";
                         return;
                 }
             }
