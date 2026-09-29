@@ -334,13 +334,23 @@ public static class MenuCommand
                     var inWindow = SwitchProjectHandler.Applies(noticeMux)
                         ? (await ProjectsInWindow(noticeMux, projects.List()).ConfigureAwait(false)).Select(p => p.Name).Append(project.Name).ToList()
                         : null;
+                    var remoteNotices = inWindow is null ? null : EmbeddedWiring.WindowRemoteNotices();
                     ShowNoticesView.Show(
                         app,
                         keymap,
                         notices,
-                        (project, keys) => notices.Save(project, NoticeSync.Dismiss(notices.Load(project), keys, DateTime.UtcNow)),
-                        notice => OpenNotice(noticeMux, projects.List(), notice),
-                        inWindow);
+                        (project, keys) =>
+                        {
+                            if (remoteNotices?.Dismiss(project, keys) != true)
+                            {
+                                notices.Save(project, NoticeSync.Dismiss(notices.Load(project), keys, DateTime.UtcNow));
+                            }
+                        },
+                        notice => remoteNotices?.Locate(notice) is var (host, remoteProject)
+                            ? ShowRemoteNotice(host, remoteProject)
+                            : OpenNotice(noticeMux, projects.List(), notice),
+                        inWindow,
+                        remoteNotices?.Source);
                     break;
                 }
 
@@ -483,6 +493,19 @@ public static class MenuCommand
         return 0;
     }
 
+
+    private static async Task<string?> ShowRemoteNotice(string host, string project)
+    {
+        try
+        {
+            await Adapters.Remotes().ShowHereAsync(host, project).ConfigureAwait(false);
+            return null;
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+        {
+            return e.Message;
+        }
+    }
 
     private static async Task<string?> OpenNotice(IMuxDriver mux, IReadOnlyList<Project> all, Ports.Notifications.Models.Notice notice)
     {

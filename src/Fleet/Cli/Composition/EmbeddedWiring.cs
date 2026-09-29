@@ -79,6 +79,14 @@ public static class EmbeddedWiring
                 DefaultShell.WindowsTerminalSettings,
                 OperatingSystem.IsWindows()),
             RemoteOpen = (host, token) => RemoteChannelOver(RemoteSsh(host, token, Endpoint.Default())),
+            Notices = LocalNotices,
+            DismissNotices = (project, keys) =>
+            {
+                var store = Adapters.Notices();
+                store.Save(project, Features.Notifications.SyncNotices.NoticeSync.Dismiss(store.Load(project), keys, DateTime.UtcNow));
+            },
+            AlertSettings = () => Adapters.Notices().Settings() is var s ? (s.Bell, s.Toast) : (false, false),
+            Toast = (title, body) => Platform.Notifications.DesktopToast.Show(title, body),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
@@ -393,6 +401,62 @@ public static class EmbeddedWiring
         catch (Ports.Mux.Exceptions.MuxUnavailableException)
         {
             return [];
+        }
+    }
+
+    private static IReadOnlyList<NoticeDto> LocalNotices()
+    {
+        var store = Adapters.Notices();
+        return [.. store.Projects().SelectMany(store.Load).Select(n => new NoticeDto
+        {
+            Project = n.Project,
+            Key = n.Key,
+            Kind = n.Kind.ToString(),
+            Worktree = n.Worktree,
+            Agent = n.Agent,
+            Message = n.Message,
+            Since = n.Since,
+            Resolved = n.Resolved,
+            Dismissed = n.Dismissed,
+        })];
+    }
+
+    public static IReadOnlyList<NoticeDto> RemoteNotices()
+    {
+        try
+        {
+            using var driver = new EmbeddedDriver(Endpoint.Default());
+            return driver.RemoteNoticesAsync().GetAwaiter().GetResult();
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return [];
+        }
+    }
+
+    public static RemoteNoticeView? WindowRemoteNotices()
+    {
+        var names = Adapters.Remotes().ListAsync().GetAwaiter().GetResult()
+            .ToDictionary(m => m.Host, m => m.Name, StringComparer.OrdinalIgnoreCase);
+        var labels = CurrentWindow()
+            .Where(e => e.Host is not null)
+            .ToDictionary(
+                e => RemoteNoticeView.Label(e.Name, names.GetValueOrDefault(e.Host!, e.Host!)),
+                e => (e.Host!, e.Name),
+                StringComparer.OrdinalIgnoreCase);
+
+        return labels.Count == 0 ? null : new RemoteNoticeView(labels, RemoteNotices);
+    }
+
+    public static void DismissRemote(string host, string project, IReadOnlyList<string> keys)
+    {
+        try
+        {
+            using var driver = new EmbeddedDriver(Endpoint.Default());
+            driver.DismissRemoteAsync(host, project, keys).GetAwaiter().GetResult();
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
         }
     }
 

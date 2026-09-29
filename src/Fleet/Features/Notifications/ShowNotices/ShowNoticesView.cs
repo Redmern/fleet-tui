@@ -18,12 +18,13 @@ public static class ShowNoticesView
         INoticeStore store,
         Action<string, IReadOnlyList<string>> dismiss,
         Func<Notice, Task<string?>> open,
-        IReadOnlyCollection<string>? only = null)
+        IReadOnlyCollection<string>? only = null,
+        NoticeSource? elsewhere = null)
     {
         var projects = only is null
             ? store.Projects()
             : [.. store.Projects().Where(p => only.Contains(p, StringComparer.OrdinalIgnoreCase))];
-        IReadOnlyList<string> names = [AllTab, .. projects];
+        IReadOnlyList<string> names = [AllTab, .. projects, .. elsewhere?.Projects ?? []];
 
         var window = FleetTheme.Overlay("notifications", 100, 24);
         var tabBar = FleetTheme.TabBar(1, 0, [.. names.Select(n => $"{n} (0)")]);
@@ -43,6 +44,15 @@ public static class ShowNoticesView
         void Reload()
         {
             var all = projects.ToDictionary(p => p, store.Load, StringComparer.OrdinalIgnoreCase);
+            if (elsewhere is not null)
+            {
+                var loaded = elsewhere.Load();
+                foreach (var project in elsewhere.Projects)
+                {
+                    all[project] = [.. loaded.Where(n => string.Equals(n.Project, project, StringComparison.OrdinalIgnoreCase))
+                        .OrderByDescending(n => n.IsOpen).ThenByDescending(n => n.Since)];
+                }
+            }
 
             for (var i = 0; i < names.Count; i++)
             {

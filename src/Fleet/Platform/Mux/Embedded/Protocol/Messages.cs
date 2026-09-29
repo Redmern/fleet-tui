@@ -403,6 +403,48 @@ public sealed class ControlResponse
 
     [JsonPropertyName("window")]
     public List<WindowEntryDto>? Window { get; set; }
+
+    [JsonPropertyName("notices")]
+    public List<NoticeDto>? Notices { get; set; }
+}
+
+public sealed class NoticeDto
+{
+    [JsonPropertyName("project")]
+    public string Project { get; set; } = string.Empty;
+
+    [JsonPropertyName("host")]
+    public string? Host { get; set; }
+
+    [JsonPropertyName("machine")]
+    public string? Machine { get; set; }
+
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("kind")]
+    public string Kind { get; set; } = string.Empty;
+
+    [JsonPropertyName("worktree")]
+    public string Worktree { get; set; } = string.Empty;
+
+    [JsonPropertyName("agent")]
+    public string Agent { get; set; } = string.Empty;
+
+    [JsonPropertyName("message")]
+    public string Message { get; set; } = string.Empty;
+
+    [JsonPropertyName("since")]
+    public DateTime Since { get; set; }
+
+    [JsonPropertyName("resolved")]
+    public DateTime? Resolved { get; set; }
+
+    [JsonPropertyName("dismissed")]
+    public DateTime? Dismissed { get; set; }
+
+    [JsonIgnore]
+    public bool IsOpen => Resolved is null && Dismissed is null;
 }
 
 public sealed class RemoteDto

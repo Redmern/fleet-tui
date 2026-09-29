@@ -18,6 +18,10 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     private Endpoint _home = null!;
     private Endpoint _far = null!;
     private Func<string, string, RemoteChannel>? _open;
+    private volatile List<NoticeDto> _farNotices = [];
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(string Project, IReadOnlyList<string> Keys)> _farDismissed = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _toasts = new();
+    private FleetDaemon _homeDaemon = null!;
 
     private static Endpoint NewEndpoint()
     {
@@ -34,6 +38,10 @@ public sealed class RemoteLinkTests : IAsyncLifetime
             Terminal = panes.NewTerminal,
             FleetExecutable = "fleet",
             RemoteOpen = open,
+            Notices = () => _farNotices,
+            DismissNotices = (project, keys) => _farDismissed.Enqueue((project, keys)),
+            AlertSettings = () => (true, true),
+            Toast = (title, _) => _toasts.Enqueue(title),
         });
         _running.Add(daemon.RunAsync(_stop.Token));
         return daemon;
@@ -44,7 +52,7 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         _home = NewEndpoint();
         _far = NewEndpoint();
         Start(_far, _farPanes);
-        Start(_home, _homePanes, (host, token) => _open!(host, token));
+        _homeDaemon = Start(_home, _homePanes, (host, token) => _open!(host, token));
         _open = (_, _) =>
         {
             var stream = _far.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
@@ -317,6 +325,57 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         Assert.True((await far.RequestAsync(new ControlRequest { Op = "open-window", Workspace = "homelab", Client = "c1" })).Ok);
 
         await Eventually(() => Task.FromResult(window.Effects.Any(e => e.Kind == HostEffects.OpenRemote && e.Value == "red@far\nhomelab")));
+    }
+
+    private static NoticeDto Notice(string project, string key, bool open = true) => new()
+    {
+        Project = project,
+        Key = key,
+        Kind = "NeedsInput",
+        Worktree = "/home/red/" + key,
+        Agent = "api / " + key,
+        Message = "has a question for you",
+        Since = new DateTime(2026, 9, 30, 9, 0, 0, DateTimeKind.Utc),
+        Resolved = open ? null : new DateTime(2026, 9, 30, 9, 5, 0, DateTimeKind.Utc),
+    };
+
+    [Fact]
+    public void Only_notices_that_opened_since_the_last_look_are_fresh()
+    {
+        List<NoticeDto> first = [Notice("homelab", "a")];
+        List<NoticeDto> later = [Notice("homelab", "a"), Notice("homelab", "b"), Notice("homelab", "c", open: false)];
+
+        Assert.Empty(RemoteLink.Fresh(null, first));
+        Assert.Equal(["b"], RemoteLink.Fresh(new HashSet<string>(first.Select(RemoteLink.NoticeId)), later).Select(n => n.Key));
+    }
+
+    [Fact]
+    public async Task A_remote_projects_notices_reach_the_window_showing_it_and_nothing_else_does()
+    {
+        _farNotices = [Notice("homelab", "old")];
+        var (_, home, window, workspace) = await ShowingHomelabAsync();
+        await window.SendCommandAsync("show", "local");
+
+        await Eventually(() => Task.FromResult(_homeDaemon.Model.Notices(_homeDaemon.Model.Client(window.Id)!) == (0, 1)));
+        Assert.DoesNotContain(window.Effects, e => e.Kind == HostEffects.Bell);
+        Assert.Empty(_toasts);
+
+        _farNotices = [Notice("homelab", "old"), Notice("scraper", "elsewhere")];
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        Assert.DoesNotContain(window.Effects, e => e.Kind == HostEffects.Bell);
+
+        _farNotices = [Notice("homelab", "old"), Notice("homelab", "new"), Notice("scraper", "elsewhere")];
+        await Eventually(() => Task.FromResult(window.Effects.Any(e => e.Kind == HostEffects.Bell)));
+        Assert.Equal([$"fleet · homelab @{Environment.MachineName}"], _toasts);
+        Assert.Equal((0, 2), _homeDaemon.Model.Notices(_homeDaemon.Model.Client(window.Id)!));
+
+        var listed = (await home.RequestAsync(new ControlRequest { Op = "remote-notices", Client = window.Id })).Notices!;
+        Assert.Equal(["old", "new"], listed.Select(n => n.Key));
+        Assert.All(listed, n => Assert.Equal(("red@far", Environment.MachineName), (n.Host, n.Machine)));
+
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-dismiss", Host = "red@far", Workspace = "homelab", Args = ["new"] })).Ok);
+        await Eventually(() => Task.FromResult(_farDismissed.Any(d => d.Project == "homelab" && d.Keys.SequenceEqual(["new"]))));
+        Assert.Contains(workspace, _homeDaemon.Model.Client(window.Id)!.Projects);
     }
 
     [Fact]

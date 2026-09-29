@@ -4122,6 +4122,26 @@ outside the view:
 - **Effects before goodbyes.** fleetd sent a leaving client its `Bye` before the host
   effects of the same frame, so a client moving its last project to a new window
   quit before it could open the window. Effects now go first.
+## Remote machines, phase 4, 2026-09-30
+
+Notifications from a remote project, under the window rule: a window hears only about
+its own projects, and the remote project `@<machine>` is showing is one of them.
+
+- **The remote serves its notices.** `list-notices` returns every project's notices
+  from the remote's store (a `DaemonOptions.Notices` callback, so the daemon stays out
+  of storage); `dismiss-notices` dismisses by the remote's own keys.
+- **The link polls them** with the workspace list every 2 s. `RemoteLink.Fresh`
+  compares open notices with the previous poll; the first poll only sets the baseline,
+  so connecting does not alert about old notices.
+- **The local fleetd** keeps the open count of the shown remote project as the notice
+  count of `@<machine>`, so it adds to the pill's `+N` in windows holding it. A fresh
+  notice of the shown project rings the bell in those windows and shows one toast, with
+  this machine's bell/toast settings (`AlertSettings`, `Toast`); notices of the remote's
+  other projects stay silent.
+- **The center** asks `remote-notices` for the window's remote projects and shows each
+  as `project @machine` (`RemoteNoticeView`). Dismissing maps the local notice key back
+  to the remote's key (paths differ by OS) and goes through `remote-dismiss`; opening one
+  shows that project here.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

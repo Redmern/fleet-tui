@@ -224,7 +224,14 @@ reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode a
 fleet menu (`ctrl+enter`) all act on the remote. Switch project always opens this machine's
 switcher, from `ctrl+s s` or from the remote's menu, so you can always get back to a project
 here. One window at a time follows a given remote machine;
-disconnecting it closes its view here and leaves its panes running there.### Sessions
+disconnecting it closes its view here and leaves its panes running there.
+
+The remote project a window shows here also counts as one of that window's projects for
+notifications: its open notices add to the pill's `+N`, a new one rings the bell and shows
+a toast (with this machine's settings), and the notification center gets a tab for it,
+`homelab @machine`, where `d` dismisses on the remote and `enter` shows the project here.
+
+### Sessions
 
 A session is a saved set of projects for one window. **Save window as session** (`w` in
 the fleet menu) stores the window's projects in their order, which one was showing, and

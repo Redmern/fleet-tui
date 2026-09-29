@@ -39,6 +39,14 @@ public sealed class DaemonOptions
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
+
+    public Func<IReadOnlyList<NoticeDto>> Notices { get; init; } = () => [];
+
+    public Action<string, IReadOnlyList<string>> DismissNotices { get; init; } = (_, _) => { };
+
+    public Func<(bool Bell, bool Toast)> AlertSettings { get; init; } = () => (false, false);
+
+    public Action<string, string> Toast { get; init; } = (_, _) => { };
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -258,6 +266,18 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     case "show-remote":
                         response.Ms = ShowRemote(ClientFor(request, attachedClient), request.Host, request.Workspace);
+                        break;
+                    case "list-notices":
+                        response.Notices = [.. options.Notices()];
+                        break;
+                    case "dismiss-notices":
+                        options.DismissNotices(request.Workspace ?? string.Empty, request.Args ?? []);
+                        break;
+                    case "remote-notices":
+                        response.Notices = RemoteNotices(ClientFor(request, attachedClient));
+                        break;
+                    case "remote-dismiss":
+                        RemoteFor(request.Host).Dismiss(request.Workspace ?? string.Empty, request.Args ?? []);
                         break;
                     case "window":
                         response.Window = Window(ClientFor(request, attachedClient));
@@ -1011,6 +1031,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         var link = new RemoteLink(host, token => open(host, token), options.Log);
         link.Effect += effect => Forward(link, effect);
+        link.Noticed += fresh => Noticed(link, fresh);
         _remotes[host] = link;
         _ = Task.Run(() => link.RunAsync(_stop.Token), CancellationToken.None);
         options.Log($"remote {host}: connecting");
@@ -1166,6 +1187,80 @@ public sealed class FleetDaemon(DaemonOptions options)
         viewer.Pending.Enqueue(new HostEffect { Kind = HostEffects.HandBack, Value = action });
         options.Log($"{client}: {action} handed back to the machine viewing it");
         return true;
+    }
+
+    private List<NoticeDto> RemoteNotices(string? client)
+    {
+        if (_model.Client(client ?? string.Empty) is not { } c)
+        {
+            return [];
+        }
+
+        var notices = new List<NoticeDto>();
+        foreach (var link in _remotes.Values)
+        {
+            if (link.Showing is not { } project || !MuxModel.InWindow(c, RemoteWorkspace(link.Name)))
+            {
+                continue;
+            }
+
+            notices.AddRange(link.Notices
+                .Where(n => string.Equals(n.Project, project, StringComparison.OrdinalIgnoreCase))
+                .Select(n => new NoticeDto
+                {
+                    Project = n.Project,
+                    Host = link.Host,
+                    Machine = link.Name,
+                    Key = n.Key,
+                    Kind = n.Kind,
+                    Worktree = n.Worktree,
+                    Agent = n.Agent,
+                    Message = n.Message,
+                    Since = n.Since,
+                    Resolved = n.Resolved,
+                    Dismissed = n.Dismissed,
+                }));
+        }
+
+        return notices;
+    }
+
+    private void Noticed(RemoteLink link, IReadOnlyList<NoticeDto> fresh)
+    {
+        var alerts = new List<AttachSession>();
+        IReadOnlyList<NoticeDto> heard = [];
+
+        lock (_gate)
+        {
+            var workspace = RemoteWorkspace(link.Name);
+            var project = link.Showing;
+            _model.SetNotices(workspace, project is null ? 0 : link.Notices.Count(n => n.IsOpen && string.Equals(n.Project, project, StringComparison.OrdinalIgnoreCase)));
+
+            heard = [.. fresh.Where(n => string.Equals(n.Project, project, StringComparison.OrdinalIgnoreCase))];
+            if (heard.Count > 0)
+            {
+                alerts.AddRange(_sessions.Values.Where(s => _model.Client(s.Client) is { } c && MuxModel.InWindow(c, workspace)));
+            }
+        }
+
+        if (alerts.Count > 0)
+        {
+            var (bell, toast) = options.AlertSettings();
+            if (bell)
+            {
+                foreach (var session in alerts)
+                {
+                    session.Pending.Enqueue(new HostEffect { Kind = HostEffects.Bell });
+                }
+            }
+
+            if (toast)
+            {
+                options.Toast($"fleet · {heard[0].Project} @{link.Name}", string.Join('\n', heard.Take(3).Select(n => $"{n.Agent}: {n.Message}")));
+            }
+        }
+
+        _wake.Release();
     }
 
     private void Forward(RemoteLink link, HostEffect effect)

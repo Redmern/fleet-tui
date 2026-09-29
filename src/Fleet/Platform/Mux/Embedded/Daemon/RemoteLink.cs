@@ -50,6 +50,63 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public event Action<HostEffect>? Effect;
 
+    public event Action<IReadOnlyList<NoticeDto>>? Noticed;
+
+    private IReadOnlyList<NoticeDto> _notices = [];
+    private HashSet<string>? _openBefore;
+
+    public IReadOnlyList<NoticeDto> Notices
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _notices;
+            }
+        }
+    }
+
+    public static IReadOnlyList<NoticeDto> Fresh(ISet<string>? openBefore, IReadOnlyList<NoticeDto> now) =>
+        openBefore is null ? [] : [.. now.Where(n => n.IsOpen && !openBefore.Contains(NoticeId(n)))];
+
+    public static string NoticeId(NoticeDto notice) => $"{notice.Project}|{notice.Key}";
+
+    public void Dismiss(string project, IReadOnlyList<string> keys) =>
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await RequestAsync(new ControlRequest { Op = "dismiss-notices", Workspace = project, Args = [.. keys] }, _stop.Token).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
+            {
+                log($"remote {host}: could not dismiss notices of {project}: {e.Message}");
+            }
+        });
+
+    private async Task PollNoticesAsync(CancellationToken ct)
+    {
+        IReadOnlyList<NoticeDto> now;
+        try
+        {
+            now = (await RequestAsync(new ControlRequest { Op = "list-notices" }, ct).ConfigureAwait(false)).Notices ?? [];
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        IReadOnlyList<NoticeDto> fresh;
+        lock (_gate)
+        {
+            fresh = Fresh(_openBefore, now);
+            _openBefore = [.. now.Where(n => n.IsOpen).Select(NoticeId)];
+            _notices = now;
+        }
+
+        Noticed?.Invoke(fresh);
+    }
+
     public bool IsConnected
     {
         get
@@ -197,6 +254,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                     _state = Connected;
                     _error = null;
                 }
+
+                await PollNoticesAsync(ct).ConfigureAwait(false);
 
                 if (await Task.WhenAny(reader, Task.Delay(RefreshEvery, ct)).ConfigureAwait(false) == reader)
                 {

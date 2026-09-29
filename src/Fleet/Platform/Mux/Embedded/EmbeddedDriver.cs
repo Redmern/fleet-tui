@@ -194,6 +194,12 @@ public sealed class EmbeddedDriver(
     public Task DisconnectRemoteAsync(string host, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "remote-disconnect", Host = host }, ct);
 
+    public async Task<IReadOnlyList<NoticeDto>> RemoteNoticesAsync(CancellationToken ct = default) =>
+        (await RequestAsync(new ControlRequest { Op = "remote-notices", Client = CurrentClient }, ct).ConfigureAwait(false)).Notices ?? [];
+
+    public Task DismissRemoteAsync(string host, string project, IReadOnlyList<string> keys, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "remote-dismiss", Host = host, Workspace = project, Args = [.. keys] }, ct);
+
     public async Task<IReadOnlyList<WindowEntryDto>> WindowAsync(CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "window", Client = CurrentClient }, ct).ConfigureAwait(false)).Window ?? [];
 
