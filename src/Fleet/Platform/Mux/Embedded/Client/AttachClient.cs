@@ -33,25 +33,40 @@ public sealed class AttachClient(
     public async Task<int> RunAsync()
     {
         using var wire = new Wire(stream);
+        var (cols, rows) = CookedSize();
+
+        if (await HandshakeAsync(wire, cols, rows).ConfigureAwait(false) is not { } client)
+        {
+            return 1;
+        }
 
         if (OperatingSystem.IsWindows())
         {
             using var console = new WindowsConsole(mouse);
             var stdout = Console.OpenStandardOutput();
-            return await RunAsync(wire, console.Size, bytes => { stdout.Write(bytes); stdout.Flush(); },
+            return await RunAsync(wire, client, (cols, rows), console.Size, bytes => { stdout.Write(bytes); stdout.Flush(); },
                 () => WindowsInputAsync(wire, console), console.Dispose).ConfigureAwait(false);
         }
 
         using var terminal = new UnixTerminal();
-        return await RunAsync(wire, terminal.Size, UnixOut.Write, () => UnixInputAsync(wire, terminal), terminal.Dispose)
+        return await RunAsync(wire, client, (cols, rows), terminal.Size, UnixOut.Write, () => UnixInputAsync(wire, terminal), terminal.Dispose)
             .ConfigureAwait(false);
     }
 
-    private async Task<int> RunAsync(
-        Wire wire, Func<(int Cols, int Rows)> size, Action<byte[]> write, Func<Task> input, Action release)
+    private static (int Cols, int Rows) CookedSize()
     {
-        var (cols, rows) = size();
+        try
+        {
+            return Console.WindowWidth > 0 && Console.WindowHeight > 0 ? (Console.WindowWidth, Console.WindowHeight) : (80, 24);
+        }
+        catch (Exception e) when (e is IOException or PlatformNotSupportedException)
+        {
+            return (80, 24);
+        }
+    }
 
+    private async Task<string?> HandshakeAsync(Wire wire, int cols, int rows)
+    {
         await wire.SendAsync(
             MessageType.Hello,
             new Hello
@@ -68,17 +83,23 @@ public sealed class AttachClient(
         if (await wire.ReceiveAsync().ConfigureAwait(false) is not { } welcome)
         {
             await Console.Error.WriteLineAsync("fleet: fleetd closed the connection").ConfigureAwait(false);
-            return 1;
+            return null;
         }
 
         if (welcome.Type == MessageType.Error)
         {
             await Console.Error.WriteLineAsync(
                 $"fleet: {Wire.Read(welcome.Payload, WireJsonContext.Default.ErrorMessage).Message}").ConfigureAwait(false);
-            return 1;
+            return null;
         }
 
-        var client = Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome).Client;
+        return Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome).Client;
+    }
+
+    private async Task<int> RunAsync(
+        Wire wire, string client, (int Cols, int Rows) told, Func<(int Cols, int Rows)> size, Action<byte[]> write, Func<Task> input, Action release)
+    {
+        var (cols, rows) = told;
         log($"attached as {client} at {cols}x{rows}");
         var savedTitle = HostEffectsOut.CurrentConsoleTitle();
         write(Encoding.UTF8.GetBytes(

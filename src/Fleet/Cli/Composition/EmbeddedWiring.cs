@@ -275,8 +275,7 @@ public static class EmbeddedWiring
         if (code != 0 && sshHost is not null)
         {
             await Console.Error.WriteLineAsync(
-                $"fleet: check that 'ssh {sshHost}' logs in without any prompt (a key or agent, and a " +
-                "known host key), and that 'fleet' is on the remote PATH or named by FLEET_REMOTE_COMMAND.")
+                $"fleet: check that 'ssh {sshHost}' logs in, and that 'fleet' is on the remote PATH or named by FLEET_REMOTE_COMMAND.")
                 .ConfigureAwait(false);
         }
 
@@ -525,8 +524,6 @@ public static class EmbeddedWiring
         };
 
         start.ArgumentList.Add("-T");
-        start.ArgumentList.Add("-o");
-        start.ArgumentList.Add("BatchMode=yes");
         start.ArgumentList.Add(host);
         start.ArgumentList.Add(remote);
         start.ArgumentList.Add("bridge");

@@ -2762,8 +2762,12 @@ switch can cost under 100 bytes.
   0700 even when it already existed, which fails for a non-root user on
   `/tmp`. Only CI caught it, because the Docker runs were root.
 - **ssh prompts in raw mode.** An unknown host key or a password prompt
-  cannot be answered once the terminal is raw, so `--ssh` hung. ssh now runs
-  with `BatchMode=yes`, and a failed attach says what ssh needs.
+  cannot be answered once the terminal is raw, so `--ssh` hung. ssh then ran
+  with `BatchMode=yes`, which refused password logins outright. Since
+  2026-09-29 the client sends its hello and waits for fleetd's welcome before
+  the terminal goes raw, so ssh asks for a password or a new host key in the
+  ordinary terminal; ssh reads those from the terminal itself, not from the
+  stdin fleet pipes into it.
 - **Zig 0.16 on Windows, intermittently.** The first fetch of a dependency
   can fail with `file_hash FileNotFound` under `zig-pkg`; a second run
   succeeds. Two of three cold local builds hit it. `build.ps1` retries up to
