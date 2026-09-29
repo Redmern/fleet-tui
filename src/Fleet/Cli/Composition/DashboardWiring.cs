@@ -60,7 +60,7 @@ public static class DashboardWiring
 {
     private const int LogTail = 400;
 
-    public static readonly FleetAction[] MenuActions =
+    private static readonly FleetAction[] MenuActions =
     [
         FleetAction.NewAgent,
         FleetAction.ChangeHarness,
@@ -593,7 +593,7 @@ public static class DashboardWiring
 
             ShowMenu: () =>
                 mux.Caps.HasFlag(MuxCaps.Popup) && !mux.CurrentPane.IsNone
-                && EmbeddedWiring.OpenMenu(FleetActionIds.DashboardMenu)
+                && EmbeddedWiring.OpenMenu(null)
                     ? FleetAction.None
                     : FleetUi.Menu(app, keymap, MenuActions),
 

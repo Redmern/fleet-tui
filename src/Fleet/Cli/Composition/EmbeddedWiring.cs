@@ -125,6 +125,20 @@ public static class EmbeddedWiring
         return 0;
     }
 
+    private static EmbeddedDriver? _ownFloat;
+
+    public static void FitOwnFloat(int cols, int rows)
+    {
+        try
+        {
+            _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
+            _ownFloat.FitAsync(cols, rows).GetAwaiter().GetResult();
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+        }
+    }
+
     public static bool OpenMenu(string? action)
     {
         try

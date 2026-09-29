@@ -550,8 +550,48 @@ public sealed class MuxModel
         return DragDivider(client, index, divider.X + (vertical ? toward : 0), divider.Y + (vertical ? 0 : toward));
     }
 
-    public string? DashboardProject(string pane) =>
-        _panes.TryGetValue(pane, out var state) && state.Args is [_, "dash", "--project", var project, ..] ? project : null;
+    public bool IsOverlay(string pane) => _clients.Values.Any(c => c.Overlay == pane);
+
+    public bool FitFloat(string pane, int cols, int rows)
+    {
+        if (FloatOf(pane) is not var (workspace, box))
+        {
+            return false;
+        }
+
+        var (screenCols, screenRows) = SizeFor(workspace);
+        var content = Content(screenCols, screenRows);
+        var large = OverlayArea(screenCols, screenRows);
+        if (cols <= 0 || rows <= 0)
+        {
+            box.Bounds = large;
+            return true;
+        }
+
+        var width = Math.Clamp(cols + 2, MinFloatWidth, content.Width);
+        var height = Math.Clamp(rows + 2, MinFloatHeight, content.Height);
+
+        var now = FloatArea(box.Bounds, content);
+        var centreX = now.X + now.Width / 2;
+        var centreY = now.Y + now.Height / 2;
+
+        box.Bounds = FloatArea(new Rect(centreX - width / 2, centreY - height / 2, width, height), content);
+        return true;
+    }
+
+    public string FloatLabel(FloatState box)
+    {
+        var live = _panes[box.Pane].Title.Trim();
+        var own = _panes[box.Pane].Args is [var program, "menu" or "approve", ..]
+                  && Path.GetFileNameWithoutExtension(program) == "fleet";
+
+        if (own && live.Length > 0 && !Path.IsPathRooted(live))
+        {
+            return live;
+        }
+
+        return box.Title.Length > 0 ? box.Title : live;
+    }
 
     public bool IsNvim(string pane)
     {
@@ -673,7 +713,7 @@ public sealed class MuxModel
                         w.Name,
                         FloatTab,
                         w.Name,
-                        f.Title.Length > 0 ? f.Title : pane.Title,
+                        FloatLabel(f),
                         pane.Cwd,
                         w.FloatFocused && w.Floats[^1] == f,
                         pane.Title);
@@ -712,7 +752,7 @@ public sealed class MuxModel
             ?? (floats.Count > 0 && (workspace!.FloatFocused || tab is null) ? floats[^1].Pane : null)
             ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
 
-        var labels = workspace?.Floats.ToDictionary(f => f.Pane, f => f.Title.Length > 0 ? f.Title : _panes[f.Pane].Title);
+        var labels = workspace?.Floats.ToDictionary(f => f.Pane, FloatLabel);
 
         return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels);
     }

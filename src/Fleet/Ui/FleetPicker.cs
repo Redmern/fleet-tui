@@ -57,7 +57,8 @@ public static class FleetPicker
 
         var keys = PickerKeys.For(entries, Motions(keymap));
 
-        var window = FleetTheme.Overlay(title);
+        var widest = entries.Max(e => e.Label.Length + e.Detail.Length + e.Key.Length) + 10;
+        var window = FleetTheme.Overlay(title, Math.Max(widest, Math.Max(title.Length + 6, 40)), entries.Count + 4);
 
         var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
 

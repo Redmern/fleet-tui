@@ -1,3 +1,4 @@
+using Fleet.Shared.Constants;
 using Fleet.Ui.Constants;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
@@ -13,14 +14,14 @@ public static class FleetTheme
 
     public static void Register() => FleetSchemeRegistry.Register();
 
-    public static Window Screen(string title) => new()
+    public static Window Screen(string title) => Floating(new Window
     {
         Title = $" {title} ",
         BorderStyle = Border,
         SchemeName = FleetSchemes.Screen,
-    };
+    }, new FloatScreen(title));
 
-    public static Window Overlay(string title) => new()
+    public static Window Overlay(string title, int fitCols = 0, int fitRows = 0) => Floating(new Window
     {
         Title = $" {title} ",
         X = 0,
@@ -29,9 +30,9 @@ public static class FleetTheme
         Height = Dim.Fill(),
         BorderStyle = Border,
         SchemeName = FleetSchemes.Screen,
-    };
+    }, new FloatScreen(title, fitCols, fitRows));
 
-    public static Window Modal(string title, int width, int height) => new()
+    public static Window Modal(string title, int width, int height) => Floating(new Window
     {
         Title = $" {title} ",
         X = Pos.Center(),
@@ -40,7 +41,23 @@ public static class FleetTheme
         Height = height,
         BorderStyle = Border,
         SchemeName = FleetSchemes.Screen,
-    };
+    }, new FloatScreen(title, width, height));
+
+    private static Window Floating(Window window, FloatScreen screen)
+    {
+        if (!FloatPane.Inside)
+        {
+            return window;
+        }
+
+        window.BorderStyle = LineStyle.None;
+        window.X = 0;
+        window.Y = 0;
+        window.Width = Dim.Fill();
+        window.Height = Dim.Fill();
+        window.IsRunningChanged += (_, running) => FloatScreens.Running(screen, running.Value);
+        return window;
+    }
 
     public static Label SectionHeader(Pos x, Pos y, string text) => new()
     {

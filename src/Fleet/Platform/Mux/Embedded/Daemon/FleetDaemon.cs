@@ -5,6 +5,7 @@ using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Mux.Embedded.Render;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -121,6 +122,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                             break;
                         }
 
+                    case "fit":
+                        Require(_model.FitFloat(request.Pane ?? request.Caller ?? string.Empty, request.Cols, request.Rows), request);
+                        break;
                     case "focus-from":
                         {
                             var (dx, dy) = Direction(request.Direction);
@@ -605,7 +609,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     Show(session.Client, workspace);
                     break;
                 case "menu":
-                    OpenMenu(session.Client, command.Arg ?? MenuFor(session.Client));
+                    OpenMenu(session.Client, command.Arg);
                     break;
                 case "redraw":
                     session.Shown = null;
@@ -876,10 +880,6 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string MenuTitle = "fleet menu";
 
-    private string? MenuFor(string client) =>
-        _model.View(client)?.Focused is { } focused && _model.DashboardProject(focused) is not null
-            ? Fleet.Shared.Keymap.FleetActionIds.DashboardMenu
-            : null;
 
     private void OpenMenu(string client, string? action)
     {
@@ -1068,6 +1068,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             [Endpoint.Variable] = options.Endpoint.Address,
             ["WEZTERM_PANE"] = string.Empty,
             ["WEZTERM_EXECUTABLE"] = options.FleetExecutable,
+            [FloatPane.Variable] = _model.FloatBounds(pane.Id) is not null || _model.IsOverlay(pane.Id) ? "1" : string.Empty,
             ["WEZTERM_UNIX_SOCKET"] = string.Empty,
             ["TMUX"] = string.Empty,
         };

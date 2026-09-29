@@ -294,12 +294,22 @@ public class MuxModelTests
     }
 
     [Fact]
-    public void A_dashboard_pane_is_recognised_by_its_command()
+    public void Fleets_own_floats_show_their_live_title_and_others_keep_the_name_they_were_given()
     {
-        var dash = _model.Spawn("techweb", "C:/x", ["C:/tools/fleet.exe", "dash", "--project", "techweb"]);
-        var claude = _model.Spawn("techweb", "C:/x", ["claude"]);
+        _model.Spawn("techweb", "C:/x", ["claude"]);
+        var menu = _model.SpawnFloat("techweb", "C:/x", ["C:/tools/fleet.exe", "menu", "--project", "techweb"], modal: true);
+        var files = _model.SpawnFloat("techweb", "C:/x", ["yazi"]);
+        _model.SetTitle(menu.Id, "fleet menu");
+        _model.SetTitle(files.Id, "files");
+        var floats = _model.Workspace("techweb")!.Floats;
 
-        Assert.Equal("techweb", _model.DashboardProject(dash.Id));
-        Assert.Null(_model.DashboardProject(claude.Id));
+        Assert.Equal("fleet menu", _model.FloatLabel(floats[0]));
+        menu.Title = "C:\\tools\\fleet.exe";
+        Assert.Equal("fleet menu", _model.FloatLabel(floats[0]));
+        menu.Title = "Switch project";
+        files.Title = "yazi";
+
+        Assert.Equal("Switch project", _model.FloatLabel(floats[0]));
+        Assert.Equal("files", _model.FloatLabel(floats[1]));
     }
 }

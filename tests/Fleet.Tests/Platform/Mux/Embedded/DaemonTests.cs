@@ -747,7 +747,7 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.Equal("fleet", _panes.ByProgram("left")!.Env["WEZTERM_EXECUTABLE"]);
     }
     [Fact]
-    public async Task The_menu_key_over_a_dashboard_opens_that_dashboards_menu_as_a_float()
+    public async Task The_menu_key_over_a_dashboard_opens_the_same_fleet_menu_as_anywhere_else()
     {
         var control = await ControlAsync();
         await SpawnAsync(control, "techweb", "claude");
@@ -767,7 +767,9 @@ public sealed class DaemonTests : IAsyncLifetime
 
         await Eventually(() => _panes.Started.Any(p => p.Args.Contains("menu")));
         var menu = _panes.Started.Single(p => p.Args.Contains("menu"));
-        Assert.Equal(["menu", "--project", "techweb", "--action", "dashboard-menu"], menu.Args);
+        Assert.Equal(["menu", "--project", "techweb"], menu.Args);
+        Assert.Equal("1", menu.Env[FloatPane.Variable]);
+        Assert.Equal(string.Empty, _panes.ByProgram("claude")!.Env[FloatPane.Variable]);
     }
 
     [Fact]
@@ -778,12 +780,27 @@ public sealed class DaemonTests : IAsyncLifetime
         var client = await AttachAsync(workspace: "techweb");
         await client.WaitForFramesAsync(1);
 
-        var asked = await control.RequestAsync(new ControlRequest { Op = "menu", Caller = dash, Text = "dashboard-menu" });
+        var asked = await control.RequestAsync(new ControlRequest { Op = "menu", Caller = dash });
 
         Assert.True(asked.Ok, asked.Error);
         await Eventually(() => _panes.ByProgram("fleet") is { } menu && menu.Env[FleetDaemon.ClientVariable] == client.Id);
         var panes = (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!;
         Assert.Contains(panes, p => p.Tab == "float" && p.Title == FleetDaemon.MenuTitle);
+    }
+    [Fact]
+    public async Task A_screen_in_a_float_resizes_its_float_and_its_pane_follows()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(cols: 80, rows: 25, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var box = (await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["menu"] })).Pane!;
+
+        var fitted = await control.RequestAsync(new ControlRequest { Op = "fit", Caller = box, Cols = 30, Rows = 8 });
+
+        Assert.True(fitted.Ok, fitted.Error);
+        await Eventually(() => _panes.ByProgram("menu")!.Size == (30, 8));
+        Assert.False((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = "p404", Cols = 30, Rows = 8 })).Ok);
     }
     [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()

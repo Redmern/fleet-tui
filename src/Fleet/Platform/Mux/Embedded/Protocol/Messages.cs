@@ -271,6 +271,12 @@ public sealed class ControlRequest
 
     [JsonPropertyName("text")]
     public string? Text { get; set; }
+
+    [JsonPropertyName("cols")]
+    public int Cols { get; set; }
+
+    [JsonPropertyName("rows")]
+    public int Rows { get; set; }
 }
 
 public sealed class PaneDto

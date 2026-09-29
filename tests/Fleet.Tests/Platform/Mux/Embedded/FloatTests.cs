@@ -98,6 +98,27 @@ public class FloatTests
     }
 
     [Fact]
+    public void A_float_fits_the_screen_inside_it_centred_and_within_the_client()
+    {
+        var (_, client) = Workspace("techweb");
+        var menu = _model.SpawnFloat("techweb", "C:/x", ["fleet", "menu"], modal: true);
+
+        Assert.True(_model.FitFloat(menu.Id, 40, 10));
+        Assert.Equal(new Rect(29, 15, 42, 12), _model.View(client.Id)!.FloatingPanes.Single().Area);
+
+        _model.MoveFloat(menu.Id, 2, 3);
+        Assert.True(_model.FitFloat(menu.Id, 20, 4));
+        Assert.Equal(new Rect(12, 6, 22, 6), _model.View(client.Id)!.FloatingPanes.Single().Area);
+        _model.MoveFloat(menu.Id, 29, 15);
+
+        Assert.True(_model.FitFloat(menu.Id, 0, 0));
+        Assert.Equal(MuxModel.OverlayArea(100, 41), _model.View(client.Id)!.FloatingPanes.Single().Area);
+
+        Assert.True(_model.FitFloat(menu.Id, 500, 500));
+        Assert.Equal(new Rect(0, 1, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
+        Assert.False(_model.FitFloat("p404", 10, 10));
+    }
+    [Fact]
     public void Toggling_without_floats_does_nothing()
     {
         var (_, client) = Workspace("techweb");

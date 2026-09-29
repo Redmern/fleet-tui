@@ -3446,22 +3446,33 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
   Ctrl+Enter, Shift+Enter and Ctrl+Tab have no distinct legacy encoding, so
   they work from Windows clients only.
 
-### Dashboard menus as floats
+### One fleet menu, built as the float (revised 2026-09-29)
 
-- **One menu per place.** Ctrl+Enter over a dashboard opens that dashboard's
-  menu (new agent, hide, manage, repositories, refresh, log, files, rebuild,
-  keybinds) as a float. The dashboard's own menu button asks fleetd for the
-  same float through a new `menu` control op.
-- **What runs where.**
-  - Views that need nothing from the dashboard run inside the float: show
-    log, keybinds, file navigator, add repository.
-  - Actions on the selected agent or repository go back to the dashboard
-    through the existing request file, and the dashboard runs them as before.
+- **One menu everywhere.** Ctrl+Enter, `prefix space` and the dashboard's own
+  menu button all open the fleet menu (Quit, Go to dashboard, Switch project,
+  List agents, File navigator, Settings) as a modal float. The dashboard
+  button asks fleetd for it through the `menu` control op. The earlier
+  per-dashboard menu is gone; its actions keep their direct keys in the
+  dashboard.
+- **The float is the frame.** fleetd gives floats `FLEET_FLOAT=1`. With it
+  set, `FleetTheme.Screen`/`Overlay`/`Modal` build borderless windows that
+  fill the float, so there is no second frame inside the float's border.
+- **The float follows the screen inside it.** Each window pushes a
+  `FloatScreen` (title and size) while it runs, and pops it when it closes.
+  - The title becomes the console title, which reaches the float's border.
+    For fleet's own floats (`fleet menu`, `fleet approve`), the live title
+    wins over the name the float was given.
+  - The size goes to fleetd's `fit` op:
+    - the menu and pickers ask for their content size, and dialogs for their
+      dialog size;
+    - full screens (log, keybinds, settings) take the large area in the
+      middle;
+    - a sized float keeps its own centre, so an approval stays over the
+      agent that asked;
+    - when a dialog closes, the screen below gets its title and size back.
 - **Fixed on the way.** `FleetActionIds.Parse` did not know ids that fall back
   to the enum name (`viewlogs`, `browsefiles`, …), so such requests were
-  silently dropped. It is now the inverse of `For` for every action, with a
-  test over all of them.
-
+  silently dropped. It is now the inverse of `For` for every action.
 ### Verified
 
 - **Tests:** 1158, format-clean.
@@ -3480,9 +3491,16 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
   - Ctrl+H moved to the left shell, and typing reached it.
   - Ctrl+Enter opened the fleet menu float, and Esc closed it.
   - Ctrl+L then `x` `y` closed the right pane.
-  - With a real `fleet dash`, Ctrl+Enter over it opened the dashboard menu
-    float, and Shift+L (*Show log*) showed the log inside the float while the
-    dashboard stayed as it was.
+  - With a real `fleet dash`, Ctrl+Enter from the Claude-side pane and from
+    the dashboard opened the same fleet menu. It was a 32-column float titled
+    `fleet menu`, with no frame inside it.
+  - *Switch project* with one project showed its dialog as a small float
+    titled `Switch project`.
+  - *Settings → Show log* grew the float to the large area, titled `fleet log
+    — probe`.
+  - Files and fleet config still open as floats.
+  - With a real Claude agent, the approval dialog was a compact float over its
+    pane, titled `Approve this action?`, and Allow reached Claude.
 
 ### Limits
 
@@ -3503,6 +3521,8 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
   dashboard the next time it starts, not at once.
 - **Not run end to end:** the dashboard menu button's click path (fleetd
   tests cover the control op it uses), and the Unix byte bindings.
+- **A float that becomes a tile** (`prefix e`) keeps `FLEET_FLOAT`, so a fleet
+  screen in it stays borderless.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

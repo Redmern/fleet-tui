@@ -4,7 +4,6 @@ namespace Fleet.Shared.Keymap;
 
 public static class FleetActionIds
 {
-    public const string DashboardMenu = "dashboard-menu";
 
     public static string For(FleetAction action) => action switch
     {

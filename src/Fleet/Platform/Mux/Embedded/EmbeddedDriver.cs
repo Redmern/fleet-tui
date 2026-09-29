@@ -157,6 +157,9 @@ public sealed class EmbeddedDriver(
             .ConfigureAwait(false);
     }
 
+    public Task FitAsync(int cols, int rows, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "fit", Cols = cols, Rows = rows }, ct);
+
     public Task OpenMenuAsync(string? action, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "menu", Text = action }, ct);
 
