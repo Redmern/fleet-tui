@@ -17,7 +17,7 @@ public sealed class PaneRuntime : IDisposable
     {
         Id = id;
         Pty = pty;
-        Terminal = terminals(cols, rows, Send);
+        Terminal = terminals(cols, rows, Reply);
         Screen.Resize(cols, rows);
         _writer = Task.Run(WriteLoopAsync);
     }
@@ -41,6 +41,8 @@ public sealed class PaneRuntime : IDisposable
     public bool Exited { get; set; }
 
     public long Outputs { get; private set; }
+
+    public void Reply(byte[] bytes) => Send(Modes.Win32Input ? KittyReplies.Without(bytes) : bytes);
 
     public void Send(byte[] bytes)
     {
