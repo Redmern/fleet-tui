@@ -51,6 +51,43 @@ public sealed class MuxModel
         return pane;
     }
 
+    public PaneState SpawnParked(string workspace, string cwd, IReadOnlyList<string> args, Rect bounds)
+    {
+        var pane = NewPane(cwd, args);
+        WorkspaceOrNew(workspace).Floats.Insert(0, new FloatState(pane.Id, bounds)
+        {
+            Modal = true,
+            Parked = true,
+            Hidden = true,
+            HiddenSince = DateTime.UtcNow,
+        });
+
+        return pane;
+    }
+
+    public FloatState? Parked(string workspace) =>
+        Workspace(workspace)?.Floats.FirstOrDefault(f => f.Parked);
+
+    public bool Unpark(string pane)
+    {
+        if (FloatOf(pane) is not var (workspace, box) || !box.Parked)
+        {
+            return false;
+        }
+
+        box.Parked = false;
+        workspace.Floats.Remove(box);
+        workspace.Floats.Add(box);
+        workspace.FloatFocused = true;
+        return true;
+    }
+
+    public IReadOnlyList<string> StrandedParked() =>
+        _workspaces
+            .Where(w => w.Tabs.Count == 0 && w.Floats.All(f => f.Parked))
+            .SelectMany(w => w.Floats.Select(f => f.Pane))
+            .ToList();
+
     public bool ToggleFloats(string client)
     {
         if (View(client)?.Workspace is not { } workspace || workspace.Floats.All(f => f.Modal))
@@ -852,7 +889,7 @@ public sealed class MuxModel
             })
             .Concat(_workspaces
                 .Where(w => !Same(w.Name, OverlayWorkspace))
-                .SelectMany(w => w.Floats.Select(f =>
+                .SelectMany(w => w.Floats.Where(f => !f.Parked).Select(f =>
                 {
                     var pane = _panes[f.Pane];
                     return new Pane(
@@ -889,7 +926,7 @@ public sealed class MuxModel
             : (Placed?)null;
 
         var candidates = workspace is not null
-            ? workspace.Floats.Where(f => workspace.FloatsShown || f.Modal).ToList()
+            ? workspace.Floats.Where(f => !f.Parked && (workspace.FloatsShown || f.Modal)).ToList()
             : [];
         var floats = candidates
             .Where(f => !f.Hidden)
@@ -900,7 +937,7 @@ public sealed class MuxModel
             ?? (candidates.Count > 0 && (workspace!.FloatFocused || tab is null) ? candidates[^1].Pane : null)
             ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
 
-        var labels = workspace?.Floats.ToDictionary(f => f.Pane, FloatLabel);
+        var labels = workspace?.Floats.ToDictionary(f => f.Pane, f => f.HeldLabel ?? FloatLabel(f));
 
         return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels);
     }
@@ -1085,7 +1122,7 @@ public sealed class MuxModel
             workspace.FloatsShown = false;
         }
 
-        if (!workspace.Floats.Any(f => workspace.FloatsShown || f.Modal))
+        if (!workspace.Floats.Any(f => !f.Parked && (workspace.FloatsShown || f.Modal)))
         {
             workspace.FloatFocused = false;
         }
@@ -1243,6 +1280,8 @@ public sealed class FloatState(string pane, Rect bounds)
 
     public bool Modal { get; init; }
 
+    public bool Parked { get; set; }
+
     public bool Hidden { get; set; }
 
     public DateTime HiddenSince { get; set; }
@@ -1254,6 +1293,8 @@ public sealed class FloatState(string pane, Rect bounds)
     public string? Baseline { get; set; }
 
     public Rect? Held { get; set; }
+
+    public string? HeldLabel { get; set; }
 
     public DateTime HeldSince { get; set; }
 

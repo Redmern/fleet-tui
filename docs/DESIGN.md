@@ -3663,6 +3663,78 @@ partial draw and corrected it a moment later.
   - Verified with the real binary: menu, then `S`. Settings appears 296 ms
     later as a single frame and nothing is redrawn after it. A daemon test
     (partial draw, resize, several passes) fails without the hold.
+- **The warm menu showed a gap in that fix.** Terminal.Gui notices a
+  console resize only when it polls for it, so it drew the next screen at
+  the old size, went quiet (and was released), and relaid out ~370 ms later.
+  - `fit` now returns the pane's real size, and a screen inside a float
+    passes it straight to `IDriver.SetScreenSize` before it draws, so the
+    first draw is at the right size.
+  - `FloatScreens` holds on every screen change, not only on close, and fits
+    before it sets the title. fleetd holds the float's border label with its
+    picture (`FloatState.HeldLabel`), so a new title no longer lands on the old
+    screen first.
+  - Verified with the real binary: `Q` (quit dialog), `S` (Settings), `s`
+    (switch project) and `l` (agents) each appear as one frame.
+## Linux end to end, 2026-09-29
+
+The Unix PTY and client had only unit tests. A run in WSL (Arch) used tmux as
+the real terminal around `fleet` and `fleet attach`, with the CI-built
+linux-x64 AOT binary and an isolated config and socket.
+
+- **Found:** Terminal.Gui programs (the dashboard, the menu) drew nothing in
+  Linux panes. Terminal.Gui 2.4 learns its size by sending `CSI 18t`
+  (`SizeDetectionMode.AnsiQuery`) and waits for `CSI 8;rows;cols t`.
+  libghostty-vt answers other queries (`6n`, `c`, `?u`) but not this one.
+  Windows was unaffected, because there Terminal.Gui asks the console API
+  through ConPTY.
+- **Fix:** `PaneRuntime` answers `CSI 18t` itself with the pane's current
+  size (`SizeQueries`, a byte matcher that survives a query split across
+  reads), for panes that are not in win32-input mode.
+- **Result:** 40 of 40 checks pass:
+  - project picker, top bar, dashboard;
+  - which-key, the menu float;
+  - split, new tab, zoom, tab keys;
+  - floats (new, typing, toggle);
+  - a real terminal resize (SIGWINCH);
+  - a mouse click on a tab, copy mode;
+  - switching project from the menu;
+  - detach (the tty is back to canonical with echo), reattach through the
+    session picker;
+  - restore after `kill -9` of fleetd (7 of 7 panes, the orchestrator
+    resumed with `ClaudeCode --continue`).
+## The fleet menu opens warm, 2026-09-29
+
+Every menu open started a new `fleet menu` process. That meant process
+start, ConPTY and Terminal.Gui init, the first draw, the fit and the settle:
+about 250–310 ms, and about 840 ms for the first open.
+
+- fleetd now keeps one **warm menu** per workspace a client shows (no hidden
+  or overlay workspaces). It is a modal float that is `Parked`: started,
+  fitted and drawn, but outside the view. It is not a focus candidate, not
+  listed by `list-panes`, and not saved in the session.
+  - Opening the menu unparks it, puts it on top and focuses it. If it is
+    still drawing, the usual reveal applies.
+  - Menus with an `--action` still start fresh.
+  - The next warm menu starts when no menu is open in that workspace any
+    more, at most once every 2 s per workspace.
+- **Measured with the real binary:** the menu appears 11–48 ms after the
+  key, instead of 250–840 ms.
+- **Cost:** one idle `fleet menu` process per shown project workspace.
+  - Parked menus don't keep fleetd alive (they're left out of the idle
+    check).
+  - A workspace left with only parked menus has them killed, so it is
+    dropped.
+  - The daemon option is `WarmMenus`, on in `EmbeddedWiring` and off in the
+    daemon tests.
+- **A warm menu is started before any client asks,** so it has no
+  `FLEET_CLIENT`.
+  - fleetd resolves a request from a menu pane without a client
+    (`show`, `list-workspaces`) to the client that opened it
+    (`ClientState.Menu`).
+  - `EmbeddedDriver.ShowWorkspaceAsync` accepts a pane caller without a
+    client.
+  - `EmbeddedWiring.InsideClient` is also true inside any fleetd pane, so a
+    warm picker never starts a nested `fleet attach`.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

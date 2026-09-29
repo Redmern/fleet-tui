@@ -147,18 +147,21 @@ public sealed class EmbeddedDriver(
 
     public async Task ShowWorkspaceAsync(string name, CancellationToken ct = default)
     {
-        if (CurrentClient is not { } client)
+        if (CurrentClient is null && CurrentPane.IsNone)
         {
             throw new MuxUnavailableException(
                 "no attached client to show a workspace in; run this from inside 'fleet attach'");
         }
 
-        await RequestAsync(new ControlRequest { Op = "show", Client = client, Workspace = name }, ct)
+        await RequestAsync(new ControlRequest { Op = "show", Client = CurrentClient, Workspace = name }, ct)
             .ConfigureAwait(false);
     }
 
-    public Task FitAsync(int cols, int rows, CancellationToken ct = default) =>
-        RequestAsync(new ControlRequest { Op = "fit", Cols = cols, Rows = rows }, ct);
+    public async Task<(int Cols, int Rows)?> FitAsync(int cols, int rows, CancellationToken ct = default)
+    {
+        var fitted = await RequestAsync(new ControlRequest { Op = "fit", Cols = cols, Rows = rows }, ct).ConfigureAwait(false);
+        return fitted.Cols > 0 && fitted.Rows > 0 ? (fitted.Cols, fitted.Rows) : null;
+    }
 
     public Task HoldAsync(CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "hold" }, ct);

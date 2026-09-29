@@ -10,12 +10,14 @@ public static class FloatScreens
 
     public static Action<string> ShowTitle { get; set; } = title => Console.Title = title;
 
-    public static Action<int, int>? Fit { get; set; }
+    public static Func<int, int, (int Cols, int Rows)?>? Fit { get; set; }
 
     public static Action? Hold { get; set; }
 
-    public static void Running(FloatScreen screen, bool running)
+    public static (int Cols, int Rows)? Running(FloatScreen screen, bool running)
     {
+        Hold?.Invoke();
+
         if (running)
         {
             Stack.Add(screen);
@@ -23,13 +25,15 @@ public static class FloatScreens
         else if (Stack.LastIndexOf(screen) is var at and >= 0)
         {
             Stack.RemoveAt(at);
-            Hold?.Invoke();
         }
 
-        if (Current is { } shown)
+        if (Current is not { } shown)
         {
-            ShowTitle(shown.Title);
-            Fit?.Invoke(shown.Cols, shown.Rows);
+            return null;
         }
+
+        var fitted = Fit?.Invoke(shown.Cols, shown.Rows);
+        ShowTitle(shown.Title);
+        return fitted;
     }
 }

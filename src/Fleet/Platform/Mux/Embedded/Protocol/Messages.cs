@@ -335,6 +335,12 @@ public sealed class ControlResponse
     [JsonPropertyName("ms")]
     public double Ms { get; set; }
 
+    [JsonPropertyName("cols")]
+    public int Cols { get; set; }
+
+    [JsonPropertyName("rows")]
+    public int Rows { get; set; }
+
     [JsonPropertyName("panes")]
     public List<PaneDto>? Panes { get; set; }
 

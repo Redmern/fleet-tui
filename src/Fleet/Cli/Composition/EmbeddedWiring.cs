@@ -31,7 +31,8 @@ public static class EmbeddedWiring
     public static bool Ready => GhosttyNative.Available();
 
     public static bool InsideClient =>
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(FleetDaemon.ClientVariable));
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(FleetDaemon.ClientVariable))
+        || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable));
 
     public static IMuxDriver Driver() => new EmbeddedDriver(Endpoint.Default(), StartDaemonAsync);
 
@@ -64,6 +65,7 @@ public static class EmbeddedWiring
             FleetExecutable = Adapters.Executable,
             ExitWhenEmptyAfter = IdleExit,
             SessionFile = SessionFile(Environment.GetEnvironmentVariable(Endpoint.Variable)),
+            WarmMenus = true,
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
@@ -155,15 +157,16 @@ public static class EmbeddedWiring
 
     private static EmbeddedDriver? _ownFloat;
 
-    public static void FitOwnFloat(int cols, int rows)
+    public static (int Cols, int Rows)? FitOwnFloat(int cols, int rows)
     {
         try
         {
             _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
-            _ownFloat.FitAsync(cols, rows).GetAwaiter().GetResult();
+            return _ownFloat.FitAsync(cols, rows).GetAwaiter().GetResult();
         }
         catch (Ports.Mux.Exceptions.MuxUnavailableException)
         {
+            return null;
         }
     }
 

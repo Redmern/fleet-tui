@@ -31,6 +31,8 @@ public sealed class DaemonOptions
     public TimeSpan SaveEvery { get; init; } = TimeSpan.FromSeconds(1);
 
     public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
+
+    public bool WarmMenus { get; init; }
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -110,7 +112,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         }).ToList();
                         break;
                     case "list-workspaces":
-                        response.Workspaces = _model.ListWorkspaces(request.Client ?? attachedClient)
+                        response.Workspaces = _model.ListWorkspaces(ClientFor(request, attachedClient))
                             .Select(w => new WorkspaceDto { Name = w.Name, ShownHere = w.ShownHere })
                             .ToList();
                         break;
@@ -175,7 +177,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         }
 
                     case "show":
-                        response.Ms = Show(request.Client ?? attachedClient, request.Workspace);
+                        response.Ms = Show(ClientFor(request, attachedClient), request.Workspace);
                         break;
                     case "close-workspace":
                         foreach (var id in _model.PanesIn(request.Workspace ?? string.Empty))
@@ -192,6 +194,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                 }
 
                 ApplyResizes();
+
+                if (request.Op == "fit" && _model.Pane(request.Pane ?? request.Caller ?? string.Empty) is { } fitted)
+                {
+                    (response.Cols, response.Rows) = (fitted.Cols, fitted.Rows);
+                }
             }
         }
         catch (InvalidOperationException e)
@@ -906,6 +913,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     {
         var before = _model.FloatBounds(pane);
         Require(_model.FitFloat(pane, cols, rows), request);
+        options.Log($"{pane} fit {cols}x{rows}: {before?.Width}x{before?.Height} -> {_model.FloatBounds(pane)?.Width}x{_model.FloatBounds(pane)?.Height}");
 
         if (_model.Pane(pane)?.Args is [_, "menu", ..])
         {
@@ -929,6 +937,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         if (box.Held is null && before is { } shown && shown != box.Bounds)
         {
             box.Held = shown;
+            box.HeldLabel = _model.FloatLabel(box);
         }
 
         if (box.Held is not null)
@@ -942,6 +951,8 @@ public sealed class FleetDaemon(DaemonOptions options)
     {
         if (_model.Float(pane) is { Hidden: false } box)
         {
+            options.Log($"{pane} held");
+            box.HeldLabel ??= _model.FloatLabel(box);
             box.Held ??= box.Bounds;
             box.HeldSince = DateTime.UtcNow;
             box.ReleaseAfterOutput = -1;
@@ -960,7 +971,9 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             if (redrawn || DateTime.UtcNow - box.HeldSince > RevealAnyway)
             {
+                options.Log($"{box.Pane} released {(redrawn ? "after its redraw" : "after waiting")} at {box.Bounds.Width}x{box.Bounds.Height}");
                 box.Held = null;
+                box.HeldLabel = null;
                 box.ReleaseAfterOutput = -1;
             }
             else
@@ -1035,6 +1048,71 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
 
+    private readonly Dictionary<string, DateTime> _warmedAt = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly TimeSpan WarmAgainAfter = TimeSpan.FromSeconds(2);
+
+    private List<string> MenuArgs(string? project) =>
+        project is null ? [options.FleetExecutable, "menu"] : [options.FleetExecutable, "menu", "--project", project];
+
+    private bool HasMenu(string workspace) =>
+        _model.PanesIn(workspace).Any(id => _model.Pane(id)?.Args is [_, "menu", ..]);
+
+    private void WarmMenus()
+    {
+        foreach (var stranded in _model.StrandedParked())
+        {
+            Kill(stranded);
+        }
+
+        if (!options.WarmMenus)
+        {
+            return;
+        }
+
+        var shown = _model.Clients
+            .Select(c => c.Showing)
+            .OfType<string>()
+            .Where(w => !Fleet.Shared.Constants.FleetWorkspaces.IsHidden(w) && _model.Workspace(w) is { Tabs.Count: > 0 })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var workspace in shown)
+        {
+            if (HasMenu(workspace)
+                || (_warmedAt.TryGetValue(workspace, out var at) && DateTime.UtcNow - at < WarmAgainAfter))
+            {
+                continue;
+            }
+
+            _warmedAt[workspace] = DateTime.UtcNow;
+            var (cols, rows) = _model.Clients
+                .Where(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
+                .Select(c => (c.Cols, c.Rows))
+                .First();
+
+            var menu = _model.SpawnParked(
+                workspace, Environment.CurrentDirectory, MenuArgs(workspace), MuxModel.OverlayArea(cols, rows));
+            _model.SetTitle(menu.Id, MenuTitle);
+            if (_menuFit is var (fitCols, fitRows))
+            {
+                _model.FitFloat(menu.Id, fitCols, fitRows);
+            }
+
+            ApplyResizes();
+
+            try
+            {
+                Start(menu, null);
+                options.Log($"warm menu {menu.Id} for {workspace}");
+            }
+            catch (InvalidOperationException e)
+            {
+                options.Log($"warm menu for {workspace}: {e.Message}");
+            }
+        }
+    }
+
     private void OpenMenu(string client, string? action)
     {
         if (_model.Client(client) is not { Overlay: null } state)
@@ -1043,11 +1121,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         var project = state.Showing is { } s && !Fleet.Shared.Constants.FleetWorkspaces.IsHidden(s) ? s : null;
-        var args = new List<string> { options.FleetExecutable, "menu" };
-        if (project is not null)
-        {
-            args.AddRange(["--project", project]);
-        }
+        var args = MenuArgs(project);
 
         if (action is not null)
         {
@@ -1061,6 +1135,13 @@ public sealed class FleetDaemon(DaemonOptions options)
             if (state.Menu is { } open && _model.FloatBounds(open) is not null)
             {
                 _model.Focus(open);
+                return;
+            }
+
+            if (action is null && _model.Parked(shown) is { } warm && _model.Unpark(warm.Pane))
+            {
+                state.Menu = warm.Pane;
+                options.Log($"{client}: warm menu {warm.Pane}{(warm.Hidden ? " (still drawing)" : string.Empty)}");
                 return;
             }
 
@@ -1216,6 +1297,9 @@ public sealed class FleetDaemon(DaemonOptions options)
         Start(pane, request.Env);
         return pane.Id;
     }
+
+    private string? ClientFor(ControlRequest request, string? attachedClient) =>
+        request.Client ?? attachedClient ?? _model.Clients.FirstOrDefault(c => c.Menu is { } menu && menu == request.Caller)?.Id;
 
     private string MoveTarget(ControlRequest request) =>
         request.Workspace ?? request.Window ?? request.Session
@@ -1459,7 +1543,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     session.Switching = null;
                 }
 
-                if (_runtimes.Count > 0 || _sessions.Count > 0)
+                WarmMenus();
+
+                if (_runtimes.Keys.Any(id => _model.Float(id) is not { Parked: true }) || _sessions.Count > 0)
                 {
                     _lastBusy = DateTime.UtcNow;
                 }

@@ -55,7 +55,14 @@ public static class FleetTheme
         window.Y = 0;
         window.Width = Dim.Fill();
         window.Height = Dim.Fill();
-        window.IsRunningChanged += (_, running) => FloatScreens.Running(screen, running.Value);
+        window.IsRunningChanged += (_, running) =>
+        {
+            if (FloatScreens.Running(screen, running.Value) is var (cols, rows))
+            {
+                window.App?.Driver?.SetScreenSize(cols, rows);
+            }
+        };
+
         return window;
     }
 

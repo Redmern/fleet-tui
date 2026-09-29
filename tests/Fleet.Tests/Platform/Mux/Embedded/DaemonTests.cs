@@ -800,6 +800,7 @@ public sealed class DaemonTests : IAsyncLifetime
         var fitted = await control.RequestAsync(new ControlRequest { Op = "fit", Caller = box, Cols = 30, Rows = 8 });
 
         Assert.True(fitted.Ok, fitted.Error);
+        Assert.Equal((30, 8), (fitted.Cols, fitted.Rows));
         await Eventually(() => _panes.ByProgram("menu")!.Size == (30, 8));
         Assert.False((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = "p404", Cols = 30, Rows = 8 })).Ok);
     }
