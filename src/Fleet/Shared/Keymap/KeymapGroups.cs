@@ -13,7 +13,13 @@ public static class KeymapGroups
             FleetAction.SwitchProject,
             FleetAction.ListAgents,
             FleetAction.BrowseFiles,
+            FleetAction.Notifications,
             FleetAction.OpenSettings,
+        ]),
+        ("notifications",
+        [
+            FleetAction.DismissNotice,
+            FleetAction.DismissAllNotices,
         ]),
         ("fleet menu > settings",
         [

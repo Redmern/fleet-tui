@@ -36,8 +36,18 @@ public static class DashboardKeys
         FleetAction.NextTab,
     ];
 
+    private static readonly FleetAction[] NoticeScope =
+    [
+        FleetAction.DismissNotice,
+        FleetAction.DismissAllNotices,
+        FleetAction.Refresh,
+        FleetAction.PrevTab,
+        FleetAction.NextTab,
+    ];
+
     public static IReadOnlyList<FleetAction> ScopeFor(int tab) => tab switch
     {
+        DashboardTabs.NotificationsTab => NoticeScope,
         DashboardTabs.RepositoriesTab => RepositoryScope,
         DashboardTabs.SubsTab => SubScope,
         _ => AgentScope,

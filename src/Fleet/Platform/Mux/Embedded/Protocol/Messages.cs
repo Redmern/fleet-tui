@@ -212,6 +212,7 @@ public static class HostEffects
     public const string Title = "title";
     public const string Clipboard = "clipboard";
     public const string OpenWindow = "open-window";
+    public const string Bell = "bell";
 }
 
 public sealed class HostEffect
@@ -278,6 +279,12 @@ public sealed class ControlRequest
 
     [JsonPropertyName("rows")]
     public int Rows { get; set; }
+
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+
+    [JsonPropertyName("bell")]
+    public bool Bell { get; set; }
 }
 
 public sealed class PaneDto

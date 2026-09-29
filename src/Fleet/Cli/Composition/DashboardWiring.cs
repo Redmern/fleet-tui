@@ -1,3 +1,4 @@
+using DispatchRequest = Fleet.Features.Orchestrations.Dispatch.Models.DispatchCommand;
 using Fleet.Features.Agents;
 using Fleet.Features.Agents.ChangeHarness;
 using Fleet.Features.Agents.FinishAgent;
@@ -13,26 +14,28 @@ using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Dashboard.RebuildDashboard;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
+using Fleet.Features.Diagnostics.ViewLogs;
+using Fleet.Features.Files.BrowseFiles;
+using Fleet.Features.Menu.EditKeybinds;
+using Fleet.Features.Menu.EditSettings;
+using Fleet.Features.Notifications.DetectNotices;
+using Fleet.Features.Notifications.ShowNotices;
+using Fleet.Features.Notifications.SyncNotices;
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.RenameOrchestration;
-using DispatchRequest = Fleet.Features.Orchestrations.Dispatch.Models.DispatchCommand;
-using Fleet.Features.Files.BrowseFiles;
-using Fleet.Features.Diagnostics.ViewLogs;
-using Fleet.Features.Menu.EditKeybinds;
-using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Repositories;
 using Fleet.Features.Repositories.AddRepository;
+using Fleet.Features.Repositories.ListRemotes;
+using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Features.Repositories.OpenRepository;
 using Fleet.Features.Repositories.PullRepository;
 using Fleet.Features.Repositories.RemoveRepository;
-using Fleet.Features.Repositories.RenameRepository;
-using Fleet.Features.Repositories.SetDefaultBranch;
 using Fleet.Features.Repositories.RemoveRepository.Models;
+using Fleet.Features.Repositories.RenameRepository;
 using Fleet.Features.Repositories.Secrets;
+using Fleet.Features.Repositories.SetDefaultBranch;
 using Fleet.Features.Setup.RunSetup;
-using Fleet.Features.Repositories.ListRemotes;
-using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
@@ -43,6 +46,7 @@ using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Notifications.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
@@ -436,6 +440,7 @@ public static class DashboardWiring
 
         IReadOnlyList<Pane>? barPanes = null;
         var barPanesAt = DateTime.MinValue;
+        var paneTexts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         IReadOnlyList<AgentRecord> WithBarState(IReadOnlyList<AgentRecord> records)
         {
@@ -477,6 +482,7 @@ public static class DashboardWiring
             }
 
             var text = mux.GetTextAsync(pane.Id).GetAwaiter().GetResult();
+            paneTexts[agent.Worktree] = text;
             var live = AgentActivity.Classify(text);
 
             return live.Length == 0 && orchestrator ? agent : agent with { Status = live };
@@ -549,6 +555,126 @@ public static class DashboardWiring
                 : $"could not open {Label(agent)}: {outcome.Error}");
 
             return outcome.Succeeded ? null : outcome.Error;
+        }
+
+        var noticeStore = Adapters.Notices();
+        var toldOpen = -1;
+        var seenAlive = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var quiet = new Dictionary<string, (string Text, DateTime Since)>(StringComparer.OrdinalIgnoreCase);
+        var againstBase = new System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime At, int Behind, bool Conflicts)>(StringComparer.OrdinalIgnoreCase);
+        var checking = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
+        (int Behind, bool Conflicts) AgainstBase(AgentRecord agent, DateTime now)
+        {
+            if (agent.BaseRef.Length == 0 || !Directory.Exists(agent.Worktree))
+            {
+                return (0, false);
+            }
+
+            var known = againstBase.TryGetValue(agent.Worktree, out var last);
+            if ((!known || now - last.At > NoticeChecks.BaseEvery) && checking.TryAdd(agent.Worktree, 0))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var behind = await git.RunAsync(agent.Worktree, ["rev-list", "--count", $"HEAD..{agent.BaseRef}"]).ConfigureAwait(false);
+                        var merge = await git.RunAsync(agent.Worktree, ["merge-tree", "--write-tree", "--quiet", agent.BaseRef, "HEAD"]).ConfigureAwait(false);
+                        againstBase[agent.Worktree] = (
+                            DateTime.UtcNow,
+                            behind.Ok && int.TryParse(behind.Out.Trim(), out var count) ? count : 0,
+                            merge.ExitCode == 1);
+                    }
+                    finally
+                    {
+                        checking.TryRemove(agent.Worktree, out _);
+                    }
+                });
+            }
+
+            return known ? (last.Behind, last.Conflicts) : (0, false);
+        }
+
+        NoticeBoard Board(IReadOnlyList<Notice> all, DateTime now) =>
+            new(NoticeRows.For(all, withProject: false, now),
+                [.. all.Select(n => n.Key)],
+                [.. all.Select(n => n.Worktree)],
+                all.Count(n => n.IsOpen));
+
+        NoticeBoard LoadNotices()
+        {
+            var now = DateTime.UtcNow;
+            var panes = barPanes ?? mux.ListPanesAsync().GetAwaiter().GetResult();
+
+            var watches = lister.Handle(project.Name).Select(agent =>
+            {
+                var alive = panes.Any(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p));
+                if (alive)
+                {
+                    seenAlive.Add(agent.Worktree);
+                }
+
+                var text = alive ? paneTexts.GetValueOrDefault(agent.Worktree, string.Empty) : string.Empty;
+                var settled = NoticeDetector.Settled(text);
+                if (!quiet.TryGetValue(agent.Worktree, out var still) || still.Text != settled)
+                {
+                    quiet[agent.Worktree] = still = (settled, now);
+                }
+
+                var (behind, conflicts) = AgainstBase(agent, now);
+                return new AgentWatch(
+                    agent, alive, text, now - still.Since, behind, conflicts,
+                    PaneLost: !alive && seenAlive.Contains(agent.Worktree));
+            }).ToList();
+
+            var stored = noticeStore.Load(project.Name);
+            var next = NoticeSync.Apply(stored, NoticeDetector.Detect(project.Name, watches, now), now);
+
+            if (!stored.Select(Signature).SequenceEqual(next.Select(Signature)))
+            {
+                noticeStore.Save(project.Name, next);
+            }
+
+            Alert(next.Count(n => n.IsOpen), NoticeSync.Fresh(stored, next));
+            return Board(next, now);
+        }
+
+        void Alert(int open, IReadOnlyList<Notice> fresh)
+        {
+            if (open == toldOpen && fresh.Count == 0)
+            {
+                return;
+            }
+
+            toldOpen = open;
+            var settings = noticeStore.Settings();
+            var embedded = mux.Name == "embedded";
+
+            _ = Task.Run(() =>
+            {
+                if (embedded)
+                {
+                    EmbeddedWiring.Notices(project.Name, open, settings.Bell && fresh.Count > 0);
+                }
+                else if (settings.Bell && fresh.Count > 0)
+                {
+                    Console.Out.Write('\a');
+                    Console.Out.Flush();
+                }
+
+                if (settings.Toast && fresh.Count > 0)
+                {
+                    Platform.Notifications.DesktopToast.Show($"fleet · {project.Name}", NoticeSync.Summary(fresh));
+                }
+            });
+        }
+
+        static string Signature(Notice n) => $"{n.Key}|{n.Message}|{n.Since:O}|{n.Resolved:O}|{n.Dismissed:O}";
+
+        async Task<string?> OpenNotice(string worktree)
+        {
+            var agent = lister.Handle(project.Name).FirstOrDefault(a => PathKey.Same(a.Worktree, worktree));
+            return agent is null ? $"that agent is gone ({worktree})" : await OpenFlow(agent).ConfigureAwait(false);
         }
 
         return new DashboardCallbacks(
@@ -1246,6 +1372,13 @@ public static class DashboardWiring
 
             Heartbeat: () => approvals.Heartbeat(project.Name),
 
-            DrainSignals: DrainSignals);
+            DrainSignals: DrainSignals,
+
+            LoadNotices: LoadNotices,
+
+            DismissNotices: keys =>
+                noticeStore.Save(project.Name, NoticeSync.Dismiss(noticeStore.Load(project.Name), [.. keys], DateTime.UtcNow)),
+
+            OpenNotice: OpenNotice);
     }
 }

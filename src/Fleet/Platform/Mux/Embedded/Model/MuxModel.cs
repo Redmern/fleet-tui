@@ -18,6 +18,7 @@ public sealed class MuxModel
     private readonly List<WorkspaceState> _workspaces = [];
     private readonly Dictionary<string, PaneState> _panes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ClientState> _clients = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _notices = new(StringComparer.OrdinalIgnoreCase);
     private int _nextPane;
     private int _nextTab;
     private int _nextClient;
@@ -35,6 +36,12 @@ public sealed class MuxModel
 
     public WorkspaceState? Workspace(string name) =>
         _workspaces.FirstOrDefault(w => Same(w.Name, name));
+
+    public void SetNotices(string workspace, int open) => _notices[workspace] = Math.Max(0, open);
+
+    public (int Here, int Elsewhere) Notices(string? workspace) =>
+        (workspace is null ? 0 : _notices.GetValueOrDefault(workspace),
+         _notices.Where(n => !Same(n.Key, workspace ?? string.Empty) && Workspace(n.Key) is not null).Sum(n => n.Value));
 
     public PaneState Spawn(string workspace, string cwd, IReadOnlyList<string> args)
     {
@@ -1031,6 +1038,7 @@ public sealed class MuxModel
         {
             Frame = frame,
             FrameTitle = frame is null ? null : $"fleet — {workspace!.Name}",
+            Notices = Notices(workspace?.Name),
         };
     }
 
@@ -1447,6 +1455,8 @@ public sealed record ClientView(
     public Rect? Frame { get; init; }
 
     public string? FrameTitle { get; init; }
+
+    public (int Here, int Elsewhere) Notices { get; init; }
 
     public string? FloatLabel(string pane) => FloatLabels?.GetValueOrDefault(pane);
 

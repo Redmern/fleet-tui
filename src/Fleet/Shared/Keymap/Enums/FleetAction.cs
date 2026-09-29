@@ -40,4 +40,7 @@ public enum FleetAction
     OpenSettings,
     EditAidlcMode,
     EditClaudeProfile,
+    Notifications,
+    DismissNotice,
+    DismissAllNotices,
 }

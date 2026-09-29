@@ -94,6 +94,8 @@ public static class Adapters
 
     public static IAgentStore Agents() => new JsonAgentStore();
 
+    public static Ports.Notifications.INoticeStore Notices() => new JsonNoticeStore();
+
     public static IDispatchHistory History() => new FileDispatchHistory();
 
     public static ISlugNamer SlugNamer() => new ClaudeSlugNamer();

@@ -954,6 +954,22 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Notices_show_their_count_on_the_tab_bar_and_ring_the_bell_only_when_asked()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(workspace: "techweb");
+
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "notices", Workspace = "techweb", Count = 2 })).Ok);
+        await client.WaitForAsync("●");
+        Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Bell);
+
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "notices", Workspace = "techweb", Count = 3, Bell = true })).Ok);
+        await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.Bell));
+        Assert.Equal((3, 0), _daemon.Model.Notices("techweb"));
+    }
+
+    [Fact]
     public async Task Status_reports_the_process_and_what_it_runs()
     {
         var control = await ControlAsync();

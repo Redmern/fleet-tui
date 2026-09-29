@@ -388,6 +388,11 @@ public static class Composer
             .Cast<(int, int, string)?>()
             .FirstOrDefault();
 
+    public static (int Start, int End)? NoticeSpan(ClientView view) =>
+        Bar(view).Where(s => s.Segment.Notices).Select(s => (s.Start, s.Start + s.Segment.Text.Length))
+            .Cast<(int, int)?>()
+            .FirstOrDefault();
+
     public static IReadOnlyList<(BarSegment Segment, int Start)> Bar(ClientView view)
     {
         var parts = new List<BarSegment> { new(" ", Cell.Default, Cell.Default) };
@@ -399,6 +404,15 @@ public static class Composer
         }
 
         parts.AddRange(Pill($" {workspace.Name} ", Lavender, Crust, CellAttr.Bold));
+
+        var (here, elsewhere) = view.Notices;
+        if (here > 0 || elsewhere > 0)
+        {
+            parts.Add(new BarSegment(" ", Cell.Default, Cell.Default));
+            parts.Add(here > 0
+                ? new BarSegment($"{LeftCap} ● {here}{(elsewhere > 0 ? $" +{elsewhere}" : string.Empty)} {RightCap}", Crust, Yellow, CellAttr.Bold, Notices: true, Caps: true)
+                : new BarSegment($" ● +{elsewhere} ", Yellow, Cell.Default, CellAttr.None, Notices: true));
+        }
 
         for (var i = 0; i < workspace.Tabs.Count; i++)
         {
@@ -476,4 +490,5 @@ public static class Composer
 }
 
 public sealed record BarSegment(
-    string Text, uint Fg, uint Bg, CellAttr Attrs = CellAttr.None, string? Tab = null, bool Floats = false, bool Caps = false);
+    string Text, uint Fg, uint Bg, CellAttr Attrs = CellAttr.None, string? Tab = null, bool Floats = false, bool Caps = false,
+    bool Notices = false);

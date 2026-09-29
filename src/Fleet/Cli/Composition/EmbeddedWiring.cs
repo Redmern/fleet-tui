@@ -338,6 +338,20 @@ public static class EmbeddedWiring
         }
     }
 
+    public static bool Notices(string project, int open, bool bell)
+    {
+        try
+        {
+            _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
+            _ownFloat.NoticesAsync(project, open, bell).GetAwaiter().GetResult();
+            return true;
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return false;
+        }
+    }
+
     public static IReadOnlyList<(string Name, int Panes)> Sessions(
         IReadOnlyList<Workspace> workspaces, IReadOnlyList<Pane> panes) =>
         [

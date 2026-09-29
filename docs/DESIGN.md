@@ -3973,6 +3973,36 @@ started fleetd had.
   personal profile gave an Upskilling pane `.claude-rib`, a fleet pane
   `.claude-personal`, and a techweb pane no `CLAUDE_CONFIG_DIR` at all (work,
   the default).
+
+## Notifications, 2026-09-29
+
+A notice is an agent that wants the user: a question, a permission prompt, done
+and ready for review, failed or its pane gone, stalled (the spinner with no new
+output for 10 minutes), or branch trouble (`git merge-tree` finds conflicts
+with its base, or it is 20+ commits behind).
+
+- **The dashboard detects**, because it already reads every agent's pane text for
+  the activity column. `NoticeDetector` is pure: it turns what the dashboard saw
+  (`AgentWatch`) into notices. The base check runs in the background every 5
+  minutes per worktree. A pane counts as gone only after it was seen alive, so a
+  closed-and-not-reopened agent does not look crashed on startup.
+- **One file per project** in `<config>/notices/<project>.json`, written only
+  by that project's dashboard (the center writes dismissals). `NoticeSync.Apply`
+  keeps a notice's start while its cause lasts, resolves it when the cause goes,
+  and keeps resolved ones a day. A dismissed notice stays dismissed while its
+  cause lasts and comes back as new only once the cause recurs.
+- **Alerts fire on fresh notices only**, the open keys that were not open in the
+  stored file, so restarting a dashboard does not alert again. The dashboard shows
+  a toast (Windows: WinRT through `powershell.exe` under PowerShell's app id;
+  Linux: `notify-send`). Under fleetd it sends `notices` with its open count
+  and whether to ring; fleetd keeps the counts, draws `● here +elsewhere` after
+  the project pill (elsewhere counts only open workspaces), and sends a `bell`
+  host effect to every attached client, which writes BEL. Under WezTerm the
+  dashboard writes BEL itself.
+- **The center** (fleet menu > Notifications, or a click on the pill) reads every
+  project's file; bell and toast settings live in `_settings.json` beside them.
+- `●` has a disputed width, so the frame encoder repositions the cursor after it:
+  tests that read the client's byte stream cannot match `● 2` as one string.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

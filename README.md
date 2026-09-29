@@ -193,6 +193,32 @@ itself when done.
 - **main pane** jumps to the dashboard. This one never starts a fleet process.
 - **List agents** opens a list with **Open** and **Hidden** tabs, switched with
   `h`/`l` or the arrows; `enter` goes to the agent.
+- **Notifications** (`n`) opens the notification center: an **All** tab and one tab per
+  project. `enter` goes to the agent, `d` dismisses the selected notice, `D` all shown ones,
+  `b` turns the terminal bell on or off and `t` the desktop toasts.
+
+### Notifications
+
+Every project's dashboard has a **Notifications** tab next to Agents, Subs and Repositories.
+The dashboard watches its agents and opens a notice when one:
+
+| Mark | Reason |
+|---|---|
+| `?` | asks a question and waits for your answer |
+| `!` | waits on a permission prompt |
+| `✓` | is done and its work is ready for review |
+| `✗` | failed, or its pane disappeared |
+| `…` | shows the spinner with no new output for 10 minutes |
+| `↕` | has a branch that conflicts with its base or is 20+ commits behind it |
+
+A notice resolves on its own when its cause goes away, and `d` dismisses it; resolved and
+dismissed notices stay listed, greyed out, for a day. They are kept per project in
+`%APPDATA%\fleet\notices`.
+
+When a notice opens, fleet shows a desktop toast (on by default) and can ring the terminal
+bell (off by default); toggle both in the notification center. The embedded multiplexer's
+tab bar shows `● 2 +3`: two open notices in this project, three in other open projects.
+Click it to open the notification center.
 
 The dashboard keys act on whatever row is selected there, so they are not in this
 menu — a menu you can open from a claude pane cannot act on a selection you cannot

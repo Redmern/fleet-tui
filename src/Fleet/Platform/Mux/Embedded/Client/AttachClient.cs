@@ -157,6 +157,10 @@ public sealed class AttachClient(
                 write(Encoding.UTF8.GetBytes(HostEffectsOut.TitleSequence(title)));
                 break;
 
+            case HostEffects.Bell:
+                write("\a"u8.ToArray());
+                break;
+
             case HostEffects.OpenWindow when effect.Value is { } project:
                 log($"open {project} in a new window: {(openWindow?.Invoke(project) is true ? "opened" : "NOT opened")}");
                 break;

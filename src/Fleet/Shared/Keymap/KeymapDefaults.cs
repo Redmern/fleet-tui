@@ -44,6 +44,9 @@ public static class KeymapDefaults
             [FleetAction.OpenSettings] = "S",
             [FleetAction.EditAidlcMode] = "A",
             [FleetAction.EditClaudeProfile] = "C",
+            [FleetAction.Notifications] = "n",
+            [FleetAction.DismissNotice] = "d",
+            [FleetAction.DismissAllNotices] = "D",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -78,6 +81,9 @@ public static class KeymapDefaults
             FleetAction.OpenSettings => "settings",
             FleetAction.EditAidlcMode => "aidlc mode",
             FleetAction.EditClaudeProfile => "claude profile",
+            FleetAction.Notifications => "notifications",
+            FleetAction.DismissNotice => "dismiss",
+            FleetAction.DismissAllNotices => "dismiss all",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -121,6 +127,9 @@ public static class KeymapDefaults
             FleetAction.OpenSettings => "Settings",
             FleetAction.EditAidlcMode => "AIDLC mode",
             FleetAction.EditClaudeProfile => "Claude profile",
+            FleetAction.Notifications => "Notifications",
+            FleetAction.DismissNotice => "Dismiss a notification",
+            FleetAction.DismissAllNotices => "Dismiss all shown notifications",
             _ => action.ToString(),
         };
 }

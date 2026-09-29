@@ -31,6 +31,9 @@ public static class FleetActionIds
         FleetAction.OpenSettings => "settings-menu",
         FleetAction.EditAidlcMode => "aidlc-mode",
         FleetAction.EditClaudeProfile => "claude-profile",
+        FleetAction.Notifications => "notifications",
+        FleetAction.DismissNotice => "dismiss-notice",
+        FleetAction.DismissAllNotices => "dismiss-all-notices",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -60,6 +63,9 @@ public static class FleetActionIds
         "settings-menu" => FleetAction.OpenSettings,
         "aidlc-mode" => FleetAction.EditAidlcMode,
         "claude-profile" => FleetAction.EditClaudeProfile,
+        "notifications" => FleetAction.Notifications,
+        "dismiss-notice" => FleetAction.DismissNotice,
+        "dismiss-all-notices" => FleetAction.DismissAllNotices,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };

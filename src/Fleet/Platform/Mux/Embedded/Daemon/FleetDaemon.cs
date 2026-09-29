@@ -211,6 +211,17 @@ public sealed class FleetDaemon(DaemonOptions options)
                         }
 
                         break;
+                    case "notices":
+                        _model.SetNotices(request.Workspace ?? string.Empty, request.Count);
+                        if (request.Bell)
+                        {
+                            foreach (var session in _sessions.Values)
+                            {
+                                session.Pending.Enqueue(new HostEffect { Kind = HostEffects.Bell });
+                            }
+                        }
+
+                        break;
                     case "shutdown":
                         _stop.Cancel();
                         break;
@@ -505,6 +516,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                                  && mouse.X >= start && mouse.X < end)
                         {
                             redraw = _model.ToggleFloats(session.Client);
+                        }
+                        else if (_model.View(session.Client) is { } noticed
+                                 && Composer.NoticeSpan(noticed) is var (from, to)
+                                 && mouse.X >= from && mouse.X < to)
+                        {
+                            OpenMenu(session.Client, NoticesMenu);
+                            redraw = true;
                         }
 
                         break;
@@ -934,6 +952,8 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
     public const string MenuTitle = "fleet menu";
+
+    public const string NoticesMenu = "notifications";
 
     public const string NothingLeft = "no project left in this window";
 

@@ -9,6 +9,8 @@ using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
+using Fleet.Features.Notifications.ShowNotices;
+using Fleet.Features.Notifications.SyncNotices;
 using Fleet.Features.Projects.LocateProject;
 using Fleet.Features.Projects.LocateProject.Models;
 using Fleet.Features.Projects.OpenProject;
@@ -47,6 +49,7 @@ public static class MenuCommand
         FleetAction.SwitchProject,
         FleetAction.ListAgents,
         FleetAction.BrowseFiles,
+        FleetAction.Notifications,
         FleetAction.OpenSettings,
     ];
 
@@ -316,6 +319,19 @@ public static class MenuCommand
                     break;
                 }
 
+            case FleetAction.Notifications:
+                {
+                    var noticeMux = Adapters.Mux(Adapters.Log()).Driver;
+                    var notices = Adapters.Notices();
+                    ShowNoticesView.Show(
+                        app,
+                        keymap,
+                        notices,
+                        (project, keys) => notices.Save(project, NoticeSync.Dismiss(notices.Load(project), keys, DateTime.UtcNow)),
+                        notice => OpenNotice(noticeMux, projects.List(), notice));
+                    break;
+                }
+
             case FleetAction.EditClaudeProfile:
                 {
                     if (EmbeddedWiring.ClaudeProfiles(project.Root) is not var (byFolder, profiles))
@@ -455,6 +471,37 @@ public static class MenuCommand
         return 0;
     }
 
+
+    private static async Task<string?> OpenNotice(IMuxDriver mux, IReadOnlyList<Project> all, Ports.Notifications.Models.Notice notice)
+    {
+        if (all.FirstOrDefault(p => string.Equals(p.Name, notice.Project, StringComparison.OrdinalIgnoreCase)) is not { } owner)
+        {
+            return $"{notice.Project} is no longer a project";
+        }
+
+        var agent = new ListAgentsHandler(Adapters.Agents()).Handle(owner.Name)
+            .FirstOrDefault(a => PathKey.Same(a.Worktree, notice.Worktree));
+
+        if (agent is null)
+        {
+            return $"{notice.Agent} is gone";
+        }
+
+        if (SwitchProjectHandler.Applies(mux))
+        {
+            var located = await new LocateProjectHandler(mux).HandleAsync([owner]).ConfigureAwait(false);
+            if (Where(located, owner).Open)
+            {
+                await new SwitchProjectHandler(mux).HandleAsync(owner.Name).ConfigureAwait(false);
+            }
+        }
+
+        var opened = await new Features.Agents.OpenAgent.OpenAgentHandler(mux, Adapters.Agents())
+            .HandleAsync(owner.Name, agent, owner.Root)
+            .ConfigureAwait(false);
+
+        return opened.Succeeded ? null : opened.Error;
+    }
 
     private static bool SameProject(Project a, Project b) =>
         string.Equals(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
