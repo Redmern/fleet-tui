@@ -1170,7 +1170,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Forward(RemoteLink link, HostEffect effect)
     {
-        if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell or HostEffects.HandBack))
+        if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell or HostEffects.HandBack or HostEffects.OpenWindow))
         {
             return;
         }
@@ -1187,6 +1187,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                         OpenMenu(session.Client, HandedBack);
                     }
 
+                    continue;
+                }
+
+                if (effect.Kind == HostEffects.OpenWindow)
+                {
+                    session.Pending.Enqueue(new HostEffect { Kind = HostEffects.OpenRemote, Value = $"{link.Host}\n{effect.Value}" });
                     continue;
                 }
 
@@ -1954,23 +1960,23 @@ public sealed class FleetDaemon(DaemonOptions options)
                 SaveSession(persisted);
             }
 
-            foreach (var session in farewells)
-            {
-                try
-                {
-                    await session.Wire.SendAsync(MessageType.Bye, Encoding.UTF8.GetBytes(NothingLeft), ct).ConfigureAwait(false);
-                }
-                catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
-                {
-                }
-            }
-
             foreach (var (session, effect) in effects)
             {
                 try
                 {
                     await session.Wire.SendAsync(MessageType.HostEffect, effect, WireJsonContext.Default.HostEffect, ct)
                         .ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+                {
+                }
+            }
+
+            foreach (var session in farewells)
+            {
+                try
+                {
+                    await session.Wire.SendAsync(MessageType.Bye, Encoding.UTF8.GetBytes(NothingLeft), ct).ConfigureAwait(false);
                 }
                 catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
                 {

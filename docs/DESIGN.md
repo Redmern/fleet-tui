@@ -4104,6 +4104,24 @@ A session is a named set of projects for one window, kept in
   gone or a machine that cannot be reached is left out with a message.
 - The picker only shows its Projects/Sessions tabs once a session exists, so `h` and `l`
   stay available as project accelerators until then.
+## Remote machines, phase 3, 2026-09-30
+
+Phase 3 was "the menu and agents for a remote project". Most of it came with phase 2:
+the fleet menu (`ctrl+enter`) is forwarded, so in `@<machine>` it is the remote's menu
+for the remote project, and its List agents is that project's dashboard, opening
+agents on the remote. What was left were the places where the remote's menu reaches
+outside the view:
+
+- **The remote project quits.** The remote says goodbye to a client with no project
+  left; the link now ends the local view on that `Bye` (`RemoteLink.EndView`), which
+  closes `@<machine>` like any quit project, and gives the next `show-remote` a fresh
+  `RemotePty`. The link itself stays connected.
+- **"Open in a new window" on the remote.** The remote's `open-window` effect for the
+  link becomes an `open-remote` effect for the local windows showing it, so a new
+  local window attaches to that project over ssh.
+- **Effects before goodbyes.** fleetd sent a leaving client its `Bye` before the host
+  effects of the same frame, so a client moving its last project to a new window
+  quit before it could open the window. Effects now go first.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

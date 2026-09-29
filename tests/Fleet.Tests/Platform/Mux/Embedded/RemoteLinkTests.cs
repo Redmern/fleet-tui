@@ -261,6 +261,64 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         wire.Dispose();
     }
 
+    private async Task<(DaemonTests.TestClient Far, DaemonTests.TestClient Home, DaemonTests.TestClient Window, string Workspace)> ShowingHomelabAsync()
+    {
+        var far = await ClientAsync(_far, ClientRoles.Control);
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "homelab", Cwd = ".", Args = ["remote-claude"] })).Ok);
+
+        var home = await ClientAsync(_home, ClientRoles.Control);
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "local", Cwd = ".", Args = ["shell"] })).Ok);
+        var window = await ClientAsync(_home, ClientRoles.Attach, 80, 24, "local");
+        await window.WaitForFramesAsync(1);
+
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-connect", Host = "red@far" })).Ok);
+        await Eventually(async () => (await RemotesAsync()).SingleOrDefault() is { State: RemoteLink.Connected });
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "show-remote", Client = window.Id, Host = "red@far", Workspace = "homelab" })).Ok);
+
+        var workspace = FleetDaemon.RemoteWorkspace(Environment.MachineName);
+        await Eventually(async () => (await PanesAsync(home)).Any(p => p.Session == workspace));
+        return (far, home, window, workspace);
+    }
+
+    [Fact]
+    public async Task The_fleet_menu_in_a_remote_project_is_the_remotes_menu_for_that_project()
+    {
+        var (_, _, window, _) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu");
+
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", "homelab"])));
+        Assert.Null(_homePanes.ByProgram("fleet"));
+    }
+
+    [Fact]
+    public async Task Quitting_the_project_on_the_remote_closes_the_view_here_and_a_later_one_opens_again()
+    {
+        var (far, home, window, workspace) = await ShowingHomelabAsync();
+
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "close-workspace", Workspace = "homelab" })).Ok);
+        await Eventually(async () => (await PanesAsync(home)).All(p => p.Session != workspace));
+        Assert.Equal(RemoteLink.Connected, Assert.Single(await RemotesAsync()).State);
+
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "scraper", Cwd = ".", Args = ["scraper-claude"] })).Ok);
+        _farPanes.ByProgram("scraper-claude")!.Emit("SCRAPER-SCREEN");
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "show-remote", Client = window.Id, Host = "red@far", Workspace = "scraper" })).Ok);
+
+        await Eventually(async () => (await PanesAsync(home)).SingleOrDefault(p => p.Session == workspace) is { } pane
+            && (await home.RequestAsync(new ControlRequest { Op = "get-text", Pane = pane.Id })).Text?.Contains("SCRAPER-SCREEN", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public async Task A_remote_project_moved_to_a_new_window_opens_one_here_attached_to_it()
+    {
+        var (far, _, window, _) = await ShowingHomelabAsync();
+
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "open-window", Workspace = "homelab", Client = "c1" })).Ok);
+
+        await Eventually(() => Task.FromResult(window.Effects.Any(e => e.Kind == HostEffects.OpenRemote && e.Value == "red@far\nhomelab")));
+    }
+
     [Fact]
     public void A_remote_workspace_is_drawn_full_screen_and_never_saved_in_the_session()
     {

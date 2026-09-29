@@ -46,7 +46,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public string Token { get; } = Guid.NewGuid().ToString("N");
 
-    public RemotePty Pty { get; } = new();
+    public RemotePty Pty { get; private set; } = new();
 
     public event Action<HostEffect>? Effect;
 
@@ -177,6 +177,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
             _wire = wire;
             var reader = Task.Run(() => ReadLoopAsync(wire), CancellationToken.None);
             Pty.Resized += Resize;
+            _running = true;
 
             var status = await RequestAsync(new ControlRequest { Op = "status" }, ct).ConfigureAwait(false);
             lock (_gate)
@@ -222,6 +223,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
         }
         finally
         {
+            _running = false;
             Pty.Resized -= Resize;
             _wire = null;
             Pty.Exit();
@@ -232,6 +234,25 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 waiting.TrySetException(new IOException("the remote went away"));
             }
         }
+    }
+
+    private volatile bool _running;
+
+    private void EndView()
+    {
+        var ended = Pty;
+        var fresh = new RemotePty();
+        ended.Resized -= Resize;
+
+        if (_running)
+        {
+            fresh.Resized += Resize;
+        }
+
+        Pty = fresh;
+        Showing = null;
+        ended.Exit();
+        log($"remote {host}: the remote closed its last project in this view");
     }
 
     private void Resize(int cols, int rows) =>
@@ -277,6 +298,9 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                         break;
                     case MessageType.HostEffect:
                         Effect?.Invoke(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect));
+                        break;
+                    case MessageType.Bye:
+                        EndView();
                         break;
                 }
             }
