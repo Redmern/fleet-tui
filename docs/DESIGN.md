@@ -3369,14 +3369,24 @@ Studio installer folder put on `PATH` for NativeAOT's `vswhere`.
 |---|---|
 | `scripts\embedded.ps1` | pick a project; fleetd starts and this terminal attaches |
 | `scripts\embedded.ps1 -Project <p>` | attach straight to a project |
-| `scripts\embedded.ps1 attach` | reattach after `ctrl+b q` |
-| `scripts\embedded.ps1 build` | stop this build's fleetd and rebuild |
-| `scripts\embedded.ps1 stop` | stop this build's fleetd (matched by path, so an installed fleet is left alone) |
-| `scripts\embedded.ps1 status` | binary age against the last code commit, and whether fleetd runs |
+| `scripts\embedded.ps1 attach` | reattach after a detach |
+| `scripts\embedded.ps1 build` | build a new copy next to the running one; fleetd keeps running |
+| `scripts\embedded.ps1 restart` | stop fleetd and attach with the newest build |
+| `scripts\embedded.ps1 stop` | stop fleetd and its clients (matched by path, so an installed fleet is left alone) |
+| `scripts\embedded.ps1 status` | the newest build against the last code commit, and which build each running fleet uses |
 
 `-Isolated` uses a separate config under `artifacts\embedded-config`, so no
 real projects are touched. The script restores `FLEET_MUX` and
 `FLEET_CONFIG_HOME` in the calling session when it returns.
+
+**Side-by-side builds (2026-09-29).** Windows locks a running exe, so the
+first version stopped fleetd before every build, which closed the session and
+every agent pane in it. Each build now goes into its own folder,
+`artifacts\embedded\<rid>\<yyyyMMdd-HHmmss>`, and a `current` file names the
+newest. `attach` and `run` start the newest; a running fleetd keeps the build
+it started from until `restart`. Builds that no process runs are pruned,
+keeping the three newest. The old `artifacts\publish\<rid>\fleet.exe` is still
+used (and recognised as running) until the first new-style build.
 ## Keys, which-key, the tab bar and dashboard menus, 2026-09-29
 
 After merging `main` (orchestrators' Claude inside nvim, `update <version>`,
