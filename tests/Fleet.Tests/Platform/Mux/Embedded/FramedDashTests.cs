@@ -69,12 +69,36 @@ public sealed class FramedDashTests
     }
 
     [Fact]
-    public void The_line_under_the_tab_bar_is_empty_and_not_clickable()
+    public void After_a_glyph_terminals_measure_differently_the_next_cell_is_placed_explicitly()
+    {
+        var frame = new ClientFrame(6, 2);
+        var row = "abc";
+        for (var x = 0; x < row.Length; x++)
+        {
+            frame.Cells[x] = Cell.Of(row[x], Composer.DividerFg);
+        }
+
+        for (var x = 0; x < 4; x++)
+        {
+            frame.Cells[6 + x] = Cell.Of("abcd"[x], Composer.DividerFg);
+        }
+
+        var encoded = FrameEncoder.Encode(null, frame);
+
+        Assert.Contains("\e[1;3Hb", encoded, StringComparison.Ordinal);
+        Assert.Contains("abcd", encoded, StringComparison.Ordinal);
+        Assert.True(FrameEncoder.WidthIsDisputed(""));
+        Assert.True(FrameEncoder.WidthIsDisputed("😀"));
+        Assert.False(FrameEncoder.WidthIsDisputed("│"));
+        Assert.False(FrameEncoder.WidthIsDisputed("a"));
+    }
+
+    [Fact]
+    public void The_frame_starts_right_under_the_tab_bar()
     {
         var (_, _, client) = Dash();
 
         Assert.Equal(MouseHitKind.StatusBar, _model.Hit(client.Id, 3, 0).Kind);
-        Assert.Equal(MouseHitKind.None, _model.Hit(client.Id, 3, MuxModel.BarRows).Kind);
-        Assert.Equal(MuxModel.BarRows + 1, MuxModel.Content(60, 20).Y);
+        Assert.Equal(MuxModel.StatusRows, _model.View(client.Id)!.Frame!.Value.Y);
     }
 }

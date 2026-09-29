@@ -48,7 +48,7 @@ public static class FrameEncoder
                 }
 
                 output.Append(cell.Text.Length == 0 || cell.Text == "\0" ? " " : cell.Text);
-                cursorX = x + (cell.Wide ? 2 : 1);
+                cursorX = cell.Wide || WidthIsDisputed(cell.Text) ? -1 : x + 1;
 
                 if (cell.Wide)
                 {
@@ -67,6 +67,17 @@ public static class FrameEncoder
 
         output.Append("\e[?2026l");
         return output.ToString();
+    }
+
+    public static bool WidthIsDisputed(string text)
+    {
+        if (text.Length == 0 || !char.IsSurrogate(text[0]) && text[0] < 0xE000)
+        {
+            return false;
+        }
+
+        var rune = System.Text.Rune.GetRuneAt(text, 0).Value;
+        return rune is >= 0xE000 and <= 0xF8FF or >= 0x1F000 or >= 0xF0000;
     }
 
     private static void Sgr(StringBuilder output, Cell cell)
