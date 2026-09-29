@@ -3880,13 +3880,31 @@ border. It is now one window:
 - **The dashboard draws no border of its own there:** fleetd sets
   `FLEET_FRAMED=1` for dashboard panes, and `FleetTheme.Screen` then uses no
   border. Its dialogs keep theirs.
-- **A blank line under the tab bar:** `StatusRows` is the bar (`BarRows`)
-  plus one empty row. A click on that row hits nothing.
 - WezTerm can't draw across panes, so WezTerm mode is unchanged.
 - **Verified with the real binary** through `fleet attach`: the frame and
-  title, the ┬ join, the dashboard without its own border inside it, and the
-  empty row under the bar. `FramedDashTests` cover the layout, the joins and
-  the focus colour.
+  title, the ┬ join, and the dashboard without its own border inside it.
+  `FramedDashTests` cover the layout, the joins and the focus colour.
+- A blank line under the tab bar was tried and then taken out again at the
+  user's request; content starts right under the bar.
+
+### Glyphs whose width terminals disagree on
+
+The dashboard's empty-list hint looked two columns short. That row starts and
+ends with the pill caps, U+E0B6 and U+E0B4 (Nerd Font glyphs in the Private
+Use Area):
+
+- Terminal.Gui and fleetd's emulator both count them as 1 column (measured:
+  in a pane, `a`, the cap, `b`, then a move to column 4 and `X` leaves
+  `a·bX`, while 中 is 2).
+- The terminal the client runs in may count them as 2. On Windows its ConPTY
+  layer did, which pushed the rest of each such row out of place.
+
+fleet can't choose how a host terminal measures a glyph. So `FrameEncoder` no
+longer lets the host's cursor advance decide where the next cell goes after
+such a glyph: after a wide cell, a Private Use glyph, or an emoji
+(`WidthIsDisputed`), it positions the next cell explicitly. A terminal that
+draws the glyph wider only affects that glyph, and never the rest of the row.
+Plain text and box drawing are still written as one run.
 
 ## Claude profiles per project, 2026-09-29
 

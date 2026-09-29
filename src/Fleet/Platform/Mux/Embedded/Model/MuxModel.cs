@@ -5,9 +5,7 @@ namespace Fleet.Platform.Mux.Embedded.Model;
 
 public sealed class MuxModel
 {
-    public const int BarRows = 1;
-
-    public const int StatusRows = BarRows + 1;
+    public const int StatusRows = 1;
 
     public const string OverlayWorkspace = "fleet~overlay";
 
@@ -463,14 +461,9 @@ public sealed class MuxModel
                 : MouseHit.Nothing;
         }
 
-        if (y < BarRows)
-        {
-            return new MouseHit(MouseHitKind.StatusBar, null, x, y);
-        }
-
         if (y < StatusRows)
         {
-            return MouseHit.Nothing;
+            return new MouseHit(MouseHitKind.StatusBar, null, x, y);
         }
 
         for (var i = view.FloatingPanes.Count - 1; i >= 0; i--)
