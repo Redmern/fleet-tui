@@ -936,6 +936,8 @@ public sealed class DaemonTests : IAsyncLifetime
         var client = await AttachAsync(workspace: "fleet");
         await client.WaitForAsync("FLEET-SCREEN");
         await client.SendCommandAsync("show", "techweb");
+        await Eventually(async () => (await control.RequestAsync(new ControlRequest { Op = "list-workspaces", Client = client.Id }))
+            .Workspaces!.SingleOrDefault(w => w.ShownHere)?.Name == "techweb");
 
         var opened = await control.RequestAsync(new ControlRequest { Op = "open-window", Workspace = "techweb", Client = client.Id });
 
