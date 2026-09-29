@@ -30,6 +30,7 @@ public static class HelpCommand
               fleet attach [--project <p>] attach this terminal to fleetd (a picker when it runs several projects)
               fleet attach --ssh <host>   attach to fleetd on another machine over ssh
               fleet daemon                run fleetd in the foreground
+              fleet daemon stop           save the session and stop fleetd (its panes close; attach restores them)
               fleet bridge                ssh's remote end: pipe stdio to the local fleetd
               prefix is ctrl+s (FLEET_PREFIX; keys in <fleet config>\embedded-keys.json), and it shows
               the keys: h/j/k/l focus, arrows resize, % " split, c new tab, n/p/1-9 tabs, z zoom,

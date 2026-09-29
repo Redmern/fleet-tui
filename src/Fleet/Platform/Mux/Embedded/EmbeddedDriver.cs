@@ -181,6 +181,9 @@ public sealed class EmbeddedDriver(
     public Task CloseWorkspaceAsync(string name, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "close-workspace", Workspace = name }, ct);
 
+    public Task ShutdownAsync(CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "shutdown" }, ct);
+
     public Task NoticesAsync(string workspace, int open, bool bell, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "notices", Workspace = workspace, Count = open, Bell = bell }, ct);
 

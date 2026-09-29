@@ -283,6 +283,55 @@ public static class EmbeddedWiring
         return code;
     }
 
+    public static async Task<int> StopDaemonAsync()
+    {
+        using var driver = new EmbeddedDriver(Endpoint.Default());
+        int pid;
+
+        try
+        {
+            pid = (await driver.StatusAsync().ConfigureAwait(false))?.Pid ?? 0;
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            await Console.Out.WriteLineAsync("fleetd is not running").ConfigureAwait(false);
+            return 0;
+        }
+
+        using var asked = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        try
+        {
+            await driver.ShutdownAsync(asked.Token).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is Ports.Mux.Exceptions.MuxUnavailableException or OperationCanceledException)
+        {
+        }
+
+        if (pid > 0 && !Exited(pid, TimeSpan.FromSeconds(10)))
+        {
+            await Console.Error.WriteLineAsync($"fleet: fleetd (pid {pid}) is still running; stop it with Stop-Process -Id {pid}")
+                .ConfigureAwait(false);
+            return 1;
+        }
+
+        await Console.Out.WriteLineAsync($"fleetd (pid {pid}) stopped and its panes closed; fleet attach starts a new one and restores the session")
+            .ConfigureAwait(false);
+        return 0;
+    }
+
+    private static bool Exited(int pid, TimeSpan within)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return process.WaitForExit(within);
+        }
+        catch (ArgumentException)
+        {
+            return true;
+        }
+    }
+
     public static async Task<int> CliAsync(IReadOnlyList<string> args)
     {
         if (args is not ["activate-pane-direction", var direction, ..])

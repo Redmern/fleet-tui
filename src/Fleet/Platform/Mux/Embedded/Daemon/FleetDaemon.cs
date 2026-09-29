@@ -223,6 +223,11 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                         break;
                     case "shutdown":
+                        if (options.SessionFile is not null)
+                        {
+                            SaveSession(SessionJson());
+                        }
+
                         _stop.Cancel();
                         break;
                     default:

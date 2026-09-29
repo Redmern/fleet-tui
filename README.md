@@ -139,7 +139,13 @@ fleet report --caller <slug> --status <s> --project <name> -- <summary>
 fleet doctor                check the environment
 fleet version               show the version, and check for an update
 fleet update                download and install the latest release
+fleet attach                attach this terminal to fleetd, starting it if needed
+fleet daemon stop           save fleetd's session and stop it; the next attach restores it
 ```
+
+After `fleet update`, a running fleetd keeps the old binary. `fleet daemon stop` then
+`fleet attach` moves it onto the new one. Stopping closes every pane, so any agent
+in the middle of a task is interrupted.
 
 `fleet doctor` is the end-to-end smoke test: it reports the config directory, the
 selected multiplexer driver and whether it responds, the git version, every saved
@@ -217,7 +223,8 @@ dismissed notices stay listed, greyed out, for a day. They are kept per project 
 
 When a notice opens, fleet shows a desktop toast (on by default) and can ring the terminal
 bell (off by default); toggle both in the notification center. The embedded multiplexer's
-tab bar adds the counts to the project pill, `fleet ● 2 +3`: two open notices in this project,three in other open projects; the pill turns yellow while this project has any.
+tab bar adds the counts to the project pill, `fleet ● 2 +3`: two open notices in this project,
+three in other open projects.
 Click it to open the notification center.
 
 The dashboard keys act on whatever row is selected there, so they are not in this

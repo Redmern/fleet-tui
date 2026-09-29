@@ -240,6 +240,46 @@ public sealed class SessionRestoreTests
         }
     }
 
+    [Fact]
+    public async Task Shutdown_saves_the_session_before_the_daemon_exits()
+    {
+        var dir = Directory.CreateTempSubdirectory("fleet-shutdown-").FullName;
+        var file = Path.Combine(dir, "embedded-session.json");
+        var name = $"fleet-test-{Guid.NewGuid():N}"[..20];
+        var endpoint = new Endpoint(OperatingSystem.IsWindows() ? name : Path.Combine(Path.GetTempPath(), name + ".sock"));
+        var panes = new FakePanes();
+        var daemon = new FleetDaemon(new DaemonOptions
+        {
+            Endpoint = endpoint,
+            Pty = panes.NewPty,
+            Terminal = panes.NewTerminal,
+            FleetExecutable = "fleet",
+            SessionFile = file,
+            SaveEvery = TimeSpan.FromHours(1),
+        });
+
+        try
+        {
+            var running = daemon.RunAsync();
+            await using (var control = await DaemonTests.TestClient.ConnectAsync(endpoint, ClientRoles.Control, 0, 0, null))
+            {
+                Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "techweb", Cwd = dir, Args = ["claude"] })).Ok);
+
+                // The first render tick may save; the shutdown must save what came after it.
+                await Task.Delay(300);
+                Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "api", Cwd = dir, Args = ["claude"] })).Ok);
+                _ = control.RequestAsync(new ControlRequest { Op = "shutdown" });
+                await running.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+
+            Assert.Contains("\"api\"", Saved(file), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private static async Task RunDaemonAsync(FakePanes panes, string file, Func<DaemonTests.TestClient, Task> body)
     {
         var name = $"fleet-test-{Guid.NewGuid():N}"[..20];
