@@ -94,6 +94,8 @@ public sealed class AccountProfiles(string? defaultName, IReadOnlyList<AccountPr
 
     private static string Expand(string path) =>
         (path.StartsWith('~')
-            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + path[1..]
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                path[1..].TrimStart('\\', '/').Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar))
             : path).TrimEnd('\\', '/');
 }
