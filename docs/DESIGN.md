@@ -3635,7 +3635,8 @@ and on a loaded machine those land in separate frames. So the menu showed a
 partial draw and corrected it a moment later.
 
 - A hidden float is now revealed only once its pane has also been quiet for
-  `RevealWhenQuiet` (60 ms). Every pass and the title have landed by then,
+  `RevealWhenQuiet` (a daemon option, 60 ms; the daemon tests use 400 ms so a
+  slow CI runner cannot pace the test out of the window). Every pass and the title have landed by then,
   so the first frame shown is the finished one.
 - While a float waits to be revealed, the render loop wakes every 15 ms
   instead of 250 ms, so the wait adds about the quiet window and no more.

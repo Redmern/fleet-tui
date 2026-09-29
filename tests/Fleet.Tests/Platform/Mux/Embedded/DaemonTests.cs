@@ -33,6 +33,7 @@ public sealed class DaemonTests : IAsyncLifetime
             Pty = _panes.NewPty,
             Terminal = _panes.NewTerminal,
             FleetExecutable = "fleet",
+            RevealWhenQuiet = TimeSpan.FromMilliseconds(400),
         });
         _running = _daemon.RunAsync(_stop.Token);
         return Task.CompletedTask;

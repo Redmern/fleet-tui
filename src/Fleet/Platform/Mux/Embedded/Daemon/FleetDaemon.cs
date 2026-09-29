@@ -29,6 +29,8 @@ public sealed class DaemonOptions
     public string? SessionFile { get; init; }
 
     public TimeSpan SaveEvery { get; init; } = TimeSpan.FromSeconds(1);
+
+    public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -893,8 +895,6 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public static readonly TimeSpan RevealAfterFit = TimeSpan.FromMilliseconds(1200);
 
-    public static readonly TimeSpan RevealWhenQuiet = TimeSpan.FromMilliseconds(60);
-
     private volatile bool _revealing;
 
     private (int Cols, int Rows)? _menuFit;
@@ -971,7 +971,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         && runtime.Outputs > box.RevealAfterOutput
                         && HasContent(runtime.Screen)
                         && (box.Baseline is null || Signature(runtime.Screen) != box.Baseline)
-                        && Environment.TickCount64 - runtime.LastOutputAt >= RevealWhenQuiet.TotalMilliseconds;
+                        && Environment.TickCount64 - runtime.LastOutputAt >= options.RevealWhenQuiet.TotalMilliseconds;
 
             if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
             {
