@@ -12,15 +12,17 @@ public sealed class NoticeTests : ConfigHomeFixture
 {
     private static readonly DateTime T0 = new(2026, 9, 29, 12, 0, 0, DateTimeKind.Utc);
 
+    private static readonly string Work = OperatingSystem.IsWindows() ? "C:/work" : "/work";
+
     private static AgentRecord Agent(string branch = "feat-x", string status = "", bool open = true) =>
-        new($"C:/work/{branch}", "api", branch, "claude", "origin/main", false, Open: open, Status: status);
+        new($"{Work}/{branch}", "api", branch, "claude", "origin/main", false, Open: open, Status: status);
 
     private static AgentWatch Watch(
         AgentRecord agent, string text = "", bool alive = true, int unchangedMinutes = 0, int behind = 0, bool conflicts = false, bool lost = false) =>
         new(agent, alive, text, TimeSpan.FromMinutes(unchangedMinutes), behind, conflicts, lost);
 
     private static Notice Found(NoticeKind kind, string branch = "feat-x") =>
-        new("alpha", kind, $"C:/work/{branch}", $"api / {branch}", "m", T0);
+        new("alpha", kind, $"{Work}/{branch}", $"api / {branch}", "m", T0);
 
     [Fact]
     public void Each_reason_is_detected_from_what_the_dashboard_sees()
