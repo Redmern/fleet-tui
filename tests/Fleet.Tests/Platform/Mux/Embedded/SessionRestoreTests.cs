@@ -171,7 +171,7 @@ public sealed class SessionRestoreTests
                 });
                 Assert.True(split.Ok, split.Error);
 
-                await WaitForAsync(() => File.Exists(file) && File.ReadAllText(file).Contains("dash", StringComparison.Ordinal));
+                await WaitForAsync(() => Saved(file).Contains("dash", StringComparison.Ordinal));
             });
 
             Assert.True(File.Exists(file));
@@ -223,6 +223,19 @@ public sealed class SessionRestoreTests
 
         await stop.CancelAsync();
         await running;
+    }
+
+    // The daemon replaces the file with a move, so a read can meet it mid-swap on Windows.
+    private static string Saved(string file)
+    {
+        try
+        {
+            return File.Exists(file) ? File.ReadAllText(file) : string.Empty;
+        }
+        catch (IOException)
+        {
+            return string.Empty;
+        }
     }
 
     private static async Task WaitForAsync(Func<bool> condition)
