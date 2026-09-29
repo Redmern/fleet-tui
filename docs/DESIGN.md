@@ -169,10 +169,22 @@ FLEET_MUX set          -> that                     (override)
 TMUX set               -> tmux                     (adopt)
 WEZTERM_PANE set       -> wezterm                  (adopt)
 otherwise:                                         (launch)
-    wezterm present AND GUI reachable  -> wezterm  (base)
+    this build has libghostty-vt       -> embedded (base, since 0.6.0)
+    wezterm present AND GUI reachable  -> wezterm
     tmux present                       -> tmux     (fallback)
     otherwise                          -> embedded (last resort)
 ```
+
+**2026-09-29: embedded became the base for a plain terminal.** Running `fleet`
+in a plain PowerShell or shell now opens the project right there, under
+fleetd, instead of handing it to a WezTerm window. Adopting is unchanged:
+inside WezTerm (the keybindings spawn fleet in a WezTerm tab, so they stay on
+WezTerm) or tmux, fleet uses that multiplexer. `FLEET_MUX=wezterm` sends a
+plain terminal to WezTerm as before. *This build has libghostty-vt* is
+`GhosttyNative.Available()`, so a build without it falls through to the old
+order. One consequence: a Claude session started by hand in a plain terminal,
+with fleet's MCP server, now opens agents in fleetd (see them with
+`fleet attach`) rather than in WezTerm.
 
 *GUI reachable* — Linux: `DISPLAY` or `WAYLAND_DISPLAY` set. Windows:
 `SSH_CONNECTION` unset.

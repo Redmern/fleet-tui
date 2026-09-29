@@ -1,4 +1,5 @@
 using Fleet.Platform.Mux.Constants;
+using Fleet.Platform.Mux.Embedded.Native;
 
 namespace Fleet.Platform.Mux.Models;
 
@@ -14,8 +15,11 @@ public sealed record MuxEnvironment
 
     public IReadOnlySet<string> Installed { get; init; } = new HashSet<string>();
 
+    public bool EmbeddedReady { get; init; }
+
     public static MuxEnvironment Current(Func<string, bool> isInstalled) => new()
     {
+        EmbeddedReady = GhosttyNative.Available(),
         Override = Environment.GetEnvironmentVariable("FLEET_MUX"),
         InsideTmux = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TMUX")),
         InsideWezTerm = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEZTERM_PANE")),

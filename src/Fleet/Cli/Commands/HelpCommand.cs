@@ -26,7 +26,7 @@ public static class HelpCommand
               fleet update --version <v>  the same, as a flag (-v)
               fleet update --list         list every published release (-l)
 
-            embedded multiplexer (FLEET_MUX=embedded, or no wezterm/tmux):
+            embedded multiplexer (the default outside wezterm and tmux; FLEET_MUX=wezterm opts out):
               fleet attach [--project <p>] attach this terminal to fleetd (a picker when it runs several projects)
               fleet attach --ssh <host>   attach to fleetd on another machine over ssh
               fleet daemon                run fleetd in the foreground
