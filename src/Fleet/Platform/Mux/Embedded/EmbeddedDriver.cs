@@ -194,6 +194,9 @@ public sealed class EmbeddedDriver(
     public Task DisconnectRemoteAsync(string host, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "remote-disconnect", Host = host }, ct);
 
+    public async Task<IReadOnlyList<WindowEntryDto>> WindowAsync(CancellationToken ct = default) =>
+        (await RequestAsync(new ControlRequest { Op = "window", Client = CurrentClient }, ct).ConfigureAwait(false)).Window ?? [];
+
     public async Task<bool> HandBackAsync(string action, CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "hand-back", Text = action, Client = CurrentClient }, ct).ConfigureAwait(false)).Pending;
 

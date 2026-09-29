@@ -1,5 +1,6 @@
 using Fleet.Features.Projects.PickProject.Models;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Sessions.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -18,20 +19,52 @@ public static class PickProjectView
     {
         ProjectPick? chosen = null;
         IReadOnlyList<ProjectChoice> entries = picker.Entries();
-        var reserved = Reserved(keymap);
+        IReadOnlyList<WindowSession> sessions = callbacks.Sessions?.Invoke() ?? [];
+        var tabbed = callbacks.Sessions is not null && sessions.Count > 0;
+        var onSessions = false;
+        var reserved = Reserved(keymap, tabbed);
         var accelerators = Accelerators(entries, reserved);
+        var sessionKeys = PickerKeys.For([.. sessions.Select(s => s.Name)], reserved);
         var prefix = new PrefixRecognizer(keymap);
         var openKey = keymap.KeyFor(FleetAction.OpenProject);
 
         var window = FleetTheme.Screen("fleet — open a project");
 
-        var header = FleetTheme.SectionHeader(1, 0, "Projects");
+        var tabBar = tabbed ? FleetTheme.TabBar(1, 0, [ProjectsTab, SessionsTab]) : null;
+        View header = tabBar is not null ? tabBar.Root : FleetTheme.SectionHeader(1, 0, ProjectsTab);
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
 
         void Refill(int selected)
         {
             accelerators = Accelerators(entries, reserved);
-            FleetRows.Fill(list, Rows(entries, accelerators), selected);
+            sessionKeys = PickerKeys.For([.. sessions.Select(s => s.Name)], reserved);
+            FleetRows.Fill(
+                list,
+                onSessions ? SessionRows(sessions, sessionKeys) : Rows(entries, accelerators),
+                selected);
+        }
+
+        void ShowTab(bool sessionsTab)
+        {
+            if (!tabbed || sessionsTab == onSessions)
+            {
+                return;
+            }
+
+            onSessions = sessionsTab;
+            tabBar!.Select(onSessions ? 1 : 0);
+            Refill(0);
+        }
+
+        void OpenSession(int index)
+        {
+            if (index < 0 || index >= sessions.Count)
+            {
+                return;
+            }
+
+            chosen = new ProjectPick(null, NewWindow: false, sessions[index]);
+            app.RequestStop(window);
         }
 
         Refill(0);
@@ -55,6 +88,18 @@ public static class PickProjectView
         void DropProject()
         {
             var index = FleetRows.Selected(list);
+
+            if (onSessions)
+            {
+                if (index >= 0 && index < sessions.Count && callbacks.RemoveSession is { } removeSession)
+                {
+                    status.Text = removeSession(sessions[index]) ?? string.Empty;
+                    sessions = callbacks.Sessions?.Invoke() ?? [];
+                    Refill(Math.Max(0, index - 1));
+                }
+
+                return;
+            }
 
             if (index < 0 || index >= entries.Count || entries[index].IsNew)
             {
@@ -85,7 +130,16 @@ public static class PickProjectView
             app.RequestStop(window);
         }
 
-        void Accept(bool newWindow = false) => OpenAt(FleetRows.Selected(list), newWindow);
+        void Accept(bool newWindow = false)
+        {
+            if (onSessions)
+            {
+                OpenSession(FleetRows.Selected(list));
+                return;
+            }
+
+            OpenAt(FleetRows.Selected(list), newWindow);
+        }
 
         void Dispatch(FleetAction action)
         {
@@ -164,7 +218,28 @@ public static class PickProjectView
                 return;
             }
 
-            for (var i = 0; i < accelerators.Length; i++)
+            if (tabbed && (key == Key.CursorLeft || key == Key.CursorRight
+                           || key == keymap.KeyFor(FleetAction.PrevTab) || key == keymap.KeyFor(FleetAction.NextTab)))
+            {
+                ShowTab(!onSessions);
+                key.Handled = true;
+                return;
+            }
+
+            if (onSessions)
+            {
+                for (var i = 0; i < sessionKeys.Count; i++)
+                {
+                    if (sessionKeys[i].Length == 1 && key == new Key(sessionKeys[i]))
+                    {
+                        OpenSession(i);
+                        key.Handled = true;
+                        return;
+                    }
+                }
+            }
+
+            for (var i = 0; i < accelerators.Length && !onSessions; i++)
             {
                 if (accelerators[i].Length != 1)
                 {
@@ -212,6 +287,11 @@ public static class PickProjectView
             ($"{keymap.DisplayFor(FleetAction.Close)}/esc", "quit", () => app.RequestStop(window)),
         ]);
 
+        if (tabBar is not null)
+        {
+            tabBar.Chosen += index => ShowTab(index == 1);
+        }
+
         window.Add(header, list, status, bar.Root);
 
         try
@@ -228,11 +308,31 @@ public static class PickProjectView
         return chosen;
     }
 
-    private static IReadOnlySet<char> Reserved(Keymap keymap)
+    public const string ProjectsTab = "Projects";
+
+    public const string SessionsTab = "Sessions";
+
+    private static IReadOnlyList<FleetRow> SessionRows(IReadOnlyList<WindowSession> sessions, IReadOnlyList<string> keys)
+    {
+        var nameWidth = sessions.Max(s => s.Name.Length);
+
+        return
+        [
+            .. sessions.Select((s, i) => new FleetRow(
+                [
+                    new FleetSpan(keys[i].Length == 0 ? "   " : $"{keys[i]}  ", FleetTones.Key),
+                    FleetSpan.Plain(s.Name.PadRight(nameWidth)),
+                ],
+                [FleetSpan.Muted($"{string.Join(", ", s.Projects.Select(p => p.Host is null ? p.Name : $"{p.Name} @{p.Host}"))} ")])),
+        ];
+    }
+
+    private static IReadOnlySet<char> Reserved(Keymap keymap, bool tabbed)
     {
         var reserved = new HashSet<char>();
 
-        foreach (var action in new[]
+        foreach (var action in (FleetAction[])[.. tabbed ? [FleetAction.PrevTab, FleetAction.NextTab] : Array.Empty<FleetAction>(),
+        ..new[]
         {
             FleetAction.MoveDown,
             FleetAction.MoveUp,
@@ -243,7 +343,7 @@ public static class PickProjectView
             FleetAction.RemoveProject,
             FleetAction.Close,
             FleetAction.EditKeybinds,
-        })
+        }])
         {
             var text = keymap.TextFor(action);
 

@@ -96,6 +96,8 @@ public static class Adapters
 
     public static Ports.Notifications.INoticeStore Notices() => new JsonNoticeStore();
 
+    public static Ports.Sessions.ISessionStore Sessions() => new JsonSessionStore();
+
     public static Ports.Remotes.IRemoteMachines Remotes() =>
         new Platform.Mux.Embedded.EmbeddedRemotes(() => new Platform.Mux.Embedded.EmbeddedDriver(Platform.Mux.Embedded.Daemon.Endpoint.Default()));
 

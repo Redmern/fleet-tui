@@ -224,7 +224,19 @@ reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode a
 fleet menu (`ctrl+enter`) all act on the remote. Switch project always opens this machine's
 switcher, from `ctrl+s s` or from the remote's menu, so you can always get back to a project
 here. One window at a time follows a given remote machine;
-disconnecting it closes its view here and leaves its panes running there.### Notifications
+disconnecting it closes its view here and leaves its panes running there.### Sessions
+
+A session is a saved set of projects for one window. **Save window as session** (`w` in
+the fleet menu) stores the window's projects in their order, which one was showing, and
+for a remote project the machine it runs on; saving under an existing name updates it.
+
+Running plain `fleet` in a terminal then shows **Projects** and **Sessions** tabs (`h`/`l`
+or the arrows; the tabs appear once a session exists). Opening a session starts its
+projects if they are not running, reconnects its remote machines (asking for a password
+if ssh needs one), and opens one window holding exactly those projects. `d` removes a
+session; the projects themselves stay. Sessions are opened from the picker only, not
+from inside fleet.
+### Notifications
 
 Every project's dashboard has a **Notifications** tab next to Agents, Subs and Repositories.
 The dashboard watches its agents and opens a notice when one:

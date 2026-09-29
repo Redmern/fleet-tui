@@ -42,6 +42,7 @@ public enum FleetAction
     EditClaudeProfile,
     Notifications,
     Remotes,
+    SaveSession,
     DismissNotice,
     DismissAllNotices,
 }

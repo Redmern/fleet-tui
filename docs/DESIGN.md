@@ -4087,6 +4087,23 @@ leave the remote's layout code alone:
   restores from the file written every second.
 - **The dashboard re-tells its count** every 30 s, so a fresh fleetd learns the
   counts without waiting for one to change.
+## Sessions, 2026-09-29
+
+A session is a named set of projects for one window, kept in
+`<config>/window-sessions/<name>.json` (`sessions/` already holds the agent store).
+
+- **Saving** asks fleetd `window` for the client's projects in window order
+  (`ClientState.Projects` plus `Showing`); an `@<machine>` workspace is reported as the
+  remote project its link is showing (`RemoteLink.Showing`) with the machine's ssh host.
+- **Opening** happens only in the plain `fleet` picker, outside any client: it opens the
+  local projects that are not running, starts fleetd if needed, reconnects each remote
+  machine in a small window that can ask ssh's questions (`ManageRemotesView.ConnectAll`),
+  and attaches with the session in the Hello (`window`, `showing`). fleetd furnishes the
+  new client before its first frame (`Furnish`): each local project joins the window, each
+  remote one goes through `show-remote`, and the saved project is shown. A project that is
+  gone or a machine that cannot be reached is left out with a message.
+- The picker only shows its Projects/Sessions tabs once a session exists, so `h` and `l`
+  stay available as project accelerators until then.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

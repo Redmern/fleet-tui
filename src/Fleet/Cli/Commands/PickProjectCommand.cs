@@ -11,6 +11,8 @@ using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.RemoveProject;
 using Fleet.Features.Projects.LocateProject;
 using Fleet.Features.Projects.SwitchProject;
+using Fleet.Features.Remotes.ManageRemotes;
+using Fleet.Ports.Sessions.Models;
 using Fleet.Ports;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects.Models;
@@ -51,7 +53,12 @@ public static class PickProjectCommand
             return 0;
         }
 
-        var chosen = picked.Project;
+        if (picked.Session is { } session)
+        {
+            return await OpenSessionAsync(mux.Driver, session, log).ConfigureAwait(false);
+        }
+
+        var chosen = picked.Project!;
 
         if (SwitchProjectHandler.Applies(mux.Driver))
         {
@@ -114,6 +121,77 @@ public static class PickProjectCommand
         }
 
         return 0;
+    }
+
+    private static async Task<int> OpenSessionAsync(IMuxDriver mux, WindowSession session, IFleetLog log)
+    {
+        if (!SwitchProjectHandler.Applies(mux))
+        {
+            return Fail("sessions need the built-in multiplexer");
+        }
+
+        var saved = Adapters.Projects();
+        var local = new List<string>();
+
+        foreach (var wanted in session.Projects.Where(p => !p.IsRemote))
+        {
+            if (saved.Load(wanted.Name) is not { } project)
+            {
+                Console.Error.WriteLine($"fleet: {wanted.Name} is no longer a project; the session opens without it.");
+                continue;
+            }
+
+            if (await EnsureOpenAsync(mux, project).ConfigureAwait(false) is { } failed)
+            {
+                return Fail(failed);
+            }
+
+            local.Add(project.Name);
+        }
+
+        await mux.ListWorkspacesAsync().ConfigureAwait(false);
+
+        var hosts = session.Projects.Where(p => p.IsRemote).Select(p => p.Host!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (hosts.Count > 0)
+        {
+            using IApplication app = FleetUi.Start();
+            foreach (var failed in ManageRemotesView.ConnectAll(app, Adapters.Remotes(), hosts))
+            {
+                Console.Error.WriteLine($"fleet: {failed}");
+            }
+        }
+
+        log.Write($"session {session.Name}: {local.Count} local, {hosts.Count} remote");
+        return await EmbeddedWiring.AttachAsync(local.FirstOrDefault(), null, log, session).ConfigureAwait(false);
+    }
+
+    private static async Task<string?> EnsureOpenAsync(IMuxDriver mux, Project chosen)
+    {
+        var located = await new LocateProjectHandler(mux).HandleAsync([chosen]).ConfigureAwait(false);
+
+        if (located.TryGetValue(chosen.Name, out var where) && where.Open)
+        {
+            return null;
+        }
+
+        var opened = await new OpenProjectHandler(mux)
+            .HandleAsync(new OpenProjectCommand(chosen, AgentHarness.Orchestrator, Adapters.Executable, null))
+            .ConfigureAwait(false);
+
+        if (!opened.Succeeded)
+        {
+            return opened.Error;
+        }
+
+        var runnable = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name)
+            .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
+            .ToList();
+
+        await new RestoreSessionHandler(mux)
+            .HandleAsync(chosen.Name, chosen.Root, runnable)
+            .ConfigureAwait(false);
+
+        return null;
     }
 
     private static async Task<int> OpenAsWorkspaceAsync(IMuxDriver mux, Project chosen, IFleetLog log)
@@ -212,6 +290,7 @@ public static class PickProjectCommand
         var keymaps = Adapters.Keymaps();
         var creator = new CreateProjectHandler(projects);
         var remover = new RemoveProjectHandler(projects);
+        var sessions = Adapters.Sessions();
 
         var driver = Adapters.Mux(Adapters.Log()).Driver;
 
@@ -256,7 +335,12 @@ public static class PickProjectCommand
                     return dropped.Succeeded ? dropped.Value : dropped.Error;
                 },
                 ShowMenu: () => FleetUi.Menu(app, keymap, MenuActions),
-                EditKeybinds: () => EditKeybindsView.Show(app, keymaps, keymap)));
+                EditKeybinds: () => EditKeybindsView.Show(app, keymaps, keymap),
+                Sessions: SwitchProjectHandler.Applies(driver) && !EmbeddedWiring.InsideClient ? sessions.List : null,
+                RemoveSession: session =>
+                    FleetDialog.Confirm(app, $"Remove session {session.Name}?", ["Its projects stay; only the saved set is forgotten."], "Remove")
+                        ? (sessions.Remove(session.Name) ? $"removed session {session.Name}" : null)
+                        : null));
     }
 
     private static int Fail(string reason)

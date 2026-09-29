@@ -20,6 +20,7 @@ using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.SwitchProject;
 using Fleet.Features.Remotes.ManageRemotes;
+using Fleet.Features.Sessions.SaveSession;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
@@ -52,6 +53,7 @@ public static class MenuCommand
         FleetAction.BrowseFiles,
         FleetAction.Notifications,
         FleetAction.Remotes,
+        FleetAction.SaveSession,
         FleetAction.OpenSettings,
     ];
 
@@ -287,6 +289,35 @@ public static class MenuCommand
                     if (picked is not null)
                     {
                         aidlcSettings.Save(project.Name, current.WithAidlcMode((AidlcMode)picked.Value));
+                    }
+
+                    break;
+                }
+
+            case FleetAction.SaveSession:
+                {
+                    var window = EmbeddedWiring.CurrentWindow().Select(e => new WindowEntry(e.Name, e.Host, e.Shown)).ToList();
+                    if (window.Count == 0)
+                    {
+                        FleetDialog.Error(app, "Save window as session", "Sessions need the built-in multiplexer; fleet sees no projects in this window.");
+                        break;
+                    }
+
+                    var name = FleetDialog.Ask(
+                        app,
+                        "Save window as session",
+                        $"Name for {SaveSessionHandler.Describe(SaveSessionHandler.For("window", window))}",
+                        initial: project.Name);
+
+                    if (name is null)
+                    {
+                        break;
+                    }
+
+                    var saved = new SaveSessionHandler(Adapters.Sessions()).Handle(name, window);
+                    if (!saved.Succeeded)
+                    {
+                        FleetDialog.Error(app, "Save window as session", saved.Error!);
                     }
 
                     break;

@@ -110,8 +110,13 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public void Stop() => _stop.Cancel();
 
-    public Task ShowAsync(string project) =>
-        RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token);
+    public string? Showing { get; private set; }
+
+    public async Task ShowAsync(string project)
+    {
+        await RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token).ConfigureAwait(false);
+        Showing = project;
+    }
 
     public async Task ForwardAsync(MessageType type, byte[] payload)
     {

@@ -13,7 +13,8 @@ public sealed class AttachClient(
     Action<string> log,
     bool mouse = true,
     Func<string, bool>? openWindow = null,
-    Func<string, string, bool>? openRemote = null)
+    Func<string, string, bool>? openRemote = null,
+    Action<Hello>? furnish = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -73,18 +74,18 @@ public sealed class AttachClient(
 
     private async Task<string?> HandshakeAsync(Wire wire, int cols, int rows)
     {
-        await wire.SendAsync(
-            MessageType.Hello,
-            new Hello
-            {
-                Version = Wire.Version,
-                Role = ClientRoles.Attach,
-                Os = OperatingSystem.IsWindows() ? "windows" : "unix",
-                Cols = cols,
-                Rows = rows,
-                Workspace = workspace,
-            },
-            WireJsonContext.Default.Hello).ConfigureAwait(false);
+        var hello = new Hello
+        {
+            Version = Wire.Version,
+            Role = ClientRoles.Attach,
+            Os = OperatingSystem.IsWindows() ? "windows" : "unix",
+            Cols = cols,
+            Rows = rows,
+            Workspace = workspace,
+        };
+        furnish?.Invoke(hello);
+
+        await wire.SendAsync(MessageType.Hello, hello, WireJsonContext.Default.Hello).ConfigureAwait(false);
 
         (MessageType Type, byte[] Payload)? welcome;
         try

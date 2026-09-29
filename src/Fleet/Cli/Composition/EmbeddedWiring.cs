@@ -8,6 +8,7 @@ using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Native;
+using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Profiles;
 using Fleet.Platform.Storage;
@@ -222,7 +223,8 @@ public static class EmbeddedWiring
         return Path.Combine(FleetHome.Config, $"embedded-session{suffix}.json");
     }
 
-    public static async Task<int> AttachAsync(string? workspace, string? sshHost, IFleetLog log)
+    public static async Task<int> AttachAsync(
+        string? workspace, string? sshHost, IFleetLog log, Ports.Sessions.Models.WindowSession? session = null)
     {
         Stream stream;
 
@@ -270,7 +272,8 @@ public static class EmbeddedWiring
         var code = await new AttachClient(
                 stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse,
                 project => OpenAttachWindow(project, sshHost, log),
-                (project, host) => OpenAttachWindow(project, host, log))
+                (project, host) => OpenAttachWindow(project, host, log),
+                session is null ? null : hello => Furnish(hello, session))
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -371,6 +374,25 @@ public static class EmbeddedWiring
         }
         catch (Ports.Mux.Exceptions.MuxUnavailableException)
         {
+        }
+    }
+
+    private static void Furnish(Hello hello, Ports.Sessions.Models.WindowSession session)
+    {
+        hello.Window = [.. session.Projects.Select(p => new WindowEntryDto { Name = p.Name, Host = p.Host })];
+        hello.Showing = session.Showing is { } showing ? new WindowEntryDto { Name = showing.Name, Host = showing.Host } : null;
+    }
+
+    public static IReadOnlyList<(string Name, string? Host, bool Shown)> CurrentWindow()
+    {
+        try
+        {
+            using var driver = new EmbeddedDriver(Endpoint.Default());
+            return [.. driver.WindowAsync().GetAwaiter().GetResult().Select(e => (e.Name, e.Host, e.Shown))];
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return [];
         }
     }
 

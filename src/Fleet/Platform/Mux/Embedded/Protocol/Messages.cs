@@ -51,6 +51,24 @@ public sealed class Hello
 
     [JsonPropertyName("label")]
     public string? Label { get; set; }
+
+    [JsonPropertyName("window")]
+    public List<WindowEntryDto>? Window { get; set; }
+
+    [JsonPropertyName("showing")]
+    public WindowEntryDto? Showing { get; set; }
+}
+
+public sealed class WindowEntryDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("host")]
+    public string? Host { get; set; }
+
+    [JsonPropertyName("shown")]
+    public bool Shown { get; set; }
 }
 
 public sealed class Welcome
@@ -382,6 +400,9 @@ public sealed class ControlResponse
 
     [JsonPropertyName("pending")]
     public bool Pending { get; set; }
+
+    [JsonPropertyName("window")]
+    public List<WindowEntryDto>? Window { get; set; }
 }
 
 public sealed class RemoteDto

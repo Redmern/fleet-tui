@@ -175,6 +175,52 @@ public static class ManageRemotesView
         }
     }
 
+    public static IReadOnlyList<string> ConnectAll(IApplication app, IRemoteMachines remotes, IReadOnlyList<string> hosts)
+    {
+        var window = FleetTheme.Overlay("connecting remote machines", 70, 6);
+        var status = FleetTheme.StatusLine(1);
+        window.Add(status);
+        var failures = new List<string>();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var host in hosts)
+                {
+                    await ConnectFlowAsync(app, remotes, host, line => app.Invoke(() => status.Text = line)).ConfigureAwait(false);
+
+                    var machine = (await remotes.ListAsync().ConfigureAwait(false))
+                        .FirstOrDefault(m => string.Equals(m.Host, host, StringComparison.OrdinalIgnoreCase));
+
+                    if (machine is not { State: RemoteState.Connected })
+                    {
+                        failures.Add($"{host}: {machine?.Error ?? "not connected"}; the session opens without it");
+                    }
+                }
+            }
+            finally
+            {
+                app.Invoke(() => app.RequestStop(window));
+            }
+        });
+
+        status.Text = $"connecting to {string.Join(", ", hosts)}...";
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
+
+        return failures;
+    }
+
     public static async Task ConnectFlowAsync(IApplication app, IRemoteMachines remotes, string host, Action<string> say)
     {
         await remotes.ConnectAsync(host).ConfigureAwait(false);

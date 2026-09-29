@@ -209,6 +209,59 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_session_furnishes_a_new_window_with_its_projects_and_reports_them_back_in_order()
+    {
+        var far = await ClientAsync(_far, ClientRoles.Control);
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "homelab", Cwd = ".", Args = ["remote-claude"] })).Ok);
+
+        var home = await ClientAsync(_home, ClientRoles.Control);
+        foreach (var project in (string[])["fleet", "pc", "unrelated"])
+        {
+            Assert.True((await home.RequestAsync(new ControlRequest { Op = "spawn", Workspace = project, Cwd = ".", Args = ["shell-" + project] })).Ok);
+        }
+
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-connect", Host = "red@far" })).Ok);
+        await Eventually(async () => (await RemotesAsync()).SingleOrDefault() is { State: RemoteLink.Connected });
+
+        var wire = new Wire(await _home.ConnectAsync(TimeSpan.FromSeconds(5)));
+        await wire.SendAsync(
+            MessageType.Hello,
+            new Hello
+            {
+                Version = Wire.Version,
+                Role = ClientRoles.Attach,
+                Os = "test",
+                Cols = 80,
+                Rows = 24,
+                Workspace = "fleet",
+                Window = [new() { Name = "fleet" }, new() { Name = "homelab", Host = "red@far" }, new() { Name = "pc" }],
+                Showing = new() { Name = "pc" },
+            },
+            WireJsonContext.Default.Hello);
+        var client = Wire.Read((await wire.ReceiveAsync())!.Value.Payload, WireJsonContext.Default.Welcome).Client;
+        _ = Task.Run(async () =>
+        {
+            while (await wire.ReceiveAsync() is not null)
+            {
+            }
+        });
+
+        IReadOnlyList<WindowEntryDto> window = [];
+        await Eventually(async () =>
+        {
+            window = (await home.RequestAsync(new ControlRequest { Op = "window", Client = client })).Window ?? [];
+            return window.Any(e => e.Host is not null);
+        });
+
+        Assert.Equal(
+            [("fleet", (string?)null, false), ("homelab", "red@far", false), ("pc", null, true)],
+            window.Select(e => (e.Name, e.Host, e.Shown)));
+
+        await wire.SendAsync(MessageType.Bye, ReadOnlyMemory<byte>.Empty);
+        wire.Dispose();
+    }
+
+    [Fact]
     public void A_remote_workspace_is_drawn_full_screen_and_never_saved_in_the_session()
     {
         var model = new Fleet.Platform.Mux.Embedded.Model.MuxModel();

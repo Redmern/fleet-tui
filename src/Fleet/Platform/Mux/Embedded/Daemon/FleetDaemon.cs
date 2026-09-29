@@ -259,6 +259,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "show-remote":
                         response.Ms = ShowRemote(ClientFor(request, attachedClient), request.Host, request.Workspace);
                         break;
+                    case "window":
+                        response.Window = Window(ClientFor(request, attachedClient));
+                        break;
                     case "hand-back":
                         response.Pending = HandBack(ClientFor(request, attachedClient), request.Text);
                         break;
@@ -337,6 +340,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     clientId = client.Id;
                     session = new AttachSession(client.Id, wire);
                     _sessions[client.Id] = session;
+                    Furnish(client.Id, hello);
                     ApplyResizes();
                 }
 
@@ -1085,6 +1089,71 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string HandedBack = "switch-project";
 
+
+    private List<WindowEntryDto> Window(string? client)
+    {
+        if (_model.Client(client ?? string.Empty) is not { } c)
+        {
+            throw new InvalidOperationException("window needs a client");
+        }
+
+        var entries = new List<WindowEntryDto>();
+
+        foreach (var name in c.Projects.Append(c.Showing).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var shown = string.Equals(name, c.Showing, StringComparison.OrdinalIgnoreCase);
+
+            if (_model.Workspace(name) is not { } workspace || FleetWorkspaces.IsHidden(name))
+            {
+                continue;
+            }
+
+            if (workspace.RemoteHost is not { } host)
+            {
+                entries.Add(new WindowEntryDto { Name = name, Shown = shown });
+            }
+            else if (_remotes.GetValueOrDefault(host)?.Showing is { } remoteProject)
+            {
+                entries.Add(new WindowEntryDto { Name = remoteProject, Host = host, Shown = shown });
+            }
+        }
+
+        return entries;
+    }
+
+    private void Furnish(string client, Hello hello)
+    {
+        foreach (var entry in hello.Window ?? [])
+        {
+            try
+            {
+                if (entry.Host is { } host)
+                {
+                    ShowRemote(client, host, entry.Name);
+                }
+                else if (_model.Workspace(entry.Name) is not null)
+                {
+                    _model.Show(client, entry.Name);
+                }
+            }
+            catch (InvalidOperationException e)
+            {
+                options.Log($"{client}: could not add {entry.Name}{(entry.Host is null ? string.Empty : " on " + entry.Host)}: {e.Message}");
+            }
+        }
+
+        if (hello.Showing is { } showing)
+        {
+            var target = showing.Host is { } host && _remotes.GetValueOrDefault(host) is { } link
+                ? RemoteWorkspace(link.Name)
+                : showing.Name;
+
+            if (_model.Workspace(target) is not null)
+            {
+                _model.Show(client, target);
+            }
+        }
+    }
 
     private bool HandBack(string? client, string? action)
     {
