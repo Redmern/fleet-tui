@@ -3862,6 +3862,32 @@ Verified: a pane opened with no program started
 `C:\Program Files\PowerShell\7\pwsh.exe` (the WT default profile) and showed
 the user's own prompt.
 
+### The dash tab is one framed window
+
+The project's dash tab (the orchestrator and the fleet dashboard side by side)
+used to show a frameless Claude pane next to a dashboard with its own rounded
+border. It is now one window:
+
+- **One rounded frame around the whole tab**, titled `fleet — <project>`. The
+  divider between Claude and the dashboard joins it (┬ top, ┴ bottom; ├ ┤ for
+  horizontal splits).
+- **A tab is framed when it holds the dashboard** (`MuxModel.IsDashboard`: a
+  `fleet dash` pane). `Arrange` lays its panes out one cell inside the content
+  area, so pane sizes, mouse hits and focus moves all agree with what is drawn.
+  Other tabs stay frameless and use the full width.
+- **The focused side is lit:** frame cells next to the focused pane use the
+  focus colour, and the rest stay dim, as dividers already did.
+- **The dashboard draws no border of its own there:** fleetd sets
+  `FLEET_FRAMED=1` for dashboard panes, and `FleetTheme.Screen` then uses no
+  border. Its dialogs keep theirs.
+- **A blank line under the tab bar:** `StatusRows` is the bar (`BarRows`)
+  plus one empty row. A click on that row hits nothing.
+- WezTerm can't draw across panes, so WezTerm mode is unchanged.
+- **Verified with the real binary** through `fleet attach`: the frame and
+  title, the ┬ join, the dashboard without its own border inside it, and the
+  empty row under the bar. `FramedDashTests` cover the layout, the joins and
+  the focus colour.
+
 ## Claude profiles per project, 2026-09-29
 
 Claude picks its account from `CLAUDE_CONFIG_DIR`. The user's PowerShell

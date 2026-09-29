@@ -10,7 +10,7 @@ public class MuxModelTests
     private (PaneState Claude, PaneState Dash) Project(string name)
     {
         var claude = _model.Spawn(name, $"C:/repos/{name}", ["claude"]);
-        var dash = _model.Split(claude.Id, sideBySide: true, newFirst: false, 50, $"C:/repos/{name}", ["fleet", "dash"])!;
+        var dash = _model.Split(claude.Id, sideBySide: true, newFirst: false, 50, $"C:/repos/{name}", ["dashboard"])!;
         return (claude, dash);
     }
 
@@ -37,7 +37,7 @@ public class MuxModelTests
         var right = view.Panes.Single(p => p.Pane == dash.Id).Area;
 
         Assert.Equal(100, left.Width + 1 + right.Width);
-        Assert.Equal(40, left.Height);
+        Assert.Equal(41 - MuxModel.StatusRows, left.Height);
         Assert.Equal(left.Width, view.Dividers.Single().X);
         Assert.Equal(dash.Id, view.Focused);
     }
@@ -105,7 +105,7 @@ public class MuxModelTests
         _model.Kill(dash.Id);
 
         var view = _model.View(client.Id)!;
-        Assert.Equal(new Rect(0, 1, 100, 40), view.Panes.Single().Area);
+        Assert.Equal(new Rect(0, MuxModel.StatusRows, 100, 41 - MuxModel.StatusRows), view.Panes.Single().Area);
         Assert.Equal(claude.Id, view.Focused);
     }
 
@@ -120,7 +120,7 @@ public class MuxModelTests
         _model.Touch(small.Id);
         _model.Resizes();
 
-        Assert.Equal(24, claude.Rows);
+        Assert.Equal(25 - MuxModel.StatusRows, claude.Rows);
         Assert.True(claude.Cols < 80);
     }
 
@@ -228,7 +228,7 @@ public class MuxModelTests
 
         Assert.True(_model.ToggleZoom(client.Id));
         var zoomed = _model.View(client.Id)!;
-        Assert.Equal(new Rect(0, 1, 100, 40), zoomed.Panes.Single(p => p.Pane == dash.Id).Area);
+        Assert.Equal(new Rect(0, MuxModel.StatusRows, 100, 41 - MuxModel.StatusRows), zoomed.Panes.Single(p => p.Pane == dash.Id).Area);
         Assert.Empty(zoomed.Dividers);
 
         _model.FocusDirection(client.Id, -1, 0);

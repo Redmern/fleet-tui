@@ -17,7 +17,7 @@ public static class FleetTheme
     public static Window Screen(string title) => Floating(new Window
     {
         Title = $" {title} ",
-        BorderStyle = Border,
+        BorderStyle = FramedPane.Inside ? LineStyle.None : Border,
         SchemeName = FleetSchemes.Screen,
     }, new FloatScreen(title));
 

@@ -1378,6 +1378,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             ["WEZTERM_PANE"] = string.Empty,
             ["WEZTERM_EXECUTABLE"] = options.FleetExecutable,
             [FloatPane.Variable] = _model.FloatBounds(pane.Id) is not null || _model.IsOverlay(pane.Id) ? "1" : string.Empty,
+            [FramedPane.Variable] = MuxModel.IsDashboard(pane) ? "1" : string.Empty,
             ["WEZTERM_UNIX_SOCKET"] = string.Empty,
             ["TMUX"] = string.Empty,
         };

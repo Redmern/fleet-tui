@@ -5,7 +5,9 @@ namespace Fleet.Platform.Mux.Embedded.Model;
 
 public sealed class MuxModel
 {
-    public const int StatusRows = 1;
+    public const int BarRows = 1;
+
+    public const int StatusRows = BarRows + 1;
 
     public const string OverlayWorkspace = "fleet~overlay";
 
@@ -461,9 +463,14 @@ public sealed class MuxModel
                 : MouseHit.Nothing;
         }
 
-        if (y < StatusRows)
+        if (y < BarRows)
         {
             return new MouseHit(MouseHitKind.StatusBar, null, x, y);
+        }
+
+        if (y < StatusRows)
+        {
+            return MouseHit.Nothing;
         }
 
         for (var i = view.FloatingPanes.Count - 1; i >= 0; i--)
@@ -897,8 +904,22 @@ public sealed class MuxModel
             .DefaultIfEmpty(Reference())
             .First();
 
-    private static void Arrange(TabState tab, Rect area, List<Placed> placed, List<Divider> dividers)
+    public static bool IsDashboard(PaneState pane) =>
+        pane.Args is [var program, "dash", ..] && Path.GetFileNameWithoutExtension(program) == "fleet";
+
+    public bool Framed(TabState tab) =>
+        tab.Root.Panes().Any(id => _panes.TryGetValue(id, out var pane) && IsDashboard(pane));
+
+    public static Rect? FrameFor(Rect area) =>
+        area.Width > 4 && area.Height > 4 ? area : null;
+
+    private void Arrange(TabState tab, Rect area, List<Placed> placed, List<Divider> dividers)
     {
+        if (Framed(tab) && FrameFor(area) is { } frame)
+        {
+            area = ClientView.Inner(frame);
+        }
+
         if (tab.Zoomed is { } zoomed && tab.Root.Contains(zoomed))
         {
             placed.Add(new Placed(zoomed, area));
@@ -1011,8 +1032,13 @@ public sealed class MuxModel
             ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
 
         var labels = workspace?.Floats.ToDictionary(f => f.Pane, f => f.HeldLabel ?? FloatLabel(f));
+        var frame = tab is not null && Framed(tab) ? FrameFor(area) : null;
 
-        return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels);
+        return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels)
+        {
+            Frame = frame,
+            FrameTitle = frame is null ? null : $"fleet — {workspace!.Name}",
+        };
     }
 
     public static Rect Over(Rect pane)
@@ -1424,6 +1450,10 @@ public sealed record ClientView(
     IReadOnlyDictionary<string, string>? FloatLabels = null)
 {
     public IReadOnlyList<Placed> FloatingPanes => Floats ?? [];
+
+    public Rect? Frame { get; init; }
+
+    public string? FrameTitle { get; init; }
 
     public string? FloatLabel(string pane) => FloatLabels?.GetValueOrDefault(pane);
 

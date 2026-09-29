@@ -56,6 +56,11 @@ public static class Composer
             Draw(frame, divider, focused);
         }
 
+        if (view.Frame is { } around)
+        {
+            Framed(frame, around, view.FrameTitle, view.Dividers, focused);
+        }
+
         foreach (var placed in view.Panes)
         {
             Decorate(frame, placed.Pane, placed.Area, screens, copy);
@@ -275,6 +280,76 @@ public static class Composer
             for (var i = 0; i < label.Length && area.X + 2 + i < frame.Cols; i++)
             {
                 frame.Cells[area.Y * frame.Cols + area.X + 2 + i] = Cell.Of(label[i], fg);
+            }
+        }
+    }
+
+    private static void Framed(ClientFrame frame, Rect box, string? title, IReadOnlyList<Divider> dividers, Rect focused)
+    {
+        var right = box.X + box.Width - 1;
+        var bottom = box.Y + box.Height - 1;
+
+        bool Near(int x, int y) =>
+            focused.Width > 0
+            && x >= focused.X - 1 && x <= focused.X + focused.Width
+            && y >= focused.Y - 1 && y <= focused.Y + focused.Height;
+
+        void Put(int x, int y, char c)
+        {
+            if (x >= 0 && y >= 0 && x < frame.Cols && y < frame.Rows)
+            {
+                frame.Cells[y * frame.Cols + x] = Cell.Of(c, Near(x, y) ? FocusFg : DividerFg);
+            }
+        }
+
+        for (var x = box.X; x <= right; x++)
+        {
+            Put(x, box.Y, x == box.X ? '╭' : x == right ? '╮' : '─');
+            Put(x, bottom, x == box.X ? '╰' : x == right ? '╯' : '─');
+        }
+
+        for (var y = box.Y + 1; y < bottom; y++)
+        {
+            Put(box.X, y, '│');
+            Put(right, y, '│');
+        }
+
+        foreach (var divider in dividers)
+        {
+            if (divider.Vertical)
+            {
+                if (divider.Y == box.Y + 1)
+                {
+                    Put(divider.X, box.Y, '┬');
+                }
+
+                if (divider.Y + divider.Length == bottom)
+                {
+                    Put(divider.X, bottom, '┴');
+                }
+            }
+            else
+            {
+                if (divider.X == box.X + 1)
+                {
+                    Put(box.X, divider.Y, '├');
+                }
+
+                if (divider.X + divider.Length == right)
+                {
+                    Put(right, divider.Y, '┤');
+                }
+            }
+        }
+
+        if (title is { Length: > 0 } && box.Width > 6)
+        {
+            var label = $" {title} ";
+            label = label.Length > box.Width - 4 ? label[..(box.Width - 4)] : label;
+
+            for (var i = 0; i < label.Length; i++)
+            {
+                Put(box.X + 2 + i, box.Y, label[i]);
             }
         }
     }

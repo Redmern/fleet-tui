@@ -295,8 +295,8 @@ public sealed class DaemonTests : IAsyncLifetime
         var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
         await client.WaitForFramesAsync(1);
 
-        await client.SendMouseAsync(3, 3, MouseButtons.Left, MouseActions.Press, held: true);
-        await client.SendMouseAsync(3, 3, MouseButtons.Left, MouseActions.Release);
+        await client.SendMouseAsync(3, 4, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(3, 4, MouseButtons.Left, MouseActions.Release);
         await client.SendKeyAsync("k");
 
         await Eventually(() => _panes.ByProgram("left")!.Written == "<mouse b1 a0 3,2><mouse b1 a1 3,2>k");
@@ -312,9 +312,9 @@ public sealed class DaemonTests : IAsyncLifetime
         var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
         await client.WaitForFramesAsync(1);
 
-        await client.SendMouseAsync(3, 3, MouseButtons.Left, MouseActions.Press, held: true);
-        await client.SendMouseAsync(35, 3, MouseButtons.Left, MouseActions.Motion, held: true);
-        await client.SendMouseAsync(35, 3, MouseButtons.Left, MouseActions.Release);
+        await client.SendMouseAsync(3, 4, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(35, 4, MouseButtons.Left, MouseActions.Motion, held: true);
+        await client.SendMouseAsync(35, 4, MouseButtons.Left, MouseActions.Release);
 
         await Eventually(() => _panes.ByProgram("left")!.Written.EndsWith(" a1 19,2>", StringComparison.Ordinal));
         Assert.Equal(string.Empty, _panes.ByProgram("right")!.Written);
@@ -329,7 +329,7 @@ public sealed class DaemonTests : IAsyncLifetime
         var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
         await client.WaitForFramesAsync(1);
 
-        await client.SendMouseAsync(2, 3, MouseButtons.WheelDown, MouseActions.Press);
+        await client.SendMouseAsync(2, 4, MouseButtons.WheelDown, MouseActions.Press);
         await client.SendKeyAsync("k");
 
         await Eventually(() => _panes.ByProgram("left")!.Written == "<mouse b5 a0 2,2>"
@@ -469,15 +469,15 @@ public sealed class DaemonTests : IAsyncLifetime
     {
         var control = await ControlAsync();
         await SpawnAsync(control, "techweb", "tile");
-        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        var client = await AttachAsync(cols: 60, rows: 13, workspace: "techweb");
         await client.WaitForFramesAsync(1);
         var spawned = await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["box"] });
         Assert.True(spawned.Ok, spawned.Error);
 
-        await client.SendMouseAsync(20, 3, MouseButtons.Left, MouseActions.Press, held: true);
-        await client.SendMouseAsync(25, 5, MouseButtons.Left, MouseActions.Motion, held: true);
-        await client.SendMouseAsync(25, 5, MouseButtons.Left, MouseActions.Release);
-        await client.SendMouseAsync(18, 6, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(20, 4, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(25, 6, MouseButtons.Left, MouseActions.Motion, held: true);
+        await client.SendMouseAsync(25, 6, MouseButtons.Left, MouseActions.Release);
+        await client.SendMouseAsync(18, 7, MouseButtons.Left, MouseActions.Press, held: true);
 
         await Eventually(() => _panes.ByProgram("box")!.Written == "<mouse b1 a0 0,0>");
         var listed = await control.RequestAsync(new ControlRequest { Op = "list-panes" });
@@ -489,13 +489,13 @@ public sealed class DaemonTests : IAsyncLifetime
     {
         var control = await ControlAsync();
         await SpawnAsync(control, "techweb", "tile");
-        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        var client = await AttachAsync(cols: 60, rows: 13, workspace: "techweb");
         await client.WaitForFramesAsync(1);
         await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["box"] });
 
         await client.SendCommandAsync("float-move", "down");
         await client.SendCommandAsync("float-size", "right");
-        await client.SendMouseAsync(13, 5, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(13, 6, MouseButtons.Left, MouseActions.Press, held: true);
 
         await Eventually(() => _panes.ByProgram("box")!.Written == "<mouse b1 a0 0,0>");
         await Eventually(() => _panes.ByProgram("box")!.Size == (35, 4));

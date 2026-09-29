@@ -27,16 +27,16 @@ public class RenderTests
         var claude = _model.Spawn("techweb", "C:/x", ["claude"]);
         var dash = _model.Split(claude.Id, true, false, 50, "C:/x", ["fleet"])!;
         _model.SetTitle(claude.Id, "dashboard");
-        var client = _model.Connect(41, 5, "techweb");
+        var client = _model.Connect(41, 6, "techweb");
         _model.Resizes();
         Screen(claude, "left");
         Screen(dash, "right");
 
         var frame = Compose(client.Id);
 
-        Assert.StartsWith("left", frame.RowText(1));
-        Assert.Equal('│', frame.At(claude.Cols, 1).Text[0]);
-        Assert.Equal("right", frame.RowText(1)[(claude.Cols + 1)..].TrimEnd());
+        Assert.StartsWith("left", frame.RowText(2));
+        Assert.Equal('│', frame.At(claude.Cols, 2).Text[0]);
+        Assert.Equal("right", frame.RowText(2)[(claude.Cols + 1)..].TrimEnd());
         Assert.Contains("techweb", frame.RowText(0));
         Assert.Contains("1:dashboard", frame.RowText(0));
     }
@@ -46,7 +46,7 @@ public class RenderTests
     {
         var claude = _model.Spawn("techweb", "C:/x", ["claude"]);
         var dash = _model.Split(claude.Id, true, false, 50, "C:/x", ["fleet"])!;
-        var client = _model.Connect(21, 5, "techweb");
+        var client = _model.Connect(21, 6, "techweb");
         _model.Resizes();
         Screen(claude, "left");
         Screen(dash, "ab");
@@ -54,7 +54,7 @@ public class RenderTests
         var frame = Compose(client.Id);
 
         Assert.Equal(claude.Cols + 1 + 2, frame.CursorX);
-        Assert.Equal(1, frame.CursorY);
+        Assert.Equal(2, frame.CursorY);
         Assert.True(frame.CursorVisible);
     }
 
@@ -88,7 +88,7 @@ public class RenderTests
     public void A_single_changed_cell_is_the_only_text_sent()
     {
         var pane = _model.Spawn("techweb", "C:/x", ["claude"]);
-        var client = _model.Connect(20, 4, "techweb");
+        var client = _model.Connect(20, 5, "techweb");
         _model.Resizes();
         var screen = Screen(pane, "hello");
         var first = Compose(client.Id);
@@ -96,7 +96,7 @@ public class RenderTests
         screen.Write(1, 0, "a");
         var diff = FrameEncoder.Encode(first, Compose(client.Id));
 
-        Assert.Contains("\e[2;2H", diff);
+        Assert.Contains("\e[3;2H", diff);
         Assert.DoesNotContain("hello", diff);
         Assert.DoesNotContain("hallo", diff);
     }
@@ -120,7 +120,7 @@ public class RenderTests
     {
         var techweb = _model.Spawn("techweb", "C:/x", ["claude"]);
         var fleet = _model.Spawn("fleet", "C:/y", ["claude"]);
-        var client = _model.Connect(20, 4, "techweb");
+        var client = _model.Connect(20, 5, "techweb");
         _model.Resizes();
         Screen(techweb, "tw");
         var fleetScreen = Screen(fleet, "fl");
@@ -130,7 +130,7 @@ public class RenderTests
         _model.Show(client.Id, "fleet");
         var next = Compose(client.Id);
 
-        Assert.StartsWith("fl", next.RowText(1));
+        Assert.StartsWith("fl", next.RowText(2));
         Assert.Contains("fl", FrameEncoder.Encode(shown, next));
         Assert.Equal(version, fleetScreen.Version);
     }

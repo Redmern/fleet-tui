@@ -105,7 +105,7 @@ public class ScrollbackTests
     {
         var model = new MuxModel();
         var pane = model.Spawn("techweb", "C:/x", ["claude"]);
-        var client = model.Connect(20, 6, "techweb");
+        var client = model.Connect(20, 7, "techweb");
         model.Resizes();
         var terminal = History(30, 20, 5);
         terminal.Scroll(ScrollTo.Delta, -10);
@@ -113,8 +113,8 @@ public class ScrollbackTests
 
         var frame = Composer.Compose(model.View(client.Id)!, id => id == pane.Id ? screen : null, null);
 
-        Assert.EndsWith("[10/25]", frame.RowText(1));
-        Assert.StartsWith("line 16", frame.RowText(1));
+        Assert.EndsWith("[10/25]", frame.RowText(2));
+        Assert.StartsWith("line 16", frame.RowText(2));
     }
 
     [Fact]
@@ -122,19 +122,19 @@ public class ScrollbackTests
     {
         var model = new MuxModel();
         var pane = model.Spawn("techweb", "C:/x", ["claude"]);
-        var client = model.Connect(20, 6, "techweb");
+        var client = model.Connect(20, 7, "techweb");
         model.Resizes();
         var screen = Shot(History(30, 20, 5));
         var copy = new CopyOverlay(pane.Id, new TextPoint(1, 2), new TextPoint(0, 18));
 
         var frame = Composer.Compose(model.View(client.Id)!, id => id == pane.Id ? screen : null, null, copy);
 
-        Assert.Equal((2, 2, true), (frame.CursorX, frame.CursorY, frame.CursorVisible));
-        Assert.True(frame.At(18, 1).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.True(frame.At(0, 2).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.True(frame.At(2, 2).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.False(frame.At(3, 2).Attrs.HasFlag(CellAttr.Inverse));
-        Assert.False(frame.At(17, 1).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.Equal((2, 3, true), (frame.CursorX, frame.CursorY, frame.CursorVisible));
+        Assert.True(frame.At(18, 2).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.True(frame.At(0, 3).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.True(frame.At(2, 3).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.False(frame.At(3, 3).Attrs.HasFlag(CellAttr.Inverse));
+        Assert.False(frame.At(17, 2).Attrs.HasFlag(CellAttr.Inverse));
     }
 
     [Theory]

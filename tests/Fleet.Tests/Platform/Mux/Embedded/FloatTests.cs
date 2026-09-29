@@ -7,7 +7,7 @@ public class FloatTests
 {
     private readonly MuxModel _model = new();
 
-    private (PaneState Tile, ClientState Client) Workspace(string name, int cols = 100, int rows = 41)
+    private (PaneState Tile, ClientState Client) Workspace(string name, int cols = 100, int rows = 40 + MuxModel.StatusRows)
     {
         var tile = _model.Spawn(name, "C:/x", ["claude"]);
         var client = _model.Connect(cols, rows, name);
@@ -24,7 +24,7 @@ public class FloatTests
 
         var view = _model.View(client.Id)!;
         var area = view.FloatingPanes.Single().Area;
-        Assert.Equal(new Rect(20, 9, 60, 24), area);
+        Assert.Equal(new Rect(20, 10, 60, 24), area);
         Assert.Equal(box.Id, view.Focused);
         Assert.Equal((58, 22), (box.Cols, box.Rows));
         Assert.Equal(tile.Id, view.Panes.Single().Pane);
@@ -104,7 +104,7 @@ public class FloatTests
         var menu = _model.SpawnFloat("techweb", "C:/x", ["fleet", "menu"], modal: true);
 
         Assert.True(_model.FitFloat(menu.Id, 40, 10));
-        Assert.Equal(new Rect(29, 15, 42, 12), _model.View(client.Id)!.FloatingPanes.Single().Area);
+        Assert.Equal(new Rect(29, 16, 42, 12), _model.View(client.Id)!.FloatingPanes.Single().Area);
 
         _model.MoveFloat(menu.Id, 2, 3);
         Assert.True(_model.FitFloat(menu.Id, 20, 4));
@@ -112,10 +112,10 @@ public class FloatTests
         _model.MoveFloat(menu.Id, 29, 15);
 
         Assert.True(_model.FitFloat(menu.Id, 0, 0));
-        Assert.Equal(MuxModel.OverlayArea(100, 41), _model.View(client.Id)!.FloatingPanes.Single().Area);
+        Assert.Equal(MuxModel.OverlayArea(100, 40 + MuxModel.StatusRows), _model.View(client.Id)!.FloatingPanes.Single().Area);
 
         Assert.True(_model.FitFloat(menu.Id, 500, 500));
-        Assert.Equal(new Rect(0, 1, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
+        Assert.Equal(new Rect(0, MuxModel.StatusRows, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
         Assert.False(_model.FitFloat("p404", 10, 10));
     }
     [Fact]
@@ -132,10 +132,10 @@ public class FloatTests
         var (tile, client) = Workspace("techweb");
         var box = _model.SpawnFloat("techweb", "C:/x", ["pwsh"]);
 
-        Assert.Equal(new MouseHit(MouseHitKind.FloatMove, box.Id, 30, 9), _model.Hit(client.Id, 30, 9));
-        Assert.Equal(MouseHitKind.FloatMove, _model.Hit(client.Id, 20, 16).Kind);
-        Assert.Equal(new MouseHit(MouseHitKind.FloatResize, box.Id, 79, 32), _model.Hit(client.Id, 79, 32));
-        Assert.Equal(new MouseHit(MouseHitKind.Pane, box.Id, 4, 2), _model.Hit(client.Id, 25, 12));
+        Assert.Equal(new MouseHit(MouseHitKind.FloatMove, box.Id, 30, 10), _model.Hit(client.Id, 30, 10));
+        Assert.Equal(MouseHitKind.FloatMove, _model.Hit(client.Id, 20, 17).Kind);
+        Assert.Equal(new MouseHit(MouseHitKind.FloatResize, box.Id, 79, 33), _model.Hit(client.Id, 79, 33));
+        Assert.Equal(new MouseHit(MouseHitKind.Pane, box.Id, 4, 2), _model.Hit(client.Id, 25, 13));
         Assert.Equal(tile.Id, _model.Hit(client.Id, 5, 5).Pane);
     }
 
@@ -176,7 +176,7 @@ public class FloatTests
         _model.MoveFloat(box.Id, 90, 35);
         _model.Resizes();
         var area = _model.View(client.Id)!.FloatingPanes.Single().Area;
-        Assert.Equal(new Rect(40, 17, 60, 24), area);
+        Assert.Equal(new Rect(40, 18, 60, 24), area);
 
         _model.ResizeFloat(box.Id, 2, 1);
         _model.Resizes();
@@ -184,7 +184,7 @@ public class FloatTests
 
         _model.ResizeFloat(box.Id, 500, 500);
         _model.Resizes();
-        Assert.Equal(new Rect(0, 1, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
+        Assert.Equal(new Rect(0, MuxModel.StatusRows, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
         Assert.Equal((98, 38), (box.Cols, box.Rows));
     }
 

@@ -68,4 +68,29 @@ public sealed class PaneEnvTests : IAsyncLifetime
         Assert.Equal("asked-for", _panes.ByProgram("pinned")!.Env["CLAUDE_CONFIG_DIR"]);
         Assert.Contains(folder, _asked);
     }
+
+    [Fact]
+    public async Task Only_the_dashboard_is_told_it_sits_inside_the_frame()
+    {
+        await using var control = await DaemonTests.TestClient.ConnectAsync(_endpoint, ClientRoles.Control, 0, 0, null);
+        var spawned = await control.RequestAsync(new ControlRequest
+        {
+            Op = "spawn",
+            Session = "alpha",
+            NewWindow = true,
+            Cwd = ".",
+            Args = ["nvim"],
+        });
+        Assert.True((await control.RequestAsync(new ControlRequest
+        {
+            Op = "split",
+            Pane = spawned.Pane,
+            Direction = "right",
+            Cwd = ".",
+            Args = ["C:/tools/fleet.exe", "dash", "--project", "alpha"],
+        })).Ok);
+
+        Assert.Equal("1", _panes.ByProgram("C:/tools/fleet.exe")!.Env[Fleet.Shared.Constants.FramedPane.Variable]);
+        Assert.Equal(string.Empty, _panes.ByProgram("nvim")!.Env[Fleet.Shared.Constants.FramedPane.Variable]);
+    }
 }
