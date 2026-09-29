@@ -157,12 +157,12 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     {
         var tabs = SwitchTabs.For(
             [new PickerEntry("fleet", "this window"), new PickerEntry("pc")],
-            [new RemoteMachine("red@192.168.0.104", "homelab", RemoteState.Connected, ["api", "scraper"])]);
+            [new RemoteMachine("user@homelab", "homelab", RemoteState.Connected, ["api", "scraper"])]);
 
         Assert.Equal(["All", "this machine", "homelab"], tabs.Tabs.Select(t => t.Title));
         Assert.Equal(["fleet", "pc", "api", "scraper"], tabs.Tabs[0].Entries.Select(e => e.Label));
         Assert.Equal("homelab", tabs.Tabs[0].Entries[2].Detail);
-        Assert.Equal(new SwitchTarget("scraper", "red@192.168.0.104"), tabs.Targets[2][1]);
+        Assert.Equal(new SwitchTarget("scraper", "user@homelab"), tabs.Targets[2][1]);
         Assert.Equal(new SwitchTarget("pc"), tabs.Targets[SwitchTabs.ThisMachine][1]);
     }
 

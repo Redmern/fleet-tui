@@ -206,7 +206,7 @@ itself when done.
 ### Remote machines
 
 **Remote machines** (`r` in the fleet menu) connects this fleet to fleet on another
-machine over ssh. `n` asks for the ssh host (for example `red@192.168.0.104`); fleet runs
+machine over ssh. `n` asks for the ssh host (for example `user@homelab`); fleet runs
 `ssh <host> fleet bridge` itself and, when ssh wants a password or asks to trust a new
 host key, shows the question in a small dialog. `d` disconnects, and `enter` answers or
 retries a connection. The remote needs this fleet on its PATH, or name it with

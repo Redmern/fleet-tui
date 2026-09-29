@@ -69,7 +69,7 @@ public static class ManageRemotesView
 
         void Connect()
         {
-            var host = FleetDialog.Ask(app, "Connect a remote machine", "ssh host, for example red@192.168.0.104");
+            var host = FleetDialog.Ask(app, "Connect a remote machine", "ssh host, for example user@homelab");
             if (string.IsNullOrWhiteSpace(host))
             {
                 return;

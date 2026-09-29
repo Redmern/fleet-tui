@@ -4007,6 +4007,31 @@ with its base, or it is 20+ commits behind).
   project's file; bell and toast settings live in `_settings.json` beside them.
 - `●` has a disputed width, so the frame encoder repositions the cursor after it:
   tests that read the client's byte stream cannot match `● 2` as one string.
+## Remote machines, phase 1, 2026-09-29
+
+Goal: a remote fleet's projects join the local one, in the same window, with the
+local fleetd keeping the tab bar and the keys. Phase 1 is the link and the switcher.
+
+- **fleetd owns the link.** `remote-connect <host>` makes the local fleetd run
+  `ssh -T <host> fleet bridge` and speak the ordinary control protocol over it, as
+  one more client of the remote fleetd (`RemoteLink`, over a `RemoteChannel` so the
+  tests can use a second in-process fleetd). It reads `status` once (the remote's
+  `Environment.MachineName` names the tab) and `list-workspaces` every 2 s; hidden
+  agent workspaces are left out. `remote-disconnect` stops it; a dropped link turns
+  the machine `failed` with ssh's last stderr lines, and `enter` retries it.
+- **Prompts go through fleetd.** ssh runs with `SSH_ASKPASS=<fleet>` and
+  `SSH_ASKPASS_REQUIRE=force`, so it never reads the terminal. fleet started with
+  `FLEET_ASKPASS=<token>` in its environment is the askpass program: it polls
+  fleetd's `askpass` op until the user answered in the Remote machines view
+  (`remote-answer`), prints the answer and exits. A prompt with `yes/no` in it is
+  shown in the clear, anything else as a password. Verified that Windows OpenSSH
+  9.5 hands the host-key question to `SSH_ASKPASS`.
+- **The switcher** (`SwitchTabs`, `FleetTabbedPicker`) shows All, this machine and
+  one tab per connected remote. Choosing a remote project sends
+  `open-remote-window`; the attached client opens a new window running
+  `fleet attach --ssh <host> --project <name>`.
+- **Next:** remote panes drawn by the local fleetd (phase 2), then the menu and
+  agents, then notifications, as agreed.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
