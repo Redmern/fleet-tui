@@ -41,6 +41,7 @@ public enum FleetAction
     EditAidlcMode,
     EditClaudeProfile,
     Notifications,
+    Remotes,
     DismissNotice,
     DismissAllNotices,
 }

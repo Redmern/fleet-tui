@@ -19,6 +19,7 @@ using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.SwitchProject;
+using Fleet.Features.Remotes.ManageRemotes;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
@@ -50,6 +51,7 @@ public static class MenuCommand
         FleetAction.ListAgents,
         FleetAction.BrowseFiles,
         FleetAction.Notifications,
+        FleetAction.Remotes,
         FleetAction.OpenSettings,
     ];
 
@@ -185,20 +187,47 @@ public static class MenuCommand
                         .HandleAsync(all)
                         .ConfigureAwait(false);
 
-                    var picked = FleetPicker.ChooseWithWindow(
-                        app,
-                        "Switch project  (a-z here, A-Z new window)",
-                        [.. all.Select(p => new PickerEntry(p.Name, Where(located, p) switch
-                        {
-                            { InWindow: true } => "this window",
-                            { InOtherWindow: true } => "another window",
-                            { Open: true } => "open",
-                            _ => string.Empty,
-                        }))],
-                        keymap,
-                        Math.Max(0, all.FindIndex(p => SameProject(p, project))));
+                    var localEntries = all.Select(p => new PickerEntry(p.Name, Where(located, p) switch
+                    {
+                        { InWindow: true } => "this window",
+                        { InOtherWindow: true } => "another window",
+                        { Open: true } => "open",
+                        _ => string.Empty,
+                    })).ToList();
+                    var here = Math.Max(0, all.FindIndex(p => SameProject(p, project)));
 
-                    if (picked is not var (chosenIndex, newWindow))
+                    var remotes = Adapters.Remotes();
+                    var machines = (await remotes.ListAsync().ConfigureAwait(false))
+                        .Where(m => m.State == Ports.Remotes.Enums.RemoteState.Connected)
+                        .ToList();
+
+                    (int Index, bool NewWindow)? picked;
+
+                    if (machines.Count == 0)
+                    {
+                        picked = FleetPicker.ChooseWithWindow(
+                            app, "Switch project  (a-z here, A-Z new window)", localEntries, keymap, here);
+                    }
+                    else
+                    {
+                        var tabs = SwitchTabs.For(localEntries, machines);
+                        var tabbed = FleetTabbedPicker.Choose(
+                            app, "Switch project  (a-z here, A-Z new window)", tabs.Tabs, keymap, SwitchTabs.ThisMachine, here);
+
+                        if (tabbed is var (tabIndex, entryIndex, remoteWindow)
+                            && tabs.Targets[tabIndex][entryIndex] is { Host: { } host } remoteTarget)
+                        {
+                            await remotes.OpenInNewWindowAsync(host, remoteTarget.Project).ConfigureAwait(false);
+                            switchLog.Write($"switch {project.Name} -> {remoteTarget.Project} on {host} (new window{(remoteWindow ? string.Empty : ", for now")})");
+                            break;
+                        }
+
+                        picked = tabbed is var (localTab, localIndex, localWindow)
+                            ? (all.FindIndex(p => string.Equals(p.Name, tabs.Targets[localTab][localIndex].Project, StringComparison.OrdinalIgnoreCase)), localWindow)
+                            : null;
+                    }
+
+                    if (picked is not var (chosenIndex, newWindow) || chosenIndex < 0)
                     {
                         break;
                     }
@@ -318,6 +347,10 @@ public static class MenuCommand
 
                     break;
                 }
+
+            case FleetAction.Remotes:
+                ManageRemotesView.Show(app, keymap, Adapters.Remotes());
+                break;
 
             case FleetAction.Notifications:
                 {

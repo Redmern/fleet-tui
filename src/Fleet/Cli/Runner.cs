@@ -28,6 +28,7 @@ public static class Runner
         FleetVerb.Bridge => await EmbeddedCommands.BridgeAsync().ConfigureAwait(false),
         FleetVerb.Approve => await ApproveCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Cli => await EmbeddedCommands.CliAsync(invocation.Arguments ?? []).ConfigureAwait(false),
+        FleetVerb.AskPass => await EmbeddedCommands.AskPassAsync(invocation).ConfigureAwait(false),
         FleetVerb.Help => HelpCommand.Run(),
         _ => HelpCommand.Unknown(invocation.Raw),
     };

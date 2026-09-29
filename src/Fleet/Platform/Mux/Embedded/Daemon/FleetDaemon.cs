@@ -37,6 +37,8 @@ public sealed class DaemonOptions
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
 
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
+
+    public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -51,6 +53,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Pane, string Text)> _copies = new();
     private readonly CancellationTokenSource _stop = new();
+    private readonly Dictionary<string, RemoteLink> _remotes = new(StringComparer.OrdinalIgnoreCase);
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
@@ -112,6 +115,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                             WarmMenus = _model.Panes.Count(p => _model.Float(p.Id) is { Parked: true }),
                             Clients = _sessions.Count,
                             SessionFile = options.SessionFile,
+                            Host = Environment.MachineName,
                         };
                         break;
                     case "list-panes":
@@ -221,6 +225,33 @@ public sealed class FleetDaemon(DaemonOptions options)
                             }
                         }
 
+                        break;
+                    case "list-remotes":
+                        response.Remotes = [.. _remotes.Values.Select(r => r.Snapshot())];
+                        break;
+                    case "remote-connect":
+                        ConnectRemote(request.Host ?? throw new InvalidOperationException("remote-connect needs a host"));
+                        break;
+                    case "remote-answer":
+                        RemoteFor(request.Host).Answer(request.Answer ?? string.Empty);
+                        break;
+                    case "remote-disconnect":
+                        if (_remotes.Remove(request.Host ?? string.Empty, out var leaving))
+                        {
+                            leaving.Stop();
+                        }
+
+                        break;
+                    case "askpass":
+                        {
+                            var asking = _remotes.Values.FirstOrDefault(r => r.Token == request.Session)
+                                ?? throw new InvalidOperationException("no remote is connecting with that token");
+                            (response.Pending, response.Text) = asking.Ask(request.Text ?? string.Empty);
+                            break;
+                        }
+
+                    case "open-remote-window":
+                        OpenRemoteWindow(ClientFor(request, attachedClient), request.Host, request.Workspace);
                         break;
                     case "shutdown":
                         if (options.SessionFile is not null)
@@ -933,6 +964,40 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             Show(client, next, take: false);
         }
+    }
+
+    private void ConnectRemote(string host)
+    {
+        if (options.RemoteOpen is not { } open)
+        {
+            throw new InvalidOperationException("this fleetd cannot connect to remotes");
+        }
+
+        if (_remotes.TryGetValue(host, out var existing) && existing.Snapshot().State != RemoteLink.Failed)
+        {
+            return;
+        }
+
+        var link = new RemoteLink(host, token => open(host, token), options.Log);
+        _remotes[host] = link;
+        _ = Task.Run(() => link.RunAsync(_stop.Token), CancellationToken.None);
+        options.Log($"remote {host}: connecting");
+    }
+
+    private RemoteLink RemoteFor(string? host) =>
+        host is not null && _remotes.TryGetValue(host, out var link)
+            ? link
+            : throw new InvalidOperationException($"no remote {host}");
+
+    private void OpenRemoteWindow(string? client, string? host, string? project)
+    {
+        if (client is null || host is null || project is null || !_sessions.TryGetValue(client, out var session))
+        {
+            throw new InvalidOperationException("open-remote-window needs a client, a host and a project");
+        }
+
+        session.Pending.Enqueue(new HostEffect { Kind = HostEffects.OpenRemote, Value = $"{host}\n{project}" });
+        options.Log($"{client} opens {project} on {host} in a new window");
     }
 
     private void OpenWindow(string? client, string? workspace)

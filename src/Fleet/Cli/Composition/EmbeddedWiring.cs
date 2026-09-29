@@ -77,6 +77,7 @@ public static class EmbeddedWiring
                 Platform.Mux.Models.MuxEnvironment.OnPath,
                 DefaultShell.WindowsTerminalSettings,
                 OperatingSystem.IsWindows()),
+            RemoteOpen = (host, token) => RemoteChannelOver(RemoteSsh(host, token, Endpoint.Default())),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
@@ -268,7 +269,8 @@ public static class EmbeddedWiring
         var mouse = !string.Equals(Environment.GetEnvironmentVariable(MouseVariable), "off", StringComparison.OrdinalIgnoreCase);
         var code = await new AttachClient(
                 stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse,
-                project => OpenAttachWindow(project, sshHost, log))
+                project => OpenAttachWindow(project, sshHost, log),
+                (project, host) => OpenAttachWindow(project, host, log))
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -511,6 +513,87 @@ public static class EmbeddedWiring
             return false;
         }
     }
+
+    public static ProcessStartInfo RemoteSsh(string host, string token, Endpoint home)
+    {
+        var start = new ProcessStartInfo("ssh")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        foreach (var arg in (string[])["-T", "-o", "ConnectTimeout=15", host, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet", "bridge"])
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        start.Environment["SSH_ASKPASS"] = Adapters.Executable;
+        start.Environment["SSH_ASKPASS_REQUIRE"] = "force";
+        start.Environment[CommandLine.AskPassVariable] = token;
+        start.Environment[Endpoint.Variable] = home.Address;
+        return start;
+    }
+
+    private static RemoteChannel RemoteChannelOver(ProcessStartInfo start)
+    {
+        var process = Process.Start(start) ?? throw new IOException("could not start ssh");
+        return new RemoteChannel(
+            new DuplexStream(process.StandardOutput.BaseStream, process.StandardInput.BaseStream),
+            process.StandardError,
+            new KilledOnDispose(process));
+    }
+
+    private sealed class KilledOnDispose(Process process) : IDisposable
+    {
+        public void Dispose()
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            process.Dispose();
+        }
+    }
+
+    public static async Task<int> AskPassAsync(string prompt)
+    {
+        var token = Environment.GetEnvironmentVariable(CommandLine.AskPassVariable) ?? string.Empty;
+        using var driver = new EmbeddedDriver(Endpoint.Default());
+        var waited = Stopwatch.StartNew();
+
+        while (waited.Elapsed < AskPassPatience)
+        {
+            try
+            {
+                var (pending, answer) = await driver.AskPassAsync(token, prompt).ConfigureAwait(false);
+                if (!pending)
+                {
+                    await Console.Out.WriteLineAsync(answer ?? string.Empty).ConfigureAwait(false);
+                    return 0;
+                }
+            }
+            catch (Ports.Mux.Exceptions.MuxUnavailableException)
+            {
+                return 1;
+            }
+
+            await Task.Delay(250).ConfigureAwait(false);
+        }
+
+        return 1;
+    }
+
+    private static readonly TimeSpan AskPassPatience = TimeSpan.FromMinutes(5);
 
     private static Stream Ssh(string host)
     {

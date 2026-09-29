@@ -213,6 +213,8 @@ public static class HostEffects
     public const string Clipboard = "clipboard";
     public const string OpenWindow = "open-window";
     public const string Bell = "bell";
+
+    public const string OpenRemote = "open-remote";
 }
 
 public sealed class HostEffect
@@ -285,6 +287,12 @@ public sealed class ControlRequest
 
     [JsonPropertyName("bell")]
     public bool Bell { get; set; }
+
+    [JsonPropertyName("host")]
+    public string? Host { get; set; }
+
+    [JsonPropertyName("answer")]
+    public string? Answer { get; set; }
 }
 
 public sealed class PaneDto
@@ -363,6 +371,36 @@ public sealed class ControlResponse
 
     [JsonPropertyName("workspaces")]
     public List<WorkspaceDto>? Workspaces { get; set; }
+
+    [JsonPropertyName("remotes")]
+    public List<RemoteDto>? Remotes { get; set; }
+
+    [JsonPropertyName("pending")]
+    public bool Pending { get; set; }
+}
+
+public sealed class RemoteDto
+{
+    [JsonPropertyName("host")]
+    public string Host { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("state")]
+    public string State { get; set; } = string.Empty;
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("prompt")]
+    public string? Prompt { get; set; }
+
+    [JsonPropertyName("secret")]
+    public bool Secret { get; set; }
+
+    [JsonPropertyName("projects")]
+    public List<string> Projects { get; set; } = [];
 }
 
 public sealed class DaemonStatusDto
@@ -387,4 +425,7 @@ public sealed class DaemonStatusDto
 
     [JsonPropertyName("sessionFile")]
     public string? SessionFile { get; set; }
+
+    [JsonPropertyName("host")]
+    public string? Host { get; set; }
 }

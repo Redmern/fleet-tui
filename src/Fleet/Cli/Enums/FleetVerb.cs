@@ -22,6 +22,7 @@ public enum FleetVerb
     Bridge,
     Approve,
     Cli,
+    AskPass,
     Help,
     Unknown,
 }

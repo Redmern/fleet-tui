@@ -10,7 +10,8 @@ using Fleet.Ports.Mux.Models;
 namespace Fleet.Platform.Mux.Embedded;
 
 public sealed class EmbeddedDriver(
-    Endpoint endpoint, Func<Task<bool>>? startDaemon = null, string? client = null) : IMuxDriver, IDisposable
+    Endpoint endpoint, Func<Task<bool>>? startDaemon = null, string? client = null, Func<CancellationToken, Task<Stream?>>? open = null)
+    : IMuxDriver, IDisposable
 {
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(2);
 
@@ -181,6 +182,27 @@ public sealed class EmbeddedDriver(
     public Task CloseWorkspaceAsync(string name, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "close-workspace", Workspace = name }, ct);
 
+    public async Task<IReadOnlyList<RemoteDto>> RemotesAsync(CancellationToken ct = default) =>
+        (await RequestAsync(new ControlRequest { Op = "list-remotes" }, ct).ConfigureAwait(false)).Remotes ?? [];
+
+    public Task ConnectRemoteAsync(string host, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "remote-connect", Host = host }, ct);
+
+    public Task AnswerRemoteAsync(string host, string answer, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "remote-answer", Host = host, Answer = answer }, ct);
+
+    public Task DisconnectRemoteAsync(string host, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "remote-disconnect", Host = host }, ct);
+
+    public Task OpenRemoteWindowAsync(string host, string project, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "open-remote-window", Host = host, Workspace = project, Client = CurrentClient }, ct);
+
+    public async Task<(bool Pending, string? Answer)> AskPassAsync(string token, string prompt, CancellationToken ct = default)
+    {
+        var response = await RequestAsync(new ControlRequest { Op = "askpass", Session = token, Text = prompt }, ct).ConfigureAwait(false);
+        return (response.Pending, response.Text);
+    }
+
     public Task ShutdownAsync(CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "shutdown" }, ct);
 
@@ -287,6 +309,11 @@ public sealed class EmbeddedDriver(
 
     private async Task<Stream?> TryConnectAsync(CancellationToken ct)
     {
+        if (open is not null)
+        {
+            return await open(ct).ConfigureAwait(false);
+        }
+
         try
         {
             return await endpoint.ConnectAsync(ConnectTimeout, ct).ConfigureAwait(false);

@@ -25,6 +25,8 @@ public static class CommandLine
 
     public const string SshFlag = "--ssh";
 
+    public const string AskPassVariable = "FLEET_ASKPASS";
+
     private static readonly string[] ValueFlags =
         [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag, SshFlag];
 
@@ -34,7 +36,7 @@ public static class CommandLine
     {
         var raw = args.Count > 0 ? args[0] : string.Empty;
         var options = args.Count > 1 ? args.Skip(1).ToArray() : [];
-        var verb = VerbFor(raw);
+        var verb = string.IsNullOrEmpty(Environment.GetEnvironmentVariable(AskPassVariable)) ? VerbFor(raw) : FleetVerb.AskPass;
 
         return new Invocation(
             verb,

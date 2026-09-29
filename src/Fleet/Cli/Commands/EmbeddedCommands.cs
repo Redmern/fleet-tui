@@ -20,5 +20,7 @@ public static class EmbeddedCommands
 
     public static Task<int> BridgeAsync() => EmbeddedWiring.BridgeAsync();
 
+    public static Task<int> AskPassAsync(Invocation invocation) => EmbeddedWiring.AskPassAsync(invocation.Raw);
+
     public static Task<int> CliAsync(IReadOnlyList<string> args) => EmbeddedWiring.CliAsync(args);
 }

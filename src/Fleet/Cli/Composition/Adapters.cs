@@ -96,6 +96,9 @@ public static class Adapters
 
     public static Ports.Notifications.INoticeStore Notices() => new JsonNoticeStore();
 
+    public static Ports.Remotes.IRemoteMachines Remotes() =>
+        new Platform.Mux.Embedded.EmbeddedRemotes(() => new Platform.Mux.Embedded.EmbeddedDriver(Platform.Mux.Embedded.Daemon.Endpoint.Default()));
+
     public static IDispatchHistory History() => new FileDispatchHistory();
 
     public static ISlugNamer SlugNamer() => new ClaudeSlugNamer();

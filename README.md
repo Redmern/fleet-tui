@@ -203,6 +203,19 @@ itself when done.
   project, switched with `h`/`l` or the arrows. `enter` goes to the agent, `d` dismisses the selected notice, `D` all shown ones,
   `b` turns the terminal bell on or off and `t` the desktop toasts.
 
+### Remote machines
+
+**Remote machines** (`r` in the fleet menu) connects this fleet to fleet on another
+machine over ssh. `n` asks for the ssh host (for example `red@192.168.0.104`); fleet runs
+`ssh <host> fleet bridge` itself and, when ssh wants a password or asks to trust a new
+host key, shows the question in a small dialog. `d` disconnects, and `enter` answers or
+retries a connection. The remote needs this fleet on its PATH, or name it with
+`FLEET_REMOTE_COMMAND`.
+
+While a machine is connected, **Switch project** gets tabs: **All**, **this machine** and
+one tab per remote, named after the remote's hostname. `h`/`l` or the arrows switch
+tabs, and it opens on the tab of the machine you are on. For now a remote project opens
+in a new window attached over ssh; showing it in the same window is the next step.
 ### Notifications
 
 Every project's dashboard has a **Notifications** tab next to Agents, Subs and Repositories.

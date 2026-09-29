@@ -14,6 +14,7 @@ public static class KeymapGroups
             FleetAction.ListAgents,
             FleetAction.BrowseFiles,
             FleetAction.Notifications,
+            FleetAction.Remotes,
             FleetAction.OpenSettings,
         ]),
         ("notifications",
