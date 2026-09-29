@@ -250,6 +250,16 @@ public sealed class FleetDaemon(DaemonOptions options)
                             break;
                         }
 
+                    case "show-remote":
+                        response.Ms = ShowRemote(ClientFor(request, attachedClient), request.Host, request.Workspace);
+                        break;
+                    case "set-label":
+                        if (_model.Client(ClientFor(request, attachedClient) ?? string.Empty) is { } labelled)
+                        {
+                            labelled.Label = request.Text;
+                        }
+
+                        break;
                     case "open-remote-window":
                         OpenRemoteWindow(ClientFor(request, attachedClient), request.Host, request.Workspace);
                         break;
@@ -312,6 +322,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 lock (_gate)
                 {
                     var client = _model.Connect(hello.Cols, hello.Rows, hello.Workspace);
+                    client.Label = hello.Label;
                     clientId = client.Id;
                     session = new AttachSession(client.Id, wire);
                     _sessions[client.Id] = session;
@@ -368,6 +379,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                         .ConfigureAwait(false);
                     break;
                 }
+
+            case MessageType.Key or MessageType.Text or MessageType.Mouse or MessageType.Command
+                when session is not null && RemoteTarget(session, type, payload) is { } remote:
+                await remote.ForwardAsync(type, payload).ConfigureAwait(false);
+                break;
 
             case MessageType.Key when session is not null:
                 Route(session, Wire.Read(payload, WireJsonContext.Default.KeyMessage));
@@ -979,9 +995,100 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         var link = new RemoteLink(host, token => open(host, token), options.Log);
+        link.Effect += effect => Forward(link, effect);
         _remotes[host] = link;
         _ = Task.Run(() => link.RunAsync(_stop.Token), CancellationToken.None);
         options.Log($"remote {host}: connecting");
+    }
+
+    public const string LocalCommands = "|switch-project|next-workspace|show|redraw|";
+
+    public static string RemoteWorkspace(string machine) => "@" + machine;
+
+    private RemoteLink? RemoteTarget(AttachSession session, MessageType type, byte[] payload)
+    {
+        lock (_gate)
+        {
+            var runtime = type == MessageType.Mouse
+                ? Wire.Read(payload, WireJsonContext.Default.MouseMessage) is var mouse
+                  && _model.Hit(session.Client, mouse.X, mouse.Y) is { Kind: MouseHitKind.Pane, Pane: { } under }
+                    ? _runtimes.GetValueOrDefault(under)
+                    : null
+                : FocusedRuntime(session.Client);
+
+            if (runtime?.Pty is not RemotePty pty
+                || _remotes.Values.FirstOrDefault(r => r.Pty == pty) is not { } link)
+            {
+                return null;
+            }
+
+            if (type == MessageType.Command
+                && LocalCommands.Contains($"|{Wire.Read(payload, WireJsonContext.Default.CommandMessage).Name}|", StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            _model.Touch(session.Client);
+            return link;
+        }
+    }
+
+    private double ShowRemote(string? client, string? host, string? project)
+    {
+        var link = RemoteFor(host);
+        if (client is null || project is null || !link.IsConnected)
+        {
+            throw new InvalidOperationException($"{host} is not connected");
+        }
+
+        var workspace = RemoteWorkspace(link.Name);
+        if (_model.Workspace(workspace) is not { } existing || existing.RemoteHost != link.Host
+            || existing.Tabs.SelectMany(t => t.Root.Panes()).All(p => _runtimes.GetValueOrDefault(p)?.Pty != link.Pty))
+        {
+            foreach (var stale in _model.PanesIn(workspace).ToList())
+            {
+                Kill(stale);
+            }
+
+            var pane = _model.Spawn(workspace, string.Empty, ["remote", link.Host]);
+            _model.Workspace(workspace)!.RemoteHost = link.Host;
+            ApplyResizes();
+            Start(pane, null, link.Pty);
+        }
+
+        var shown = Show(client, workspace);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await link.ShowAsync(project).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
+            {
+                options.Log($"remote {link.Host}: could not show {project}: {e.Message}");
+            }
+        });
+
+        return shown;
+    }
+
+    private void Forward(RemoteLink link, HostEffect effect)
+    {
+        if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell))
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            var workspace = RemoteWorkspace(link.Name);
+            foreach (var session in _sessions.Values.Where(s => _model.Client(s.Client)?.Showing == workspace))
+            {
+                session.Pending.Enqueue(effect);
+            }
+        }
+
+        _wake.Release();
     }
 
     private RemoteLink RemoteFor(string? host) =>
@@ -1438,7 +1545,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private string? CallerWorkspace(string? caller) =>
         caller is null ? null : _model.ListPanes().FirstOrDefault(p => p.Id.Value == caller)?.SessionName;
 
-    private void Start(PaneState pane, IReadOnlyDictionary<string, string>? requested)
+    private void Start(PaneState pane, IReadOnlyDictionary<string, string>? requested, IPanePty? given = null)
     {
         pane.Env = (requested ?? new Dictionary<string, string>())
             .Where(e => e.Key != ClientVariable)
@@ -1470,7 +1577,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         var cols = Math.Max(pane.Cols, 2);
         var rows = Math.Max(pane.Rows, 2);
-        var pty = options.Pty();
+        var pty = given ?? options.Pty();
         var runtime = new PaneRuntime(pane.Id, pty, options.Terminal, cols, rows);
         _runtimes[pane.Id] = runtime;
 
@@ -1506,7 +1613,15 @@ public sealed class FleetDaemon(DaemonOptions options)
                 {
                     if (_runtimes.TryGetValue(pane.Id, out var current) && current == runtime)
                     {
-                        Kill(pane.Id);
+                        var doomed = pty is RemotePty && CallerWorkspace(pane.Id) is { } remote
+                            ? [.. _model.PanesIn(remote)]
+                            : new List<string> { pane.Id };
+
+                        foreach (var id in doomed)
+                        {
+                            Kill(id);
+                        }
+
                         ApplyResizes();
                     }
                 }

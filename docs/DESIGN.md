@@ -4032,6 +4032,41 @@ local fleetd keeping the tab bar and the keys. Phase 1 is the link and the switc
   `fleet attach --ssh <host> --project <name>`.
 - **Next:** remote panes drawn by the local fleetd (phase 2), then the menu and
   agents, then notifications, as agreed.
+## Remote machines, phase 2, 2026-09-29
+
+A remote project in the same window. The cheapest sound design turned out to be to
+leave the remote's layout code alone:
+
+- **The link is an attached client of the remote.** `RemoteLink` says Hello with
+  role `attach` over the ssh bridge, at the size of the local window, and keeps using
+  the same connection for control requests (the remote's `Execute` already accepts
+  requests on attach connections). The remote does everything as for any client:
+  layout, splits, floats, copy mode, its own menu, and it sends ordinary frames.
+- **The local fleetd shows those frames.** `show-remote` creates one workspace per
+  machine, `@<machine>`, flagged `RemoteHost`, whose single pane runs over a
+  `RemotePty`: frames from the link are its output, its resizes go back as `Resize`.
+  A remote workspace is laid out full screen (`MuxModel.Area`), draws no local bar
+  (the remote's bar is in the frame; only the local which-key badge is drawn over
+  it), is never framed, and is left out of the session snapshot.
+- **One bar that says where you are.** Hello carries a `label` and `set-label`
+  changes it; the remote appends it to its project pill, so the bar reads
+  `homelab @machine`. Clicks on the remote's tabs are the remote's to handle.
+- **Input.** Keys, pastes and commands to a focused remote pane, and mouse events
+  over it, are forwarded verbatim; the remote encodes them for its panes (rule 3).
+  `switch-project`, `next-workspace`, `show` and `redraw` stay local, so `ctrl+s s`
+  is the way back; the local switcher opens on the remote machine's tab when started
+  from `@<machine>`. Remote clipboard and bell effects go to the windows showing it.
+- **Ending.** When the link ends the whole `@<machine>` workspace goes, including a
+  local menu float opened over it; its panes keep running on the remote.
+- **Limits.** One remote client per link, so one local window at a time follows a
+  machine: two windows showing the same machine see the same project. Every key is
+  a round trip to the remote. Both ends must run a build that knows `label` and
+  `set-label` (phase 2 and later).
+- **Tested** with two in-process fleetds: the remote's text and pill label reach the
+  local pane, a typed key reaches the remote pane and not the local one, a split is
+  made on the remote, `ctrl+s s` opens the local switcher for `@<machine>`, and
+  disconnecting removes the view. Not yet exercised against a real ssh remote with
+  the ghostty terminal in between.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

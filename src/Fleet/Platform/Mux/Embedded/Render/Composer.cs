@@ -410,7 +410,7 @@ public static class Composer
             : $" ●{(here > 0 ? $" {here}" : string.Empty)}{(elsewhere > 0 ? $" +{elsewhere}" : string.Empty)}";
 
         parts.Add(new BarSegment(
-            $"{LeftCap} {workspace.Name}{counts} {RightCap}", Crust, Lavender, CellAttr.Bold, Notices: noticed, Caps: true));
+            $"{LeftCap} {workspace.Name}{view.Client.Label}{counts} {RightCap}", Crust, Lavender, CellAttr.Bold, Notices: noticed, Caps: true));
 
         for (var i = 0; i < workspace.Tabs.Count; i++)
         {
@@ -469,11 +469,14 @@ public static class Composer
             }
         }
 
-        Put(0, new string(' ', frame.Cols), Cell.Default, Cell.Default, CellAttr.None, false);
-
-        foreach (var (segment, start) in Bar(view))
+        if (view.Workspace?.RemoteHost is null)
         {
-            Put(start, segment.Text, segment.Fg, segment.Bg, segment.Attrs, segment.Caps);
+            Put(0, new string(' ', frame.Cols), Cell.Default, Cell.Default, CellAttr.None, false);
+
+            foreach (var (segment, start) in Bar(view))
+            {
+                Put(start, segment.Text, segment.Fg, segment.Bg, segment.Attrs, segment.Caps);
+            }
         }
 
         if (badge is { Length: > 0 })

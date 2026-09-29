@@ -214,9 +214,14 @@ retries a connection. The remote needs this fleet on its PATH, or name it with
 
 While a machine is connected, **Switch project** gets tabs: **All**, **this machine** and
 one tab per remote, named after the remote's hostname. `h`/`l` or the arrows switch
-tabs, and it opens on the tab of the machine you are on. For now a remote project opens
-in a new window attached over ssh; showing it in the same window is the next step.
-### Notifications
+tabs, and it opens on the tab of the machine you are on. `enter` shows a remote project
+in this window; `SHIFT` opens it in a new window attached over ssh.
+
+A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar
+reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode and the
+fleet menu (`ctrl+enter`) all act on the remote. `ctrl+s s` stays local, so it is the way
+back to a project on this machine. One window at a time follows a given remote machine;
+disconnecting it closes its view here and leaves its panes running there.### Notifications
 
 Every project's dashboard has a **Notifications** tab next to Agents, Subs and Repositories.
 The dashboard watches its agents and opens a notice when one:

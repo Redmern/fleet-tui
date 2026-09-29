@@ -468,7 +468,7 @@ public sealed class MuxModel
                 : MouseHit.Nothing;
         }
 
-        if (y < StatusRows)
+        if (y < StatusRows && view.Workspace?.RemoteHost is null)
         {
             return new MouseHit(MouseHitKind.StatusBar, null, x, y);
         }
@@ -729,7 +729,7 @@ public sealed class MuxModel
     {
         var snapshot = new SessionSnapshot();
 
-        foreach (var workspace in _workspaces.Where(w => !Same(w.Name, OverlayWorkspace)))
+        foreach (var workspace in _workspaces.Where(w => !Same(w.Name, OverlayWorkspace) && w.RemoteHost is null))
         {
             var saved = new WorkspaceSnapshot
             {
@@ -950,6 +950,9 @@ public sealed class MuxModel
 
     public static Rect Content(int cols, int rows) => new(0, StatusRows, cols, Math.Max(1, rows - StatusRows));
 
+    public static Rect Area(WorkspaceState? workspace, int cols, int rows) =>
+        workspace?.RemoteHost is not null ? new Rect(0, 0, cols, Math.Max(1, rows)) : Content(cols, rows);
+
     public IReadOnlyList<Workspace> ListWorkspaces(string? client)
     {
         var mine = client is not null ? Client(client) : null;
@@ -1007,7 +1010,7 @@ public sealed class MuxModel
 
         var workspace = c.Showing is null ? null : Workspace(c.Showing);
         var tab = workspace?.Tabs.FirstOrDefault(t => t.Id == workspace.ActiveTab);
-        var area = Content(c.Cols, c.Rows);
+        var area = Area(workspace, c.Cols, c.Rows);
         var placed = new List<Placed>();
         var dividers = new List<Divider>();
         if (tab is not null)
@@ -1032,7 +1035,7 @@ public sealed class MuxModel
             ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
 
         var labels = workspace?.Floats.ToDictionary(f => f.Pane, f => f.HeldLabel ?? FloatLabel(f));
-        var frame = tab is not null && Framed(tab) ? FrameFor(area) : null;
+        var frame = tab is not null && workspace?.RemoteHost is null && Framed(tab) ? FrameFor(area) : null;
 
         return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels)
         {
@@ -1088,7 +1091,7 @@ public sealed class MuxModel
                     ? (shownBy.Cols, shownBy.Rows)
                     : Reference();
                 var placed = new List<Placed>();
-                Arrange(tab, Content(size.Item1, size.Item2), placed, []);
+                Arrange(tab, Area(workspace, size.Item1, size.Item2), placed, []);
 
                 foreach (var p in placed)
                 {
@@ -1368,6 +1371,8 @@ public sealed class WorkspaceState(string name)
     public bool FloatsShown { get; set; }
 
     public bool FloatFocused { get; set; }
+
+    public string? RemoteHost { get; set; }
 }
 
 public sealed class FloatState(string pane, Rect bounds)
@@ -1422,6 +1427,8 @@ public sealed class ClientState(string id)
     public List<string> Projects { get; } = [];
 
     public bool Leaving { get; set; }
+
+    public string? Label { get; set; }
 }
 
 public enum MouseHitKind

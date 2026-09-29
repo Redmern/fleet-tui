@@ -12,6 +12,9 @@ public sealed class RemoteLinkTests : IAsyncLifetime
 {
     private readonly CancellationTokenSource _stop = new();
     private readonly List<Task> _running = [];
+    private readonly FakePanes _homePanes = new();
+    private readonly FakePanes _farPanes = new();
+    private readonly List<DaemonTests.TestClient> _clients = [];
     private Endpoint _home = null!;
     private Endpoint _far = null!;
     private Func<string, string, RemoteChannel>? _open;
@@ -40,8 +43,8 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     {
         _home = NewEndpoint();
         _far = NewEndpoint();
-        Start(_far, new FakePanes());
-        Start(_home, new FakePanes(), (host, token) => _open!(host, token));
+        Start(_far, _farPanes);
+        Start(_home, _homePanes, (host, token) => _open!(host, token));
         _open = (_, _) =>
         {
             var stream = _far.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
@@ -52,6 +55,11 @@ public sealed class RemoteLinkTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        foreach (var client in _clients)
+        {
+            await client.DisposeAsync();
+        }
+
         await _stop.CancelAsync();
         await Task.WhenAll(_running);
     }
@@ -143,6 +151,72 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         Assert.Equal((false, "hunter2"), await home.AskPassAsync(token!, "red@far's password: "));
         Assert.Equal((true, (string?)null), await home.AskPassAsync(token!, "red@far's password: "));
         await Assert.ThrowsAsync<Fleet.Ports.Mux.Exceptions.MuxUnavailableException>(() => home.AskPassAsync("someone-else", "password: "));
+    }
+
+    private async Task<DaemonTests.TestClient> ClientAsync(Endpoint endpoint, string role, int cols = 0, int rows = 0, string? workspace = null)
+    {
+        var client = await DaemonTests.TestClient.ConnectAsync(endpoint, role, cols, rows, workspace);
+        _clients.Add(client);
+        return client;
+    }
+
+    private static async Task<IReadOnlyList<PaneDto>> PanesAsync(DaemonTests.TestClient control) =>
+        (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes ?? [];
+
+    [Fact]
+    public async Task A_remote_project_shown_here_draws_the_remote_screen_and_takes_keys_and_commands()
+    {
+        var far = await ClientAsync(_far, ClientRoles.Control);
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "homelab", Cwd = ".", Args = ["remote-claude"] })).Ok);
+        _farPanes.ByProgram("remote-claude")!.Emit("REMOTE-SCREEN");
+
+        var home = await ClientAsync(_home, ClientRoles.Control);
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "local", Cwd = ".", Args = ["shell"] })).Ok);
+        var window = await ClientAsync(_home, ClientRoles.Attach, 80, 24, "local");
+        await window.WaitForFramesAsync(1);
+
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-connect", Host = "red@far" })).Ok);
+        await Eventually(async () => (await RemotesAsync()).SingleOrDefault() is { State: RemoteLink.Connected });
+
+        var shown = await home.RequestAsync(new ControlRequest { Op = "show-remote", Client = window.Id, Host = "red@far", Workspace = "homelab" });
+        Assert.True(shown.Ok, shown.Error);
+
+        var workspace = FleetDaemon.RemoteWorkspace(Environment.MachineName);
+        await Eventually(async () => (await PanesAsync(home)).Any(p => p.Session == workspace));
+        var remotePane = (await PanesAsync(home)).Single(p => p.Session == workspace).Id;
+        await Eventually(async () => (await home.RequestAsync(new ControlRequest { Op = "get-text", Pane = remotePane })).Text is { } text
+            && text.Contains("REMOTE-SCREEN", StringComparison.Ordinal)
+            && text.Contains($"homelab @{Environment.MachineName}", StringComparison.Ordinal));
+
+        await window.SendKeyAsync("x");
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("remote-claude")!.Written == "x"));
+        Assert.Equal(string.Empty, _homePanes.ByProgram("shell")!.Written);
+
+        await window.SendCommandAsync("split-right");
+        await Eventually(async () => (await PanesAsync(far)).Count(p => p.Session == "homelab") == 2);
+
+        await window.SendCommandAsync("switch-project");
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "switch-project"])));
+
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-disconnect", Host = "red@far" })).Ok);
+        await Eventually(async () => (await PanesAsync(home)).All(p => p.Session != workspace));
+    }
+
+    [Fact]
+    public void A_remote_workspace_is_drawn_full_screen_and_never_saved_in_the_session()
+    {
+        var model = new Fleet.Platform.Mux.Embedded.Model.MuxModel();
+        model.Spawn("local", ".", ["shell"]);
+        var remote = model.Spawn("@homelab", string.Empty, ["remote", "red@far"]);
+        model.Workspace("@homelab")!.RemoteHost = "red@far";
+        var client = model.Connect(80, 24, "@homelab");
+        model.Resizes();
+
+        var view = model.View(client.Id)!;
+        Assert.Equal(new Fleet.Platform.Mux.Embedded.Model.Rect(0, 0, 80, 24), Assert.Single(view.Panes).Area);
+        Assert.Equal((80, 24), (remote.Cols, remote.Rows));
+        Assert.Equal(["local"], model.Snapshot().Workspaces.Select(w => w.Name));
     }
 
     [Fact]

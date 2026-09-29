@@ -194,6 +194,9 @@ public sealed class EmbeddedDriver(
     public Task DisconnectRemoteAsync(string host, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "remote-disconnect", Host = host }, ct);
 
+    public Task ShowRemoteAsync(string host, string project, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "show-remote", Host = host, Workspace = project, Client = CurrentClient }, ct);
+
     public Task OpenRemoteWindowAsync(string host, string project, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "open-remote-window", Host = host, Workspace = project, Client = CurrentClient }, ct);
 

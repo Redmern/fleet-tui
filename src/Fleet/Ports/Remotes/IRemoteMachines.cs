@@ -13,4 +13,6 @@ public interface IRemoteMachines
     Task DisconnectAsync(string host, CancellationToken ct = default);
 
     Task OpenInNewWindowAsync(string host, string project, CancellationToken ct = default);
+
+    Task ShowHereAsync(string host, string project, CancellationToken ct = default);
 }

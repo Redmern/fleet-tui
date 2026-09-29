@@ -48,6 +48,9 @@ public sealed class Hello
 
     [JsonPropertyName("client")]
     public string? Client { get; set; }
+
+    [JsonPropertyName("label")]
+    public string? Label { get; set; }
 }
 
 public sealed class Welcome

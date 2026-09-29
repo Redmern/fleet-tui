@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
@@ -14,9 +16,14 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(2);
 
+    public static readonly TimeSpan AnswerWithin = TimeSpan.FromSeconds(10);
+
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly Queue<string> _errors = new();
+    private readonly ConcurrentDictionary<int, TaskCompletionSource<ControlResponse>> _pending = new();
+    private Wire? _wire;
+    private int _nextId;
     private string _state = Connecting;
     private string? _name;
     private string? _error;
@@ -26,7 +33,33 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public string Host => host;
 
+    public string Name
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _name ?? host;
+            }
+        }
+    }
+
     public string Token { get; } = Guid.NewGuid().ToString("N");
+
+    public RemotePty Pty { get; } = new();
+
+    public event Action<HostEffect>? Effect;
+
+    public bool IsConnected
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _state == Connected;
+            }
+        }
+    }
 
     public RemoteDto Snapshot()
     {
@@ -46,6 +79,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
     }
 
     public static bool IsSecret(string prompt) => !prompt.Contains("yes/no", StringComparison.OrdinalIgnoreCase);
+
+    public static string Label(string name) => $" @{name}";
 
     public (bool Pending, string? Answer) Ask(string prompt)
     {
@@ -75,6 +110,25 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public void Stop() => _stop.Cancel();
 
+    public Task ShowAsync(string project) =>
+        RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token);
+
+    public async Task ForwardAsync(MessageType type, byte[] payload)
+    {
+        if (_wire is not { } wire)
+        {
+            return;
+        }
+
+        try
+        {
+            await wire.SendAsync(type, payload, _stop.Token).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
     public async Task RunAsync(CancellationToken daemon)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(daemon, _stop.Token);
@@ -89,31 +143,48 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 _ = Task.Run(() => CollectErrorsAsync(errors), CancellationToken.None);
             }
 
-            var opened = false;
-            using var remote = new EmbeddedDriver(
-                new Endpoint(host),
-                open: _ =>
+            var wire = new Wire(channel.Stream);
+            var (cols, rows) = Pty.Size;
+            await wire.SendAsync(
+                MessageType.Hello,
+                new Hello
                 {
-                    if (opened)
-                    {
-                        return Task.FromResult<Stream?>(null);
-                    }
+                    Version = Wire.Version,
+                    Role = ClientRoles.Attach,
+                    Os = OperatingSystem.IsWindows() ? "windows" : "unix",
+                    Cols = cols,
+                    Rows = rows,
+                    Label = Label(host),
+                },
+                WireJsonContext.Default.Hello,
+                ct).ConfigureAwait(false);
 
-                    opened = true;
-                    return Task.FromResult<Stream?>(channel.Stream);
-                });
-
-            var status = await remote.StatusAsync(ct).ConfigureAwait(false);
-            lock (_gate)
+            if (await wire.ReceiveAsync(ct).ConfigureAwait(false) is not { } welcome)
             {
-                _name = status?.Host is { Length: > 0 } name ? name : host;
+                throw new IOException("the remote closed the connection");
             }
 
-            log($"remote {host}: connected to {_name ?? host}");
+            if (welcome.Type == MessageType.Error)
+            {
+                throw new IOException(Wire.Read(welcome.Payload, WireJsonContext.Default.ErrorMessage).Message);
+            }
+
+            _wire = wire;
+            var reader = Task.Run(() => ReadLoopAsync(wire), CancellationToken.None);
+            Pty.Resized += Resize;
+
+            var status = await RequestAsync(new ControlRequest { Op = "status" }, ct).ConfigureAwait(false);
+            lock (_gate)
+            {
+                _name = status.Status?.Host is { Length: > 0 } name ? name : host;
+            }
+
+            await RequestAsync(new ControlRequest { Op = "set-label", Text = Label(Name) }, ct).ConfigureAwait(false);
+            log($"remote {host}: connected to {Name}");
 
             while (!ct.IsCancellationRequested)
             {
-                var workspaces = await remote.ListWorkspacesAsync(ct).ConfigureAwait(false);
+                var workspaces = (await RequestAsync(new ControlRequest { Op = "list-workspaces" }, ct).ConfigureAwait(false)).Workspaces ?? [];
                 lock (_gate)
                 {
                     _projects = [.. workspaces.Select(w => w.Name).Where(n => !FleetWorkspaces.IsHidden(n)).Order(StringComparer.OrdinalIgnoreCase)];
@@ -121,14 +192,18 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                     _error = null;
                 }
 
-                await Task.Delay(RefreshEvery, ct).ConfigureAwait(false);
+                if (await Task.WhenAny(reader, Task.Delay(RefreshEvery, ct)).ConfigureAwait(false) == reader)
+                {
+                    throw new IOException("the remote went away");
+                }
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
         catch (Exception e) when (e is IOException or InvalidOperationException or ObjectDisposedException
-                                      or System.ComponentModel.Win32Exception or Ports.Mux.Exceptions.MuxUnavailableException)
+                                      or TimeoutException or System.Text.Json.JsonException
+                                      or System.ComponentModel.Win32Exception)
         {
             await Task.Delay(300, CancellationToken.None).ConfigureAwait(false);
 
@@ -142,7 +217,68 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
         }
         finally
         {
+            Pty.Resized -= Resize;
+            _wire = null;
+            Pty.Exit();
             channel?.Owner.Dispose();
+
+            foreach (var waiting in _pending.Values)
+            {
+                waiting.TrySetException(new IOException("the remote went away"));
+            }
+        }
+    }
+
+    private void Resize(int cols, int rows) =>
+        _ = _wire?.SendAsync(MessageType.Resize, new ResizeMessage { Cols = cols, Rows = rows }, WireJsonContext.Default.ResizeMessage);
+
+    private async Task<ControlResponse> RequestAsync(ControlRequest request, CancellationToken ct)
+    {
+        var wire = _wire ?? throw new IOException("not connected");
+        request.Id = Interlocked.Increment(ref _nextId);
+        var reply = new TaskCompletionSource<ControlResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pending[request.Id] = reply;
+
+        try
+        {
+            await wire.SendAsync(MessageType.Request, request, WireJsonContext.Default.ControlRequest, ct).ConfigureAwait(false);
+            var response = await reply.Task.WaitAsync(AnswerWithin, ct).ConfigureAwait(false);
+            return response.Ok ? response : throw new InvalidOperationException($"remote: {response.Error}");
+        }
+        finally
+        {
+            _pending.TryRemove(request.Id, out _);
+        }
+    }
+
+    private async Task ReadLoopAsync(Wire wire)
+    {
+        try
+        {
+            while (await wire.ReceiveAsync().ConfigureAwait(false) is { } message)
+            {
+                switch (message.Type)
+                {
+                    case MessageType.Frame:
+                        Pty.Emit(Wire.ReadFrame(message.Payload).Bytes);
+                        break;
+                    case MessageType.Response:
+                        var response = Wire.Read(message.Payload, WireJsonContext.Default.ControlResponse);
+                        if (_pending.TryRemove(response.Id, out var waiting))
+                        {
+                            waiting.TrySetResult(response);
+                        }
+
+                        break;
+                    case MessageType.HostEffect:
+                        Effect?.Invoke(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect));
+                        break;
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or EndOfStreamException
+                                      or InvalidDataException or System.Text.Json.JsonException)
+        {
         }
     }
 

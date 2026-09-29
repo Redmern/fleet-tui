@@ -80,6 +80,15 @@ public static class MenuCommand
             : FleetAction.None;
 
 
+        if (project is null && requested == FleetAction.SwitchProject
+            && invocation.Project is { } shown && shown.StartsWith(RemoteMark, StringComparison.Ordinal))
+        {
+            using IApplication remoteApp = FleetUi.Start();
+            await SwitchAcrossMachines(remoteApp, new Keymap(Adapters.Keymaps().Load()), projects.List(), null, shown[RemoteMark.Length..])
+                .ConfigureAwait(false);
+            return 0;
+        }
+
         if (requested is FleetAction.OpenProject or FleetAction.NewProject || project is null)
         {
             return await PickProjectCommand.RunAsync().ConfigureAwait(false);
@@ -179,76 +188,8 @@ public static class MenuCommand
                 break;
 
             case FleetAction.SwitchProject when SwitchProjectHandler.Applies(Adapters.Mux(Adapters.Log()).Driver):
-                {
-                    var switchLog = Adapters.Log();
-                    var switchMux = Adapters.Mux(switchLog);
-                    var all = projects.List().OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
-                    var located = await new LocateProjectHandler(switchMux.Driver)
-                        .HandleAsync(all)
-                        .ConfigureAwait(false);
-
-                    var localEntries = all.Select(p => new PickerEntry(p.Name, Where(located, p) switch
-                    {
-                        { InWindow: true } => "this window",
-                        { InOtherWindow: true } => "another window",
-                        { Open: true } => "open",
-                        _ => string.Empty,
-                    })).ToList();
-                    var here = Math.Max(0, all.FindIndex(p => SameProject(p, project)));
-
-                    var remotes = Adapters.Remotes();
-                    var machines = (await remotes.ListAsync().ConfigureAwait(false))
-                        .Where(m => m.State == Ports.Remotes.Enums.RemoteState.Connected)
-                        .ToList();
-
-                    (int Index, bool NewWindow)? picked;
-
-                    if (machines.Count == 0)
-                    {
-                        picked = FleetPicker.ChooseWithWindow(
-                            app, "Switch project  (a-z here, A-Z new window)", localEntries, keymap, here);
-                    }
-                    else
-                    {
-                        var tabs = SwitchTabs.For(localEntries, machines);
-                        var tabbed = FleetTabbedPicker.Choose(
-                            app, "Switch project  (a-z here, A-Z new window)", tabs.Tabs, keymap, SwitchTabs.ThisMachine, here);
-
-                        if (tabbed is var (tabIndex, entryIndex, remoteWindow)
-                            && tabs.Targets[tabIndex][entryIndex] is { Host: { } host } remoteTarget)
-                        {
-                            await remotes.OpenInNewWindowAsync(host, remoteTarget.Project).ConfigureAwait(false);
-                            switchLog.Write($"switch {project.Name} -> {remoteTarget.Project} on {host} (new window{(remoteWindow ? string.Empty : ", for now")})");
-                            break;
-                        }
-
-                        picked = tabbed is var (localTab, localIndex, localWindow)
-                            ? (all.FindIndex(p => string.Equals(p.Name, tabs.Targets[localTab][localIndex].Project, StringComparison.OrdinalIgnoreCase)), localWindow)
-                            : null;
-                    }
-
-                    if (picked is not var (chosenIndex, newWindow) || chosenIndex < 0)
-                    {
-                        break;
-                    }
-
-                    var target = all[chosenIndex];
-                    var clock = System.Diagnostics.Stopwatch.StartNew();
-
-                    var switched = newWindow
-                        ? await OpenInNewWindow(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false)
-                        : await SwitchByWorkspace(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false);
-
-                    switchLog.Write(
-                        $"switch {project.Name} -> {target.Name}{(newWindow ? " (new window)" : string.Empty)}: {clock.ElapsedMilliseconds} ms");
-
-                    if (switched is not null)
-                    {
-                        FleetDialog.Error(app, "Switch project", switched);
-                    }
-
-                    break;
-                }
+                await SwitchAcrossMachines(app, keymap, projects.List(), project, onMachine: null).ConfigureAwait(false);
+                break;
 
             case FleetAction.SwitchProject:
                 {
@@ -534,6 +475,102 @@ public static class MenuCommand
             .ConfigureAwait(false);
 
         return opened.Succeeded ? null : opened.Error;
+    }
+
+    private const string RemoteMark = "@";
+
+    private const string SwitchTitle = "Switch project  (a-z here, A-Z new window)";
+
+    private static async Task SwitchAcrossMachines(
+        IApplication app, Keymap keymap, IReadOnlyList<Project> saved, Project? current, string? onMachine)
+    {
+        var switchLog = Adapters.Log();
+        var switchMux = Adapters.Mux(switchLog);
+        var all = saved.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var located = await new LocateProjectHandler(switchMux.Driver)
+            .HandleAsync(all)
+            .ConfigureAwait(false);
+
+        var localEntries = all.Select(p => new PickerEntry(p.Name, Where(located, p) switch
+        {
+            { InWindow: true } => "this window",
+            { InOtherWindow: true } => "another window",
+            { Open: true } => "open",
+            _ => string.Empty,
+        })).ToList();
+        var here = current is null ? 0 : Math.Max(0, all.FindIndex(p => SameProject(p, current)));
+        var from = current?.Name ?? RemoteMark + onMachine;
+
+        var remotes = Adapters.Remotes();
+        var machines = (await remotes.ListAsync().ConfigureAwait(false))
+            .Where(m => m.State == Ports.Remotes.Enums.RemoteState.Connected)
+            .ToList();
+
+        (int Index, bool NewWindow)? picked;
+
+        if (machines.Count == 0)
+        {
+            picked = FleetPicker.ChooseWithWindow(app, SwitchTitle, localEntries, keymap, here);
+        }
+        else
+        {
+            var tabs = SwitchTabs.For(localEntries, machines);
+            var machineTab = machines.FindIndex(m => string.Equals(m.Name, onMachine, StringComparison.OrdinalIgnoreCase));
+            var tabbed = FleetTabbedPicker.Choose(
+                app,
+                SwitchTitle,
+                tabs.Tabs,
+                keymap,
+                machineTab >= 0 ? SwitchTabs.ThisMachine + 1 + machineTab : SwitchTabs.ThisMachine,
+                machineTab >= 0 ? 0 : here);
+
+            if (tabbed is var (tabIndex, entryIndex, remoteWindow)
+                && tabs.Targets[tabIndex][entryIndex] is { Host: { } host } remoteTarget)
+            {
+                try
+                {
+                    if (remoteWindow)
+                    {
+                        await remotes.OpenInNewWindowAsync(host, remoteTarget.Project).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await remotes.ShowHereAsync(host, remoteTarget.Project).ConfigureAwait(false);
+                    }
+                }
+                catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+                {
+                    FleetDialog.Error(app, "Switch project", e.Message);
+                }
+
+                switchLog.Write($"switch {from} -> {remoteTarget.Project} on {host}{(remoteWindow ? " (new window)" : string.Empty)}");
+                return;
+            }
+
+            picked = tabbed is var (localTab, localIndex, localWindow)
+                ? (all.FindIndex(p => string.Equals(p.Name, tabs.Targets[localTab][localIndex].Project, StringComparison.OrdinalIgnoreCase)), localWindow)
+                : null;
+        }
+
+        if (picked is not var (chosenIndex, newWindow) || chosenIndex < 0)
+        {
+            return;
+        }
+
+        var target = all[chosenIndex];
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var switched = newWindow
+            ? await OpenInNewWindow(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false)
+            : await SwitchByWorkspace(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false);
+
+        switchLog.Write(
+            $"switch {from} -> {target.Name}{(newWindow ? " (new window)" : string.Empty)}: {clock.ElapsedMilliseconds} ms");
+
+        if (switched is not null)
+        {
+            FleetDialog.Error(app, "Switch project", switched);
+        }
     }
 
     private static bool SameProject(Project a, Project b) =>

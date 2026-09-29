@@ -45,6 +45,12 @@ public sealed class EmbeddedRemotes(Func<EmbeddedDriver> driver) : IRemoteMachin
         await fleetd.OpenRemoteWindowAsync(host, project, ct).ConfigureAwait(false);
     }
 
+    public async Task ShowHereAsync(string host, string project, CancellationToken ct = default)
+    {
+        using var fleetd = driver();
+        await fleetd.ShowRemoteAsync(host, project, ct).ConfigureAwait(false);
+    }
+
     public static RemoteMachine ToMachine(RemoteDto dto) =>
         new(
             dto.Host,
