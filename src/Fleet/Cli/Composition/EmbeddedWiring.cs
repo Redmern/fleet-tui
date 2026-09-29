@@ -9,6 +9,11 @@ using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
+using Fleet.Shared.Keymap;
+using Fleet.Ui;
+using Fleet.Ui.Models;
 
 namespace Fleet.Cli.Composition;
 
@@ -93,6 +98,18 @@ public static class EmbeddedWiring
             }
 
             stream = local;
+
+            if (workspace is null)
+            {
+                var (cancelled, chosen) = await ChooseSessionAsync(endpoint).ConfigureAwait(false);
+                if (cancelled)
+                {
+                    await stream.DisposeAsync().ConfigureAwait(false);
+                    return 0;
+                }
+
+                workspace = chosen;
+            }
         }
 
         var mouse = !string.Equals(Environment.GetEnvironmentVariable(MouseVariable), "off", StringComparison.OrdinalIgnoreCase);
@@ -151,6 +168,46 @@ public static class EmbeddedWiring
         {
             return false;
         }
+    }
+
+    public static IReadOnlyList<(string Name, int Panes)> Sessions(
+        IReadOnlyList<Workspace> workspaces, IReadOnlyList<Pane> panes) =>
+        [
+            .. workspaces
+                .Where(w => !FleetWorkspaces.IsHidden(w.Name))
+                .Select(w => (w.Name, panes.Count(p => string.Equals(p.SessionName, w.Name, StringComparison.OrdinalIgnoreCase))))
+                .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase),
+        ];
+
+    private static async Task<(bool Cancelled, string? Chosen)> ChooseSessionAsync(Endpoint endpoint)
+    {
+        IReadOnlyList<(string Name, int Panes)> sessions;
+
+        try
+        {
+            using var driver = new EmbeddedDriver(endpoint);
+            sessions = Sessions(
+                await driver.ListWorkspacesAsync().ConfigureAwait(false),
+                await driver.ListPanesAsync().ConfigureAwait(false));
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return (false, null);
+        }
+
+        if (sessions.Count <= 1)
+        {
+            return (false, sessions.Count == 1 ? sessions[0].Name : null);
+        }
+
+        using var app = FleetUi.Start();
+        var index = FleetPicker.Choose(
+            app,
+            "Attach to",
+            [.. sessions.Select(s => new PickerEntry(s.Name, s.Panes == 1 ? "1 pane" : $"{s.Panes} panes"))],
+            new Keymap(Adapters.Keymaps().Load()));
+
+        return index is { } chosen ? (false, sessions[chosen].Name) : (true, null);
     }
 
     public static string KeysFile => Path.Combine(FleetPaths.Config, MuxKeys.FileName);
