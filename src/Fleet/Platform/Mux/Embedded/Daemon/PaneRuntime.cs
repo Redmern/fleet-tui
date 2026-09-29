@@ -13,12 +13,17 @@ public sealed class PaneRuntime : IDisposable
 
     private readonly Task _writer;
 
+    private readonly SizeQueries _sizeQueries = new();
+
+    private (int Cols, int Rows) _size;
+
     public PaneRuntime(string id, IPanePty pty, PaneTerminalFactory terminals, int cols, int rows)
     {
         Id = id;
         Pty = pty;
         Terminal = terminals(cols, rows, Reply);
         Screen.Resize(cols, rows);
+        _size = (cols, rows);
         _writer = Task.Run(WriteLoopAsync);
     }
 
@@ -67,6 +72,12 @@ public sealed class PaneRuntime : IDisposable
             Dirty = true;
             Outputs++;
             LastOutputAt = Environment.TickCount64;
+
+            for (var asked = _sizeQueries.Count(buffer.AsSpan(0, count)); asked > 0 && !Modes.Win32Input; asked--)
+            {
+                Send(SizeQueries.Reply(_size.Cols, _size.Rows));
+            }
+
             return before != ModeSummary;
         }
     }
@@ -76,6 +87,7 @@ public sealed class PaneRuntime : IDisposable
         lock (Gate)
         {
             Terminal.Resize(cols, rows);
+            _size = (cols, rows);
             Dirty = true;
         }
 
