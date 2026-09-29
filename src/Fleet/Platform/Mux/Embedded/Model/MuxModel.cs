@@ -585,7 +585,10 @@ public sealed class MuxModel
         var own = _panes[box.Pane].Args is [var program, "menu" or "approve", ..]
                   && Path.GetFileNameWithoutExtension(program) == "fleet";
 
-        if (own && live.Length > 0 && !Path.IsPathRooted(live))
+        var programPath = live.IndexOfAny(['/', '\\']) >= 0
+                          && Path.GetFileNameWithoutExtension(live.Replace('\\', '/')) == "fleet";
+
+        if (own && live.Length > 0 && !programPath)
         {
             return live;
         }
