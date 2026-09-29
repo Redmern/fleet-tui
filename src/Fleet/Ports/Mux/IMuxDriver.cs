@@ -38,4 +38,6 @@ public interface IMuxDriver
     Task ShowWorkspaceAsync(string name, CancellationToken ct = default);
 
     Task CloseWorkspaceAsync(string name, CancellationToken ct = default);
+
+    Task OpenWindowAsync(string name, CancellationToken ct = default);
 }

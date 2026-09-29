@@ -346,8 +346,56 @@ public sealed class MuxModel
 
         c.Showing = target.Name;
         c.LastActive = ++_clock;
+        c.Leaving = false;
         Remember(c, target.Name);
         return true;
+    }
+
+    public void Release(string client, string workspace)
+    {
+        if (!_clients.TryGetValue(client, out var c))
+        {
+            return;
+        }
+
+        Forget(c, workspace);
+    }
+
+    private void Forget(ClientState client, string workspace)
+    {
+        var at = client.Projects.FindIndex(p => Same(p, workspace));
+        client.Projects.RemoveAll(p => Same(p, workspace) || Workspace(p) is null);
+
+        if (!Same(client.Showing, workspace))
+        {
+            return;
+        }
+
+        client.Showing = client.Projects.Count > 0
+            ? client.Projects[Math.Clamp(at - 1, 0, client.Projects.Count - 1)]
+            : null;
+        client.Leaving = client.Showing is null;
+    }
+
+    public bool Take(string client, string workspace)
+    {
+        foreach (var other in _clients.Values.Where(c => c.Id != client).ToList())
+        {
+            Release(other.Id, workspace);
+        }
+
+        return Show(client, workspace);
+    }
+
+    public string? NextProject(string client, int delta = 1)
+    {
+        if (!_clients.TryGetValue(client, out var c) || c.Projects.Count == 0)
+        {
+            return null;
+        }
+
+        var at = c.Projects.FindIndex(p => Same(p, c.Showing));
+        return c.Projects[((at < 0 ? 0 : at + delta) % c.Projects.Count + c.Projects.Count) % c.Projects.Count];
     }
 
     public static bool IsProject(string? workspace) =>
@@ -360,8 +408,10 @@ public sealed class MuxModel
             return;
         }
 
-        client.Projects.RemoveAll(p => Same(p, workspace));
-        client.Projects.Add(workspace!);
+        if (!client.Projects.Any(p => Same(p, workspace)))
+        {
+            client.Projects.Add(workspace!);
+        }
     }
 
     public bool CycleTab(string client, int delta)
@@ -1162,15 +1212,7 @@ public sealed class MuxModel
 
         foreach (var client in _clients.Values)
         {
-            client.Projects.RemoveAll(p => Same(p, workspace.Name) || Workspace(p) is null);
-
-            if (!Same(client.Showing, workspace.Name))
-            {
-                continue;
-            }
-
-            client.Showing = client.Projects.LastOrDefault();
-            client.Leaving = client.Showing is null;
+            Forget(client, workspace.Name);
         }
     }
 

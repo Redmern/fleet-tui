@@ -211,6 +211,7 @@ public static class HostEffects
 {
     public const string Title = "title";
     public const string Clipboard = "clipboard";
+    public const string OpenWindow = "open-window";
 }
 
 public sealed class HostEffect

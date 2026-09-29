@@ -199,6 +199,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "show":
                         response.Ms = Show(ClientFor(request, attachedClient), request.Workspace);
                         break;
+                    case "open-window":
+                        OpenWindow(ClientFor(request, attachedClient), request.Workspace);
+                        break;
                     case "close-workspace":
                         foreach (var id in _model.PanesIn(request.Workspace ?? string.Empty))
                         {
@@ -906,17 +909,31 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void NextWorkspace(string client)
     {
-        var visible = _model.ListWorkspaces(client)
-            .Where(w => !Fleet.Shared.Constants.FleetWorkspaces.IsHidden(w.Name))
-            .ToList();
-
-        if (visible.Count == 0)
+        if (_model.NextProject(client) is { } next)
         {
-            return;
+            Show(client, next, take: false);
+        }
+    }
+
+    private void OpenWindow(string? client, string? workspace)
+    {
+        if (client is null || workspace is null || _model.Workspace(workspace) is null)
+        {
+            throw new InvalidOperationException("open-window needs a client and an open workspace");
         }
 
-        var current = visible.FindIndex(w => w.ShownHere);
-        Show(client, visible[(current + 1) % visible.Count].Name);
+        foreach (var other in _model.Clients.ToList())
+        {
+            _model.Release(other.Id, workspace);
+        }
+
+        if (_sessions.TryGetValue(client, out var session))
+        {
+            session.Pending.Enqueue(new HostEffect { Kind = HostEffects.OpenWindow, Value = workspace });
+        }
+
+        ApplyResizes();
+        options.Log($"{client} opens {workspace} in a new window");
     }
 
     public const string MenuTitle = "fleet menu";
@@ -1193,7 +1210,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         Start(pane, env);
     }
 
-    private double Show(string? client, string? workspace)
+    private double Show(string? client, string? workspace, bool take = true)
     {
         var clock = Stopwatch.StartNew();
 
@@ -1202,7 +1219,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             throw new InvalidOperationException("show needs a client and a workspace");
         }
 
-        if (!_model.Show(client, workspace))
+        var shown = take && MuxModel.IsProject(workspace)
+            ? _model.Take(client, workspace)
+            : _model.Show(client, workspace);
+
+        if (!shown)
         {
             throw new InvalidOperationException($"no client {client} or no workspace {workspace}");
         }
@@ -1558,6 +1579,11 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                 foreach (var session in _sessions.Values)
                 {
+                    while (session.Pending.TryDequeue(out var pending))
+                    {
+                        effects.Add((session, pending));
+                    }
+
                     if (_model.WindowTitle(session.Client) is { } title && title != session.Title)
                     {
                         session.Title = title;
@@ -1822,6 +1848,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         public List<WhichKeyEntry>? WhichKey { get; set; }
 
         public bool SaidBye { get; set; }
+
+        public System.Collections.Concurrent.ConcurrentQueue<HostEffect> Pending { get; } = new();
     }
 
     private sealed record MouseCapture(

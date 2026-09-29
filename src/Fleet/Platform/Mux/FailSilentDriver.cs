@@ -55,6 +55,9 @@ public sealed class FailSilentDriver(IMuxDriver inner, Action<Exception> onSwall
     public Task CloseWorkspaceAsync(string name, CancellationToken ct = default)
         => Guard(() => inner.CloseWorkspaceAsync(name, ct));
 
+    public Task OpenWindowAsync(string name, CancellationToken ct = default)
+        => Guard(() => inner.OpenWindowAsync(name, ct));
+
     private static bool IsExpected(Exception e) =>
         e is MuxUnavailableException
           or IOException

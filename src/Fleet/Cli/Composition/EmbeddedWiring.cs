@@ -97,6 +97,27 @@ public static class EmbeddedWiring
         return _profiles.Profiles;
     }
 
+    public static string[] AttachArgs(string project, string? sshHost) =>
+        sshHost is null ? ["attach", "--project", project] : ["attach", "--ssh", sshHost, "--project", project];
+
+    private static bool OpenAttachWindow(string project, string? sshHost, IFleetLog log)
+    {
+        var env = new[] { Endpoint.Variable, FleetHome.OverrideVariable }
+            .Select(name => (Name: name, Value: Environment.GetEnvironmentVariable(name)))
+            .Where(v => !string.IsNullOrEmpty(v.Value))
+            .ToDictionary(v => v.Name, v => v.Value!);
+
+        var plan = NewWindow.Plan(
+            Adapters.Executable,
+            AttachArgs(project, sshHost),
+            env,
+            Environment.GetEnvironmentVariable,
+            Platform.Mux.Models.MuxEnvironment.OnPath,
+            OperatingSystem.IsWindows());
+
+        return plan is not null && NewWindow.Open(plan, line => log.Write($"attach: {line}"));
+    }
+
     public static string ProfilesFile => AccountProfiles.DefaultFile;
 
     public static string? ClaudeProfileOf(Project project)
@@ -233,7 +254,9 @@ public static class EmbeddedWiring
         }
 
         var mouse = !string.Equals(Environment.GetEnvironmentVariable(MouseVariable), "off", StringComparison.OrdinalIgnoreCase);
-        var code = await new AttachClient(stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse)
+        var code = await new AttachClient(
+                stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse,
+                project => OpenAttachWindow(project, sshHost, log))
             .RunAsync()
             .ConfigureAwait(false);
 

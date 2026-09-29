@@ -334,4 +334,58 @@ public class MuxModelTests
         Assert.False(seen["alpha"].InOtherWindow);
         Assert.Equal(["gamma"], there.Projects);
     }
+
+    [Fact]
+    public void Taking_a_project_moves_it_out_of_the_other_window_which_shows_its_neighbour()
+    {
+        Project("alpha");
+        Project("beta");
+        Project("gamma");
+        var here = _model.Connect(100, 30, "alpha");
+        var there = _model.Connect(100, 30, "beta");
+        _model.Show(there.Id, "gamma");
+        _model.Show(there.Id, "beta");
+
+        Assert.True(_model.Take(here.Id, "beta"));
+
+        Assert.Equal(["alpha", "beta"], here.Projects);
+        Assert.Equal("beta", here.Showing);
+        Assert.Equal(["gamma"], there.Projects);
+        Assert.Equal("gamma", there.Showing);
+        Assert.False(there.Leaving);
+    }
+
+    [Fact]
+    public void A_window_that_gives_away_its_only_project_leaves()
+    {
+        Project("alpha");
+        var here = _model.Connect(100, 30, "alpha");
+
+        _model.Release(here.Id, "alpha");
+
+        Assert.Empty(here.Projects);
+        Assert.Null(here.Showing);
+        Assert.True(here.Leaving);
+    }
+
+    [Fact]
+    public void Next_project_cycles_through_this_window_in_a_stable_order()
+    {
+        Project("alpha");
+        Project("beta");
+        Project("gamma");
+        var here = _model.Connect(100, 30, "alpha");
+        _model.Show(here.Id, "beta");
+        _model.Show(here.Id, "gamma");
+
+        var seen = new List<string>();
+        for (var i = 0; i < 4; i++)
+        {
+            var next = _model.NextProject(here.Id)!;
+            _model.Show(here.Id, next);
+            seen.Add(next);
+        }
+
+        Assert.Equal(["alpha", "beta", "gamma", "alpha"], seen);
+    }
 }

@@ -3812,6 +3812,39 @@ show the same project (attaching from a second machine).
   sent the window home; Tab, Enter quit only the current one, and the window
   moved to the other.
 
+### Switching projects between windows
+
+- **The Switch project picker** (built-in multiplexer only) lists every
+  project, including the current one, with where it lives: *this window*,
+  *another window*, or *open*.
+  - **A lower-case letter** (or Enter) brings the project into this window
+    (opening it first if needed). `show` *takes* it: it leaves any other
+    window, and that window moves to its neighbour or goes home.
+    `fleet attach --project` still only shares a project.
+  - **An upper-case letter** (or Shift+Enter) opens it in a new window. The
+    `open-window` op releases it from every window, this one included (a
+    window giving away its only project goes home), and sends this window an
+    `open-window` host effect.
+- **The window opens the new one**, because it runs in the user's actual
+  terminal (`NewWindow.Plan`):
+  - Windows Terminal (`WT_SESSION`): `wt -w new`;
+  - WezTerm (`TERM_PROGRAM`): `wezterm start --`;
+  - Linux: `$TERMINAL -e`, then `x-terminal-emulator -e`;
+  - otherwise, on Windows, a new console window.
+
+  The window runs `fleet attach --project <name>` (plus `--ssh <host>` when
+  this window came over ssh). `FLEET_ENDPOINT` and `FLEET_CONFIG_HOME` are
+  set in its command, because Windows Terminal does not reliably pass on the
+  caller's environment.
+- **`prefix w`** cycles only through this window's projects, in a stable
+  order (a project is added when first shown, never moved).
+- WezTerm mode is unchanged. Its driver refuses `OpenWindowAsync`, and the
+  menu keeps the old picker there.
+- **Verified with the real menu:** the picker labels the current project
+  *this window*. Upper-case `B` sent `open-window beta`, and the window stayed
+  on alpha. Launching the terminal is covered by `NewWindowTests`. The e2e
+  runs deliberately don't open windows on the desktop.
+
 ## Claude profiles per project, 2026-09-29
 
 Claude picks its account from `CLAUDE_CONFIG_DIR`. The user's PowerShell

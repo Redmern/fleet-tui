@@ -269,6 +269,13 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
         return Task.CompletedTask;
     }
 
+    public Task OpenWindowAsync(string name, CancellationToken ct = default)
+    {
+        RequireAvailable();
+        _calls.Enqueue($"open-window {name}");
+        return Task.CompletedTask;
+    }
+
     public Task CloseWorkspaceAsync(string name, CancellationToken ct = default)
     {
         RequireAvailable();

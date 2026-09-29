@@ -108,5 +108,8 @@ public class FailSilentDriverTests
 
         public Task CloseWorkspaceAsync(string name, CancellationToken ct = default) =>
             throw toThrow;
+
+        public Task OpenWindowAsync(string name, CancellationToken ct = default) =>
+            throw toThrow;
     }
 }

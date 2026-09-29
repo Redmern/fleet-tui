@@ -173,6 +173,51 @@ public static class MenuCommand
                 await FocusMain(project).ConfigureAwait(false);
                 break;
 
+            case FleetAction.SwitchProject when SwitchProjectHandler.Applies(Adapters.Mux(Adapters.Log()).Driver):
+                {
+                    var switchLog = Adapters.Log();
+                    var switchMux = Adapters.Mux(switchLog);
+                    var all = projects.List().OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                    var located = await new LocateProjectHandler(switchMux.Driver)
+                        .HandleAsync(all)
+                        .ConfigureAwait(false);
+
+                    var picked = FleetPicker.ChooseWithWindow(
+                        app,
+                        "Switch project  (a-z here, A-Z new window)",
+                        [.. all.Select(p => new PickerEntry(p.Name, Where(located, p) switch
+                        {
+                            { InWindow: true } => "this window",
+                            { InOtherWindow: true } => "another window",
+                            { Open: true } => "open",
+                            _ => string.Empty,
+                        }))],
+                        keymap,
+                        Math.Max(0, all.FindIndex(p => SameProject(p, project))));
+
+                    if (picked is not var (chosenIndex, newWindow))
+                    {
+                        break;
+                    }
+
+                    var target = all[chosenIndex];
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
+
+                    var switched = newWindow
+                        ? await OpenInNewWindow(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false)
+                        : await SwitchByWorkspace(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false);
+
+                    switchLog.Write(
+                        $"switch {project.Name} -> {target.Name}{(newWindow ? " (new window)" : string.Empty)}: {clock.ElapsedMilliseconds} ms");
+
+                    if (switched is not null)
+                    {
+                        FleetDialog.Error(app, "Switch project", switched);
+                    }
+
+                    break;
+                }
+
             case FleetAction.SwitchProject:
                 {
                     var others = projects.List()
@@ -439,6 +484,24 @@ public static class MenuCommand
             .ConfigureAwait(false);
 
         return shown.Succeeded ? null : shown.Error;
+    }
+
+    private static async Task<string?> OpenInNewWindow(IMuxDriver mux, Project target, ProjectLocation where)
+    {
+        if (!where.Open)
+        {
+            await OpenProjectFlow(mux, target).ConfigureAwait(false);
+        }
+
+        try
+        {
+            await mux.OpenWindowAsync(target.Name).ConfigureAwait(false);
+            return null;
+        }
+        catch (NotSupportedException e)
+        {
+            return e.Message;
+        }
     }
 
     private static async Task<string?> SwitchByMoving(

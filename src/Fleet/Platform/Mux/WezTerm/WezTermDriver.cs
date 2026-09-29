@@ -203,6 +203,9 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
         throw new NotSupportedException(
             "wezterm workspaces are global to the GUI process; fleet switches by moving panes");
 
+    public Task OpenWindowAsync(string name, CancellationToken ct = default) =>
+        throw new NotSupportedException("wezterm opens projects in its own windows; fleet switches by moving panes");
+
     public async Task CloseWorkspaceAsync(string name, CancellationToken ct = default)
     {
         var panes = await ListPanesAsync(ct).ConfigureAwait(false);

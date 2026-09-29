@@ -927,6 +927,31 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Open_window_asks_the_window_to_open_one_and_moves_the_project_out_of_it()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "fleet", "fleet-shell");
+        await SpawnAsync(control, "techweb", "claude");
+        _panes.ByProgram("fleet-shell")!.Emit("FLEET-SCREEN");
+        var client = await AttachAsync(workspace: "fleet");
+        await client.WaitForAsync("FLEET-SCREEN");
+        await client.SendCommandAsync("show", "techweb");
+
+        var opened = await control.RequestAsync(new ControlRequest { Op = "open-window", Workspace = "techweb", Client = client.Id });
+
+        Assert.True(opened.Ok, opened.Error);
+        await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.OpenWindow && e.Value == "techweb"));
+        var seen = (await control.RequestAsync(new ControlRequest { Op = "list-workspaces", Client = client.Id })).Workspaces!;
+        Assert.Equal("fleet", seen.Single(w => w.ShownHere).Name);
+        Assert.False(seen.Single(w => w.Name == "techweb").InWindow);
+        Assert.Null(client.Farewell);
+
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "open-window", Workspace = "fleet", Client = client.Id })).Ok);
+        await Eventually(() => client.Farewell is not null);
+        Assert.Contains(client.Effects, e => e.Kind == HostEffects.OpenWindow && e.Value == "fleet");
+    }
+
+    [Fact]
     public async Task Status_reports_the_process_and_what_it_runs()
     {
         var control = await ControlAsync();

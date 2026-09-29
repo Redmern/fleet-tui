@@ -6,7 +6,8 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 
 namespace Fleet.Platform.Mux.Embedded.Client;
 
-public sealed class AttachClient(Stream stream, string? workspace, Func<MuxKeys> loadKeys, Action<string> log, bool mouse = true)
+public sealed class AttachClient(
+    Stream stream, string? workspace, Func<MuxKeys> loadKeys, Action<string> log, bool mouse = true, Func<string, bool>? openWindow = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -154,6 +155,10 @@ public sealed class AttachClient(Stream stream, string? workspace, Func<MuxKeys>
         {
             case HostEffects.Title when effect.Value is { } title:
                 write(Encoding.UTF8.GetBytes(HostEffectsOut.TitleSequence(title)));
+                break;
+
+            case HostEffects.OpenWindow when effect.Value is { } project:
+                log($"open {project} in a new window: {(openWindow?.Invoke(project) is true ? "opened" : "NOT opened")}");
                 break;
 
             case HostEffects.Clipboard when effect.Value is { } text:
