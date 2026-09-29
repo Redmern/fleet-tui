@@ -67,7 +67,17 @@ public class WireTests
     {
         var bogus = new MemoryStream([0xff, 0xff, 0xff, 0x7f, 1]);
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => new Wire(bogus).ReceiveAsync());
+        await Assert.ThrowsAsync<StrayBytesException>(() => new Wire(bogus).ReceiveAsync());
+    }
+
+    [Fact]
+    public async Task Text_where_a_message_should_be_keeps_its_first_bytes_so_the_client_can_show_it()
+    {
+        var text = new MemoryStream("fleet: not the protocol\n"u8.ToArray());
+
+        var stray = await Assert.ThrowsAsync<StrayBytesException>(() => new Wire(text).ReceiveAsync());
+
+        Assert.Equal("fleet", System.Text.Encoding.ASCII.GetString(stray.Header));
     }
 
     [Fact]

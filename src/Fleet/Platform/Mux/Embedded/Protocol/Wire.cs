@@ -58,7 +58,7 @@ public sealed class Wire(Stream stream) : IDisposable
         var length = BinaryPrimitives.ReadUInt32LittleEndian(_header);
         if (length < 1 || length > MaxMessage)
         {
-            throw new InvalidDataException($"message length {length} is out of range");
+            throw new StrayBytesException(length, [.. _header]);
         }
 
         var payload = new byte[length - 1];

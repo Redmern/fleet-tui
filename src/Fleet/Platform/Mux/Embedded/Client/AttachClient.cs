@@ -80,22 +80,62 @@ public sealed class AttachClient(
             },
             WireJsonContext.Default.Hello).ConfigureAwait(false);
 
-        if (await wire.ReceiveAsync().ConfigureAwait(false) is not { } welcome)
+        (MessageType Type, byte[] Payload)? welcome;
+        try
+        {
+            welcome = await wire.ReceiveAsync().ConfigureAwait(false);
+        }
+        catch (StrayBytesException e)
+        {
+            var text = e.Header.Concat(await StrayTextAsync().ConfigureAwait(false)).ToArray();
+            await Console.Error.WriteLineAsync(
+                "fleet: the other end sent text instead of fleet's protocol. On ssh this is usually the remote's shell " +
+                "startup printing something, or an old or different 'fleet' on its PATH (set FLEET_REMOTE_COMMAND). It sent:" +
+                Environment.NewLine + Encoding.UTF8.GetString(text).TrimEnd()).ConfigureAwait(false);
+            return null;
+        }
+
+        if (welcome is not { } reply)
         {
             await Console.Error.WriteLineAsync("fleet: fleetd closed the connection").ConfigureAwait(false);
             return null;
         }
 
-        if (welcome.Type == MessageType.Error)
+        if (reply.Type == MessageType.Error)
         {
             await Console.Error.WriteLineAsync(
-                $"fleet: {Wire.Read(welcome.Payload, WireJsonContext.Default.ErrorMessage).Message}").ConfigureAwait(false);
+                $"fleet: {Wire.Read(reply.Payload, WireJsonContext.Default.ErrorMessage).Message}").ConfigureAwait(false);
             return null;
         }
 
-        return Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome).Client;
+        return Wire.Read(reply.Payload, WireJsonContext.Default.Welcome).Client;
     }
 
+    private async Task<byte[]> StrayTextAsync()
+    {
+        var buffer = new byte[400];
+        var read = 0;
+        using var quiet = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+
+        try
+        {
+            while (read < buffer.Length)
+            {
+                var n = await stream.ReadAsync(buffer.AsMemory(read), quiet.Token).ConfigureAwait(false);
+                if (n == 0)
+                {
+                    break;
+                }
+
+                read += n;
+            }
+        }
+        catch (Exception e) when (e is OperationCanceledException or IOException)
+        {
+        }
+
+        return buffer[..read];
+    }
     private async Task<int> RunAsync(
         Wire wire, string client, (int Cols, int Rows) told, Func<(int Cols, int Rows)> size, Action<byte[]> write, Func<Task> input, Action release)
     {
