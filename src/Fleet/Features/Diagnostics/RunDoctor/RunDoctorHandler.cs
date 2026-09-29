@@ -30,12 +30,18 @@ public sealed class RunDoctorHandler(
             problems.Add("git was not found on PATH");
         }
 
+        if (command.Embedded?.SavedError is { } unreadable)
+        {
+            problems.Add($"the saved embedded session cannot be read, so fleetd will start empty: {unreadable}");
+        }
+
         return new DoctorReport(
             command.ChosenDriver,
             reachable,
             version,
             projects.List(),
             log.Tail(5),
-            problems);
+            problems,
+            command.Embedded);
     }
 }

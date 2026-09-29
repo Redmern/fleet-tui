@@ -163,6 +163,9 @@ public sealed class EmbeddedDriver(
         return fitted.Cols > 0 && fitted.Rows > 0 ? (fitted.Cols, fitted.Rows) : null;
     }
 
+    public async Task<DaemonStatusDto?> StatusAsync(CancellationToken ct = default) =>
+        (await RequestAsync(new ControlRequest { Op = "status" }, ct).ConfigureAwait(false)).Status;
+
     public Task HoldAsync(CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "hold" }, ct);
 

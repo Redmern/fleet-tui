@@ -98,6 +98,18 @@ public sealed class FleetDaemon(DaemonOptions options)
                 {
                     case "ping":
                         break;
+                    case "status":
+                        response.Status = new DaemonStatusDto
+                        {
+                            Pid = Environment.ProcessId,
+                            Executable = Environment.ProcessPath ?? string.Empty,
+                            Workspaces = _model.ListWorkspaces(null).Count,
+                            Panes = _model.Panes.Count(p => _model.Float(p.Id) is not { Parked: true }),
+                            WarmMenus = _model.Panes.Count(p => _model.Float(p.Id) is { Parked: true }),
+                            Clients = _sessions.Count,
+                            SessionFile = options.SessionFile,
+                        };
+                        break;
                     case "list-panes":
                         response.Panes = _model.ListPanes().Select(p => new PaneDto
                         {

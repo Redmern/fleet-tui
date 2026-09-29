@@ -901,6 +901,22 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Status_reports_the_process_and_what_it_runs()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        await SpawnAsync(control, "fleet", "shell");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        var status = (await control.RequestAsync(new ControlRequest { Op = "status" })).Status!;
+
+        Assert.Equal(Environment.ProcessId, status.Pid);
+        Assert.Equal((2, 2, 0, 1), (status.Workspaces, status.Panes, status.WarmMenus, status.Clients));
+        Assert.False(string.IsNullOrEmpty(status.Executable));
+    }
+
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();

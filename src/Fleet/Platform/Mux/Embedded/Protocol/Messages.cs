@@ -341,9 +341,36 @@ public sealed class ControlResponse
     [JsonPropertyName("rows")]
     public int Rows { get; set; }
 
+    [JsonPropertyName("status")]
+    public DaemonStatusDto? Status { get; set; }
+
     [JsonPropertyName("panes")]
     public List<PaneDto>? Panes { get; set; }
 
     [JsonPropertyName("workspaces")]
     public List<WorkspaceDto>? Workspaces { get; set; }
+}
+
+public sealed class DaemonStatusDto
+{
+    [JsonPropertyName("pid")]
+    public int Pid { get; set; }
+
+    [JsonPropertyName("executable")]
+    public string Executable { get; set; } = string.Empty;
+
+    [JsonPropertyName("workspaces")]
+    public int Workspaces { get; set; }
+
+    [JsonPropertyName("panes")]
+    public int Panes { get; set; }
+
+    [JsonPropertyName("warmMenus")]
+    public int WarmMenus { get; set; }
+
+    [JsonPropertyName("clients")]
+    public int Clients { get; set; }
+
+    [JsonPropertyName("sessionFile")]
+    public string? SessionFile { get; set; }
 }

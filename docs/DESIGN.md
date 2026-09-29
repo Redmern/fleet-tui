@@ -3750,6 +3750,24 @@ about 250–310 ms, and about 840 ms for the first open.
     client.
   - `EmbeddedWiring.InsideClient` is also true inside any fleetd pane, so a
     warm picker never starts a nested `fleet attach`.
+## fleet doctor and the embedded multiplexer, 2026-09-29
+
+`fleet doctor` now reports on the embedded multiplexer, whichever driver is
+chosen:
+
+- whether this build links libghostty-vt;
+- fleetd: its pid, workspaces, panes, warm menus and attached clients, and
+  whether it runs this build or another one (restart to switch). fleetd has a
+  `status` control op for this. The probe uses a driver without a start
+  callback, so doctor never starts a fleetd just to look at it. A fleetd too
+  old to know `status` is reported as running on an older build.
+- the saved session: how many workspaces and panes it would restore, and when
+  it was saved.
+
+An unreadable session file is the one new *problem* (doctor exits 1): fleetd
+would start empty. The rest is information. The feature gets it as a plain
+model (`EmbeddedHealth`), gathered by `EmbeddedWiring.HealthAsync` in the
+composition root, the way it already gets git's version.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

@@ -1,9 +1,12 @@
 using System.Diagnostics;
+using System.Text.Json;
+using Fleet.Features.Diagnostics.RunDoctor.Models;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
+using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Storage;
@@ -71,6 +74,58 @@ public static class EmbeddedWiring
         await daemon.RunAsync().ConfigureAwait(false);
         return 0;
     }
+
+    public static async Task<EmbeddedHealth> HealthAsync()
+    {
+        FleetdStatus? fleetd = null;
+        var tooOld = false;
+        try
+        {
+            using var probe = new EmbeddedDriver(Endpoint.Default());
+            if (await probe.StatusAsync().ConfigureAwait(false) is { } status)
+            {
+                fleetd = new FleetdStatus(
+                    status.Pid,
+                    status.Executable,
+                    PathKey.Same(status.Executable, Adapters.Executable),
+                    status.Workspaces,
+                    status.Panes,
+                    status.WarmMenus,
+                    status.Clients);
+            }
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+        {
+            tooOld = e.Message.Contains("unknown operation", StringComparison.Ordinal);
+        }
+
+        var file = SessionFile(Environment.GetEnvironmentVariable(Endpoint.Variable));
+        if (!File.Exists(file))
+        {
+            return new EmbeddedHealth(Ready, fleetd, null, FleetdTooOld: tooOld);
+        }
+
+        try
+        {
+            var snapshot = JsonSerializer.Deserialize(File.ReadAllText(file), SessionJsonContext.Default.SessionSnapshot)
+                ?? throw new JsonException("the file is empty");
+
+            var saved = new SavedSession(
+                file,
+                File.GetLastWriteTime(file),
+                snapshot.Workspaces.Count,
+                snapshot.Workspaces.Sum(w => w.Floats.Count + w.Tabs.Sum(t => Leaves(t.Root))));
+
+            return new EmbeddedHealth(Ready, fleetd, saved, FleetdTooOld: tooOld);
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return new EmbeddedHealth(Ready, fleetd, null, $"{file}: {e.Message}", tooOld);
+        }
+    }
+
+    private static int Leaves(LayoutSnapshot? node) =>
+        node is null ? 0 : node.Pane is not null ? 1 : Leaves(node.First) + Leaves(node.Second);
 
     public static string SessionFile(string? endpoint)
     {
