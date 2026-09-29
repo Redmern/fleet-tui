@@ -3554,6 +3554,24 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
     Panes elsewhere keep it, because fleet's encoder can send them kitty keys.
   - Verified end to end: `z z`, `z z z` and hide → show all reach the real
     dashboard.
+## Attach picker and clickable dashboard tabs, 2026-09-29
+
+- **`fleet attach` without `--project`** asks fleetd for its project
+  workspaces (hidden ones excluded) and their pane counts.
+  - With more than one, it shows an `Attach to` picker (letter keys,
+    `name … N panes`) before attaching. Esc attaches to nothing.
+  - With one or none, it attaches as before.
+  - `--ssh` attaches are unchanged.
+- **Dashboard tabs** (Agents, Subs, Repositories) react to a mouse click.
+  `FleetTabBar` raises `Chosen`, and the dashboard switches tabs unless it is
+  busy or a dialog is open, the same guard its keys use.
+- **Verified with the real binary** (outer fleetd running `fleet attach`
+  against an inner fleetd with projects alpha and beta):
+  - the picker listed *alpha — 2 panes* and *beta — 1 pane*, and Enter
+    attached to alpha;
+  - a click on `Subs (0)` in a real `fleet dash` moved the tab underline to
+    Subs.
+  - Tests cover the session listing and a click on the tab bar view.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
