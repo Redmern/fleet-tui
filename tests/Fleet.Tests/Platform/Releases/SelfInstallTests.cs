@@ -28,7 +28,12 @@ public sealed class SelfInstallTests : IDisposable
         new SelfInstall().Replace(target, "new"u8.ToArray());
 
         Assert.Equal("new", File.ReadAllText(target));
-        Assert.Empty(Directory.GetFiles(_dir, "fleet.exe.old-*"));
+
+        // Only Windows sets the running binary aside, so only there are old copies cleared.
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Empty(Directory.GetFiles(_dir, "fleet.exe.old-*"));
+        }
     }
 
     [Fact]
