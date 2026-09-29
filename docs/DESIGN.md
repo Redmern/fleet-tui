@@ -4056,6 +4056,11 @@ leave the remote's layout code alone:
   `switch-project`, `next-workspace`, `show` and `redraw` stay local, so `ctrl+s s`
   is the way back; the local switcher opens on the remote machine's tab when started
   from `@<machine>`. Remote clipboard and bell effects go to the windows showing it.
+- **Switch project is handed back.** The remote's menu, opened in a labelled client
+  (one viewed from another machine), asks its fleetd `hand-back switch-project`;
+  the remote sends a `hand-back` host effect to the link, and the viewing fleetd
+  opens its own switcher for the windows showing `@<machine>`. Without this the
+  remote's switcher only knew the remote's projects and there was no way back.
 - **Ending.** When the link ends the whole `@<machine>` workspace goes, including a
   local menu float opened over it; its panes keep running on the remote.
 - **Limits.** One remote client per link, so one local window at a time follows a

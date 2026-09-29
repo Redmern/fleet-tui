@@ -187,6 +187,9 @@ public static class MenuCommand
                 await FocusMain(project).ConfigureAwait(false);
                 break;
 
+            case FleetAction.SwitchProject when EmbeddedWiring.HandBack(FleetActionIds.For(FleetAction.SwitchProject)):
+                break;
+
             case FleetAction.SwitchProject when SwitchProjectHandler.Applies(Adapters.Mux(Adapters.Log()).Driver):
                 await SwitchAcrossMachines(app, keymap, projects.List(), project, onMachine: null).ConfigureAwait(false);
                 break;

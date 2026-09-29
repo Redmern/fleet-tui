@@ -195,9 +195,14 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         await window.SendCommandAsync("split-right");
         await Eventually(async () => (await PanesAsync(far)).Count(p => p.Session == "homelab") == 2);
 
-        await window.SendCommandAsync("switch-project");
+        Assert.False((await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = "nobody", Text = "switch-project" })).Pending);
+        var viewedFromHome = (await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = "c1", Text = "switch-project" })).Pending;
+        Assert.True(viewedFromHome);
         await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
             && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "switch-project"])));
+
+        await window.SendCommandAsync("switch-project");
+        await Eventually(() => Task.FromResult(_homePanes.Started.Count(p => p.Program == "fleet") == 1));
 
         Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-disconnect", Host = "red@far" })).Ok);
         await Eventually(async () => (await PanesAsync(home)).All(p => p.Session != workspace));

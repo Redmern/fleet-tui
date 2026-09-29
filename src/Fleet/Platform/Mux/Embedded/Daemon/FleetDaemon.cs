@@ -253,6 +253,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "show-remote":
                         response.Ms = ShowRemote(ClientFor(request, attachedClient), request.Host, request.Workspace);
                         break;
+                    case "hand-back":
+                        response.Pending = HandBack(ClientFor(request, attachedClient), request.Text);
+                        break;
                     case "set-label":
                         if (_model.Client(ClientFor(request, attachedClient) ?? string.Empty) is { } labelled)
                         {
@@ -1072,9 +1075,24 @@ public sealed class FleetDaemon(DaemonOptions options)
         return shown;
     }
 
+    public const string HandedBack = "switch-project";
+
+    private bool HandBack(string? client, string? action)
+    {
+        if (action != HandedBack || client is null || _model.Client(client)?.Label is null
+            || !_sessions.TryGetValue(client, out var viewer))
+        {
+            return false;
+        }
+
+        viewer.Pending.Enqueue(new HostEffect { Kind = HostEffects.HandBack, Value = action });
+        options.Log($"{client}: {action} handed back to the machine viewing it");
+        return true;
+    }
+
     private void Forward(RemoteLink link, HostEffect effect)
     {
-        if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell))
+        if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell or HostEffects.HandBack))
         {
             return;
         }
@@ -1084,6 +1102,16 @@ public sealed class FleetDaemon(DaemonOptions options)
             var workspace = RemoteWorkspace(link.Name);
             foreach (var session in _sessions.Values.Where(s => _model.Client(s.Client)?.Showing == workspace))
             {
+                if (effect.Kind == HostEffects.HandBack)
+                {
+                    if (effect.Value == HandedBack)
+                    {
+                        OpenMenu(session.Client, HandedBack);
+                    }
+
+                    continue;
+                }
+
                 session.Pending.Enqueue(effect);
             }
         }

@@ -219,8 +219,9 @@ in this window; `SHIFT` opens it in a new window attached over ssh.
 
 A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar
 reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode and the
-fleet menu (`ctrl+enter`) all act on the remote. `ctrl+s s` stays local, so it is the way
-back to a project on this machine. One window at a time follows a given remote machine;
+fleet menu (`ctrl+enter`) all act on the remote. Switch project always opens this machine's
+switcher, from `ctrl+s s` or from the remote's menu, so you can always get back to a project
+here. One window at a time follows a given remote machine;
 disconnecting it closes its view here and leaves its panes running there.### Notifications
 
 Every project's dashboard has a **Notifications** tab next to Agents, Subs and Repositories.

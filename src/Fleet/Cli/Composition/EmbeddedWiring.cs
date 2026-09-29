@@ -374,6 +374,24 @@ public static class EmbeddedWiring
         }
     }
 
+    public static bool HandBack(string action)
+    {
+        if (Environment.GetEnvironmentVariable(FleetDaemon.ClientVariable) is not { Length: > 0 })
+        {
+            return false;
+        }
+
+        try
+        {
+            using var driver = new EmbeddedDriver(Endpoint.Default());
+            return driver.HandBackAsync(action).GetAwaiter().GetResult();
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return false;
+        }
+    }
+
     public static bool OpenMenu(string? action)
     {
         try

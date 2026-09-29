@@ -218,6 +218,8 @@ public static class HostEffects
     public const string Bell = "bell";
 
     public const string OpenRemote = "open-remote";
+
+    public const string HandBack = "hand-back";
 }
 
 public sealed class HostEffect
