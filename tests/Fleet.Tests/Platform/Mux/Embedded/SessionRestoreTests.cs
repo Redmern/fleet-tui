@@ -241,7 +241,7 @@ public sealed class SessionRestoreTests
     }
 
     [Fact]
-    public async Task Shutdown_saves_the_session_before_the_daemon_exits()
+    public async Task Stopping_the_daemon_forgets_its_projects_so_the_next_start_is_fresh()
     {
         var dir = Directory.CreateTempSubdirectory("fleet-shutdown-").FullName;
         var file = Path.Combine(dir, "embedded-session.json");
@@ -265,14 +265,15 @@ public sealed class SessionRestoreTests
             {
                 Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "techweb", Cwd = dir, Args = ["claude"] })).Ok);
 
-                // The first render tick may save; the shutdown must save what came after it.
+                // The first render tick saves; the shutdown must remove that save, not refresh it.
                 await Task.Delay(300);
+                Assert.Contains("\"techweb\"", Saved(file), StringComparison.Ordinal);
                 Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "api", Cwd = dir, Args = ["claude"] })).Ok);
                 _ = control.RequestAsync(new ControlRequest { Op = "shutdown" });
                 await running.WaitAsync(TimeSpan.FromSeconds(10));
             }
 
-            Assert.Contains("\"api\"", Saved(file), StringComparison.Ordinal);
+            Assert.False(File.Exists(file));
         }
         finally
         {

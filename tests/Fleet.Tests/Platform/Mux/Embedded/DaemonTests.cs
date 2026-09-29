@@ -966,7 +966,33 @@ public sealed class DaemonTests : IAsyncLifetime
 
         Assert.True((await control.RequestAsync(new ControlRequest { Op = "notices", Workspace = "techweb", Count = 3, Bell = true })).Ok);
         await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.Bell));
-        Assert.Equal((3, 0), _daemon.Model.Notices("techweb"));
+        Assert.Equal((3, 0), _daemon.Model.Notices(_daemon.Model.Client(client.Id)!));
+    }
+
+    [Fact]
+    public async Task A_window_only_hears_about_the_projects_in_it()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        await SpawnAsync(control, "api", "claude");
+        await SpawnAsync(control, "lonely", "claude");
+        var both = await AttachAsync(workspace: "techweb");
+        await both.SendCommandAsync("show", "api");
+        await both.SendCommandAsync("show", "techweb");
+        var single = await AttachAsync(workspace: "lonely");
+        await both.WaitForFramesAsync(1);
+        await single.WaitForFramesAsync(1);
+
+        var api = await control.RequestAsync(new ControlRequest { Op = "notices", Workspace = "api", Count = 2, Bell = true });
+
+        Assert.True(api.Pending);
+        await Eventually(() => both.Effects.Any(e => e.Kind == HostEffects.Bell));
+        Assert.Equal((0, 2), _daemon.Model.Notices(_daemon.Model.Client(both.Id)!));
+        Assert.Equal((0, 0), _daemon.Model.Notices(_daemon.Model.Client(single.Id)!));
+        Assert.DoesNotContain(single.Effects, e => e.Kind == HostEffects.Bell);
+
+        await SpawnAsync(control, "unseen", "claude");
+        Assert.False((await control.RequestAsync(new ControlRequest { Op = "notices", Workspace = "unseen", Count = 1, Bell = true })).Pending);
     }
 
     [Fact]

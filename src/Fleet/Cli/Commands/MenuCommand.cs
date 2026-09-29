@@ -300,12 +300,16 @@ public static class MenuCommand
                 {
                     var noticeMux = Adapters.Mux(Adapters.Log()).Driver;
                     var notices = Adapters.Notices();
+                    var inWindow = SwitchProjectHandler.Applies(noticeMux)
+                        ? (await ProjectsInWindow(noticeMux, projects.List()).ConfigureAwait(false)).Select(p => p.Name).Append(project.Name).ToList()
+                        : null;
                     ShowNoticesView.Show(
                         app,
                         keymap,
                         notices,
                         (project, keys) => notices.Save(project, NoticeSync.Dismiss(notices.Load(project), keys, DateTime.UtcNow)),
-                        notice => OpenNotice(noticeMux, projects.List(), notice));
+                        notice => OpenNotice(noticeMux, projects.List(), notice),
+                        inWindow);
                     break;
                 }
 

@@ -57,6 +57,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
+    private volatile bool _forgotten;
 
     public MuxModel Model => _model;
 
@@ -216,16 +217,21 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                         break;
                     case "notices":
-                        _model.SetNotices(request.Workspace ?? string.Empty, request.Count);
-                        if (request.Bell)
                         {
-                            foreach (var session in _sessions.Values)
-                            {
-                                session.Pending.Enqueue(new HostEffect { Kind = HostEffects.Bell });
-                            }
-                        }
+                            var noticed = request.Workspace ?? string.Empty;
+                            _model.SetNotices(noticed, request.Count);
+                            response.Pending = _model.InAnyWindow(noticed);
 
-                        break;
+                            if (request.Bell)
+                            {
+                                foreach (var session in _sessions.Values.Where(s => _model.Client(s.Client) is { } c && MuxModel.InWindow(c, noticed)))
+                                {
+                                    session.Pending.Enqueue(new HostEffect { Kind = HostEffects.Bell });
+                                }
+                            }
+
+                            break;
+                        }
                     case "list-remotes":
                         response.Remotes = [.. _remotes.Values.Select(r => r.Snapshot())];
                         break;
@@ -269,7 +275,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "shutdown":
                         if (options.SessionFile is not null)
                         {
-                            SaveSession(SessionJson());
+                            _forgotten = true;
+                            _savedSession = null;
+                            SaveSession(string.Empty);
                         }
 
                         _stop.Cancel();
@@ -1077,6 +1085,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string HandedBack = "switch-project";
 
+
     private bool HandBack(string? client, string? action)
     {
         if (action != HandedBack || client is null || _model.Client(client)?.Label is null
@@ -1871,7 +1880,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 persisted = SessionDue() ? SessionJson() : null;
             }
 
-            if (persisted is not null)
+            if (persisted is not null && !_forgotten)
             {
                 SaveSession(persisted);
             }
@@ -1971,7 +1980,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             : args);
 
     private bool SessionDue() =>
-        options.SessionFile is not null && DateTime.UtcNow - _lastSave >= options.SaveEvery;
+        options.SessionFile is not null && !_forgotten && DateTime.UtcNow - _lastSave >= options.SaveEvery;
 
     private string SessionJson()
     {

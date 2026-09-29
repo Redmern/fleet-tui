@@ -315,7 +315,7 @@ public static class EmbeddedWiring
             return 1;
         }
 
-        await Console.Out.WriteLineAsync($"fleetd (pid {pid}) stopped and its panes closed; fleet attach starts a new one and restores the session")
+        await Console.Out.WriteLineAsync($"fleetd (pid {pid}) stopped: its panes are closed and its projects forgotten; fleet attach or opening a project starts fresh")
             .ConfigureAwait(false);
         return 0;
     }
@@ -411,8 +411,7 @@ public static class EmbeddedWiring
         try
         {
             _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
-            _ownFloat.NoticesAsync(project, open, bell).GetAwaiter().GetResult();
-            return true;
+            return _ownFloat.NoticesAsync(project, open, bell).GetAwaiter().GetResult();
         }
         catch (Ports.Mux.Exceptions.MuxUnavailableException)
         {

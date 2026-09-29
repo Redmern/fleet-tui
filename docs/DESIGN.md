@@ -4072,6 +4072,21 @@ leave the remote's layout code alone:
   made on the remote, `ctrl+s s` opens the local switcher for `@<machine>`, and
   disconnecting removes the view. Not yet exercised against a real ssh remote with
   the ghostty terminal in between.
+## A window hears only its own projects, 2026-09-29
+
+- **Scope is the window.** A client's window is `Showing` plus `ClientState.Projects`
+  (what `MuxModel.InWindow` checks). The pill's "elsewhere" count sums only the other
+  projects in that window; `notices` rings the bell only in windows that hold the
+  project, and answers whether any window holds it. The dashboard shows a toast only
+  when it does, so a project that sits in fleetd with no window stays silent. The
+  notification center lists the window's projects (`ProjectsInWindow`) under All.
+  Notices are still detected and kept for every project; only the alerting is scoped.
+- **Stopping forgets.** `fleet daemon stop` deletes the saved session instead of
+  saving it, and no later render tick may write it back (`_forgotten`), so the next
+  start opens only the project you open. A crash or a restart without `stop` still
+  restores from the file written every second.
+- **The dashboard re-tells its count** every 30 s, so a fresh fleetd learns the
+  counts without waiting for one to change.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

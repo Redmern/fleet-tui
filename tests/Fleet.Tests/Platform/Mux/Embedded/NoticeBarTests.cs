@@ -11,12 +11,16 @@ public class NoticeBarTests
     private string Bar(string client) => Composer.Compose(_model.View(client)!, _ => null, null).RowText(0);
 
     [Fact]
-    public void The_project_pill_carries_its_open_notices_and_those_of_other_open_projects()
+    public void The_project_pill_carries_its_open_notices_and_those_of_the_other_projects_in_its_window()
     {
         _model.Spawn("techweb", "C:/x", ["claude"]);
         _model.Spawn("api", "C:/y", ["claude"]);
+        _model.Spawn("elsewhere", "C:/z", ["claude"]);
         var client = _model.Connect(80, 4, "techweb");
+        _model.Show(client.Id, "api");
+        _model.Show(client.Id, "techweb");
 
+        _model.SetNotices("elsewhere", 7);
         Assert.DoesNotContain("●", Bar(client.Id));
 
         _model.SetNotices("api", 2);

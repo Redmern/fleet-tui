@@ -39,9 +39,14 @@ public sealed class MuxModel
 
     public void SetNotices(string workspace, int open) => _notices[workspace] = Math.Max(0, open);
 
-    public (int Here, int Elsewhere) Notices(string? workspace) =>
-        (workspace is null ? 0 : _notices.GetValueOrDefault(workspace),
-         _notices.Where(n => !Same(n.Key, workspace ?? string.Empty) && Workspace(n.Key) is not null).Sum(n => n.Value));
+    public (int Here, int Elsewhere) Notices(ClientState client) =>
+        (client.Showing is { } showing ? _notices.GetValueOrDefault(showing) : 0,
+         _notices.Where(n => !Same(n.Key, client.Showing) && InWindow(client, n.Key) && Workspace(n.Key) is not null).Sum(n => n.Value));
+
+    public static bool InWindow(ClientState client, string workspace) =>
+        Same(client.Showing, workspace) || client.Projects.Any(p => Same(p, workspace));
+
+    public bool InAnyWindow(string workspace) => _clients.Values.Any(c => InWindow(c, workspace));
 
     public PaneState Spawn(string workspace, string cwd, IReadOnlyList<string> args)
     {
@@ -1041,7 +1046,7 @@ public sealed class MuxModel
         {
             Frame = frame,
             FrameTitle = frame is null ? null : $"fleet — {workspace!.Name}",
-            Notices = Notices(workspace?.Name),
+            Notices = Notices(c),
         };
     }
 

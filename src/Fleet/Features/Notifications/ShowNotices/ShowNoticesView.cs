@@ -17,9 +17,12 @@ public static class ShowNoticesView
         Keymap keymap,
         INoticeStore store,
         Action<string, IReadOnlyList<string>> dismiss,
-        Func<Notice, Task<string?>> open)
+        Func<Notice, Task<string?>> open,
+        IReadOnlyCollection<string>? only = null)
     {
-        var projects = store.Projects();
+        var projects = only is null
+            ? store.Projects()
+            : [.. store.Projects().Where(p => only.Contains(p, StringComparer.OrdinalIgnoreCase))];
         IReadOnlyList<string> names = [AllTab, .. projects];
 
         var window = FleetTheme.Overlay("notifications", 100, 24);

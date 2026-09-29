@@ -559,6 +559,7 @@ public static class DashboardWiring
 
         var noticeStore = Adapters.Notices();
         var toldOpen = -1;
+        var toldAt = DateTime.MinValue;
         var seenAlive = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var quiet = new Dictionary<string, (string Text, DateTime Since)>(StringComparer.OrdinalIgnoreCase);
         var againstBase = new System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime At, int Behind, bool Conflicts)>(StringComparer.OrdinalIgnoreCase);
@@ -641,20 +642,23 @@ public static class DashboardWiring
 
         void Alert(int open, IReadOnlyList<Notice> fresh)
         {
-            if (open == toldOpen && fresh.Count == 0)
+            if (open == toldOpen && fresh.Count == 0 && DateTime.UtcNow - toldAt < NoticeChecks.RetellEvery)
             {
                 return;
             }
 
             toldOpen = open;
+            toldAt = DateTime.UtcNow;
             var settings = noticeStore.Settings();
             var embedded = mux.Name == "embedded";
 
             _ = Task.Run(() =>
             {
+                var inWindow = true;
+
                 if (embedded)
                 {
-                    EmbeddedWiring.Notices(project.Name, open, settings.Bell && fresh.Count > 0);
+                    inWindow = EmbeddedWiring.Notices(project.Name, open, settings.Bell && fresh.Count > 0);
                 }
                 else if (settings.Bell && fresh.Count > 0)
                 {
@@ -662,7 +666,7 @@ public static class DashboardWiring
                     Console.Out.Flush();
                 }
 
-                if (settings.Toast && fresh.Count > 0)
+                if (settings.Toast && fresh.Count > 0 && inWindow)
                 {
                     Platform.Notifications.DesktopToast.Show($"fleet · {project.Name}", NoticeSync.Summary(fresh));
                 }

@@ -140,12 +140,14 @@ fleet doctor                check the environment
 fleet version               show the version, and check for an update
 fleet update                download and install the latest release
 fleet attach                attach this terminal to fleetd, starting it if needed
-fleet daemon stop           save fleetd's session and stop it; the next attach restores it
+fleet daemon stop           stop fleetd and forget its projects; the next start is fresh
 ```
 
 After `fleet update`, a running fleetd keeps the old binary. `fleet daemon stop` then
 `fleet attach` moves it onto the new one. Stopping closes every pane, so any agent
-in the middle of a task is interrupted.
+in the middle of a task is interrupted, and forgets which projects were open: the next
+start opens only the project you open. (A crash or restart without `stop` still restores
+everything.)
 
 `fleet doctor` is the end-to-end smoke test: it reports the config directory, the
 selected multiplexer driver and whether it responds, the git version, every saved

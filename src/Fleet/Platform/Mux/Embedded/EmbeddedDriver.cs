@@ -212,8 +212,8 @@ public sealed class EmbeddedDriver(
     public Task ShutdownAsync(CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "shutdown" }, ct);
 
-    public Task NoticesAsync(string workspace, int open, bool bell, CancellationToken ct = default) =>
-        RequestAsync(new ControlRequest { Op = "notices", Workspace = workspace, Count = open, Bell = bell }, ct);
+    public async Task<bool> NoticesAsync(string workspace, int open, bool bell, CancellationToken ct = default) =>
+        (await RequestAsync(new ControlRequest { Op = "notices", Workspace = workspace, Count = open, Bell = bell }, ct).ConfigureAwait(false)).Pending;
 
     public void Dispose()
     {
