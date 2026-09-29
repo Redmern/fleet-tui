@@ -3895,6 +3895,29 @@ border. It is now one window:
 - A blank line under the tab bar was tried and then taken out again at the
   user's request; content starts right under the bar.
 
+### The agents list loads faster
+
+*List agents* (and every dashboard refresh) waited on git before showing
+anything:
+- each agent's branch state is 2–4 git processes (`rev-list` against upstream,
+  or `rev-parse` then `rev-list` against origin or the base, then
+  `status --porcelain`), run one after another;
+- the Agents and Subs lists each kept their own per-list cache, so every
+  worktree was measured twice.
+
+`BranchStates` now keeps one cache (fresh for 2 s; the dashboard refreshes
+every 4 s) that the Agents, Subs and Repositories lists share. Before
+building their rows, the lists `Warm` it: every worktree is measured once,
+six at a time. The rows still appear only when they are complete, so there is
+no first draw without branch state.
+
+Measured on the user's real worktrees, the same git work took:
+
+| Project | Worktrees | Before | After |
+|---|---|---|---|
+| fleet | 5 | 1.2 s | 0.35 s |
+| pc | 11 | 3.2 s | 0.53 s |
+
 ### Glyphs whose width terminals disagree on
 
 The dashboard's empty-list hint looked two columns short. That row starts and

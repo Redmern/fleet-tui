@@ -76,13 +76,10 @@ public static class DashboardWiring
         FleetAction.Close,
     ];
 
-    private static Func<AgentRecord, BranchState> Memoized(BranchStates states)
+    private static Func<AgentRecord, BranchState> Warmed(BranchStates states, IEnumerable<AgentRecord> agents)
     {
-        var cache = new Dictionary<string, BranchState>(StringComparer.OrdinalIgnoreCase);
-
-        return agent => cache.TryGetValue(agent.Worktree, out var cached)
-            ? cached
-            : cache[agent.Worktree] = states.For(agent.Worktree, agent.BaseRef);
+        states.Warm(agents.Select(a => (a.Worktree, (string?)a.BaseRef)));
+        return agent => states.For(agent.Worktree, agent.BaseRef);
     }
 
     private static AgentRecord? At(ListAgentsHandler lister, string project, int tab, int index)
@@ -556,10 +553,16 @@ public static class DashboardWiring
 
         return new DashboardCallbacks(
             LoadRepositories: async () =>
-                (IReadOnlyList<RepositoryChoice>)(await repositories
-                        .HandleAsync(project.Root).ConfigureAwait(false))
+            {
+                var found = (await repositories.HandleAsync(project.Root).ConfigureAwait(false))
                     .Select(r => new RepositoryChoice(r.Name, r.Path, r.DefaultBranch))
-                    .ToList(),
+                    .ToList();
+
+                states.Warm(found.Select(r =>
+                    (RepositoryWorktree.For(r.Directory, r.DefaultBranch, Directory.Exists), (string?)null)));
+
+                return (IReadOnlyList<RepositoryChoice>)found;
+            },
 
             AddRepository: async () =>
             {
@@ -644,7 +647,7 @@ public static class DashboardWiring
                     .ToList();
 
                 return new AgentBoard(
-                    AgentRows.For(board, Memoized(states)),
+                    AgentRows.For(board, Warmed(states, board)),
                     board.Count,
                     [.. board.Select(a => a.Hidden)],
                     [.. board.Select(a => a.Status)]);
@@ -660,7 +663,7 @@ public static class DashboardWiring
                 var trigger = settings.Load(project.Name).Trigger;
 
                 return new SubBoard(
-                    SubRows.For(listing, Memoized(states), trigger),
+                    SubRows.For(listing, Warmed(states, listing.Flat.Select(e => e.Agent)), trigger),
                     listing.Flat.Count(e => !e.IsChild),
                     [.. listing.Flat.Select(e => e.Agent.Hidden)],
                     SubRows.GapsAfter(listing));
