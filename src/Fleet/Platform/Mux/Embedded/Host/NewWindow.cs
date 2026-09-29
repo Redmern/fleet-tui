@@ -81,7 +81,7 @@ public static class NewWindow
         }
 
         if (variable("WEZTERM_EXECUTABLE") is { Length: > 0 } own
-            && Path.GetFileNameWithoutExtension(own).StartsWith("wezterm", StringComparison.OrdinalIgnoreCase))
+            && Path.GetFileNameWithoutExtension(own.Replace('\\', '/')).StartsWith("wezterm", StringComparison.OrdinalIgnoreCase))
         {
             return own;
         }
