@@ -452,12 +452,7 @@ public static class DashboardWiring
 
             var panes = barPanes;
 
-            bool ShownInBar(AgentRecord a) => panes.Any(p =>
-                AgentPanes.Owns(p, a)
-                && !string.Equals(
-                    p.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase));
-
-            return [.. records.Select(a => a with { Hidden = !ShownInBar(a) })];
+            return [.. records.Select(a => a with { Hidden = !AgentPanes.Shown(a, panes) })];
         }
 
         AgentRecord WithActivity(AgentRecord agent)
@@ -831,6 +826,7 @@ public static class DashboardWiring
             HideAgent: (tab, index) =>
             {
                 var agent = At(lister, project.Name, tab, index);
+
 
                 if (agent is null)
                 {

@@ -26,6 +26,23 @@ public class AgentPanesTests
         Assert.True(AgentPanes.Owns(Pane("remove-pr-pipeline", string.Empty), Sub));
     }
 
+    [Theory]
+    [InlineData("techweb", true)]
+    [InlineData(FleetWorkspaces.Hidden, false)]
+    [InlineData("techweb" + FleetWorkspaces.HiddenSuffix, false)]
+    public void An_agent_is_shown_unless_its_panes_sit_in_a_hidden_workspace(string workspace, bool shown)
+    {
+        var pane = new Pane(new PaneId("2"), workspace, "t1", workspace, string.Empty, Sub.Worktree, true);
+
+        Assert.Equal(shown, AgentPanes.Shown(Sub, [pane]));
+    }
+
+    [Fact]
+    public void An_agent_without_panes_is_not_shown()
+    {
+        Assert.False(AgentPanes.Shown(Sub, []));
+    }
+
     [Fact]
     public void The_dashboard_tab_is_never_an_agents_even_when_the_cwd_lines_up()
     {
