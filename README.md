@@ -217,7 +217,7 @@ dismissed notices stay listed, greyed out, for a day. They are kept per project 
 
 When a notice opens, fleet shows a desktop toast (on by default) and can ring the terminal
 bell (off by default); toggle both in the notification center. The embedded multiplexer's
-tab bar shows `● 2 +3`: two open notices in this project, three in other open projects.
+tab bar adds the counts to the project pill, `fleet ● 2 +3`: two open notices in this project,three in other open projects; the pill turns yellow while this project has any.
 Click it to open the notification center.
 
 The dashboard keys act on whatever row is selected there, so they are not in this

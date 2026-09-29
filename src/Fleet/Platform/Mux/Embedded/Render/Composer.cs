@@ -403,16 +403,14 @@ public static class Composer
             return Place(parts);
         }
 
-        parts.AddRange(Pill($" {workspace.Name} ", Lavender, Crust, CellAttr.Bold));
-
         var (here, elsewhere) = view.Notices;
-        if (here > 0 || elsewhere > 0)
-        {
-            parts.Add(new BarSegment(" ", Cell.Default, Cell.Default));
-            parts.Add(here > 0
-                ? new BarSegment($"{LeftCap} ● {here}{(elsewhere > 0 ? $" +{elsewhere}" : string.Empty)} {RightCap}", Crust, Yellow, CellAttr.Bold, Notices: true, Caps: true)
-                : new BarSegment($" ● +{elsewhere} ", Yellow, Cell.Default, CellAttr.None, Notices: true));
-        }
+        var noticed = here > 0 || elsewhere > 0;
+        var counts = !noticed
+            ? string.Empty
+            : $" ●{(here > 0 ? $" {here}" : string.Empty)}{(elsewhere > 0 ? $" +{elsewhere}" : string.Empty)}";
+
+        parts.Add(new BarSegment(
+            $"{LeftCap} {workspace.Name}{counts} {RightCap}", Crust, here > 0 ? Yellow : Lavender, CellAttr.Bold, Notices: noticed, Caps: true));
 
         for (var i = 0; i < workspace.Tabs.Count; i++)
         {
@@ -441,9 +439,6 @@ public static class Composer
 
         return Place(parts);
     }
-
-    private static IEnumerable<BarSegment> Pill(string text, uint accent, uint fg, CellAttr attrs) =>
-        [new BarSegment($"{LeftCap}{text}{RightCap}", fg, accent, attrs, Caps: true)];
 
     private static List<(BarSegment Segment, int Start)> Place(List<BarSegment> parts)
     {

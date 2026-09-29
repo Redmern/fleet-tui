@@ -11,7 +11,7 @@ public class NoticeBarTests
     private string Bar(string client) => Composer.Compose(_model.View(client)!, _ => null, null).RowText(0);
 
     [Fact]
-    public void The_bar_shows_this_projects_open_notices_and_those_of_other_open_projects()
+    public void The_project_pill_carries_its_open_notices_and_those_of_other_open_projects()
     {
         _model.Spawn("techweb", "C:/x", ["claude"]);
         _model.Spawn("api", "C:/y", ["claude"]);
@@ -20,13 +20,13 @@ public class NoticeBarTests
         Assert.DoesNotContain("●", Bar(client.Id));
 
         _model.SetNotices("api", 2);
-        Assert.Contains(" ● +2 ", Bar(client.Id));
+        Assert.Contains(" techweb ● +2 ", Bar(client.Id));
 
         _model.SetNotices("techweb", 1);
-        Assert.Contains("● 1 +2", Bar(client.Id));
+        Assert.Contains(" techweb ● 1 +2 ", Bar(client.Id));
 
         _model.SetNotices("gone", 5);
-        Assert.Contains("● 1 +2", Bar(client.Id));
+        Assert.Contains(" techweb ● 1 +2 ", Bar(client.Id));
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class NoticeBarTests
         _model.SetNotices("techweb", 4);
         var (start, end) = Composer.NoticeSpan(_model.View(client.Id)!)!.Value;
 
-        Assert.Contains("● 4", Bar(client.Id)[start..end]);
+        Assert.Contains("techweb ● 4", Bar(client.Id)[start..end]);
     }
 
     [Fact]
