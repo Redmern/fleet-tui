@@ -3387,6 +3387,21 @@ newest. `attach` and `run` start the newest; a running fleetd keeps the build
 it started from until `restart`. Builds that no process runs are pruned,
 keeping the three newest. The old `artifacts\publish\<rid>\fleet.exe` is still
 used (and recognised as running) until the first new-style build.
+
+**End-to-end scripts (2026-09-29).** They are run by hand before a merge, not
+in CI: they start real processes and take about a minute.
+
+| Script | Covers |
+|---|---|
+| `scripts\e2e\windows.ps1 [-Fleet <exe>]` | its own fleetd and a scripted attach client recording frames: ConPTY panes, the dashboard in a pane, the warm menu (shown under 200 ms, in one frame), Settings in one frame, floats, restore after a kill. The Windows console client itself is not covered |
+| `scripts/e2e/linux.sh <fleet>` | tmux as the real terminal around `fleet` and `fleet attach`: the Unix client and PTYs, which-key, menu, splits, tabs, zoom, floats, a resize, the mouse, copy mode, switching project, detach and reattach, restore after `kill -9` |
+
+Both isolate fleetd (own config, own pipe or socket) and stop only the fleetd
+they started, so a session running from the same build is left alone. They
+exit with the number of failed checks. From Windows, run the Linux script on
+the binary CI built: `gh run download <run id> -n fleet-linux-x64 -D
+artifacts\e2e\linux`, then `wsl -e bash scripts/e2e/linux.sh
+artifacts/e2e/linux/fleet`.
 ## Keys, which-key, the tab bar and dashboard menus, 2026-09-29
 
 After merging `main` (orchestrators' Claude inside nvim, `update <version>`,
