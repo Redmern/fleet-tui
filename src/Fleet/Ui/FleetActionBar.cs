@@ -9,10 +9,11 @@ public sealed class FleetActionBar
 {
     private readonly ChipStrip _strip;
 
-    public FleetActionBar(Pos y)
+    public FleetActionBar(Pos y, bool alignRight = false)
     {
         _strip = new ChipStrip
         {
+            AlignRight = alignRight,
             X = 1,
             Y = y,
             Width = Dim.Fill(1),
@@ -32,6 +33,12 @@ public sealed class FleetActionBar
         private readonly List<(int From, int To, Action Run)> _hits = [];
 
         private IReadOnlyList<FleetSpan> _spans = [];
+
+        private int _total;
+
+        public bool AlignRight { get; init; }
+
+        private int Start => AlignRight ? Math.Max(0, Viewport.Width - _total) : 0;
 
         public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
         {
@@ -67,6 +74,7 @@ public sealed class FleetActionBar
             }
 
             _spans = spans;
+            _total = Math.Max(0, offset - 1);
 
             SetNeedsLayout();
             SetNeedsDraw();
@@ -76,9 +84,9 @@ public sealed class FleetActionBar
         {
             var basis = GetAttributeForRole(Terminal.Gui.Drawing.VisualRole.Normal);
             var width = Viewport.Width;
-            var drawn = 0;
+            var drawn = Start;
 
-            Move(0, 0);
+            Move(drawn, 0);
 
             foreach (var span in _spans)
             {
@@ -113,7 +121,7 @@ public sealed class FleetActionBar
 
             foreach (var (from, to, run) in _hits)
             {
-                if (at.X >= from && at.X <= to)
+                if (at.X - Start >= from && at.X - Start <= to)
                 {
                     run();
                     return true;

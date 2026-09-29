@@ -43,7 +43,7 @@ public static class ShowMenuView
             e.Handled = true;
         };
 
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        var bar = new FleetActionBar(Pos.AnchorEnd(2), alignRight: true);
 
         bar.Show(
         [
