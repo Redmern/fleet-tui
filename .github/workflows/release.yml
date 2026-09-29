@@ -105,9 +105,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        # A tag with a suffix (v0.6.0-rc.1) is a prerelease: GitHub never makes
+        # it "latest", so `fleet update` (which asks for the latest release)
+        # does not hand it to everyone; `fleet update <tag>` still installs it.
         run: |
+          kind=()
+          case "$TAG" in *-*) kind=(--prerelease) ;; esac
           gh release view "$TAG" >/dev/null 2>&1 \
             && gh release upload "$TAG" dist/* --clobber \
-            || gh release create "$TAG" dist/* \
+            || gh release create "$TAG" dist/* "${kind[@]}" \
                  --title "fleet $TAG" \
                  --notes "Native binaries for Windows and Linux. Install with scripts/get-fleet.ps1 or scripts/get-fleet.sh, then run 'fleet setup'."
