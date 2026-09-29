@@ -3811,6 +3811,44 @@ show the same project (attaching from a second machine).
   itself halfway. Verified with the real menu: Enter quit both projects and
   sent the window home; Tab, Enter quit only the current one, and the window
   moved to the other.
+
+## Claude profiles per project, 2026-09-29
+
+Claude picks its account from `CLAUDE_CONFIG_DIR`. The user's PowerShell
+profile derives that from the folder, using `~/.profiles.psd1`, and WezTerm
+panes get it through a `cmd.exe` AutoRun hook. Panes under fleetd start
+`claude` directly, so before this they all inherited whatever the shell that
+started fleetd had.
+
+- **fleetd now sets it per pane** from the pane's folder, through
+  `DaemonOptions.PaneEnv`, wired to `PaneProfile.Env`. The rule is the
+  profile's own:
+  - the longest `Roots` entry that equals or contains the folder, else
+    `Default`;
+  - `CLAUDE_CONFIG_DIR` is that profile's `Claude` folder, and is left unset
+    for `~\.claude`, Claude's own default;
+  - a folder-derived value sets `ACCOUNT_PROFILE_AUTO=1`, so the user's shell
+    inside the pane keeps following `cd`;
+  - a pin or hand-set value inherited from fleetd's own shell is cleared,
+    because fleetd serves every project.
+- **A project can pin a profile.** `claudeProfile` in `projects/<name>.json`,
+  set from *fleet menu > Settings > Claude profile* (`C`). It sets
+  `ACCOUNT_PROFILE=<name>` (the same as `p <name>`) and that profile's
+  `CLAUDE_CONFIG_DIR`, and it wins over the folder. It applies to panes
+  opened from then on.
+- An explicit `CLAUDE_CONFIG_DIR` in a spawn request still wins over both.
+  Without a `~/.profiles.psd1`, panes keep the environment they get, as before.
+- `~/.profiles.psd1` is read by a small data-file parser (`PowerShellData`:
+  `@{}`, `@()`, quoted strings, `$true`/`$false`/`$null`, comments). It is
+  reread only when the file changes.
+- `fleet doctor` lists each project's profile and whether it is pinned or
+  comes from the folder.
+- **Verified** on the real file: all seven projects resolve as the PowerShell
+  profile resolves them. An isolated fleetd started from a shell with the
+  personal profile gave an Upskilling pane `.claude-rib`, a fleet pane
+  `.claude-personal`, and a techweb pane no `CLAUDE_CONFIG_DIR` at all (work,
+  the default).
+## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

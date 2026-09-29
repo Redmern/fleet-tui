@@ -59,6 +59,7 @@ public static class MenuCommand
         FleetAction.ViewLogs,
         FleetAction.CleanupProject,
         FleetAction.EditAidlcMode,
+        FleetAction.EditClaudeProfile,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -265,6 +266,37 @@ public static class MenuCommand
                     if (picked is not null)
                     {
                         aidlcSettings.Save(project.Name, current.WithAidlcMode((AidlcMode)picked.Value));
+                    }
+
+                    break;
+                }
+
+            case FleetAction.EditClaudeProfile:
+                {
+                    if (EmbeddedWiring.ClaudeProfiles(project.Root) is not var (byFolder, profiles))
+                    {
+                        FleetDialog.Error(
+                            app, "Claude profile", $"No profiles found in {EmbeddedWiring.ProfilesFile}.");
+
+                        break;
+                    }
+
+                    var picked = FleetPicker.Choose(
+                        app,
+                        $"Claude profile — {project.Name} (for panes opened from now on)",
+                        [
+                            new PickerEntry("by folder", $"from ~/.profiles.psd1: {byFolder}", "f"),
+                            .. profiles.Select((p, i) => new PickerEntry(
+                                p.Name, p.Folder, (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))),
+                        ],
+                        keymap,
+                        project.ClaudeProfile is { } current
+                            ? Math.Max(0, profiles.ToList().FindIndex(p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase)) + 1)
+                            : 0);
+
+                    if (picked is { } index)
+                    {
+                        projects.Save(project with { ClaudeProfile = index == 0 ? null : profiles[index - 1].Name });
                     }
 
                     break;

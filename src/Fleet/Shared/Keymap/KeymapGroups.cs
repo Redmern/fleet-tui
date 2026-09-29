@@ -24,6 +24,7 @@ public static class KeymapGroups
             FleetAction.ViewLogs,
             FleetAction.CleanupProject,
             FleetAction.EditAidlcMode,
+            FleetAction.EditClaudeProfile,
         ]),
         ("dashboard",
         [

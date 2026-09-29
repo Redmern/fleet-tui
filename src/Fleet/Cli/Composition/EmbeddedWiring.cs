@@ -9,10 +9,12 @@ using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Pty;
+using Fleet.Platform.Profiles;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
@@ -69,11 +71,61 @@ public static class EmbeddedWiring
             ExitWhenEmptyAfter = IdleExit,
             SessionFile = SessionFile(Environment.GetEnvironmentVariable(Endpoint.Variable)),
             WarmMenus = true,
+            PaneEnv = cwd => PaneProfile.Env(cwd, Adapters.Projects().List(), Profiles()),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
         return 0;
     }
+
+    private static (DateTime Stamp, AccountProfiles? Profiles) _profiles;
+
+    public static AccountProfiles? Profiles()
+    {
+        var file = AccountProfiles.DefaultFile;
+        if (!File.Exists(file))
+        {
+            return null;
+        }
+
+        var stamp = File.GetLastWriteTimeUtc(file);
+        if (_profiles.Stamp != stamp)
+        {
+            _profiles = (stamp, AccountProfiles.Parse(File.ReadAllText(file)));
+        }
+
+        return _profiles.Profiles;
+    }
+
+    public static string ProfilesFile => AccountProfiles.DefaultFile;
+
+    public static string? ClaudeProfileOf(Project project)
+    {
+        try
+        {
+            if (Profiles() is not { } profiles)
+            {
+                return null;
+            }
+
+            if (project.ClaudeProfile is { Length: > 0 } pinned)
+            {
+                return profiles.Named(pinned) is { } found ? $"{found.Name} (pinned)" : $"{pinned} (pinned, NOT in {ProfilesFile})";
+            }
+
+            return $"{profiles.ForFolder(project.Root)?.Name ?? "none"} (by folder)";
+        }
+        catch (Exception e) when (e is FormatException or IOException or UnauthorizedAccessException)
+        {
+            return $"cannot read {ProfilesFile}: {e.Message}";
+        }
+    }
+
+    public static (string ByFolder, IReadOnlyList<(string Name, string Folder)> Profiles)? ClaudeProfiles(string root) =>
+        Profiles() is { All.Count: > 0 } profiles
+            ? (profiles.ForFolder(root)?.Name ?? "none",
+                [.. profiles.All.Select(p => (p.Name, AccountProfiles.ConfigDir(p) ?? "Claude's default folder"))])
+            : null;
 
     public static async Task<EmbeddedHealth> HealthAsync()
     {

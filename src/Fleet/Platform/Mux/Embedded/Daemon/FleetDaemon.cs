@@ -33,6 +33,8 @@ public sealed class DaemonOptions
     public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
 
     public bool WarmMenus { get; init; }
+
+    public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -1334,7 +1336,18 @@ public sealed class FleetDaemon(DaemonOptions options)
             .Where(e => e.Key != ClientVariable)
             .ToDictionary(e => e.Key, e => e.Value);
 
-        var env = new Dictionary<string, string>(requested ?? new Dictionary<string, string>())
+        var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in ProfileEnv(pane.Cwd))
+        {
+            env[key] = value;
+        }
+
+        foreach (var (key, value) in requested ?? new Dictionary<string, string>())
+        {
+            env[key] = value;
+        }
+
+        env = new Dictionary<string, string>(env, StringComparer.OrdinalIgnoreCase)
         {
             ["FLEET_MUX"] = "embedded",
             [PaneVariable] = pane.Id,
@@ -1408,6 +1421,19 @@ public sealed class FleetDaemon(DaemonOptions options)
             _model.Kill(pane.Id);
             runtime.Dispose();
             throw new InvalidOperationException($"could not start {program}: {e.Message}");
+        }
+    }
+
+    private IReadOnlyDictionary<string, string> ProfileEnv(string cwd)
+    {
+        try
+        {
+            return options.PaneEnv(cwd) ?? new Dictionary<string, string>();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException)
+        {
+            options.Log($"pane env for {cwd}: {e.Message}");
+            return new Dictionary<string, string>();
         }
     }
 

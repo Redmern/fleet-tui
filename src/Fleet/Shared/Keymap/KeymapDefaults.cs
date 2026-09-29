@@ -43,6 +43,7 @@ public static class KeymapDefaults
             [FleetAction.EditFleetConfig] = "E",
             [FleetAction.OpenSettings] = "S",
             [FleetAction.EditAidlcMode] = "A",
+            [FleetAction.EditClaudeProfile] = "C",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -76,6 +77,7 @@ public static class KeymapDefaults
             FleetAction.EditFleetConfig => "edit fleet config",
             FleetAction.OpenSettings => "settings",
             FleetAction.EditAidlcMode => "aidlc mode",
+            FleetAction.EditClaudeProfile => "claude profile",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -118,6 +120,7 @@ public static class KeymapDefaults
             FleetAction.EditFleetConfig => "Edit fleet config",
             FleetAction.OpenSettings => "Settings",
             FleetAction.EditAidlcMode => "AIDLC mode",
+            FleetAction.EditClaudeProfile => "Claude profile",
             _ => action.ToString(),
         };
 }

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Fleet.Platform.Storage.Models;
 
 public sealed class ProjectFile
@@ -7,4 +9,7 @@ public sealed class ProjectFile
     public string Name { get; set; } = string.Empty;
 
     public string Root { get; set; } = string.Empty;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ClaudeProfile { get; set; }
 }

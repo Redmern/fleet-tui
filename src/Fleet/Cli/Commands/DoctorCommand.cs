@@ -55,6 +55,11 @@ public static class DoctorCommand
                 $"                  mcp: {(claude.ServerRegistered ? "registered" : "NOT registered")}, "
                 + $"{(claude.ServerEnabled ? "enabled" : "NOT enabled")}, "
                 + $"dispatch hook {(claude.HookInstalled ? "installed" : "NOT installed")}");
+
+            if (EmbeddedWiring.ClaudeProfileOf(project) is { } profile)
+            {
+                Console.WriteLine($"                  claude profile: {profile}");
+            }
         }
 
         if (report.Projects.Count > 0)

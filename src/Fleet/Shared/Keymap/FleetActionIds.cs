@@ -30,6 +30,7 @@ public static class FleetActionIds
         FleetAction.EditFleetConfig => "edit-fleet-config",
         FleetAction.OpenSettings => "settings-menu",
         FleetAction.EditAidlcMode => "aidlc-mode",
+        FleetAction.EditClaudeProfile => "claude-profile",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -58,6 +59,7 @@ public static class FleetActionIds
         "edit-fleet-config" => FleetAction.EditFleetConfig,
         "settings-menu" => FleetAction.OpenSettings,
         "aidlc-mode" => FleetAction.EditAidlcMode,
+        "claude-profile" => FleetAction.EditClaudeProfile,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };
