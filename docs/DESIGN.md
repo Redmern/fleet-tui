@@ -3626,6 +3626,25 @@ rebuilds from it when it starts.
   workspaces, tabs, float and pane programs; no pane shells were left
   orphaned. Tests cover the round trip, zoom, skipped modal floats, the
   resume mapping, per-endpoint files, and a daemon restart through the file.
+## The menu's first frame is its last draw, 2026-09-29
+
+The menu float stayed hidden until it had drawn at its fitted size, but it
+was revealed on the *first* output after the fit that had content. After a
+resize Terminal.Gui writes the screen in several passes (and sets its title),
+and on a loaded machine those land in separate frames. So the menu showed a
+partial draw and corrected it a moment later.
+
+- A hidden float is now revealed only once its pane has also been quiet for
+  `RevealWhenQuiet` (60 ms). Every pass and the title have landed by then,
+  so the first frame shown is the finished one.
+- While a float waits to be revealed, the render loop wakes every 15 ms
+  instead of 250 ms, so the wait adds about the quiet window and no more.
+- `RevealAnyway` still reveals a float that never goes quiet.
+- **Verified with the real binary** (a raw attach client recording every
+  frame): each open sends a single frame with the whole menu, and nothing is
+  redrawn after it. A later open appears after about 130 ms. A daemon test
+  feeds eight quick passes and checks that the first frame showing the menu
+  already holds the last one; it fails without the quiet window.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

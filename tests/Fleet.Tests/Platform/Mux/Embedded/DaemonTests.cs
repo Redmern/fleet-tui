@@ -836,6 +836,34 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.Equal((60, 12), _panes.Started.Last(p => p.Program == "fleet").Size);
     }
     [Fact]
+    public async Task The_menu_float_appears_with_its_last_draw_not_a_partial_one()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "claude");
+        var client = await AttachAsync(cols: 100, rows: 30, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("menu");
+        await Eventually(() => _panes.ByProgram("fleet") is not null);
+        var menu = _panes.ByProgram("fleet")!;
+        var id = menu.Env[FleetDaemon.PaneVariable];
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = id, Cols = 60, Rows = 12 })).Ok);
+
+        for (var pass = 0; pass < 8; pass++)
+        {
+            menu.Emit($"pass {pass}\nrow\n");
+            await Task.Delay(15);
+        }
+
+        Assert.DoesNotContain("fleet menu", client.AllText);
+        menu.Emit("FINAL\n");
+
+        await client.WaitForAsync("fleet menu");
+        var first = client.Frames.First(f => f.Contains("fleet menu", StringComparison.Ordinal));
+        Assert.Contains("FINAL", first, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_float_can_be_tiled_and_floated_again()
     {
         var control = await ControlAsync();
@@ -896,6 +924,8 @@ public sealed class DaemonTests : IAsyncLifetime
         public int FrameCount => _frames.Count;
 
         public string AllText => string.Concat(_frames);
+
+        public IReadOnlyList<string> Frames => [.. _frames];
 
         public static async Task<TestClient> ConnectAsync(Endpoint endpoint, string role, int cols, int rows, string? workspace)
         {

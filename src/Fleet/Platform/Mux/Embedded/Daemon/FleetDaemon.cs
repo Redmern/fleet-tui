@@ -893,6 +893,10 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public static readonly TimeSpan RevealAfterFit = TimeSpan.FromMilliseconds(1200);
 
+    public static readonly TimeSpan RevealWhenQuiet = TimeSpan.FromMilliseconds(60);
+
+    private volatile bool _revealing;
+
     private (int Cols, int Rows)? _menuFit;
 
     private void Fit(string pane, int cols, int rows, ControlRequest request)
@@ -950,6 +954,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void RevealReadyFloats()
     {
+        _revealing = false;
+
         foreach (var box in _model.HiddenFloats().ToList())
         {
             _runtimes.TryGetValue(box.Pane, out var runtime);
@@ -964,11 +970,16 @@ public sealed class FleetDaemon(DaemonOptions options)
                         && runtime is not null
                         && runtime.Outputs > box.RevealAfterOutput
                         && HasContent(runtime.Screen)
-                        && (box.Baseline is null || Signature(runtime.Screen) != box.Baseline);
+                        && (box.Baseline is null || Signature(runtime.Screen) != box.Baseline)
+                        && Environment.TickCount64 - runtime.LastOutputAt >= RevealWhenQuiet.TotalMilliseconds;
 
             if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
             {
                 box.Hidden = false;
+            }
+            else
+            {
+                _revealing = true;
             }
         }
     }
@@ -1314,7 +1325,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             try
             {
-                await _wake.WaitAsync(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+                await _wake.WaitAsync(TimeSpan.FromMilliseconds(_revealing ? 15 : 250), ct).ConfigureAwait(false);
                 await Task.Delay(options.FrameDelay, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)

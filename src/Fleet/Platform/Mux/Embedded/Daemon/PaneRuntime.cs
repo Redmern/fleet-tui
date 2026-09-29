@@ -42,6 +42,8 @@ public sealed class PaneRuntime : IDisposable
 
     public long Outputs { get; private set; }
 
+    public long LastOutputAt { get; private set; }
+
     public void Reply(byte[] bytes) => Send(Modes.Win32Input ? KittyReplies.Without(bytes) : bytes);
 
     public void Send(byte[] bytes)
@@ -64,6 +66,7 @@ public sealed class PaneRuntime : IDisposable
             Modes.Feed(buffer.AsSpan(0, count));
             Dirty = true;
             Outputs++;
+            LastOutputAt = Environment.TickCount64;
             return before != ModeSummary;
         }
     }
