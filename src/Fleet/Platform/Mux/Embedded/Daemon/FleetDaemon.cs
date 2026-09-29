@@ -35,6 +35,8 @@ public sealed class DaemonOptions
     public bool WarmMenus { get; init; }
 
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
+
+    public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -1427,8 +1429,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             });
         };
 
-        var (program, args) = pane.Args.Count > 0
-            ? (pane.Args[0], pane.Args.Skip(1).ToList())
+        var command = pane.Args.Count > 0 ? pane.Args : options.Shell();
+        var (program, args) = command.Count > 0
+            ? (command[0], command.Skip(1).ToList())
             : (DefaultShell(), new List<string>());
 
         try
@@ -1815,7 +1818,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
-    private static string DefaultShell()
+    public static string DefaultShell()
     {
         if (OperatingSystem.IsWindows())
         {

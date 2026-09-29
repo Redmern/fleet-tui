@@ -3845,6 +3845,23 @@ show the same project (attaching from a second machine).
   on alpha. Launching the terminal is covered by `NewWindowTests`. The e2e
   runs deliberately don't open windows on the desktop.
 
+### New panes open the default shell
+
+A pane opened without a program (`prefix c` for a new tab, the splits,
+`prefix f` for a float) used to start `COMSPEC`, which is `cmd.exe`. It now
+starts the user's default shell (`DefaultShell.Resolve`, passed to fleetd as
+`DaemonOptions.Shell`):
+
+1. `FLEET_SHELL`, a command line;
+2. Windows Terminal's `defaultProfile` command line, read from its
+   `settings.json` (comments and trailing commas allowed; `%VARS%` expanded);
+3. `pwsh -NoLogo` when pwsh is on `PATH`;
+4. `COMSPEC`, or `SHELL` on Unix, as before.
+
+Verified: a pane opened with no program started
+`C:\Program Files\PowerShell\7\pwsh.exe` (the WT default profile) and showed
+the user's own prompt.
+
 ## Claude profiles per project, 2026-09-29
 
 Claude picks its account from `CLAUDE_CONFIG_DIR`. The user's PowerShell

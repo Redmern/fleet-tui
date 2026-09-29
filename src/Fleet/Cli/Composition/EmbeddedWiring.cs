@@ -72,6 +72,11 @@ public static class EmbeddedWiring
             SessionFile = SessionFile(Environment.GetEnvironmentVariable(Endpoint.Variable)),
             WarmMenus = true,
             PaneEnv = cwd => PaneProfile.Env(cwd, Adapters.Projects().List(), Profiles()),
+            Shell = () => DefaultShell.Resolve(
+                Environment.GetEnvironmentVariable,
+                Platform.Mux.Models.MuxEnvironment.OnPath,
+                DefaultShell.WindowsTerminalSettings,
+                OperatingSystem.IsWindows()),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
