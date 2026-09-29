@@ -3632,6 +3632,9 @@ rebuilds from it when it starts.
     build does not relaunch the old one.
   - The project's own restore (`RestoreSessionHandler`, matching agents by
     worktree) sees the panes are there and adds nothing twice.
+  - Focus comes back too: a workspace whose top float had the focus gets it
+    back (`floatFocused`). If a menu was on top, restore skips it, and the
+    tab gets the focus.
 - **`scripts\embedded.ps1 stop`/`restart`** kill fleetd before its other
   processes; were a `fleet dash` pane to die first, fleetd could save a
   session without it.

@@ -663,6 +663,8 @@ public sealed class MuxModel
                 Name = workspace.Name,
                 ActiveTab = Math.Max(0, workspace.Tabs.FindIndex(t => t.Id == workspace.ActiveTab)),
                 FloatsShown = workspace.FloatsShown,
+                FloatFocused = workspace.FloatFocused && workspace.FloatsShown
+                    && workspace.Floats.LastOrDefault(f => !f.Parked) is { Modal: false },
             };
 
             foreach (var tab in workspace.Tabs)
@@ -760,6 +762,7 @@ public sealed class MuxModel
             }
 
             workspace.FloatsShown = saved.FloatsShown && workspace.Floats.Count > 0;
+            workspace.FloatFocused = saved.FloatFocused && workspace.FloatsShown;
 
             if (workspace.Tabs.Count == 0 && workspace.Floats.Count == 0)
             {

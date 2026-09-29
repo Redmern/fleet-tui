@@ -27,6 +27,9 @@ public sealed class WorkspaceSnapshot
 
     [JsonPropertyName("floatsShown")]
     public bool FloatsShown { get; set; }
+
+    [JsonPropertyName("floatFocused")]
+    public bool FloatFocused { get; set; }
 }
 
 public sealed class TabSnapshot

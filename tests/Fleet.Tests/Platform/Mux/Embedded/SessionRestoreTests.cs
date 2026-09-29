@@ -99,6 +99,47 @@ public sealed class SessionRestoreTests
         Assert.Equal(tab.Root.Panes().First(), tab.Zoomed);
     }
 
+    private static string? FocusedAfterRestore(MuxModel model)
+    {
+        var restored = new MuxModel();
+        restored.Restore(model.Snapshot(), Same);
+        var client = restored.Connect(100, 30, "alpha");
+        var focused = restored.View(client.Id)!.Focused;
+        return focused is null ? null : string.Join(' ', restored.Pane(focused)!.Args);
+    }
+
+    [Fact]
+    public void A_focused_float_is_focused_again_after_a_restore()
+    {
+        var model = new MuxModel();
+        model.Spawn("alpha", "C:/a", ["tile"]);
+        model.SpawnFloat("alpha", "C:/a", ["box"]);
+
+        Assert.Equal("box", FocusedAfterRestore(model));
+    }
+
+    [Fact]
+    public void A_focused_tab_stays_focused_with_its_floats_shown_behind_it()
+    {
+        var model = new MuxModel();
+        var tile = model.Spawn("alpha", "C:/a", ["tile"]);
+        model.SpawnFloat("alpha", "C:/a", ["box"]);
+        model.Focus(tile.Id);
+
+        Assert.Equal("tile", FocusedAfterRestore(model));
+    }
+
+    [Fact]
+    public void A_menu_that_had_the_focus_is_not_restored_so_the_tab_gets_it()
+    {
+        var model = new MuxModel();
+        model.Spawn("alpha", "C:/a", ["tile"]);
+        model.SpawnFloat("alpha", "C:/a", ["box"]);
+        model.SpawnFloat("alpha", "C:/a", ["fleet", "menu"], modal: true);
+
+        Assert.Equal("tile", FocusedAfterRestore(model));
+    }
+
     [Fact]
     public void Relaunch_is_applied_to_every_restored_pane()
     {
