@@ -3996,7 +3996,7 @@ with its base, or it is 20+ commits behind).
   a toast (Windows: WinRT through `powershell.exe` under PowerShell's app id;
   Linux: `notify-send`). Under fleetd it sends `notices` with its open count
   and whether to ring; fleetd keeps the counts, draws `● here +elsewhere` inside
-  the project pill, which turns yellow while this project has open notices (elsewhere counts only open workspaces), and sends a `bell`
+  the project pill (elsewhere counts only open workspaces), and sends a `bell`
   host effect to every attached client, which writes BEL. Under WezTerm the
   dashboard writes BEL itself.
 - **The center** (fleet menu > Notifications, or a click on the pill) reads every

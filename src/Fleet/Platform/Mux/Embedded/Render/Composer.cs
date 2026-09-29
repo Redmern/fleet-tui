@@ -410,7 +410,7 @@ public static class Composer
             : $" ●{(here > 0 ? $" {here}" : string.Empty)}{(elsewhere > 0 ? $" +{elsewhere}" : string.Empty)}";
 
         parts.Add(new BarSegment(
-            $"{LeftCap} {workspace.Name}{counts} {RightCap}", Crust, here > 0 ? Yellow : Lavender, CellAttr.Bold, Notices: noticed, Caps: true));
+            $"{LeftCap} {workspace.Name}{counts} {RightCap}", Crust, Lavender, CellAttr.Bold, Notices: noticed, Caps: true));
 
         for (var i = 0; i < workspace.Tabs.Count; i++)
         {
