@@ -613,6 +613,144 @@ public sealed class MuxModel
                || state.Title.Contains("nvim", StringComparison.OrdinalIgnoreCase);
     }
 
+    public SessionSnapshot Snapshot()
+    {
+        var snapshot = new SessionSnapshot();
+
+        foreach (var workspace in _workspaces.Where(w => !Same(w.Name, OverlayWorkspace)))
+        {
+            var saved = new WorkspaceSnapshot
+            {
+                Name = workspace.Name,
+                ActiveTab = Math.Max(0, workspace.Tabs.FindIndex(t => t.Id == workspace.ActiveTab)),
+                FloatsShown = workspace.FloatsShown,
+            };
+
+            foreach (var tab in workspace.Tabs)
+            {
+                var order = tab.Root.Panes().ToList();
+                saved.Tabs.Add(new TabSnapshot
+                {
+                    Title = tab.Title,
+                    Root = Save(tab.Root),
+                    ActivePane = Math.Max(0, order.IndexOf(tab.ActivePane)),
+                    Zoomed = tab.Zoomed is { } zoomed ? order.IndexOf(zoomed) : -1,
+                });
+            }
+
+            foreach (var box in workspace.Floats.Where(f => !f.Modal))
+            {
+                saved.Floats.Add(new FloatSnapshot
+                {
+                    Pane = Save(_panes[box.Pane]),
+                    X = box.Bounds.X,
+                    Y = box.Bounds.Y,
+                    Width = box.Bounds.Width,
+                    Height = box.Bounds.Height,
+                    Title = box.Title,
+                });
+            }
+
+            if (saved.Tabs.Count > 0 || saved.Floats.Count > 0)
+            {
+                snapshot.Workspaces.Add(saved);
+            }
+        }
+
+        return snapshot;
+    }
+
+    public IReadOnlyList<PaneState> Restore(
+        SessionSnapshot snapshot, Func<IReadOnlyList<string>, IReadOnlyList<string>> relaunch)
+    {
+        var created = new List<PaneState>();
+
+        PaneState Revive(PaneSnapshot saved)
+        {
+            var pane = NewPane(saved.Cwd, relaunch(saved.Args));
+            pane.Env = new Dictionary<string, string>(saved.Env);
+            created.Add(pane);
+            return pane;
+        }
+
+        Layout? Rebuild(LayoutSnapshot? node) => node switch
+        {
+            { Pane: { } pane } => Layout.Of(Revive(pane).Id),
+            { First: var first, Second: var second } => (Rebuild(first), Rebuild(second)) switch
+            {
+                (null, var only) => only,
+                (var only, null) => only,
+                var (a, b) => new LayoutSplit(node.SideBySide, Math.Clamp(node.Ratio, 0.05, 0.95), a, b),
+            },
+            _ => null,
+        };
+
+        foreach (var saved in snapshot.Workspaces.Where(w => w.Name.Length > 0 && !Same(w.Name, OverlayWorkspace)))
+        {
+            var workspace = WorkspaceOrNew(saved.Name);
+
+            foreach (var tab in saved.Tabs)
+            {
+                if (Rebuild(tab.Root) is not { } root)
+                {
+                    continue;
+                }
+
+                var order = root.Panes().ToList();
+                workspace.Tabs.Add(new TabState($"t{++_nextTab}", root)
+                {
+                    Title = tab.Title,
+                    ActivePane = order[Math.Clamp(tab.ActivePane, 0, order.Count - 1)],
+                    Zoomed = tab.Zoomed >= 0 && tab.Zoomed < order.Count ? order[tab.Zoomed] : null,
+                });
+            }
+
+            if (workspace.Tabs.Count > 0)
+            {
+                workspace.ActiveTab = workspace.Tabs[Math.Clamp(saved.ActiveTab, 0, workspace.Tabs.Count - 1)].Id;
+            }
+
+            foreach (var box in saved.Floats)
+            {
+                workspace.Floats.Add(new FloatState(
+                    Revive(box.Pane).Id,
+                    new Rect(box.X, Math.Max(StatusRows, box.Y), Math.Max(MinFloatWidth, box.Width), Math.Max(MinFloatHeight, box.Height)))
+                {
+                    Title = box.Title,
+                });
+            }
+
+            workspace.FloatsShown = saved.FloatsShown && workspace.Floats.Count > 0;
+
+            if (workspace.Tabs.Count == 0 && workspace.Floats.Count == 0)
+            {
+                _workspaces.Remove(workspace);
+            }
+        }
+
+        return created;
+    }
+
+    private LayoutSnapshot Save(Layout layout) => layout switch
+    {
+        LayoutLeaf leaf => new LayoutSnapshot { Pane = Save(_panes[leaf.Pane]) },
+        LayoutSplit split => new LayoutSnapshot
+        {
+            SideBySide = split.SideBySide,
+            Ratio = split.Ratio,
+            First = Save(split.First),
+            Second = Save(split.Second),
+        },
+        _ => new LayoutSnapshot(),
+    };
+
+    private static PaneSnapshot Save(PaneState pane) => new()
+    {
+        Cwd = pane.Cwd,
+        Args = [.. pane.Args],
+        Env = new Dictionary<string, string>(pane.Env),
+    };
+
     private static int FindDivider(IReadOnlyList<Divider> dividers, Func<Divider, bool> match)
     {
         for (var i = 0; i < dividers.Count; i++)
@@ -1055,6 +1193,8 @@ public sealed class PaneState(string id, string cwd, IReadOnlyList<string> args)
     public string Cwd { get; set; } = cwd;
 
     public IReadOnlyList<string> Args { get; } = args;
+
+    public IReadOnlyDictionary<string, string> Env { get; set; } = new Dictionary<string, string>();
 
     public string Title { get; set; } = string.Empty;
 

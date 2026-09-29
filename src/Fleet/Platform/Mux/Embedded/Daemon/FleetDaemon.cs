@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
@@ -24,6 +25,10 @@ public sealed class DaemonOptions
     public TimeSpan FrameDelay { get; init; } = TimeSpan.FromMilliseconds(4);
 
     public TimeSpan? ExitWhenEmptyAfter { get; init; }
+
+    public string? SessionFile { get; init; }
+
+    public TimeSpan SaveEvery { get; init; } = TimeSpan.FromSeconds(1);
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -39,6 +44,8 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Pane, string Text)> _copies = new();
     private readonly CancellationTokenSource _stop = new();
     private DateTime _lastBusy = DateTime.UtcNow;
+    private DateTime _lastSave = DateTime.MinValue;
+    private string? _savedSession;
 
     public MuxModel Model => _model;
 
@@ -51,6 +58,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         using var listener = options.Endpoint.Listen();
         options.Log($"fleetd listening on {options.Endpoint.Address}");
+
+        RestoreSession();
 
         var render = Task.Run(() => RenderLoopAsync(token), CancellationToken.None);
 
@@ -1156,6 +1165,10 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Start(PaneState pane, IReadOnlyDictionary<string, string>? requested)
     {
+        pane.Env = (requested ?? new Dictionary<string, string>())
+            .Where(e => e.Key != ClientVariable)
+            .ToDictionary(e => e.Key, e => e.Value);
+
         var env = new Dictionary<string, string>(requested ?? new Dictionary<string, string>())
         {
             ["FLEET_MUX"] = "embedded",
@@ -1316,6 +1329,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             List<(AttachSession Session, long Seq, bool Full, string Bytes, Stopwatch? Switching)> sends = [];
             List<(AttachSession Session, HostEffect Effect)> effects = [];
+            string? persisted;
 
             lock (_gate)
             {
@@ -1387,6 +1401,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                     options.Log("nothing left to run; fleetd exits");
                     _stop.Cancel();
                 }
+
+                persisted = SessionDue() ? SessionJson() : null;
+            }
+
+            if (persisted is not null)
+            {
+                SaveSession(persisted);
             }
 
             foreach (var (session, effect) in effects)
@@ -1415,6 +1436,101 @@ public sealed class FleetDaemon(DaemonOptions options)
                 {
                 }
             }
+        }
+    }
+
+    private void RestoreSession()
+    {
+        if (options.SessionFile is not { } file || !File.Exists(file))
+        {
+            return;
+        }
+
+        SessionSnapshot? snapshot;
+        try
+        {
+            var json = File.ReadAllText(file);
+            snapshot = JsonSerializer.Deserialize(json, SessionJsonContext.Default.SessionSnapshot);
+            File.Copy(file, Path.ChangeExtension(file, ".previous.json"), overwrite: true);
+            _savedSession = json;
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+            options.Log($"could not read the saved session {file}: {e.Message}");
+            return;
+        }
+
+        if (snapshot is null)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            var panes = _model.Restore(snapshot, Relaunch);
+            _model.Resizes();
+
+            var started = 0;
+            foreach (var pane in panes)
+            {
+                try
+                {
+                    Start(pane, pane.Env);
+                    started++;
+                }
+                catch (InvalidOperationException e)
+                {
+                    options.Log($"restore: {e.Message}");
+                }
+            }
+
+            options.Log($"restored {started} of {panes.Count} panes from {file}");
+        }
+    }
+
+    private IReadOnlyList<string> Relaunch(IReadOnlyList<string> args) =>
+        AgentHarness.Resumed(args.Count > 0 && Path.GetFileNameWithoutExtension(args[0]) == "fleet"
+            ? [options.FleetExecutable, .. args.Skip(1)]
+            : args);
+
+    private bool SessionDue() =>
+        options.SessionFile is not null && DateTime.UtcNow - _lastSave >= options.SaveEvery;
+
+    private string SessionJson()
+    {
+        _lastSave = DateTime.UtcNow;
+        var snapshot = _model.Snapshot();
+        return snapshot.Workspaces.Count == 0
+            ? string.Empty
+            : JsonSerializer.Serialize(snapshot, SessionJsonContext.Default.SessionSnapshot);
+    }
+
+    private void SaveSession(string json)
+    {
+        if (json == _savedSession || options.SessionFile is not { } file)
+        {
+            return;
+        }
+
+        try
+        {
+            if (json.Length == 0)
+            {
+                File.Delete(file);
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(file))!);
+                var temporary = file + ".tmp";
+                File.WriteAllText(temporary, json);
+                File.Move(temporary, file, overwrite: true);
+            }
+
+            _savedSession = json;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            options.Log($"could not save the session to {file}: {e.Message}");
         }
     }
 

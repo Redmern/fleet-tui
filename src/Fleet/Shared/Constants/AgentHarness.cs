@@ -73,6 +73,15 @@ public static class AgentHarness
     public static IReadOnlyList<string> OrchestratorCommand(bool resume) =>
         [Nvim, "-c", NvimStartupClaudeOnly(resume ? " " + ResumeArgument : string.Empty)];
 
+    public static IReadOnlyList<string> Resumed(IReadOnlyList<string> command) => command switch
+    {
+        [Nvim, "-c", var startup] when startup == NvimStartupClaudeOnly(string.Empty) => OrchestratorCommand(resume: true),
+        [Nvim, "-c", NvimStartupWithClaude] =>
+            [Nvim, "-c", NvimStartupWithClaude.Replace("vim.cmd('ClaudeCode')", $"vim.cmd('ClaudeCode {ResumeArgument}')", StringComparison.Ordinal)],
+        [Claude] => [Claude, ResumeArgument],
+        _ => command,
+    };
+
     public static bool HostedInNvim(string harness) => CommandFor(harness)[0] == Nvim;
 
     public const string TellPrefix = ":FleetTell ";

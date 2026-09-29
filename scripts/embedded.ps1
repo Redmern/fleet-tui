@@ -53,10 +53,18 @@ function Get-Fleetd {
 
 function Stop-Fleetd {
     $running = @(Get-Fleetd)
-    if ($running.Count -gt 0) {
-        $running | Stop-Process -Force
-        Write-Host "stopped $($running.Count) fleet process(es) of these builds"
-    }
+    if ($running.Count -eq 0) { return }
+
+    $daemons = @($running | Where-Object {
+            $line = if ($IsWindows) { (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)").CommandLine } else { (Get-Content "/proc/$($_.Id)/cmdline" -Raw) -replace "`0", ' ' }
+            $line -match '\sdaemon(\s|$)'
+        })
+
+    # fleetd goes first: were its panes to exit before it, it would save a session without them
+    $daemons | Stop-Process -Force
+    Start-Sleep -Milliseconds 300
+    $running | Where-Object { -not $_.HasExited } | Stop-Process -Force -ErrorAction SilentlyContinue
+    Write-Host "stopped $($running.Count) fleet process(es) of these builds"
 }
 
 function Remove-OldBuilds {

@@ -3582,6 +3582,50 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
   - a click on `Subs (0)` in a real `fleet dash` moved the tab underline to
     Subs.
   - Tests cover the session listing and a click on the tab bar view.
+## fleetd restores its session, 2026-09-29
+
+A fleetd restart (a new build, a crash, `scripts\embedded.ps1 restart`) used
+to lose every tab, split and agent pane. fleetd now keeps a snapshot and
+rebuilds from it when it starts.
+
+- **What is saved:** `<fleet config>\embedded-session.json`, or
+  `embedded-session-<endpoint>.json` when `FLEET_ENDPOINT` is set, so test and
+  second daemons never share one. It holds:
+  - every workspace (hidden ones too) with its active tab;
+  - per tab: its title, the layout tree (orientation and ratio), the active
+    pane and the zoomed pane;
+  - non-modal floats with their bounds and title;
+  - per pane: cwd, args and the env it was spawned with, minus
+    `FLEET_CLIENT`, which names a client that will be gone.
+  - Modal floats (the fleet menu, approvals) and the old overlay workspace
+    are left out: they belong to a moment, not the session.
+- **When:** the render loop serialises the model (source-generated
+  `SessionJsonContext`) at most once a second, and writes it only when it
+  changed, through a temporary file and a move. An empty model deletes the
+  file, so after fleetd exits because nothing is left (or `fleet quit`)
+  nothing comes back; after a kill or crash, everything does.
+- **Restore:** before the render loop starts, the snapshot is read (and
+  copied to `.previous.json`, so a bad restore does not lose it), the model
+  is rebuilt with new pane ids, and each pane is started again. A pane that
+  fails to start is dropped and logged.
+  - `AgentHarness.Resumed` picks up the conversation: bare `claude` gets
+    `--continue`, the orchestrator's nvim gets its resume command, and nvim
+    with `ClaudeCode` gets `ClaudeCode --continue`. Anything else runs as it
+    was.
+  - A pane whose program is `fleet` (the dashboard, `titled` wrappers) is
+    started with the running fleetd's own executable, so a restart onto a new
+    build does not relaunch the old one.
+  - The project's own restore (`RestoreSessionHandler`, matching agents by
+    worktree) sees the panes are there and adds nothing twice.
+- **`scripts\embedded.ps1 stop`/`restart`** kill fleetd before its other
+  processes; were a `fleet dash` pane to die first, fleetd could save a
+  session without it.
+- **Verified with the real binary** (scratchpad build, isolated config and
+  endpoint): a split tab at 30/70, a float and a second workspace were
+  saved, fleetd was killed hard, and a new fleetd came back with the same
+  workspaces, tabs, float and pane programs; no pane shells were left
+  orphaned. Tests cover the round trip, zoom, skipped modal floats, the
+  resume mapping, per-endpoint files, and a daemon restart through the file.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

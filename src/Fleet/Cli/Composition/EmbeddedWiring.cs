@@ -10,6 +10,7 @@ using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Ui;
@@ -62,10 +63,20 @@ public static class EmbeddedWiring
             Log = line => log.Write($"fleetd: {line}"),
             FleetExecutable = Adapters.Executable,
             ExitWhenEmptyAfter = IdleExit,
+            SessionFile = SessionFile(Environment.GetEnvironmentVariable(Endpoint.Variable)),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
         return 0;
+    }
+
+    public static string SessionFile(string? endpoint)
+    {
+        var suffix = string.IsNullOrWhiteSpace(endpoint)
+            ? string.Empty
+            : "-" + new string(endpoint.Trim().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '-').ToArray());
+
+        return Path.Combine(FleetHome.Config, $"embedded-session{suffix}.json");
     }
 
     public static async Task<int> AttachAsync(string? workspace, string? sshHost, IFleetLog log)

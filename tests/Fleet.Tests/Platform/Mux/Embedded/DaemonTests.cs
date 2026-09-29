@@ -872,7 +872,7 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.Fail("the condition never became true");
     }
 
-    private sealed class TestClient : IAsyncDisposable
+    internal sealed class TestClient : IAsyncDisposable
     {
         private readonly Wire _wire;
         private readonly ConcurrentQueue<string> _frames = new();
