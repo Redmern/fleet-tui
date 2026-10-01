@@ -70,6 +70,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
     private volatile bool _forgotten;
+    private readonly Lock _saveGate = new();
 
     public MuxModel Model => _model;
 
@@ -316,9 +317,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "shutdown":
                         if (options.SessionFile is not null)
                         {
-                            _forgotten = true;
-                            _savedSession = null;
-                            SaveSession(string.Empty);
+                            lock (_saveGate)
+                            {
+                                _forgotten = true;
+                                _savedSession = null;
+                                SaveSessionLocked(string.Empty);
+                            }
                         }
 
                         _stop.Cancel();
@@ -2181,7 +2185,15 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void SaveSession(string json)
     {
-        if (json == _savedSession || options.SessionFile is not { } file)
+        lock (_saveGate)
+        {
+            SaveSessionLocked(json);
+        }
+    }
+
+    private void SaveSessionLocked(string json)
+    {
+        if (json == _savedSession || options.SessionFile is not { } file || (_forgotten && json.Length > 0))
         {
             return;
         }
