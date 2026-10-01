@@ -18,6 +18,8 @@ public static class FleetPaths
 
     public static string KeymapFile => Path.Combine(Config, "keybinds.json");
 
+    public static string KnownRemotesFile => Path.Combine(Config, "remotes.json");
+
     public static string Settings => Path.Combine(Config, "settings");
 
     public static string Approvals => Path.Combine(Config, "approvals");

@@ -324,7 +324,7 @@ public static class MenuCommand
                 }
 
             case FleetAction.Remotes:
-                ManageRemotesView.Show(app, keymap, Adapters.Remotes());
+                ManageRemotesView.Show(app, keymap, Adapters.Remotes(), Adapters.KnownRemotes());
                 break;
 
             case FleetAction.Notifications:

@@ -155,7 +155,7 @@ public static class PickProjectCommand
         if (hosts.Count > 0)
         {
             using IApplication app = FleetUi.Start();
-            foreach (var failed in ManageRemotesView.ConnectAll(app, Adapters.Remotes(), hosts))
+            foreach (var failed in ManageRemotesView.ConnectAll(app, Adapters.Remotes(), Adapters.KnownRemotes(), hosts))
             {
                 Console.Error.WriteLine($"fleet: {failed}");
             }

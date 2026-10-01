@@ -76,6 +76,15 @@ public sealed class SwitchTabsTests
     }
 
     [Fact]
+    public void A_nicknamed_machine_shows_its_nickname_in_the_tab_and_details()
+    {
+        var tabs = SwitchTabs.For([], [], [Homelab with { Nickname = "lab" }]);
+
+        Assert.Equal("lab", tabs.Tabs[tabs.MachineTab(0)].Title);
+        Assert.Equal(["lab · open", "lab · open"], tabs.Tabs[SwitchTabs.Open].Entries.Select(e => e.Detail));
+    }
+
+    [Fact]
     public void An_empty_open_tab_falls_back_to_the_old_start()
     {
         var tabs = SwitchTabs.For([new PickerEntry("fleet"), new PickerEntry("pc")], [], []);
