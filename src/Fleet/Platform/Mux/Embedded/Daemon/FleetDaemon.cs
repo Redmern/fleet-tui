@@ -395,6 +395,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                 WireJsonContext.Default.Welcome,
                 ct).ConfigureAwait(false);
 
+            if (session is not null)
+            {
+                session.Welcomed = true;
+            }
+
             _wake.Release();
 
             while (!ct.IsCancellationRequested)
@@ -2011,7 +2016,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     }
                 }
 
-                foreach (var session in _sessions.Values)
+                foreach (var session in _sessions.Values.Where(s => s.Welcomed))
                 {
                     while (session.Pending.TryDequeue(out var pending))
                     {
@@ -2025,7 +2030,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     }
                 }
 
-                foreach (var session in _sessions.Values)
+                foreach (var session in _sessions.Values.Where(s => s.Welcomed))
                 {
                     if (_model.Client(session.Client) is { Leaving: true } && !session.SaidBye)
                     {
@@ -2290,6 +2295,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         public List<WhichKeyEntry>? WhichKey { get; set; }
 
         public bool SaidBye { get; set; }
+
+        public volatile bool Welcomed;
 
         public System.Collections.Concurrent.ConcurrentQueue<HostEffect> Pending { get; } = new();
     }
