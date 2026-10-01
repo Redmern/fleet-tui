@@ -16,6 +16,8 @@ public static class ToolArguments
 
     public const string Summary = "summary";
 
+    public const string Profile = "profile";
+
     public const string Harness = "harness";
 
     public const string DefaultBranch = "default_branch";

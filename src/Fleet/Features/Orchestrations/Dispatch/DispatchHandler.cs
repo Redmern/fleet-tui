@@ -1,5 +1,6 @@
 using Fleet.Features.Orchestrations.Dispatch.Models;
 using Fleet.Ports.Agents;
+using Fleet.Ports.Aidlc;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Mux;
@@ -8,6 +9,9 @@ using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Settings;
 using Fleet.Shared;
+using Fleet.Shared.Aidlc;
+using Fleet.Shared.Aidlc.Enums;
+using Fleet.Shared.Aidlc.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Orchestrations.Models;
@@ -25,7 +29,8 @@ public sealed class DispatchHandler(
     TimeSpan? pollInterval = null,
     IDispatchHistory? history = null,
     ISlugNamer? namer = null,
-    ISettingsStore? settings = null)
+    ISettingsStore? settings = null,
+    IIntentStore? intents = null)
 {
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
 
@@ -41,7 +46,21 @@ public sealed class DispatchHandler(
             return Result<DispatchReply>.Fail(DispatchNote.Nothing);
         }
 
-        var (prompt, useAidlc) = ResolveAidlc(trimmed, command.ProjectName);
+        var config = settings?.Load(command.ProjectName) ?? SettingsConfig.Default;
+
+        Profile? argument = null;
+
+        if (!string.IsNullOrWhiteSpace(command.Profile))
+        {
+            argument = Words.Parse<Profile>(command.Profile);
+
+            if (argument is null)
+            {
+                return Result<DispatchReply>.Fail(DispatchNote.UnknownProfile(command.Profile));
+            }
+        }
+
+        var (prompt, aidlc) = ResolveAidlc(trimmed, config.Aidlc.Mode, config.Aidlc.DefaultProfile, argument);
 
         if (prompt.Length == 0)
         {
@@ -66,11 +85,19 @@ public sealed class DispatchHandler(
 
         var brief = new OrchestrationBrief(command.ProjectName, slug, prompt, stampUtc);
         var howYouWork = HowYouWorkOverride(command.ProjectRoot);
-        var aidlc = useAidlc ? (AidlcOverride(command.ProjectRoot) ?? OrchestrationText.DefaultAidlc) : null;
+        string? process = null;
+
+        if (aidlc is var (profile, source))
+        {
+            var plan = config.Aidlc.Plan(profile);
+
+            StartIntent(folder, Intake.Start(slug, plan, source, stampUtc));
+            process = ProcessText.Render(plan, AidlcOverride(command.ProjectRoot));
+        }
 
         File.WriteAllText(
             OrchestrationPaths.InstructionsFile(folder),
-            OrchestrationText.Instructions(brief, howYouWork, aidlc));
+            OrchestrationText.Instructions(brief, howYouWork, process));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
@@ -121,7 +148,8 @@ public sealed class DispatchHandler(
 
         await KickOff(folder, ct).ConfigureAwait(false);
 
-        return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, DispatchNote.Dispatched(slug)));
+        return Result<DispatchReply>.Ok(
+            new DispatchReply(slug, folder, DispatchNote.Dispatched(slug, aidlc?.Profile)));
     }
 
     private static string? HowYouWorkOverride(string projectRoot)
@@ -144,7 +172,9 @@ public sealed class DispatchHandler(
 
         try
         {
-            return File.Exists(path) ? File.ReadAllText(path) : null;
+            var text = File.Exists(path) ? File.ReadAllText(path) : null;
+
+            return text is not null && OrchestrationText.IsClassicAidlc(text) ? null : text;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -152,28 +182,42 @@ public sealed class DispatchHandler(
         }
     }
 
-    private (string Prompt, bool UseAidlc) ResolveAidlc(string prompt, string projectName)
+    private static (string Prompt, (Profile Profile, ProfileSource Source)? Aidlc) ResolveAidlc(
+        string prompt, AidlcMode mode, Profile projectDefault, Profile? argument)
     {
-        var config = settings?.Load(projectName) ?? SettingsConfig.Default;
-
-        if (config.Aidlc.Mode == AidlcMode.Off)
+        if (mode == AidlcMode.Off)
         {
-            return (prompt, false);
+            return (prompt, null);
         }
 
-        if (config.Aidlc.Mode == AidlcMode.On)
+        var (prefixed, task) = ProfilePrefix.Split(prompt);
+
+        if (prefixed is { } fromPrefix)
         {
-            return (prompt, true);
+            return (task, (fromPrefix, ProfileSource.Prefix));
         }
 
-        var trimmed = prompt.TrimStart();
-
-        if (config.Trigger.Length > 0 && trimmed.StartsWith(config.Trigger, StringComparison.Ordinal))
+        if (argument is { } fromArgument)
         {
-            return (trimmed[config.Trigger.Length..].TrimStart(), true);
+            return (prompt, (fromArgument, ProfileSource.Argument));
         }
 
-        return (prompt, false);
+        return mode == AidlcMode.On ? (prompt, (projectDefault, ProfileSource.ProjectDefault)) : (prompt, null);
+    }
+
+    private void StartIntent(string folder, IntakeRecord record)
+    {
+        if (intents is null)
+        {
+            return;
+        }
+
+        intents.Save(folder, record.State);
+
+        foreach (var entry in record.Events)
+        {
+            intents.Append(folder, entry);
+        }
     }
 
     private async Task<string?> NameOrNull(string prompt, CancellationToken ct)

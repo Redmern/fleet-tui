@@ -32,10 +32,15 @@ public sealed class EditFleetConfigHandlerTests : IDisposable
         var instructions = File.ReadAllText(ProjectConfigPaths.InstructionsFile(_root));
         Assert.Contains(OrchestrationText.DefaultHowYouWork, instructions);
 
-        var aidlc = File.ReadAllText(ProjectConfigPaths.AidlcFile(_root));
-        Assert.Contains(OrchestrationText.DefaultAidlc, aidlc);
-
         Assert.True(File.Exists(ProjectConfigPaths.ReadmeFile(_root)));
+    }
+
+    [Fact]
+    public void It_no_longer_seeds_an_aidlc_file_because_fleet_renders_the_process_itself()
+    {
+        EditFleetConfigHandler.Ensure(_root);
+
+        Assert.False(File.Exists(ProjectConfigPaths.AidlcFile(_root)));
     }
 
     [Fact]

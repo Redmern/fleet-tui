@@ -95,4 +95,13 @@ public sealed class McpToolsTests
         Assert.Contains(spec.Params, p => p.Name == "status" && p.Required);
         Assert.Contains(spec.Params, p => p.Name == "summary" && !p.Required);
     }
+
+    [Fact]
+    public void Dispatch_takes_a_required_message_and_an_optional_aidlc_profile()
+    {
+        var spec = McpTools.Find("dispatch")!;
+
+        Assert.Contains(spec.Params, p => p.Name == "message" && p.Required);
+        Assert.Contains(spec.Params, p => p.Name == "profile" && !p.Required && p.Description.Contains("feature", StringComparison.Ordinal));
+    }
 }

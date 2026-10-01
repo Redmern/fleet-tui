@@ -90,7 +90,12 @@ public static class McpTools
         Spec(
             HarnessTool.Dispatch,
             "Dispatch a sub-orchestrator to carry out a task described in a message.",
-            new ToolParam(ToolArguments.Message, "string", "The task for the sub-orchestrator.", true)),
+            new ToolParam(ToolArguments.Message, "string", "The task for the sub-orchestrator.", true),
+            new ToolParam(
+                ToolArguments.Profile,
+                "string",
+                "Optional AIDLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this; ignored when AIDLC is off.",
+                false)),
         Spec(
             HarnessTool.Report,
             "Report your own status back to fleet (working, done, failed).",
