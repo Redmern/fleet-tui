@@ -17,18 +17,52 @@ public class KeysTests
     [InlineData("\"", "\"")]
     [InlineData("space", " ")]
     [InlineData("pageup", "\e[5~")]
+    [InlineData("enter", "\r")]
+    [InlineData("ctrl+enter", "\e[27;5;13~")]
+    [InlineData("shift+enter", "\e[27;2;13~")]
     public void A_chord_knows_the_bytes_a_unix_terminal_sends_for_it(string spec, string bytes)
     {
         Assert.Equal(Encoding.ASCII.GetBytes(bytes), KeyChord.Parse(spec)!.Value.Bytes());
     }
 
     [Theory]
-    [InlineData("ctrl+enter")]
-    [InlineData("shift+enter")]
     [InlineData("ctrl+tab")]
     public void Chords_a_unix_terminal_cannot_tell_apart_have_no_bytes(string spec)
     {
         Assert.Null(KeyChord.Parse(spec)!.Value.Bytes());
+    }
+
+    [Fact]
+    public void Ctrl_enter_and_shift_enter_reach_their_bindings_in_either_report_form()
+    {
+        var keys = MuxKeys.Defaults;
+
+        Assert.Equal("menu", keys.DirectBytes(Encoding.ASCII.GetBytes("\e[27;5;13~")).Command);
+        Assert.Equal("newline", keys.DirectBytes(Encoding.ASCII.GetBytes("\e[27;2;13~")).Command);
+        Assert.Equal("\e[27;5;13~", Encoding.ASCII.GetString(ModifiedKeys.Normalize(Encoding.ASCII.GetBytes("\e[13;5u"))));
+        Assert.Equal("abc", Encoding.ASCII.GetString(ModifiedKeys.Normalize(Encoding.ASCII.GetBytes("abc"))));
+    }
+
+    [Theory]
+    [InlineData("\e[27;5;13~", "\r")]
+    [InlineData("\e[27;5;9~", "\t")]
+    [InlineData("\e[27;2;9~", "\e[Z")]
+    [InlineData("\e[27;6;65~", "\u0001")]
+    [InlineData("\e[27;3;120~", "\ex")]
+    [InlineData("\e[27;2;33~", "!")]
+    public void A_modified_key_no_binding_wants_goes_to_the_pane_as_its_usual_bytes(string report, string legacy)
+    {
+        var (modifier, code, length) = ModifiedKeys.Parse(Encoding.ASCII.GetBytes(report))!.Value;
+
+        Assert.Equal(report.Length, length);
+        Assert.Equal(legacy, Encoding.UTF8.GetString(ModifiedKeys.Legacy(modifier, code)));
+    }
+
+    [Fact]
+    public void Text_that_only_starts_like_a_report_is_left_alone()
+    {
+        Assert.Null(ModifiedKeys.Parse(Encoding.ASCII.GetBytes("\e[27;5")));
+        Assert.Null(ModifiedKeys.Parse(Encoding.ASCII.GetBytes("\e[5~")));
     }
 
     [Fact]

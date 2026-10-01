@@ -92,7 +92,8 @@ public readonly record struct KeyChord(Mods Mods, Key Key, string? Text)
 
         var basic = Key switch
         {
-            Key.Enter when !ctrl && !shift => "\r",
+            Key.Enter when ctrl || shift => ModifiedKeys.Report(modifier, 13),
+            Key.Enter => "\r",
             Key.Tab when shift && !ctrl => "\e[Z",
             Key.Tab when !ctrl => "\t",
             Key.Escape => "\e",

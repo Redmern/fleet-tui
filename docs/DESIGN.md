@@ -4157,6 +4157,22 @@ its own projects, and the remote project `@<machine>` is showing is one of them.
   only the remote's projects. The menu now asks with just its pane; fleetd finds the
   client that opened that menu (`ClientState.Menu`) and hands the switcher back to the
   viewing machine.
+## ctrl+enter and shift+enter on Linux, 2026-10-01
+
+A Unix terminal sends Enter, ctrl+enter and shift+enter all as `\r`, so the attach
+client could not see the menu key (or the newline key) and only `ctrl+s space` worked.
+The client now asks the terminal for xterm's `modifyOtherKeys` level 1 on attach
+(`CSI > 4 ; 1 m`, reset on detach). Level 1 leaves ordinary control keys (`ctrl+c`,
+`ctrl+a`, ...) alone and reports the ambiguous ones as `CSI 27 ; mod ; key ~`, which is
+what the `ctrl+enter`/`shift+enter` bindings now match (`KeyChord.Bytes`); terminals that
+answer in the `CSI key ; mod u` form are normalized first. A report no binding wants is
+turned back into the bytes the key would otherwise send (`ModifiedKeys.Legacy`), so a
+program in a pane never sees the new form. Terminals without `modifyOtherKeys` keep
+sending `\r`; `ctrl+s space` still opens the menu there.
+
+The stop test also exposed a race: the render loop checked "not forgotten" and then
+wrote the session, and `shutdown` could delete the file between the two, so the save
+came back. The check and the write now happen under one lock with the shutdown's delete.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

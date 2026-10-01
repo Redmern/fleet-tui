@@ -152,7 +152,8 @@ public sealed class AttachClient(
         write(Encoding.UTF8.GetBytes(
             (OperatingSystem.IsWindows() ? string.Empty : PushTitle)
             + EnterHost
-            + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)));
+            + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)
+            + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Enable)));
 
         void Leave() => this.Leave(write, savedTitle, release);
 
@@ -192,7 +193,7 @@ public sealed class AttachClient(
         return 0;
     }
 
-    public static string RestoreSequence => RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : PopTitle);
+    public static string RestoreSequence => RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Disable + PopTitle);
 
     private void Leave(Action<byte[]> write, string? savedTitle, Action release)
     {
@@ -487,6 +488,7 @@ public sealed class AttachClient(
     private async Task TypedBytesAsync(Wire wire, byte[] bytes, List<byte> pending)
     {
         pending.Clear();
+        bytes = ModifiedKeys.Normalize(bytes);
         var prefixBytes = PrefixState.Bytes;
         var i = 0;
 
@@ -535,6 +537,13 @@ public sealed class AttachClient(
             {
                 i += whole;
                 await Chord(wire, direct, null, bytes).ConfigureAwait(false);
+                continue;
+            }
+
+            if (ModifiedKeys.Parse(bytes.AsSpan(i)) is var (modifier, code, reported))
+            {
+                pending.AddRange(ModifiedKeys.Legacy(modifier, code));
+                i += reported;
                 continue;
             }
 
