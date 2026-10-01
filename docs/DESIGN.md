@@ -4204,6 +4204,7 @@ the fleet menu and its Settings submenu.
 The trade-off is accepted knowingly: `k` is also move-up, and a menu matches its item
 keys before the list's motions, so in a menu that lists Keybinds `k` opens it instead
 of moving up — the collision the move to `e` once fixed. The arrow keys still move.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
