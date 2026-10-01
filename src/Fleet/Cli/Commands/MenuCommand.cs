@@ -567,51 +567,39 @@ public static class MenuCommand
             .Where(m => m.State == Ports.Remotes.Enums.RemoteState.Connected)
             .ToList();
 
-        (int Index, bool NewWindow)? picked;
+        var tabs = SwitchTabs.For(localEntries, [.. all.Where(p => Where(located, p).InWindow).Select(p => p.Name)], machines);
+        var machineTab = machines.FindIndex(m => string.Equals(m.Name, onMachine, StringComparison.OrdinalIgnoreCase));
+        var (startTab, startEntry) = machineTab >= 0
+            ? tabs.Start(t => t.Host == machines[machineTab].Host, (tabs.MachineTab(machineTab), 0))
+            : tabs.Start(t => t.Host is null && string.Equals(t.Project, current?.Name, StringComparison.OrdinalIgnoreCase), (tabs.ThisMachine, here));
+        var tabbed = FleetTabbedPicker.Choose(app, SwitchTitle, tabs.Tabs, keymap, startTab, startEntry);
 
-        if (machines.Count == 0)
+        if (tabbed is var (tabIndex, entryIndex, remoteWindow)
+            && tabs.Targets[tabIndex][entryIndex] is { Host: { } host } remoteTarget)
         {
-            picked = FleetPicker.ChooseWithWindow(app, SwitchTitle, localEntries, keymap, here);
-        }
-        else
-        {
-            var tabs = SwitchTabs.For(localEntries, machines);
-            var machineTab = machines.FindIndex(m => string.Equals(m.Name, onMachine, StringComparison.OrdinalIgnoreCase));
-            var tabbed = FleetTabbedPicker.Choose(
-                app,
-                SwitchTitle,
-                tabs.Tabs,
-                keymap,
-                machineTab >= 0 ? SwitchTabs.ThisMachine + 1 + machineTab : SwitchTabs.ThisMachine,
-                machineTab >= 0 ? 0 : here);
-
-            if (tabbed is var (tabIndex, entryIndex, remoteWindow)
-                && tabs.Targets[tabIndex][entryIndex] is { Host: { } host } remoteTarget)
+            try
             {
-                try
+                if (remoteWindow)
                 {
-                    if (remoteWindow)
-                    {
-                        await remotes.OpenInNewWindowAsync(host, remoteTarget.Project).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await remotes.ShowHereAsync(host, remoteTarget.Project).ConfigureAwait(false);
-                    }
+                    await remotes.OpenInNewWindowAsync(host, remoteTarget.Project).ConfigureAwait(false);
                 }
-                catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+                else
                 {
-                    FleetDialog.Error(app, "Switch project", e.Message);
+                    await remotes.ShowHereAsync(host, remoteTarget.Project).ConfigureAwait(false);
                 }
-
-                switchLog.Write($"switch {from} -> {remoteTarget.Project} on {host}{(remoteWindow ? " (new window)" : string.Empty)}");
-                return;
+            }
+            catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+            {
+                FleetDialog.Error(app, "Switch project", e.Message);
             }
 
-            picked = tabbed is var (localTab, localIndex, localWindow)
-                ? (all.FindIndex(p => string.Equals(p.Name, tabs.Targets[localTab][localIndex].Project, StringComparison.OrdinalIgnoreCase)), localWindow)
-                : null;
+            switchLog.Write($"switch {from} -> {remoteTarget.Project} on {host}{(remoteWindow ? " (new window)" : string.Empty)}");
+            return;
         }
+
+        (int Index, bool NewWindow)? picked = tabbed is var (localTab, localIndex, localWindow)
+            ? (all.FindIndex(p => string.Equals(p.Name, tabs.Targets[localTab][localIndex].Project, StringComparison.OrdinalIgnoreCase)), localWindow)
+            : null;
 
         if (picked is not var (chosenIndex, newWindow) || chosenIndex < 0)
         {
