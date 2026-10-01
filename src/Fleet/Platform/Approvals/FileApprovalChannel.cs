@@ -20,6 +20,8 @@ public sealed class FileApprovalChannel(
 
     private readonly TimeSpan _stale = stale ?? TimeSpan.FromSeconds(12);
 
+    private readonly TimeSpan _paneGrace = TimeSpan.FromSeconds(5);
+
     private readonly Func<DateTimeOffset> _clock = now ?? (() => DateTimeOffset.UtcNow);
 
     public async Task<ApprovalOutcome> AskAsync(
@@ -100,7 +102,7 @@ public sealed class FileApprovalChannel(
         }
     }
 
-    public PendingApproval? TakePending(string project)
+    public PendingApproval? TakePending(string project, string? pane = null)
     {
         var dir = DirFor(project);
 
@@ -112,6 +114,12 @@ public sealed class FileApprovalChannel(
         foreach (var ask in Directory.EnumerateFiles(dir, "*.ask").OrderBy(f => f, StringComparer.Ordinal))
         {
             var stem = Path.GetFileNameWithoutExtension(ask);
+
+            if (!ForTaker(ReadAsk(ask).Pane, stem, pane))
+            {
+                continue;
+            }
+
             var taken = Path.Combine(dir, stem + ".taken");
 
             try
@@ -125,7 +133,7 @@ public sealed class FileApprovalChannel(
 
             var file = ReadAsk(taken);
 
-            return new PendingApproval(stem, new ApprovalRequest(project, file.Tool, file.Summary));
+            return new PendingApproval(stem, new ApprovalRequest(project, file.Tool, file.Summary, file.Pane));
         }
 
         return null;
@@ -161,15 +169,27 @@ public sealed class FileApprovalChannel(
         }
     }
 
+    private bool ForTaker(string? asker, string stem, string? taker)
+    {
+        if (taker is not null)
+        {
+            return asker == taker;
+        }
+
+        return asker is null
+            || !long.TryParse(stem.Split('-')[0], out var ticks)
+            || _clock() - new DateTimeOffset(ticks, TimeSpan.Zero) >= _paneGrace;
+    }
+
     private static ApprovalOutcome Decide(string reply) =>
         Enum.TryParse<ApprovalDecision>(reply.Trim(), out var decision)
         && decision == ApprovalDecision.Allowed
             ? ApprovalOutcome.Allow
-            : ApprovalOutcome.Deny("The dashboard declined this action.");
+            : ApprovalOutcome.Deny("Declined by the user in fleet.");
 
     private static string Serialize(ApprovalRequest request) =>
         JsonSerializer.Serialize(
-            new AskFile { Tool = request.Tool, Summary = request.Summary },
+            new AskFile { Tool = request.Tool, Summary = request.Summary, Pane = request.Pane },
             FleetJsonContext.Default.AskFile);
 
     private static AskFile ReadAsk(string path)

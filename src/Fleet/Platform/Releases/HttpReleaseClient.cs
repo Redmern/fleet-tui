@@ -10,11 +10,15 @@ namespace Fleet.Platform.Releases;
 
 public sealed class HttpReleaseClient : IReleaseClient, IDisposable
 {
+    public static readonly TimeSpan LookupWithin = TimeSpan.FromSeconds(15);
+
+    public static readonly TimeSpan DownloadWithin = TimeSpan.FromMinutes(10);
+
     private readonly HttpClient _http;
 
     public HttpReleaseClient()
     {
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        _http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _http.DefaultRequestHeaders.UserAgent.Add(
             new ProductInfoHeaderValue("fleet", FleetVersion.Current));
         _http.DefaultRequestHeaders.Accept.Add(
@@ -42,9 +46,10 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
     {
         try
         {
+            using var limit = Within(LookupWithin, ct);
             using var response = await _http
                 .GetAsync(
-                    $"https://api.github.com/repos/{repo}/releases?per_page=100", ct)
+                    $"https://api.github.com/repos/{repo}/releases?per_page=100", limit.Token)
                 .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
@@ -52,10 +57,10 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
                 return [];
             }
 
-            await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await using var body = await response.Content.ReadAsStreamAsync(limit.Token).ConfigureAwait(false);
 
             var releases = await JsonSerializer
-                .DeserializeAsync(body, GitHubJsonContext.Default.GitHubReleaseJsonArray, ct)
+                .DeserializeAsync(body, GitHubJsonContext.Default.GitHubReleaseJsonArray, limit.Token)
                 .ConfigureAwait(false);
 
             return releases is null
@@ -74,17 +79,18 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
     {
         try
         {
-            using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
+            using var limit = Within(LookupWithin, ct);
+            using var response = await _http.GetAsync(url, limit.Token).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
                 return null;
             }
 
-            await using var body = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await using var body = await response.Content.ReadAsStreamAsync(limit.Token).ConfigureAwait(false);
 
             var release = await JsonSerializer
-                .DeserializeAsync(body, GitHubJsonContext.Default.GitHubReleaseJson, ct)
+                .DeserializeAsync(body, GitHubJsonContext.Default.GitHubReleaseJson, limit.Token)
                 .ConfigureAwait(false);
 
             return release is null || string.IsNullOrEmpty(release.TagName)
@@ -107,12 +113,20 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
     {
         try
         {
-            return await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
+            using var limit = Within(DownloadWithin, ct);
+            return await _http.GetByteArrayAsync(url, limit.Token).ConfigureAwait(false);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
             return null;
         }
+    }
+
+    private static CancellationTokenSource Within(TimeSpan limit, CancellationToken ct)
+    {
+        var within = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        within.CancelAfter(limit);
+        return within;
     }
 
     public void Dispose() => _http.Dispose();

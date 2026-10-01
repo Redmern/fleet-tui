@@ -20,6 +20,18 @@ public sealed class JsonProjectStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_pinned_claude_profile_round_trips_and_no_pin_writes_nothing()
+    {
+        var root = ARoot;
+        Store.Save(new Project("client", root, "rib"));
+        Store.Save(new Project("plain", root));
+
+        Assert.Equal("rib", Store.Load("client")!.ClaudeProfile);
+        Assert.Null(Store.Load("plain")!.ClaudeProfile);
+        Assert.DoesNotContain("claudeProfile", File.ReadAllText(Path.Combine(FleetPaths.Projects, "plain.json")), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Save_then_Load_round_trips()
     {
         var root = ARoot;

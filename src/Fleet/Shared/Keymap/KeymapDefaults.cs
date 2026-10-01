@@ -43,6 +43,12 @@ public static class KeymapDefaults
             [FleetAction.EditFleetConfig] = "E",
             [FleetAction.OpenSettings] = "S",
             [FleetAction.EditAidlcMode] = "A",
+            [FleetAction.EditClaudeProfile] = "C",
+            [FleetAction.Notifications] = "n",
+            [FleetAction.Remotes] = "r",
+            [FleetAction.SaveSession] = "w",
+            [FleetAction.DismissNotice] = "d",
+            [FleetAction.DismissAllNotices] = "D",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -76,6 +82,12 @@ public static class KeymapDefaults
             FleetAction.EditFleetConfig => "edit fleet config",
             FleetAction.OpenSettings => "settings",
             FleetAction.EditAidlcMode => "aidlc mode",
+            FleetAction.EditClaudeProfile => "claude profile",
+            FleetAction.Notifications => "notifications",
+            FleetAction.Remotes => "remotes",
+            FleetAction.SaveSession => "save session",
+            FleetAction.DismissNotice => "dismiss",
+            FleetAction.DismissAllNotices => "dismiss all",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -118,6 +130,12 @@ public static class KeymapDefaults
             FleetAction.EditFleetConfig => "Edit fleet config",
             FleetAction.OpenSettings => "Settings",
             FleetAction.EditAidlcMode => "AIDLC mode",
+            FleetAction.EditClaudeProfile => "Claude profile",
+            FleetAction.Notifications => "Notifications",
+            FleetAction.Remotes => "Remote machines",
+            FleetAction.SaveSession => "Save window as session",
+            FleetAction.DismissNotice => "Dismiss a notification",
+            FleetAction.DismissAllNotices => "Dismiss all shown notifications",
             _ => action.ToString(),
         };
 }

@@ -145,6 +145,57 @@ public static class FleetDialog
         return confirmed;
     }
 
+    public static string? Ask(IApplication app, string title, string question, bool secret = false, string initial = "")
+    {
+        string? answer = null;
+        var lines = Wrap(question);
+        var window = Sized(title, lines, extraRows: 5);
+
+        var y = 1;
+        foreach (var line in lines)
+        {
+            window.Add(FleetTheme.Caption(2, y, line));
+            y++;
+        }
+
+        var field = FleetTheme.Field(2, y + 1, initial);
+        field.Width = Terminal.Gui.ViewBase.Dim.Fill(2);
+        field.Secret = secret;
+
+        field.Accepting += (_, e) =>
+        {
+            answer = field.Text;
+            app.RequestStop(window);
+            e.Handled = true;
+        };
+
+        window.KeyDown += (_, key) =>
+        {
+            if (key == FleetKeys.Cancel)
+            {
+                app.RequestStop(window);
+                key.Handled = true;
+            }
+        };
+
+        window.Add(field, FleetTheme.HintBar(FleetHints.Ask));
+        field.SetFocus();
+
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
+
+        return answer;
+    }
+
     public static void Error(IApplication app, string title, string message)
     {
         var lines = Wrap(message);

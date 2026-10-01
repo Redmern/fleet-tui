@@ -139,7 +139,15 @@ fleet report --caller <slug> --status <s> --project <name> -- <summary>
 fleet doctor                check the environment
 fleet version               show the version, and check for an update
 fleet update                download and install the latest release
+fleet attach                attach this terminal to fleetd, starting it if needed
+fleet daemon stop           stop fleetd and forget its projects; the next start is fresh
 ```
+
+After `fleet update`, a running fleetd keeps the old binary. `fleet daemon stop` then
+`fleet attach` moves it onto the new one. Stopping closes every pane, so any agent
+in the middle of a task is interrupted, and forgets which projects were open: the next
+start opens only the project you open. (A crash or restart without `stop` still restores
+everything.)
 
 `fleet doctor` is the end-to-end smoke test: it reports the config directory, the
 selected multiplexer driver and whether it responds, the git version, every saved
@@ -193,6 +201,75 @@ itself when done.
 - **main pane** jumps to the dashboard. This one never starts a fleet process.
 - **List agents** opens a list with **Open** and **Hidden** tabs, switched with
   `h`/`l` or the arrows; `enter` goes to the agent.
+- **Notifications** (`n`) opens the notification center: an **All** tab and one tab per
+  project, switched with `h`/`l` or the arrows. `enter` goes to the agent, `d` dismisses the selected notice, `D` all shown ones,
+  `b` turns the terminal bell on or off and `t` the desktop toasts.
+
+### Remote machines
+
+**Remote machines** (`r` in the fleet menu) connects this fleet to fleet on another
+machine over ssh. `n` asks for the ssh host (for example `user@homelab`); fleet runs
+`ssh <host> fleet bridge` itself and, when ssh wants a password or asks to trust a new
+host key, shows the question in a small dialog. `d` disconnects, and `enter` answers or
+retries a connection. The remote needs this fleet on its PATH, or name it with
+`FLEET_REMOTE_COMMAND`.
+
+While a machine is connected, **Switch project** gets tabs: **All**, **this machine** and
+one tab per remote, named after the remote's hostname. `h`/`l` or the arrows switch
+tabs, and it opens on the tab of the machine you are on. A machine's tab lists every project
+saved there, running or not (running ones say `open`); opening one that is not running
+starts it on that machine first. `enter` shows a remote project
+in this window; `SHIFT` opens it in a new window attached over ssh.
+
+A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar
+reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode and the
+fleet menu (`ctrl+enter`) all act on the remote. Switch project always opens this machine's
+switcher, from `ctrl+s s` or from the remote's menu, so you can always get back to a project
+here. One window at a time follows a given remote machine;
+disconnecting it closes its view here and leaves its panes running there.
+
+The remote project a window shows here also counts as one of that window's projects for
+notifications: its open notices add to the pill's `+N`, a new one rings the bell and shows
+a toast (with this machine's settings), and the notification center gets a tab for it,
+`homelab @machine`, where `d` dismisses on the remote and `enter` shows the project here.
+
+### Sessions
+
+A session is a saved set of projects for one window. **Save window as session** (`w` in
+the fleet menu) stores the window's projects in their order, which one was showing, and
+for a remote project the machine it runs on; saving under an existing name updates it.
+
+Running plain `fleet` in a terminal then shows **Projects** and **Sessions** tabs (`h`/`l`
+or the arrows; the tabs appear once a session exists). Opening a session starts its
+projects if they are not running, reconnects its remote machines (asking for a password
+if ssh needs one), and opens one window holding exactly those projects. `d` removes a
+session; the projects themselves stay. Sessions are opened from the picker only, not
+from inside fleet.
+### Notifications
+
+Every project's dashboard has a **Notifications** tab next to Agents, Subs and Repositories.
+The dashboard watches its agents and opens a notice when one:
+
+| Mark | Reason |
+|---|---|
+| `?` | asks a question and waits for your answer |
+| `!` | waits on a permission prompt |
+| `✓` | is done and its work is ready for review |
+| `✗` | failed, or its pane disappeared |
+| `…` | shows the spinner with no new output for 10 minutes |
+| `↕` | has a branch that conflicts with its base or is 20+ commits behind it |
+
+A notice resolves on its own when its cause goes away, and `d` dismisses it. Resolved and
+dismissed notices are kept for a day: greyed out in the dashboard's tab, and in the
+notification center they move to its **History** tab, so All and the project tabs show only
+open notices. They are kept per project in
+`%APPDATA%\fleet\notices`.
+
+When a notice opens, fleet shows a desktop toast (on by default) and can ring the terminal
+bell (off by default); toggle both in the notification center. The embedded multiplexer's
+tab bar adds the counts to the project pill, `fleet ● 2 +3`: two open notices in this project,
+three in other open projects.
+Click it to open the notification center.
 
 The dashboard keys act on whatever row is selected there, so they are not in this
 menu — a menu you can open from a claude pane cannot act on a selection you cannot

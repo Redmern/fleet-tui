@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>embeddedspike</AssemblyName>
+    <RootNamespace>EmbeddedSpike</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RoyalApps.RoyalTerminal.Terminal.Pty.Windows" Version="0.5.0" />
+  </ItemGroup>
+
+  <!--
+    libghostty-vt is linked statically into the NativeAOT binary: DirectPInvoke
+    turns every [LibraryImport("ghostty-vt")] into a direct call resolved at link
+    time, and NativeLibrary hands the archive to the linker. Build the archive
+    first with native/build.ps1 (Windows) or native/build.sh (Linux).
+  -->
+  <ItemGroup>
+    <DirectPInvoke Include="ghostty-vt" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <NativeLibrary Include="$(MSBuildThisFileDirectory)native/out/win-x64/lib/ghostty-vt-static.lib" />
+    <NativeLibrary Include="ntdll.lib" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <NativeLibrary Include="$(MSBuildThisFileDirectory)native/out/linux-x64/lib/libghostty-vt.a" />
+  </ItemGroup>
+
+</Project>

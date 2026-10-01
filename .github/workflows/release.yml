@@ -38,6 +38,28 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
+      # libghostty-vt for the embedded multiplexer, exactly as in ci.yml (same
+      # pins, same cache key, so a release reuses CI's cache).
+      - uses: actions/cache@v4
+        with:
+          path: artifacts/ghostty/.cache
+          key: ghostty-${{ matrix.rid }}-${{ hashFiles('scripts/ghostty/pins.env') }}
+
+      - name: Build libghostty-vt
+        shell: pwsh
+        run: |
+          if ($IsWindows) { ./scripts/ghostty/build.ps1 } else { bash scripts/ghostty/build.sh }
+
+      # Fleet.csproj links the archive only when it exists, so without this a
+      # release would quietly ship without the embedded multiplexer.
+      - name: Check libghostty-vt will be linked
+        shell: bash
+        run: |
+          lib=artifacts/ghostty/${{ matrix.rid }}/lib
+          archive=$([ "${{ runner.os }}" = Windows ] && echo "$lib/ghostty-vt-static.lib" || echo "$lib/libghostty-vt.a")
+          [ -f "$archive" ] || { echo "::error::$archive is missing; the release would ship without the embedded multiplexer"; exit 1; }
+          ls -la "$archive"
+
       - name: Test
         run: dotnet test Fleet.slnx --nologo -v minimal
 
@@ -83,9 +105,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        # A tag with a suffix (v0.6.0-rc.1) is a prerelease: GitHub never makes
+        # it "latest", so `fleet update` (which asks for the latest release)
+        # does not hand it to everyone; `fleet update <tag>` still installs it.
         run: |
+          kind=()
+          case "$TAG" in *-*) kind=(--prerelease) ;; esac
           gh release view "$TAG" >/dev/null 2>&1 \
             && gh release upload "$TAG" dist/* --clobber \
-            || gh release create "$TAG" dist/* \
+            || gh release create "$TAG" dist/* "${kind[@]}" \
                  --title "fleet $TAG" \
                  --notes "Native binaries for Windows and Linux. Install with scripts/get-fleet.ps1 or scripts/get-fleet.sh, then run 'fleet setup'."

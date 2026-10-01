@@ -193,6 +193,30 @@ public sealed class WezTermDriver(WezTermCli? cli = null) : IMuxDriver
     public async Task<string> GetTextAsync(PaneId id, CancellationToken ct = default)
         => await _cli.RunAsync(["get-text", "--pane-id", id.Value], ct).ConfigureAwait(false);
 
+    public Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<Workspace>>([]);
+
+    public Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default) =>
+        throw new NotSupportedException("wezterm has no floating panes");
+
+    public Task ShowWorkspaceAsync(string name, CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "wezterm workspaces are global to the GUI process; fleet switches by moving panes");
+
+    public Task OpenWindowAsync(string name, CancellationToken ct = default) =>
+        throw new NotSupportedException("wezterm opens projects in its own windows; fleet switches by moving panes");
+
+    public async Task CloseWorkspaceAsync(string name, CancellationToken ct = default)
+    {
+        var panes = await ListPanesAsync(ct).ConfigureAwait(false);
+
+        foreach (var pane in panes.Where(p =>
+                     string.Equals(p.SessionName, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            await KillPaneAsync(pane.Id, ct).ConfigureAwait(false);
+        }
+    }
+
     private static string DirectionFlag(SplitDirection d) => d switch
     {
         SplitDirection.Right => "--right",

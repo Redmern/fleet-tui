@@ -72,6 +72,39 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task With_workspaces_an_agent_opened_from_another_projects_window_lands_in_its_own_project()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        Directory.CreateDirectory(ProjectRoot);
+        await mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot, SessionName = "techweb" });
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { Cwd = _root, SessionName = "other-project" });
+
+        var fresh = Agent("feature/fresh");
+        Assert.True((await new OpenAgentHandler(mux, _store).HandleAsync("techweb", fresh, ProjectRoot)).Succeeded);
+
+        var strayed = Agent("feature/strayed");
+        var stray = await mux.SpawnAsync(new SpawnOptions { Cwd = strayed.Worktree, SessionName = "other-project" });
+        Assert.True((await new OpenAgentHandler(mux, _store).HandleAsync("techweb", strayed, ProjectRoot)).Succeeded);
+
+        var panes = await mux.ListPanesAsync();
+        Assert.Equal("techweb", panes.Single(p => p.Cwd == fresh.Worktree).SessionName);
+        Assert.Equal("techweb", panes.Single(p => p.Id == stray).SessionName);
+    }
+
+    [Fact]
+    public async Task Reopening_an_agent_the_main_orchestrator_started_brings_claude_back()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Nvim, Claude = true };
+        Directory.CreateDirectory(ProjectRoot);
+
+        var result = await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Contains(_mux.ArgsFor(pane.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_running_agent_is_found_by_its_worktree_not_by_a_pane_id()
     {
         var agent = Agent();

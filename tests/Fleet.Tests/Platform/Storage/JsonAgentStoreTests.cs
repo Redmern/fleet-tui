@@ -129,6 +129,42 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public async Task A_save_waits_for_a_session_file_someone_else_holds_open()
+    {
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "first"), "first"));
+        var file = Path.Combine(FleetPaths.Sessions, "techweb.json");
+
+        Task saving;
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            saving = Task.Run(() => _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "second"), "second")));
+            await Task.Delay(300);
+        }
+
+        await saving;
+
+        Assert.Equal(["first", "second"], _store.List("techweb").Select(a => a.Branch));
+    }
+
+    [Fact]
+    public async Task A_session_file_that_stays_unreadable_is_left_alone_rather_than_overwritten()
+    {
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "first"), "first"));
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "second"), "second"));
+        var file = Path.Combine(FleetPaths.Sessions, "techweb.json");
+
+        // Readers are shut out. On Unix the replace (a rename) still succeeds, so the old store,
+        // which read "nothing" after 45 ms, wrote that over both records; on Windows the replace
+        // failed too, so there this guards the skip rather than reproducing the wipe.
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await Task.Run(() => _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "third"), "third")));
+        }
+
+        Assert.Equal(["first", "second"], _store.List("techweb").Select(a => a.Branch));
+    }
+
+    [Fact]
     public void Concurrent_writers_from_separate_stores_do_not_lose_each_others_records()
     {
         const int writers = 24;

@@ -23,8 +23,12 @@ public static class CommandLine
 
     public const string ListShortFlag = "-l";
 
+    public const string SshFlag = "--ssh";
+
+    public const string AskPassVariable = "FLEET_ASKPASS";
+
     private static readonly string[] ValueFlags =
-        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag];
+        [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag, SshFlag];
 
     private static readonly string[] BoolFlags = [ListFlag, ListShortFlag];
 
@@ -32,7 +36,7 @@ public static class CommandLine
     {
         var raw = args.Count > 0 ? args[0] : string.Empty;
         var options = args.Count > 1 ? args.Skip(1).ToArray() : [];
-        var verb = VerbFor(raw);
+        var verb = string.IsNullOrEmpty(Environment.GetEnvironmentVariable(AskPassVariable)) ? VerbFor(raw) : FleetVerb.AskPass;
 
         return new Invocation(
             verb,
@@ -46,7 +50,9 @@ public static class CommandLine
             TailOf(options),
             ValueOf(options, VersionFlag, VersionShortFlag)
                 ?? (verb == FleetVerb.Update ? TextOf(options) : null),
-            HasFlag(options, ListFlag, ListShortFlag));
+            HasFlag(options, ListFlag, ListShortFlag),
+            ValueOf(options, SshFlag),
+            options);
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch
@@ -65,6 +71,11 @@ public static class CommandLine
         "doctor" => FleetVerb.Doctor,
         "version" or "--version" or "-v" => FleetVerb.Version,
         "update" => FleetVerb.Update,
+        "daemon" => FleetVerb.Daemon,
+        "attach" => FleetVerb.Attach,
+        "bridge" => FleetVerb.Bridge,
+        "approve" => FleetVerb.Approve,
+        "cli" => FleetVerb.Cli,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         "help" or "--help" or "-h" => FleetVerb.Help,
         _ => FleetVerb.Unknown,

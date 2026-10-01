@@ -18,8 +18,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var window = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId
-            ?? panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
+        var window = ProjectWindows.For(mux, panes, project, projectRoot, preferCaller: true);
         var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
         var running = mine.FirstOrDefault();
 
@@ -113,7 +112,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
                 Args = orchestrator
                     ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true)
                     : Shared.Constants.AgentHarness.CommandFor(
-                        agent.Harness, withClaude: agent.Owner.Length > 0),
+                        agent.Harness, withClaude: agent.RunsClaude),
                 Env = Shared.Constants.AgentHarness.SpawnEnv(agent.Harness),
             },
             ct).ConfigureAwait(false);

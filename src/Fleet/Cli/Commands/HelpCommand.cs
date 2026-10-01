@@ -25,6 +25,19 @@ public static class HelpCommand
               fleet update <v>            install a specific release instead of latest
               fleet update --version <v>  the same, as a flag (-v)
               fleet update --list         list every published release (-l)
+
+            embedded multiplexer (the default outside wezterm and tmux; FLEET_MUX=wezterm opts out):
+              fleet attach [--project <p>] attach this terminal to fleetd (a picker when it runs several projects)
+              fleet attach --ssh <host>   attach to fleetd on another machine over ssh
+              fleet daemon                run fleetd in the foreground
+              fleet daemon stop           stop fleetd and forget its projects (the next start opens only what you open)
+              fleet bridge                ssh's remote end: pipe stdio to the local fleetd
+              prefix is ctrl+s (FLEET_PREFIX; keys in <fleet config>\embedded-keys.json), and it shows
+              the keys: h/j/k/l focus, arrows resize, % " split, c new tab, n/p/1-9 tabs, z zoom,
+              x/& close pane/tab, o next pane, s switch project, space menu, [ copy, ] paste,
+              f/t/e/g floats, r reload keys, d detach; ctrl+s again sends ctrl+s
+              without prefix: ctrl/alt+h/j/k/l move focus (nvim gets them), alt+left/right tabs,
+              ctrl+enter menu, shift+enter newline for claude
             """);
 
         return 0;

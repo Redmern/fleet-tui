@@ -1,5 +1,6 @@
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -16,7 +17,7 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
+        var window = ProjectWindows.For(mux, panes, project, projectRoot, preferCaller: false);
 
         var restored = 0;
 
@@ -27,7 +28,7 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
                 continue;
             }
 
-            var pane = await mux.SpawnAsync(Options(project, agent, window), ct)
+            var pane = await mux.SpawnAsync(Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces)), ct)
                 .ConfigureAwait(false);
 
             if (pane.IsNone)
@@ -44,21 +45,24 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
         return restored;
     }
 
+    public static string HiddenWorkspace(string project, bool workspaces) =>
+        workspaces ? FleetWorkspaces.HiddenFor(project) : FleetWorkspaces.Hidden;
+
     public static bool Wanted(AgentRecord agent, IReadOnlyList<Pane> panes) =>
         agent.Open
         && Directory.Exists(agent.Worktree)
         && !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
 
-    public static SpawnOptions Options(string project, AgentRecord agent, string? window) =>
+    public static SpawnOptions Options(string project, AgentRecord agent, string? window, bool workspaces = false) =>
         new()
         {
             Cwd = agent.Worktree,
-            SessionName = agent.Hidden ? FleetWorkspaces.Hidden : project,
-            Workspace = agent.Hidden ? FleetWorkspaces.Hidden : null,
+            SessionName = agent.Hidden ? HiddenWorkspace(project, workspaces) : project,
+            Workspace = agent.Hidden ? HiddenWorkspace(project, workspaces) : null,
             WindowId = agent.Hidden ? null : window,
             NewWindow = agent.Hidden,
             Args = AgentHarness.IsOrchestrator(agent.Harness)
                 ? AgentHarness.OrchestratorCommand(resume: true)
-                : AgentHarness.CommandFor(agent.Harness, withClaude: agent.Owner.Length > 0),
+                : AgentHarness.CommandFor(agent.Harness, withClaude: agent.RunsClaude),
         };
 }

@@ -74,6 +74,44 @@ public class DriverSelectorTests
         }));
 
     [Fact]
+    public void A_plain_terminal_uses_the_embedded_multiplexer_when_this_build_has_it()
+        => Assert.Equal("embedded", DriverSelector.Choose(new MuxEnvironment
+        {
+            GuiReachable = true,
+            Installed = BothInstalled,
+            EmbeddedReady = true,
+        }));
+
+    [Fact]
+    public void Inside_wezterm_or_tmux_their_driver_still_wins_over_embedded()
+    {
+        Assert.Equal("wezterm", DriverSelector.Choose(new MuxEnvironment
+        {
+            InsideWezTerm = true,
+            GuiReachable = true,
+            Installed = BothInstalled,
+            EmbeddedReady = true,
+        }));
+
+        Assert.Equal("tmux", DriverSelector.Choose(new MuxEnvironment
+        {
+            InsideTmux = true,
+            Installed = BothInstalled,
+            EmbeddedReady = true,
+        }));
+    }
+
+    [Fact]
+    public void FLEET_MUX_can_still_send_a_plain_terminal_to_wezterm()
+        => Assert.Equal("wezterm", DriverSelector.Choose(new MuxEnvironment
+        {
+            Override = "wezterm",
+            GuiReachable = true,
+            Installed = BothInstalled,
+            EmbeddedReady = true,
+        }));
+
+    [Fact]
     public void OnPath_finds_a_real_executable_and_rejects_a_made_up_one()
     {
         var real = OperatingSystem.IsWindows() ? "cmd" : "sh";

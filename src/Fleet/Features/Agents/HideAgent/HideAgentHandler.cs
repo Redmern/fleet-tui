@@ -1,6 +1,7 @@
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -23,15 +24,15 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         var active = panes.FirstOrDefault(p => p.IsActive);
         var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
 
-        var hiddenWindow = hiding
+        var hiddenWindow = hiding && !Workspaces
             ? HiddenNest.WindowOf(panes, store.List(project))
             : null;
 
         var changed = AgentHarness.IsOrchestrator(agent.Harness)
             ? await ToggleOrchestratorAsync(
-                agent, dashboardWindow, hiddenWindow, mine, hiding, ct).ConfigureAwait(false)
+                project, agent, dashboardWindow, hiddenWindow, mine, hiding, ct).ConfigureAwait(false)
             : await ToggleAgentAsync(
-                agent, dashboardWindow, hiddenWindow, mine, hiding, ct).ConfigureAwait(false);
+                project, agent, dashboardWindow, hiddenWindow, mine, hiding, ct).ConfigureAwait(false);
 
         if (active is not null)
         {
@@ -43,7 +44,27 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         return Result<AgentRecord>.Ok(changed);
     }
 
+    private bool Workspaces => mux.Caps.HasFlag(MuxCaps.Workspaces);
+
+    private async Task HideAsync(
+        string project, IEnumerable<PaneId> ids, string? hiddenWindow, CancellationToken ct)
+    {
+        if (!Workspaces)
+        {
+            await HiddenNest.MoveIntoAsync(mux, ids, hiddenWindow, ct).ConfigureAwait(false);
+            return;
+        }
+
+        var into = new MovePaneOptions { Workspace = FleetWorkspaces.HiddenFor(project) };
+
+        foreach (var id in ids)
+        {
+            await mux.MovePaneAsync(id, into, ct).ConfigureAwait(false);
+        }
+    }
+
     private async Task<AgentRecord> ToggleAgentAsync(
+        string project,
         AgentRecord agent,
         string? dashboardWindow,
         string? hiddenWindow,
@@ -53,7 +74,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
     {
         if (hiding)
         {
-            await HiddenNest.MoveIntoAsync(mux, mine.Select(p => p.Id), hiddenWindow, ct)
+            await HideAsync(project, mine.Select(p => p.Id), hiddenWindow, ct)
                 .ConfigureAwait(false);
         }
         else
@@ -80,6 +101,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
     }
 
     private async Task<AgentRecord> ToggleOrchestratorAsync(
+        string project,
         AgentRecord agent,
         string? dashboardWindow,
         string? hiddenWindow,
@@ -89,6 +111,12 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
     {
         var claude = mine.Where(p => !SubBrowse.Is(p)).ToList();
 
+        if (Workspaces)
+        {
+            return await ToggleOrchestratorInWorkspacesAsync(
+                project, agent, dashboardWindow, mine, claude, hiding, ct).ConfigureAwait(false);
+        }
+
         foreach (var browser in mine.Where(SubBrowse.Is))
         {
             await mux.KillPaneAsync(browser.Id, ct).ConfigureAwait(false);
@@ -96,7 +124,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
 
         if (hiding)
         {
-            await HiddenNest.MoveIntoAsync(mux, claude.Select(p => p.Id), hiddenWindow, ct)
+            await HideAsync(project, claude.Select(p => p.Id), hiddenWindow, ct)
                 .ConfigureAwait(false);
 
             foreach (var pane in claude)
@@ -126,5 +154,41 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
         }
 
         return agent with { Hidden = hiding, Open = claude.Count > 0 };
+    }
+
+    private async Task<AgentRecord> ToggleOrchestratorInWorkspacesAsync(
+        string project,
+        AgentRecord agent,
+        string? dashboardWindow,
+        IReadOnlyList<Pane> mine,
+        IReadOnlyList<Pane> claude,
+        bool hiding,
+        CancellationToken ct)
+    {
+        var main = claude.FirstOrDefault();
+
+        if (main is null)
+        {
+            return agent with { Hidden = hiding, Open = false };
+        }
+
+        var into = hiding
+            ? new MovePaneOptions { Workspace = FleetWorkspaces.HiddenFor(project) }
+            : new MovePaneOptions { WindowId = dashboardWindow, NewWindow = dashboardWindow is null };
+
+        await mux.MovePaneAsync(main.Id, into, ct).ConfigureAwait(false);
+        await mux.SetTitleAsync(main.Id, AgentTitle.For(agent.Repository, agent.Branch), ct)
+            .ConfigureAwait(false);
+
+        var browser = mine.FirstOrDefault(SubBrowse.Is);
+
+        if (browser is not null)
+        {
+            await mux.SplitAsync(
+                new SplitOptions(main.Id, SplitDirection.Right) { Percent = 50, MovePane = browser.Id },
+                ct).ConfigureAwait(false);
+        }
+
+        return agent with { Hidden = hiding, Open = true };
     }
 }

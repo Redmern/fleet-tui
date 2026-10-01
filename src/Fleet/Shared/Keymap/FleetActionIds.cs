@@ -4,6 +4,7 @@ namespace Fleet.Shared.Keymap;
 
 public static class FleetActionIds
 {
+
     public static string For(FleetAction action) => action switch
     {
         FleetAction.AddRepository => "add-repository",
@@ -29,6 +30,12 @@ public static class FleetActionIds
         FleetAction.EditFleetConfig => "edit-fleet-config",
         FleetAction.OpenSettings => "settings-menu",
         FleetAction.EditAidlcMode => "aidlc-mode",
+        FleetAction.EditClaudeProfile => "claude-profile",
+        FleetAction.Notifications => "notifications",
+        FleetAction.Remotes => "remotes",
+        FleetAction.SaveSession => "save-session",
+        FleetAction.DismissNotice => "dismiss-notice",
+        FleetAction.DismissAllNotices => "dismiss-all-notices",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -57,7 +64,13 @@ public static class FleetActionIds
         "edit-fleet-config" => FleetAction.EditFleetConfig,
         "settings-menu" => FleetAction.OpenSettings,
         "aidlc-mode" => FleetAction.EditAidlcMode,
+        "claude-profile" => FleetAction.EditClaudeProfile,
+        "notifications" => FleetAction.Notifications,
+        "remotes" => FleetAction.Remotes,
+        "save-session" => FleetAction.SaveSession,
+        "dismiss-notice" => FleetAction.DismissNotice,
+        "dismiss-all-notices" => FleetAction.DismissAllNotices,
         "close" => FleetAction.Close,
-        _ => FleetAction.None,
+        var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };
 }

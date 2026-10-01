@@ -22,6 +22,11 @@ public static class DriverSelector
             return DriverNames.WezTerm;
         }
 
+        if (env.EmbeddedReady)
+        {
+            return DriverNames.Embedded;
+        }
+
         if (env.GuiReachable && env.Installed.Contains(DriverNames.WezTerm))
         {
             return DriverNames.WezTerm;

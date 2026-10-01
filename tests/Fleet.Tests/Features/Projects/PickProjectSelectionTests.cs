@@ -12,7 +12,8 @@ public class PickProjectSelectionTests
                 "PickProjectView.cs"));
 
         Assert.Contains("Refill(0);", source);
-        Assert.Contains("FleetRows.Fill(list, Rows(entries, accelerators), selected);", source);
+        Assert.Contains("onSessions ? SessionRows(sessions, sessionKeys) : Rows(entries, accelerators),", source);
+        Assert.Contains("                selected);", source);
     }
 
     private static string RepoRoot { get; } =

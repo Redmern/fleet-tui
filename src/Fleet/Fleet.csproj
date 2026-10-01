@@ -9,7 +9,7 @@
       -p:Version=<tag> on a tagged build, so a forgotten bump here only affects
       local dev builds, never a published one.
     -->
-    <Version>0.5.24</Version>
+    <Version>0.6.0</Version>
   </PropertyGroup>
 
   <!--
@@ -24,7 +24,26 @@
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
     <EnableAotAnalyzer>true</EnableAotAnalyzer>
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <!--
+    libghostty-vt for the embedded multiplexer, linked statically into the AOT
+    binary when scripts/ghostty/build.ps1 (or build.sh) has produced it. Without
+    the archive fleet still builds and publishes; the embedded driver then reports
+    itself unavailable at runtime instead of failing the link.
+  -->
+  <PropertyGroup>
+    <GhosttyDir>$(MSBuildThisFileDirectory)../../artifacts/ghostty/$(RuntimeIdentifier)/lib/</GhosttyDir>
+    <GhosttyArchive Condition="'$(RuntimeIdentifier)' == 'win-x64'">$(GhosttyDir)ghostty-vt-static.lib</GhosttyArchive>
+    <GhosttyArchive Condition="'$(RuntimeIdentifier)' == 'linux-x64'">$(GhosttyDir)libghostty-vt.a</GhosttyArchive>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GhosttyArchive)' != '' And Exists('$(GhosttyArchive)')">
+    <DirectPInvoke Include="ghostty-vt" />
+    <NativeLibrary Include="$(GhosttyArchive)" />
+    <NativeLibrary Include="ntdll.lib" Condition="'$(RuntimeIdentifier)' == 'win-x64'" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Terminal.Gui" Version="2.4.17" />
   </ItemGroup>

@@ -1,0 +1,1476 @@
+using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
+
+namespace Fleet.Platform.Mux.Embedded.Model;
+
+public sealed class MuxModel
+{
+    public const int StatusRows = 1;
+
+    public const string OverlayWorkspace = "fleet~overlay";
+
+    public const string FloatTab = "float";
+
+    public const int MinFloatWidth = 10;
+
+    public const int MinFloatHeight = 4;
+
+    private readonly List<WorkspaceState> _workspaces = [];
+    private readonly Dictionary<string, PaneState> _panes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ClientState> _clients = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _notices = new(StringComparer.OrdinalIgnoreCase);
+    private int _nextPane;
+    private int _nextTab;
+    private int _nextClient;
+    private long _clock;
+
+    public (int Cols, int Rows) DefaultSize { get; set; } = (120, 40);
+
+    public IReadOnlyCollection<PaneState> Panes => _panes.Values;
+
+    public IReadOnlyCollection<ClientState> Clients => _clients.Values;
+
+    public PaneState? Pane(string id) => _panes.GetValueOrDefault(id);
+
+    public ClientState? Client(string id) => _clients.GetValueOrDefault(id);
+
+    public WorkspaceState? Workspace(string name) =>
+        _workspaces.FirstOrDefault(w => Same(w.Name, name));
+
+    public void SetNotices(string workspace, int open) => _notices[workspace] = Math.Max(0, open);
+
+    public (int Here, int Elsewhere) Notices(ClientState client) =>
+        (client.Showing is { } showing ? _notices.GetValueOrDefault(showing) : 0,
+         _notices.Where(n => !Same(n.Key, client.Showing) && InWindow(client, n.Key) && Workspace(n.Key) is not null).Sum(n => n.Value));
+
+    public static bool InWindow(ClientState client, string workspace) =>
+        Same(client.Showing, workspace) || client.Projects.Any(p => Same(p, workspace));
+
+    public bool InAnyWindow(string workspace) => _clients.Values.Any(c => InWindow(c, workspace));
+
+    public PaneState Spawn(string workspace, string cwd, IReadOnlyList<string> args)
+    {
+        var pane = NewPane(cwd, args);
+        AddTab(WorkspaceOrNew(workspace), pane);
+        return pane;
+    }
+
+    public PaneState SpawnFloat(
+        string workspace, string cwd, IReadOnlyList<string> args, Rect? bounds = null, bool modal = false)
+    {
+        var pane = NewPane(cwd, args);
+        AddFloat(WorkspaceOrNew(workspace), pane, bounds, modal);
+        return pane;
+    }
+
+    public PaneState SpawnParked(string workspace, string cwd, IReadOnlyList<string> args, Rect bounds)
+    {
+        var pane = NewPane(cwd, args);
+        WorkspaceOrNew(workspace).Floats.Insert(0, new FloatState(pane.Id, bounds)
+        {
+            Modal = true,
+            Parked = true,
+            Hidden = true,
+            HiddenSince = DateTime.UtcNow,
+        });
+
+        return pane;
+    }
+
+    public FloatState? Parked(string workspace) =>
+        Workspace(workspace)?.Floats.FirstOrDefault(f => f.Parked);
+
+    public bool Unpark(string pane)
+    {
+        if (FloatOf(pane) is not var (workspace, box) || !box.Parked)
+        {
+            return false;
+        }
+
+        box.Parked = false;
+        workspace.Floats.Remove(box);
+        workspace.Floats.Add(box);
+        workspace.FloatFocused = true;
+        return true;
+    }
+
+    public IReadOnlyList<string> StrandedParked() =>
+        _workspaces
+            .Where(w => w.Tabs.Count == 0 && w.Floats.All(f => f.Parked))
+            .SelectMany(w => w.Floats.Select(f => f.Pane))
+            .ToList();
+
+    public bool ToggleFloats(string client)
+    {
+        if (View(client)?.Workspace is not { } workspace || workspace.Floats.All(f => f.Modal))
+        {
+            return false;
+        }
+
+        workspace.FloatsShown = !workspace.FloatsShown;
+        workspace.FloatFocused = workspace.FloatsShown || workspace.Floats.Any(f => f.Modal);
+        return true;
+    }
+
+    public Rect? PaneArea(string pane)
+    {
+        if (!_panes.TryGetValue(pane, out var state) || TabOf(state) is not var (workspace, tab))
+        {
+            return null;
+        }
+
+        var (cols, rows) = _clients.Values
+            .Where(c => Same(c.Showing, workspace.Name))
+            .OrderByDescending(c => c.LastActive)
+            .Select(c => (c.Cols, c.Rows))
+            .DefaultIfEmpty(Reference())
+            .First();
+
+        var placed = new List<Placed>();
+        Arrange(tab, Content(cols, rows), placed, []);
+        return placed.FirstOrDefault(p => p.Pane == pane).Area;
+    }
+
+    public bool MoveFloat(string pane, int x, int y)
+    {
+        if (FloatOf(pane) is not var (_, box))
+        {
+            return false;
+        }
+
+        box.Bounds = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(StatusRows, y) };
+        return true;
+    }
+
+    public bool ResizeFloat(string pane, int width, int height)
+    {
+        if (FloatOf(pane) is not var (_, box))
+        {
+            return false;
+        }
+
+        box.Bounds = box.Bounds with { Width = Math.Max(MinFloatWidth, width), Height = Math.Max(MinFloatHeight, height) };
+        return true;
+    }
+
+    public bool NudgeFloat(string client, int dx, int dy, int dw, int dh)
+    {
+        if (View(client) is not { Focused: { } focused } view
+            || view.FloatingPanes.FirstOrDefault(p => p.Pane == focused) is not { Pane: not null } box)
+        {
+            return false;
+        }
+
+        var area = box.Area;
+        return ResizeFloat(focused, area.Width + dw, area.Height + dh)
+            && MoveFloat(focused, area.X + dx, area.Y + dy);
+    }
+
+    public bool ToFloat(string id)
+    {
+        if (!_panes.TryGetValue(id, out var pane)
+            || TabOf(pane) is not var (workspace, _)
+            || Same(workspace.Name, OverlayWorkspace))
+        {
+            return false;
+        }
+
+        AddFloat(workspace, pane);
+        Detach(pane);
+        return true;
+    }
+
+    public bool ToTile(string id)
+    {
+        if (!_panes.TryGetValue(id, out var pane) || FloatOf(id) is not var (workspace, box) || box.Modal)
+        {
+            return false;
+        }
+
+        if (workspace.Tabs.FirstOrDefault(t => t.Id == workspace.ActiveTab) is { } tab
+            && _panes.TryGetValue(tab.ActivePane, out var anchor))
+        {
+            Join(anchor, pane, sideBySide: true, newFirst: false, 50);
+        }
+        else
+        {
+            AddTab(workspace, pane);
+        }
+
+        RemoveFloat(workspace, box);
+        workspace.FloatFocused = false;
+        pane.Cols = 0;
+        return true;
+    }
+
+    public Rect? FloatBounds(string pane) => FloatOf(pane)?.Float.Bounds;
+
+    public PaneState? Split(
+        string source, bool sideBySide, bool newFirst, int percent, string cwd, IReadOnlyList<string> args)
+    {
+        if (!_panes.TryGetValue(source, out var anchor) || TabOf(anchor) is null)
+        {
+            return null;
+        }
+
+        var pane = NewPane(cwd, args);
+        Join(anchor, pane, sideBySide, newFirst, percent);
+        return pane;
+    }
+
+    public bool JoinBeside(string source, string moving, bool sideBySide, bool newFirst, int percent)
+    {
+        if (!_panes.TryGetValue(source, out var anchor)
+            || !_panes.TryGetValue(moving, out var pane)
+            || source == moving)
+        {
+            return false;
+        }
+
+        Detach(pane);
+        Join(anchor, pane, sideBySide, newFirst, percent);
+        return true;
+    }
+
+    public bool Move(string id, string workspace)
+    {
+        if (!_panes.TryGetValue(id, out var pane))
+        {
+            return false;
+        }
+
+        Detach(pane);
+        AddTab(WorkspaceOrNew(workspace), pane);
+        return true;
+    }
+
+    public bool Kill(string id)
+    {
+        if (!_panes.TryGetValue(id, out var pane))
+        {
+            return false;
+        }
+
+        Detach(pane);
+        _panes.Remove(id);
+
+        foreach (var client in _clients.Values.Where(c => c.Overlay == id))
+        {
+            client.Overlay = null;
+        }
+
+        return true;
+    }
+
+    public IReadOnlyList<string> PanesIn(string workspace) =>
+        Workspace(workspace) is { } found
+            ? found.Tabs.SelectMany(t => t.Root.Panes()).Concat(found.Floats.Select(f => f.Pane)).ToList()
+            : [];
+
+    public bool Focus(string id)
+    {
+        if (!_panes.TryGetValue(id, out var pane))
+        {
+            return false;
+        }
+
+        if (FloatOf(id) is var (floatWorkspace, box))
+        {
+            floatWorkspace.Floats.Remove(box);
+            floatWorkspace.Floats.Add(box);
+            floatWorkspace.FloatsShown = true;
+            floatWorkspace.FloatFocused = true;
+            return true;
+        }
+
+        if (TabOf(pane) is not var (workspace, tab))
+        {
+            return false;
+        }
+
+        workspace.ActiveTab = tab.Id;
+        tab.ActivePane = pane.Id;
+        workspace.FloatFocused = false;
+        return true;
+    }
+
+    public bool SetTitle(string id, string title)
+    {
+        if (FloatOf(id) is var (_, box))
+        {
+            box.Title = title;
+            return true;
+        }
+
+        if (!_panes.TryGetValue(id, out var pane) || TabOf(pane) is not var (_, tab))
+        {
+            return false;
+        }
+
+        tab.Title = title;
+        return true;
+    }
+
+    public ClientState Connect(int cols, int rows, string? showing)
+    {
+        var client = new ClientState($"c{++_nextClient}")
+        {
+            Cols = Math.Max(cols, 2),
+            Rows = Math.Max(rows, 2),
+            LastActive = ++_clock,
+        };
+
+        client.Showing = showing is not null && Workspace(showing) is not null
+            ? Workspace(showing)!.Name
+            : _workspaces.FirstOrDefault(w => !FleetWorkspaces.IsHidden(w.Name) && !Same(w.Name, OverlayWorkspace))?.Name;
+        Remember(client, client.Showing);
+
+        _clients[client.Id] = client;
+        return client;
+    }
+
+    public void Disconnect(string client) => _clients.Remove(client);
+
+    public void Resize(string client, int cols, int rows)
+    {
+        if (_clients.TryGetValue(client, out var c))
+        {
+            c.Cols = Math.Max(cols, 2);
+            c.Rows = Math.Max(rows, 2);
+            c.LastActive = ++_clock;
+        }
+    }
+
+    public void Touch(string client)
+    {
+        if (_clients.TryGetValue(client, out var c))
+        {
+            c.LastActive = ++_clock;
+        }
+    }
+
+    public bool Show(string client, string workspace)
+    {
+        if (!_clients.TryGetValue(client, out var c) || Workspace(workspace) is not { } target)
+        {
+            return false;
+        }
+
+        c.Showing = target.Name;
+        c.LastActive = ++_clock;
+        c.Leaving = false;
+        Remember(c, target.Name);
+        return true;
+    }
+
+    public void Release(string client, string workspace)
+    {
+        if (!_clients.TryGetValue(client, out var c))
+        {
+            return;
+        }
+
+        Forget(c, workspace);
+    }
+
+    private void Forget(ClientState client, string workspace)
+    {
+        var at = client.Projects.FindIndex(p => Same(p, workspace));
+        client.Projects.RemoveAll(p => Same(p, workspace) || Workspace(p) is null);
+
+        if (!Same(client.Showing, workspace))
+        {
+            return;
+        }
+
+        client.Showing = client.Projects.Count > 0
+            ? client.Projects[Math.Clamp(at - 1, 0, client.Projects.Count - 1)]
+            : null;
+        client.Leaving = client.Showing is null;
+    }
+
+    public bool Take(string client, string workspace)
+    {
+        foreach (var other in _clients.Values.Where(c => c.Id != client).ToList())
+        {
+            Release(other.Id, workspace);
+        }
+
+        return Show(client, workspace);
+    }
+
+    public string? NextProject(string client, int delta = 1)
+    {
+        if (!_clients.TryGetValue(client, out var c) || c.Projects.Count == 0)
+        {
+            return null;
+        }
+
+        var at = c.Projects.FindIndex(p => Same(p, c.Showing));
+        return c.Projects[((at < 0 ? 0 : at + delta) % c.Projects.Count + c.Projects.Count) % c.Projects.Count];
+    }
+
+    public static bool IsProject(string? workspace) =>
+        workspace is not null && !FleetWorkspaces.IsHidden(workspace) && !Same(workspace, OverlayWorkspace);
+
+    private static void Remember(ClientState client, string? workspace)
+    {
+        if (!IsProject(workspace))
+        {
+            return;
+        }
+
+        if (!client.Projects.Any(p => Same(p, workspace)))
+        {
+            client.Projects.Add(workspace!);
+        }
+    }
+
+    public bool CycleTab(string client, int delta)
+    {
+        if (!_clients.TryGetValue(client, out var c)
+            || c.Showing is null
+            || Workspace(c.Showing) is not { Tabs.Count: > 0 } workspace)
+        {
+            return false;
+        }
+
+        var index = workspace.Tabs.FindIndex(t => t.Id == workspace.ActiveTab);
+        var next = ((index + delta) % workspace.Tabs.Count + workspace.Tabs.Count) % workspace.Tabs.Count;
+        workspace.ActiveTab = workspace.Tabs[next].Id;
+        return true;
+    }
+
+    public string? WindowTitle(string client)
+    {
+        if (View(client) is not { } view)
+        {
+            return null;
+        }
+
+        if (view.Workspace is not { } workspace)
+        {
+            return "fleet";
+        }
+
+        var title = view.Focused is { } focused ? Pane(focused)?.Title : null;
+
+        return string.IsNullOrWhiteSpace(title) ? $"{workspace.Name} · fleet" : $"{title} · {workspace.Name}";
+    }
+
+    public MouseHit Hit(string client, int x, int y)
+    {
+        if (View(client) is not { } view)
+        {
+            return MouseHit.Nothing;
+        }
+
+        if (view.Overlay is { } overlay)
+        {
+            var inner = new Rect(overlay.Area.X + 1, overlay.Area.Y + 1, overlay.Area.Width - 2, overlay.Area.Height - 2);
+            return inner.Contains(x, y)
+                ? new MouseHit(MouseHitKind.Pane, overlay.Pane, x - inner.X, y - inner.Y)
+                : MouseHit.Nothing;
+        }
+
+        if (y < StatusRows && view.Workspace?.RemoteHost is null)
+        {
+            return new MouseHit(MouseHitKind.StatusBar, null, x, y);
+        }
+
+        for (var i = view.FloatingPanes.Count - 1; i >= 0; i--)
+        {
+            var box = view.FloatingPanes[i];
+            if (!box.Area.Contains(x, y))
+            {
+                continue;
+            }
+
+            var inner = ClientView.Inner(box.Area);
+            if (inner.Contains(x, y))
+            {
+                return new MouseHit(MouseHitKind.Pane, box.Pane, x - inner.X, y - inner.Y);
+            }
+
+            var corner = x == box.Area.X + box.Area.Width - 1 && y == box.Area.Y + box.Area.Height - 1;
+            return new MouseHit(corner ? MouseHitKind.FloatResize : MouseHitKind.FloatMove, box.Pane, x, y);
+        }
+
+        for (var i = 0; i < view.Dividers.Count; i++)
+        {
+            if (view.Dividers[i].Contains(x, y))
+            {
+                return new MouseHit(MouseHitKind.Divider, null, x, y, i);
+            }
+        }
+
+        foreach (var placed in view.Panes)
+        {
+            if (placed.Area.Contains(x, y))
+            {
+                return new MouseHit(MouseHitKind.Pane, placed.Pane, x - placed.Area.X, y - placed.Area.Y);
+            }
+        }
+
+        return MouseHit.Nothing;
+    }
+
+    public (int X, int Y)? Relative(string client, string pane, int x, int y)
+    {
+        if (View(client) is not { } view)
+        {
+            return null;
+        }
+
+        var area = view.Overlay is { } overlay && overlay.Pane == pane
+            ? new Rect(overlay.Area.X + 1, overlay.Area.Y + 1, overlay.Area.Width - 2, overlay.Area.Height - 2)
+            : view.FloatingPanes.Any(p => p.Pane == pane)
+                ? ClientView.Inner(view.FloatingPanes.First(p => p.Pane == pane).Area)
+                : view.Panes.FirstOrDefault(p => p.Pane == pane).Area;
+
+        if (area.Width <= 0 || area.Height <= 0)
+        {
+            return null;
+        }
+
+        return (Math.Clamp(x - area.X, 0, area.Width - 1), Math.Clamp(y - area.Y, 0, area.Height - 1));
+    }
+
+    public bool FocusTab(string client, string tab)
+    {
+        if (View(client)?.Workspace is not { } workspace || workspace.Tabs.All(t => t.Id != tab))
+        {
+            return false;
+        }
+
+        workspace.ActiveTab = tab;
+        return true;
+    }
+
+    public bool DragDivider(string client, int index, int x, int y)
+    {
+        if (View(client) is not { Tab: { } tab } view || index < 0 || index >= view.Dividers.Count)
+        {
+            return false;
+        }
+
+        var divider = view.Dividers[index];
+        if (divider.Split is not { } split)
+        {
+            return false;
+        }
+
+        var area = divider.Area;
+        var usable = Math.Max(2, (divider.Vertical ? area.Width : area.Height) - 1);
+        var offset = divider.Vertical ? x - area.X : y - area.Y;
+        tab.Root = tab.Root.WithRatio(split, (double)Math.Clamp(offset, 1, usable - 1) / usable);
+        return true;
+    }
+
+    public bool FocusDirection(string client, int dx, int dy)
+    {
+        if (View(client) is { Tab.Zoomed: not null } zoomed)
+        {
+            zoomed.Tab!.Zoomed = null;
+        }
+
+        if (View(client) is not { Focused: not null } view || view.Panes.All(p => p.Pane != view.Focused))
+        {
+            return false;
+        }
+
+        return Neighbour(view.Panes, view.Focused, dx, dy) is { } best && Focus(best);
+    }
+
+    public bool FocusDirectionFrom(string pane, int dx, int dy)
+    {
+        if (!_panes.TryGetValue(pane, out var state) || TabOf(state) is not var (workspace, tab))
+        {
+            return false;
+        }
+
+        tab.Zoomed = null;
+        var (cols, rows) = SizeFor(workspace);
+        var placed = new List<Placed>();
+        Arrange(tab, Content(cols, rows), placed, []);
+        return Neighbour(placed, pane, dx, dy) is { } best && Focus(best);
+    }
+
+    public bool FocusTabIndex(string client, int index)
+    {
+        if (View(client)?.Workspace is not { } workspace || index < 0 || index >= workspace.Tabs.Count)
+        {
+            return false;
+        }
+
+        workspace.ActiveTab = workspace.Tabs[index].Id;
+        workspace.FloatFocused = false;
+        return true;
+    }
+
+    public bool NextPane(string client)
+    {
+        if (View(client) is not { Tab: { } tab, Focused: { } focused })
+        {
+            return false;
+        }
+
+        var order = tab.Root.Panes().ToList();
+        var at = order.IndexOf(focused);
+        tab.Zoomed = null;
+        return order.Count > 1 && Focus(order[(at + 1 + order.Count) % order.Count]);
+    }
+
+    public bool ToggleZoom(string client)
+    {
+        if (View(client) is not { Tab: { } tab, Focused: { } focused } || !tab.Root.Contains(focused))
+        {
+            return false;
+        }
+
+        tab.Zoomed = tab.Zoomed is null && tab.Root.Panes().Count() > 1 ? focused : null;
+        return true;
+    }
+
+    public bool ResizeFocused(string client, string direction, int cells)
+    {
+        if (View(client) is not { Focused: { } focused } view || view.Panes.All(p => p.Pane != focused))
+        {
+            return false;
+        }
+
+        var area = view.Panes.First(p => p.Pane == focused).Area;
+        var vertical = direction is "left" or "right";
+        var toward = direction is "right" or "down" ? cells : -cells;
+
+        bool Touches(Divider d, bool before) => vertical
+            ? d.Vertical && d.X == (before ? area.X - 1 : area.X + area.Width)
+              && d.Y <= area.Y && d.Y + d.Length >= area.Y + area.Height
+            : !d.Vertical && d.Y == (before ? area.Y - 1 : area.Y + area.Height)
+              && d.X <= area.X && d.X + d.Length >= area.X + area.Width;
+
+        var after = direction is "right" or "down";
+        var index = FindDivider(view.Dividers, d => Touches(d, before: !after));
+        if (index < 0)
+        {
+            index = FindDivider(view.Dividers, d => Touches(d, before: after));
+        }
+
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var divider = view.Dividers[index];
+        return DragDivider(client, index, divider.X + (vertical ? toward : 0), divider.Y + (vertical ? 0 : toward));
+    }
+
+    public bool IsOverlay(string pane) => _clients.Values.Any(c => c.Overlay == pane);
+
+    public FloatState? Float(string pane) => FloatOf(pane)?.Float;
+
+    public IEnumerable<FloatState> HiddenFloats() => _workspaces.SelectMany(w => w.Floats).Where(f => f.Hidden);
+
+    public IEnumerable<FloatState> HeldFloats() => _workspaces.SelectMany(w => w.Floats).Where(f => f.Held is not null);
+
+    public bool FitFloat(string pane, int cols, int rows)
+    {
+        if (FloatOf(pane) is not var (workspace, box))
+        {
+            return false;
+        }
+
+        var (screenCols, screenRows) = SizeFor(workspace);
+        var content = Content(screenCols, screenRows);
+        var large = OverlayArea(screenCols, screenRows);
+        if (cols <= 0 || rows <= 0)
+        {
+            box.Bounds = large;
+            return true;
+        }
+
+        var width = Math.Clamp(cols + 2, MinFloatWidth, content.Width);
+        var height = Math.Clamp(rows + 2, MinFloatHeight, content.Height);
+
+        var now = FloatArea(box.Bounds, content);
+        var centreX = now.X + now.Width / 2;
+        var centreY = now.Y + now.Height / 2;
+
+        box.Bounds = FloatArea(new Rect(centreX - width / 2, centreY - height / 2, width, height), content);
+        return true;
+    }
+
+    public string FloatLabel(FloatState box)
+    {
+        var live = _panes[box.Pane].Title.Trim();
+        var own = _panes[box.Pane].Args is [var program, "menu" or "approve", ..]
+                  && Path.GetFileNameWithoutExtension(program) == "fleet";
+
+        var programPath = live.IndexOfAny(['/', '\\']) >= 0
+                          && Path.GetFileNameWithoutExtension(live.Replace('\\', '/')) == "fleet";
+
+        if (own && live.Length > 0 && !programPath)
+        {
+            return live;
+        }
+
+        return box.Title.Length > 0 ? box.Title : live;
+    }
+
+    public bool IsNvim(string pane)
+    {
+        if (!_panes.TryGetValue(pane, out var state))
+        {
+            return false;
+        }
+
+        var program = state.Args.Count > 0 ? Path.GetFileNameWithoutExtension(state.Args[0]) : string.Empty;
+        return program is "nvim" or "vim"
+               || state.Args.Any(a => Path.GetFileNameWithoutExtension(a) is "nvim" or "vim")
+               || state.Title.Contains("nvim", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public SessionSnapshot Snapshot()
+    {
+        var snapshot = new SessionSnapshot();
+
+        foreach (var workspace in _workspaces.Where(w => !Same(w.Name, OverlayWorkspace) && w.RemoteHost is null))
+        {
+            var saved = new WorkspaceSnapshot
+            {
+                Name = workspace.Name,
+                ActiveTab = Math.Max(0, workspace.Tabs.FindIndex(t => t.Id == workspace.ActiveTab)),
+                FloatsShown = workspace.FloatsShown,
+                FloatFocused = workspace.FloatFocused && workspace.FloatsShown
+                    && workspace.Floats.LastOrDefault(f => !f.Parked) is { Modal: false },
+            };
+
+            foreach (var tab in workspace.Tabs)
+            {
+                var order = tab.Root.Panes().ToList();
+                saved.Tabs.Add(new TabSnapshot
+                {
+                    Title = tab.Title,
+                    Root = Save(tab.Root),
+                    ActivePane = Math.Max(0, order.IndexOf(tab.ActivePane)),
+                    Zoomed = tab.Zoomed is { } zoomed ? order.IndexOf(zoomed) : -1,
+                });
+            }
+
+            foreach (var box in workspace.Floats.Where(f => !f.Modal))
+            {
+                saved.Floats.Add(new FloatSnapshot
+                {
+                    Pane = Save(_panes[box.Pane]),
+                    X = box.Bounds.X,
+                    Y = box.Bounds.Y,
+                    Width = box.Bounds.Width,
+                    Height = box.Bounds.Height,
+                    Title = box.Title,
+                });
+            }
+
+            if (saved.Tabs.Count > 0 || saved.Floats.Count > 0)
+            {
+                snapshot.Workspaces.Add(saved);
+            }
+        }
+
+        return snapshot;
+    }
+
+    public IReadOnlyList<PaneState> Restore(
+        SessionSnapshot snapshot, Func<IReadOnlyList<string>, IReadOnlyList<string>> relaunch)
+    {
+        var created = new List<PaneState>();
+
+        PaneState Revive(PaneSnapshot saved)
+        {
+            var pane = NewPane(saved.Cwd, relaunch(saved.Args));
+            pane.Env = new Dictionary<string, string>(saved.Env);
+            created.Add(pane);
+            return pane;
+        }
+
+        Layout? Rebuild(LayoutSnapshot? node) => node switch
+        {
+            { Pane: { } pane } => Layout.Of(Revive(pane).Id),
+            { First: var first, Second: var second } => (Rebuild(first), Rebuild(second)) switch
+            {
+                (null, var only) => only,
+                (var only, null) => only,
+                var (a, b) => new LayoutSplit(node.SideBySide, Math.Clamp(node.Ratio, 0.05, 0.95), a, b),
+            },
+            _ => null,
+        };
+
+        foreach (var saved in snapshot.Workspaces.Where(w => w.Name.Length > 0 && !Same(w.Name, OverlayWorkspace)))
+        {
+            var workspace = WorkspaceOrNew(saved.Name);
+
+            foreach (var tab in saved.Tabs)
+            {
+                if (Rebuild(tab.Root) is not { } root)
+                {
+                    continue;
+                }
+
+                var order = root.Panes().ToList();
+                workspace.Tabs.Add(new TabState($"t{++_nextTab}", root)
+                {
+                    Title = tab.Title,
+                    ActivePane = order[Math.Clamp(tab.ActivePane, 0, order.Count - 1)],
+                    Zoomed = tab.Zoomed >= 0 && tab.Zoomed < order.Count ? order[tab.Zoomed] : null,
+                });
+            }
+
+            if (workspace.Tabs.Count > 0)
+            {
+                workspace.ActiveTab = workspace.Tabs[Math.Clamp(saved.ActiveTab, 0, workspace.Tabs.Count - 1)].Id;
+            }
+
+            foreach (var box in saved.Floats)
+            {
+                workspace.Floats.Add(new FloatState(
+                    Revive(box.Pane).Id,
+                    new Rect(box.X, Math.Max(StatusRows, box.Y), Math.Max(MinFloatWidth, box.Width), Math.Max(MinFloatHeight, box.Height)))
+                {
+                    Title = box.Title,
+                });
+            }
+
+            workspace.FloatsShown = saved.FloatsShown && workspace.Floats.Count > 0;
+            workspace.FloatFocused = saved.FloatFocused && workspace.FloatsShown;
+
+            if (workspace.Tabs.Count == 0 && workspace.Floats.Count == 0)
+            {
+                _workspaces.Remove(workspace);
+            }
+        }
+
+        return created;
+    }
+
+    private LayoutSnapshot Save(Layout layout) => layout switch
+    {
+        LayoutLeaf leaf => new LayoutSnapshot { Pane = Save(_panes[leaf.Pane]) },
+        LayoutSplit split => new LayoutSnapshot
+        {
+            SideBySide = split.SideBySide,
+            Ratio = split.Ratio,
+            First = Save(split.First),
+            Second = Save(split.Second),
+        },
+        _ => new LayoutSnapshot(),
+    };
+
+    private static PaneSnapshot Save(PaneState pane) => new()
+    {
+        Cwd = pane.Cwd,
+        Args = [.. pane.Args],
+        Env = new Dictionary<string, string>(pane.Env),
+    };
+
+    private static int FindDivider(IReadOnlyList<Divider> dividers, Func<Divider, bool> match)
+    {
+        for (var i = 0; i < dividers.Count; i++)
+        {
+            if (match(dividers[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static string? Neighbour(IReadOnlyList<Placed> panes, string focused, int dx, int dy)
+    {
+        var from = panes.First(p => p.Pane == focused).Area;
+        var cx = from.X + from.Width / 2;
+        var cy = from.Y + from.Height / 2;
+
+        return panes
+            .Where(p => p.Pane != focused)
+            .Where(p => dx > 0 ? p.Area.X >= from.X + from.Width
+                : dx < 0 ? p.Area.X + p.Area.Width <= from.X
+                : dy > 0 ? p.Area.Y >= from.Y + from.Height
+                : p.Area.Y + p.Area.Height <= from.Y)
+            .OrderBy(p => Math.Abs(p.Area.X + p.Area.Width / 2 - cx) + Math.Abs(p.Area.Y + p.Area.Height / 2 - cy))
+            .Select(p => p.Pane)
+            .FirstOrDefault();
+    }
+
+    private (int Cols, int Rows) SizeFor(WorkspaceState workspace) =>
+        _clients.Values
+            .Where(c => Same(c.Showing, workspace.Name))
+            .OrderByDescending(c => c.LastActive)
+            .Select(c => (c.Cols, c.Rows))
+            .DefaultIfEmpty(Reference())
+            .First();
+
+    public static bool IsDashboard(PaneState pane) =>
+        pane.Args is [var program, "dash", ..] && Path.GetFileNameWithoutExtension(program) == "fleet";
+
+    public bool Framed(TabState tab) =>
+        tab.Root.Panes().Any(id => _panes.TryGetValue(id, out var pane) && IsDashboard(pane));
+
+    public static Rect? FrameFor(Rect area) =>
+        area.Width > 4 && area.Height > 4 ? area : null;
+
+    private void Arrange(TabState tab, Rect area, List<Placed> placed, List<Divider> dividers)
+    {
+        if (Framed(tab) && FrameFor(area) is { } frame)
+        {
+            area = ClientView.Inner(frame);
+        }
+
+        if (tab.Zoomed is { } zoomed && tab.Root.Contains(zoomed))
+        {
+            placed.Add(new Placed(zoomed, area));
+            return;
+        }
+
+        tab.Root.Place(area, placed, dividers);
+    }
+
+    public bool SetOverlay(string client, string pane)
+    {
+        if (!_clients.TryGetValue(client, out var c) || !_panes.ContainsKey(pane))
+        {
+            return false;
+        }
+
+        c.Overlay = pane;
+        return true;
+    }
+
+    public static Rect OverlayArea(int cols, int rows)
+    {
+        var usable = Math.Max(1, rows - StatusRows);
+        var width = Math.Clamp(cols * 4 / 5, Math.Min(cols, 40), cols);
+        var height = Math.Clamp(usable * 4 / 5, Math.Min(usable, 12), usable);
+        return new Rect((cols - width) / 2, StatusRows + (usable - height) / 2, width, height);
+    }
+
+    public static Rect Content(int cols, int rows) => new(0, StatusRows, cols, Math.Max(1, rows - StatusRows));
+
+    public static Rect Area(WorkspaceState? workspace, int cols, int rows) =>
+        workspace?.RemoteHost is not null ? new Rect(0, 0, cols, Math.Max(1, rows)) : Content(cols, rows);
+
+    public IReadOnlyList<Workspace> ListWorkspaces(string? client)
+    {
+        var mine = client is not null ? Client(client) : null;
+
+        return _workspaces
+            .Where(w => !Same(w.Name, OverlayWorkspace))
+            .Select(w => new Workspace(
+                w.Name,
+                Same(w.Name, mine?.Showing),
+                mine is not null && (Same(w.Name, mine.Showing) || mine.Projects.Any(p => Same(p, w.Name))),
+                _clients.Values.Any(c => c != mine && (Same(c.Showing, w.Name) || c.Projects.Any(p => Same(p, w.Name))))))
+            .ToList();
+    }
+
+    public IReadOnlyList<Pane> ListPanes() =>
+        _workspaces
+            .Where(w => !Same(w.Name, OverlayWorkspace))
+            .SelectMany(w => w.Tabs.SelectMany(t => t.Root.Panes().Select(id => (w, t, id))))
+            .Select(x =>
+            {
+                var pane = _panes[x.id];
+                return new Pane(
+                    new PaneId(pane.Id),
+                    x.w.Name,
+                    x.t.Id,
+                    x.w.Name,
+                    x.t.Title.Length > 0 ? x.t.Title : pane.Title,
+                    pane.Cwd,
+                    x.w.ActiveTab == x.t.Id && x.t.ActivePane == pane.Id,
+                    pane.Title);
+            })
+            .Concat(_workspaces
+                .Where(w => !Same(w.Name, OverlayWorkspace))
+                .SelectMany(w => w.Floats.Where(f => !f.Parked).Select(f =>
+                {
+                    var pane = _panes[f.Pane];
+                    return new Pane(
+                        new PaneId(pane.Id),
+                        w.Name,
+                        FloatTab,
+                        w.Name,
+                        FloatLabel(f),
+                        pane.Cwd,
+                        w.FloatFocused && w.Floats[^1] == f,
+                        pane.Title);
+                })))
+            .ToList();
+
+    public ClientView? View(string client)
+    {
+        if (!_clients.TryGetValue(client, out var c))
+        {
+            return null;
+        }
+
+        var workspace = c.Showing is null ? null : Workspace(c.Showing);
+        var tab = workspace?.Tabs.FirstOrDefault(t => t.Id == workspace.ActiveTab);
+        var area = Area(workspace, c.Cols, c.Rows);
+        var placed = new List<Placed>();
+        var dividers = new List<Divider>();
+        if (tab is not null)
+        {
+            Arrange(tab, area, placed, dividers);
+        }
+
+        var overlay = c.Overlay is { } o && _panes.ContainsKey(o)
+            ? new Placed(o, OverlayArea(c.Cols, c.Rows))
+            : (Placed?)null;
+
+        var candidates = workspace is not null
+            ? workspace.Floats.Where(f => !f.Parked && (workspace.FloatsShown || f.Modal)).ToList()
+            : [];
+        var floats = candidates
+            .Where(f => !f.Hidden)
+            .Select(f => new Placed(f.Pane, FloatArea(f.Drawn, area)))
+            .ToList();
+
+        var focused = overlay?.Pane
+            ?? (candidates.Count > 0 && (workspace!.FloatFocused || tab is null) ? candidates[^1].Pane : null)
+            ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
+
+        var labels = workspace?.Floats.ToDictionary(f => f.Pane, f => f.HeldLabel ?? FloatLabel(f));
+        var frame = tab is not null && workspace?.RemoteHost is null && Framed(tab) ? FrameFor(area) : null;
+
+        return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels)
+        {
+            Frame = frame,
+            FrameTitle = frame is null ? null : $"fleet — {workspace!.Name}",
+            Notices = Notices(c),
+        };
+    }
+
+    public static Rect Over(Rect pane)
+    {
+        var width = Math.Clamp(pane.Width, 50, 72);
+        var height = Math.Clamp(pane.Height, 10, 14);
+        return new Rect(
+            Math.Max(0, pane.X + (pane.Width - width) / 2),
+            Math.Max(0, pane.Y + (pane.Height - height) / 2),
+            width,
+            height);
+    }
+
+    public static Rect FloatArea(Rect bounds, Rect content)
+    {
+        var width = Math.Min(bounds.Width, content.Width);
+        var height = Math.Min(bounds.Height, content.Height);
+        return new Rect(
+            Math.Clamp(bounds.X, content.X, content.X + content.Width - width),
+            Math.Clamp(bounds.Y, content.Y, content.Y + content.Height - height),
+            width,
+            height);
+    }
+
+    public IReadOnlyList<(PaneState Pane, int Cols, int Rows)> Resizes()
+    {
+        var changed = new List<(PaneState, int, int)>();
+
+        foreach (var workspace in _workspaces.Where(w => !Same(w.Name, OverlayWorkspace)))
+        {
+            var shownBy = _clients.Values
+                .Where(c => Same(c.Showing, workspace.Name))
+                .OrderByDescending(c => c.LastActive)
+                .FirstOrDefault();
+
+            foreach (var tab in workspace.Tabs)
+            {
+                var unsized = tab.Root.Panes().Any(id => _panes[id].Cols == 0);
+
+                if (shownBy is null && !unsized)
+                {
+                    continue;
+                }
+
+                var size = shownBy is not null
+                    ? (shownBy.Cols, shownBy.Rows)
+                    : Reference();
+                var placed = new List<Placed>();
+                Arrange(tab, Area(workspace, size.Item1, size.Item2), placed, []);
+
+                foreach (var p in placed)
+                {
+                    var pane = _panes[p.Pane];
+                    var cols = Math.Max(1, p.Area.Width);
+                    var rows = Math.Max(1, p.Area.Height);
+
+                    if (pane.Cols != cols || pane.Rows != rows)
+                    {
+                        pane.Cols = cols;
+                        pane.Rows = rows;
+                        changed.Add((pane, cols, rows));
+                    }
+                }
+            }
+
+            foreach (var box in workspace.Floats)
+            {
+                var pane = _panes[box.Pane];
+
+                if (shownBy is null && pane.Cols != 0)
+                {
+                    continue;
+                }
+
+                var size = shownBy is not null ? (shownBy.Cols, shownBy.Rows) : Reference();
+                var inner = ClientView.Inner(
+                    FloatArea(box.Bounds, Content(size.Item1, size.Item2)));
+                var cols = Math.Max(1, inner.Width);
+                var rows = Math.Max(1, inner.Height);
+
+                if (pane.Cols != cols || pane.Rows != rows)
+                {
+                    pane.Cols = cols;
+                    pane.Rows = rows;
+                    changed.Add((pane, cols, rows));
+                }
+            }
+        }
+
+        foreach (var client in _clients.Values)
+        {
+            if (client.Overlay is { } id && _panes.TryGetValue(id, out var pane))
+            {
+                var area = OverlayArea(client.Cols, client.Rows);
+                var cols = Math.Max(1, area.Width - 2);
+                var rows = Math.Max(1, area.Height - 2);
+
+                if (pane.Cols != cols || pane.Rows != rows)
+                {
+                    pane.Cols = cols;
+                    pane.Rows = rows;
+                    changed.Add((pane, cols, rows));
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    private (int Cols, int Rows) Reference() =>
+        _clients.Values.OrderByDescending(c => c.LastActive).FirstOrDefault() is { } latest
+            ? (latest.Cols, latest.Rows)
+            : DefaultSize;
+
+    private PaneState NewPane(string cwd, IReadOnlyList<string> args)
+    {
+        var pane = new PaneState($"p{++_nextPane}", cwd, args);
+        _panes[pane.Id] = pane;
+        return pane;
+    }
+
+    private WorkspaceState WorkspaceOrNew(string name)
+    {
+        if (Workspace(name) is { } found)
+        {
+            return found;
+        }
+
+        var created = new WorkspaceState(name);
+        _workspaces.Add(created);
+        return created;
+    }
+
+    private void AddTab(WorkspaceState workspace, PaneState pane)
+    {
+        var tab = new TabState($"t{++_nextTab}", Layout.Of(pane.Id)) { ActivePane = pane.Id };
+        workspace.Tabs.Add(tab);
+        workspace.ActiveTab = tab.Id;
+    }
+
+    private void Join(PaneState anchor, PaneState pane, bool sideBySide, bool newFirst, int percent)
+    {
+        if (TabOf(anchor) is not var (_, tab))
+        {
+            return;
+        }
+
+        tab.Root = tab.Root.Split(anchor.Id, pane.Id, sideBySide, newFirst, percent);
+        tab.ActivePane = pane.Id;
+        tab.Zoomed = null;
+        pane.Cols = 0;
+    }
+
+    private void AddFloat(WorkspaceState workspace, PaneState pane, Rect? bounds = null, bool modal = false)
+    {
+        var (cols, rows) = Reference();
+        var usable = Math.Max(1, rows - StatusRows);
+        var width = Math.Max(MinFloatWidth, cols * 3 / 5);
+        var height = Math.Max(MinFloatHeight, usable * 3 / 5);
+        var cascade = workspace.Floats.Count * 2;
+
+        workspace.Floats.Add(new FloatState(
+            pane.Id,
+            bounds ?? new Rect((cols - width) / 2 + cascade, StatusRows + (usable - height) / 2 + cascade / 2, width, height))
+        {
+            Modal = modal,
+        });
+
+        workspace.FloatsShown |= !modal;
+        workspace.FloatFocused = true;
+        pane.Cols = 0;
+    }
+
+    private void RemoveFloat(WorkspaceState workspace, FloatState box)
+    {
+        workspace.Floats.Remove(box);
+
+        if (workspace.Floats.All(f => f.Modal))
+        {
+            workspace.FloatsShown = false;
+        }
+
+        if (!workspace.Floats.Any(f => !f.Parked && (workspace.FloatsShown || f.Modal)))
+        {
+            workspace.FloatFocused = false;
+        }
+
+        if (workspace.Tabs.Count == 0 && workspace.Floats.Count == 0)
+        {
+            DropWorkspace(workspace);
+        }
+    }
+
+    private void DropWorkspace(WorkspaceState workspace)
+    {
+        _workspaces.Remove(workspace);
+
+        foreach (var client in _clients.Values)
+        {
+            Forget(client, workspace.Name);
+        }
+    }
+
+    private (WorkspaceState Workspace, FloatState Float)? FloatOf(string pane)
+    {
+        foreach (var workspace in _workspaces)
+        {
+            if (workspace.Floats.FirstOrDefault(f => f.Pane == pane) is { } box)
+            {
+                return (workspace, box);
+            }
+        }
+
+        return null;
+    }
+
+    private void Detach(PaneState pane)
+    {
+        if (TabOf(pane) is not var (workspace, tab))
+        {
+            if (FloatOf(pane.Id) is var (floatWorkspace, box))
+            {
+                RemoveFloat(floatWorkspace, box);
+            }
+
+            return;
+        }
+
+        var rest = tab.Root.Remove(pane.Id);
+
+        if (tab.Zoomed == pane.Id)
+        {
+            tab.Zoomed = null;
+        }
+
+        if (rest is not null)
+        {
+            tab.Root = rest;
+            if (tab.ActivePane == pane.Id)
+            {
+                tab.ActivePane = rest.Panes().First();
+            }
+
+            return;
+        }
+
+        var index = workspace.Tabs.IndexOf(tab);
+        workspace.Tabs.Remove(tab);
+
+        if (workspace.Tabs.Count > 0)
+        {
+            if (workspace.ActiveTab == tab.Id)
+            {
+                workspace.ActiveTab = workspace.Tabs[Math.Min(index, workspace.Tabs.Count - 1)].Id;
+            }
+
+            return;
+        }
+
+        if (workspace.Floats.Count == 0)
+        {
+            DropWorkspace(workspace);
+        }
+    }
+
+    private (WorkspaceState Workspace, TabState Tab)? TabOf(PaneState pane)
+    {
+        foreach (var workspace in _workspaces)
+        {
+            foreach (var tab in workspace.Tabs)
+            {
+                if (tab.Root.Contains(pane.Id))
+                {
+                    return (workspace, tab);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool Same(string? a, string? b) =>
+        string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed class PaneState(string id, string cwd, IReadOnlyList<string> args)
+{
+    public string Id { get; } = id;
+
+    public string Cwd { get; set; } = cwd;
+
+    public IReadOnlyList<string> Args { get; } = args;
+
+    public IReadOnlyDictionary<string, string> Env { get; set; } = new Dictionary<string, string>();
+
+    public string Title { get; set; } = string.Empty;
+
+    public int Cols { get; set; }
+
+    public int Rows { get; set; }
+}
+
+public sealed class TabState(string id, Layout root)
+{
+    public string Id { get; } = id;
+
+    public Layout Root { get; set; } = root;
+
+    public string Title { get; set; } = string.Empty;
+
+    public string ActivePane { get; set; } = string.Empty;
+
+    public string? Zoomed { get; set; }
+}
+
+public sealed class WorkspaceState(string name)
+{
+    public string Name { get; } = name;
+
+    public List<TabState> Tabs { get; } = [];
+
+    public string ActiveTab { get; set; } = string.Empty;
+
+    public List<FloatState> Floats { get; } = [];
+
+    public bool FloatsShown { get; set; }
+
+    public bool FloatFocused { get; set; }
+
+    public string? RemoteHost { get; set; }
+}
+
+public sealed class FloatState(string pane, Rect bounds)
+{
+    public string Pane { get; } = pane;
+
+    public Rect Bounds { get; set; } = bounds;
+
+    public string Title { get; set; } = string.Empty;
+
+    public bool Modal { get; init; }
+
+    public bool Parked { get; set; }
+
+    public bool Hidden { get; set; }
+
+    public DateTime HiddenSince { get; set; }
+
+    public long RevealAfterOutput { get; set; } = -1;
+
+    public bool NeedsBaseline { get; set; }
+
+    public string? Baseline { get; set; }
+
+    public Rect? Held { get; set; }
+
+    public string? HeldLabel { get; set; }
+
+    public DateTime HeldSince { get; set; }
+
+    public long ReleaseAfterOutput { get; set; } = -1;
+
+    public Rect Drawn => Held ?? Bounds;
+}
+
+public sealed class ClientState(string id)
+{
+    public string Id { get; } = id;
+
+    public string? Showing { get; set; }
+
+    public int Cols { get; set; }
+
+    public int Rows { get; set; }
+
+    public long LastActive { get; set; }
+
+    public string? Overlay { get; set; }
+
+    public string? Menu { get; set; }
+
+    public List<string> Projects { get; } = [];
+
+    public bool Leaving { get; set; }
+
+    public string? Label { get; set; }
+}
+
+public enum MouseHitKind
+{
+    None,
+    Pane,
+    Divider,
+    StatusBar,
+    FloatMove,
+    FloatResize,
+}
+
+public sealed record MouseHit(MouseHitKind Kind, string? Pane, int X, int Y, int Divider = -1)
+{
+    public static readonly MouseHit Nothing = new(MouseHitKind.None, null, 0, 0);
+}
+
+public sealed record ClientView(
+    ClientState Client,
+    WorkspaceState? Workspace,
+    TabState? Tab,
+    IReadOnlyList<Placed> Panes,
+    IReadOnlyList<Divider> Dividers,
+    string? Focused,
+    Placed? Overlay = null,
+    IReadOnlyList<Placed>? Floats = null,
+    IReadOnlyDictionary<string, string>? FloatLabels = null)
+{
+    public IReadOnlyList<Placed> FloatingPanes => Floats ?? [];
+
+    public Rect? Frame { get; init; }
+
+    public string? FrameTitle { get; init; }
+
+    public (int Here, int Elsewhere) Notices { get; init; }
+
+    public string? FloatLabel(string pane) => FloatLabels?.GetValueOrDefault(pane);
+
+    public static Rect Inner(Rect box) => new(box.X + 1, box.Y + 1, Math.Max(0, box.Width - 2), Math.Max(0, box.Height - 2));
+}

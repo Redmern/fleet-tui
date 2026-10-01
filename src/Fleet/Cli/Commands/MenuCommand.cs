@@ -9,11 +9,18 @@ using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
+using Fleet.Features.Notifications.ShowNotices;
+using Fleet.Features.Notifications.SyncNotices;
+using Fleet.Features.Projects.LocateProject;
+using Fleet.Features.Projects.LocateProject.Models;
 using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Projects.RestoreSession;
+using Fleet.Features.Projects.SwitchProject;
+using Fleet.Features.Remotes.ManageRemotes;
+using Fleet.Features.Sessions.SaveSession;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
@@ -44,6 +51,9 @@ public static class MenuCommand
         FleetAction.SwitchProject,
         FleetAction.ListAgents,
         FleetAction.BrowseFiles,
+        FleetAction.Notifications,
+        FleetAction.Remotes,
+        FleetAction.SaveSession,
         FleetAction.OpenSettings,
     ];
 
@@ -56,6 +66,7 @@ public static class MenuCommand
         FleetAction.ViewLogs,
         FleetAction.CleanupProject,
         FleetAction.EditAidlcMode,
+        FleetAction.EditClaudeProfile,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -69,6 +80,16 @@ public static class MenuCommand
         var requested = invocation.Action is { } id
             ? FleetActionIds.Parse(id)
             : FleetAction.None;
+
+
+        if (project is null && requested == FleetAction.SwitchProject
+            && invocation.Project is { } shown && shown.StartsWith(RemoteMark, StringComparison.Ordinal))
+        {
+            using IApplication remoteApp = FleetUi.Start();
+            await SwitchAcrossMachines(remoteApp, new Keymap(Adapters.Keymaps().Load()), projects.List(), null, shown[RemoteMark.Length..])
+                .ConfigureAwait(false);
+            return 0;
+        }
 
         if (requested is FleetAction.OpenProject or FleetAction.NewProject || project is null)
         {
@@ -119,12 +140,9 @@ public static class MenuCommand
             case FleetAction.QuitFleet:
                 {
                     var quitMux = Adapters.Mux(Adapters.Log());
-                    var quitPanes = await quitMux.Driver.ListPanesAsync().ConfigureAwait(false);
 
-                    var quitSelf = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-                    var quitWindow = quitPanes.FirstOrDefault(p => p.Id.Value == quitSelf)?.WindowId;
-
-                    var inWindow = ProjectsVisibleInWindow(projects.List(), quitPanes, quitWindow);
+                    var inWindow = await ProjectsInWindow(quitMux.Driver, projects.List())
+                        .ConfigureAwait(false);
 
                     if (inWindow.Count <= 1)
                     {
@@ -144,8 +162,8 @@ public static class MenuCommand
                         app,
                         "Quit fleet?",
                         [$"This window has {inWindow.Count} projects open."],
-                        "Quit fleet",
-                        "Just this project");
+                        "Quit all in this window",
+                        $"Just {project.Name}");
 
                     if (quitChoice == DialogChoice.Cancelled)
                     {
@@ -154,7 +172,7 @@ public static class MenuCommand
 
                     if (quitChoice == DialogChoice.Primary)
                     {
-                        foreach (var toQuit in inWindow)
+                        foreach (var toQuit in inWindow.OrderBy(p => SameProject(p, project)))
                         {
                             await Quit(toQuit).ConfigureAwait(false);
                         }
@@ -169,6 +187,13 @@ public static class MenuCommand
 
             case FleetAction.FocusMain:
                 await FocusMain(project).ConfigureAwait(false);
+                break;
+
+            case FleetAction.SwitchProject when EmbeddedWiring.HandBack(FleetActionIds.For(FleetAction.SwitchProject)):
+                break;
+
+            case FleetAction.SwitchProject when SwitchProjectHandler.Applies(Adapters.Mux(Adapters.Log()).Driver):
+                await SwitchAcrossMachines(app, keymap, projects.List(), project, onMachine: null).ConfigureAwait(false);
                 break;
 
             case FleetAction.SwitchProject:
@@ -187,14 +212,14 @@ public static class MenuCommand
                         break;
                     }
 
-                    var switchMux = Adapters.Mux(Adapters.Log());
-                    var panes = await switchMux.Driver.ListPanesAsync().ConfigureAwait(false);
-
-                    var self = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-                    var currentWindow = panes.FirstOrDefault(p => p.Id.Value == self)?.WindowId;
+                    var switchLog = Adapters.Log();
+                    var switchMux = Adapters.Mux(switchLog);
+                    var located = await new LocateProjectHandler(switchMux.Driver)
+                        .HandleAsync(projects.List())
+                        .ConfigureAwait(false);
 
                     string Label(Project p) =>
-                        panes.Any(x => PathKey.Same(x.Cwd, p.Root)) ? $"{p.Name}  (open)" : p.Name;
+                        Where(located, p).Open ? $"{p.Name}  (open)" : p.Name;
 
                     var labels = others.Select(Label).ToList();
 
@@ -206,56 +231,20 @@ public static class MenuCommand
                     }
 
                     var target = others[chosenIndex];
+                    var clock = System.Diagnostics.Stopwatch.StartNew();
 
-                    var toPark = ProjectsVisibleInWindow(projects.List(), panes, currentWindow)
-                        .Where(p => !string.Equals(
-                            p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-
-                    var mover = new MoveProjectHandler(switchMux.Driver);
-
-                    foreach (var park in toPark)
-                    {
-                        await mover
-                            .ParkAsync(
-                                park.Name,
-                                park.Root,
-                                new ListAgentsHandler(Adapters.Agents()).Handle(park.Name),
-                                Adapters.DashPane(park.Name),
-                                self)
-                            .ConfigureAwait(false);
-                    }
-
-                    var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
-
-                    if (dash is not null && dash.WindowId == currentWindow)
-                    {
-                        await switchMux.Driver.FocusPaneAsync(dash.Id).ConfigureAwait(false);
-                        break;
-                    }
-
-                    if (dash is null)
-                    {
-                        await OpenProjectFlow(switchMux.Driver, target, currentWindow)
+                    var switched = SwitchProjectHandler.Applies(switchMux.Driver)
+                        ? await SwitchByWorkspace(switchMux.Driver, target, Where(located, target))
+                            .ConfigureAwait(false)
+                        : await SwitchByMoving(switchMux.Driver, projects.List(), target)
                             .ConfigureAwait(false);
 
-                        break;
-                    }
+                    switchLog.Write(
+                        $"switch {project.Name} -> {target.Name}: {clock.ElapsedMilliseconds} ms ({switchMux.Driver.Name})");
 
-                    var moved = await mover
-                        .HandleAsync(
-                            target.Name,
-                            target.Root,
-                            new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
-                            currentWindow,
-                            Adapters.DashPane(target.Name),
-                            self,
-                            Adapters.Executable)
-                        .ConfigureAwait(false);
-
-                    if (!moved.Succeeded)
+                    if (switched is not null)
                     {
-                        FleetDialog.Error(app, "Switch project", moved.Error!);
+                        FleetDialog.Error(app, "Switch project", switched);
                     }
 
                     break;
@@ -305,6 +294,97 @@ public static class MenuCommand
                     break;
                 }
 
+            case FleetAction.SaveSession:
+                {
+                    var window = EmbeddedWiring.CurrentWindow().Select(e => new WindowEntry(e.Name, e.Host, e.Shown)).ToList();
+                    if (window.Count == 0)
+                    {
+                        FleetDialog.Error(app, "Save window as session", "Sessions need the built-in multiplexer; fleet sees no projects in this window.");
+                        break;
+                    }
+
+                    var name = FleetDialog.Ask(
+                        app,
+                        "Save window as session",
+                        $"Name for {SaveSessionHandler.Describe(SaveSessionHandler.For("window", window))}",
+                        initial: project.Name);
+
+                    if (name is null)
+                    {
+                        break;
+                    }
+
+                    var saved = new SaveSessionHandler(Adapters.Sessions()).Handle(name, window);
+                    if (!saved.Succeeded)
+                    {
+                        FleetDialog.Error(app, "Save window as session", saved.Error!);
+                    }
+
+                    break;
+                }
+
+            case FleetAction.Remotes:
+                ManageRemotesView.Show(app, keymap, Adapters.Remotes());
+                break;
+
+            case FleetAction.Notifications:
+                {
+                    var noticeMux = Adapters.Mux(Adapters.Log()).Driver;
+                    var notices = Adapters.Notices();
+                    var inWindow = SwitchProjectHandler.Applies(noticeMux)
+                        ? (await ProjectsInWindow(noticeMux, projects.List()).ConfigureAwait(false)).Select(p => p.Name).Append(project.Name).ToList()
+                        : null;
+                    var remoteNotices = inWindow is null ? null : EmbeddedWiring.WindowRemoteNotices();
+                    ShowNoticesView.Show(
+                        app,
+                        keymap,
+                        notices,
+                        (project, keys) =>
+                        {
+                            if (remoteNotices?.Dismiss(project, keys) != true)
+                            {
+                                notices.Save(project, NoticeSync.Dismiss(notices.Load(project), keys, DateTime.UtcNow));
+                            }
+                        },
+                        notice => remoteNotices?.Locate(notice) is var (host, remoteProject)
+                            ? ShowRemoteNotice(host, remoteProject)
+                            : OpenNotice(noticeMux, projects.List(), notice),
+                        inWindow,
+                        remoteNotices?.Source);
+                    break;
+                }
+
+            case FleetAction.EditClaudeProfile:
+                {
+                    if (EmbeddedWiring.ClaudeProfiles(project.Root) is not var (byFolder, profiles))
+                    {
+                        FleetDialog.Error(
+                            app, "Claude profile", $"No profiles found in {EmbeddedWiring.ProfilesFile}.");
+
+                        break;
+                    }
+
+                    var picked = FleetPicker.Choose(
+                        app,
+                        $"Claude profile — {project.Name} (for panes opened from now on)",
+                        [
+                            new PickerEntry("by folder", $"from ~/.profiles.psd1: {byFolder}", "f"),
+                            .. profiles.Select((p, i) => new PickerEntry(
+                                p.Name, p.Folder, (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))),
+                        ],
+                        keymap,
+                        project.ClaudeProfile is { } current
+                            ? Math.Max(0, profiles.ToList().FindIndex(p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase)) + 1)
+                            : 0);
+
+                    if (picked is { } index)
+                    {
+                        projects.Save(project with { ClaudeProfile = index == 0 ? null : profiles[index - 1].Name });
+                    }
+
+                    break;
+                }
+
             case FleetAction.EditFleetConfig:
                 {
                     EditFleetConfigHandler.Ensure(project.Root);
@@ -316,7 +396,8 @@ public static class MenuCommand
                         break;
                     }
 
-                    var configPane = await configMux.Driver.SpawnAsync(
+                    var configPane = await Adapters.SpawnHereAsync(
+                        configMux.Driver,
                         new SpawnOptions
                         {
                             Cwd = project.Root,
@@ -412,14 +493,247 @@ public static class MenuCommand
         return 0;
     }
 
-    private static List<Project> ProjectsVisibleInWindow(
-        IReadOnlyList<Project> allProjects, IReadOnlyList<Pane> panes, string? windowId) =>
-        allProjects
-            .Where(p => panes.Any(x => PathKey.Same(x.Cwd, p.Root)
-                && x.WindowId == windowId
-                && !string.Equals(
-                    x.SessionName, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase)))
+
+    private static async Task<string?> ShowRemoteNotice(string host, string project)
+    {
+        try
+        {
+            await Adapters.Remotes().ShowHereAsync(host, project).ConfigureAwait(false);
+            return null;
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+        {
+            return e.Message;
+        }
+    }
+
+    private static async Task<string?> OpenNotice(IMuxDriver mux, IReadOnlyList<Project> all, Ports.Notifications.Models.Notice notice)
+    {
+        if (all.FirstOrDefault(p => string.Equals(p.Name, notice.Project, StringComparison.OrdinalIgnoreCase)) is not { } owner)
+        {
+            return $"{notice.Project} is no longer a project";
+        }
+
+        var agent = new ListAgentsHandler(Adapters.Agents()).Handle(owner.Name)
+            .FirstOrDefault(a => PathKey.Same(a.Worktree, notice.Worktree));
+
+        if (agent is null)
+        {
+            return $"{notice.Agent} is gone";
+        }
+
+        if (SwitchProjectHandler.Applies(mux))
+        {
+            var located = await new LocateProjectHandler(mux).HandleAsync([owner]).ConfigureAwait(false);
+            if (Where(located, owner).Open)
+            {
+                await new SwitchProjectHandler(mux).HandleAsync(owner.Name).ConfigureAwait(false);
+            }
+        }
+
+        var opened = await new Features.Agents.OpenAgent.OpenAgentHandler(mux, Adapters.Agents())
+            .HandleAsync(owner.Name, agent, owner.Root)
+            .ConfigureAwait(false);
+
+        return opened.Succeeded ? null : opened.Error;
+    }
+
+    private const string RemoteMark = "@";
+
+    private const string SwitchTitle = "Switch project  (a-z here, A-Z new window)";
+
+    private static async Task SwitchAcrossMachines(
+        IApplication app, Keymap keymap, IReadOnlyList<Project> saved, Project? current, string? onMachine)
+    {
+        var switchLog = Adapters.Log();
+        var switchMux = Adapters.Mux(switchLog);
+        var all = saved.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var located = await new LocateProjectHandler(switchMux.Driver)
+            .HandleAsync(all)
+            .ConfigureAwait(false);
+
+        var localEntries = all.Select(p => new PickerEntry(p.Name, Where(located, p) switch
+        {
+            { InWindow: true } => "this window",
+            { InOtherWindow: true } => "another window",
+            { Open: true } => "open",
+            _ => string.Empty,
+        })).ToList();
+        var here = current is null ? 0 : Math.Max(0, all.FindIndex(p => SameProject(p, current)));
+        var from = current?.Name ?? RemoteMark + onMachine;
+
+        var remotes = Adapters.Remotes();
+        var machines = (await remotes.ListAsync().ConfigureAwait(false))
+            .Where(m => m.State == Ports.Remotes.Enums.RemoteState.Connected)
             .ToList();
+
+        (int Index, bool NewWindow)? picked;
+
+        if (machines.Count == 0)
+        {
+            picked = FleetPicker.ChooseWithWindow(app, SwitchTitle, localEntries, keymap, here);
+        }
+        else
+        {
+            var tabs = SwitchTabs.For(localEntries, machines);
+            var machineTab = machines.FindIndex(m => string.Equals(m.Name, onMachine, StringComparison.OrdinalIgnoreCase));
+            var tabbed = FleetTabbedPicker.Choose(
+                app,
+                SwitchTitle,
+                tabs.Tabs,
+                keymap,
+                machineTab >= 0 ? SwitchTabs.ThisMachine + 1 + machineTab : SwitchTabs.ThisMachine,
+                machineTab >= 0 ? 0 : here);
+
+            if (tabbed is var (tabIndex, entryIndex, remoteWindow)
+                && tabs.Targets[tabIndex][entryIndex] is { Host: { } host } remoteTarget)
+            {
+                try
+                {
+                    if (remoteWindow)
+                    {
+                        await remotes.OpenInNewWindowAsync(host, remoteTarget.Project).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await remotes.ShowHereAsync(host, remoteTarget.Project).ConfigureAwait(false);
+                    }
+                }
+                catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+                {
+                    FleetDialog.Error(app, "Switch project", e.Message);
+                }
+
+                switchLog.Write($"switch {from} -> {remoteTarget.Project} on {host}{(remoteWindow ? " (new window)" : string.Empty)}");
+                return;
+            }
+
+            picked = tabbed is var (localTab, localIndex, localWindow)
+                ? (all.FindIndex(p => string.Equals(p.Name, tabs.Targets[localTab][localIndex].Project, StringComparison.OrdinalIgnoreCase)), localWindow)
+                : null;
+        }
+
+        if (picked is not var (chosenIndex, newWindow) || chosenIndex < 0)
+        {
+            return;
+        }
+
+        var target = all[chosenIndex];
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        var switched = newWindow
+            ? await OpenInNewWindow(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false)
+            : await SwitchByWorkspace(switchMux.Driver, target, Where(located, target)).ConfigureAwait(false);
+
+        switchLog.Write(
+            $"switch {from} -> {target.Name}{(newWindow ? " (new window)" : string.Empty)}: {clock.ElapsedMilliseconds} ms");
+
+        if (switched is not null)
+        {
+            FleetDialog.Error(app, "Switch project", switched);
+        }
+    }
+
+    private static bool SameProject(Project a, Project b) =>
+        string.Equals(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+
+    private static ProjectLocation Where(
+        IReadOnlyDictionary<string, ProjectLocation> located, Project project) =>
+        located.TryGetValue(project.Name, out var at) ? at : ProjectLocation.Closed;
+
+    private static async Task<List<Project>> ProjectsInWindow(
+        IMuxDriver mux, IReadOnlyList<Project> allProjects)
+    {
+        var located = await new LocateProjectHandler(mux).HandleAsync(allProjects)
+            .ConfigureAwait(false);
+
+        return allProjects.Where(p => Where(located, p).InWindow).ToList();
+    }
+
+    private static async Task<string?> SwitchByWorkspace(
+        IMuxDriver mux, Project target, ProjectLocation where)
+    {
+        if (!where.Open)
+        {
+            await OpenProjectFlow(mux, target).ConfigureAwait(false);
+        }
+
+        var shown = await new SwitchProjectHandler(mux).HandleAsync(target.Name)
+            .ConfigureAwait(false);
+
+        return shown.Succeeded ? null : shown.Error;
+    }
+
+    private static async Task<string?> OpenInNewWindow(IMuxDriver mux, Project target, ProjectLocation where)
+    {
+        if (!where.Open)
+        {
+            await OpenProjectFlow(mux, target).ConfigureAwait(false);
+        }
+
+        try
+        {
+            await mux.OpenWindowAsync(target.Name).ConfigureAwait(false);
+            return null;
+        }
+        catch (NotSupportedException e)
+        {
+            return e.Message;
+        }
+    }
+
+    private static async Task<string?> SwitchByMoving(
+        IMuxDriver mux, IReadOnlyList<Project> allProjects, Project target)
+    {
+        var panes = await mux.ListPanesAsync().ConfigureAwait(false);
+        var self = mux.CurrentPane.IsNone ? null : mux.CurrentPane.Value;
+        var currentWindow = panes.FirstOrDefault(p => p.Id == mux.CurrentPane)?.WindowId;
+
+        var toPark = (await ProjectsInWindow(mux, allProjects).ConfigureAwait(false))
+            .Where(p => !string.Equals(p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var mover = new MoveProjectHandler(mux);
+
+        foreach (var park in toPark)
+        {
+            await mover
+                .ParkAsync(
+                    park.Name,
+                    park.Root,
+                    new ListAgentsHandler(Adapters.Agents()).Handle(park.Name),
+                    Adapters.DashPane(park.Name),
+                    self)
+                .ConfigureAwait(false);
+        }
+
+        var dash = panes.FirstOrDefault(x => PathKey.Same(x.Cwd, target.Root));
+
+        if (dash is not null && dash.WindowId == currentWindow)
+        {
+            await mux.FocusPaneAsync(dash.Id).ConfigureAwait(false);
+            return null;
+        }
+
+        if (dash is null)
+        {
+            await OpenProjectFlow(mux, target, currentWindow).ConfigureAwait(false);
+            return null;
+        }
+
+        var moved = await mover
+            .HandleAsync(
+                target.Name,
+                target.Root,
+                new ListAgentsHandler(Adapters.Agents()).Handle(target.Name),
+                currentWindow,
+                Adapters.DashPane(target.Name),
+                self,
+                Adapters.Executable)
+            .ConfigureAwait(false);
+
+        return moved.Succeeded ? null : moved.Error;
+    }
 
     private static async Task Quit(Project project)
     {
@@ -458,14 +772,27 @@ public static class MenuCommand
 
     private static async Task FocusMain(Project project)
     {
-        var mux = Adapters.Mux(Adapters.Log());
-        var panes = await mux.Driver.ListPanesAsync().ConfigureAwait(false);
+        var mux = Adapters.Mux(Adapters.Log()).Driver;
 
-        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root));
+        if (SwitchProjectHandler.Applies(mux))
+        {
+            var located = await new LocateProjectHandler(mux).HandleAsync([project])
+                .ConfigureAwait(false);
+
+            if (Where(located, project) is { Open: true, ShownHere: false })
+            {
+                await new SwitchProjectHandler(mux).HandleAsync(project.Name).ConfigureAwait(false);
+            }
+        }
+
+        var panes = await mux.ListPanesAsync().ConfigureAwait(false);
+
+        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root)
+            && !FleetWorkspaces.IsHidden(p.SessionName));
 
         if (dashboard is not null)
         {
-            await mux.Driver.FocusPaneAsync(dashboard.Id).ConfigureAwait(false);
+            await mux.FocusPaneAsync(dashboard.Id).ConfigureAwait(false);
         }
     }
 }

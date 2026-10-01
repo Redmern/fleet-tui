@@ -8,7 +8,8 @@ public sealed record DoctorReport(
     string? GitVersion,
     IReadOnlyList<Project> Projects,
     IReadOnlyList<string> RecentSwallowed,
-    IReadOnlyList<string> Problems)
+    IReadOnlyList<string> Problems,
+    EmbeddedHealth? Embedded = null)
 {
     public bool Healthy => Problems.Count == 0;
 }

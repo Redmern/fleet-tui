@@ -16,6 +16,8 @@ public static class FleetHints
 
     public const string Dismiss = "enter/esc dismiss";
 
+    public const string Ask = "enter confirm   esc cancel";
+
     public const string Keybinds = "j/k move   enter rebind   esc close";
 
     public const string Capture = "press any key   esc cancel";

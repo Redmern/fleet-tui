@@ -28,7 +28,7 @@ public static class McpWiring
         var dispatcher = new McpDispatcher(
             new McpCaller(project.Name, project.Root, caller),
             Adapters.Settings(),
-            Adapters.Approvals(),
+            new FloatingApprovalChannel(Adapters.Approvals(), mux.Driver, ApproveArgs),
             log,
             actions.PerformAsync,
             Adapters.Notifier());
@@ -42,6 +42,9 @@ public static class McpWiring
 
         return 0;
     }
+
+    private static IReadOnlyList<string> ApproveArgs(string project, string pane) =>
+        [Adapters.Executable, "approve", CommandLine.ProjectFlag, project, pane];
 
     private static Action? ReadySignal(string projectRoot, string caller)
     {

@@ -13,7 +13,15 @@ public static class KeymapGroups
             FleetAction.SwitchProject,
             FleetAction.ListAgents,
             FleetAction.BrowseFiles,
+            FleetAction.Notifications,
+            FleetAction.Remotes,
+            FleetAction.SaveSession,
             FleetAction.OpenSettings,
+        ]),
+        ("notifications",
+        [
+            FleetAction.DismissNotice,
+            FleetAction.DismissAllNotices,
         ]),
         ("fleet menu > settings",
         [
@@ -24,6 +32,7 @@ public static class KeymapGroups
             FleetAction.ViewLogs,
             FleetAction.CleanupProject,
             FleetAction.EditAidlcMode,
+            FleetAction.EditClaudeProfile,
         ]),
         ("dashboard",
         [

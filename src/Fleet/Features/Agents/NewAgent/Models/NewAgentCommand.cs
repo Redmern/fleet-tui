@@ -7,4 +7,5 @@ public sealed record NewAgentCommand(
     string BranchName,
     string Base,
     string Harness,
-    string Owner = "");
+    string Owner = "",
+    bool? Claude = null);

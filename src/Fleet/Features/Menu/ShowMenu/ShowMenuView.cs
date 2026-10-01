@@ -15,10 +15,12 @@ public static class ShowMenuView
         var chosen = FleetAction.None;
         var rows = ShowMenuHandler.Rows(items);
 
-        var window = FleetTheme.Overlay("fleet menu");
+        var width = ShowMenuHandler.Width(rows);
+        var height = ShowMenuHandler.Height(rows);
 
-        var list = FleetTheme.CenteredRows(
-            ShowMenuHandler.Width(rows), ShowMenuHandler.Height(rows));
+        var window = FleetTheme.Overlay("fleet menu", Math.Max(width + 20, 52), height + 6);
+
+        var list = FleetTheme.CenteredRows(width, height);
 
         FleetRows.Fill(list, rows);
 
@@ -41,7 +43,7 @@ public static class ShowMenuView
             e.Handled = true;
         };
 
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        var bar = new FleetActionBar(Pos.AnchorEnd(2), alignRight: true);
 
         bar.Show(
         [

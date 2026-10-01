@@ -32,6 +32,7 @@ public sealed class JsonAgentStore : IAgentStore
                 Open = agent.Open,
                 Owner = agent.Owner,
                 Status = agent.Status,
+                Claude = agent.Claude,
             });
         });
     }
@@ -56,7 +57,8 @@ public sealed class JsonAgentStore : IAgentStore
                 a.Hidden,
                 a.Open,
                 a.Owner,
-                a.Status))
+                a.Status,
+                a.Claude))
             .OrderBy(a => a.Repository, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Branch, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -83,7 +85,11 @@ public sealed class JsonAgentStore : IAgentStore
 
         using var gate = Lock(file + ".lock");
 
-        var session = Read(file);
+        if (TryRead(file, BusyFiles.Patience) is not { } session)
+        {
+            return;
+        }
+
         change(session);
         Write(file, session);
     }
@@ -110,47 +116,32 @@ public sealed class JsonAgentStore : IAgentStore
         }
     }
 
-    private static SessionFile Read(string file)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                if (!File.Exists(file))
-                {
-                    return new SessionFile();
-                }
+    private static SessionFile Read(string file) =>
+        TryRead(file, TimeSpan.FromMilliseconds(50)) ?? new SessionFile();
 
-                return JsonSerializer.Deserialize(
-                    File.ReadAllText(file), FleetJsonContext.Default.SessionFile) ?? new SessionFile();
-            }
-            catch (IOException) when (attempt < 3)
-            {
-                Thread.Sleep(15);
-            }
-            catch (Exception e)
-                when (e is IOException or JsonException or UnauthorizedAccessException)
+    private static SessionFile? TryRead(string file, TimeSpan patience) =>
+        BusyFiles.Retry(() =>
+        {
+            if (!File.Exists(file))
             {
                 return new SessionFile();
             }
-        }
-    }
+
+            try
+            {
+                return JsonSerializer.Deserialize(
+                    File.ReadAllText(file), FleetJsonContext.Default.SessionFile) ?? new SessionFile();
+            }
+            catch (JsonException)
+            {
+                return new SessionFile();
+            }
+        }, patience);
 
     private static void Write(string file, SessionFile session)
     {
-        try
-        {
-            FleetPaths.EnsureDirs();
-
-            var temp = file + ".tmp";
-
-            File.WriteAllText(
-                temp, JsonSerializer.Serialize(session, FleetJsonContext.Default.SessionFile));
-            File.Move(temp, file, overwrite: true);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
+        var json = JsonSerializer.Serialize(session, FleetJsonContext.Default.SessionFile);
+        BusyFiles.Replace(file, temp => File.WriteAllText(temp, json));
     }
 
     private static string? FileFor(string project)

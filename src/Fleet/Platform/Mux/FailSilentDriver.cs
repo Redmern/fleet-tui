@@ -22,6 +22,9 @@ public sealed class FailSilentDriver(IMuxDriver inner, Action<Exception> onSwall
     public Task<PaneId> SpawnAsync(SpawnOptions options, CancellationToken ct = default)
         => Guard(() => inner.SpawnAsync(options, ct), PaneId.None);
 
+    public Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default)
+        => Guard(() => inner.SpawnFloatingAsync(over, options, ct), PaneId.None);
+
     public Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default)
         => Guard(() => inner.SplitAsync(options, ct), PaneId.None);
 
@@ -42,6 +45,18 @@ public sealed class FailSilentDriver(IMuxDriver inner, Action<Exception> onSwall
 
     public Task<string> GetTextAsync(PaneId id, CancellationToken ct = default)
         => Guard(() => inner.GetTextAsync(id, ct), string.Empty);
+
+    public Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default)
+        => Guard(() => inner.ListWorkspacesAsync(ct), Array.Empty<Workspace>());
+
+    public Task ShowWorkspaceAsync(string name, CancellationToken ct = default)
+        => Guard(() => inner.ShowWorkspaceAsync(name, ct));
+
+    public Task CloseWorkspaceAsync(string name, CancellationToken ct = default)
+        => Guard(() => inner.CloseWorkspaceAsync(name, ct));
+
+    public Task OpenWindowAsync(string name, CancellationToken ct = default)
+        => Guard(() => inner.OpenWindowAsync(name, ct));
 
     private static bool IsExpected(Exception e) =>
         e is MuxUnavailableException

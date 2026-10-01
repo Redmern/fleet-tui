@@ -31,6 +31,29 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
+      # libghostty-vt for the embedded multiplexer, at the pins in
+      # scripts/ghostty/pins.env. The cache holds the Zig toolchain, the ghostty
+      # source and Zig's own package cache; a cold build takes several minutes.
+      - uses: actions/cache@v4
+        with:
+          path: artifacts/ghostty/.cache
+          key: ghostty-${{ matrix.rid }}-${{ hashFiles('scripts/ghostty/pins.env') }}
+
+      - name: Build libghostty-vt
+        shell: pwsh
+        run: |
+          if ($IsWindows) { ./scripts/ghostty/build.ps1 } else { bash scripts/ghostty/build.sh }
+
+      # Fleet.csproj links the archive only when it exists; fail rather than
+      # test and publish a binary without the embedded multiplexer.
+      - name: Check libghostty-vt will be linked
+        shell: bash
+        run: |
+          lib=artifacts/ghostty/${{ matrix.rid }}/lib
+          archive=$([ "${{ runner.os }}" = Windows ] && echo "$lib/ghostty-vt-static.lib" || echo "$lib/libghostty-vt.a")
+          [ -f "$archive" ] || { echo "::error::$archive is missing; the build would have no embedded multiplexer"; exit 1; }
+          ls -la "$archive"
+
       - name: Test
         run: dotnet test Fleet.slnx --nologo -v minimal
 

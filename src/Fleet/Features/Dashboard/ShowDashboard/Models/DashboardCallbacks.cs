@@ -36,4 +36,7 @@ public sealed record DashboardCallbacks(
     Func<PendingApproval?> TakeApproval,
     Action<string, bool> AnswerApproval,
     Action Heartbeat,
-    Action DrainSignals);
+    Action DrainSignals,
+    Func<NoticeBoard>? LoadNotices = null,
+    Action<IReadOnlyList<string>>? DismissNotices = null,
+    Func<string, Task<string?>>? OpenNotice = null);

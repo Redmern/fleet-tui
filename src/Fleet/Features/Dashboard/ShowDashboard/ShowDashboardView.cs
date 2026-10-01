@@ -29,13 +29,14 @@ public static class ShowDashboardView
         var prefix = new PrefixRecognizer(keys);
 
         var tabBar = FleetTheme.TabBar(1, 0,
-            [DashboardTabs.Agents(0), DashboardTabs.Subs(0), DashboardTabs.Repositories(0)]);
+            [DashboardTabs.Agents(0), DashboardTabs.Subs(0), DashboardTabs.Repositories(0), DashboardTabs.Notifications(0)]);
 
         var agentList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var subList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var repoList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
+        var noticeList = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
 
-        var lists = new[] { agentList, subList, repoList };
+        var lists = new[] { agentList, subList, repoList, noticeList };
 
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
         var hints = new FleetActionBar(Pos.AnchorEnd(1));
@@ -56,9 +57,11 @@ public static class ShowDashboardView
         FleetKeys.ApplyMotions(agentList, keys);
         FleetKeys.ApplyMotions(subList, keys);
         FleetKeys.ApplyMotions(repoList, keys);
+        FleetKeys.ApplyMotions(noticeList, keys);
 
         IReadOnlyList<(string, string, Action)> BarFor(int index) => index switch
         {
+            DashboardTabs.NotificationsTab => NoticeBar(),
             DashboardTabs.RepositoriesTab => RepositoryBar(),
             DashboardTabs.SubsTab => SubBar(),
             _ => AgentBar(),
@@ -89,6 +92,7 @@ public static class ShowDashboardView
 
         var board = new AgentBoard([], 0, []);
         var subs = SubBoard.Empty;
+        var notices = NoticeBoard.Empty;
 
         agentList.MousePositionTracking = true;
 
@@ -123,7 +127,7 @@ public static class ShowDashboardView
 
         agentList.MouseLeave += (_, _) => HideTip();
 
-        HashSet<int>[] marks = [[], [], []];
+        HashSet<int>[] marks = [[], [], [], []];
 
         FleetRow Decorate(FleetRow row, int tab, int index) =>
             marks[tab].Count == 0
@@ -198,8 +202,13 @@ public static class ShowDashboardView
             IReadOnlyList<RepositoryChoice> loaded,
             IReadOnlyList<FleetRow> repoRowsData,
             AgentBoard agentBoard,
-            SubBoard subBoard)
+            SubBoard subBoard,
+            NoticeBoard noticeBoard)
         {
+            notices = noticeBoard;
+            FleetRows.Fill(noticeList, notices.Rows, FleetRows.Selected(noticeList));
+            tabBar.Retitle(DashboardTabs.NotificationsTab, DashboardTabs.Notifications(notices.Open));
+
             repositories = loaded;
             FleetRows.Fill(repoList, repoRowsData, FleetRows.Selected(repoList));
             repoRows = (FleetRowSource)repoList.Source!;
@@ -240,8 +249,9 @@ public static class ShowDashboardView
             var repoRowsData = DashboardRows.ForRepositories(loaded, callbacks.RepositoryState);
             var agentBoard = callbacks.LoadAgents();
             var subBoard = callbacks.LoadSubs();
+            var noticeBoard = callbacks.LoadNotices?.Invoke() ?? NoticeBoard.Empty;
 
-            app.Invoke(() => Bind(loaded, repoRowsData, agentBoard, subBoard));
+            app.Invoke(() => Bind(loaded, repoRowsData, agentBoard, subBoard, noticeBoard));
         }
 
         async Task AutoRefreshAsync()
@@ -367,7 +377,7 @@ public static class ShowDashboardView
         {
             var tab = ActiveTab();
 
-            if (tab == DashboardTabs.RepositoriesTab)
+            if (tab is DashboardTabs.RepositoriesTab or DashboardTabs.NotificationsTab)
             {
                 return;
             }
@@ -848,6 +858,18 @@ public static class ShowDashboardView
                     RebuildDashboard();
                     break;
 
+                case FleetAction.DismissNotice:
+                    if (notices.KeyAt(FleetRows.Selected(noticeList)) is { } one)
+                    {
+                        Dismiss([one]);
+                    }
+
+                    break;
+
+                case FleetAction.DismissAllNotices:
+                    Dismiss(notices.Keys);
+                    break;
+
                 case FleetAction.PrevTab:
                     ShowTab(DashboardTabs.Step(tabBar.Selected, -1, tabBar.Count));
                     break;
@@ -895,6 +917,47 @@ public static class ShowDashboardView
                     () => FromKey(FleetAction.ToggleHidden)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
             ]);
+
+        IReadOnlyList<(string, string, Action)> NoticeBar() =>
+            WithClose(
+            [
+                ("enter", "open", () => Start(OpenNoticeAsync)),
+                (keys.DisplayFor(FleetAction.DismissNotice), "dismiss", () => FromKey(FleetAction.DismissNotice)),
+                (keys.DisplayFor(FleetAction.DismissAllNotices), "dismiss all", () => FromKey(FleetAction.DismissAllNotices)),
+                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
+            ]);
+
+        void Dismiss(IReadOnlyList<string> which)
+        {
+            if (callbacks.DismissNotices is null || which.Count == 0)
+            {
+                return;
+            }
+
+            callbacks.DismissNotices(which);
+            Start(RefreshAsync);
+        }
+
+        async Task OpenNoticeAsync()
+        {
+            if (callbacks.OpenNotice is null || notices.WorktreeAt(FleetRows.Selected(noticeList)) is not { } worktree)
+            {
+                return;
+            }
+
+            var error = await callbacks.OpenNotice(worktree).ConfigureAwait(false);
+            app.Invoke(() =>
+            {
+                if (error is not null)
+                {
+                    status.Text = error;
+                }
+                else if (menu)
+                {
+                    app.RequestStop(window);
+                }
+            });
+        }
 
         IReadOnlyList<(string, string, Action)> RepositoryBar() =>
             WithClose(
@@ -1015,8 +1078,7 @@ public static class ShowDashboardView
 
             try
             {
-                var allowed = FleetDialog.Confirm(
-                    app, "Approve this action?", ApprovalLines(approval.Request), confirmText: "Allow");
+                var allowed = ApprovalDialog.Ask(app, approval.Request.Summary, approval.Request.Tool);
 
                 callbacks.AnswerApproval(approval.Id, allowed);
 
@@ -1030,8 +1092,6 @@ public static class ShowDashboardView
             }
         }
 
-        static IReadOnlyList<string> ApprovalLines(ApprovalRequest request) =>
-            [request.Summary, string.Empty, $"tool: {request.Tool}"];
 
         bool Beat()
         {
@@ -1057,6 +1117,14 @@ public static class ShowDashboardView
             return true;
         }
 
+        tabBar.Chosen += index =>
+        {
+            if (!busy && !FleetModal.Any && index != tabBar.Selected)
+            {
+                ShowTab(index);
+            }
+        };
+
         agentList.ValueChanged += (_, _) => ShowBarFor(DashboardTabs.AgentsTab);
         subList.ValueChanged += (_, _) => ShowBarFor(DashboardTabs.SubsTab);
 
@@ -1078,6 +1146,12 @@ public static class ShowDashboardView
             e.Handled = true;
         };
 
+        noticeList.Accepting += (_, e) =>
+        {
+            Start(OpenNoticeAsync);
+            e.Handled = true;
+        };
+
         app.Keyboard.KeyDown += Keys;
 
         app.AddTimeout(TimeSpan.FromMilliseconds(80), Pump);
@@ -1088,6 +1162,7 @@ public static class ShowDashboardView
             agentList,
             subList,
             repoList,
+            noticeList,
             status,
             hints.Root,
             tip);

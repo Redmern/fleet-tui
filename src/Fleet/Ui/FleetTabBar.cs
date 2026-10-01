@@ -1,4 +1,5 @@
 using Fleet.Ui.Constants;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -40,9 +41,19 @@ public sealed class FleetTabBar
             Height = 2,
         };
 
-        foreach (var label in _labels)
+        for (var i = 0; i < _labels.Length; i++)
         {
-            Root.Add(label);
+            var index = i;
+            _labels[i].MouseEvent += (_, mouse) =>
+            {
+                if (mouse.Flags.HasFlag(MouseFlags.LeftButtonPressed) || mouse.IsSingleClicked)
+                {
+                    mouse.Handled = true;
+                    Chosen?.Invoke(index);
+                }
+            };
+
+            Root.Add(_labels[i]);
         }
 
         Root.Add(_underline);
@@ -51,6 +62,10 @@ public sealed class FleetTabBar
     }
 
     public View Root { get; }
+
+    public event Action<int>? Chosen;
+
+    public void Choose(int index) => Chosen?.Invoke(index);
 
     public int Selected { get; private set; }
 

@@ -162,6 +162,29 @@ public class SliceBoundaryTests
     }
 
     [Fact]
+    public void Only_ProjectWindows_decides_which_window_a_projects_pane_belongs_in()
+    {
+        // With workspaces a window is a project, so guessing it from the caller's pane or from a folder
+        // put one project's agents into another project's workspace.
+        var banned = new[]
+        {
+            "mux.CurrentPane)?.WindowId",
+            "p.Cwd, projectRoot))?.WindowId",
+            "p.Cwd, command.ProjectRoot))?.WindowId",
+        };
+
+        // LocateProject only reports where a project is (and only without workspaces); it places no pane.
+        var violations = CsFiles(FeaturesDir)
+            .Where(f => !f.EndsWith("LocateProjectHandler.cs", StringComparison.Ordinal))
+            .Select(f => (File: f, Text: File.ReadAllText(f)))
+            .Where(x => banned.Any(b => x.Text.Contains(b, StringComparison.Ordinal)))
+            .Select(x => Relative(x.File))
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
     public void No_slice_styles_itself()
     {
         var banned = new[]

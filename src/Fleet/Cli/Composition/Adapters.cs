@@ -23,6 +23,7 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Mcp;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
 using Fleet.Ports.Projects;
@@ -93,6 +94,13 @@ public static class Adapters
 
     public static IAgentStore Agents() => new JsonAgentStore();
 
+    public static Ports.Notifications.INoticeStore Notices() => new JsonNoticeStore();
+
+    public static Ports.Sessions.ISessionStore Sessions() => new JsonSessionStore();
+
+    public static Ports.Remotes.IRemoteMachines Remotes() =>
+        new Platform.Mux.Embedded.EmbeddedRemotes(() => new Platform.Mux.Embedded.EmbeddedDriver(Platform.Mux.Embedded.Daemon.Endpoint.Default()));
+
     public static IDispatchHistory History() => new FileDispatchHistory();
 
     public static ISlugNamer SlugNamer() => new ClaudeSlugNamer();
@@ -103,10 +111,13 @@ public static class Adapters
     {
         var chosen = DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath));
 
-        var unsupported = MuxTrouble.With(chosen, OnPath(DriverNames.WezTerm));
+        var embedded = chosen == DriverNames.Embedded;
+        var unsupported = MuxTrouble.With(
+            chosen, OnPath(DriverNames.WezTerm), embeddedReady: embedded && EmbeddedWiring.Ready);
 
-        return new MuxSelection(
-            new FailSilentDriver(new WezTermDriver(), log.Swallowed), chosen, unsupported);
+        IMuxDriver inner = embedded ? EmbeddedWiring.Driver() : new WezTermDriver();
+
+        return new MuxSelection(new FailSilentDriver(inner, log.Swallowed), chosen, unsupported);
     }
 
     public static string ConfigDirectory => FleetPaths.Config;
@@ -135,8 +146,7 @@ public static class Adapters
         var file = Path.Combine(
             Path.GetTempPath(), $"fleet-folder-{Guid.NewGuid():N}");
 
-        var pane = mux
-            .SpawnAsync(FileBrowser.Choose(startIn, project, CurrentWindow(mux), file))
+        var pane = SpawnHereAsync(mux, FileBrowser.Choose(startIn, project, CurrentWindow(mux), file))
             .GetAwaiter()
             .GetResult();
 
@@ -166,8 +176,7 @@ public static class Adapters
 
     public static string? BrowseFolder(IMuxDriver mux, string project, string root)
     {
-        var pane = mux
-            .SpawnAsync(FileBrowser.Browse(root, project, CurrentWindow(mux)))
+        var pane = SpawnHereAsync(mux, FileBrowser.Browse(root, project, CurrentWindow(mux)))
             .GetAwaiter()
             .GetResult();
 
@@ -218,14 +227,17 @@ public static class Adapters
         }
     }
 
+    public static Task<PaneId> SpawnHereAsync(IMuxDriver mux, SpawnOptions options) =>
+        mux.Caps.HasFlag(MuxCaps.Popup) && !mux.CurrentPane.IsNone
+            ? mux.SpawnFloatingAsync(PaneId.None, options with { Workspace = null, SessionName = null, WindowId = null })
+            : mux.SpawnAsync(options);
+
     public static string? CurrentWindow(IMuxDriver mux)
     {
         var panes = mux.ListPanesAsync().GetAwaiter().GetResult();
 
-        var own = Environment.GetEnvironmentVariable("WEZTERM_PANE");
-
-        if (!string.IsNullOrEmpty(own)
-            && panes.FirstOrDefault(p => p.Id.Value == own) is { } mine)
+        if (!mux.CurrentPane.IsNone
+            && panes.FirstOrDefault(p => p.Id == mux.CurrentPane) is { } mine)
         {
             return mine.WindowId;
         }
@@ -293,6 +305,11 @@ public static class Adapters
         if (missing.Count > 0)
         {
             return $"setup: {string.Join(", ", missing)} not on PATH — run 'fleet setup'.";
+        }
+
+        if (DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath)) != DriverNames.WezTerm)
+        {
+            return null;
         }
 
         var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermWiring.Module);

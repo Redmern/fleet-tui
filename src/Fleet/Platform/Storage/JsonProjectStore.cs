@@ -25,7 +25,12 @@ public sealed class JsonProjectStore : IProjectStore
 
         FleetPaths.EnsureDirs();
 
-        var file = new ProjectFile { Name = name, Root = HomePath.Contract(root) };
+        var file = new ProjectFile
+        {
+            Name = name,
+            Root = HomePath.Contract(root),
+            ClaudeProfile = string.IsNullOrWhiteSpace(project.ClaudeProfile) ? null : project.ClaudeProfile.Trim(),
+        };
         File.WriteAllText(
             FileFor(name),
             JsonSerializer.Serialize(file, FleetJsonContext.Default.ProjectFile));
@@ -52,7 +57,8 @@ public sealed class JsonProjectStore : IProjectStore
 
             return new Project(
                 string.IsNullOrWhiteSpace(file.Name) ? sanitized : file.Name,
-                HomePath.Expand(file.Root));
+                HomePath.Expand(file.Root),
+                string.IsNullOrWhiteSpace(file.ClaudeProfile) ? null : file.ClaudeProfile);
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {

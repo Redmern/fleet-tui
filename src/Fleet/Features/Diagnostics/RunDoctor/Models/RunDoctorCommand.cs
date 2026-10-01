@@ -1,3 +1,3 @@
 namespace Fleet.Features.Diagnostics.RunDoctor.Models;
 
-public sealed record RunDoctorCommand(string ChosenDriver, string? UnsupportedReason);
+public sealed record RunDoctorCommand(string ChosenDriver, string? UnsupportedReason, EmbeddedHealth? Embedded = null);

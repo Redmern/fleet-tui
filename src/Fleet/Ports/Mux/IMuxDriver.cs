@@ -19,6 +19,8 @@ public interface IMuxDriver
 
     Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default);
 
+    Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default);
+
     Task KillPaneAsync(PaneId id, CancellationToken ct = default);
 
     Task MovePaneAsync(PaneId id, MovePaneOptions options, CancellationToken ct = default);
@@ -30,4 +32,12 @@ public interface IMuxDriver
     Task SendTextAsync(PaneId id, string text, CancellationToken ct = default);
 
     Task<string> GetTextAsync(PaneId id, CancellationToken ct = default);
+
+    Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default);
+
+    Task ShowWorkspaceAsync(string name, CancellationToken ct = default);
+
+    Task CloseWorkspaceAsync(string name, CancellationToken ct = default);
+
+    Task OpenWindowAsync(string name, CancellationToken ct = default);
 }

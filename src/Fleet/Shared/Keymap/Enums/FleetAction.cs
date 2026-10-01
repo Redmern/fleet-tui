@@ -39,4 +39,10 @@ public enum FleetAction
     EditFleetConfig,
     OpenSettings,
     EditAidlcMode,
+    EditClaudeProfile,
+    Notifications,
+    Remotes,
+    SaveSession,
+    DismissNotice,
+    DismissAllNotices,
 }

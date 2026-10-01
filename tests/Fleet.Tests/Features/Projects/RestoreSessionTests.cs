@@ -57,6 +57,22 @@ public sealed class RestoreSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task An_orchestrator_started_agent_comes_back_with_claude_and_a_manual_one_without()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+
+        await new RestoreSessionHandler(_mux).HandleAsync(
+            "techweb", ProjectRoot, [Agent("health", open: true) with { Claude = true }, Agent("notes", open: true)]);
+
+        var panes = await _mux.ListPanesAsync();
+        var health = panes.Single(p => p.Cwd.EndsWith("health", StringComparison.Ordinal));
+        var notes = panes.Single(p => p.Cwd.EndsWith("notes", StringComparison.Ordinal));
+        Assert.Contains(_mux.ArgsFor(health.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+        Assert.DoesNotContain(_mux.ArgsFor(notes.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_hidden_agent_comes_back_hidden()
     {
         Directory.CreateDirectory(ProjectRoot);
@@ -95,6 +111,29 @@ public sealed class RestoreSessionTests : IDisposable
             "origin/develop", true, false, true);
 
         Assert.False(RestoreSessionHandler.Wanted(missing, []));
+    }
+
+    [Fact]
+    public void A_hidden_agent_is_restored_into_its_own_projects_hidden_workspace_when_there_are_workspaces()
+    {
+        var hidden = Agent("dev", open: true, hidden: true);
+
+        Assert.Equal(FleetWorkspaces.HiddenFor("techweb"), RestoreSessionHandler.Options("techweb", hidden, null, workspaces: true).Workspace);
+        Assert.Equal(FleetWorkspaces.Hidden, RestoreSessionHandler.Options("techweb", hidden, null).Workspace);
+    }
+
+    [Fact]
+    public async Task With_workspaces_agents_are_restored_into_their_project_even_when_another_project_shares_its_folder()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        Directory.CreateDirectory(ProjectRoot);
+        await mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot, SessionName = "other" });
+        await mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot, SessionName = "techweb" });
+
+        await new RestoreSessionHandler(mux).HandleAsync("techweb", ProjectRoot, [Agent("dev", open: true)]);
+
+        var dev = (await mux.ListPanesAsync()).Single(p => p.Cwd.EndsWith("dev", StringComparison.Ordinal));
+        Assert.Equal("techweb", dev.SessionName);
     }
 
     [Fact]

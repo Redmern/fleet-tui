@@ -54,11 +54,22 @@ no WezTerm — over SSH, on a headless box, or on a machine that never installed
 it.
 
 The `embedded` driver is an attach-model daemon: it owns the PTYs, outlives its
-clients, and attaches one pane at a time as fullscreen raw passthrough.
-Deliberately no tiling and no terminal emulator — attach/detach and tiling are
-separable, and tiling is the expensive half. Tiling forces a VT emulator, and a
-VT emulator is what mangles Neovim (truecolor, undercurl, SGR mouse, bracketed
-paste, focus events, kitty keyboard protocol).
+clients, and attaches one pane at a time, fullscreen. Deliberately no tiling —
+attach/detach and tiling are separable, and tiling is the expensive half.
+
+**Revised 2026-09-24:** each pane runs through a libghostty-vt terminal emulator
+inside the daemon, and clients receive frames the daemon renders from it. The
+earlier position — no emulator, because an emulator is what mangles Neovim
+(truecolor, undercurl, SGR mouse, bracketed paste, focus events, kitty keyboard
+protocol) — was true of the emulators available then, not of Ghostty's. The
+Phase 0 spike showed nvim and claude intact through it. See *The `embedded`
+driver, Phase 0 spike* and *Remote attach* below.
+
+**Revised again 2026-09-24:** tiling *within a workspace* is now in scope. Each
+project is a workspace with its split layout (claude, dashboard, agents,
+sub-orchestrator browsers), and a client shows one workspace at a time. The
+emulator per pane is what makes that affordable: the daemon composites several
+pane grids into one frame. See *Instant project switching on `embedded`*.
 
 **Build order:** `fake`, then `wezterm`, then `tmux`, then `embedded`. WezTerm
 first because it is the daily driver and `fleet-win` supplies a debugged
@@ -158,10 +169,22 @@ FLEET_MUX set          -> that                     (override)
 TMUX set               -> tmux                     (adopt)
 WEZTERM_PANE set       -> wezterm                  (adopt)
 otherwise:                                         (launch)
-    wezterm present AND GUI reachable  -> wezterm  (base)
+    this build has libghostty-vt       -> embedded (base, since 0.6.0)
+    wezterm present AND GUI reachable  -> wezterm
     tmux present                       -> tmux     (fallback)
     otherwise                          -> embedded (last resort)
 ```
+
+**2026-09-29: embedded became the base for a plain terminal.** Running `fleet`
+in a plain PowerShell or shell now opens the project right there, under
+fleetd, instead of handing it to a WezTerm window. Adopting is unchanged:
+inside WezTerm (the keybindings spawn fleet in a WezTerm tab, so they stay on
+WezTerm) or tmux, fleet uses that multiplexer. `FLEET_MUX=wezterm` sends a
+plain terminal to WezTerm as before. *This build has libghostty-vt* is
+`GhosttyNative.Available()`, so a build without it falls through to the old
+order. One consequence: a Claude session started by hand in a plain terminal,
+with fleet's MCP server, now opens agents in fleetd (see them with
+`fleet attach`) rather than in WezTerm.
 
 *GUI reachable* — Linux: `DISPLAY` or `WAYLAND_DISPLAY` set. Windows:
 `SSH_CONNECTION` unset.
@@ -399,12 +422,16 @@ the multiplexer itself and run no daemon. Everything in this section applies to
 `embedded` alone.
 
 ```
-  fleet (client)                 fleetd (daemon)              children
-  -------------                  ---------------              --------
-  Terminal.Gui dash --socket-->  session registry     --pty-->  nvim
-  raw-mode attach   <-stream-->  pane table                     claude
-  fleet CLI verbs   --socket-->  PTY owner + ring buf           shell
+  fleet (client)                 fleetd (daemon)                   children
+  -------------                  ---------------                   --------
+  Terminal.Gui dash --stream-->  session registry         --pty-->  nvim
+  attach client     <-frames---  pane table                         claude
+                    --input--->  per pane: PTY + libghostty-vt      shell
+  fleet CLI verbs   --stream-->    terminal + frame renderer
 ```
+
+The arrows are one protocol over any byte stream: a local pipe or socket, or SSH
+stdio for a remote machine (*Remote attach*, below).
 
 ### fleetd
 
@@ -414,13 +441,16 @@ that single property is what buys detach and reattach.
 Spawning it detached is platform-specific and easy to get subtly wrong: on
 Windows, `CreateProcess` with `DETACHED_PROCESS` and no inherited handles; on
 Unix, `setsid` with stdio redirected away from the parent's terminal. Double-fork
-daemonization is not safe in .NET.
+daemonization is not safe in .NET. On Windows it must also survive logout of the
+OpenSSH session that started it (herdr hit exactly this).
 
 ### Transport
 
-`\\.\pipe\fleet` on Windows, `$XDG_RUNTIME_DIR/fleet/<name>.sock` on Linux.
-ndjson control frames plus a raw byte stream for attach. Both sides are BCL
-types; this is the cheapest part of the driver.
+`\\.\pipe\fleet` on Windows, `$XDG_RUNTIME_DIR/fleet/<name>.sock` on Linux, and
+`ssh -T <host> fleet bridge` for a remote daemon. Length-prefixed messages in both
+directions, versioned by a handshake. The rules that keep SSH working are in
+*Remote attach*. Both local sides are BCL types; this is the cheapest part of the
+driver.
 
 ### Panes
 
@@ -428,28 +458,34 @@ Everything is a pane, Neovim included. This is the driver's private
 representation; it satisfies the interface's `Pane` but carries more:
 
 ```
-Pane { Id, Kind: Editor|Agent|Shell, Cwd, Argv, Pty, Ring, Status }
+Pane { Id, Kind: Editor|Agent|Shell, Cwd, Argv, Pty, Terminal, Status }
 ```
+
+`Terminal` is the pane's libghostty-vt instance. It is fed every byte the child
+writes, whether or not anyone is attached, and it answers the child's terminal
+queries (DSR, DA, mode reports) itself, so a pane with no client does not stall
+on a query.
 
 Consequence worth wanting: the editor session survives a dropped SSH connection
 the same way the agents do.
 
 ### Attach
 
-Fullscreen raw passthrough. The client puts its console in raw mode, copies
-stdin to the PTY and PTY to stdout verbatim, and forwards resize events. Nothing
-in the path parses the stream, so Neovim gets truecolor, SGR mouse, kitty
-keyboard, and undercurl intact.
+Fullscreen, one pane at a time. The client puts its console in raw mode, sends
+input and resizes, and writes the frames it receives to stdout. fleetd renders
+each frame by diffing the pane's emulator grid against what that client already
+shows, as `spikes/EmbeddedSpike/Render/GridRenderer.cs` does, and sends only the
+changed cells. Keys are encoded for the pane on the daemon side (see *Remote
+attach*, rule 3).
 
-### Repaint on attach — known soft spot
+### Repaint on attach — resolved 2026-09-24
 
-The daemon keeps a per-pane ring buffer of recent output. On attach it replays
-the ring, then pokes a resize so full-screen applications redraw themselves.
-
-This is a heuristic, not a screen model. tmux instead runs a headless terminal
-emulator per pane and dumps exact screen state on attach. If replay proves
-unreliable, that is the upgrade — and it is the same component tiling would
-later need, so the work would not be wasted.
+The earlier plan replayed a per-pane ring buffer on attach and then poked a resize
+so full-screen programs would redraw — a heuristic, not a screen model. It named
+the upgrade: a headless emulator per pane that dumps exact screen state, as tmux
+does. That is now the design. Attach, reattach, resize and reconnect after a
+dropped link all send one full frame rendered from the emulator, and incremental
+frames after it.
 
 ## Agent status and data flow
 
@@ -2115,6 +2151,2048 @@ from the dashboard both. yazi is an optional dependency: without it the browse b
 hides itself and the menu entry reports what to install, which is why `fleet setup`
 lists it as costing "no folder picker or file navigator" rather than blocking.
 
+## The `embedded` driver, Phase 0 spike, 2026-09-24
+
+Branch `feat/embedded-mux`, code in `spikes/EmbeddedSpike`. The question was whether
+fleet can own one pane end to end, from the PTY through a real terminal emulator
+to the host terminal, with a prefix key that works while nvim or claude has focus.
+This goes further than the attach model above ("no terminal emulator"): with an
+emulator in the path, repaint on attach becomes an exact screen dump rather than
+a ring-buffer replay, which is the upgrade *Repaint on attach* named.
+
+**Verdict: go.** libghostty-vt from .NET NativeAOT works on Windows and Linux,
+statically linked, with no warnings. Everything the spike set out to prove was
+observed working, not just compiled. The one design change it forces is on the
+Windows input path; see *Keys on Windows go to ConPTY as records* below.
+
+### What was built
+
+One NativeAOT console app with one pane:
+
+```
+host console/tty --records/bytes--> prefix check --> ConPTY | pty master
+       ^                                                    |
+       |                                                    v
+  diffed render <-- render state <-- libghostty-vt <-- PTY output
+```
+
+- **PTY.** Windows uses ConPTY through `RoyalApps.RoyalTerminal.Terminal.Pty.Windows`
+  0.5.0, as the 2026-08-08 entry recommended. Only the Windows package is
+  referenced, because the `Platform` package also pulls in the Unix one, which
+  P/Invokes `forkpty` and returns into managed code in the child. Linux uses
+  hand-written `openpty` + `posix_spawnp` (see the next point).
+- **A controlling terminal without fork.** The PTY section above says
+  `posix_spawn` cannot issue `TIOCSCTTY`. It does not need to. With
+  `POSIX_SPAWN_SETSID` plus a file action that opens `/dev/pts/N` as fd 0, glibc
+  runs `setsid` and then `open` in the child, and a session leader with no
+  controlling terminal acquires the tty it opens. Verified: nvim runs, gets
+  `SIGWINCH` on resize, and redraws. Signal dispositions and the mask are reset
+  with `SETSIGDEF`/`SETSIGMASK`. This is glibc-specific (macOS numbers the flag
+  differently) and removes the need for a helper binary.
+- **Emulator.** One libghostty-vt terminal fed from the PTY. Its `write_pty`
+  callback sends terminal replies (DSR, DA, mode reports) back to the child. A
+  DA1/DA2 callback answers as a VT220-class terminal. Without it, nvim waits
+  out its query timeout.
+- **Render.** The render-state API (`ghostty_render_state_*`) gives dirty rows.
+  Each dirty row is read cell by cell and diffed against a shadow of what the
+  host already shows, and only changed cells are written, wrapped in
+  synchronized output (`?2026`). Palette colours stay palette indices, so the
+  host theme still applies. RGB stays RGB, and "no colour" becomes SGR 39/49.
+  Wide characters and their spacer tails are handled. On Windows the console
+  code page is set to UTF-8 (65001) and restored on exit, the 2026-08-08 fix.
+- **Input, Windows.** `ReadConsoleInputW` records with
+  `ENABLE_VIRTUAL_TERMINAL_INPUT` off, as herdr does. The prefix is decided on
+  the virtual key and modifier state, so whatever mode the pane has put the
+  terminal in cannot change what the prefix looks like. This retires the
+  2026-08-08 finding that win32-input-mode broke a byte-level scanner.
+- **Input, Linux.** Raw stdin bytes with a byte-level prefix check (Ctrl+B is
+  `0x02`), passed through otherwise. Good enough for the spike. Phase 1 needs a
+  host input parser here too (see what did not work).
+- **Prefix.** `Ctrl+B` by default (`--prefix ctrl+<letter>`). `prefix q` quits,
+  `prefix prefix` sends the chord through, `prefix d` dumps the screen, and
+  `prefix r` redraws. Unbound keys after the prefix are swallowed, as in tmux.
+  While the prefix is armed, a badge shows top right.
+- **Resize.** Host → emulator (`ghostty_terminal_resize`) → PTY. Windows sees it
+  from `WINDOW_BUFFER_SIZE_EVENT` plus polling, Linux from `SIGWINCH` via
+  `PosixSignalRegistration` plus `TIOCGWINSZ`.
+- **Restore.** On exit: SGR reset, mouse modes 1000/1002/1003/1006, focus 1004,
+  bracketed paste 2004, DECCKM, keypad mode, cursor shape and visibility, then
+  leave the alt screen. Console modes and code pages are restored on Windows,
+  termios on Linux.
+- **Test hooks.** `--dump FILE` keeps the emulator's screen as plain text (via
+  `ghostty_formatter`) with size and counters. `--log FILE` records every key
+  record and the bytes sent. `--inject PID tokens…` attaches to the spike's
+  console and writes real `INPUT_RECORD`s with `WriteConsoleInputW`, so the
+  Windows tests go through the same `ReadConsoleInputW` path as a keyboard.
+
+### libghostty-vt: pin and build
+
+| | |
+|---|---|
+| Source | `ghostty-org/ghostty` @ `44f2a44df7e8c4a0c6df3f7d872ef3d7ead88e51` (reports `1.3.2-HEAD`). The same commit herdr vendors, so it is known-good on Windows MSVC |
+| Toolchain | Zig **0.16.0** (`build.zig.zon` requires it) |
+| Pins | `spikes/EmbeddedSpike/native/pins.env`: Zig version, the SHA-256 of both Zig archives, the ghostty commit and the SHA-256 of its GitHub tarball |
+| Windows | `native/build.ps1` → `zig build -Demit-lib-vt -Doptimize=ReleaseFast -Dsimd=true -Dtarget=x86_64-windows-msvc` → `ghostty-vt-static.lib` (12 MB) |
+| Linux | `native/build.sh` → same flags with `-Dtarget=x86_64-linux-gnu` → `libghostty-vt.a` (18 MB) |
+| Linking | `<DirectPInvoke Include="ghostty-vt" />` plus `<NativeLibrary>` pointing at the archive, and `ntdll.lib` on Windows. Every `[LibraryImport("ghostty-vt")]` becomes a direct call resolved at link time, so there is no DLL at runtime |
+| Result | `embeddedspike.exe` 3.99 MB. Linux `embeddedspike` 4.18 MB, depending only on `libc`/`libm`. Zero IL, trim, AOT or link warnings with `TreatWarningsAsErrors` |
+
+The scripts download Zig and the source into `native/.cache`, check both hashes,
+and install nothing system-wide, so a CI runner needs only what NativeAOT already
+needs: MSVC and the Windows SDK on Windows, `clang` on Linux. Zig fetches
+ghostty's own dependencies at build time; `build.zig.zon` pins their hashes. A
+cold build takes minutes, so CI should cache `native/.cache`.
+
+One Zig 0.16 trap on Windows: with `ZIG_GLOBAL_CACHE_DIR` pointing at a fresh
+directory, the dependency fetch fails with `FileNotFound` unless `<cache>/p`
+already exists. Both scripts create it.
+
+The bindings are hand-written from the C headers
+(`Ghostty/Native.cs`), about 45 functions and the struct layouts they need. No
+generator was used. The headers are the ABI, and the render and formatter
+structs carry a `size` field, so a mismatch shows up as an error code rather
+than a crash. Alternatives seen along the way, not used: RoyalApps ships
+`RoyalApps.RoyalTerminal.GhosttySharp` with a prebuilt dynamic `ghostty-vt.dll`,
+and `DeBlasis.GhosttyVt` (Parked). Both trade the Zig build for someone else's
+pin and a DLL next to the binary.
+
+**XtermSharp was not evaluated.** It was the fallback in case libghostty-vt
+turned out impractical from .NET, and it did not: Zig, MSVC linking and AOT all
+worked on the first try. The reasons for the pick are fidelity, since this is
+Ghostty's own parser, screen and key encoder with kitty keyboard, mouse modes
+and grapheme handling, and one pinned upstream on both OSes.
+
+### Credit: herdr
+
+[herdr](https://github.com/ogulcancelik/herdr) (Apache-2.0) is a Rust terminal
+multiplexer built on libghostty-vt that ships on Windows. This spike takes from
+it: the Zig invocation and target triples from its `build.rs`, the ghostty pin,
+the Windows input rules in `Input/WindowsKeys.cs` (AltGr as `LEFT_CTRL|RIGHT_ALT`
+is text, not a chord; modifier-only records produce nothing; Alt+numpad codes
+arrive as a `VK_MENU` key-up carrying the character; surrogate pairs span two
+records; `vk == 0` is synthesized text), and the Windows checklist below, taken
+from its CHANGELOG. The files that port its logic say so in a comment.
+
+### Keys on Windows go to ConPTY as records
+
+The spike first encoded every key with libghostty-vt's key encoder, which honours
+the pane's modes, and that broke in a way that matters. Claude Code turns on the
+kitty keyboard protocol, so the encoder sent Ctrl+U as `CSI 117;5u`, **and Claude
+did not clear its prompt.** The child never sees our bytes directly. ConPTY
+parses them back into console records, and ConPTY does not understand kitty's
+CSI-u.
+
+ConPTY says what it wants. The first bytes of every session are
+`ESC[?9001h ESC[?1004h`, a request for win32-input-mode and focus events. The
+spike already holds the `KEY_EVENT_RECORD`, so when 9001 is on it forwards the
+record verbatim as `ESC[Vk;Sc;Uc;Kd;Cs;Rc_`, the spec Windows Terminal
+implements. ConPTY rebuilds the identical record for the child, and the child's
+own console mode decides the rest. With that, Ctrl+U clears Claude's prompt.
+Focus events go through as `CSI I`/`CSI O` when 1004 is on.
+
+Consequences:
+
+- On **Windows**, libghostty-vt's key encoder is the fallback (`--keys ghostty`,
+  or a ConPTY that never asks for 9001), not the main path. Records are lossless
+  and cheaper.
+- On **Linux** the encoder is the right tool. It is what fleet needs to turn
+  parsed host input into whatever the pane asked for (kitty flags,
+  modifyOtherKeys, DECCKM).
+- The prefix check stays on the translated key in both paths.
+
+### Verified
+
+Windows 11, conhost, driven by `--inject` (real console input records) with
+`--dump` screen captures:
+
+| Check | Result |
+|---|---|
+| `nvim --clean file` renders into the grid | ✓ text, `─ ✓ 日本語`, status line at full width |
+| typing in insert mode | ✓ |
+| `i`, `Ctrl+V`, `prefix prefix` | ✓ nvim inserts a literal `^B`, so the chord reaches the pane |
+| `prefix r` redraw, `prefix d` dump, unbound `prefix z` swallowed | ✓ |
+| `prefix q` quits and restores the console | ✓ exits cleanly; entry logged mode `0x1F7→0x1A8`, CP `437→65001`. The restore is the saved values written back, not read back afterwards |
+| resize by dragging the window (`MoveWindow`) | ✓ 120x30 → 95x22 → 181x41. nvim and claude both re-lay out |
+| `claude` trust dialog and main prompt render | ✓ box drawing, logo, status line |
+| typing into claude, `Ctrl+U` clears the line | ✓ with win32-input-mode, ✗ with the ghostty encoder |
+| `prefix d`, `prefix q` while claude is focused | ✓ |
+| nvim with modifyOtherKeys, encoder path | ✓ `|` arrives as `CSI 27;2;124~` and is inserted |
+
+Linux, in `mcr.microsoft.com/dotnet/sdk:10.0` (Debian) under Docker Desktop,
+with `script` providing the host pty:
+
+| Check | Result |
+|---|---|
+| `build.sh` + AOT publish | ✓ from a clean container |
+| nvim renders through `openpty` + `posix_spawn` | ✓ |
+| typing, `Ctrl+V` `prefix prefix` inserts `^B` | ✓ |
+| host pty resized 100x30 → 72x20 | ✓ emulator and nvim both at 72x20 |
+| `prefix d`, `prefix q`, restore sequence emitted, exit 0 | ✓ |
+
+Setting `SetConsoleScreenBufferSize` from another process fails with
+`ERROR_INVALID_PARAMETER` while the alt screen is active. That is why the resize
+test moves the window instead. Worth knowing for any future scripted test.
+
+`dotnet build Fleet.slnx` and `dotnet test` stay green (0 warnings, 926 passed).
+The spike is not in the solution, as with the earlier spikes.
+
+### What did not work, or was not done
+
+- **Not tested by the spike:** Windows Terminal, PowerShell as the pane,
+  Ghostty/kitty on Linux, claude on Linux (not installed in the container), macOS
+  (not built). The manual checklist below covers these. **WezTerm on Windows was
+  checked by hand afterwards (2026-09-24): nvim and claude render and take input
+  correctly, and the prefix works in both.**
+- **Mouse** is not forwarded: `ENABLE_MOUSE_INPUT` is off, and the host is never
+  asked for mouse modes. On Windows, mouse records can go to ConPTY the same way
+  keys do.
+- **Host-side modes** the pane asks for are not mirrored to the host: bracketed
+  paste, focus reporting on Linux, the window title (OSC 0/2), clipboard
+  (OSC 52), cursor colour, hyperlinks and kitty graphics. On Windows a paste
+  arrives as key records, which is correct but not bracketed.
+- **Linux input is raw bytes.** A kitty-mode pane on Linux gets legacy keys, and
+  the prefix check would misfire on a `0x02` inside a paste. Phase 1 needs a host
+  input parser that feeds the key encoder.
+- **Underline style** is re-emitted as `4:n`. Terminals without styled
+  underlines may show a plain underline or none.
+- **Dead keys** are untested. The translator passes whatever character the
+  console reports, which is exactly the herdr bug on the checklist.
+- **No scrollback view.** Only the active screen is drawn.
+
+### Windows input checklist for later phases
+
+From herdr's CHANGELOG. Each item is a bug herdr shipped and fixed on Windows.
+The records path avoids some of them by construction; each needs a test before
+`embedded` is called done.
+
+- [x] **Alt combinations.** Alt+letter, Alt+Shift+letter (must not collapse to
+      uppercase), Alt+Backspace, Ctrl+Alt+letter (fish decodes these as both
+      modifiers). Right Alt is AltGr only with `LEFT_CTRL` also set. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Ctrl+S** reaches the pane (not taken as XOFF, not claimed by the host;
+      WezTerm on this machine claims it as a leader). Also Ctrl+/, Ctrl+1..9 as
+      keys rather than control bytes, and Ctrl+J as LF, distinct from Enter. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Dead keys and AltGr text.** US-International `'` + `e` gives `é` once,
+      with no extra base character; AltGr+dead key; non-US shifted text such as
+      `@` on German layouts; IME commits; emoji from the Windows picker
+      (surrogate pairs, or CSI-u with associated text under WezTerm). *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **SGR mouse past column 95.** Coordinates must use SGR (1006) encoding end
+      to end. Legacy encodings stop at 95/223. Reattach must restore mouse
+      reporting. *Done 2026-09-28 for `embedded`: a click at column 110 reached
+      an SGR app intact. See "Mouse".*
+- [x] **Pasted Enter.** A multi-line paste from Windows Terminal arrives as key
+      records with `VK_RETURN`. It must reach the pane as one bracketed paste with
+      its newlines, and must not submit each line (herdr: Codex lost Enter after
+      long pastes; OMP/Pi submitted per line). LF-only pastes keep their
+      newlines. *Done 2026-09-28 for `embedded`, see "Paste on Windows"; the
+      conhost path and the ConPTY (WezTerm/WT) path were verified, not a real
+      WezTerm or Windows Terminal window.*
+- [x] **Mode restore.** On exit and on detach, reset mouse (1000/1002/1003/1006),
+      focus (1004), bracketed paste (2004), cursor keys, keypad, cursor shape and
+      visibility, and the alt screen. Restore console modes and code pages even
+      on a crash (herdr #4055 still had a Git Bash report open). *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Escape** is sent at once, not held as a possible Alt prefix, and a lone
+      Esc beside another key is not fused into an Alt chord. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Shift+Enter** keeps its modifier. **Shift+Tab** reaches the pane as
+      CSI Z; the permission-mode cycle depends on it. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Key repeat and release** stay with the pane that got the press. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+- [x] **Incomplete host replies** (split `ESC ]` OSC colour answers) are not
+      mistaken for Alt+`]`. *Done 2026-09-28 for `embedded`, see "Windows input checklist".*
+
+### Manual test checklist
+
+For a human, on each host: PowerShell in conhost, Windows Terminal, WezTerm on
+Windows, and Ghostty and kitty on Linux. Build with `native/build.ps1` or
+`native/build.sh`, then `dotnet publish -c Release -r <rid> -o out/<rid>` in
+`spikes/EmbeddedSpike`. Add `--log log.txt` to capture key records when
+something looks wrong.
+
+1. **nvim renders.** `embeddedspike -- nvim <some file with unicode>`. Colours
+   match the host theme, box drawing and CJK align, the cursor shape changes
+   between normal and insert, and scrolling with `Ctrl+D`/`Ctrl+U` has no
+   leftovers.
+2. **claude renders.** `embeddedspike -- claude`. Logo, prompt box and status
+   line are intact. Spinner updates leave no trails. The trust dialog's
+   selection highlight moves.
+3. **Prefix under nvim.** In insert mode, `Ctrl+V` then `Ctrl+B Ctrl+B` inserts
+   `^B`. `Ctrl+B` shows the badge top right. `Ctrl+B d` writes the dump.
+   `Ctrl+B q` quits.
+4. **Prefix under claude.** Type text, `Ctrl+U` clears it, `Ctrl+B Ctrl+B`
+   reaches claude, and `Ctrl+B q` quits even while claude is busy streaming.
+5. **Alt, Ctrl+S, Shift+Tab** under claude: Alt+B/F move by word, Shift+Tab
+   cycles permission mode, Ctrl+S does what claude does with it.
+6. **Resize.** Drag the window smaller and larger, maximise, restore. nvim's
+   status line and claude's prompt box follow within a frame and nothing is
+   left behind at the old edge.
+7. **Restore.** After `Ctrl+B q`: the prompt returns on the normal screen, the
+   cursor is visible with its usual shape, typing echoes, mouse clicks do not
+   print escape codes, and a paste is not wrapped in `200~`. On Windows,
+   `chcp` reports the original code page.
+8. **Host specifics.** Windows Terminal: pasting multiple lines into claude does
+   not submit each line. WezTerm: note that its own Ctrl+S leader (this machine)
+   wins. Ghostty and kitty: the host's kitty keyboard mode is not left on after
+   exit.
+9. **Project switching (once Phase 1 lands).** Open two projects, each with
+   nvim, claude and a sub-orchestrator running. Switch back and forth several
+   times: nothing redraws from scratch, scrollback and cursor positions are
+   kept, the hidden dashboard keeps polling, and `switch A -> B` in the log
+   reads low tens of milliseconds. Attach a second client showing the other
+   project; switching in the first never changes the second.
+
+## Remote attach, 2026-09-24
+
+Goal: from a laptop, attach to panes that live on another machine over SSH, as
+herdr's `--remote` does. Linux→Linux, Windows→Linux, Linux→Windows and
+Windows→Windows all count. This does not need a different design. It needs the
+fleetd protocol to follow a few rules from the start, because each rule is cheap
+now and expensive to retrofit once clients exist.
+
+### How herdr does it
+
+`herdr --remote host` starts a local thin client and runs
+`ssh -T host herdr remote-client-bridge` (herdr `src/remote/attach.rs`). On the
+remote, the bridge makes sure the server is running, connects to the server's
+**local** client socket, and copies SSH stdin and stdout to and from it
+(`src/remote/host.rs`). That is all it does. The client speaks the same protocol
+whether the server is local or remote, and SSH is one more byte pipe. Around that
+core herdr adds a protocol version check (offering to install or update the
+remote binary), strict host-key checking, a managed SSH config with a control
+socket, and ssh-agent forwarding.
+
+Its wire format, `src/protocol/wire.rs`: length-prefixed messages. Clients send a
+hello with size and cell pixels, then input and resize messages. The server sends
+`TerminalFrame { seq, width, height, full, bytes }`, already-diffed escape bytes
+the client writes to stdout, plus separate messages for window title, clipboard,
+notifications and mouse capture.
+
+### The rules for fleetd's protocol
+
+1. **Byte stream only.** Length-prefixed messages over any duplex stream: a named
+   pipe, a Unix socket, or SSH stdio. No passing file descriptors or handles, no
+   shared files or memory, and no assumption that client and daemon share an OS
+   or a filesystem. `fleet bridge` on the remote side is then a stream copy
+   between stdio and the local endpoint.
+2. **Versioned handshake.** The client's hello carries the protocol version, its
+   OS, its terminal size and what its terminal supports (truecolor, styled
+   underline, synchronized output, kitty keyboard). The daemon refuses an
+   incompatible version with a message naming both versions, and renders for
+   what the client can show.
+3. **Input goes over the wire as neutral key events.** A key event is key,
+   modifiers, text, and press/repeat/release, plus the raw Windows
+   `KEY_EVENT_RECORD` when the client has one. The daemon encodes it for the
+   pane:
+   - ConPTY pane that asked for win32-input-mode: the raw record if present,
+     otherwise one built from the neutral fields;
+   - any other pane: libghostty-vt's key encoder under the pane's modes.
+
+   This is the one place the Phase 0 finding (*Keys on Windows go to ConPTY as
+   records*) shapes the protocol. A Linux client attaching to a Windows fleetd has
+   no records to forward, so the neutral form must be enough on its own. herdr's
+   `ClientKeySource::{WindowsConsole, Vt, Synthesized}` makes the same split.
+   Mouse, paste and focus are their own messages. A paste is text, never
+   keystrokes, so the daemon can bracket it for the pane.
+4. **The daemon renders; the client writes bytes.** Frames carry a sequence
+   number and a `full` flag. Attach, resize and reconnect get one full frame,
+   then diffs. Diffs are small, which is what makes SSH usable, and reconnecting
+   after a dropped link is only "send a full frame".
+5. **Host effects are messages, not escape sequences inside frames.** Window
+   title, clipboard (OSC 52), notifications, bell, and mouse-capture and
+   bracketed-paste state all have to act on the machine the user is sitting at.
+   The client applies them to its own terminal and restores them on detach.
+6. **fleetd outlives the SSH session.** It is already a detached daemon. On
+   Windows it must also survive logout of the OpenSSH session that started it,
+   and the bridge must start it if it is not running.
+
+Control traffic — the `fleet` CLI verbs, the dashboard, MCP — goes over the same
+protocol. That makes remote orchestration a later option at no extra cost,
+rather than a second protocol.
+
+### Two ways to reach a remote pane
+
+- **Bridge (the main path).** `fleet attach --ssh host`: the keyboard is read
+  locally (console records on Windows, parsed bytes on Linux), and frames come
+  back over SSH. Terminal fidelity is the local terminal's.
+- **Plain SSH (works for free).** `ssh host`, then `fleet attach` on the remote.
+  Input then goes through the remote's terminal layer. On a Windows OpenSSH
+  server that is sshd's ConPTY, where herdr's CHANGELOG lists several
+  OpenSSH-specific input and mouse bugs. Supported, but not the path to optimise.
+
+### Plan
+
+Folded into the combined plan at the end of *Instant project switching on
+`embedded`*, which supersedes the four-step list that was here.
+
+## Instant project switching on `embedded`, 2026-09-24
+
+A core requirement, not later polish. Read together with
+`docs/workspace-native-switching-postmortem.md`, whose two WezTerm attempts
+failed for reasons this design has to rule out by construction.
+
+### Behaviour
+
+- **Each project is a workspace in fleetd** holding its claude pane, dashboard,
+  agent panes and sub-orchestrator browser panes, in their split layout.
+- **Switching hides one workspace and shows another.** Nothing is killed,
+  spawned, restarted or moved. Every process keeps running while hidden,
+  including the dashboard, which keeps polling.
+- **It is instant:** one control round trip to fleetd, then the target is drawn
+  from screen state that already exists. No program is asked to repaint.
+- **Hidden agents use the same mechanism.** A hidden agent lives in its
+  project's hidden workspace, which no client is ever told to show. On
+  `embedded` this replaces `HiddenNest` and the pane moves in
+  `MoveProjectHandler`.
+- **Visibility is per client.** Hiding a project in one attached client never
+  changes what another client shows. That is exactly what WezTerm could not do:
+  its workspace visibility is global to a GUI process (postmortem, attempt 1).
+- **Opening a project for the first time creates its workspace.** Quitting a
+  project closes its workspace, its hidden workspace and every pane in them, as
+  today.
+
+### Why this works on `embedded` when it failed on WezTerm
+
+fleetd owns the whole model, so "hidden" is a fact fleetd records, not a
+side effect of some other feature:
+
+```
+fleetd
+  workspaces   name -> layout tree of pane ids      ("fleet", "fleet~hidden", ...)
+  panes        id   -> PTY + libghostty-vt terminal (runs whether shown or not)
+  clients      id   -> showing: workspace name, size, focused pane
+```
+
+- **Switching** is one message, `Show { workspace }`, from a client. fleetd
+  changes that client's `showing`, composites a full frame of the target from
+  its panes' emulators, and sends it. That frame is the entire round trip.
+  Scrollback and cursor positions survive because they live in each pane's
+  emulator, which never stopped. Nothing touches a PTY, so no child notices.
+- **Per-client visibility** falls out of the data: `showing` belongs to a
+  client, and no operation writes it for any client but the sender. A test
+  asserts this.
+- **"Instant from existing state"** means fleetd's emulators, not a client-side
+  cache. A client-side frame cache per workspace could skip even the round trip,
+  but it would have to reconcile anything that changed while hidden. Not worth
+  it unless measurement says the round trip is slow.
+- **Size.** A hidden workspace keeps its panes at their last size. When it is
+  shown in a client of a different size, its panes are resized once, which does
+  make those programs redraw. Same-size switches, the common case, redraw
+  nothing. When two clients show the same workspace at different sizes, the
+  most recently active client's size wins, as in tmux's `latest`.
+
+### The postmortem's structural lesson: decide once, pass it down
+
+The WezTerm attempts broke because each call site re-derived which instance and
+which window it was acting on (`DashCommand` cold-starting a second GUI). Here:
+
+- **The client is explicit.** When a client's prefix opens the fleet menu,
+  fleetd starts the menu process with `FLEET_CLIENT=<client id>` (and
+  `FLEET_PANE`). A switch from that menu sends `Show` for that client and no
+  other. A command with no `FLEET_CLIENT` — a hook, cron, MCP, a plain shell —
+  may create, close or hide panes but never changes any client's view.
+- **The switch strategy is chosen once per driver.** `MenuCommand` stops calling
+  `MoveProjectHandler` directly and asks for the driver's switch strategy, so the
+  moving approach is no longer hard-coded in the command.
+
+### Port changes
+
+- `MuxCaps.Workspaces`: the driver has real workspaces with per-client
+  visibility. `embedded` sets it. `wezterm` does not, and keeps its move-based
+  switching (including the `perf/switch-without-kills` behaviour if that merges
+  to `main` first; it is not on `main`, so nothing here depends on it).
+- `IMuxDriver` gains three operations, which the WezTerm driver implements the
+  way it can:
+  - `ListWorkspacesAsync()`: each workspace's name and whether the *current
+    client* is showing it. WezTerm derives the latter from panes in the current
+    window, which is what `ProjectsVisibleInWindow` computes today.
+  - `ShowWorkspaceAsync(name)`: on `embedded`, one `Show`. On WezTerm, not
+    supported (`Caps` says so); the move strategy is used instead.
+  - `CloseWorkspaceAsync(name)`: kills every pane in it.
+- A feature-level `IProjectSwitch` with two implementations:
+  - `WorkspaceSwitch` for drivers with `MuxCaps.Workspaces`: hide the current
+    project and show the target with one `ShowWorkspaceAsync`, creating the
+    workspace through `OpenProjectHandler` if the project is not open yet.
+  - `MoveSwitch`: today's `MoveProjectHandler.ParkAsync` + `HandleAsync`,
+    unchanged.
+
+  `ProjectSwitch.For(driver)` picks between them from `Caps`, in one place.
+- **"Is this project open, and where"** moves out of `MenuCommand` into one
+  query shared by the switch picker's `(open)` labels, `QuitFleet`'s
+  `ProjectsVisibleInWindow` and `FocusMain`: open = its workspace exists (on
+  WezTerm: any pane has its root as cwd); visible here = the current client is
+  showing it. A hidden project still counts as open.
+- `HideAgentHandler` on `embedded` moves the agent's panes into
+  `<project>~hidden`, a data-structure change inside fleetd that leaves every
+  process alone. `HiddenNest` stays for WezTerm.
+
+### Measuring it
+
+Every switch logs `switch A -> B: N ms` on both drivers, measured in the menu
+around the strategy call, as the WezTerm branch does. fleetd also logs its side:
+time to composite and send the frame. Target on `embedded`: low tens of
+milliseconds end to end. A 200x50 frame is about 10,000 cells; the spike's
+per-cell reads run well inside that budget. If it does not, the first lever is
+caching each workspace's last composited frame in fleetd.
+
+### Acceptance
+
+Tests, against the fake driver and against fleetd's in-process model:
+
+- a switch never calls kill or spawn (the fake driver records both);
+- pane ids, and the fake processes behind them, are identical after hide → show
+  → hide;
+- two clients show two different projects at once, and a switch by one leaves
+  the other's `showing` and last frame unchanged;
+- a command without `FLEET_CLIENT` cannot change any client's view;
+- hidden agents are not in any shown frame but still receive output;
+- quitting a project closes both its workspaces and nothing else.
+
+Manual, added to the checklist below: with nvim, claude and a sub-orchestrator
+running in two projects, switch back and forth repeatedly. Nothing redraws from
+scratch, scrollback and cursor positions are kept, the dashboard keeps updating
+while hidden, and the logged switch times are in the low tens of milliseconds.
+In a second attached client showing the other project, nothing changes.
+
+### Cost, stated
+
+This pulls tiling into Phase 1. The earlier design attached one pane,
+fullscreen; a workspace with a split layout needs:
+
+- a layout tree per workspace;
+- a compositor drawing several pane grids plus borders into one frame;
+- focus and input routing to the focused pane;
+- mouse hit-testing across panes;
+- per-pane PTY sizes derived from the layout.
+
+The spike's renderer is the per-pane half of the compositor. The layout half is
+new. It is the largest single item in Phase 1.
+
+### Combined Phase 1 plan
+
+1. **Protocol** in `src/Fleet`, unit-tested: codec, handshake, neutral key
+   events with both encoders, `Show`/workspace and client messages, frame
+   messages.
+2. **fleetd model**: workspaces, layout trees, panes, clients, per-client
+   visibility. Pure and in-process first, so the acceptance tests above run
+   without a terminal.
+3. **Compositor**: the spike's renderer generalised to a layout of panes with
+   borders and focus.
+4. **fleetd process plus local `fleet attach`**: detach, reattach, exact screen,
+   and switching with timing logs.
+5. **Port changes**: `MuxCaps.Workspaces`, the three `IMuxDriver` operations,
+   `IProjectSwitch`, the shared open/visible query, and `MenuCommand` rewired
+   through them. The WezTerm behaviour is unchanged and covered by its existing
+   tests.
+6. **`fleet bridge` and `fleet attach --ssh`**: Linux→Linux, Windows→Linux,
+   Linux→Windows.
+7. **`EmbeddedDriver` behind `IMuxDriver`**, then `DriverSelector`.
+
+## Phase 1 status, 2026-09-28
+
+Steps 1–7 of the combined plan are built on `feat/embedded-mux` and run
+end to end on Windows and Linux. `DriverSelector` needed no change: it already
+falls back to `embedded`, and `FLEET_MUX=embedded` forces it. What changed is
+that choosing it now works, because the build carries libghostty-vt.
+
+### Where things are
+
+| Piece | Code |
+|---|---|
+| Workspace port and switching | `Ports/Mux` (`Workspace`, `MuxCaps.Workspaces`, three operations), `Features/Projects/SwitchProject`, `Features/Projects/LocateProject`, `MenuCommand` |
+| fleetd model: workspaces, tabs, split layouts, per-client views and overlays | `Platform/Mux/Embedded/Model` |
+| Compositor and diff encoder | `Platform/Mux/Embedded/Render` |
+| Wire protocol | `Platform/Mux/Embedded/Protocol` |
+| Emulator, PTYs, host consoles, key translation | `Platform/Mux/Embedded/{Native,Pty,Host,Input}` (ported from the spike) |
+| The daemon | `Platform/Mux/Embedded/Daemon` |
+| Driver and attach client | `Platform/Mux/Embedded/EmbeddedDriver.cs`, `Platform/Mux/Embedded/Client` |
+| Commands | `fleet daemon`, `fleet attach [--project p] [--ssh host]`, `fleet bridge` |
+| Native build | `scripts/ghostty/build.{ps1,sh}`, into `artifacts/ghostty/<rid>`. `Fleet.csproj` links it when present; CI builds it |
+
+fleetd starts on demand, from `fleet`, `fleet attach` or the driver, and exits
+ten seconds after its last pane and client are gone. The client prefix is
+Ctrl+B (`FLEET_PREFIX`): `q` detach, `space` fleet menu, `n`/`p` tab, `s`
+next project, `h`/`j`/`k`/`l` or the arrows to move focus, `r` redraw, and
+Ctrl+B again to send it through.
+
+### Verified
+
+Unit and daemon tests: 982, green on Windows, on Linux in Docker, and in CI on
+both runners. The daemon tests run a real fleetd over a real pipe or socket
+with fake PTYs. The switching acceptance tests pass there:
+- a switch never spawns or kills;
+- panes and processes survive hide/show round trips;
+- two clients show different projects;
+- a connection with no client cannot change a view;
+- hidden agents keep receiving output.
+
+Real consoles on Windows (conhost, driven by console input records), with
+`FLEET_CONFIG_HOME` pointing at a scratch config:
+
+| Check | Result |
+|---|---|
+| `fleet` picker → project opens as a workspace, fleetd started on demand | ✓ claude and the dashboard side by side, divider, status bar |
+| Terminal.Gui dashboard rendered through the emulator | ✓ |
+| Ctrl+B Space | ✓ fleet menu as an overlay over this client only |
+| Menu → Switch project → a project not yet open | ✓ its workspace is created and shown. `switch demo1 -> demo2: 50–93 ms` including the two spawns |
+| Ctrl+B S between open projects | ✓ fleetd frame 13–16 ms, 1.9–3.8 KB |
+| Second client attached to `demo1` while the first switches four times | ✓ the second never changes |
+| Ctrl+B Q, then attach again | ✓ clean exit, then a character-for-character identical screen |
+
+Linux in Docker, under `script`, with a shell standing in for claude:
+
+| Check | Result |
+|---|---|
+| Cold `build.sh`, `dotnet test`, AOT publish | ✓ 26.5 MB, needs only libc and libm |
+| picker → open → menu overlay → open second project → switch → detach | ✓ `switch demo1 -> demo2: 6 ms`, frames 3–4 ms, fleetd still running after detach |
+| `fleet attach --ssh localhost` against a fleetd on the "remote" | ✓ frames arrive over `ssh -T host fleet bridge`, typed input runs in the remote pane |
+
+Switch frames are small because they are diffs against what the client
+already shows. Two workspaces laid out alike differ in a few cells, so a
+switch can cost under 100 bytes.
+
+### Found by running it, and fixed
+
+- **ConPTY children inherited redirected std handles.** fleetd was started
+  with pipes for stdin, stdout and stderr, and a pane child (claude, cmd) took
+  those pipes as its stdout instead of the pseudoconsole. It printed nowhere
+  and died. The Terminal.Gui dashboard worked only because it opens `CONOUT$`
+  by name. fleetd is no longer started redirected on Windows, and it releases
+  any redirected std handles it finds at startup.
+- **RoyalApps' `ProcessExited` does not fire.** Dead panes, and the menu
+  overlay, stayed forever. Each Windows pane now also waits on its child
+  process by PID and raises the exit once.
+- **The socket directory chmod.** The listener made the socket's directory
+  0700 even when it already existed, which fails for a non-root user on
+  `/tmp`. Only CI caught it, because the Docker runs were root.
+- **ssh prompts in raw mode.** An unknown host key or a password prompt
+  cannot be answered once the terminal is raw, so `--ssh` hung. ssh then ran
+  with `BatchMode=yes`, which refused password logins outright. Since
+  2026-09-29 the client sends its hello and waits for fleetd's welcome before
+  the terminal goes raw, so ssh asks for a password or a new host key in the
+  ordinary terminal; ssh reads those from the terminal itself, not from the
+  stdin fleet pipes into it.
+- **Zig 0.16 on Windows, intermittently.** The first fetch of a dependency
+  can fail with `file_hash FileNotFound` under `zig-pkg`; a second run
+  succeeds. Two of three cold local builds hit it. `build.ps1` retries up to
+  three times.
+
+### Deviations from the plan
+
+- **Linux clients send raw bytes.** DESIGN rule 3 asks for neutral key events.
+  Windows clients send them (plus the raw record). Linux clients still send
+  stdin bytes, and the prefix is a byte check, because there is no host input
+  parser yet. A pane asking for the kitty keyboard gets legacy keys from a
+  Linux client.
+- **Layouts come only from fleet's own splits.** There is no interactive pane
+  splitting or resizing by the user.
+- **Size policy** is "most recently active client wins" for a workspace shown
+  in two clients of different sizes. With two differently sized clients on
+  one workspace, the panes resize whenever activity moves between them.
+
+### Still open
+
+- **Not exercised in a real console:**
+  - hiding and unhiding a real agent (covered by feature and daemon tests only);
+  - scrollback;
+  - mouse, which is not forwarded at all yet;
+  - clipboard, title and other host effects (rule 5);
+  - bracketed paste into a ConPTY pane: the herdr pasted-Enter item.
+- **Hosts I could not drive:** Windows Terminal, WezTerm, and Ghostty/kitty
+  for the attach client. Also Linux→Windows over OpenSSH, which needs a
+  Windows sshd.
+- **Whether fleetd survives closing the terminal that started it.** On
+  Windows it is a separate windowless process, but that is untested.
+- **The conhost window grew after the picker.** In the automated runs the
+  window reported 200x48 or 215x53 after `fleet`'s Terminal.Gui picker exited
+  and the attach began. An attach started directly stayed at 120x30. The
+  cause is unconfirmed; Terminal.Gui resizing the buffer on shutdown is a
+  guess.
+- **One unexplained client exit.** A second attached client left once,
+  shortly after the first client's menu overlay ended. That was on the build
+  before exit detection was fixed, and it did not reproduce afterwards.
+- **The dashboard's other WezTerm-only actions** (e.g. its keybind hints) have
+  not been audited for `embedded`.
+
+## Paste on Windows, 2026-09-28
+
+The gap: a multi-line paste into a Windows pane submitted each line. Pasting
+two lines into Claude sent the first as a prompt.
+
+### What the probes showed
+
+Two probes ran inside fleetd panes: one reads console records (like
+PowerShell's `ReadKey`), and one reads VT input (`ENABLE_VIRTUAL_TERMINAL_INPUT`,
+as modern TUIs do). Both enable bracketed paste (`?2004h`).
+
+| Path | What the program receives |
+|---|---|
+| `ESC[200~alpha CR bravo ESC[201~` into a pane, record reader, inbox ConPTY | `a l p h a`, an **Enter key press**, `b r a v o`. No markers |
+| same, record reader, app-local ConPTY (WezTerm's OpenConsole 1.22) | the same |
+| same, **VT-input** reader, inbox ConPTY | `ESC[200~alpha<CR>bravo ESC[201~` intact |
+| same, VT-input reader, app-local 1.22 | intact |
+| the app's `?2004h`, seen by fleetd through ConPTY | yes: `bracketed-paste=True` |
+
+So a VT-input app, Claude included, gets a real bracketed paste as long as
+something sends one. The markers must come from fleetd, and fleetd must know
+the host pasted.
+
+On the host side, where `fleet attach` reads its own console:
+
+| Host | How a paste arrives |
+|---|---|
+| conhost, native Paste | one read of key records, CR as an ordinary key, **no markers** even though the client asked for `?2004h`. conhost also ignored `?9001h` |
+| a terminal pasting through its ConPTY (WezTerm, Windows Terminal), reproduced with an outer fleetd | key records, **split into two reads at the newline**, markers stripped |
+
+In record mode typed keys arrive one or two records per read, and a paste
+arrives as a burst.
+
+### Design
+
+- **Client (Windows).** `PasteBurst` recognises a paste as a burst. A read
+  with two or more text key-downs and no Ctrl/Alt chord (AltGr counts as text)
+  starts a candidate; the client keeps reading while more input arrives within
+  15 ms. The burst is a paste if it contains a newline or is at least 8
+  characters long. Otherwise it is replayed as keys, so `dd` typed quickly in
+  nvim still deletes a line. CRLF and LF become CR, as a terminal sends. A paste
+  goes to fleetd as one `Text { paste: true }` message.
+- **fleetd.** A paste is wrapped in `ESC[200~ … ESC[201~` when the pane asked
+  for bracketed paste, and `ESC[201~` inside the text is removed so a paste
+  cannot close its bracket early. A pane that did not ask gets the text as
+  typed, Enters included, which is what a terminal does too.
+- **Linux clients** are unchanged: their paste arrives as raw bytes, already
+  bracketed if the host terminal does it.
+
+Rejected along the way:
+- **Reading the host as VT input** and asking it for `?9001h`/`?2004h`, as
+  herdr does. conhost honours neither, and VT input loses key fidelity where
+  `?9001h` is ignored.
+- **Shipping an app-local ConPTY for paste.** The inbox ConPTY passes
+  bracketed paste to VT-input apps just as well.
+
+### fleet's own ConPTY replaces RoyalApps
+
+To test the app-local ConPTY question, Windows panes moved to fleet's own
+ConPTY code (`Pty/ConPtyPane.cs`). It stays, and the RoyalApps package is gone:
+- it owns the process handle, so exit is seen from the handle rather than an
+  event that did not fire;
+- the child gets null std handles, so it can never inherit fleetd's;
+- it builds the child's environment block itself.
+
+It binds `CreatePseudoConsole`, `ResizePseudoConsole` and `ClosePseudoConsole`
+from `kernel32` (the inbox ConPTY, the default) or from an app-local
+`conpty.dll`. `FLEET_CONPTY` may name one, or say `inbox`. A `conpty.dll` with
+its `OpenConsole.exe` next to `fleet.exe` is also picked up. Microsoft ships
+that pair as the `Microsoft.Windows.Console.ConPTY` NuGet package (1.25
+preview), should a newer ConPTY become worth shipping. `WindowsCommandLine`
+builds the command line: C-runtime quoting, `.cmd`/`.bat` shims through `cmd`,
+and anything after `cmd /c` passed as written.
+
+### Verified
+
+- Unit tests: `PasteBurst` (bursts, split reads, chords, AltGr, surrogates,
+  newline normalisation), `PasteBytes` (bracketing only when asked; an embedded
+  `ESC[201~` removed) and `WindowsCommandLine`. 1003 tests.
+- conhost's native Paste into a real attach client → the VT app received one
+  bracketed paste.
+- A paste through a ConPTY into the attach client, which is the
+  WezTerm/Windows Terminal path, run windowless with an outer fleetd → one
+  bracketed paste.
+- Claude (plan mode) in a pane: two pasted lines sat in its prompt box as one
+  paste, and nothing was submitted.
+
+### Limits
+
+- **A single-line paste under 8 characters** reaches the pane as keys, not as
+  a bracketed paste. That is deliberate, so short fast input in nvim stays
+  keys.
+- **A human typing two keys within one read** is treated as a burst. It still
+  becomes a paste only with a newline or 8+ characters, which typing does not
+  produce.
+- **Programs that read console records** (PowerShell/PSReadLine) receive a
+  paste as keys with Enters, since the inbox ConPTY strips the markers for
+  them. That is the same as pasting into them in any terminal.
+- **Not tried in a real WezTerm or Windows Terminal window.** Test windows take
+  the keyboard focus, even when launched minimized and not activated, so these
+  runs used conhost's Paste command and the windowless nested setup instead.
+  Paste into Claude inside `fleet attach` under WezTerm belongs on the manual
+  checklist.
+
+## Mouse, 2026-09-28
+
+tmux-style mouse support for `embedded`.
+
+### Behaviour
+
+- **Click** focuses the pane under the pointer, and the click also reaches that
+  pane.
+- **Drag** stays with the pane it started in. Coordinates are clamped to that
+  pane, so a selection drag in nvim that leaves the pane keeps working.
+- **Wheel** goes to the pane under the pointer, without moving focus.
+- **Status bar:** clicking a tab label shows that tab.
+- **Dividers:** dragging one resizes the split. Both panes are resized and
+  their programs get SIGWINCH or a ConPTY resize.
+- **Menu overlay:** it takes the clicks inside its box.
+- A pane's program only receives mouse input if it asked for it (1000, 1002,
+  1003). libghostty-vt's mouse encoder decides this from the pane's terminal
+  state and encodes in the format the program chose (X10, UTF-8, SGR, urxvt).
+  Coordinates are pane-relative.
+
+### How it gets there
+
+- **Windows client:** `ENABLE_MOUSE_INPUT` on the attach client's console, and
+  `WindowsMouse` turns `MOUSE_EVENT` records into press, release, motion and
+  wheel. Motion is sent only when the cell changes, and coordinates are made
+  relative to the visible window. This also covers WezTerm and Windows
+  Terminal: their ConPTY turns the terminal's SGR reports into those records.
+- **Unix client:** asks the host for `?1002h?1006h` and takes the SGR reports
+  out of stdin (`SgrMouse`). Everything else passes on untouched, and a lone
+  Esc is never held back.
+- **Wire:** a `Mouse` message (x, y, button, action, mods, whether a button is
+  held).
+- **fleetd:** `MuxModel.Hit` for panes, the overlay, dividers and the status
+  bar; `Composer.TabSpans` for tab labels, shared with the renderer so they
+  cannot disagree. A per-client capture keeps a drag with its target.
+- **Opting out:** `FLEET_MOUSE=off` leaves the mouse to the host terminal. With
+  mouse capture on, native text selection needs Shift in WezTerm, Windows
+  Terminal, Ghostty and kitty, and is off in conhost.
+
+### Verified
+
+- **Tests:** 17 new, for record translation, SGR parsing (split reads, a lone
+  Esc, other sequences untouched, hover vs drag), hit-testing, divider drags
+  and clamping. fleetd's routing is tested end to end with fake panes: click to
+  focus, a drag that leaves its pane, wheel without focus, and tab clicks.
+- **Windows, windowless:** SGR reports sent through a ConPTY into
+  `fleet attach`, the WezTerm/Windows Terminal path, reached an SGR app
+  exactly: press, release, wheel, and column 110.
+- **Windows, nvim:** five wheel-downs scrolled a 200-line file to `line 16`.
+- **Linux in Docker:** SGR wheel reports into `fleet attach` scrolled nvim to
+  `line 16`, read back from fleetd.
+
+### Not verified
+
+- **conhost's own mouse records from a physical mouse.** Test windows take
+  focus, so none were opened; the record format is the same one the ConPTY
+  path produces.
+- **Divider dragging and tab clicks in a real terminal.** They are covered by
+  the model and daemon tests.
+- **Clicking in a pane focuses and passes the click on in one go.** A program
+  that treats a click as an action (e.g. a TUI button) acts on the focusing
+  click too. tmux behaves the same with `mouse on`.
+
+## Window title and clipboard, 2026-09-28
+
+Rule 5 of *Remote attach*, implemented: a pane's title and its clipboard writes
+act on the machine the user is sitting at, as messages rather than escape
+sequences passed through.
+
+### Behaviour
+
+- **Window title.** Each client's terminal title is the focused pane's title
+  (OSC 0/2) and the workspace, e.g. `README.md - NVIM · techweb`, or
+  `techweb · fleet` when the pane set none. It is sent only when it changes,
+  and it follows focus, switching and overlays. The original title comes back
+  on detach: `GetConsoleTitle`/`SetConsoleTitle` on Windows, the xterm title
+  stack (`CSI 22 t` / `CSI 23 t`) on Unix.
+- **The emulator's title is also the model's pane title.** fleet's own
+  features read it, e.g. `SubBrowse.Is` recognises a sub-orchestrator's
+  browser by a title ending in ` files`, so on `embedded` it now comes from
+  the program itself.
+- **Clipboard writes.** OSC 52, and the iTerm2 and kitty variants that
+  libghostty-vt normalises, deliver plain text up to 1 MiB to one client: the
+  most recently active client showing that pane, or else the most recently
+  active client. That client sets the clipboard:
+  - natively on Windows (`SetClipboardData`), which works in conhost, Windows
+    Terminal and WezTerm alike;
+  - as OSC 52 to its host terminal on Unix, which also works when the client
+    is on the far side of SSH.
+- **Clipboard reads** (OSC 52 `?`) stay refused. A program in a pane never
+  reads the user's clipboard.
+- **Titles are sanitised** (control characters removed, 256 characters
+  maximum), so a pane cannot put escape sequences onto the host through its
+  title.
+
+### Verified
+
+- **Tests:** fleetd with fake panes. The title follows the pane and the
+  workspace, including after a switch. A copy reaches only the client showing
+  that pane. The emulator's title shows up in `list-panes`. Sanitising and the
+  OSC 52 encoding have their own tests (1026 tests).
+- **Windows, windowless, real emulator:** a probe pane's OSC 52 landed on the
+  Windows clipboard. The attach client's own title, as its outer fleetd saw
+  it, became `effects probe title · probe`.
+- **Linux in Docker:** `fleet attach` wrote the title push, the OSC 0 title,
+  the OSC 52 copy with the right base64, and the title pop.
+
+### Not verified
+
+- **Whether each host terminal honours OSC 52 writes.** Ghostty, kitty,
+  WezTerm and Windows Terminal do by default; others may need a setting. On
+  Windows this does not matter, because the client sets the clipboard
+  natively.
+
+## Floating panes, 2026-09-28
+
+zellij-style floating panes on `embedded`. A float is an ordinary pane of a
+workspace, drawn in a bordered box over the tiled layout instead of in it.
+
+### Behaviour
+
+- **Per workspace.** Each workspace has its own floats, in z-order, and one
+  shown/hidden switch. Every client showing that workspace sees the same floats.
+- **Prefix keys** (`ctrl+b` by default):
+  - `f` opens a float with the default shell, in the focused pane's directory;
+  - `w` shows or hides the workspace's floats;
+  - `e` tiles the focused float beside the active pane, or floats the focused
+    tile;
+  - `g` enters float mode for the focused float: `h/j/k/l` or the arrows move
+    it one cell, `H/J/K/L` or shift+arrows make it narrower, taller, shorter
+    or wider by one cell, and `esc`, `enter`, `q` or `g` leave. The status bar
+    shows the keys while the mode is on. Other keys are swallowed, so nothing
+    typed in the mode reaches a pane.
+- **Focus.** A new or clicked float comes to the top and takes the keys. A
+  click on a tile, or `w` to hide, gives the keys back to the tiles. `h/j/k/l`
+  move between tiles only.
+- **Hidden floats keep running**, like hidden workspaces. The status bar shows
+  ` float N ` whenever a workspace has floats (highlighted while they are shown),
+  and clicking it toggles them.
+- **Mouse.** Dragging the border moves a float. Dragging the bottom-right corner
+  resizes it (at least 10x4). A float never leaves the screen: it is clamped to
+  the client's size at draw time, and its pane is sized to the inside of the
+  box. Clicks and wheel inside it reach the program in its own coordinates, as
+  they do for tiles.
+- **Default size and placement.** 60% of the width and height, centred, with
+  each further float offset so none hides the one before it exactly.
+- **Titles.** The border shows the float's title: the one set through
+  `title`, or else the program's own (OSC 0/2).
+- **Lifetime.** Floating the last tile keeps the workspace alive. A workspace
+  goes away only when its last tile and its last float are gone. A float cannot
+  be split.
+- **Control.** `spawn-float` opens one from outside (fleetctl, scripts);
+  `list-panes` reports floats with tab `float`.
+
+### Verified
+
+- **Tests** (33 new, 1059 in all):
+  - model: placement, hit-testing (border, corner, inside, topmost wins),
+    raise and lower on focus, clamping on move and resize, float to tile and
+    back, workspace lifetime, per-workspace floats;
+  - compositor: box, title and cursor;
+  - fleetd with fake panes: `f` then keys reach the float and `w` hands them
+    back; dragging the border moves the float without the pane seeing the
+    drag; `e` tiles and floats again; `float-move`/`float-size` nudge the
+    focused float;
+  - float mode: keys and shifted keys, and the Unix byte path including
+    arrow and shift+arrow sequences.
+- **Windows, windowless, real binary and emulator:** an outer fleetd ran
+  `fleet attach` in a pane against an inner fleetd, and the chords and SGR
+  mouse went into that pane the way a terminal sends them through ConPTY.
+  - `ctrl+b f` drew the box at column 24, row 8, and `echo FLOAT-OK` ran
+    inside it.
+  - A drag of the top border from (30,8) to (20,4) moved it to (14,4).
+  - `ctrl+b w` hid it; the pane survived.
+  - `ctrl+b w`, `ctrl+b e` tiled it next to the existing pane (both in `t1`).
+  - Float mode, in a second run: `ctrl+b g`, `lll`, `j` moved the box from
+    (24,8) to (27,9); `LL` widened it from 72 to 74 columns. `esc` left the
+    mode, and `echo AFTER-ESC` then ran in the float. The float's own text had
+    none of the mode's keys in it.
+
+### Not done
+
+- ~~**No port operation.**~~ Added with the approval float:
+  `IMuxDriver.SpawnFloatingAsync`, behind `MuxCaps.Popup`. See "The menu and
+  approvals as floats".
+- **Float mode on Unix was not run end to end.** Its byte path (letters,
+  arrows, shift+arrows) is unit-tested; the Windows key path was run for real.
+- **Float layout is not saved** across fleetd restarts. Neither is anything
+  else yet.
+
+## Windows input checklist, 2026-09-28
+
+The items from herdr's CHANGELOG (see "Windows input checklist for later
+phases"), checked against `embedded`.
+
+### How keys reach a pane
+
+- **A ConPTY pane** (every pane on Windows) asks for win32-input-mode
+  (`?9001h`). fleet then hands it the client's own key records, as Windows
+  Terminal does. ConPTY rebuilds exactly those records for the program, and
+  conhost does any VT translation as it would under Windows Terminal.
+- **Any other pane** (a Linux pane reached from a Windows client) gets the
+  key encoded by libghostty-vt from fleet's translation of the record.
+- **A Unix client** passes the bytes it reads straight through. It only takes
+  out the prefix, SGR mouse reports and float-mode keys.
+
+### Found and fixed
+
+- **Key repeat was multiplied.** A record with repeat count 3 reached the
+  pane as the record *plus* two extra encoded keys: five `x` instead of three.
+  The key message now carries a `repeat` count. fleetd passes the one record
+  through to a ConPTY pane, and encodes N presses for any other pane.
+- **Dead keys** have no text. On the encoder path, the dead key's press could
+  have become a stray base character. fleet now marks a dead key (Windows
+  flags it in `MapVirtualKey`) and encodes nothing for it. The composed
+  character arrives once, with the next key.
+- **`y` + Enter typed in one console read counted as a paste**, so the pane
+  got it bracketed and Claude Code would not submit. A burst under 8
+  characters is now a paste only when a newline sits between text.
+- **The host was not restored when the client was killed.** SIGTERM, SIGHUP
+  (also console close on Windows), SIGQUIT and process exit now restore it,
+  exactly once. The restore resets mouse (1000/1002/1003/1006), focus (1004),
+  bracketed paste (2004), cursor keys, keypad, cursor shape and visibility,
+  synchronized output, attributes and the alt screen. It also restores
+  console modes, code pages, the console title and termios.
+
+### Verified
+
+- **End to end on Windows, real binary, windowless.** An outer fleetd ran
+  `fleet attach` in a pane. Each key was injected as win32-input-mode input,
+  which makes the outer ConPTY produce exactly those records for the client.
+  In the inner pane, a probe printed what it received.
+  - **Record mode:** the program got every injected record unchanged, with
+    virtual key, character, key-down, control state and repeat count all
+    matching. That covered Shift+Tab, Shift+Enter, Esc, Alt+a, Alt+Shift+a,
+    Alt+Backspace, Ctrl+Alt+a, Ctrl+S, Ctrl+J, Ctrl+/, Ctrl+1, AltGr+q (`@`),
+    Right Alt+a, the dead key `'` then `é`, a surrogate-pair emoji, and `x`
+    with repeat 3.
+  - **VT-input mode, as conhost translates it:**
+
+    | Key | Program got |
+    |---|---|
+    | Shift+Tab | `\e[Z` |
+    | Shift+Enter | `\r` |
+    | Esc | `\e` |
+    | Alt+a | `\ea` |
+    | Alt+Shift+a | `\eA` |
+    | Alt+Backspace | `\e\x7f` |
+    | Ctrl+S | `^S` |
+    | Ctrl+J | `^J` |
+    | Ctrl+/ | `^_` |
+    | AltGr+q | `@` |
+    | `'` then `e` | `é` (UTF-8, once) |
+- **Tests (15 new, 1074 in all):**
+  - key translation: modifiers, AltGr, Ctrl letters, dead keys, surrogate
+    pairs, repeat counts;
+  - chords never taken for a paste; the short-burst rule;
+  - the restore sequence;
+  - a split OSC reply passing through the Unix byte path whole;
+  - in fleetd: repeat encoding for both kinds of pane, and a dead key putting
+    nothing into an encoder pane.
+
+### Limits
+
+- **Emoji for VT-input programs.** A program that reads console input with
+  `ReadFile` in VT mode gets U+FFFD for each half of a surrogate pair. This
+  happens even when the emoji arrives as plain UTF-8 text, so it is the inbox
+  conhost, not fleet. Programs that read records (node/libuv, PSReadLine) get
+  the right character. A newer `conpty.dll` via `FLEET_CONPTY` may fix it;
+  not tried.
+- **What conhost makes of a record is conhost's.** Shift+Enter reaches a
+  VT-input program as a plain `\r`, the same as under Windows Terminal.
+- **The host can still claim a key before fleet sees it,** e.g. WezTerm's
+  leader on Ctrl+S. That is host configuration.
+- **The encoder path (Windows client, Linux pane) was checked with unit tests
+  only,** not end to end.
+## The menu and approvals as floats, 2026-09-28
+
+### Behaviour
+
+- **The menu is a float in the workspace you are in.** `ctrl+b space` opens
+  `fleet menu` as a modal float (80% of the screen, titled `fleet menu`) in
+  the workspace the client is showing, instead of in a per-client overlay
+  workspace. A second press brings the open menu forward rather than opening
+  another. When the menu exits, the keys go back to the pane you were in.
+- **Its actions happen where you are.** The menu's own pane now belongs to
+  the project's workspace, and `Adapters.CurrentWindow` asks the driver for
+  its own pane (before, it read `WEZTERM_PANE` only). So *Edit fleet config*
+  and *Browse files* open in that workspace. On `embedded` they used to take
+  the first active pane anywhere, which could be another project.
+- **Its tools open as floats too** (added later the same day). The file
+  navigator (menu `f`, and the dashboard's browse), *Edit fleet config*
+  (menu `S` `E`) and the folder picker use `Adapters.SpawnHereAsync`:
+  - when the multiplexer has floats and fleet runs inside one of its panes,
+    they open as an ordinary float (60%, movable and resizable, closing with
+    the program) in the caller's workspace;
+  - otherwise they open a pane as before (WezTerm, or a plain terminal).
+
+  `SpawnFloatingAsync` with no `over` pane means exactly this.
+  - Verified with the real binary: menu `f` opened yazi as a float titled
+    `files` in the project's workspace, and `q` closed it and the float.
+    Menu `S` `E` opened a `fleet config` float there.
+  - Tests: the helper in all three cases, and `spawn-float` from a pane in
+    fleetd.
+- **The overlay is only a fallback,** for a client that shows no workspace.
+- **Modal floats** (the menu, approvals):
+  - are drawn even while the workspace's floats are hidden, and do not reveal
+    them;
+  - are not counted in ` float N ` and not affected by `ctrl+b w`;
+  - cannot be tiled with `ctrl+b e`.
+- **Every client showing the workspace sees the menu,** because floats belong
+  to the workspace. The overlay was per client.
+- **An agent's approval request opens over the agent's pane.** The agent's
+  fleet MCP server runs inside that pane and knows its id.
+  1. On a multiplexer with floats (`MuxCaps.Popup`), the MCP server tags the
+     request with its pane.
+  2. It opens `fleet approve --project <p> <pane>` in a modal float centred
+     over that pane (50–72 columns by 10–14 rows, kept on screen).
+  3. That float shows the same Allow/No dialog as the dashboard, answers,
+     and exits. The MCP side closes the float if it is still there when the
+     answer arrives by some other route.
+- **The dashboard stays the fallback.** It takes a pane-tagged request only
+  after 5 seconds, i.e. when no float picked it up (it failed to start, or
+  the agent's workspace is not shown anywhere). Untagged requests reach it at
+  once, as before. On WezTerm nothing changes: no floats, so no tag.
+- **Port:** `IMuxDriver.SpawnFloatingAsync(over, options)`. `embedded`
+  implements it (control op `spawn-float` with `pane`). WezTerm refuses it,
+  the fake supports it when it has workspaces, and `FailSilentDriver` guards
+  it.
+
+### Verified
+
+- **Tests (10 new, 1084 in all):**
+  - menu float in the shown workspace, single instance, keys back afterwards;
+  - overlay fallback;
+  - modal floats over hidden floats, not toggled, not counted, not tiled;
+  - float-over-pane placement;
+  - `spawn-float` over a pane in fleetd;
+  - approval requests taken only by their pane's float, then the dashboard's
+    grace;
+  - the MCP-side decorator: opens the float over the asking pane, closes it
+    after the answer, and does nothing without a pane or without floats.
+- **Windows, windowless, real binary** (outer fleetd running `fleet attach`
+  against an inner fleetd):
+  - `ctrl+b space` drew `╭─ fleet menu ─…` over the agent pane, listed as
+    tab `float` in workspace `probe`. `esc` closed it, and
+    `echo BACK-IN-PANE` then ran in the pane underneath.
+  - A pane-tagged request written the way the MCP side writes it, plus
+    `spawn-float` over the agent pane running `fleet approve`, drew the dialog
+    centred over the agent (column 24, row 12 on 120x39). Enter wrote
+    `Allowed` to the reply file, and the float closed.
+
+### Not verified / limits
+
+- ~~**The full MCP round trip**~~ was run later the same day with a real
+  agent (windowless, isolated config). The setup:
+  - an inner fleetd ran the real `fleet dash` and Claude Code (`claude -p`)
+    with this build's `fleet mcp` as its MCP server;
+  - an outer fleetd ran `fleet attach`, so the float was drawn in a real
+    client;
+  - Claude was asked to call `stop_agent` (Ask by default) for a
+    non-existent agent.
+
+  What happened:
+  - The float `approve?` opened over the Claude pane 8–10 s after the prompt
+    started, showing "the main orchestrator wants to: Stop an agent —
+    nobody/none".
+  - **Allow** (Enter): the tool ran, and Claude reported its real result, "No
+    agent nobody/none in this project".
+  - **No** (Esc): Claude reported that the stop was declined in fleet.
+  - Both times the float closed, and the fleet log recorded the request and
+    the outcome.
+- **An approval float takes the keyboard in that workspace** when it opens,
+  as a dialog does. If the agent's workspace is not on any screen, the float
+  waits there until you switch to it, or the dashboard takes the request
+  after 5 seconds.
+- ~~**Underscores in the tool name are eaten.**~~ Fixed: dialog lines
+  (`FleetTheme.Caption`) no longer treat `_` as a hotkey marker. A decline now
+  reads "Declined by the user in fleet." instead of naming the dashboard.
+## Scrollback and copy mode, 2026-09-28
+
+### Behaviour
+
+- **History lives in the emulator.** libghostty-vt keeps each pane's
+  scrollback (its default limits) and can scroll its own viewport, so fleetd
+  stores nothing extra. Rendering follows the viewport.
+- **The mouse wheel over a pane:**
+  - goes to the program if it turned on mouse reporting (vim, less `--mouse`,
+    TUIs), as before;
+  - on the alternate screen without mouse reporting (less, man), becomes three
+    arrow keys, like "alternate scroll" in other terminals;
+  - otherwise scrolls the pane's history three lines at a time.
+- **A scrolled-back pane shows where it is.** A marker `[below/history]` sits
+  at its top-right corner (lines below the view / lines of history).
+- **Typing snaps back.** Any key or text sent to a scrolled-back pane first
+  returns it to the live output.
+- **Copy mode** (`ctrl+b [`, tmux's key). It works on the focused pane
+  (tiled or floating), and the status bar shows its keys while it is on.
+
+  | Key | Does |
+  |---|---|
+  | `h/j/k/l`, arrows | move |
+  | `0` / `^` / Home, `$` / End | line start / end |
+  | `g`, `G` | top / bottom of history |
+  | `ctrl+u` / `ctrl+d` | half page |
+  | PgUp / PgDn | full page |
+  | `v` or space | start/stop a selection |
+  | `y` or Enter | copy and leave |
+  | `q`, Esc, `ctrl+c` | leave |
+
+  - The view scrolls to keep the cursor visible, and the selection is shown
+    inverted.
+  - `y` without a selection copies the cursor's line.
+  - The copy goes to the client's clipboard by the existing path (natively on
+    Windows, OSC 52 on Unix). Leaving returns the pane to live output.
+  - Other keys are swallowed, so nothing typed in copy mode reaches the pane.
+- **How it is split:**
+  - The client maps keys to `copy <step>` commands, from Windows key records
+    or Unix bytes (including the arrow, Home/End and PgUp/PgDn sequences),
+    through the same sticky-mode path as float mode.
+  - fleetd keeps the copy state per client (`CopySession`): cursor and
+    anchor in absolute history rows.
+  - To extract the text, fleetd pages the viewport through the selected rows
+    and restores it afterwards.
+
+### Verified
+
+- **Tests (24 new, 1108 in all):**
+  - copy-mode movement, the view following the cursor, clamping, selections
+    across lines, yank without a selection, and leaving back to the live
+    output;
+  - the scrolled-back marker, and the inverted selection with the copy
+    cursor;
+  - key mapping for Unix bytes and Windows keys;
+  - the `[` chord;
+  - in fleetd: the wheel scrolling history and typing snapping back, the
+    wheel becoming arrows on a full-screen program, and a copy-mode yank
+    reaching the clipboard of the client that copied.
+- **Windows, windowless, real binary and libghostty** (outer fleetd running
+  `fleet attach` against an inner fleetd whose pane printed `LINE-1` to
+  `LINE-200`):
+  - five wheel-ups (SGR reports, which ConPTY hands the client as wheel
+    events) showed `LINE-151` at the top with `[15/165]`. One wheel-down gave
+    `[12/165]`, and typing `x` snapped back.
+  - `ctrl+b [` showed the copy-mode keys in the status bar, and `g` jumped to
+    `LINE-1` with `[165/165]`.
+  - `0 v j $ y` put `LINE-1\nLINE-2` on the Windows clipboard and returned the
+    pane to live output.
+
+### Limits
+
+- **One viewport per pane.** Two clients showing the same pane share its
+  scroll position.
+- **Soft-wrapped lines are copied as separate lines.** The copy joins screen
+  rows with `\n`, and the copied line breaks are `\n`, not `\r\n`.
+- **No mouse selection** (drag to select in panes that do not use the mouse)
+  and **no search** (`/`) in copy mode yet.
+- **Scrolling with the wheel while in copy mode** can move the copy cursor out
+  of view. It is then hidden until a key brings the view back to it.
+- **Unix clients were covered by unit tests only,** not end to end.
+## Running the embedded build, 2026-09-28
+
+`scripts\embedded.ps1` runs this checkout's fleet with `FLEET_MUX=embedded`,
+next to an installed fleet and without touching it. It builds on first use:
+libghostty-vt if it is missing, then `dotnet publish`, with the Visual
+Studio installer folder put on `PATH` for NativeAOT's `vswhere`.
+
+| Command | Does |
+|---|---|
+| `scripts\embedded.ps1` | pick a project; fleetd starts and this terminal attaches |
+| `scripts\embedded.ps1 -Project <p>` | attach straight to a project |
+| `scripts\embedded.ps1 attach` | reattach after a detach |
+| `scripts\embedded.ps1 build` | build a new copy next to the running one; fleetd keeps running |
+| `scripts\embedded.ps1 restart` | stop fleetd and attach with the newest build |
+| `scripts\embedded.ps1 stop` | stop fleetd and its clients (matched by path, so an installed fleet is left alone) |
+| `scripts\embedded.ps1 status` | the newest build against the last code commit, and which build each running fleet uses |
+
+`-Isolated` uses a separate config under `artifacts\embedded-config`, so no
+real projects are touched. The script restores `FLEET_MUX` and
+`FLEET_CONFIG_HOME` in the calling session when it returns.
+
+**Side-by-side builds (2026-09-29).** Windows locks a running exe, so the
+first version stopped fleetd before every build, which closed the session and
+every agent pane in it. Each build now goes into its own folder,
+`artifacts\embedded\<rid>\<yyyyMMdd-HHmmss>`, and a `current` file names the
+newest. `attach` and `run` start the newest; a running fleetd keeps the build
+it started from until `restart`. Builds that no process runs are pruned,
+keeping the three newest. The old `artifacts\publish\<rid>\fleet.exe` is still
+used (and recognised as running) until the first new-style build.
+
+**End-to-end scripts (2026-09-29).** They are run by hand before a merge, not
+in CI: they start real processes and take about a minute.
+
+| Script | Covers |
+|---|---|
+| `scripts\e2e\windows.ps1 [-Fleet <exe>]` | its own fleetd and a scripted attach client recording frames: ConPTY panes, the dashboard in a pane, the warm menu (shown under 200 ms, in one frame), Settings in one frame, floats, restore after a kill. The Windows console client itself is not covered |
+| `scripts/e2e/linux.sh <fleet>` | tmux as the real terminal around `fleet` and `fleet attach`: the Unix client and PTYs, which-key, menu, splits, tabs, zoom, floats, a resize, the mouse, copy mode, switching project, detach and reattach, restore after `kill -9` |
+
+Both isolate fleetd (own config, own pipe or socket) and stop only the fleetd
+they started, so a session running from the same build is left alone. They
+exit with the number of failed checks. From Windows, run the Linux script on
+the binary CI built: `gh run download <run id> -n fleet-linux-x64 -D
+artifacts\e2e\linux`, then `wsl -e bash scripts/e2e/linux.sh
+artifacts/e2e/linux/fleet`.
+## Keys, which-key, the tab bar and dashboard menus, 2026-09-29
+
+After merging `main` (orchestrators' Claude inside nvim, `update <version>`,
+`CLAUDE.md`), the embedded client took over the WezTerm tmux-mode layout.
+
+### Tab bar
+
+The status row is at the **top** now, drawn as Catppuccin pills like the
+tmux-mode bar:
+- the project;
+- the active tab as a pill, the other tabs as dim text, with ` Z` on a
+  zoomed tab;
+- the float count;
+- the badge on the right.
+
+Panes start on row 1, and `MuxModel.Content` is the one place that defines
+the content area. Clicks on tabs and the float count use the same segment
+list as the drawing.
+
+### Keys (`<fleet config>\embedded-keys.json`)
+
+The defaults mirror `~/.wezterm/tmux-mode.lua`. The file only needs
+overrides; `"none"` unbinds a key, comments and trailing commas are allowed,
+and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
+
+```json
+{
+  "prefix": "ctrl+s",
+  "prefixKeys": { "v": "split-right", "x": "none" },
+  "keys": { "ctrl+h": "none" }
+}
+```
+
+| Prefix key (default `ctrl+s`) | Does |
+|---|---|
+| `h j k l` | move focus |
+| arrows | resize the focused pane by 5 cells |
+| `%`, `"` | split right / down (a shell in the pane's folder) |
+| `c`, `n`, `p`, `1`–`9` | new tab, next, previous, go to tab |
+| `z` | zoom the focused pane (toggle; moving focus unzooms) |
+| `x`, `&` | close pane / tab, after a `y/n` |
+| `o` | next pane |
+| `s`, `w` | switch project (the picker, as a float) / next project |
+| `space` | menu |
+| `[`, `]` | copy mode / paste the Windows clipboard |
+| `f t e g` | new float / show-hide floats / float↔tile / move-resize float |
+| `r`, `d`, `q` | reload keys / detach |
+| the prefix again | sends the prefix to the pane |
+
+| Key without the prefix | Does |
+|---|---|
+| `ctrl`/`alt` + `h j k l` | move focus; when the pane runs nvim the key goes to nvim (the `is_nvim` rule) |
+| `alt+←/→`, `ctrl+tab`, `ctrl+shift+tab` | previous / next tab |
+| `ctrl+enter` | the menu: the dashboard's over a dashboard, fleet's elsewhere |
+| `shift+enter` | Claude's newline: Ctrl+J for a shell or Claude, Shift+Enter (CSI-u off Windows) for nvim |
+
+- **Which-key.** Pressing the prefix draws a box at the bottom listing the
+  prefix keys, with directions, arrows and tab numbers grouped.
+- **Nvim at the edge of its splits.** main's orchestrator (Claude inside nvim)
+  runs `$WEZTERM_EXECUTABLE cli activate-pane-direction <dir>` there. fleetd
+  sets `WEZTERM_EXECUTABLE` to fleet itself, and `fleet cli
+  activate-pane-direction` moves focus from the calling pane, so Ctrl+h/j/k/l
+  crosses from nvim into fleet's panes.
+- **Unix clients** get the same bindings from byte sequences (ctrl+letter,
+  alt+x, arrows with modifiers, PgUp and friends). A direct binding only fires
+  when it is the whole read, so a pasted newline is never taken for Ctrl+J.
+  Ctrl+Enter, Shift+Enter and Ctrl+Tab have no distinct legacy encoding, so
+  they work from Windows clients only.
+
+### One fleet menu, built as the float (revised 2026-09-29)
+
+- **One menu everywhere.** Ctrl+Enter, `prefix space` and the dashboard's own
+  menu button all open the fleet menu (Quit, Go to dashboard, Switch project,
+  List agents, File navigator, Settings) as a modal float. The dashboard
+  button asks fleetd for it through the `menu` control op. The earlier
+  per-dashboard menu is gone; its actions keep their direct keys in the
+  dashboard.
+- **The float is the frame.** fleetd gives floats `FLEET_FLOAT=1`. With it
+  set, `FleetTheme.Screen`/`Overlay`/`Modal` build borderless windows that
+  fill the float, so there is no second frame inside the float's border.
+- **The float follows the screen inside it.** Each window pushes a
+  `FloatScreen` (title and size) while it runs, and pops it when it closes.
+  - The title becomes the console title, which reaches the float's border.
+    For fleet's own floats (`fleet menu`, `fleet approve`), the live title
+    wins over the name the float was given.
+  - The size goes to fleetd's `fit` op:
+    - the menu and pickers ask for their content size, and dialogs for their
+      dialog size;
+    - full screens (log, keybinds, settings) take the large area in the
+      middle;
+    - a sized float keeps its own centre, so an approval stays over the
+      agent that asked;
+    - when a dialog closes, the screen below gets its title and size back.
+- **Fixed on the way.** `FleetActionIds.Parse` did not know ids that fall back
+  to the enum name (`viewlogs`, `browsefiles`, …), so such requests were
+  silently dropped. It is now the inverse of `For` for every action.
+### Verified
+
+- **Tests:** 1158, format-clean.
+  - key chords and their Unix bytes;
+  - defaults, overrides, unbinding, a broken file, comments;
+  - which-key grouping, the prefix state machine, the close confirmation;
+  - model: resize, zoom, next pane, tab by number, focus from a pane, nvim
+    and dashboard detection;
+  - fleetd: split, smart focus with and without nvim, newline, close pane,
+    the which-key box, `focus-from`, the dashboard menu float both ways;
+  - every action id round-trips.
+- **Windows, windowless, real binary** (outer fleetd running `fleet attach`
+  against an inner fleetd; key records injected at the client):
+  - Ctrl+S drew the which-key box, and `%` split right.
+  - `z` zoomed and showed `1:shell Z`; a second `z` unzoomed.
+  - Ctrl+H moved to the left shell, and typing reached it.
+  - Ctrl+Enter opened the fleet menu float, and Esc closed it.
+  - Ctrl+L then `x` `y` closed the right pane.
+  - With a real `fleet dash`, Ctrl+Enter from the Claude-side pane and from
+    the dashboard opened the same fleet menu. It was a 32-column float titled
+    `fleet menu`, with no frame inside it.
+  - *Switch project* with one project showed its dialog as a small float
+    titled `Switch project`.
+  - *Settings → Show log* grew the float to the large area, titled `fleet log
+    — probe`.
+  - Files and fleet config still open as floats.
+  - With a real Claude agent, the approval dialog was a compact float over its
+    pane, titled `Approve this action?`, and Allow reached Claude.
+
+### Limits
+
+- **Inside WezTerm with tmux-mode,** WezTerm takes Ctrl+S (its leader),
+  Ctrl/Alt+h/j/k/l and Alt+arrows before `fleet attach` sees them.
+  - Ctrl+Enter still reaches fleet: `fleet.lua` forwards it when no dashboard
+    user var is present.
+  - To pass the navigation keys through, add `or base == "fleet"` to
+    `is_nvim` in `~/.wezterm/tmux-mode.lua`.
+  - The leader cannot be made conditional in WezTerm. Either press Ctrl+S
+    twice (WezTerm then sends a literal Ctrl+S), or give fleet another prefix
+    in `embedded-keys.json`.
+  - In Windows Terminal all keys reach fleet.
+- **Not ported from tmux-mode:** rotate panes (`o` moves to the next pane
+  instead), rename tab/workspace (`,`/`$`), and the tab navigator (`w` goes to
+  the next project).
+- **Keybinds edited from the dashboard menu float** are picked up by the
+  dashboard the next time it starts, not at once.
+- **Not run end to end:** the dashboard menu button's click path (fleetd
+  tests cover the control op it uses), and the Unix byte bindings.
+- **A float that becomes a tile** (`prefix e`) keeps `FLEET_FLOAT`, so a fleet
+  screen in it stays borderless.
+## Menu opening, hidden agents and repeated keys, 2026-09-29
+
+- **Menu size.** The fleet menu and pickers have more room around their rows
+  (menu: row width + 20 columns, at least 52, and 6 rows of padding).
+- **No flash on opening.** A new menu float is created hidden; keys still
+  reach it.
+  - It is shown once it has fitted and its pane has drawn at that size. After
+    a resize, it waits for content that differs from the cropped first
+    drawing.
+  - fleetd remembers the menu's size, so later menus start at it and need no
+    resize at all.
+  - Caps: 1.2 s after the fit, 2.5 s in all.
+  - Measured with the real binary: the first open after fleetd starts goes
+    from nothing to the full menu in about 0.7 s (cold start); later opens
+    take about 0.1 s. Nothing large or empty shows in between.
+- **Hidden agents stay hidden on the dashboard.** The dashboard's refresh
+  took an agent as shown unless its panes sat in the global hidden workspace.
+  `embedded` hides into `<project>~hidden`, so the hidden icon vanished on the
+  next refresh. `AgentPanes.Shown` now treats any hidden workspace as hidden.
+- **Repeated keys in Terminal.Gui programs.**
+  - The problem: libghostty answered the kitty keyboard query that ConPTY
+    passes through. Terminal.Gui then expects each key twice (kitty event and
+    plain character) and swallows the next identical plain key. So `x` to
+    show an agent right after hiding it, `j j`, and double letters were lost
+    in the dashboard and fleet's menus.
+  - Why it only happened here: the inbox ConPTY never delivers kitty keys.
+    WezTerm with kitty off never answers the query.
+  - The fix: fleetd drops the kitty flags report from a ConPTY pane's replies.
+    Panes elsewhere keep it, because fleet's encoder can send them kitty keys.
+  - Verified end to end: `z z`, `z z z` and hide → show all reach the real
+    dashboard.
+## Attach picker and clickable dashboard tabs, 2026-09-29
+
+- **`fleet attach` without `--project`** asks fleetd for its project
+  workspaces (hidden ones excluded) and their pane counts.
+  - With more than one, it shows an `Attach to` picker (letter keys,
+    `name … N panes`) before attaching. Esc attaches to nothing.
+  - With one or none, it attaches as before.
+  - `--ssh` attaches are unchanged.
+- **Dashboard tabs** (Agents, Subs, Repositories) react to a mouse click.
+  `FleetTabBar` raises `Chosen`, and the dashboard switches tabs unless it is
+  busy or a dialog is open, the same guard its keys use.
+- **Verified with the real binary** (outer fleetd running `fleet attach`
+  against an inner fleetd with projects alpha and beta):
+  - the picker listed *alpha — 2 panes* and *beta — 1 pane*, and Enter
+    attached to alpha;
+  - a click on `Subs (0)` in a real `fleet dash` moved the tab underline to
+    Subs.
+  - Tests cover the session listing and a click on the tab bar view.
+## fleetd restores its session, 2026-09-29
+
+A fleetd restart (a new build, a crash, `scripts\embedded.ps1 restart`) used
+to lose every tab, split and agent pane. fleetd now keeps a snapshot and
+rebuilds from it when it starts.
+
+- **What is saved:** `<fleet config>\embedded-session.json`, or
+  `embedded-session-<endpoint>.json` when `FLEET_ENDPOINT` is set, so test and
+  second daemons never share one. It holds:
+  - every workspace (hidden ones too) with its active tab;
+  - per tab: its title, the layout tree (orientation and ratio), the active
+    pane and the zoomed pane;
+  - non-modal floats with their bounds and title;
+  - per pane: cwd, args and the env it was spawned with, minus
+    `FLEET_CLIENT`, which names a client that will be gone.
+  - Modal floats (the fleet menu, approvals) and the old overlay workspace
+    are left out: they belong to a moment, not the session.
+- **When:** the render loop serialises the model (source-generated
+  `SessionJsonContext`) at most once a second, and writes it only when it
+  changed, through a temporary file and a move. An empty model deletes the
+  file, so after fleetd exits because nothing is left (or `fleet quit`)
+  nothing comes back; after a kill or crash, everything does.
+- **Restore:** before the render loop starts, the snapshot is read (and
+  copied to `.previous.json`, so a bad restore does not lose it), the model
+  is rebuilt with new pane ids, and each pane is started again. A pane that
+  fails to start is dropped and logged.
+  - `AgentHarness.Resumed` picks up the conversation: bare `claude` gets
+    `--continue`, the orchestrator's nvim gets its resume command, and nvim
+    with `ClaudeCode` gets `ClaudeCode --continue`. Anything else runs as it
+    was.
+  - A pane whose program is `fleet` (the dashboard, `titled` wrappers) is
+    started with the running fleetd's own executable, so a restart onto a new
+    build does not relaunch the old one.
+  - The project's own restore (`RestoreSessionHandler`, matching agents by
+    worktree) sees the panes are there and adds nothing twice.
+  - Focus comes back too: a workspace whose top float had the focus gets it
+    back (`floatFocused`). If a menu was on top, restore skips it, and the
+    tab gets the focus.
+- **`scripts\embedded.ps1 stop`/`restart`** kill fleetd before its other
+  processes; were a `fleet dash` pane to die first, fleetd could save a
+  session without it.
+- **Verified with the real binary** (scratchpad build, isolated config and
+  endpoint): a split tab at 30/70, a float and a second workspace were
+  saved, fleetd was killed hard, and a new fleetd came back with the same
+  workspaces, tabs, float and pane programs; no pane shells were left
+  orphaned. Tests cover the round trip, zoom, skipped modal floats, the
+  resume mapping, per-endpoint files, and a daemon restart through the file.
+## The menu's first frame is its last draw, 2026-09-29
+
+The menu float stayed hidden until it had drawn at its fitted size, but it
+was revealed on the *first* output after the fit that had content. After a
+resize Terminal.Gui writes the screen in several passes (and sets its title),
+and on a loaded machine those land in separate frames. So the menu showed a
+partial draw and corrected it a moment later.
+
+- A hidden float is now revealed only once its pane has also been quiet for
+  `RevealWhenQuiet` (a daemon option, 60 ms; the daemon tests use 400 ms so a
+  slow CI runner cannot pace the test out of the window). Every pass and the title have landed by then,
+  so the first frame shown is the finished one.
+- While a float waits to be revealed, the render loop wakes every 15 ms
+  instead of 250 ms, so the wait adds about the quiet window and no more.
+- `RevealAnyway` still reveals a float that never goes quiet.
+- **Verified with the real binary** (a raw attach client recording every
+  frame): each open sends a single frame with the whole menu, and nothing is
+  redrawn after it. A later open appears after about 130 ms. A daemon test
+  feeds eight quick passes and checks that the first frame showing the menu
+  already holds the last one; it fails without the quiet window.
+- **Screens opened from the menu** (Settings, dialogs, pickers, the
+  dashboard) had the same problem one step later. The next window starts,
+  draws at the float's old size (with a blank moment in between), and only
+  then asks fleetd to fit the float, so it is drawn twice.
+  - When a screen inside a float closes, `FloatScreens` now sends `hold`
+    (`EmbeddedWiring.HoldOwnFloat`). fleetd keeps showing that float's last
+    screen at its old bounds (`FloatState.Held`) and stops taking snapshots
+    of the pane.
+  - The next screen's `fit` resizes the pane behind the held picture. Once
+    the pane has written after the fit and been quiet for `RevealWhenQuiet`,
+    the hold ends, and the new screen appears at its new size in one frame.
+  - A `fit` that changes the size of a visible float holds it in the same
+    way, even without a `hold`. A hold that never gets its redraw ends after
+    `RevealAnyway`.
+  - Verified with the real binary: menu, then `S`. Settings appears 296 ms
+    later as a single frame and nothing is redrawn after it. A daemon test
+    (partial draw, resize, several passes) fails without the hold.
+- **The warm menu showed a gap in that fix.** Terminal.Gui notices a
+  console resize only when it polls for it, so it drew the next screen at
+  the old size, went quiet (and was released), and relaid out ~370 ms later.
+  - `fit` now returns the pane's real size, and a screen inside a float
+    passes it straight to `IDriver.SetScreenSize` before it draws, so the
+    first draw is at the right size.
+  - `FloatScreens` holds on every screen change, not only on close, and fits
+    before it sets the title. fleetd holds the float's border label with its
+    picture (`FloatState.HeldLabel`), so a new title no longer lands on the old
+    screen first.
+  - Verified with the real binary: `Q` (quit dialog), `S` (Settings), `s`
+    (switch project) and `l` (agents) each appear as one frame.
+## Linux end to end, 2026-09-29
+
+The Unix PTY and client had only unit tests. A run in WSL (Arch) used tmux as
+the real terminal around `fleet` and `fleet attach`, with the CI-built
+linux-x64 AOT binary and an isolated config and socket.
+
+- **Found:** Terminal.Gui programs (the dashboard, the menu) drew nothing in
+  Linux panes. Terminal.Gui 2.4 learns its size by sending `CSI 18t`
+  (`SizeDetectionMode.AnsiQuery`) and waits for `CSI 8;rows;cols t`.
+  libghostty-vt answers other queries (`6n`, `c`, `?u`) but not this one.
+  Windows was unaffected, because there Terminal.Gui asks the console API
+  through ConPTY.
+- **Fix:** `PaneRuntime` answers `CSI 18t` itself with the pane's current
+  size (`SizeQueries`, a byte matcher that survives a query split across
+  reads), for panes that are not in win32-input mode.
+- **Result:** 40 of 40 checks pass:
+  - project picker, top bar, dashboard;
+  - which-key, the menu float;
+  - split, new tab, zoom, tab keys;
+  - floats (new, typing, toggle);
+  - a real terminal resize (SIGWINCH);
+  - a mouse click on a tab, copy mode;
+  - switching project from the menu;
+  - detach (the tty is back to canonical with echo), reattach through the
+    session picker;
+  - restore after `kill -9` of fleetd (7 of 7 panes, the orchestrator
+    resumed with `ClaudeCode --continue`).
+## The fleet menu opens warm, 2026-09-29
+
+Every menu open started a new `fleet menu` process. That meant process
+start, ConPTY and Terminal.Gui init, the first draw, the fit and the settle:
+about 250–310 ms, and about 840 ms for the first open.
+
+- fleetd now keeps one **warm menu** per workspace a client shows (no hidden
+  or overlay workspaces). It is a modal float that is `Parked`: started,
+  fitted and drawn, but outside the view. It is not a focus candidate, not
+  listed by `list-panes`, and not saved in the session.
+  - Opening the menu unparks it, puts it on top and focuses it. If it is
+    still drawing, the usual reveal applies.
+  - Menus with an `--action` still start fresh.
+  - The next warm menu starts when no menu is open in that workspace any
+    more, at most once every 2 s per workspace.
+- **Measured with the real binary:** the menu appears 11–48 ms after the
+  key, instead of 250–840 ms.
+- **Cost:** one idle `fleet menu` process per shown project workspace.
+  - Parked menus don't keep fleetd alive (they're left out of the idle
+    check).
+  - A workspace left with only parked menus has them killed, so it is
+    dropped.
+  - The daemon option is `WarmMenus`, on in `EmbeddedWiring` and off in the
+    daemon tests.
+- **A warm menu is started before any client asks,** so it has no
+  `FLEET_CLIENT`.
+  - fleetd resolves a request from a menu pane without a client
+    (`show`, `list-workspaces`) to the client that opened it
+    (`ClientState.Menu`).
+  - `EmbeddedDriver.ShowWorkspaceAsync` accepts a pane caller without a
+    client.
+  - `EmbeddedWiring.InsideClient` is also true inside any fleetd pane, so a
+    warm picker never starts a nested `fleet attach`.
+## fleet doctor and the embedded multiplexer, 2026-09-29
+
+`fleet doctor` now reports on the embedded multiplexer, whichever driver is
+chosen:
+
+- whether this build links libghostty-vt;
+- fleetd: its pid, workspaces, panes, warm menus and attached clients, and
+  whether it runs this build or another one (restart to switch). fleetd has a
+  `status` control op for this. The probe uses a driver without a start
+  callback, so doctor never starts a fleetd just to look at it. A fleetd too
+  old to know `status` is reported as running on an older build.
+- the saved session: how many workspaces and panes it would restore, and when
+  it was saved.
+
+An unreadable session file is the one new *problem* (doctor exits 1): fleetd
+would start empty. The rest is information. The feature gets it as a plain
+model (`EmbeddedHealth`), gathered by `EmbeddedWiring.HealthAsync` in the
+composition root, the way it already gets git's version.
+## Windows and their projects, 2026-09-29
+
+A *window* is one attached client, one terminal window. Each window keeps the
+projects it has shown, most recent last (`ClientState.Projects`). Hidden-agent
+workspaces and the overlay workspace are never projects. Two windows may still
+show the same project (attaching from a second machine).
+
+- **Quitting no longer leaves a dead window.** Before, the window drew an
+  empty screen with "nothing to show" in the bar and never gave the prompt
+  back. When a project's workspace goes away, every window showing it moves to
+  its most recent remaining project. A window with none left is `Leaving`:
+  fleetd sends it `Bye` with a reason, the client restores the terminal and
+  prints `fleet: no project left in this window`, and the shell prompt is
+  back. fleetd itself exits once nothing runs.
+- Verified with the real binary (nested fleetd, `cmd` running
+  `fleet attach`): quitting the shown project of two switched the window to
+  the other one, and quitting the last one ended `fleet attach` with that line
+  and the `cmd` prompt.
+- **The quit question counts this window's projects.** `list-workspaces`
+  now also reports, per workspace, whether it is `InWindow` (this window holds
+  it) or `InOtherWindow`, and `ProjectLocation` carries both. On WezTerm,
+  in-window means shown in this window, as before. With two or more projects
+  in the window, quitting asks "Quit all in this window" or "Just <project>".
+  Projects in other windows are never touched. "Quit all" quits the current
+  project last, because the menu runs inside it and would otherwise kill
+  itself halfway. Verified with the real menu: Enter quit both projects and
+  sent the window home; Tab, Enter quit only the current one, and the window
+  moved to the other.
+
+### Switching projects between windows
+
+- **The Switch project picker** (built-in multiplexer only) lists every
+  project, including the current one, with where it lives: *this window*,
+  *another window*, or *open*.
+  - **A lower-case letter** (or Enter) brings the project into this window
+    (opening it first if needed). `show` *takes* it: it leaves any other
+    window, and that window moves to its neighbour or goes home.
+    `fleet attach --project` still only shares a project.
+  - **An upper-case letter** (or Shift+Enter) opens it in a new window. The
+    `open-window` op releases it from every window, this one included (a
+    window giving away its only project goes home), and sends this window an
+    `open-window` host effect.
+- **The window opens the new one**, because it runs in the user's actual
+  terminal (`NewWindow.Plan`):
+  - Windows Terminal (`WT_SESSION`): `wt -w new`;
+  - WezTerm (`TERM_PROGRAM`): `wezterm start --`;
+  - Linux: `$TERMINAL -e`, then `x-terminal-emulator -e`;
+  - otherwise, on Windows, a new console window.
+
+  The window runs `fleet attach --project <name>` (plus `--ssh <host>` when
+  this window came over ssh).
+- **The new window uses the same terminal profile as the window it came
+  from:**
+  - Windows Terminal: `wt -w new -p <WT_PROFILE_ID>`.
+  - WezTerm: the running `WEZTERM_EXECUTABLE` with
+    `--config-file <WEZTERM_CONFIG_FILE>`, so a pinned window (such as
+    `.wezterm-rib.lua`) opens another pinned window.
+  - Both terminals start the window from their own process, so the caller's
+    environment doesn't reach it. `FLEET_ENDPOINT`, `FLEET_CONFIG_HOME` and the
+    account-profile variables (`ACCOUNT_PROFILE`, `ACCOUNT_PROFILE_AUTO`,
+    `CLAUDE_CONFIG_DIR`) are therefore set in the window's command.
+- **`prefix w`** cycles only through this window's projects, in a stable
+  order (a project is added when first shown, never moved).
+- WezTerm mode is unchanged. Its driver refuses `OpenWindowAsync`, and the
+  menu keeps the old picker there.
+- **Verified with the real menu:** the picker labels the current project
+  *this window*. Upper-case `B` sent `open-window beta`, and the window stayed
+  on alpha. Launching the terminal is covered by `NewWindowTests`. The e2e
+  runs deliberately don't open windows on the desktop.
+
+### New panes open the default shell
+
+A pane opened without a program (`prefix c` for a new tab, the splits,
+`prefix f` for a float) used to start `COMSPEC`, which is `cmd.exe`. It now
+starts the user's default shell (`DefaultShell.Resolve`, passed to fleetd as
+`DaemonOptions.Shell`):
+
+1. `FLEET_SHELL`, a command line;
+2. Windows Terminal's `defaultProfile` command line, read from its
+   `settings.json` (comments and trailing commas allowed; `%VARS%` expanded);
+3. `pwsh -NoLogo` when pwsh is on `PATH`;
+4. `COMSPEC`, or `SHELL` on Unix, as before.
+
+Verified: a pane opened with no program started
+`C:\Program Files\PowerShell\7\pwsh.exe` (the WT default profile) and showed
+the user's own prompt.
+
+### The dash tab is one framed window
+
+The project's dash tab (the orchestrator and the fleet dashboard side by side)
+used to show a frameless Claude pane next to a dashboard with its own rounded
+border. It is now one window:
+
+- **One rounded frame around the whole tab**, titled `fleet — <project>`. The
+  divider between Claude and the dashboard joins it (┬ top, ┴ bottom; ├ ┤ for
+  horizontal splits).
+- **A tab is framed when it holds the dashboard** (`MuxModel.IsDashboard`: a
+  `fleet dash` pane). `Arrange` lays its panes out one cell inside the content
+  area, so pane sizes, mouse hits and focus moves all agree with what is drawn.
+  Other tabs stay frameless and use the full width.
+- **The focused side is lit:** frame cells next to the focused pane use the
+  focus colour, and the rest stay dim, as dividers already did.
+- **The dashboard draws no border of its own there:** fleetd sets
+  `FLEET_FRAMED=1` for dashboard panes, and `FleetTheme.Screen` then uses no
+  border. Its dialogs keep theirs.
+- WezTerm can't draw across panes, so WezTerm mode is unchanged.
+- **Verified with the real binary** through `fleet attach`: the frame and
+  title, the ┬ join, and the dashboard without its own border inside it.
+  `FramedDashTests` cover the layout, the joins and the focus colour.
+- A blank line under the tab bar was tried and then taken out again at the
+  user's request; content starts right under the bar.
+
+### The agents list loads faster
+
+*List agents* (and every dashboard refresh) waited on git before showing
+anything:
+- each agent's branch state is 2–4 git processes (`rev-list` against upstream,
+  or `rev-parse` then `rev-list` against origin or the base, then
+  `status --porcelain`), run one after another;
+- the Agents and Subs lists each kept their own per-list cache, so every
+  worktree was measured twice.
+
+`BranchStates` now keeps one cache (fresh for 2 s; the dashboard refreshes
+every 4 s) that the Agents, Subs and Repositories lists share. Before
+building their rows, the lists `Warm` it: every worktree is measured once,
+six at a time. The rows still appear only when they are complete, so there is
+no first draw without branch state.
+
+Measured on the user's real worktrees, the same git work took:
+
+| Project | Worktrees | Before | After |
+|---|---|---|---|
+| fleet | 5 | 1.2 s | 0.35 s |
+| pc | 11 | 3.2 s | 0.53 s |
+
+### Glyphs whose width terminals disagree on
+
+The dashboard's empty-list hint looked two columns short. That row starts and
+ends with the pill caps, U+E0B6 and U+E0B4 (Nerd Font glyphs in the Private
+Use Area):
+
+- Terminal.Gui and fleetd's emulator both count them as 1 column (measured:
+  in a pane, `a`, the cap, `b`, then a move to column 4 and `X` leaves
+  `a·bX`, while 中 is 2).
+- The terminal the client runs in may count them as 2. On Windows its ConPTY
+  layer did, which pushed the rest of each such row out of place.
+
+fleet can't choose how a host terminal measures a glyph. So `FrameEncoder` no
+longer lets the host's cursor advance decide where the next cell goes after
+such a glyph: after a wide cell, a Private Use glyph, or an emoji
+(`WidthIsDisputed`), it positions the next cell explicitly. A terminal that
+draws the glyph wider only affects that glyph, and never the rest of the row.
+Plain text and box drawing are still written as one run.
+
+## Claude profiles per project, 2026-09-29
+
+Claude picks its account from `CLAUDE_CONFIG_DIR`. The user's PowerShell
+profile derives that from the folder, using `~/.profiles.psd1`, and WezTerm
+panes get it through a `cmd.exe` AutoRun hook. Panes under fleetd start
+`claude` directly, so before this they all inherited whatever the shell that
+started fleetd had.
+
+- **fleetd now sets it per pane** from the pane's folder, through
+  `DaemonOptions.PaneEnv`, wired to `PaneProfile.Env`. The rule is the
+  profile's own:
+  - the longest `Roots` entry that equals or contains the folder, else
+    `Default`;
+  - `CLAUDE_CONFIG_DIR` is that profile's `Claude` folder, and is left unset
+    for `~\.claude`, Claude's own default;
+  - a folder-derived value sets `ACCOUNT_PROFILE_AUTO=1`, so the user's shell
+    inside the pane keeps following `cd`;
+  - a pin or hand-set value inherited from fleetd's own shell is cleared,
+    because fleetd serves every project.
+- **A project can pin a profile.** `claudeProfile` in `projects/<name>.json`,
+  set from *fleet menu > Settings > Claude profile* (`C`). It sets
+  `ACCOUNT_PROFILE=<name>` (the same as `p <name>`) and that profile's
+  `CLAUDE_CONFIG_DIR`, and it wins over the folder. It applies to panes
+  opened from then on.
+- An explicit `CLAUDE_CONFIG_DIR` in a spawn request still wins over both.
+  Without a `~/.profiles.psd1`, panes keep the environment they get, as before.
+- `~/.profiles.psd1` is read by a small data-file parser (`PowerShellData`:
+  `@{}`, `@()`, quoted strings, `$true`/`$false`/`$null`, comments). It is
+  reread only when the file changes.
+- `fleet doctor` lists each project's profile and whether it is pinned or
+  comes from the folder.
+- **Verified** on the real file: all seven projects resolve as the PowerShell
+  profile resolves them. An isolated fleetd started from a shell with the
+  personal profile gave an Upskilling pane `.claude-rib`, a fleet pane
+  `.claude-personal`, and a techweb pane no `CLAUDE_CONFIG_DIR` at all (work,
+  the default).
+
+## Notifications, 2026-09-29
+
+A notice is an agent that wants the user: a question, a permission prompt, done
+and ready for review, failed or its pane gone, stalled (the spinner with no new
+output for 10 minutes), or branch trouble (`git merge-tree` finds conflicts
+with its base, or it is 20+ commits behind).
+
+- **The dashboard detects**, because it already reads every agent's pane text for
+  the activity column. `NoticeDetector` is pure: it turns what the dashboard saw
+  (`AgentWatch`) into notices. The base check runs in the background every 5
+  minutes per worktree. A pane counts as gone only after it was seen alive, so a
+  closed-and-not-reopened agent does not look crashed on startup.
+- **One file per project** in `<config>/notices/<project>.json`, written only
+  by that project's dashboard (the center writes dismissals). `NoticeSync.Apply`
+  keeps a notice's start while its cause lasts, resolves it when the cause goes,
+  and keeps resolved ones a day. A dismissed notice stays dismissed while its
+  cause lasts and comes back as new only once the cause recurs.
+- **Alerts fire on fresh notices only**, the open keys that were not open in the
+  stored file, so restarting a dashboard does not alert again. The dashboard shows
+  a toast (Windows: WinRT through `powershell.exe` under PowerShell's app id;
+  Linux: `notify-send`). Under fleetd it sends `notices` with its open count
+  and whether to ring; fleetd keeps the counts, draws `● here +elsewhere` inside
+  the project pill (elsewhere counts only open workspaces), and sends a `bell`
+  host effect to every attached client, which writes BEL. Under WezTerm the
+  dashboard writes BEL itself.
+- **The center** (fleet menu > Notifications, or a click on the pill) reads every
+  project's file; bell and toast settings live in `_settings.json` beside them.
+- `●` has a disputed width, so the frame encoder repositions the cursor after it:
+  tests that read the client's byte stream cannot match `● 2` as one string.
+## Remote machines, phase 1, 2026-09-29
+
+Goal: a remote fleet's projects join the local one, in the same window, with the
+local fleetd keeping the tab bar and the keys. Phase 1 is the link and the switcher.
+
+- **fleetd owns the link.** `remote-connect <host>` makes the local fleetd run
+  `ssh -T <host> fleet bridge` and speak the ordinary control protocol over it, as
+  one more client of the remote fleetd (`RemoteLink`, over a `RemoteChannel` so the
+  tests can use a second in-process fleetd). It reads `status` once (the remote's
+  `Environment.MachineName` names the tab) and `list-workspaces` every 2 s; hidden
+  agent workspaces are left out. `remote-disconnect` stops it; a dropped link turns
+  the machine `failed` with ssh's last stderr lines, and `enter` retries it.
+- **Prompts go through fleetd.** ssh runs with `SSH_ASKPASS=<fleet>` and
+  `SSH_ASKPASS_REQUIRE=force`, so it never reads the terminal. fleet started with
+  `FLEET_ASKPASS=<token>` in its environment is the askpass program: it polls
+  fleetd's `askpass` op until the user answered in the Remote machines view
+  (`remote-answer`), prints the answer and exits. A prompt with `yes/no` in it is
+  shown in the clear, anything else as a password. Verified that Windows OpenSSH
+  9.5 hands the host-key question to `SSH_ASKPASS`.
+- **The switcher** (`SwitchTabs`, `FleetTabbedPicker`) shows All, this machine and
+  one tab per connected remote. Choosing a remote project sends
+  `open-remote-window`; the attached client opens a new window running
+  `fleet attach --ssh <host> --project <name>`.
+- **Next:** remote panes drawn by the local fleetd (phase 2), then the menu and
+  agents, then notifications, as agreed.
+## Remote machines, phase 2, 2026-09-29
+
+A remote project in the same window. The cheapest sound design turned out to be to
+leave the remote's layout code alone:
+
+- **The link is an attached client of the remote.** `RemoteLink` says Hello with
+  role `attach` over the ssh bridge, at the size of the local window, and keeps using
+  the same connection for control requests (the remote's `Execute` already accepts
+  requests on attach connections). The remote does everything as for any client:
+  layout, splits, floats, copy mode, its own menu, and it sends ordinary frames.
+- **The local fleetd shows those frames.** `show-remote` creates one workspace per
+  machine, `@<machine>`, flagged `RemoteHost`, whose single pane runs over a
+  `RemotePty`: frames from the link are its output, its resizes go back as `Resize`.
+  A remote workspace is laid out full screen (`MuxModel.Area`), draws no local bar
+  (the remote's bar is in the frame; only the local which-key badge is drawn over
+  it), is never framed, and is left out of the session snapshot.
+- **One bar that says where you are.** Hello carries a `label` and `set-label`
+  changes it; the remote appends it to its project pill, so the bar reads
+  `homelab @machine`. Clicks on the remote's tabs are the remote's to handle.
+- **Input.** Keys, pastes and commands to a focused remote pane, and mouse events
+  over it, are forwarded verbatim; the remote encodes them for its panes (rule 3).
+  `switch-project`, `next-workspace`, `show` and `redraw` stay local, so `ctrl+s s`
+  is the way back; the local switcher opens on the remote machine's tab when started
+  from `@<machine>`. Remote clipboard and bell effects go to the windows showing it.
+- **Switch project is handed back.** The remote's menu, opened in a labelled client
+  (one viewed from another machine), asks its fleetd `hand-back switch-project`;
+  the remote sends a `hand-back` host effect to the link, and the viewing fleetd
+  opens its own switcher for the windows showing `@<machine>`. Without this the
+  remote's switcher only knew the remote's projects and there was no way back.
+- **Ending.** When the link ends the whole `@<machine>` workspace goes, including a
+  local menu float opened over it; its panes keep running on the remote.
+- **Limits.** One remote client per link, so one local window at a time follows a
+  machine: two windows showing the same machine see the same project. Every key is
+  a round trip to the remote. Both ends must run a build that knows `label` and
+  `set-label` (phase 2 and later).
+- **Tested** with two in-process fleetds: the remote's text and pill label reach the
+  local pane, a typed key reaches the remote pane and not the local one, a split is
+  made on the remote, `ctrl+s s` opens the local switcher for `@<machine>`, and
+  disconnecting removes the view. Not yet exercised against a real ssh remote with
+  the ghostty terminal in between.
+## A window hears only its own projects, 2026-09-29
+
+- **Scope is the window.** A client's window is `Showing` plus `ClientState.Projects`
+  (what `MuxModel.InWindow` checks). The pill's "elsewhere" count sums only the other
+  projects in that window; `notices` rings the bell only in windows that hold the
+  project, and answers whether any window holds it. The dashboard shows a toast only
+  when it does, so a project that sits in fleetd with no window stays silent. The
+  notification center lists the window's projects (`ProjectsInWindow`) under All.
+  Notices are still detected and kept for every project; only the alerting is scoped.
+- **Stopping forgets.** `fleet daemon stop` deletes the saved session instead of
+  saving it, and no later render tick may write it back (`_forgotten`), so the next
+  start opens only the project you open. A crash or a restart without `stop` still
+  restores from the file written every second.
+- **The dashboard re-tells its count** every 30 s, so a fresh fleetd learns the
+  counts without waiting for one to change.
+## Sessions, 2026-09-29
+
+A session is a named set of projects for one window, kept in
+`<config>/window-sessions/<name>.json` (`sessions/` already holds the agent store).
+
+- **Saving** asks fleetd `window` for the client's projects in window order
+  (`ClientState.Projects` plus `Showing`); an `@<machine>` workspace is reported as the
+  remote project its link is showing (`RemoteLink.Showing`) with the machine's ssh host.
+- **Opening** happens only in the plain `fleet` picker, outside any client: it opens the
+  local projects that are not running, starts fleetd if needed, reconnects each remote
+  machine in a small window that can ask ssh's questions (`ManageRemotesView.ConnectAll`),
+  and attaches with the session in the Hello (`window`, `showing`). fleetd furnishes the
+  new client before its first frame (`Furnish`): each local project joins the window, each
+  remote one goes through `show-remote`, and the saved project is shown. A project that is
+  gone or a machine that cannot be reached is left out with a message.
+- The picker only shows its Projects/Sessions tabs once a session exists, so `h` and `l`
+  stay available as project accelerators until then.
+## Remote machines, phase 3, 2026-09-30
+
+Phase 3 was "the menu and agents for a remote project". Most of it came with phase 2:
+the fleet menu (`ctrl+enter`) is forwarded, so in `@<machine>` it is the remote's menu
+for the remote project, and its List agents is that project's dashboard, opening
+agents on the remote. What was left were the places where the remote's menu reaches
+outside the view:
+
+- **The remote project quits.** The remote says goodbye to a client with no project
+  left; the link now ends the local view on that `Bye` (`RemoteLink.EndView`), which
+  closes `@<machine>` like any quit project, and gives the next `show-remote` a fresh
+  `RemotePty`. The link itself stays connected.
+- **"Open in a new window" on the remote.** The remote's `open-window` effect for the
+  link becomes an `open-remote` effect for the local windows showing it, so a new
+  local window attaches to that project over ssh.
+- **Effects before goodbyes.** fleetd sent a leaving client its `Bye` before the host
+  effects of the same frame, so a client moving its last project to a new window
+  quit before it could open the window. Effects now go first.
+## Remote machines, phase 4, 2026-09-30
+
+Notifications from a remote project, under the window rule: a window hears only about
+its own projects, and the remote project `@<machine>` is showing is one of them.
+
+- **The remote serves its notices.** `list-notices` returns every project's notices
+  from the remote's store (a `DaemonOptions.Notices` callback, so the daemon stays out
+  of storage); `dismiss-notices` dismisses by the remote's own keys.
+- **The link polls them** with the workspace list every 2 s. `RemoteLink.Fresh`
+  compares open notices with the previous poll; the first poll only sets the baseline,
+  so connecting does not alert about old notices.
+- **The local fleetd** keeps the open count of the shown remote project as the notice
+  count of `@<machine>`, so it adds to the pill's `+N` in windows holding it. A fresh
+  notice of the shown project rings the bell in those windows and shows one toast, with
+  this machine's bell/toast settings (`AlertSettings`, `Toast`); notices of the remote's
+  other projects stay silent.
+- **The center** asks `remote-notices` for the window's remote projects and shows each
+  as `project @machine` (`RemoteNoticeView`). Dismissing maps the local notice key back
+  to the remote's key (paths differ by OS) and goes through `remote-dismiss`; opening one
+  shows that project here.
+## Remote projects that are not running, and the way back, 2026-10-01
+
+- **A remote's tab lists its saved projects.** `list-projects` returns the remote's
+  project store (`DaemonOptions.SavedProjects`); the link lists those together with
+  whatever runs there (`RemoteLink.Listed`) and keeps the running ones apart, which
+  the switcher marks `open`. Showing a project that is not running sends
+  `open-project` first: the remote runs `ProjectOpener.EnsureOpenAsync` (the same
+  open-and-restore-agents path as the `fleet` picker) and the link waits up to a minute
+  for its workspace before it shows it. A remote without `list-projects` still lists
+  its running workspaces.
+- **Warm menus hand back too.** The remote's menu is usually a pre-started (warm) float,
+  started without `FLEET_CLIENT`, so `hand-back` never ran and its Switch project showed
+  only the remote's projects. The menu now asks with just its pane; fleetd finds the
+  client that opened that menu (`ClientState.Menu`) and hands the switcher back to the
+  viewing machine.
+## ctrl+enter and shift+enter on Linux, 2026-10-01
+
+A Unix terminal sends Enter, ctrl+enter and shift+enter all as `\r`, so the attach
+client could not see the menu key (or the newline key) and only `ctrl+s space` worked.
+The client now asks the terminal for xterm's `modifyOtherKeys` level 1 on attach
+(`CSI > 4 ; 1 m`, reset on detach). Level 1 leaves ordinary control keys (`ctrl+c`,
+`ctrl+a`, ...) alone and reports the ambiguous ones as `CSI 27 ; mod ; key ~`, which is
+what the `ctrl+enter`/`shift+enter` bindings now match (`KeyChord.Bytes`); terminals that
+answer in the `CSI key ; mod u` form are normalized first. A report no binding wants is
+turned back into the bytes the key would otherwise send (`ModifiedKeys.Legacy`), so a
+program in a pane never sees the new form. Terminals without `modifyOtherKeys` keep
+sending `\r`; `ctrl+s space` still opens the menu there.
+
+The stop test also exposed a race: the render loop checked "not forgotten" and then
+wrote the session, and `shutdown` could delete the file between the two, so the save
+came back. The check and the write now happen under one lock with the shutdown's delete.
+## Panes stay in their own project, 2026-10-01
+
+Agents turned up in another project's workspace. With workspaces a "window" is a
+project, and several paths worked out the target window the WezTerm way:
+
+- **Opening an agent and dispatching** took the window of the *calling* pane first.
+  From the notification center or a menu running in project B's window, project A's
+  agent was moved or started into B.
+- **Restoring agents and opening repositories** took the window of the first pane whose
+  folder equals the project root, which can be a pane of another project.
+- **Restored hidden agents** went to the shared `fleet-hidden` workspace instead of
+  `<project>~hidden`, so quitting the project left them running there.
+- **fleetd's `spawn`** let a request's window outrank the project it named.
+
+Now every one of these asks `ProjectWindows.For`: with workspaces the answer is always
+the project's own workspace (the WezTerm behaviour is unchanged); restore uses
+`<project>~hidden`; and fleetd places a pane in the project a spawn names, whatever
+window it carries, so a wrong window can no longer move a pane across projects. An
+architecture test keeps features from deciding a project's window themselves again.
+## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

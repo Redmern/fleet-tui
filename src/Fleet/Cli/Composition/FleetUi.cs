@@ -1,4 +1,5 @@
 using Fleet.Features.Menu.ShowMenu;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Terminal.Gui.App;
@@ -11,6 +12,12 @@ public static class FleetUi
     {
         var app = Application.Create().Init();
         FleetTheme.Register();
+
+        if (FloatPane.Inside)
+        {
+            FloatScreens.Fit = EmbeddedWiring.FitOwnFloat;
+            FloatScreens.Hold = EmbeddedWiring.HoldOwnFloat;
+        }
 
         return app;
     }

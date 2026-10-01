@@ -4,9 +4,11 @@ public static class MuxTrouble
 {
     public const string WezTerm = "wezterm";
 
-    public static string? With(string chosen, bool wezTermOnPath)
+    public const string Embedded = "embedded";
+
+    public static string? With(string chosen, bool wezTermOnPath, bool embeddedReady = false)
     {
-        if (chosen == WezTerm)
+        if (chosen == WezTerm || (chosen == Embedded && embeddedReady))
         {
             return null;
         }
