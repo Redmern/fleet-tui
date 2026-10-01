@@ -2,6 +2,9 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Notifications.Enums;
 using Fleet.Ports.Notifications.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Hooks;
+using Fleet.Shared.Status.Enums;
+using Fleet.Shared.Status.Models;
 
 namespace Fleet.Features.Notifications.DetectNotices;
 
@@ -12,7 +15,8 @@ public sealed record AgentWatch(
     TimeSpan Unchanged,
     int Behind,
     bool Conflicts,
-    bool PaneLost = false);
+    bool PaneLost = false,
+    AgentReport? Hooked = null);
 
 public static class NoticeDetector
 {
@@ -48,7 +52,14 @@ public static class NoticeDetector
                 found.Add(Raise(NoticeKind.Done, "is done and ready for review"));
             }
 
-            if (watch.PaneAlive && IsPermission(text))
+            if (watch.Hooked is { } hooked)
+            {
+                if (watch.PaneAlive && FromHook(hooked, now) is { } notice)
+                {
+                    found.Add(Raise(notice.Kind, notice.Message));
+                }
+            }
+            else if (watch.PaneAlive && IsPermission(text))
             {
                 found.Add(Raise(NoticeKind.Permission, "asks for permission"));
             }
@@ -73,6 +84,14 @@ public static class NoticeDetector
 
         return found;
     }
+
+    private static (NoticeKind Kind, string Message)? FromHook(AgentReport hooked, DateTime now) => hooked.State switch
+    {
+        AgentState.Blocked when hooked.Reason == HookStatus.PermissionReason => (NoticeKind.Permission, "asks for permission"),
+        AgentState.Blocked => (NoticeKind.NeedsInput, "has a question for you"),
+        AgentState.Stalled => (NoticeKind.Stalled, $"has reported no progress for {(int)(now - hooked.At).TotalMinutes} min"),
+        _ => null,
+    };
 
     public static bool IsPermission(string text) =>
         text.Contains("no, and tell claude", StringComparison.OrdinalIgnoreCase)

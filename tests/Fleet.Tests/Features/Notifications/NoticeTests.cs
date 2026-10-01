@@ -4,6 +4,9 @@ using Fleet.Platform.Storage;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Notifications.Enums;
 using Fleet.Ports.Notifications.Models;
+using Fleet.Shared.Hooks;
+using Fleet.Shared.Status.Enums;
+using Fleet.Shared.Status.Models;
 
 namespace Fleet.Tests.Features.Notifications;
 
@@ -46,6 +49,56 @@ public sealed class NoticeTests : ConfigHomeFixture
             ],
             found.Select(n => (n.Kind, n.Worktree.Split('/')[^1])));
         Assert.Contains("25 commits behind origin/main", found.Single(n => n.Worktree.EndsWith("behind", StringComparison.Ordinal)).Message, StringComparison.Ordinal);
+    }
+
+    private static AgentReport Hook(AgentState state, string reason = "", int minutesAgo = 0) =>
+        new($"{Work}/x", "s1", state, T0 - TimeSpan.FromMinutes(minutesAgo), Reason: reason);
+
+    [Fact]
+    public void Hook_state_raises_permission_question_and_stall_notices()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("p")) with { Hooked = Hook(AgentState.Blocked, HookStatus.PermissionReason) },
+            Watch(Agent("q")) with { Hooked = Hook(AgentState.Blocked, HookStatus.InputReason) },
+            Watch(Agent("slow")) with { Hooked = Hook(AgentState.Stalled, minutesAgo: 14) },
+            Watch(Agent("busy")) with { Hooked = Hook(AgentState.Working) },
+            Watch(Agent("rest")) with { Hooked = Hook(AgentState.Idle) },
+        ], T0);
+
+        Assert.Equal(
+            [(NoticeKind.Permission, "p"), (NoticeKind.NeedsInput, "q"), (NoticeKind.Stalled, "slow")],
+            found.Select(n => (n.Kind, n.Worktree.Split('/')[^1])));
+        Assert.Contains("14 min", found.Single(n => n.Kind == NoticeKind.Stalled).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hook_state_wins_over_what_the_pane_shows()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("p"), "Do you want to make this edit?\n2. No, and tell Claude") with { Hooked = Hook(AgentState.Working) },
+        ], T0);
+
+        Assert.Empty(found);
+    }
+
+    [Fact]
+    public void Without_hook_state_the_pane_text_is_still_the_fallback()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("p"), "Do you want to make this edit?\n2. No, and tell Claude"),
+        ], T0);
+
+        Assert.Equal(NoticeKind.Permission, Assert.Single(found).Kind);
+    }
+
+    [Fact]
+    public void Hook_state_needs_a_live_pane_but_done_failed_and_branch_notices_do_not_depend_on_it()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("p", status: "done"), alive: false, behind: 30) with { Hooked = Hook(AgentState.Blocked, HookStatus.PermissionReason) },
+        ], T0);
+
+        Assert.Equal([NoticeKind.Done, NoticeKind.BranchTrouble], found.Select(n => n.Kind));
     }
 
     [Fact]

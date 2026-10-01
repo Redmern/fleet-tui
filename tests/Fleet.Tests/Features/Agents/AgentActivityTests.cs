@@ -1,4 +1,5 @@
 using Fleet.Features.Agents.ListAgents;
+using Fleet.Shared.Status.Enums;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -18,6 +19,17 @@ public class AgentActivityTests
         Assert.Equal(
             AgentActivity.Waiting,
             AgentActivity.Classify("Do you want to make this edit?\n1. Yes\n2. No, and tell Claude"));
+    }
+
+    [Theory]
+    [InlineData(AgentState.Blocked, AgentActivity.Waiting)]
+    [InlineData(AgentState.Stalled, AgentActivity.Stalled)]
+    [InlineData(AgentState.Working, AgentActivity.Working)]
+    [InlineData(AgentState.Idle, AgentActivity.Idle)]
+    [InlineData(AgentState.Unknown, "")]
+    public void A_hook_state_maps_to_the_activity_the_row_shows(AgentState state, string activity)
+    {
+        Assert.Equal(activity, AgentActivity.For(state));
     }
 
     [Fact]

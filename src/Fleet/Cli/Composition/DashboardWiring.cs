@@ -59,6 +59,8 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Status;
+using Fleet.Shared.Status.Models;
 using Fleet.Ui;
 using Terminal.Gui.App;
 
@@ -461,6 +463,25 @@ public static class DashboardWiring
             return [.. records.Select(a => a with { Hidden = !AgentPanes.Shown(a, panes) })];
         }
 
+        var agentStates = Adapters.AgentStates();
+        AgentSnapshot? hookSnapshot = null;
+        var hookSnapshotAt = DateTime.MinValue;
+
+        AgentReport? Hooked(AgentRecord agent)
+        {
+            var now = DateTime.UtcNow;
+
+            if (hookSnapshot is null || now - hookSnapshotAt > TimeSpan.FromMilliseconds(500))
+            {
+                hookSnapshot = settings.Load(project.Name).StatusHooks
+                    ? agentStates.GetSnapshotAsync().GetAwaiter().GetResult()
+                    : AgentSnapshot.Empty;
+                hookSnapshotAt = now;
+            }
+
+            return AgentStatusRules.For(hookSnapshot, agent.Worktree, now, AgentStatusRules.StallAfter);
+        }
+
         AgentRecord WithActivity(AgentRecord agent)
         {
             if (barPanes is null)
@@ -483,6 +504,12 @@ public static class DashboardWiring
             if (pane is null)
             {
                 return agent;
+            }
+
+            if (Hooked(agent) is { } hooked)
+            {
+                paneTexts[agent.Worktree] = string.Empty;
+                return agent with { Status = AgentActivity.For(hooked.State) };
             }
 
             var text = mux.GetTextAsync(pane.Id).GetAwaiter().GetResult();
@@ -633,7 +660,8 @@ public static class DashboardWiring
                 var (behind, conflicts) = AgainstBase(agent, now);
                 return new AgentWatch(
                     agent, alive, text, now - still.Since, behind, conflicts,
-                    PaneLost: !alive && seenAlive.Contains(agent.Worktree));
+                    PaneLost: !alive && seenAlive.Contains(agent.Worktree),
+                    Hooked: Hooked(agent));
             }).ToList();
 
             var stored = noticeStore.Load(project.Name);

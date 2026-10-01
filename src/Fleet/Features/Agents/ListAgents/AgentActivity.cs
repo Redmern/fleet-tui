@@ -1,3 +1,5 @@
+using Fleet.Shared.Status.Enums;
+
 namespace Fleet.Features.Agents.ListAgents;
 
 public static class AgentActivity
@@ -7,6 +9,17 @@ public static class AgentActivity
     public const string Waiting = "waiting";
 
     public const string Idle = "idle";
+
+    public const string Stalled = "stalled";
+
+    public static string For(AgentState state) => state switch
+    {
+        AgentState.Blocked => Waiting,
+        AgentState.Stalled => Stalled,
+        AgentState.Working => Working,
+        AgentState.Idle => Idle,
+        _ => string.Empty,
+    };
 
     public static string Classify(string paneText)
     {
