@@ -15,15 +15,17 @@ public sealed record SwitchTabs(
 
     public const int ThisMachine = 1;
 
+    public const string OpenDetail = "open";
+
     public static SwitchTabs For(IReadOnlyList<PickerEntry> local, IReadOnlyList<RemoteMachine> machines)
     {
         var localTargets = local.Select(e => new SwitchTarget(e.Label)).ToList();
         var remote = machines
             .Select(m => (
                 m.Name,
-                Entries: (IReadOnlyList<PickerEntry>)[.. m.Projects.Select(p => new PickerEntry(p))],
+                Entries: (IReadOnlyList<PickerEntry>)[.. m.Projects.Select(p => new PickerEntry(p, m.IsRunning(p) ? OpenDetail : string.Empty))],
                 Targets: (IReadOnlyList<SwitchTarget>)[.. m.Projects.Select(p => new SwitchTarget(p, m.Host))],
-                AllEntries: m.Projects.Select(p => new PickerEntry(p, m.Name))))
+                AllEntries: m.Projects.Select(p => new PickerEntry(p, m.IsRunning(p) ? $"{m.Name} · {OpenDetail}" : m.Name))))
             .ToList();
 
         List<(string, IReadOnlyList<PickerEntry>)> tabs =

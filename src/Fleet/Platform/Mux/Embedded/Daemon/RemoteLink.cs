@@ -30,6 +30,9 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
     private string? _prompt;
     private string? _answer;
     private IReadOnlyList<string> _projects = [];
+    private IReadOnlyList<string> _runningProjects = [];
+
+    public static readonly TimeSpan OpenWithin = TimeSpan.FromMinutes(1);
 
     public string Host => host;
 
@@ -131,6 +134,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 Prompt = _state == Asking ? _prompt : null,
                 Secret = _prompt is not null && IsSecret(_prompt),
                 Projects = [.. _projects],
+                Running = [.. _runningProjects],
             };
         }
     }
@@ -171,9 +175,34 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public async Task ShowAsync(string project)
     {
+        if (!await RunningAsync(project).ConfigureAwait(false))
+        {
+            await RequestAsync(new ControlRequest { Op = "open-project", Workspace = project }, _stop.Token).ConfigureAwait(false);
+            var waited = System.Diagnostics.Stopwatch.StartNew();
+
+            while (!await RunningAsync(project).ConfigureAwait(false))
+            {
+                if (waited.Elapsed > OpenWithin)
+                {
+                    throw new TimeoutException($"{project} did not start on {Name}");
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(300), _stop.Token).ConfigureAwait(false);
+            }
+        }
+
         await RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token).ConfigureAwait(false);
         Showing = project;
     }
+
+    private async Task<bool> RunningAsync(string project) =>
+        ((await RequestAsync(new ControlRequest { Op = "list-workspaces" }, _stop.Token).ConfigureAwait(false)).Workspaces ?? [])
+            .Any(w => string.Equals(w.Name, project, StringComparison.OrdinalIgnoreCase));
+
+    public static IReadOnlyList<string> Listed(IEnumerable<string> saved, IEnumerable<string> running) =>
+        [.. saved.Concat(running.Where(n => !FleetWorkspaces.IsHidden(n)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)];
 
     public async Task ForwardAsync(MessageType type, byte[] payload)
     {
@@ -248,9 +277,20 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
             while (!ct.IsCancellationRequested)
             {
                 var workspaces = (await RequestAsync(new ControlRequest { Op = "list-workspaces" }, ct).ConfigureAwait(false)).Workspaces ?? [];
+                IReadOnlyList<string> saved;
+                try
+                {
+                    saved = (await RequestAsync(new ControlRequest { Op = "list-projects" }, ct).ConfigureAwait(false)).Projects ?? [];
+                }
+                catch (InvalidOperationException)
+                {
+                    saved = [];
+                }
+
                 lock (_gate)
                 {
-                    _projects = [.. workspaces.Select(w => w.Name).Where(n => !FleetWorkspaces.IsHidden(n)).Order(StringComparer.OrdinalIgnoreCase)];
+                    _runningProjects = [.. workspaces.Select(w => w.Name).Where(n => !FleetWorkspaces.IsHidden(n))];
+                    _projects = Listed(saved, _runningProjects);
                     _state = Connected;
                     _error = null;
                 }

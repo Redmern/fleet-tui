@@ -80,6 +80,8 @@ public static class EmbeddedWiring
                 OperatingSystem.IsWindows()),
             RemoteOpen = (host, token) => RemoteChannelOver(RemoteSsh(host, token, Endpoint.Default())),
             Notices = LocalNotices,
+            SavedProjects = () => [.. Adapters.Projects().List().Select(p => p.Name)],
+            OpenProject = ProjectOpener.EnsureOpenAsync,
             DismissNotices = (project, keys) =>
             {
                 var store = Adapters.Notices();
@@ -462,7 +464,8 @@ public static class EmbeddedWiring
 
     public static bool HandBack(string action)
     {
-        if (Environment.GetEnvironmentVariable(FleetDaemon.ClientVariable) is not { Length: > 0 })
+        if (Environment.GetEnvironmentVariable(FleetDaemon.ClientVariable) is not { Length: > 0 }
+            && Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable) is not { Length: > 0 })
         {
             return false;
         }

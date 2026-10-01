@@ -42,6 +42,13 @@ public sealed class RemoteLinkTests : IAsyncLifetime
             DismissNotices = (project, keys) => _farDismissed.Enqueue((project, keys)),
             AlertSettings = () => (true, true),
             Toast = (title, _) => _toasts.Enqueue(title),
+            SavedProjects = () => ["homelab", "dormant"],
+            OpenProject = async name =>
+            {
+                await using var opener = await DaemonTests.TestClient.ConnectAsync(endpoint, ClientRoles.Control, 0, 0, null);
+                var opened = await opener.RequestAsync(new ControlRequest { Op = "spawn", Workspace = name, Cwd = ".", Args = ["opened-" + name] });
+                return opened.Ok ? null : opened.Error;
+            },
         });
         _running.Add(daemon.RunAsync(_stop.Token));
         return daemon;
@@ -108,10 +115,11 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         using var home = new EmbeddedDriver(_home);
         await home.ConnectRemoteAsync("red@far");
 
-        await Eventually(async () => (await RemotesAsync()).SingleOrDefault() is { State: RemoteLink.Connected, Projects.Count: 2 });
+        await Eventually(async () => (await RemotesAsync()).SingleOrDefault() is { State: RemoteLink.Connected, Projects.Count: 3 });
         var remote = Assert.Single(await RemotesAsync());
         Assert.Equal(("red@far", Environment.MachineName), (remote.Host, remote.Name));
-        Assert.Equal(["homelab", "scraper"], remote.Projects);
+        Assert.Equal(["dormant", "homelab", "scraper"], remote.Projects);
+        Assert.Equal(["homelab", "scraper"], remote.Running);
 
         await home.DisconnectRemoteAsync("red@far");
         Assert.Empty(await RemotesAsync());
@@ -376,6 +384,47 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-dismiss", Host = "red@far", Workspace = "homelab", Args = ["new"] })).Ok);
         await Eventually(() => Task.FromResult(_farDismissed.Any(d => d.Project == "homelab" && d.Keys.SequenceEqual(["new"]))));
         Assert.Contains(workspace, _homeDaemon.Model.Client(window.Id)!.Projects);
+    }
+
+    [Fact]
+    public void A_remotes_list_is_its_saved_projects_and_whatever_else_runs_there()
+    {
+        Assert.Equal(
+            ["default", "dormant", "homelab"],
+            RemoteLink.Listed(["homelab", "dormant"], ["homelab", "default", "homelab~hidden"]));
+    }
+
+    [Fact]
+    public async Task A_saved_remote_project_that_is_not_running_is_listed_and_started_there_when_shown()
+    {
+        var (far, home, window, _) = await ShowingHomelabAsync();
+
+        var remote = Assert.Single(await RemotesAsync());
+        Assert.Equal(["dormant", "homelab"], remote.Projects);
+        Assert.Equal(["homelab"], remote.Running);
+
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "show-remote", Client = window.Id, Host = "red@far", Workspace = "dormant" })).Ok);
+
+        await Eventually(async () => (await PanesAsync(far)).Any(p => p.Session == "dormant"));
+        await Eventually(async () => (await home.RequestAsync(new ControlRequest { Op = "window", Client = window.Id })).Window!
+            .Any(e => e.Name == "dormant" && e.Host == "red@far"));
+        Assert.NotNull(_farPanes.ByProgram("opened-dormant"));
+    }
+
+    [Fact]
+    public async Task A_warm_menu_on_the_remote_hands_switch_project_back_through_its_pane()
+    {
+        var (far, _, window, workspace) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu");
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is not null));
+        var menuPane = _farPanes.ByProgram("fleet")!.Env[FleetDaemon.PaneVariable];
+
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Caller = menuPane, Text = "switch-project" });
+
+        Assert.True(handed.Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "switch-project"])));
     }
 
     [Fact]

@@ -216,7 +216,9 @@ retries a connection. The remote needs this fleet on its PATH, or name it with
 
 While a machine is connected, **Switch project** gets tabs: **All**, **this machine** and
 one tab per remote, named after the remote's hostname. `h`/`l` or the arrows switch
-tabs, and it opens on the tab of the machine you are on. `enter` shows a remote project
+tabs, and it opens on the tab of the machine you are on. A machine's tab lists every project
+saved there, running or not (running ones say `open`); opening one that is not running
+starts it on that machine first. `enter` shows a remote project
 in this window; `SHIFT` opens it in a new window attached over ssh.
 
 A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar

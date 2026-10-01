@@ -4142,6 +4142,21 @@ its own projects, and the remote project `@<machine>` is showing is one of them.
   as `project @machine` (`RemoteNoticeView`). Dismissing maps the local notice key back
   to the remote's key (paths differ by OS) and goes through `remote-dismiss`; opening one
   shows that project here.
+## Remote projects that are not running, and the way back, 2026-10-01
+
+- **A remote's tab lists its saved projects.** `list-projects` returns the remote's
+  project store (`DaemonOptions.SavedProjects`); the link lists those together with
+  whatever runs there (`RemoteLink.Listed`) and keeps the running ones apart, which
+  the switcher marks `open`. Showing a project that is not running sends
+  `open-project` first: the remote runs `ProjectOpener.EnsureOpenAsync` (the same
+  open-and-restore-agents path as the `fleet` picker) and the link waits up to a minute
+  for its workspace before it shows it. A remote without `list-projects` still lists
+  its running workspaces.
+- **Warm menus hand back too.** The remote's menu is usually a pre-started (warm) float,
+  started without `FLEET_CLIENT`, so `hand-back` never ran and its Switch project showed
+  only the remote's projects. The menu now asks with just its pane; fleetd finds the
+  client that opened that menu (`ClientState.Menu`) and hands the switcher back to the
+  viewing machine.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

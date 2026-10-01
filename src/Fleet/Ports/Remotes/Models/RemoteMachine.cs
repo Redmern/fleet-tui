@@ -9,4 +9,9 @@ public sealed record RemoteMachine(
     IReadOnlyList<string> Projects,
     string? Error = null,
     string? Prompt = null,
-    bool Secret = true);
+    bool Secret = true,
+    IReadOnlyList<string>? Running = null)
+{
+    public bool IsRunning(string project) =>
+        Running?.Contains(project, StringComparer.OrdinalIgnoreCase) == true;
+}

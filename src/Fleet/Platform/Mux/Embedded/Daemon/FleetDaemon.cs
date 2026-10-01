@@ -42,6 +42,10 @@ public sealed class DaemonOptions
 
     public Func<IReadOnlyList<NoticeDto>> Notices { get; init; } = () => [];
 
+    public Func<IReadOnlyList<string>> SavedProjects { get; init; } = () => [];
+
+    public Func<string, Task<string?>> OpenProject { get; init; } = name => Task.FromResult<string?>($"{name} cannot be opened here");
+
     public Action<string, IReadOnlyList<string>> DismissNotices { get; init; } = (_, _) => { };
 
     public Func<(bool Bell, bool Toast)> AlertSettings { get; init; } = () => (false, false);
@@ -267,6 +271,20 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "show-remote":
                         response.Ms = ShowRemote(ClientFor(request, attachedClient), request.Host, request.Workspace);
                         break;
+                    case "list-projects":
+                        response.Projects = [.. options.SavedProjects()];
+                        break;
+                    case "open-project":
+                        {
+                            var opening = request.Workspace ?? throw new InvalidOperationException("open-project needs a project");
+                            _ = Task.Run(async () =>
+                            {
+                                var failed = await options.OpenProject(opening).ConfigureAwait(false);
+                                options.Log(failed is null ? $"opened {opening} for a remote viewer" : $"could not open {opening}: {failed}");
+                            });
+                            break;
+                        }
+
                     case "list-notices":
                         response.Notices = [.. options.Notices()];
                         break;

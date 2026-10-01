@@ -406,6 +406,9 @@ public sealed class ControlResponse
 
     [JsonPropertyName("notices")]
     public List<NoticeDto>? Notices { get; set; }
+
+    [JsonPropertyName("projects")]
+    public List<string>? Projects { get; set; }
 }
 
 public sealed class NoticeDto
@@ -469,6 +472,9 @@ public sealed class RemoteDto
 
     [JsonPropertyName("projects")]
     public List<string> Projects { get; set; } = [];
+
+    [JsonPropertyName("running")]
+    public List<string> Running { get; set; } = [];
 }
 
 public sealed class DaemonStatusDto

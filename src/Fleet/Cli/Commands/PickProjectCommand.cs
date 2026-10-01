@@ -141,7 +141,7 @@ public static class PickProjectCommand
                 continue;
             }
 
-            if (await EnsureOpenAsync(mux, project).ConfigureAwait(false) is { } failed)
+            if (await ProjectOpener.EnsureOpenAsync(mux, project).ConfigureAwait(false) is { } failed)
             {
                 return Fail(failed);
             }
@@ -163,35 +163,6 @@ public static class PickProjectCommand
 
         log.Write($"session {session.Name}: {local.Count} local, {hosts.Count} remote");
         return await EmbeddedWiring.AttachAsync(local.FirstOrDefault(), null, log, session).ConfigureAwait(false);
-    }
-
-    private static async Task<string?> EnsureOpenAsync(IMuxDriver mux, Project chosen)
-    {
-        var located = await new LocateProjectHandler(mux).HandleAsync([chosen]).ConfigureAwait(false);
-
-        if (located.TryGetValue(chosen.Name, out var where) && where.Open)
-        {
-            return null;
-        }
-
-        var opened = await new OpenProjectHandler(mux)
-            .HandleAsync(new OpenProjectCommand(chosen, AgentHarness.Orchestrator, Adapters.Executable, null))
-            .ConfigureAwait(false);
-
-        if (!opened.Succeeded)
-        {
-            return opened.Error;
-        }
-
-        var runnable = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name)
-            .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
-            .ToList();
-
-        await new RestoreSessionHandler(mux)
-            .HandleAsync(chosen.Name, chosen.Root, runnable)
-            .ConfigureAwait(false);
-
-        return null;
     }
 
     private static async Task<int> OpenAsWorkspaceAsync(IMuxDriver mux, Project chosen, IFleetLog log)

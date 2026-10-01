@@ -65,5 +65,6 @@ public sealed class EmbeddedRemotes(Func<EmbeddedDriver> driver) : IRemoteMachin
             dto.Projects,
             dto.Error,
             dto.Prompt,
-            dto.Secret);
+            dto.Secret,
+            dto.Running);
 }
