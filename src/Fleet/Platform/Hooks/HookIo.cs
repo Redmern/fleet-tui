@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Fleet.Platform.Hooks.Models;
+using Fleet.Shared.Hooks;
 
 namespace Fleet.Platform.Hooks;
 
@@ -24,6 +25,15 @@ public static class HookIo
             return new HookPayload();
         }
     }
+
+    public static HookEvent Event(HookPayload payload) =>
+        new(
+            payload.HookEventName ?? string.Empty,
+            payload.Cwd ?? string.Empty,
+            payload.SessionId ?? string.Empty,
+            payload.TranscriptPath ?? string.Empty,
+            payload.AgentId ?? string.Empty,
+            payload.NotificationType ?? string.Empty);
 
     public static string Block(string reason) =>
         JsonSerializer.Serialize(

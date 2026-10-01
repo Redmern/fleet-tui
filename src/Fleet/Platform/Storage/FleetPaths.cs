@@ -26,6 +26,8 @@ public static class FleetPaths
 
     public static string Notices => Path.Combine(Config, "notices");
 
+    public static string Status => Path.Combine(Config, "status");
+
     public static string WindowSessions => Path.Combine(Config, "window-sessions");
 
     public static void EnsureDirs()

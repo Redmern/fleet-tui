@@ -34,6 +34,7 @@ using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Platform.Releases;
+using Fleet.Shared.Hooks;
 using Fleet.Ui;
 
 namespace Fleet.Cli.Composition;
@@ -92,7 +93,11 @@ public static class Adapters
         return (payload.Text, payload.Cwd);
     }
 
+    public static HookEvent ReadHookEvent() => HookIo.Event(HookIo.Read(Console.In));
+
     public static string HookBlockJson(string note) => HookIo.Block(note);
+
+    public static IAgentStateStore AgentStates() => new FileAgentStateStore();
 
     public static IActionRequestStore Requests() => new FileActionRequestStore();
 
