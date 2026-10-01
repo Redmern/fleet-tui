@@ -177,12 +177,6 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void The_keybinds_key_no_longer_collides_with_move_up()
-    {
-        Assert.NotEqual(Map.KeyFor(FleetAction.MoveUp), Map.KeyFor(FleetAction.EditKeybinds));
-    }
-
-    [Fact]
     public void The_keybinds_key_still_does_not_fire_bare_on_a_dashboard_tab()
     {
         var result = DashboardKeys.For(Map.KeyFor(FleetAction.EditKeybinds), Map, Agents);

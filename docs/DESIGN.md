@@ -4192,6 +4192,19 @@ the project's own workspace (the WezTerm behaviour is unchanged); restore uses
 `<project>~hidden`; and fleetd places a pane in the project a spawn names, whatever
 window it carries, so a wrong window can no longer move a pane across projects. An
 architecture test keeps features from deciding a project's window themselves again.
+
+## Defaults follow the live keymap, 2026-10-02
+
+The shipped defaults now match the keymap the user actually runs, so a fresh install
+gets it without a `keybinds.json`: Keybinds `k`, Show log `l`, Permissions `p`, Switch
+project `p`, Edit fleet config `e`, Settings `s` (were `e`, `L`, `P`, `s`, `E`, `S`).
+Every menu still has unique keys; Switch project and Permissions share `p` but live in
+the fleet menu and its Settings submenu.
+
+The trade-off is accepted knowingly: `k` is also move-up, and a menu matches its item
+keys before the list's motions, so in a menu that lists Keybinds `k` opens it instead
+of moving up — the collision the move to `e` once fixed. The arrow keys still move.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

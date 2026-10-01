@@ -320,6 +320,9 @@ the dashboard's letters stay free for navigation.
 in the picker. Each view resolves keys against its own set of actions, so a
 shared key is never ambiguous.
 
+`k` is the exception: in a menu that lists **Keybinds**, `k` opens it rather than
+moving up. Use the up arrow there, or rebind one of the two.
+
 Every one of these is configurable through **Keybinds** in the menu, including
 the prefix. Changes are saved to `%APPDATA%\fleet\keybinds.json`.
 
@@ -483,7 +486,7 @@ Code only honours a project's approval in a *trusted* workspace; fleet records t
 trust in `~/.claude.json` for every folder it opens, so there is no `/mcp` step.
 `fleet doctor` reports whether each project is registered and enabled.)
 
-**Permissions.** Press `P` in the menu to say, per project and per tool, whether the
+**Permissions.** Press `s` then `p` in the menu (Settings, then Permissions) to say, per project and per tool, whether the
 orchestrator may do the action, must ask, or can't. Reads are allowed by default;
 writes ask. An "ask" can prompt in the fleet dashboard, in Claude's own permission
 prompt, or both. When the prompt lives in the dashboard, the running dashboard shows
