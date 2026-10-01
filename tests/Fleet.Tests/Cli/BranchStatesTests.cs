@@ -50,13 +50,11 @@ public sealed class BranchStatesTests : IDisposable
         var states = new BranchStates(git);
         var trees = Enumerable.Range(0, 6).Select(i => Worktree($"wt{i}")).ToList();
 
-        var clock = System.Diagnostics.Stopwatch.StartNew();
         states.Warm([.. trees.Select(t => (t, (string?)null)), (trees[0], (string?)null)]);
-        clock.Stop();
 
+        // Side by side is shown by overlap, not by wall-clock time, which a busy CI runner stretches.
         Assert.All(trees, t => Assert.Equal(1, git.StatusCalls(t)));
         Assert.True(git.MostAtOnce > 1, $"at most {git.MostAtOnce} git at a time");
-        Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(150 * 2 * 6), $"took {clock.ElapsedMilliseconds} ms");
 
         foreach (var tree in trees)
         {
