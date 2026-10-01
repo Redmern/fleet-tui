@@ -10,7 +10,7 @@ namespace Fleet.Features.Notifications.ShowNotices;
 
 public static class ShowNoticesView
 {
-    public const string AllTab = "All";
+    public const string AllTab = NoticeTabs.AllTab;
 
     public static void Show(
         IApplication app,
@@ -24,7 +24,7 @@ public static class ShowNoticesView
         var projects = only is null
             ? store.Projects()
             : [.. store.Projects().Where(p => only.Contains(p, StringComparer.OrdinalIgnoreCase))];
-        IReadOnlyList<string> names = [AllTab, .. projects, .. elsewhere?.Projects ?? []];
+        var names = NoticeTabs.Names([.. projects, .. elsewhere?.Projects ?? []]);
 
         var window = FleetTheme.Overlay("notifications", 100, 24);
         var tabBar = FleetTheme.TabBar(1, 0, [.. names.Select(n => $"{n} (0)")]);
@@ -36,10 +36,6 @@ public static class ShowNoticesView
 
         IReadOnlyList<Notice> shown = [];
 
-        IReadOnlyList<Notice> For(string tab, IReadOnlyDictionary<string, IReadOnlyList<Notice>> all) =>
-            tab == AllTab
-                ? [.. all.Values.SelectMany(n => n).OrderByDescending(n => n.IsOpen).ThenByDescending(n => n.Since)]
-                : all.GetValueOrDefault(tab, []);
 
         void Reload()
         {
@@ -56,11 +52,12 @@ public static class ShowNoticesView
 
             for (var i = 0; i < names.Count; i++)
             {
-                tabBar.Retitle(i, $"{names[i]} ({For(names[i], all).Count(n => n.IsOpen)})");
+                tabBar.Retitle(i, NoticeTabs.Title(names[i], NoticeTabs.For(names[i], all)));
             }
 
-            shown = For(names[tabBar.Selected], all);
-            FleetRows.Fill(list, NoticeRows.For(shown, withProject: tabBar.Selected == 0, DateTime.UtcNow), FleetRows.Selected(list));
+            var tab = names[tabBar.Selected];
+            shown = NoticeTabs.For(tab, all);
+            FleetRows.Fill(list, NoticeRows.For(shown, withProject: NoticeTabs.ShowsProject(tab), DateTime.UtcNow), FleetRows.Selected(list));
             ShowBar();
         }
 

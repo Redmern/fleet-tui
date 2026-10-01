@@ -259,8 +259,10 @@ The dashboard watches its agents and opens a notice when one:
 | `…` | shows the spinner with no new output for 10 minutes |
 | `↕` | has a branch that conflicts with its base or is 20+ commits behind it |
 
-A notice resolves on its own when its cause goes away, and `d` dismisses it; resolved and
-dismissed notices stay listed, greyed out, for a day. They are kept per project in
+A notice resolves on its own when its cause goes away, and `d` dismisses it. Resolved and
+dismissed notices are kept for a day: greyed out in the dashboard's tab, and in the
+notification center they move to its **History** tab, so All and the project tabs show only
+open notices. They are kept per project in
 `%APPDATA%\fleet\notices`.
 
 When a notice opens, fleet shows a desktop toast (on by default) and can ring the terminal

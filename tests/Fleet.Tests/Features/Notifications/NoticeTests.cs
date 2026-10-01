@@ -131,6 +131,26 @@ public sealed class NoticeTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_center_shows_open_notices_per_tab_and_moves_resolved_and_dismissed_ones_to_history()
+    {
+        var open = Found(NoticeKind.NeedsInput, "q");
+        var resolved = Found(NoticeKind.Done, "d") with { Resolved = T0.AddMinutes(5) };
+        var dismissed = Found(NoticeKind.Failed, "f") with { Dismissed = T0.AddMinutes(9) };
+        var elsewhere = new Notice("beta", NoticeKind.Stalled, $"{Work}/s", "api / s", "m", T0.AddMinutes(1));
+        IReadOnlyDictionary<string, IReadOnlyList<Notice>> all = new Dictionary<string, IReadOnlyList<Notice>>
+        {
+            ["alpha"] = [open, resolved, dismissed],
+            ["beta"] = [elsewhere],
+        };
+
+        Assert.Equal(["All", "alpha", "beta", "History"], Fleet.Features.Notifications.ShowNotices.NoticeTabs.Names(["alpha", "beta"]));
+        Assert.Equal([elsewhere, open], Fleet.Features.Notifications.ShowNotices.NoticeTabs.For("All", all));
+        Assert.Equal([open], Fleet.Features.Notifications.ShowNotices.NoticeTabs.For("alpha", all));
+        Assert.Equal([dismissed, resolved], Fleet.Features.Notifications.ShowNotices.NoticeTabs.For("History", all));
+        Assert.Equal("History (2)", Fleet.Features.Notifications.ShowNotices.NoticeTabs.Title("History", Fleet.Features.Notifications.ShowNotices.NoticeTabs.For("History", all)));
+    }
+
+    [Fact]
     public void The_store_keeps_notices_per_project_and_the_alert_settings()
     {
         var store = new JsonNoticeStore();
