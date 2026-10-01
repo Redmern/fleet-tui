@@ -61,8 +61,8 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
         if (workspaces)
         {
             var name = options.Workspace
-                ?? (options.NewWindow ? null : options.WindowId)
                 ?? options.SessionName
+                ?? (options.NewWindow ? null : options.WindowId)
                 ?? "default";
 
             Add(id, name, NextTabId(), name, options.Cwd ?? string.Empty, options.Args, options.Env);

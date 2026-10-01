@@ -20,7 +20,7 @@ public sealed class OpenRepositoryHandler(IMuxDriver mux)
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var window = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, projectRoot))?.WindowId;
+        var window = ProjectWindows.For(mux, panes, project, projectRoot, preferCaller: false);
 
         var open = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, directory));
 

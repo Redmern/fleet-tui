@@ -114,6 +114,29 @@ public sealed class RestoreSessionTests : IDisposable
     }
 
     [Fact]
+    public void A_hidden_agent_is_restored_into_its_own_projects_hidden_workspace_when_there_are_workspaces()
+    {
+        var hidden = Agent("dev", open: true, hidden: true);
+
+        Assert.Equal(FleetWorkspaces.HiddenFor("techweb"), RestoreSessionHandler.Options("techweb", hidden, null, workspaces: true).Workspace);
+        Assert.Equal(FleetWorkspaces.Hidden, RestoreSessionHandler.Options("techweb", hidden, null).Workspace);
+    }
+
+    [Fact]
+    public async Task With_workspaces_agents_are_restored_into_their_project_even_when_another_project_shares_its_folder()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        Directory.CreateDirectory(ProjectRoot);
+        await mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot, SessionName = "other" });
+        await mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot, SessionName = "techweb" });
+
+        await new RestoreSessionHandler(mux).HandleAsync("techweb", ProjectRoot, [Agent("dev", open: true)]);
+
+        var dev = (await mux.ListPanesAsync()).Single(p => p.Cwd.EndsWith("dev", StringComparison.Ordinal));
+        Assert.Equal("techweb", dev.SessionName);
+    }
+
+    [Fact]
     public void A_visible_agent_is_restored_into_the_dashboards_window()
     {
         var options = RestoreSessionHandler.Options("techweb", Agent("dev", open: true), "w7");

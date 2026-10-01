@@ -4173,6 +4173,25 @@ sending `\r`; `ctrl+s space` still opens the menu there.
 The stop test also exposed a race: the render loop checked "not forgotten" and then
 wrote the session, and `shutdown` could delete the file between the two, so the save
 came back. The check and the write now happen under one lock with the shutdown's delete.
+## Panes stay in their own project, 2026-10-01
+
+Agents turned up in another project's workspace. With workspaces a "window" is a
+project, and several paths worked out the target window the WezTerm way:
+
+- **Opening an agent and dispatching** took the window of the *calling* pane first.
+  From the notification center or a menu running in project B's window, project A's
+  agent was moved or started into B.
+- **Restoring agents and opening repositories** took the window of the first pane whose
+  folder equals the project root, which can be a pane of another project.
+- **Restored hidden agents** went to the shared `fleet-hidden` workspace instead of
+  `<project>~hidden`, so quitting the project left them running there.
+- **fleetd's `spawn`** let a request's window outrank the project it named.
+
+Now every one of these asks `ProjectWindows.For`: with workspaces the answer is always
+the project's own workspace (the WezTerm behaviour is unchanged); restore uses
+`<project>~hidden`; and fleetd places a pane in the project a spawn names, whatever
+window it carries, so a wrong window can no longer move a pane across projects. An
+architecture test keeps features from deciding a project's window themselves again.
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

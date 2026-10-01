@@ -970,6 +970,20 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_pane_made_for_a_project_lands_in_that_project_whatever_window_the_request_carries()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "dash");
+        await SpawnAsync(control, "api", "dash");
+
+        var spawned = await control.RequestAsync(new ControlRequest { Op = "spawn", Session = "techweb", Window = "api", Cwd = ".", Args = ["agent"] });
+
+        Assert.True(spawned.Ok, spawned.Error);
+        var panes = await control.RequestAsync(new ControlRequest { Op = "list-panes" });
+        Assert.Equal("techweb", panes.Panes!.Single(p => p.Id == spawned.Pane).Session);
+    }
+
+    [Fact]
     public async Task A_window_only_hears_about_the_projects_in_it()
     {
         var control = await ControlAsync();

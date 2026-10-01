@@ -1665,7 +1665,8 @@ public sealed class FleetDaemon(DaemonOptions options)
     private string Spawn(ControlRequest request)
     {
         var workspace = request.Workspace
-            ?? (request.NewWindow ? request.Session : request.Window ?? request.Session)
+            ?? request.Session
+            ?? (request.NewWindow ? null : request.Window)
             ?? CallerWorkspace(request.Caller)
             ?? Fleet.Shared.Constants.FleetWorkspaces.Default;
 
