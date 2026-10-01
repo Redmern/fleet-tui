@@ -4224,6 +4224,87 @@ The trade-off is accepted knowingly: `k` is also move-up, and a menu matches its
 keys before the list's motions, so in a menu that lists Keybinds `k` opens it instead
 of moving up — the collision the move to `e` once fixed. The arrow keys still move.
 
+## AIDLC engine, 2026-10
+
+AIDLC used to be prose: with AIDLC on, dispatch pasted a five-step Plan/Implement/Test/
+Review/Report text into the sub-orchestrator's CLAUDE.md, and nothing knew where a task
+stood. Milestone 1 of the plan in `.fleet/orchestrations/ai-sdlc-research-plan` gives
+it an engine core: fleet decides the process and keeps a record; the model carries it out.
+
+**Profiles size the ceremony.** Five profiles, each a fixed set of stages with fixed
+human gates (`Shared/Aidlc/ProfileCatalog`):
+
+| Profile | Stages | Human gates |
+|---|---|---|
+| `express` (default) | Intake, Specify (short), Build, Verify, Review, Deliver | Deliver |
+| `bugfix` | Intake, Discover, Specify (repro + expected), Build (failing test first), Verify, Review, Deliver | Specify, Deliver |
+| `feature` | all nine | Specify, Plan, Build (walking skeleton), Deliver |
+| `refactor` | Intake, Discover, Plan, Build (characterisation tests first), Verify, Review, Deliver | Plan, Deliver |
+| `research` | Intake, Discover, Deliver (the report) | Deliver |
+
+Stages have AI-DLC's six states (`pending`, `active`, `awaiting`, `revising`, `done`,
+`skipped`) and units have their own nine. `Transitions` lists the allowed moves and
+returns a failed `Result` for any other; a gated stage cannot go from `active` to `done`
+without passing `awaiting`. `UnitGraph` validates a `units.json` plan (cycles, unknown
+repositories and dependencies, duplicate ids and branches, acceptance-criteria coverage
+through `Traceability`), computes the ready set (a walking skeleton runs alone first)
+and reports `owns` globs that overlap between units of one repository that could run
+at the same time. The glob check is conservative: when in doubt it reports an overlap,
+because the cost is only that two units run one after the other.
+
+**Settings, per project** (`AidlcSettings`, in the project's settings file; a missing
+field means its default, so older files load unchanged):
+
+- *Mode*: `off` (default), `on`, or `manual`. Manual used to mean "the prompt doubles the
+  dispatch trigger" (`,,task`), which nobody found. It now means "only when the task
+  names a profile": a prefix such as `,feature: add oauth`, or the `profile` argument of
+  the `dispatch` MCP tool. The prefix is the profile word and a colon; a colon keeps
+  ordinary sentences that start with "feature" or "research" from being taken as one.
+- *Default profile* (`express`) and *autonomy* (`guided`, or `automatic` to go on from
+  unit to unit after the walking skeleton; failures still stop either way).
+- Seven parts, all on by default: the spec, plan and deliver gates, the walking
+  skeleton, and the verify, review and learn stages. A gate switched off keeps its stage
+  but makes the gate automatic; verify, review or learn switched off skips the stage,
+  recorded as `skipped` with the reason "off in settings". One pure function,
+  `ProcessPlan.Resolve(profile, autonomy, off)`, turns this into the effective plan, so
+  the record, the rendered text and the tests cannot disagree.
+
+The settings are edited from the AIDLC item (`A`) in the menu's Settings submenu, which
+now opens a screen with all of them instead of a three-way mode picker.
+
+**Intake on dispatch.** When AIDLC applies, dispatch picks the profile (prefix, then the
+`profile` argument, then the project default), writes `state.json` (profile, autonomy,
+stages with their states, units, created/updated) and starts `audit.jsonl` with
+`IntentCreated`, `ProfileSet` (with where the profile came from) and one `StageSkipped`
+per switched-off stage. Both go through `IIntentStore`; the JSON store uses the
+source-generated `AidlcJsonContext`, writes `state.json` through a temporary file, and
+appends one compact JSON object per audit line. Then it renders CLAUDE.md's
+`## Process` from the effective plan: the stages in order, the artifacts each writes
+(`discover.md`, `spec.md` with numbered AC-n, `design.md` and `units.json`,
+`progress/<unit>.md`, `reviews/<unit>-<round>.md`, `learnings.md`), and which stages wait
+for the user.
+
+**Gates are honour-system until M3.** There are no gate tools yet, so the process text
+tells the conductor to stop at each human gate, summarise the artifact, and wait for the
+user's reply. The engine cannot enforce that yet; M3 moves gates onto the dashboard's
+approval channel, where the conductor cannot answer its own prompt.
+
+**`aidlc.md` is appended, not substituted.** A project's `.fleet/config/aidlc.md` used
+to replace the process. With a generated, per-profile process, replacing it would throw
+away the stage list and the gates, so the file now lands under `### Project guidance`
+at the end of the process. Opening the fleet config used to seed `aidlc.md` with the old
+built-in text; such a file would now append a contradicting second process, so a file
+whose text is exactly the old default (`OrchestrationText.ClassicAidlc`) is ignored, and
+the config folder no longer seeds one.
+
+**Deferred.** M2: hook-based agent status (a sibling branch). M3: `aidlc_status` and
+`aidlc_submit`, gates through the approval channel, the `GateWaiting` notice, refusing
+illegal moves at the tool. M4: `aidlc_verify` with receipts keyed by commit SHA. M5:
+`aidlc_plan_units`, unit agents with fleet-rendered briefs, the dependency scheduler
+with its concurrency cap. M6: the read-only reviewer harness and the two-round review
+loop. M7: the pipeline view, cost and metrics, and Deliver. M8: the learning loop.
+Until then the record's later stages stay `pending`; only Intake is marked done.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
