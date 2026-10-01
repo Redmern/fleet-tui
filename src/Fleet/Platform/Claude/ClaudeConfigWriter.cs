@@ -2,6 +2,7 @@ using System.Text.Json;
 using Fleet.Platform.Claude.Models;
 using Fleet.Ports.Claude;
 using Fleet.Ports.Claude.Models;
+using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 
@@ -72,7 +73,8 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         string directory,
         IReadOnlyList<string> allow,
         IReadOnlyList<string> deny,
-        IReadOnlyList<string> ask)
+        IReadOnlyList<string> ask,
+        string statusHook = "")
     {
         var mcpPath = Path.Combine(directory, ".mcp.json");
         var settingsPath = Path.Combine(directory, ".claude", "settings.local.json");
@@ -101,6 +103,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         settings.Permissions.Allow = Merge(settings.Permissions.Allow, allow);
         settings.Permissions.Deny = Merge(settings.Permissions.Deny, deny);
         settings.Permissions.Ask = Merge(settings.Permissions.Ask, ask);
+        ApplyStatusHooks(settings, statusHook);
 
         if (!Write(mcpPath, JsonSerializer.Serialize(mcp, ClaudeJsonContext.Default.McpJsonFile)))
         {
@@ -165,11 +168,15 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         var hookInstalled = settings.Hooks?.UserPromptSubmit
             .Any(group => group.Hooks.Any(IsOwnedHook)) ?? false;
 
+        var statusHooksInstalled = settings.Hooks is { } hooks
+            && HookStatus.Events.All(name => hooks.For(name)?.Any(group => group.Hooks.Any(IsStatusHook)) ?? false);
+
         return new ClaudeState(
             mcp.McpServers.ContainsKey(serverName),
             settings.EnabledMcpjsonServers.Contains(serverName),
             hookInstalled,
-            settings.Permissions.Allow);
+            settings.Permissions.Allow,
+            statusHooksInstalled);
     }
 
     private static void Apply(McpJsonFile file, McpServerEntry server)
@@ -197,7 +204,42 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         }
 
         ApplyHook(file, plan.HookCommand, plan.HookArgs);
+        ApplyStatusHooks(file, plan.StatusHook);
     }
+
+    private static void ApplyStatusHooks(ClaudeSettingsFile file, string command)
+    {
+        var on = command.Trim().Length > 0;
+
+        if (!on && file.Hooks is null)
+        {
+            return;
+        }
+
+        var hooks = file.Hooks ??= new HooksJson();
+
+        foreach (var name in HookStatus.Events)
+        {
+            var kept = (hooks.For(name) ?? [])
+                .Where(group => !group.Hooks.Any(IsStatusHook))
+                .ToList();
+
+            if (on)
+            {
+                kept.Add(new HookGroup
+                {
+                    Hooks = [new HookEntry { Type = "command", Command = command, Args = [HookStatus.Verb], Timeout = StatusHookTimeout }],
+                });
+            }
+
+            hooks.Set(name, kept.Count == 0 ? null : kept);
+        }
+    }
+
+    private const double StatusHookTimeout = 10;
+
+    private static bool IsStatusHook(HookEntry entry) =>
+        entry.Args is [var verb, ..] && verb == HookStatus.Verb;
 
     private static void ApplyHook(
         ClaudeSettingsFile file, string command, IReadOnlyList<string> args)

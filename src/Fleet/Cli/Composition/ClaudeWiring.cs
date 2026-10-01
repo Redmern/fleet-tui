@@ -30,7 +30,8 @@ public static class ClaudeWiring
             permissions.Ask,
             [server.Name],
             Adapters.Executable,
-            ["hook-dispatch", "--project", project]);
+            ["hook-dispatch", "--project", project],
+            StatusHook(settings));
 
         var writer = new ClaudeConfigWriter();
 
@@ -66,8 +67,11 @@ public static class ClaudeWiring
             Adapters.Executable, project, McpCaller.ForAgent(repository, branch));
 
         return new ClaudeConfigWriter()
-            .SyncWorktree(server, folder, permissions.Allow, permissions.Deny, permissions.Ask);
+            .SyncWorktree(server, folder, permissions.Allow, permissions.Deny, permissions.Ask, StatusHook(settings));
     }
+
+    private static string StatusHook(SettingsConfig settings) =>
+        settings.StatusHooks ? Adapters.Executable : string.Empty;
 
     public static void TrustFolder(string folder) =>
         new ClaudeConfigWriter().TrustFolder(ClaudeJsonPathFor(folder), folder, McpTools.ServerName);

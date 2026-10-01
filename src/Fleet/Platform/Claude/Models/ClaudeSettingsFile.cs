@@ -29,6 +29,9 @@ public sealed class HookEntry
     [JsonPropertyName("args")]
     public List<string>? Args { get; set; }
 
+    [JsonPropertyName("timeout")]
+    public double? Timeout { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extra { get; set; } = [];
 }
@@ -49,6 +52,64 @@ public sealed class HooksJson
 {
     [JsonPropertyName("UserPromptSubmit")]
     public List<HookGroup> UserPromptSubmit { get; set; } = [];
+
+    [JsonPropertyName("PreToolUse")]
+    public List<HookGroup>? PreToolUse { get; set; }
+
+    [JsonPropertyName("Stop")]
+    public List<HookGroup>? Stop { get; set; }
+
+    [JsonPropertyName("SessionStart")]
+    public List<HookGroup>? SessionStart { get; set; }
+
+    [JsonPropertyName("SessionEnd")]
+    public List<HookGroup>? SessionEnd { get; set; }
+
+    [JsonPropertyName("PermissionRequest")]
+    public List<HookGroup>? PermissionRequest { get; set; }
+
+    [JsonPropertyName("Notification")]
+    public List<HookGroup>? Notification { get; set; }
+
+    public List<HookGroup>? For(string name) => name switch
+    {
+        "UserPromptSubmit" => UserPromptSubmit,
+        "PreToolUse" => PreToolUse,
+        "Stop" => Stop,
+        "SessionStart" => SessionStart,
+        "SessionEnd" => SessionEnd,
+        "PermissionRequest" => PermissionRequest,
+        "Notification" => Notification,
+        _ => null,
+    };
+
+    public void Set(string name, List<HookGroup>? groups)
+    {
+        switch (name)
+        {
+            case "UserPromptSubmit":
+                UserPromptSubmit = groups ?? [];
+                break;
+            case "PreToolUse":
+                PreToolUse = groups;
+                break;
+            case "Stop":
+                Stop = groups;
+                break;
+            case "SessionStart":
+                SessionStart = groups;
+                break;
+            case "SessionEnd":
+                SessionEnd = groups;
+                break;
+            case "PermissionRequest":
+                PermissionRequest = groups;
+                break;
+            case "Notification":
+                Notification = groups;
+                break;
+        }
+    }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extra { get; set; } = [];

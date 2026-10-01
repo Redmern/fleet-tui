@@ -8,4 +8,5 @@ public sealed record ClaudePlan(
     IReadOnlyList<string> Ask,
     IReadOnlyList<string> EnabledServers,
     string HookCommand,
-    IReadOnlyList<string> HookArgs);
+    IReadOnlyList<string> HookArgs,
+    string StatusHook = "");
