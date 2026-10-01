@@ -99,12 +99,14 @@ public class ViewLogsTests
     }
 
     [Fact]
-    public void The_log_key_is_capital_L_because_lowercase_l_switches_tabs()
+    public void The_log_key_is_l_and_stays_out_of_the_dashboard_tabs_where_l_switches_tabs()
     {
-        var map = Keymap.Default;
+        Assert.Equal("l", KeymapDefaults.Bindings[FleetAction.ViewLogs]);
 
-        Assert.Equal("L", KeymapDefaults.Bindings[FleetAction.ViewLogs]);
-        Assert.NotEqual(map.KeyFor(FleetAction.NextTab), map.KeyFor(FleetAction.ViewLogs));
+        foreach (var tab in new[] { DashboardTabs.AgentsTab, DashboardTabs.RepositoriesTab, DashboardTabs.SubsTab, DashboardTabs.NotificationsTab })
+        {
+            Assert.DoesNotContain(FleetAction.ViewLogs, DashboardKeys.ScopeFor(tab));
+        }
     }
 
     [Fact]
