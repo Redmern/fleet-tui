@@ -20,8 +20,95 @@ REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 BIN_DIR="${FLEET_BIN_DIR:-$HOME/.local/bin}"
 BIN="$BIN_DIR/fleet"
 
-step() { printf '==> %s\n' "$1"; }
+# Progress bar and spinner only on an interactive terminal; anywhere else
+# (redirected, CI, TERM=dumb, NO_COLOR, FLEET_NO_ANIMATION) the plain
+# '==> step' lines are printed.
+FANCY=0
+if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ] &&
+    [ -z "${CI:-}" ] && [ -z "${FLEET_NO_ANIMATION:-}" ]; then
+    FANCY=1
+fi
+STEP=0
+STEPS=4
+SPIN_PID=
+SPIN_LOG=
+
+bar() {
+    filled=$(($1 * 24 / $2))
+    out='['
+    n=0
+    while [ "$n" -lt 24 ]; do
+        if [ "$n" -lt "$filled" ]; then out="$out#"; else out="$out-"; fi
+        n=$((n + 1))
+    done
+    printf '%s]' "$out"
+}
+
+step() {
+    STEP=$((STEP + 1))
+    if [ "$FANCY" = 1 ]; then
+        printf '%s %s/%s %s\n' "$(bar $((STEP - 1)) "$STEPS")" "$STEP" "$STEPS" "$1"
+    else
+        printf '==> %s\n' "$1"
+    fi
+}
+
+steps_done() {
+    if [ "$FANCY" = 1 ]; then
+        printf '%s %s/%s Done\n' "$(bar 1 1)" "$STEPS" "$STEPS"
+    fi
+}
+
 ok() { printf '    %s\n' "$1"; }
+
+# Clears the spinner line and gives the cursor back, also on Ctrl+C.
+spin_cleanup() {
+    if [ -n "$SPIN_PID" ]; then
+        kill "$SPIN_PID" 2>/dev/null || true
+        SPIN_PID=
+        printf '\r\033[K\033[?25h'
+    fi
+    if [ -n "$SPIN_LOG" ]; then
+        rm -f "$SPIN_LOG"
+    fi
+}
+trap spin_cleanup EXIT
+trap 'spin_cleanup; exit 130' INT
+trap 'spin_cleanup; exit 143' TERM
+
+# Runs a command with its output in a log (printed when it fails) and a spinner
+# while it runs. Returns the command's exit code.
+with_spinner() {
+    label="$1"
+    shift
+    log="$(mktemp)"
+    SPIN_LOG="$log"
+    "$@" >"$log" 2>&1 &
+    SPIN_PID=$!
+    printf '\033[?25l'
+    i=0
+    while kill -0 "$SPIN_PID" 2>/dev/null; do
+        case $((i % 4)) in
+            0) c='|' ;;
+            1) c='/' ;;
+            2) c='-' ;;
+            *) c='\' ;;
+        esac
+        printf '\r    %s %s' "$c" "$label"
+        i=$((i + 1))
+        sleep 0.2 2>/dev/null || sleep 1
+    done
+    rc=0
+    wait "$SPIN_PID" || rc=$?
+    SPIN_PID=
+    printf '\r\033[K\033[?25h'
+    if [ "$rc" != 0 ]; then
+        cat "$log" >&2
+    fi
+    rm -f "$log"
+    SPIN_LOG=
+    return "$rc"
+}
 
 for arg in "$@"; do
     case "$arg" in
@@ -75,11 +162,19 @@ install_deps() {
 }
 
 if [ "${1:-}" = "--uninstall" ]; then
+    STEPS=1
     step 'Uninstalling'
     rm -f "$BIN"
     ok "removed $BIN"
     ok "configuration kept in ${XDG_CONFIG_HOME:-$HOME/.config}/fleet"
+    steps_done
     exit 0
+fi
+
+if [ "$DEPS_ONLY" = 1 ]; then
+    STEPS=2
+elif [ "$WITH_DEPS" = 1 ]; then
+    STEPS=6
 fi
 
 if [ "$WITH_DEPS" = 1 ]; then
@@ -87,6 +182,7 @@ if [ "$WITH_DEPS" = 1 ]; then
 fi
 
 if [ "$DEPS_ONLY" = 1 ]; then
+    steps_done
     exit 0
 fi
 
@@ -124,7 +220,11 @@ ok "target $RID"
 
 step 'Publishing (NativeAOT)'
 OUT="$REPO_ROOT/out/$RID"
-dotnet publish "$REPO_ROOT/src/Fleet/Fleet.csproj" -c Release -r "$RID" -o "$OUT" --nologo
+if [ "$FANCY" = 1 ]; then
+    with_spinner 'dotnet publish' dotnet publish "$REPO_ROOT/src/Fleet/Fleet.csproj" -c Release -r "$RID" -o "$OUT" --nologo
+else
+    dotnet publish "$REPO_ROOT/src/Fleet/Fleet.csproj" -c Release -r "$RID" -o "$OUT" --nologo
+fi
 ok "published to $OUT"
 
 step 'Installing'
@@ -141,5 +241,6 @@ esac
 step 'Setting up'
 "$BIN" setup || true
 
+steps_done
 echo
 echo "fleet installed. Run 'fleet' to open a project."

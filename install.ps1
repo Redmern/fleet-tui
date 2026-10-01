@@ -45,9 +45,83 @@ $InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\fleet'
 $BinPath    = Join-Path $InstallDir 'fleet.exe'
 $ConfigDir  = Join-Path $env:APPDATA 'fleet'
 
-function Write-Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
+# Progress bar and spinner only on an interactive console; anywhere else (redirected,
+# CI, TERM=dumb, NO_COLOR, FLEET_NO_ANIMATION) the plain '==> step' lines are printed.
+$script:Fancy = -not ($env:FLEET_NO_ANIMATION -or $env:NO_COLOR -or $env:CI -or $env:TERM -eq 'dumb' -or
+    $Host.Name -ne 'ConsoleHost' -or [Console]::IsOutputRedirected)
+$script:StepCount = 0
+$script:StepTotal = 4
+
+function Format-Bar([double]$fraction, [int]$width = 24) {
+    $filled = [int][Math]::Floor([Math]::Max(0.0, [Math]::Min(1.0, $fraction)) * $width)
+    '[' + ('#' * $filled) + ('-' * ($width - $filled)) + ']'
+}
+
+function Write-Step($m) {
+    $script:StepCount++
+    if ($script:Fancy) {
+        $bar = Format-Bar (($script:StepCount - 1) / $script:StepTotal)
+        Write-Host "$bar $script:StepCount/$script:StepTotal $m" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "==> $m" -ForegroundColor Cyan
+    }
+}
+
+function Complete-Steps {
+    if ($script:Fancy) { Write-Host "$(Format-Bar 1) $script:StepTotal/$script:StepTotal Done" -ForegroundColor Cyan }
+}
+
 function Write-Ok($m)   { Write-Host "    $m" -ForegroundColor Green }
 function Write-Warn2($m) { Write-Host "    $m" -ForegroundColor Yellow }
+
+function Get-LineWidth {
+    try { [Math]::Max(20, [Console]::WindowWidth - 1) } catch { 79 }
+}
+
+function Write-Status($text) {
+    $width = Get-LineWidth
+    if ($text.Length -gt $width) { $text = $text.Substring(0, $width) }
+    [Console]::Write("`r" + $text.PadRight($width))
+}
+
+function Clear-Status {
+    [Console]::Write("`r" + (' ' * (Get-LineWidth)) + "`r")
+    try { [Console]::CursorVisible = $true } catch { }
+}
+
+# Runs a command with its output captured (shown by the caller on failure) and a
+# spinner on the console while it runs. Ctrl+C still lands in the finally block.
+function Invoke-WithSpinner([string]$Label, [string]$FilePath, [string[]]$Arguments) {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $FilePath
+    $psi.Arguments = ($Arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $stdout = $process.StandardOutput.ReadToEndAsync()
+    $stderr = $process.StandardError.ReadToEndAsync()
+    $frames = '|/-\'
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    $i = 0
+
+    try {
+        if ($script:Fancy) { try { [Console]::CursorVisible = $false } catch { } }
+        while (-not $process.WaitForExit(100)) {
+            if ($script:Fancy) {
+                Write-Status "    $($frames[$i++ % $frames.Length]) $Label ($([int]$clock.Elapsed.TotalSeconds)s)"
+            }
+        }
+        $process.WaitForExit()
+        [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $stdout.Result + $stderr.Result }
+    }
+    finally {
+        if (-not $process.HasExited) { try { $process.Kill() } catch { } }
+        if ($script:Fancy) { Clear-Status }
+    }
+}
 
 function Add-ToUserPath($dir) {
     $current = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -76,6 +150,7 @@ function Remove-FromUserPath($dir) {
 # ---------------------------------------------------------------------------
 
 if ($Uninstall) {
+    $script:StepTotal = 1
     Write-Step 'Uninstalling fleet'
 
     Get-Process fleet -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -98,6 +173,7 @@ if ($Uninstall) {
         Write-Warn2 'config kept; re-run with -Purge to delete it'
     }
 
+    Complete-Steps
     Write-Host "`nfleet uninstalled." -ForegroundColor Green
     return
 }
@@ -136,9 +212,10 @@ if ((Test-Path (Join-Path $vsInstaller 'vswhere.exe')) -and
 Write-Step 'Publishing (NativeAOT)'
 
 $publishDir = Join-Path $RepoRoot 'out'
-& dotnet publish (Join-Path $RepoRoot 'src\Fleet') -c Release -o $publishDir | Out-Null
+$publish = Invoke-WithSpinner 'dotnet publish' 'dotnet' @('publish', (Join-Path $RepoRoot 'src\Fleet'), '-c', 'Release', '-o', $publishDir)
 
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $publishDir 'fleet.exe'))) {
+if ($publish.ExitCode -ne 0 -or -not (Test-Path (Join-Path $publishDir 'fleet.exe'))) {
+    Write-Host $publish.Output
     throw 'publish failed. NativeAOT needs Visual Studio Build Tools with the C++ workload.'
 }
 Write-Ok "published to $publishDir"
@@ -188,5 +265,6 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host '    something fleet needs is missing - see the list above' -ForegroundColor Yellow
 }
 
+Complete-Steps
 Write-Host "`nfleet installed. Run 'fleet' in a new terminal." -ForegroundColor Green
 exit 0

@@ -54,6 +54,18 @@ jobs:
           [ -f "$archive" ] || { echo "::error::$archive is missing; the build would have no embedded multiplexer"; exit 1; }
           ls -la "$archive"
 
+      # The installers' plain fallback; installs nothing. Windows also runs it on
+      # Windows PowerShell 5.1, which get-fleet.ps1 has to support through irm | iex.
+      - name: Installer output
+        shell: pwsh
+        run: |
+          ./tests/scripts/installer-output.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($IsWindows) {
+            powershell -NoProfile -ExecutionPolicy Bypass -File tests/scripts/installer-output.ps1
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
       - name: Test
         run: dotnet test Fleet.slnx --nologo -v minimal
 
