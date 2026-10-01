@@ -451,17 +451,18 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     }
 
     [Fact]
-    public void The_switcher_gets_an_all_tab_this_machine_and_one_tab_per_remote_named_by_its_machine()
+    public void The_switcher_gets_open_all_this_machine_and_one_tab_per_remote_named_by_its_machine()
     {
         var tabs = SwitchTabs.For(
             [new PickerEntry("fleet", "this window"), new PickerEntry("pc")],
+            ["fleet"],
             [new RemoteMachine("user@homelab", "homelab", RemoteState.Connected, ["api", "scraper"])]);
 
-        Assert.Equal(["All", "this machine", "homelab"], tabs.Tabs.Select(t => t.Title));
-        Assert.Equal(["fleet", "pc", "api", "scraper"], tabs.Tabs[0].Entries.Select(e => e.Label));
-        Assert.Equal("homelab", tabs.Tabs[0].Entries[2].Detail);
-        Assert.Equal(new SwitchTarget("scraper", "user@homelab"), tabs.Targets[2][1]);
-        Assert.Equal(new SwitchTarget("pc"), tabs.Targets[SwitchTabs.ThisMachine][1]);
+        Assert.Equal(["Open", "All", "this machine", "homelab"], tabs.Tabs.Select(t => t.Title));
+        Assert.Equal(["fleet", "pc", "api", "scraper"], tabs.Tabs[1].Entries.Select(e => e.Label));
+        Assert.Equal("homelab", tabs.Tabs[1].Entries[2].Detail);
+        Assert.Equal(new SwitchTarget("scraper", "user@homelab"), tabs.Targets[tabs.MachineTab(0)][1]);
+        Assert.Equal(new SwitchTarget("pc"), tabs.Targets[tabs.ThisMachine][1]);
     }
 
     private sealed class SilentStream : Stream
