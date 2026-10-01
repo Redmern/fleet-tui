@@ -154,6 +154,17 @@ public static class EditSettingsView
                 return;
             }
 
+            if (SettingsRows.IsStatusHooksRow(index))
+            {
+                Persist(
+                    config.WithStatusHooks(!config.StatusHooks),
+                    config.StatusHooks
+                        ? "Status hooks off: fleet reads the panes instead."
+                        : "Status hooks on: agents report their status through Claude hooks.");
+                Refill(index);
+                return;
+            }
+
             var tool = SettingsRows.ToolAt(index);
 
             if (tool != HarnessTool.None)
@@ -194,6 +205,13 @@ public static class EditSettingsView
             if (SettingsRows.IsPushRow(index))
             {
                 Persist(config.WithPush(SettingsDefaults.Push), "Reset to the default.");
+                Refill(index);
+                return;
+            }
+
+            if (SettingsRows.IsStatusHooksRow(index))
+            {
+                Persist(config.WithStatusHooks(SettingsDefaults.StatusHooks), "Reset to the default.");
                 Refill(index);
                 return;
             }

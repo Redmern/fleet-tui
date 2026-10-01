@@ -230,6 +230,27 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Status_hooks_default_to_on_when_the_field_is_missing()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(Path.Combine(FleetPaths.Settings, "techweb.json"), """{"version":1,"trigger":";"}""");
+
+        Assert.True(Store.Load("techweb").StatusHooks);
+        Assert.True(Store.Load("never-saved").StatusHooks);
+    }
+
+    [Fact]
+    public void Status_hooks_off_round_trips_and_on_is_not_written()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithStatusHooks(false));
+        Assert.False(Store.Load("techweb").StatusHooks);
+
+        Store.Save("techweb", SettingsConfig.Default.WithStatusHooks(true));
+        Assert.True(Store.Load("techweb").StatusHooks);
+        Assert.DoesNotContain("statusHooks", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));

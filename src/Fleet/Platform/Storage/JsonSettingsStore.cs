@@ -61,7 +61,10 @@ public sealed class JsonSettingsStore : ISettingsStore
                     ParseOnOff(stored.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim),
                     ParseOnOff(stored.AutoClose, SettingsDefaults.AutoClose),
                     stored.AutoCloseMinutes)
-                .MergedOverDefaults();
+                .MergedOverDefaults() with
+            {
+                StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
+            };
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -93,6 +96,7 @@ public sealed class JsonSettingsStore : ISettingsStore
                 config.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim),
             AutoClose = OnOffAgainstDefault(config.AutoClose, SettingsDefaults.AutoClose),
             AutoCloseMinutes = config.AutoCloseMinutes == SettingsDefaults.AutoCloseMinutes ? 0 : config.AutoCloseMinutes,
+            StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
             Tools = SettingsDiff.AgainstDefaults(config.Rules).ToDictionary(
                 r => HarnessToolIds.For(r.Key),
                 r => new ToolRuleEntry

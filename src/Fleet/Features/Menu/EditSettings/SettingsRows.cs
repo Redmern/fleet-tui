@@ -12,13 +12,15 @@ public static class SettingsRows
 
     public static IReadOnlyList<HarnessTool> Tools => SettingsDefaults.Configurable;
 
-    public static int Count => Tools.Count + 3;
+    public static int Count => Tools.Count + 4;
 
     public static bool IsTriggerRow(int index) => index == 0;
 
     public static bool IsCommitRow(int index) => index == Tools.Count + 1;
 
     public static bool IsPushRow(int index) => index == Tools.Count + 2;
+
+    public static bool IsStatusHooksRow(int index) => index == Tools.Count + 3;
 
     public static HarnessTool ToolAt(int index) =>
         index >= 1 && index <= Tools.Count ? Tools[index - 1] : HarnessTool.None;
@@ -32,6 +34,7 @@ public static class SettingsRows
                 TriggerLabel.Length,
                 SettingsDefaults.CommitLabel.Length,
                 SettingsDefaults.PushLabel.Length,
+                SettingsDefaults.StatusHooksLabel.Length,
                 Tools.Max(t => SettingsDefaults.Describe(t).Length),
             }
             .Max();
@@ -46,6 +49,7 @@ public static class SettingsRows
         rows.AddRange(Tools.Select(t => Row(t, config.RuleFor(t), labelWidth)));
         rows.Add(GateRow(SettingsDefaults.CommitLabel, config.Commit, labelWidth));
         rows.Add(GateRow(SettingsDefaults.PushLabel, config.Push, labelWidth));
+        rows.Add(SwitchRow(SettingsDefaults.StatusHooksLabel, config.StatusHooks, labelWidth));
 
         return rows;
     }
@@ -68,6 +72,11 @@ public static class SettingsRows
         new(
             [FleetSpan.Plain(label.PadRight(labelWidth))],
             [new FleetSpan(GateWord(policy).PadRight(6) + "  ", ToneFor(policy)), FleetSpan.Muted("—")]);
+
+    private static FleetRow SwitchRow(string label, bool on, int labelWidth) =>
+        new(
+            [FleetSpan.Plain(label.PadRight(labelWidth))],
+            [new FleetSpan((on ? "on" : "off").PadRight(6) + "  ", on ? FleetTones.Good : FleetTones.Muted), FleetSpan.Muted("—")]);
 
     private static string GateWord(ActionPolicy policy) => policy switch
     {

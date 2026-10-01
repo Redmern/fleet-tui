@@ -120,6 +120,14 @@ public class SettingsTests
         Assert.NotEqual(before, SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid).Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithTrigger(";").Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithAidlcMode(AidlcMode.On).Signature);
+        Assert.NotEqual(before, SettingsConfig.Default.WithStatusHooks(false).Signature);
+    }
+
+    [Fact]
+    public void Status_hooks_are_on_by_default_and_survive_a_merge_over_the_defaults()
+    {
+        Assert.True(SettingsConfig.Default.StatusHooks);
+        Assert.False(SettingsConfig.Default.WithStatusHooks(false).MergedOverDefaults().StatusHooks);
     }
 
     [Fact]
