@@ -16,7 +16,7 @@
 #>
 $ErrorActionPreference = 'Stop'
 
-$repo = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+$repo = Resolve-Path (Join-Path $PSScriptRoot '../..')
 $shell = (Get-Process -Id $PID).Path
 $failures = 0
 
@@ -45,7 +45,7 @@ function Get-FancyExpression($path) {
     $assignment.Right.Extent.Text
 }
 
-foreach ($installer in 'install.ps1', 'scripts\get-fleet.ps1') {
+foreach ($installer in 'install.ps1', 'scripts/get-fleet.ps1') {
     $helpers = Get-Helpers (Join-Path $repo $installer)
     $probe = Join-Path ([IO.Path]::GetTempPath()) "fleet-installer-probe-$([guid]::NewGuid().ToString('N')).ps1"
 
