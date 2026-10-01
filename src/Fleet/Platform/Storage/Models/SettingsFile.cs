@@ -12,6 +12,12 @@ public sealed class SettingsFile
 
     public string Aidlc { get; set; } = string.Empty;
 
+    public string AidlcProfile { get; set; } = string.Empty;
+
+    public string AidlcAutonomy { get; set; } = string.Empty;
+
+    public List<string> AidlcOff { get; set; } = [];
+
     public Dictionary<string, ToolRuleEntry> Tools { get; set; } = [];
 }
 

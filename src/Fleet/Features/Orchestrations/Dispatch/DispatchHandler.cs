@@ -156,12 +156,12 @@ public sealed class DispatchHandler(
     {
         var config = settings?.Load(projectName) ?? SettingsConfig.Default;
 
-        if (config.Aidlc == AidlcMode.Off)
+        if (config.Aidlc.Mode == AidlcMode.Off)
         {
             return (prompt, false);
         }
 
-        if (config.Aidlc == AidlcMode.On)
+        if (config.Aidlc.Mode == AidlcMode.On)
         {
             return (prompt, true);
         }
