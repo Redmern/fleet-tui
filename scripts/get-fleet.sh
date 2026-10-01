@@ -21,6 +21,46 @@ for arg in "$@"; do
     esac
 done
 
+# Progress bar and curl's download meter only on an interactive terminal; anywhere
+# else (redirected, CI, TERM=dumb, NO_COLOR, FLEET_NO_ANIMATION) the plain
+# '==> step' lines are printed. Inlined so 'curl ... | sh' keeps working.
+FANCY=0
+if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ] &&
+    [ -z "${CI:-}" ] && [ -z "${FLEET_NO_ANIMATION:-}" ]; then
+    FANCY=1
+fi
+STEP=0
+STEPS=3
+if [ "$WITH_DEPS" = 1 ]; then
+    STEPS=4
+fi
+
+bar() {
+    filled=$(($1 * 24 / $2))
+    out='['
+    n=0
+    while [ "$n" -lt 24 ]; do
+        if [ "$n" -lt "$filled" ]; then out="$out#"; else out="$out-"; fi
+        n=$((n + 1))
+    done
+    printf '%s]' "$out"
+}
+
+step() {
+    STEP=$((STEP + 1))
+    if [ "$FANCY" = 1 ]; then
+        printf '%s %s/%s %s\n' "$(bar $((STEP - 1)) "$STEPS")" "$STEP" "$STEPS" "$1"
+    else
+        printf '==> %s\n' "$1"
+    fi
+}
+
+steps_done() {
+    if [ "$FANCY" = 1 ]; then
+        printf '%s %s/%s Done\n' "$(bar 1 1)" "$STEPS" "$STEPS"
+    fi
+}
+
 REPO="${REPO_ARG:-${FLEET_REPO:-$DEFAULT_REPO}}"
 VERSION="${FLEET_VERSION:-latest}"
 BIN_DIR="${FLEET_BIN_DIR:-$HOME/.local/bin}"
@@ -40,7 +80,7 @@ else
 fi
 
 if [ "$WITH_DEPS" = 1 ]; then
-    echo "==> Fetching the dependency installer"
+    step 'Fetching the dependency installer'
     DEPS="$(mktemp)"
     curl -fsSL "https://raw.githubusercontent.com/$REPO/main/install.sh" -o "$DEPS"
     # install.sh carries the dependency logic; --deps-only stops before building.
@@ -48,13 +88,17 @@ if [ "$WITH_DEPS" = 1 ]; then
     rm -f "$DEPS"
 fi
 
-echo "==> Downloading $ASSET"
+step "Downloading $ASSET"
 mkdir -p "$BIN_DIR"
 TMP="$(mktemp)"
-curl -fsSL "$URL" -o "$TMP"
+if [ "$FANCY" = 1 ]; then
+    curl -fL -# "$URL" -o "$TMP"
+else
+    curl -fsSL "$URL" -o "$TMP"
+fi
 echo "    $URL"
 
-echo "==> Installing"
+step 'Installing'
 chmod +x "$TMP"
 mv "$TMP" "$BIN_DIR/fleet"
 echo "    $BIN_DIR/fleet"
@@ -64,8 +108,9 @@ case ":$PATH:" in
     *) echo "    add to PATH: export PATH=\"$BIN_DIR:\$PATH\"" ;;
 esac
 
-echo "==> Setting up"
+step 'Setting up'
 "$BIN_DIR/fleet" setup || true
 
+steps_done
 echo
 echo "fleet installed. Run 'fleet' to open a project."

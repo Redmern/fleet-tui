@@ -44,8 +44,103 @@ $Asset      = 'fleet-win-x64.exe'
 $InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\fleet'
 $BinPath    = Join-Path $InstallDir 'fleet.exe'
 
-function Write-Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
+# Progress bar and download meter only on an interactive console; anywhere else
+# (redirected, CI, TERM=dumb, NO_COLOR, FLEET_NO_ANIMATION) the plain '==> step'
+# lines are printed. Inlined rather than dot-sourced so 'irm | iex' keeps working.
+$script:Fancy = -not ($env:FLEET_NO_ANIMATION -or $env:NO_COLOR -or $env:CI -or $env:TERM -eq 'dumb' -or
+    $Host.Name -ne 'ConsoleHost' -or [Console]::IsOutputRedirected)
+$script:StepCount = 0
+$script:StepTotal = if ($WithDeps) { 4 } else { 3 }
+
+function Format-Bar([double]$fraction, [int]$width = 24) {
+    $filled = [int][Math]::Floor([Math]::Max(0.0, [Math]::Min(1.0, $fraction)) * $width)
+    '[' + ('#' * $filled) + ('-' * ($width - $filled)) + ']'
+}
+
+function Write-Step($m) {
+    $script:StepCount++
+    if ($script:Fancy) {
+        $bar = Format-Bar (($script:StepCount - 1) / $script:StepTotal)
+        Write-Host "$bar $script:StepCount/$script:StepTotal $m" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "==> $m" -ForegroundColor Cyan
+    }
+}
+
+function Complete-Steps {
+    if ($script:Fancy) { Write-Host "$(Format-Bar 1) $script:StepTotal/$script:StepTotal Done" -ForegroundColor Cyan }
+}
+
 function Write-Ok($m)   { Write-Host "    $m" -ForegroundColor Green }
+
+function Get-LineWidth {
+    try { [Math]::Max(20, [Console]::WindowWidth - 1) } catch { 79 }
+}
+
+function Write-Status($text) {
+    $width = Get-LineWidth
+    if ($text.Length -gt $width) { $text = $text.Substring(0, $width) }
+    [Console]::Write("`r" + $text.PadRight($width))
+}
+
+function Clear-Status {
+    [Console]::Write("`r" + (' ' * (Get-LineWidth)) + "`r")
+    try { [Console]::CursorVisible = $true } catch { }
+}
+
+# Streams the download so the console can show a byte bar (or a spinner when the
+# server sends no Content-Length). A failed download leaves no partial file.
+function Save-Download($Uri, $Path) {
+    if (-not $script:Fancy) {
+        Invoke-WebRequest -Uri $Uri -OutFile $Path -UseBasicParsing
+        return
+    }
+
+    $response = $null
+    $source = $null
+    $target = $null
+    $frames = '|/-\'
+    $i = 0
+
+    try {
+        try { [Console]::CursorVisible = $false } catch { }
+        $response = [System.Net.WebRequest]::Create($Uri).GetResponse()
+        $total = $response.ContentLength
+        $source = $response.GetResponseStream()
+        $target = [System.IO.File]::Create($Path)
+        $buffer = New-Object byte[] 65536
+        $done = 0L
+        $clock = [System.Diagnostics.Stopwatch]::StartNew()
+
+        while (($read = $source.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $target.Write($buffer, 0, $read)
+            $done += $read
+            if ($clock.ElapsedMilliseconds -lt 100) { continue }
+            $clock.Reset()
+            $clock.Start()
+
+            $size = '{0:N1} MB' -f ($done / 1MB)
+            if ($total -gt 0) {
+                Write-Status "    $(Format-Bar ($done / $total)) $([int](100 * $done / $total))% $size"
+            }
+            else {
+                Write-Status "    $($frames[$i++ % $frames.Length]) $size"
+            }
+        }
+    }
+    catch {
+        if ($target) { $target.Dispose(); $target = $null }
+        Remove-Item $Path -Force -ErrorAction SilentlyContinue
+        throw
+    }
+    finally {
+        if ($target) { $target.Dispose() }
+        if ($source) { $source.Dispose() }
+        if ($response) { $response.Dispose() }
+        Clear-Status
+    }
+}
 
 if ($WithDeps) {
     $depsUrl = "https://raw.githubusercontent.com/$Repo/main/scripts/deps.ps1"
@@ -70,7 +165,7 @@ Write-Step "Downloading $Asset"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 $temp = Join-Path $env:TEMP "fleet-$([guid]::NewGuid().ToString('N')).exe"
-Invoke-WebRequest -Uri $url -OutFile $temp -UseBasicParsing
+Save-Download $url $temp
 Write-Ok $url
 
 Write-Step 'Installing'
@@ -91,5 +186,6 @@ if (($current -split ';') -notcontains $InstallDir) {
 Write-Step 'Setting up'
 & $BinPath setup
 
+Complete-Steps
 Write-Host ''
 Write-Host "fleet installed. Open a new terminal and run 'fleet'." -ForegroundColor Green
