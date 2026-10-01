@@ -4157,6 +4157,25 @@ its own projects, and the remote project `@<machine>` is showing is one of them.
   only the remote's projects. The menu now asks with just its pane; fleetd finds the
   client that opened that menu (`ClientState.Menu`) and hands the switcher back to the
   viewing machine.
+## Known remote machines, 2026-10-02
+
+fleetd keeps remote links in memory only, so a restart forgot every machine. The client
+now remembers them; fleetd and the wire protocol are unchanged.
+
+- **`remotes.json`** (`IKnownRemoteStore`, `JsonKnownRemoteStore`) holds per host (the ssh
+  target, case-insensitive) an optional nickname and the last connected time. A missing or
+  corrupt file reads as empty, like `keybinds.json`.
+- **A host is remembered once it connects**: `ConnectFlowAsync` records it when the link
+  reaches Connected, and the Remote machines view records any connected host it does not
+  know yet (a link made before this existed). Disconnecting does not forget it; `x` does.
+- **Nicknames resolve client-side.** `NicknamedRemotes` wraps `IRemoteMachines` and fills
+  `RemoteMachine.Nickname`; `Label` (nickname, else fleetd's name) is what the switcher tabs,
+  their `@machine` details and remote notice labels show. Matching still uses `Name` and
+  `Host`, so a nickname never has to reach fleetd.
+- **The view merges** live links with known hosts that are not connected
+  (`RemoteEntry.Merge`, live first, then by last connected); the known ones are muted and
+  `enter` reconnects them through the same flow.
+
 ## ctrl+enter and shift+enter on Linux, 2026-10-01
 
 A Unix terminal sends Enter, ctrl+enter and shift+enter all as `\r`, so the attach

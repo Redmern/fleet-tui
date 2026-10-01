@@ -214,8 +214,13 @@ host key, shows the question in a small dialog. `d` disconnects, and `enter` ans
 retries a connection. The remote needs this fleet on its PATH, or name it with
 `FLEET_REMOTE_COMMAND`.
 
+A machine that connected once is remembered (`remotes.json` in the fleet config folder)
+and stays in the list after a disconnect or a restart, muted as `known · not connected`;
+`enter` reconnects it. `e` gives a machine a nickname (empty clears it), which fleet shows
+wherever it names the machine, with the ssh host next to it; `x` forgets a machine.
+
 While a machine is connected, **Switch project** gets tabs: **All**, **this machine** and
-one tab per remote, named after the remote's hostname. `h`/`l` or the arrows switch
+one tab per remote, named after its nickname or the remote's hostname. `h`/`l` or the arrows switch
 tabs, and it opens on the tab of the machine you are on. A machine's tab lists every project
 saved there, running or not (running ones say `open`); opening one that is not running
 starts it on that machine first. `enter` shows a remote project
