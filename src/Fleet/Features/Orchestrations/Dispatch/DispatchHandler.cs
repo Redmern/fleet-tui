@@ -197,12 +197,14 @@ public sealed class DispatchHandler(
             return (task, (fromPrefix, ProfileSource.Prefix));
         }
 
-        if (argument is { } fromArgument)
+        if (mode != AidlcMode.On)
         {
-            return (prompt, (fromArgument, ProfileSource.Argument));
+            return (prompt, null);
         }
 
-        return mode == AidlcMode.On ? (prompt, (projectDefault, ProfileSource.ProjectDefault)) : (prompt, null);
+        return argument is { } fromArgument
+            ? (prompt, (fromArgument, ProfileSource.Argument))
+            : (prompt, (projectDefault, ProfileSource.ProjectDefault));
     }
 
     private void StartIntent(string folder, IntakeRecord record)

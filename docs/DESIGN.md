@@ -4257,8 +4257,9 @@ field means its default, so older files load unchanged):
 
 - *Mode*: `off` (default), `on`, or `manual`. Manual used to mean "the prompt doubles the
   dispatch trigger" (`,,task`), which nobody found. It now means "only when the task
-  names a profile": a prefix such as `,feature: add oauth`, or the `profile` argument of
-  the `dispatch` MCP tool. The prefix is the profile word and a colon; a colon keeps
+  starts with a profile prefix", such as `,feature: add oauth`. The `profile` argument of
+  the `dispatch` MCP tool does not turn it on in manual mode; it only picks the profile
+  when the mode is `on`. The prefix is the profile word and a colon; a colon keeps
   ordinary sentences that start with "feature" or "research" from being taken as one.
 - *Default profile* (`express`) and *autonomy* (`guided`, or `automatic` to go on from
   unit to unit after the walking skeleton; failures still stop either way).

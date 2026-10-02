@@ -94,7 +94,7 @@ public static class McpTools
             new ToolParam(
                 ToolArguments.Profile,
                 "string",
-                "Optional AIDLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this; ignored when AIDLC is off.",
+                "Optional AIDLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this. Used only when AIDLC mode is on; in manual mode only a prefix applies AIDLC.",
                 false)),
         Spec(
             HarnessTool.Report,

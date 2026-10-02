@@ -201,11 +201,20 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task In_manual_mode_an_explicit_profile_argument_also_applies_aidlc()
+    public async Task In_manual_mode_a_profile_argument_without_a_prefix_does_not_apply_aidlc()
     {
         var reply = (await Aidlc(AidlcMode.Manual).HandleAsync(Command("tidy the store") with { Profile = "refactor" }, "t")).Value!;
 
-        Assert.Equal(Profile.Refactor, _intents.Load(reply.Folder)!.Profile);
+        Assert.DoesNotContain("## Process", InstructionsOf(reply));
+        Assert.Null(_intents.Load(reply.Folder));
+    }
+
+    [Fact]
+    public async Task In_manual_mode_a_prefix_still_wins_over_the_profile_argument()
+    {
+        var reply = (await Aidlc(AidlcMode.Manual).HandleAsync(Command("bugfix: the login loops") with { Profile = "feature" }, "t")).Value!;
+
+        Assert.Equal(Profile.Bugfix, _intents.Load(reply.Folder)!.Profile);
     }
 
     [Fact]

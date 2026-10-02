@@ -513,13 +513,13 @@ failed — until you remove it.
 `A` in the menu's Settings submenu to set it per project:
 
 - **Mode** — `off` (default), `on` (every dispatch), or `manual` (only when the task
-  names a profile).
+  starts with a profile prefix).
 - **Profile** — how much ceremony a task gets: `express` (default; short spec, build,
   verify, review, PR), `bugfix` (reproduction first), `feature` (spec, plan, walking
   skeleton; may span repositories), `refactor` (no behaviour change) or `research`
   (investigate and report, no code). Name one per task with a prefix after the trigger,
-  `,feature: add oauth login`, or the `profile` argument of the `dispatch` tool;
-  otherwise the project default applies.
+  `,feature: add oauth login`. With the mode `on`, the `profile` argument of the
+  `dispatch` tool also picks one; otherwise the project default applies.
 - **Autonomy** — `guided` checks in with you after each unit; `automatic` goes on by
   itself. A failure always stops and asks.
 - **Parts** — switch off the spec, plan or deliver gate (the stage still runs, without
