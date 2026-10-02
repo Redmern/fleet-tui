@@ -90,6 +90,8 @@ public static class NoticeDetector
         AgentState.Blocked when IsBusy(paneText) && !IsQuestion(paneText) && !IsPermission(paneText) => null,
         AgentState.Blocked when hooked.Reason == HookStatus.PermissionReason => (NoticeKind.Permission, "asks for permission"),
         AgentState.Blocked => (NoticeKind.NeedsInput, "has a question for you"),
+        AgentState.Stalled when IsPermission(paneText) => (NoticeKind.Permission, "asks for permission"),
+        AgentState.Stalled when IsQuestion(paneText) => (NoticeKind.NeedsInput, "has a question for you"),
         AgentState.Stalled when IsBusy(paneText) => (NoticeKind.Stalled, $"has reported no progress for {(int)(now - hooked.At).TotalMinutes} min"),
         _ => null,
     };

@@ -4458,7 +4458,9 @@ Aggregate and the dashboard sort are one ordering.
 worktrees (`SyncWorktree`) and for the project root and orchestration folders
 (`Sync`), on all eight contract events, in Claude Code's exec form
 (`"command": <fleet>, "args": ["hook"]`, 10 s timeout) so no shell parses the path.
-A hook is fleet's when its first argument is `hook`; re-syncing replaces fleet's
+A hook is fleet's when its command is the fleet executable (file name `fleet`, any
+folder) and its first argument is `hook`, so a user's `git hook …` entry is never taken
+for fleet's; re-syncing replaces fleet's
 entries and leaves the user's own hooks on the same events, matchers and unknown keys
 alone. The dispatch hook on `UserPromptSubmit` is a separate entry and unaffected.
 `fleet doctor` prints, per project, whether status hooks are on and in how many of
@@ -4492,7 +4494,9 @@ Working and Idle agents are never scraped):
 
 - **Stalled needs the busy spinner.** Esc interrupts a turn without a `Stop`, leaving
   the last report Working. If the pane shows no `esc to interrupt`, the agent is idle at
-  the prompt: the row says idle and no Stalled notice is raised.
+  the prompt: the row says idle and no Stalled notice is raised. If it shows a permission
+  or question prompt instead (a Blocked report that never landed), the agent is Blocked:
+  the row says waiting and the Permission or NeedsInput notice is raised.
 - **Blocked ends when the approved tool runs.** No hook fires when you approve a
   permission; the next one is `PostToolUse`, after the tool. If the pane shows the
   spinner and no prompt, the row says working and the permission notice resolves.

@@ -14,6 +14,7 @@ public static class AgentActivity
 
     public static AgentState Confirmed(AgentState state, string paneText) => state switch
     {
+        AgentState.Stalled when Prompting(paneText) => AgentState.Blocked,
         AgentState.Stalled when Classify(paneText) != Working => AgentState.Idle,
         AgentState.Blocked when Classify(paneText) == Working && !Prompting(paneText) => AgentState.Working,
         _ => state,

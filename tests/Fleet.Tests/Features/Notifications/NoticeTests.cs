@@ -94,6 +94,19 @@ public sealed class NoticeTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_hook_stall_with_a_prompt_on_screen_raises_the_prompts_notice()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("p"), "Do you want to proceed?\n2. No, and tell Claude") with { Hooked = Hook(AgentState.Stalled, minutesAgo: 15) },
+            Watch(Agent("q"), "Which option should I take? (waiting for your input)") with { Hooked = Hook(AgentState.Stalled, minutesAgo: 15) },
+        ], T0);
+
+        Assert.Equal(
+            [(NoticeKind.Permission, "p"), (NoticeKind.NeedsInput, "q")],
+            found.Select(n => (n.Kind, n.Worktree.Split('/')[^1])));
+    }
+
+    [Fact]
     public void Hook_state_wins_over_what_the_pane_shows()
     {
         var found = NoticeDetector.Detect("alpha", [

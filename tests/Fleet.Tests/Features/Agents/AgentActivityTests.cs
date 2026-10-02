@@ -40,6 +40,14 @@ public class AgentActivityTests
         Assert.Equal(AgentState.Idle, AgentActivity.Confirmed(AgentState.Stalled, string.Empty));
     }
 
+    [Theory]
+    [InlineData("Do you want to proceed?\n2. No, and tell Claude")]
+    [InlineData("Which option should I take? (waiting for your input)")]
+    public void A_hook_stall_with_a_prompt_on_screen_is_blocked_not_idle(string pane)
+    {
+        Assert.Equal(AgentState.Blocked, AgentActivity.Confirmed(AgentState.Stalled, pane));
+    }
+
     [Fact]
     public void A_hook_block_turns_to_work_once_the_pane_runs_the_approved_tool()
     {

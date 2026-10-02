@@ -240,7 +240,11 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
     private const double StatusHookTimeout = 10;
 
     private static bool IsStatusHook(HookEntry entry) =>
-        entry.Args is [var verb, ..] && verb == HookStatus.Verb;
+        entry.Args is [var verb, ..]
+        && verb == HookStatus.Verb
+        && string.Equals(FleetExecutableName, Path.GetFileNameWithoutExtension(entry.Command.Trim('"', '\'')), StringComparison.OrdinalIgnoreCase);
+
+    private const string FleetExecutableName = "fleet";
 
     private static void ApplyHook(
         ClaudeSettingsFile file, string command, IReadOnlyList<string> args)

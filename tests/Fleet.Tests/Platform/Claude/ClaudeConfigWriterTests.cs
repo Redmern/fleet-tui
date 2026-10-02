@@ -254,6 +254,45 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         Assert.Equal(1, StatusHookCount(Hooks().GetProperty("Stop")));
     }
 
+    [Theory]
+    [InlineData("fleet.exe")]
+    [InlineData("")]
+    public void A_users_own_hook_verb_on_another_program_is_never_taken_for_fleets(string statusHook)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"git","args":["hook","run","pre-tool"]}]}]}}""");
+
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, [], [], [], statusHook);
+
+        var entries = Hooks().GetProperty("PreToolUse").EnumerateArray()
+            .SelectMany(g => g.GetProperty("hooks").EnumerateArray())
+            .Select(h => h.GetProperty("command").GetString())
+            .ToList();
+
+        Assert.Contains("git", entries);
+        Assert.Equal(statusHook.Length > 0 ? 2 : 1, entries.Count);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\me\.local\bin\fleet.exe")]
+    [InlineData("/usr/local/bin/fleet")]
+    [InlineData("\"C:\\Program Files\\fleet\\FLEET.EXE\"")]
+    public void Fleets_own_status_hook_is_recognised_whatever_path_it_was_installed_at(string command)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"""
+            + System.Text.Json.JsonSerializer.Serialize(command)
+            + ""","args":["hook"]}]}]}}""");
+
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, [], [], []);
+
+        Assert.False(Hooks().TryGetProperty("Stop", out _));
+    }
+
     [Fact]
     public void Turning_status_hooks_off_removes_only_fleets_status_hooks()
     {
