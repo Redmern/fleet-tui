@@ -85,6 +85,40 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Auto_close_defaults_to_off_after_thirty_minutes()
+    {
+        var config = Store.Load("techweb");
+
+        Assert.False(config.AutoClose);
+        Assert.Equal(30, config.AutoCloseMinutes);
+    }
+
+    [Fact]
+    public void Auto_close_and_its_threshold_round_trip()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithAutoClose(true, 45));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.True(loaded.AutoClose);
+        Assert.Equal(45, loaded.AutoCloseMinutes);
+        Assert.False(Store.Load("other").AutoClose);
+    }
+
+    [Fact]
+    public void Default_auto_close_values_are_written_as_empty_values()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithAutoClose(true, 45).WithAutoClose(false, 30));
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"autoClose\": \"\"", raw);
+        Assert.Contains("\"autoCloseMinutes\": 0", raw);
+        Assert.False(Store.Load("techweb").AutoClose);
+        Assert.Equal(30, Store.Load("techweb").AutoCloseMinutes);
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));

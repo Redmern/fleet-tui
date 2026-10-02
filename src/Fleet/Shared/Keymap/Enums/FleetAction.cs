@@ -45,4 +45,5 @@ public enum FleetAction
     SaveSession,
     DismissNotice,
     DismissAllNotices,
+    EditAutoClose,
 }

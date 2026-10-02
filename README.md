@@ -399,6 +399,15 @@ lists it under Agents.
 
 **The branch is always kept** — removing an agent is not deleting work.
 
+**Auto-close idle agents** (fleet menu > settings, `i`) does the stop for you. It is
+per project and off by default. When it is on, the project's dashboard stops an agent or
+sub-orchestrator that reported `done` or `failed` and has been idle for the threshold
+(30 minutes by default). "Idle" means no new report and no change in its pane's text
+in that time. It never closes the main orchestrator, anything still working, anything asking
+you a question or for permission, or the active pane. The log says which agent it closed
+and why. `enter` reopens the agent, and claude continues the same conversation
+(`--continue`).
+
 `d` on a **repository** deletes the repository and every worktree under it. It
 refuses while any agent is registered on that repository, and the confirmation
 lists every worktree that would go and any branch that is not pushed.

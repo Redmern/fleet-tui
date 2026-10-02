@@ -54,7 +54,9 @@ public sealed class JsonSettingsStore : ISettingsStore
                     rules,
                     ParsePolicy(stored.Commit, SettingsDefaults.Commit),
                     ParsePolicy(stored.Push, SettingsDefaults.Push),
-                    ParseAidlc(stored.Aidlc, SettingsDefaults.Aidlc))
+                    ParseAidlc(stored.Aidlc, SettingsDefaults.Aidlc),
+                    ParseSwitch(stored.AutoClose, SettingsDefaults.AutoClose),
+                    stored.AutoCloseMinutes)
                 .MergedOverDefaults();
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -78,6 +80,8 @@ public sealed class JsonSettingsStore : ISettingsStore
             Commit = PolicyAgainstDefault(config.Commit, SettingsDefaults.Commit),
             Push = PolicyAgainstDefault(config.Push, SettingsDefaults.Push),
             Aidlc = AidlcAgainstDefault(config.Aidlc, SettingsDefaults.Aidlc),
+            AutoClose = SwitchAgainstDefault(config.AutoClose, SettingsDefaults.AutoClose),
+            AutoCloseMinutes = config.AutoCloseMinutes == SettingsDefaults.AutoCloseMinutes ? 0 : config.AutoCloseMinutes,
             Tools = SettingsDiff.AgainstDefaults(config.Rules).ToDictionary(
                 r => HarnessToolIds.For(r.Key),
                 r => new ToolRuleEntry
@@ -109,6 +113,13 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     private static string AidlcAgainstDefault(AidlcMode value, AidlcMode fallback) =>
         value == fallback ? string.Empty : value.ToString().ToLowerInvariant();
+
+    private static bool ParseSwitch(string stored, bool fallback) =>
+        string.Equals(stored, "on", StringComparison.OrdinalIgnoreCase)
+        || (!string.Equals(stored, "off", StringComparison.OrdinalIgnoreCase) && fallback);
+
+    private static string SwitchAgainstDefault(bool value, bool fallback) =>
+        value == fallback ? string.Empty : value ? "on" : "off";
 
     private static string? FileFor(string project)
     {

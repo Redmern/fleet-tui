@@ -7,7 +7,9 @@ public sealed record SettingsConfig(
     IReadOnlyDictionary<HarnessTool, ToolRule> Rules,
     ActionPolicy Commit,
     ActionPolicy Push,
-    AidlcMode Aidlc)
+    AidlcMode Aidlc,
+    bool AutoClose = SettingsDefaults.AutoClose,
+    int AutoCloseMinutes = SettingsDefaults.AutoCloseMinutes)
 {
     public static SettingsConfig Default => new(
         SettingsDefaults.Trigger,
@@ -41,6 +43,9 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithAidlcMode(AidlcMode mode) => this with { Aidlc = mode };
 
+    public SettingsConfig WithAutoClose(bool on, int minutes) =>
+        this with { AutoClose = on, AutoCloseMinutes = minutes };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -58,7 +63,9 @@ public sealed record SettingsConfig(
             rules,
             Commit,
             Push,
-            Aidlc);
+            Aidlc,
+            AutoClose,
+            AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes);
     }
 
     public string Signature =>
@@ -70,5 +77,6 @@ public sealed record SettingsConfig(
                 .Prepend($"trigger={Trigger}")
                 .Append($"commit={Commit}")
                 .Append($"push={Push}")
-                .Append($"aidlc={Aidlc}"));
+                .Append($"aidlc={Aidlc}")
+                .Append($"autoclose={AutoClose}:{AutoCloseMinutes}"));
 }

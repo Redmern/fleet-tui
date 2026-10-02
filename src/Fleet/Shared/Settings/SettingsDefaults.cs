@@ -13,11 +13,17 @@ public static class SettingsDefaults
 
     public const AidlcMode Aidlc = AidlcMode.Off;
 
+    public const bool AutoClose = false;
+
+    public const int AutoCloseMinutes = 30;
+
     public const string CommitLabel = "Agents commit changes";
 
     public const string PushLabel = "Agents push changes";
 
     public const string AidlcLabel = "AIDLC mode";
+
+    public const string AutoCloseLabel = "Auto-close idle agents";
 
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);

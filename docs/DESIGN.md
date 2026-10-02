@@ -4224,6 +4224,41 @@ The trade-off is accepted knowingly: `k` is also move-up, and a menu matches its
 keys before the list's motions, so in a menu that lists Keybinds `k` opens it instead
 of moving up — the collision the move to `e` once fixed. The arrow keys still move.
 
+## Auto-close idle agents, 2026-10-02
+
+Every open agent costs about 400 MB (claude, nvim, supermaven, a fleet MCP server,
+conhosts), and most of them sit finished. A per-project setting (`autoClose`,
+`autoCloseMinutes` in the settings file, off and 30 by default) lets fleet stop them.
+
+- **The dashboard ticks it.** It runs right after notice detection in the
+  dashboard's 4 s refresh, because that loop already lists the panes, reads the
+  pane text and owns the notices. Each project has its own dashboard, and nothing
+  on the dashboard closes it, so this covers several projects. fleetd is the
+  only process that outlives the dashboards, but it is a pure multiplexer in
+  `Platform`, and putting agent policy in it would break the layering. While a
+  project's dashboard pane is gone, nothing in that project is auto-closed.
+- **Activity is the later of two timestamps.** One is the start of the open
+  `Done`/`Failed` notice: the dashboard stamps it within one tick of the report and
+  persists it. The other is the last change in the pane's settled text
+  (`NoticeDetector.Settled`, the same normalisation the stall check uses), so a
+  user still talking to a finished agent keeps it open. Claude hooks would be a
+  better signal, but fleet installs only the `UserPromptSubmit` dispatch hook,
+  only for the main orchestrator. The text clock lives in memory, so restarting
+  the dashboard restarts it, which errs towards keeping panes open.
+- **The rule is pure** (`IdleAgents.ShouldClose`). It needs a reported `done` or
+  `failed` status, a live pane, and idleness of at least the threshold. It refuses when
+  the pane is working (`esc to interrupt`), waiting (`AgentActivity.Waiting`, or an
+  open Permission/NeedsInput notice), active, or in the project root (the main
+  orchestrator). "Active" is `Pane.IsActive` outside a hidden workspace, the only
+  focus signal the mux port has. Under WezTerm it means the active pane of its tab,
+  so an agent alone in its own tab is never auto-closed there. Fixing that needs a
+  focused-pane query (`wezterm cli list-clients`) on `IMuxDriver`.
+- **Closing is `StopAgentHandler`**, the same path as `m` > Stop and the
+  `stop_agent` tool. The record stays (`Open = false`). Reopening a repo agent now
+  passes its command through `AgentHarness.Resumed`, so claude starts with
+  `--continue` the way sub-orchestrators already did. Before this, a stopped repo
+  agent came back as a fresh conversation.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

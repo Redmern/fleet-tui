@@ -12,6 +12,10 @@ public sealed class SettingsFile
 
     public string Aidlc { get; set; } = string.Empty;
 
+    public string AutoClose { get; set; } = string.Empty;
+
+    public int AutoCloseMinutes { get; set; }
+
     public Dictionary<string, ToolRuleEntry> Tools { get; set; } = [];
 }
 
