@@ -87,8 +87,7 @@ public static class AgentHarness
         _ => command,
     };
 
-    public static bool HostedInNvim(string harness, bool orchestratorInNvim = true) =>
-        CommandFor(harness, orchestratorInNvim: orchestratorInNvim)[0] == Nvim;
+    public static bool HostedInNvim(string harness) => CommandFor(harness)[0] == Nvim;
 
     public const string TellPrefix = ":FleetTell ";
 

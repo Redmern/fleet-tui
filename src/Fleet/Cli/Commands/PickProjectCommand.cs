@@ -107,7 +107,7 @@ public static class PickProjectCommand
                 $"fleet: {stranded} is not on PATH, so agents that open it stay closed.");
         }
 
-        await new RestoreSessionHandler(mux.Driver, Adapters.SubOrchestratorsInNvim(chosen.Name))
+        await new RestoreSessionHandler(mux.Driver, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents())
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 
@@ -189,7 +189,7 @@ public static class PickProjectCommand
                     AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0]))
                 .ToList();
 
-            await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(chosen.Name))
+            await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents())
                 .HandleAsync(chosen.Name, chosen.Root, runnable)
                 .ConfigureAwait(false);
 

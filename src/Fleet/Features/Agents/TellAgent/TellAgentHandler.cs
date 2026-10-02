@@ -1,0 +1,33 @@
+using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
+
+namespace Fleet.Features.Agents.TellAgent;
+
+public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null)
+{
+    private readonly TimeSpan _enterDelay = enterDelay ?? TimeSpan.FromMilliseconds(400);
+
+    public static bool PumpedByNvim(AgentRecord agent) =>
+        AgentHarness.IsOrchestrator(agent.Harness)
+            ? agent.StartedInNvim
+            : AgentHarness.HostedInNvim(agent.Harness);
+
+    public async Task DeliverAsync(AgentRecord agent, PaneId pane, string message, CancellationToken ct = default)
+    {
+        var dir = Path.Combine(agent.Worktree, ".fleet");
+        Directory.CreateDirectory(dir);
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, AgentHarness.AgentInstructionFile), message, ct).ConfigureAwait(false);
+
+        if (PumpedByNvim(agent))
+        {
+            return;
+        }
+
+        await mux.SendTextAsync(pane, AgentHarness.AgentInstructionPrompt, ct).ConfigureAwait(false);
+        await Task.Delay(_enterDelay, ct).ConfigureAwait(false);
+        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
+    }
+}

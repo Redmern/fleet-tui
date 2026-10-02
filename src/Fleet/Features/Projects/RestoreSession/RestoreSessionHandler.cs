@@ -8,7 +8,8 @@ using Fleet.Shared.Constants;
 
 namespace Fleet.Features.Projects.RestoreSession;
 
-public sealed class RestoreSessionHandler(IMuxDriver mux, bool subOrchestratorsInNvim = true)
+public sealed class RestoreSessionHandler(
+    IMuxDriver mux, bool subOrchestratorsInNvim = true, IAgentStore? store = null)
 {
     public async Task<int> HandleAsync(
         string project,
@@ -41,6 +42,11 @@ public sealed class RestoreSessionHandler(IMuxDriver mux, bool subOrchestratorsI
 
             await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct)
                 .ConfigureAwait(false);
+
+            if (AgentHarness.IsOrchestrator(agent.Harness))
+            {
+                store?.Save(project, agent with { InNvim = subOrchestratorsInNvim });
+            }
 
             restored++;
         }

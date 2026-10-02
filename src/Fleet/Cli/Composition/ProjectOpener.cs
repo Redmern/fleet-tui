@@ -35,7 +35,7 @@ public static class ProjectOpener
                 AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0]))
             .ToList();
 
-        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(chosen.Name))
+        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents())
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 

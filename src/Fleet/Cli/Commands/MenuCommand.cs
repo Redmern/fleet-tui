@@ -835,7 +835,7 @@ public static class MenuCommand
                 AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(project.Name))[0]))
             .ToList();
 
-        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(project.Name))
+        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(project.Name), Adapters.Agents())
             .HandleAsync(project.Name, project.Root, runnable)
             .ConfigureAwait(false);
 

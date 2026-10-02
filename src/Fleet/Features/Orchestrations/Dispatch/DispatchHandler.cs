@@ -103,6 +103,8 @@ public sealed class DispatchHandler(
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
 
+        var inNvim = settings?.Load(command.ProjectName).SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
+
         var record = new AgentRecord(
             folder,
             string.Empty,
@@ -113,14 +115,14 @@ public sealed class DispatchHandler(
             Hidden: true,
             Open: true,
             Owner: command.Caller,
-            Status: OrchestrationStatus.Working);
+            Status: OrchestrationStatus.Working,
+            InNvim: inNvim);
 
         store.Save(command.ProjectName, record);
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
         var active = panes.FirstOrDefault(p => p.IsActive);
         var window = ProjectWindows.For(mux, panes, command.ProjectName, command.ProjectRoot, preferCaller: true);
-        var inNvim = settings?.Load(command.ProjectName).SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
 
         var pane = await mux.SpawnAsync(
             new SpawnOptions

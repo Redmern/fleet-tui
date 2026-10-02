@@ -9,17 +9,15 @@ public class AgentHarnessTests
     {
         Assert.Equal(AgentHarness.Nvim, AgentHarness.CommandFor(AgentHarness.Orchestrator)[0]);
         Assert.True(AgentHarness.HostedInNvim(AgentHarness.Orchestrator));
-        Assert.True(AgentHarness.HostedInNvim(AgentHarness.Orchestrator, orchestratorInNvim: true));
         Assert.Empty(AgentHarness.SpawnEnv(AgentHarness.Orchestrator));
     }
 
     [Fact]
-    public void A_bare_orchestrator_runs_claude_with_session_persistence_and_takes_typed_instructions()
+    public void A_bare_orchestrator_runs_claude_with_session_persistence()
     {
         Assert.Equal(
             [AgentHarness.Claude],
             AgentHarness.CommandFor(AgentHarness.Orchestrator, orchestratorInNvim: false));
-        Assert.False(AgentHarness.HostedInNvim(AgentHarness.Orchestrator, orchestratorInNvim: false));
         Assert.Equal(
             AgentHarness.SessionPersistence,
             AgentHarness.SpawnEnv(AgentHarness.Orchestrator, orchestratorInNvim: false));
@@ -46,8 +44,8 @@ public class AgentHarnessTests
                 AgentHarness.CommandFor(harness),
                 AgentHarness.CommandFor(harness, orchestratorInNvim: false));
             Assert.Equal(
-                AgentHarness.HostedInNvim(harness),
-                AgentHarness.HostedInNvim(harness, orchestratorInNvim: false));
+                AgentHarness.SpawnEnv(harness),
+                AgentHarness.SpawnEnv(harness, orchestratorInNvim: false));
         }
     }
 }

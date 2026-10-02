@@ -124,9 +124,11 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store, bool sub
 
         await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
 
-        if (agent.Hidden || !agent.Open)
+        var started = orchestrator ? agent with { InNvim = subOrchestratorsInNvim } : agent;
+
+        if (agent.Hidden || !agent.Open || started != agent)
         {
-            store.Save(project, agent with { Hidden = false, Open = true });
+            store.Save(project, started with { Hidden = false, Open = true });
         }
 
         return Result.Ok();
