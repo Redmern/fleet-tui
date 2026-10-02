@@ -48,4 +48,5 @@ public enum FleetAction
     DismissNotice,
     DismissAllNotices,
     OpenEditor,
+    EditAutoClose,
 }

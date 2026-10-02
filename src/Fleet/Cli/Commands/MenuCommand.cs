@@ -1,3 +1,4 @@
+using System.Globalization;
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
 using Fleet.Features.Agents.CleanupAgents;
@@ -70,6 +71,7 @@ public static class MenuCommand
         FleetAction.ViewLogs,
         FleetAction.CleanupProject,
         FleetAction.EditAidlcMode,
+        FleetAction.EditAutoClose,
         FleetAction.EditClaudeProfile,
         FleetAction.EditMainOrchestratorInNvim,
         FleetAction.EditSubOrchestratorsInNvim,
@@ -337,6 +339,54 @@ public static class MenuCommand
                         hostSettings.Save(project.Name, current.WithSubOrchestratorsInNvim(picked.Value == 0));
                     }
 
+                    break;
+                }
+
+            case FleetAction.EditAutoClose:
+                {
+                    var closeSettings = Adapters.Settings();
+                    var current = closeSettings.Load(project.Name);
+                    var title = $"{SettingsDefaults.AutoCloseLabel} — {project.Name}";
+
+                    var picked = FleetPicker.Choose(
+                        app,
+                        title,
+                        [
+                            new PickerEntry("off", "agents stay open until you close them", "o"),
+                        new PickerEntry("on", "close done or failed agents that sat idle", "n"),
+                        ],
+                        keymap,
+                        current.AutoClose ? 1 : 0);
+
+                    if (picked is null)
+                    {
+                        break;
+                    }
+
+                    if (picked.Value == 0)
+                    {
+                        closeSettings.Save(project.Name, current.WithAutoClose(false, current.AutoCloseMinutes));
+                        break;
+                    }
+
+                    var answer = FleetDialog.Ask(
+                        app,
+                        title,
+                        "Close after how many idle minutes?",
+                        initial: current.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture));
+
+                    if (answer is null)
+                    {
+                        break;
+                    }
+
+                    if (!int.TryParse(answer.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var minutes) || minutes < 1)
+                    {
+                        FleetDialog.Error(app, title, $"'{answer}' is not a whole number of minutes.");
+                        break;
+                    }
+
+                    closeSettings.Save(project.Name, current.WithAutoClose(true, minutes));
                     break;
                 }
 

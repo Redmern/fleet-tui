@@ -1,5 +1,7 @@
 using DispatchRequest = Fleet.Features.Orchestrations.Dispatch.Models.DispatchCommand;
 using Fleet.Features.Agents;
+using Fleet.Features.Agents.AutoClose;
+using Fleet.Features.Agents.AutoClose.Models;
 using Fleet.Features.Agents.ChangeHarness;
 using Fleet.Features.Agents.FinishAgent;
 using Fleet.Features.Agents.HideAgent;
@@ -47,6 +49,7 @@ using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Notifications.Enums;
 using Fleet.Ports.Notifications.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Requests;
@@ -567,6 +570,8 @@ public static class DashboardWiring
         var quiet = new Dictionary<string, (string Text, DateTime Since)>(StringComparer.OrdinalIgnoreCase);
         var againstBase = new System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime At, int Behind, bool Conflicts)>(StringComparer.OrdinalIgnoreCase);
         var checking = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+        var idleSeen = new Dictionary<string, (string Text, DateTime Since)>(StringComparer.OrdinalIgnoreCase);
+        var closingIdle = 0;
 
         (int Behind, bool Conflicts) AgainstBase(AgentRecord agent, DateTime now)
         {
@@ -640,7 +645,72 @@ public static class DashboardWiring
             }
 
             Alert(next.Count(n => n.IsOpen), NoticeSync.Fresh(stored, next));
+            CloseIdle(next, panes, now);
             return Board(next, now);
+        }
+
+        void CloseIdle(IReadOnlyList<Notice> notices, IReadOnlyList<Pane> panes, DateTime now)
+        {
+            var config = settings.Load(project.Name);
+
+            if (!config.AutoClose || Interlocked.Exchange(ref closingIdle, 1) == 1)
+            {
+                return;
+            }
+
+            try
+            {
+                foreach (var agent in lister.Handle(project.Name).Where(a => IdleAgents.Finished(a.Status)))
+                {
+                    var owned = IdleAgents.PanesOf(agent, panes);
+
+                    if (owned.Count == 0)
+                    {
+                        idleSeen.Remove(agent.Worktree);
+                        continue;
+                    }
+
+                    var text = mux.GetTextAsync(owned[0].Id).GetAwaiter().GetResult();
+                    var settled = NoticeDetector.Settled(text);
+                    if (!idleSeen.TryGetValue(agent.Worktree, out var seen) || seen.Text != settled)
+                    {
+                        idleSeen[agent.Worktree] = seen = (settled, now);
+                    }
+
+                    var live = AgentActivity.Classify(text);
+                    var mine = notices.Where(n => n.Resolved is null && PathKey.Same(n.Worktree, agent.Worktree)).ToList();
+                    var reported = mine
+                        .Where(n => n.Kind is NoticeKind.Done or NoticeKind.Failed)
+                        .Select(n => n.Since)
+                        .DefaultIfEmpty(now)
+                        .Max();
+
+                    var watch = new IdleWatch(
+                        agent,
+                        PaneAlive: true,
+                        Focused: IdleAgents.Focused(owned),
+                        Working: live == AgentActivity.Working,
+                        AsksTheUser: live == AgentActivity.Waiting
+                            || mine.Any(n => n.Kind is NoticeKind.Permission or NoticeKind.NeedsInput),
+                        reported > seen.Since ? reported : seen.Since);
+
+                    if (!IdleAgents.ShouldClose(watch, config, project.Root, now))
+                    {
+                        continue;
+                    }
+
+                    var stopped = stopper.HandleAsync(project.Name, agent).GetAwaiter().GetResult();
+                    idleSeen.Remove(agent.Worktree);
+
+                    Note(log, project.Name, stopped.Succeeded
+                        ? IdleAgents.Note(Label(agent), agent.Status, now - watch.LastActivity)
+                        : $"could not auto-close {Label(agent)}: {stopped.Error}");
+                }
+            }
+            finally
+            {
+                Volatile.Write(ref closingIdle, 0);
+            }
         }
 
         void Alert(int open, IReadOnlyList<Notice> fresh)

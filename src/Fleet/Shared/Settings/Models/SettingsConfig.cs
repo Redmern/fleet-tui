@@ -9,7 +9,9 @@ public sealed record SettingsConfig(
     ActionPolicy Push,
     AidlcSettings Aidlc,
     bool MainOrchestratorInNvim = SettingsDefaults.MainOrchestratorInNvim,
-    bool SubOrchestratorsInNvim = SettingsDefaults.SubOrchestratorsInNvim)
+    bool SubOrchestratorsInNvim = SettingsDefaults.SubOrchestratorsInNvim,
+    bool AutoClose = SettingsDefaults.AutoClose,
+    int AutoCloseMinutes = SettingsDefaults.AutoCloseMinutes)
 {
     public static SettingsConfig Default => new(
         SettingsDefaults.Trigger,
@@ -51,6 +53,9 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithSubOrchestratorsInNvim(bool inNvim) => this with { SubOrchestratorsInNvim = inNvim };
 
+    public SettingsConfig WithAutoClose(bool on, int minutes) =>
+        this with { AutoClose = on, AutoCloseMinutes = minutes };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -70,7 +75,9 @@ public sealed record SettingsConfig(
             Push,
             Aidlc,
             MainOrchestratorInNvim,
-            SubOrchestratorsInNvim);
+            SubOrchestratorsInNvim,
+            AutoClose,
+            AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes);
     }
 
     public string Signature =>
@@ -84,5 +91,6 @@ public sealed record SettingsConfig(
                 .Append($"push={Push}")
                 .Append(Aidlc.Signature)
                 .Append($"main-nvim={MainOrchestratorInNvim}")
-                .Append($"sub-nvim={SubOrchestratorsInNvim}"));
+                .Append($"sub-nvim={SubOrchestratorsInNvim}")
+                .Append($"autoclose={AutoClose}:{AutoCloseMinutes}"));
 }

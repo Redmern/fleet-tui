@@ -17,6 +17,10 @@ public static class SettingsDefaults
 
     public const bool SubOrchestratorsInNvim = true;
 
+    public const bool AutoClose = false;
+
+    public const int AutoCloseMinutes = 30;
+
     public const string CommitLabel = "Agents commit changes";
 
     public const string PushLabel = "Agents push changes";
@@ -24,6 +28,8 @@ public static class SettingsDefaults
     public const string MainOrchestratorInNvimLabel = "Main orchestrator in nvim";
 
     public const string SubOrchestratorsInNvimLabel = "Sub-orchestrators in nvim";
+
+    public const string AutoCloseLabel = "Auto-close idle agents";
 
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);

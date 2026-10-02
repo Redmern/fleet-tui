@@ -32,6 +32,7 @@ public static class KeymapGroups
             FleetAction.ViewLogs,
             FleetAction.CleanupProject,
             FleetAction.EditAidlcMode,
+            FleetAction.EditAutoClose,
             FleetAction.EditClaudeProfile,
             FleetAction.EditMainOrchestratorInNvim,
             FleetAction.EditSubOrchestratorsInNvim,

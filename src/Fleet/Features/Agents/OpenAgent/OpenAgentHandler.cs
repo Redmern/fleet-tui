@@ -111,8 +111,8 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store, bool sub
                 WindowId = window,
                 Args = orchestrator
                     ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim)
-                    : Shared.Constants.AgentHarness.CommandFor(
-                        agent.Harness, withClaude: agent.RunsClaude),
+                    : Shared.Constants.AgentHarness.Resumed(Shared.Constants.AgentHarness.CommandFor(
+                        agent.Harness, withClaude: agent.RunsClaude)),
                 Env = Shared.Constants.AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim),
             },
             ct).ConfigureAwait(false);

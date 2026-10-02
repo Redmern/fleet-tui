@@ -132,7 +132,7 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task An_agent_whose_pane_died_is_restarted_in_its_own_worktree()
+    public async Task An_agent_whose_pane_died_is_restarted_in_its_own_worktree_and_continues_its_conversation()
     {
         var agent = Agent();
 
@@ -143,8 +143,20 @@ public sealed class OpenAgentTests : IDisposable
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
         Assert.Equal(agent.Worktree, pane.Cwd);
-        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
+        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], _mux.ArgsFor(pane.Id));
         Assert.Equal("backend/feature_login", _mux.TitleOf(pane.Id));
+    }
+
+    [Fact]
+    public async Task A_stopped_agent_hosted_in_nvim_continues_its_claude_conversation()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Nvim, Claude = true };
+
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Contains($"ClaudeCode {AgentHarness.ResumeArgument}", _mux.ArgsFor(pane.Id)[2], StringComparison.Ordinal);
     }
 
     [Fact]
