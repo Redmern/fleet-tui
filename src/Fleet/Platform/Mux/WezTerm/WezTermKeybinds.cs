@@ -1,5 +1,6 @@
 using System.Text;
 using Fleet.Platform.Mux.WezTerm.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Ui.Constants;
 using Fleet.Shared.Keymap.Enums;
@@ -17,6 +18,8 @@ public static class WezTermKeybinds
         string notifyRequest = "")
     {
         var chord = WezTermChord.From(keymap.PrefixText);
+        var head = WezTermChord.From(keymap.TextFor(FleetAction.OpenHead));
+        var headVoice = WezTermChord.From(keymap.TextFor(FleetAction.OpenHeadVoice));
         var exe = fleetExecutable.Replace("\\", "\\\\", StringComparison.Ordinal);
         var request = workspaceRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
         var notify = notifyRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
@@ -173,6 +176,41 @@ public static class WezTermKeybinds
         sb.AppendLine("  window:perform_action(act.SwitchToWorkspace { name = wanted }, _pane)");
         sb.AppendLine("end)");
         sb.AppendLine();
+        sb.AppendLine("-- The head orchestrator: one Claude above every project. wezterm has no");
+        sb.AppendLine("-- floating panes, so the head lives in a workspace of its own and the chord");
+        sb.AppendLine("-- switches the window into it and back. Hiding never stops it, so the session");
+        sb.AppendLine("-- survives across projects and windows. The voice chord only matters when");
+        sb.AppendLine("-- the head is first started; a running head keeps the mode it started in.");
+        sb.AppendLine($"M.head_workspace = '{FleetWorkspaces.Head}'");
+        sb.AppendLine();
+        sb.AppendLine("local function toggle_head(window, pane, voice, key, mods)");
+        sb.AppendLine("  local here = window:active_workspace()");
+        sb.AppendLine();
+        sb.AppendLine("  if here == M.head_workspace then");
+        sb.AppendLine("    local back = wezterm.GLOBAL.fleet_head_return or 'default'");
+        sb.AppendLine("    window:perform_action(act.SwitchToWorkspace { name = back }, pane)");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  if not fleet_project(window, true) then");
+        sb.AppendLine("    window:perform_action(act.SendKey { key = key, mods = mods }, pane)");
+        sb.AppendLine("    return");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  wezterm.GLOBAL.fleet_head_return = here");
+        sb.AppendLine();
+        sb.AppendLine("  local args = { M.fleet, 'head' }");
+        sb.AppendLine();
+        sb.AppendLine("  if voice then");
+        sb.AppendLine("    table.insert(args, '--voice')");
+        sb.AppendLine("  end");
+        sb.AppendLine();
+        sb.AppendLine("  window:perform_action(");
+        sb.AppendLine("    act.SwitchToWorkspace { name = M.head_workspace, spawn = { args = args } },");
+        sb.AppendLine("    pane");
+        sb.AppendLine("  )");
+        sb.AppendLine("end");
+        sb.AppendLine();
         sb.AppendLine("function M.apply(config)");
         sb.AppendLine("  config.keys = config.keys or {}");
         sb.AppendLine();
@@ -214,6 +252,8 @@ public static class WezTermKeybinds
         sb.AppendLine("    end),");
         sb.AppendLine("  })");
         sb.AppendLine();
+        AppendHeadKey(sb, head, voice: false);
+        AppendHeadKey(sb, headVoice, voice: true);
         sb.AppendLine("  -- Guard the dashboard pane from the leader close binding (e.g. LEADER x):");
         sb.AppendLine("  -- closing it would tear down the project view, so refuse it there and");
         sb.AppendLine("  -- close any other pane as usual. Applied after your own keys, so keep");
@@ -245,5 +285,19 @@ public static class WezTermKeybinds
         sb.AppendLine("return M");
 
         return sb.ToString();
+    }
+
+    private static void AppendHeadKey(StringBuilder sb, WezTermChord chord, bool voice)
+    {
+        var flag = voice ? "true" : "false";
+
+        sb.AppendLine("  table.insert(config.keys, {");
+        sb.AppendLine($"    key = '{chord.Key}',");
+        sb.AppendLine($"    mods = '{chord.Mods}',");
+        sb.AppendLine("    action = wezterm.action_callback(function(window, pane)");
+        sb.AppendLine($"      toggle_head(window, pane, {flag}, '{chord.Key}', '{chord.Mods}')");
+        sb.AppendLine("    end),");
+        sb.AppendLine("  })");
+        sb.AppendLine();
     }
 }

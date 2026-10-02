@@ -40,6 +40,8 @@ public static class FleetActionIds
         FleetAction.DismissNotice => "dismiss-notice",
         FleetAction.DismissAllNotices => "dismiss-all-notices",
         FleetAction.OpenEditor => "open-editor",
+        FleetAction.OpenHead => "head",
+        FleetAction.OpenHeadVoice => "head-voice",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -78,6 +80,8 @@ public static class FleetActionIds
         "dismiss-notice" => FleetAction.DismissNotice,
         "dismiss-all-notices" => FleetAction.DismissAllNotices,
         "open-editor" => FleetAction.OpenEditor,
+        "head" => FleetAction.OpenHead,
+        "head-voice" => FleetAction.OpenHeadVoice,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };

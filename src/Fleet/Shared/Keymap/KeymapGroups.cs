@@ -68,5 +68,10 @@ public static class KeymapGroups
             FleetAction.NextTab,
             FleetAction.Close,
         ]),
+        ("anywhere, no prefix",
+        [
+            FleetAction.OpenHead,
+            FleetAction.OpenHeadVoice,
+        ]),
     ];
 }
