@@ -138,5 +138,20 @@ public class RebuildDashboardTests
 
         var fresh = Assert.Single(await _mux.ListPanesAsync(), p => p.Id != dash);
         Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(fresh.Id));
+        Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(fresh.Id));
+    }
+
+    [Fact]
+    public async Task With_main_orchestrator_in_nvim_on_a_fresh_harness_gets_no_extra_env()
+    {
+        var (harness, dash) = await ProjectAsync();
+        await _mux.KillPaneAsync(harness);
+
+        await new RebuildDashboardHandler(_mux, mainOrchestratorInNvim: true)
+            .HandleAsync(Root, [Sub], AgentHarness.Orchestrator);
+
+        var fresh = Assert.Single(await _mux.ListPanesAsync(), p => p.Id != dash);
+        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Orchestrator), _mux.ArgsFor(fresh.Id));
+        Assert.Empty(_mux.EnvFor(fresh.Id));
     }
 }

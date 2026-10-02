@@ -393,6 +393,23 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_split_through_the_embedded_driver_starts_its_command_with_the_given_env()
+    {
+        using var mux = new EmbeddedDriver(_endpoint);
+        var source = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Cwd = ".", Args = ["fleet-dash"] });
+
+        await mux.SplitAsync(new SplitOptions(source, Fleet.Ports.Mux.Enums.SplitDirection.Left)
+        {
+            Cwd = ".",
+            Args = ["claude"],
+            Env = AgentHarness.SessionPersistence,
+        });
+
+        await Eventually(() => _panes.ByProgram("claude") is not null);
+        Assert.Equal("1", _panes.ByProgram("claude")!.Env["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"]);
+    }
+
+    [Fact]
     public async Task Fleets_own_handlers_switch_projects_through_the_embedded_driver()
     {
         using var mux = new EmbeddedDriver(_endpoint);

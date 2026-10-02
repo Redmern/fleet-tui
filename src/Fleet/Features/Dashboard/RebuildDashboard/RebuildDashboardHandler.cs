@@ -62,6 +62,7 @@ public sealed class RebuildDashboardHandler(IMuxDriver mux, bool mainOrchestrato
                         Percent = 50,
                         Cwd = projectRoot,
                         Args = AgentHarness.CommandFor(harness, orchestratorInNvim: mainOrchestratorInNvim),
+                        Env = AgentHarness.SpawnEnv(harness, mainOrchestratorInNvim),
                     },
                     ct)
                 .ConfigureAwait(false);
