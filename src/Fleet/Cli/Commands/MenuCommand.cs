@@ -3,6 +3,7 @@ using Fleet.Cli.Models;
 using Fleet.Features.Agents.CleanupAgents;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.MoveProject;
+using Fleet.Features.Agents.OpenEditor;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
@@ -25,6 +26,7 @@ using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
@@ -50,6 +52,7 @@ public static class MenuCommand
         FleetAction.FocusMain,
         FleetAction.SwitchProject,
         FleetAction.ListAgents,
+        FleetAction.OpenEditor,
         FleetAction.BrowseFiles,
         FleetAction.Notifications,
         FleetAction.Remotes,
@@ -417,6 +420,42 @@ public static class MenuCommand
 
                     await configMux.Driver.SetTitleAsync(configPane, "fleet config").ConfigureAwait(false);
                     await configMux.Driver.FocusPaneAsync(configPane).ConfigureAwait(false);
+
+                    break;
+                }
+
+            case FleetAction.OpenEditor:
+                {
+                    var editorMux = Adapters.Mux(Adapters.Log());
+
+                    if (editorMux.Unsupported is not null)
+                    {
+                        FleetDialog.Error(app, "Open editor here", editorMux.Unsupported);
+                        break;
+                    }
+
+                    var driver = editorMux.Driver;
+                    var agent = OpenEditorHandler.Caller(
+                        await driver.ListPanesAsync().ConfigureAwait(false),
+                        driver.CurrentPane,
+                        driver.Caps.HasFlag(MuxCaps.Popup),
+                        Environment.CurrentDirectory,
+                        new ListAgentsHandler(Adapters.Agents()).Handle(project.Name));
+
+                    if (agent is null)
+                    {
+                        FleetDialog.Error(app, "Open editor here", "This pane is not an agent or sub-orchestrator.");
+                        break;
+                    }
+
+                    var opened = await new OpenEditorHandler(driver)
+                        .HandleAsync(project.Name, agent, project.Root)
+                        .ConfigureAwait(false);
+
+                    if (!opened.Succeeded)
+                    {
+                        FleetDialog.Error(app, "Open editor here", opened.Error!);
+                    }
 
                     break;
                 }

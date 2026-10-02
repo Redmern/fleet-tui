@@ -7,6 +7,7 @@ using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Features.Agents.OpenAgent;
+using Fleet.Features.Agents.OpenEditor;
 using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.RenameAgent;
@@ -491,6 +492,7 @@ public static class DashboardWiring
         var spawner = new NewAgentHandler(git, mux, agents);
         var opener = new OpenAgentHandler(mux, agents);
         var hider = new HideAgentHandler(mux, agents);
+        var editor = new OpenEditorHandler(mux);
         var branches = new ListBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
         var stopper = new StopAgentHandler(mux, agents);
@@ -1383,6 +1385,23 @@ public static class DashboardWiring
             DismissNotices: keys =>
                 noticeStore.Save(project.Name, NoticeSync.Dismiss(noticeStore.Load(project.Name), [.. keys], DateTime.UtcNow)),
 
-            OpenNotice: OpenNotice);
+            OpenNotice: OpenNotice,
+
+            OpenEditor: async (tab, index) =>
+            {
+                var agent = At(lister, project.Name, tab, index);
+
+                if (agent is null)
+                {
+                    return null;
+                }
+
+                var outcome = await editor.HandleAsync(project.Name, agent, project.Root)
+                    .ConfigureAwait(false);
+
+                return outcome.Succeeded
+                    ? null
+                    : Noted(log, project.Name, $"could not open an editor for {Label(agent)}: {outcome.Error}");
+            });
     }
 }

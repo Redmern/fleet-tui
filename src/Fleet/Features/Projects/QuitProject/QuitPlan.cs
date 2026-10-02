@@ -17,7 +17,8 @@ public static class QuitPlan
         foreach (var pane in panes)
         {
             var isRoot = PathKey.Same(pane.Cwd, projectRoot);
-            var isAgent = agents.Any(a => AgentPaneMatch.Owns(pane, a));
+            var isAgent = agents.Any(a =>
+                AgentPaneMatch.Owns(pane, a) || AgentPaneMatch.IsEditor(pane, a));
 
             if ((isRoot || isAgent) && !doomed.Contains(pane.Id))
             {

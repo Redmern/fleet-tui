@@ -36,6 +36,7 @@ public static class FleetActionIds
         FleetAction.SaveSession => "save-session",
         FleetAction.DismissNotice => "dismiss-notice",
         FleetAction.DismissAllNotices => "dismiss-all-notices",
+        FleetAction.OpenEditor => "open-editor",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -70,6 +71,7 @@ public static class FleetActionIds
         "save-session" => FleetAction.SaveSession,
         "dismiss-notice" => FleetAction.DismissNotice,
         "dismiss-all-notices" => FleetAction.DismissAllNotices,
+        "open-editor" => FleetAction.OpenEditor,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };

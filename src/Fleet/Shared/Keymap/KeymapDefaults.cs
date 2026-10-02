@@ -49,6 +49,7 @@ public static class KeymapDefaults
             [FleetAction.SaveSession] = "w",
             [FleetAction.DismissNotice] = "d",
             [FleetAction.DismissAllNotices] = "D",
+            [FleetAction.OpenEditor] = "e",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -88,6 +89,7 @@ public static class KeymapDefaults
             FleetAction.SaveSession => "save session",
             FleetAction.DismissNotice => "dismiss",
             FleetAction.DismissAllNotices => "dismiss all",
+            FleetAction.OpenEditor => "editor",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -136,6 +138,7 @@ public static class KeymapDefaults
             FleetAction.SaveSession => "Save window as session",
             FleetAction.DismissNotice => "Dismiss a notification",
             FleetAction.DismissAllNotices => "Dismiss all shown notifications",
+            FleetAction.OpenEditor => "Open editor here",
             _ => action.ToString(),
         };
 }

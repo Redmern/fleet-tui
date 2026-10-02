@@ -373,6 +373,26 @@ public static class ShowDashboardView
             }
         }
 
+        async Task OpenEditorAsync()
+        {
+            if (callbacks.OpenEditor is null)
+            {
+                return;
+            }
+
+            var error = await callbacks.OpenEditor(ActiveTab(), ActiveRow())
+                .ConfigureAwait(false);
+
+            if (error is not null)
+            {
+                app.Invoke(() => status.Text = error);
+            }
+            else if (menu)
+            {
+                app.Invoke(() => app.RequestStop(window));
+            }
+        }
+
         void ToggleMark()
         {
             var tab = ActiveTab();
@@ -826,6 +846,10 @@ public static class ShowDashboardView
                     HideAgent();
                     break;
 
+                case FleetAction.OpenEditor:
+                    Start(OpenEditorAsync);
+                    break;
+
                 case FleetAction.RemoveRepository:
                     RemoveRepository();
                     break;
@@ -900,6 +924,8 @@ public static class ShowDashboardView
                         ? AgentWords.Show
                         : AgentWords.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
+                (keys.DisplayFor(FleetAction.OpenEditor), "editor",
+                    () => FromKey(FleetAction.OpenEditor)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
             ]);
 
@@ -915,6 +941,8 @@ public static class ShowDashboardView
                         ? AgentWords.Show
                         : AgentWords.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
+                (keys.DisplayFor(FleetAction.OpenEditor), "editor",
+                    () => FromKey(FleetAction.OpenEditor)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
             ]);
 
