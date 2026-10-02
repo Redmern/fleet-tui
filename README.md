@@ -132,6 +132,8 @@ fleet request --action <id> --project <name>
                             hand an action to that project's running dashboard
 fleet apply-keybinds        write the wezterm keybinding module
 fleet mcp --project <name>  serve the MCP tools over stdio (Claude calls this)
+fleet mcp --head            serve the head orchestrator's cross-project tools
+fleet head [--voice]        run the head orchestrator's Claude (the alt+o chord does this)
 fleet dispatch "<task>" --project <name>
                             spin up a sub-orchestrator for a task
 fleet report --caller <slug> --status <s> --project <name> -- <summary>
@@ -326,6 +328,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
 | `ctrl+enter` | the fleet menu, from any pane |
+| `alt+o` | show or hide the head orchestrator, from any pane of a fleet window |
+| `alt+shift+o` | the same, starting the head with voice dictation on |
 
 Adding a repository has no bare key on purpose — it lives in the menu only, so
 the dashboard's letters stay free for navigation.
@@ -558,6 +562,57 @@ next to it (`state.json`, and `audit.jsonl` for what happened), and tells it to 
 ask you at each approval point. `.fleet/config/aidlc.md` adds your own notes to that
 process.
 
+## The head orchestrator
+
+Every project has its own orchestrator. The **head** is one Claude above all of them:
+you tell it "go to techweb and have its orchestrator dispatch: add a login page", and it
+switches the window to techweb and types `,add a login page` into techweb's orchestrator
+as if you had.
+
+- **`alt+o`** shows the head from any pane of a fleet window; pressing it again hides it.
+  Hiding never stops it: it is one Claude session that lives across projects and
+  windows, and comes back with the conversation where you left it. After a restart of
+  WezTerm it resumes the last conversation (`claude --continue`).
+- **`alt+shift+o`** does the same, but starts the head with Claude Code's voice dictation
+  on (hold space to talk). Voice is a Claude Code setting, `voice.enabled`, so fleet
+  starts the head with `claude --settings <file>` holding `{"voice":{"enabled":true}}`;
+  `alt+o` passes `false`. This only takes effect when the head starts. A head that is
+  already running keeps its mode, so to switch, run `/voice` inside it. Voice needs a
+  claude.ai login, as it does anywhere in Claude Code.
+- Both chords are direct, with no prefix, and are rebindable under **Keybinds** in the
+  *anywhere, no prefix* group. Re-run `fleet apply-keybinds` after changing them.
+- **WezTerm has no floating panes**, so the head lives in a workspace of its own,
+  `fleet-head`: the chord switches the window into it and back to the workspace you came
+  from. Your project windows stay exactly as they were. The chords come from
+  `fleet apply-keybinds`, so they are WezTerm's; the built-in multiplexer does not bind
+  them yet (run `fleet head` in a float there with `ctrl+s f`).
+
+The head runs in `%APPDATA%\fleet\head`, where fleet writes its `CLAUDE.md` (its role and
+tools) and registers `fleet mcp --head` as its MCP server every time it starts. Its tools:
+
+| Tool | Does |
+|---|---|
+| `list_projects` | every project, open or closed, and how many relayed prompts wait for it |
+| `switch_project` | shows a project, opening it first if it is closed |
+| `menu_action` | hands a dashboard action (`new-agent`, `add-repository`, `keybinds`, ...) to a project's dashboard and shows it |
+| `list_agents` | the agents of one project, or of every open project |
+| `relay` | types a dispatch prompt into a project's main orchestrator |
+
+**Relaying.** `relay` puts the project's dispatch trigger in front of the task and types it
+into that project's orchestrator, so the orchestrator's own hook dispatches a
+sub-orchestrator exactly as if you had typed it. If the project is closed, the head opens
+it and waits up to 90 seconds for its Claude. If that Claude is busy (a spinner, or a
+question or permission prompt on screen), the prompt is **queued** and the head is told
+so; fleet types it in as soon as the orchestrator is idle, in order, for up to an hour.
+The queue lives in the head's MCP server, so it is lost if the head's Claude exits.
+
+**Permissions.** What the head does inside a project goes through that project's own
+permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule and
+`list_agents` its `list_agents` rule. *Forbid* refuses; *ask* shows the Allow/Deny dialog in
+that project's dashboard, whichever channel the rule names, because the head's own Claude
+cannot tell projects apart. Switching projects, opening menus and showing or hiding the
+head are navigation and always allowed.
+
 ## Configuration
 
 Everything lives under `%APPDATA%\fleet`:
@@ -566,6 +621,7 @@ Everything lives under `%APPDATA%\fleet`:
 projects/<name>.json    a name and a root, with ~ for the home directory
 keybinds.json           the prefix and every action binding
 settings/<name>.json    the per-project tool permissions, dispatch trigger and AIDLC settings
+head/                   the head orchestrator's folder: CLAUDE.md, .mcp.json, voice settings
 approvals/<name>/       in-flight MCP approval requests (transient)
 fleet.log               failures fleet degraded past, shown by doctor
 ```
