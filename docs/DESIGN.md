@@ -4331,12 +4331,22 @@ does. The composition root reads the settings and hands a bool to the handlers;
 `AgentHarness` stays free of storage. A running orchestrator keeps what it was started with;
 a setting applies to the next launch.
 
-Known gaps: delivery picks the path from the setting at the moment of delivery, not from how
-the running pane was started, so flipping the sub setting while a sub-orchestrator runs can
-double-deliver (nvim) or not type the prompt (bare) until that pane is relaunched. Rebuild
-dashboard splits a fresh harness pane, and `SplitOptions` carries no env, so a bare main
-orchestrator started that way runs without the session-persistence env. In a bare pane
-fleet installs no ctrl+hjkl mapping, so pane navigation depends on the WezTerm config.
+Delivery follows how the running pane was started, not the current setting: dispatch,
+restore and open store the host on the sub's `AgentRecord` (`InNvim`), and `TellAgentHandler`
+types the prompt only for a sub started bare. Reading the setting at delivery time instead
+double-delivered (pump plus send-text into nvim) or lost the message (a bare pane nobody types
+into) once the setting flipped under a running sub. A record without `InNvim` was saved before
+it existed, when every sub ran in nvim, so it counts as nvim. The daemon's session restore
+relaunches a pane's own command, so the stored host stays true across a fleetd restart. A
+mux-side signal was not used: panes carry no command in the `Pane` model, and WezTerm's pane
+list does not report the process reliably.
+
+Rebuild dashboard re-creates the main harness with a split, so `SplitOptions` gained `Env`,
+handled like `SpawnOptions.Env` (WezTerm wraps the command through `EnvLaunch`, the embedded
+driver sends it to fleetd, which already started split panes with a request's env).
+
+Not verified on a real machine: in a bare pane fleet installs no ctrl+hjkl mapping, so pane
+navigation depends on the WezTerm config.
 
 ## Still to verify
 ## Still to verify
