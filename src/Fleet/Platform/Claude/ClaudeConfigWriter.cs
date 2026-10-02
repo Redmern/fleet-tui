@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Fleet.Platform.Claude.Models;
+using Fleet.Platform.Storage;
 using Fleet.Ports.Claude;
 using Fleet.Ports.Claude.Models;
 using Fleet.Shared.Hooks;
@@ -19,14 +20,14 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (mcp is null)
         {
-            return Result.Fail($"{mcpPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{mcpPath} could not be read as JSON; fleet left it untouched.");
         }
 
         var settings = ReadSettings(settingsPath);
 
         if (settings is null)
         {
-            return Result.Fail($"{settingsPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{settingsPath} could not be read as JSON; fleet left it untouched.");
         }
 
         Apply(mcp, plan.Server);
@@ -53,7 +54,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (file is null)
         {
-            return Result.Fail($"{userSettingsPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{userSettingsPath} could not be read as JSON; fleet left it untouched.");
         }
 
         if (file.EnabledMcpjsonServers.Contains(serverName))
@@ -84,12 +85,12 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (mcp is null)
         {
-            return Result.Fail($"{mcpPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{mcpPath} could not be read as JSON; fleet left it untouched.");
         }
 
         if (settings is null)
         {
-            return Result.Fail($"{settingsPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{settingsPath} could not be read as JSON; fleet left it untouched.");
         }
 
         Apply(mcp, server);
@@ -123,7 +124,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (file is null)
         {
-            return Result.Fail($"{claudeJsonPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{claudeJsonPath} could not be read as JSON; fleet left it untouched.");
         }
 
         var key = Path.GetFullPath(folder).Replace('\\', '/');
@@ -289,53 +290,29 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         string path, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> info, Func<T> empty)
         where T : class
     {
+        var text = BusyFiles.Retry(
+            () => File.Exists(path) ? File.ReadAllText(path) : string.Empty, BusyFiles.Patience);
+
+        if (text is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return empty();
+        }
+
         try
         {
-            if (!File.Exists(path))
-            {
-                return empty();
-            }
-
-            var text = File.ReadAllText(path);
-
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return empty();
-            }
-
             return JsonSerializer.Deserialize(text, info) ?? empty();
         }
         catch (JsonException)
         {
             return null;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return empty();
-        }
     }
 
-    private static bool Write(string path, string content)
-    {
-        try
-        {
-            var directory = Path.GetDirectoryName(path);
-
-            if (directory is { Length: > 0 })
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var temp = path + ".tmp";
-
-            File.WriteAllText(temp, content);
-            File.Move(temp, path, overwrite: true);
-
-            return true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+    private static bool Write(string path, string content) =>
+        BusyFiles.Replace(path, temp => File.WriteAllText(temp, content));
 }

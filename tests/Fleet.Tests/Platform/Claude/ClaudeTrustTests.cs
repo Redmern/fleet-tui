@@ -102,6 +102,73 @@ public sealed class ClaudeTrustTests : IDisposable
         Assert.Equal("abc", entry.GetProperty("lastSessionId").GetString());
     }
 
+    private string SeedUntrusted(string folder)
+    {
+        var seed = $$"""
+            {
+              "userID": "keep-me",
+              "projects": {
+                "{{Key(folder)}}": { "hasTrustDialogAccepted": false, "lastSessionId": "abc" }
+              }
+            }
+            """;
+        File.WriteAllText(_claudeJson, seed);
+        return seed;
+    }
+
+    [Fact]
+    public async Task A_file_briefly_held_by_another_process_is_waited_for_not_treated_as_empty()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var folder = Path.Combine(_dir, "worktree");
+        SeedUntrusted(folder);
+
+        var locked = new FileStream(_claudeJson, FileMode.Open, FileAccess.Read, FileShare.None);
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(300);
+            await locked.DisposeAsync();
+        });
+
+        var result = new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet");
+        await release;
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var root = Reload();
+        var entry = root.GetProperty("projects").GetProperty(Key(folder));
+
+        Assert.Equal("keep-me", root.GetProperty("userID").GetString());
+        Assert.True(entry.GetProperty("hasTrustDialogAccepted").GetBoolean());
+        Assert.Equal("abc", entry.GetProperty("lastSessionId").GetString());
+    }
+
+    [Fact]
+    public void A_file_that_stays_unreadable_is_left_alone_rather_than_overwritten()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var folder = Path.Combine(_dir, "worktree");
+        var seed = SeedUntrusted(folder);
+
+        Fleet.Shared.Results.Result result;
+
+        using (new FileStream(_claudeJson, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            result = new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet");
+        }
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(seed, File.ReadAllText(_claudeJson));
+    }
+
     [Fact]
     public void It_does_not_rewrite_when_already_trusted()
     {
