@@ -60,7 +60,7 @@ public sealed class NoticeTests : ConfigHomeFixture
         var found = NoticeDetector.Detect("alpha", [
             Watch(Agent("p")) with { Hooked = Hook(AgentState.Blocked, HookStatus.PermissionReason) },
             Watch(Agent("q")) with { Hooked = Hook(AgentState.Blocked, HookStatus.InputReason) },
-            Watch(Agent("slow")) with { Hooked = Hook(AgentState.Stalled, minutesAgo: 14) },
+            Watch(Agent("slow"), "* Churning... (esc to interrupt)") with { Hooked = Hook(AgentState.Stalled, minutesAgo: 14) },
             Watch(Agent("busy")) with { Hooked = Hook(AgentState.Working) },
             Watch(Agent("rest")) with { Hooked = Hook(AgentState.Idle) },
         ], T0);
@@ -69,6 +69,28 @@ public sealed class NoticeTests : ConfigHomeFixture
             [(NoticeKind.Permission, "p"), (NoticeKind.NeedsInput, "q"), (NoticeKind.Stalled, "slow")],
             found.Select(n => (n.Kind, n.Worktree.Split('/')[^1])));
         Assert.Contains("14 min", found.Single(n => n.Kind == NoticeKind.Stalled).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_hook_stall_without_the_busy_spinner_is_an_interrupted_turn_not_a_stall()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("esc"), "Interrupted by user\n> ") with { Hooked = Hook(AgentState.Stalled, minutesAgo: 30) },
+            Watch(Agent("unread")) with { Hooked = Hook(AgentState.Stalled, minutesAgo: 30) },
+        ], T0);
+
+        Assert.Empty(found);
+    }
+
+    [Fact]
+    public void A_hook_block_is_released_once_the_pane_runs_the_approved_tool()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("approved"), "Bash(dotnet test)\n* Running... (esc to interrupt)") with { Hooked = Hook(AgentState.Blocked, HookStatus.PermissionReason) },
+            Watch(Agent("asking"), "Do you want to proceed?\n2. No, and tell Claude") with { Hooked = Hook(AgentState.Blocked, HookStatus.PermissionReason) },
+        ], T0);
+
+        Assert.Equal([(NoticeKind.Permission, "asking")], found.Select(n => (n.Kind, n.Worktree.Split('/')[^1])));
     }
 
     [Fact]

@@ -12,6 +12,24 @@ public static class AgentActivity
 
     public const string Stalled = "stalled";
 
+    public static AgentState Confirmed(AgentState state, string paneText) => state switch
+    {
+        AgentState.Stalled when Classify(paneText) != Working => AgentState.Idle,
+        AgentState.Blocked when Classify(paneText) == Working && !Prompting(paneText) => AgentState.Working,
+        _ => state,
+    };
+
+    public static bool NeedsPane(AgentState state) => state is AgentState.Stalled or AgentState.Blocked;
+
+    private static bool Prompting(string paneText)
+    {
+        var text = paneText.ToLowerInvariant();
+
+        return text.Contains("do you want")
+            || text.Contains("waiting for your input")
+            || text.Contains("no, and tell claude");
+    }
+
     public static string For(AgentState state) => state switch
     {
         AgentState.Blocked => Waiting,

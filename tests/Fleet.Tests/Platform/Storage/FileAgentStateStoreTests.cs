@@ -98,6 +98,77 @@ public sealed class FileAgentStateStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_session_forgets_the_sessions_before_it_in_the_same_worktree()
+    {
+        var store = new FileAgentStateStore(_dir);
+
+        await store.ReportAsync(Report(AgentState.Working, "killed"));
+        await store.ReportAsync(Report(AgentState.Blocked, "elsewhere", worktree: "C:/w/b"));
+        await store.ReportAsync(Report(AgentState.Idle, "fresh") with { StartsSession = true });
+
+        var reports = (await store.GetSnapshotAsync()).Reports;
+
+        Assert.Equal(["elsewhere", "fresh"], reports.Select(r => r.Session).Order());
+    }
+
+    [Fact]
+    public async Task A_session_end_clears_the_report_while_a_reader_has_the_file_open()
+    {
+        var store = new FileAgentStateStore(_dir);
+        await store.ReportAsync(Report(AgentState.Working));
+        var file = Directory.GetFiles(_dir, "*.json").Single();
+
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        {
+            await store.ReportAsync(Report(AgentState.Unknown));
+        }
+
+        Assert.Empty((await store.GetSnapshotAsync()).Reports);
+    }
+
+    [Fact]
+    public async Task A_report_waits_out_a_file_briefly_held_shut()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var store = new FileAgentStateStore(_dir);
+        await store.ReportAsync(Report(AgentState.Working));
+        var file = Directory.GetFiles(_dir, "*.json").Single();
+
+        var held = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(200);
+            await held.DisposeAsync();
+        });
+
+        await store.ReportAsync(Report(AgentState.Idle));
+        await release;
+
+        Assert.Equal(AgentState.Idle, Assert.Single((await store.GetSnapshotAsync()).Reports).State);
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task Leftover_temp_files_are_cleaned_up_once_they_are_old()
+    {
+        Directory.CreateDirectory(_dir);
+        var old = Path.Combine(_dir, "x.json.abc.tmp");
+        var recent = Path.Combine(_dir, "y.json.def.tmp");
+        await File.WriteAllTextAsync(old, "{}");
+        await File.WriteAllTextAsync(recent, "{}");
+        File.SetLastWriteTimeUtc(old, DateTime.UtcNow - TimeSpan.FromMinutes(5));
+
+        await new FileAgentStateStore(_dir).GetSnapshotAsync();
+
+        Assert.False(File.Exists(old));
+        Assert.True(File.Exists(recent));
+    }
+
+    [Fact]
     public void The_file_name_is_stable_for_the_same_worktree_spelled_differently()
     {
         var a = FileAgentStateStore.NameFor(@"C:\w\a\", "s1");

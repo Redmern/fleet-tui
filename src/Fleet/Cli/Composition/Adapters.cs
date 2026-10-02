@@ -93,7 +93,8 @@ public static class Adapters
         return (payload.Text, payload.Cwd);
     }
 
-    public static HookEvent ReadHookEvent() => HookIo.Event(HookIo.Read(Console.In));
+    public static HookEvent ReadHookEvent() =>
+        HookIo.Event(HookIo.Read(Console.In), Environment.GetEnvironmentVariable(HookIo.ProjectDirVariable));
 
     public static string HookBlockJson(string note) => HookIo.Block(note);
 

@@ -13,6 +13,7 @@ public sealed class HookStatusTests
     [Theory]
     [InlineData("UserPromptSubmit", AgentState.Working)]
     [InlineData("PreToolUse", AgentState.Working)]
+    [InlineData("PostToolUse", AgentState.Working)]
     [InlineData("Stop", AgentState.Idle)]
     [InlineData("SessionStart", AgentState.Idle)]
     [InlineData("PermissionRequest", AgentState.Blocked)]
@@ -43,6 +44,21 @@ public sealed class HookStatusTests
     }
 
     [Fact]
+    public void Only_a_session_start_marks_a_new_session()
+    {
+        Assert.True(HookStatus.ReportFor(Event("SessionStart"), Now)!.StartsSession);
+        Assert.False(HookStatus.ReportFor(Event("Stop"), Now)!.StartsSession);
+        Assert.False(HookStatus.ReportFor(Event("PreToolUse"), Now)!.StartsSession);
+    }
+
+    [Fact]
+    public void An_approved_tool_finishing_clears_the_block()
+    {
+        Assert.Equal(AgentState.Working, HookStatus.ReportFor(Event("PostToolUse"), Now)!.State);
+        Assert.Equal(string.Empty, HookStatus.ReportFor(Event("PostToolUse"), Now)!.Reason);
+    }
+
+    [Fact]
     public void An_event_without_a_cwd_reports_nothing()
     {
         Assert.Null(HookStatus.ReportFor(new HookEvent("PreToolUse", " "), Now));
@@ -51,7 +67,7 @@ public sealed class HookStatusTests
     [Theory]
     [InlineData("SubagentStop")]
     [InlineData("SubagentStart")]
-    [InlineData("PostToolUse")]
+    [InlineData("PostToolUseFailure")]
     [InlineData("")]
     public void Events_outside_the_contract_report_nothing(string name)
     {

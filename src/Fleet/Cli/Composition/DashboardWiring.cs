@@ -508,8 +508,11 @@ public static class DashboardWiring
 
             if (Hooked(agent) is { } hooked)
             {
-                paneTexts[agent.Worktree] = string.Empty;
-                return agent with { Status = AgentActivity.For(hooked.State) };
+                var seen = AgentActivity.NeedsPane(hooked.State)
+                    ? mux.GetTextAsync(pane.Id).GetAwaiter().GetResult()
+                    : string.Empty;
+                paneTexts[agent.Worktree] = seen;
+                return agent with { Status = AgentActivity.For(AgentActivity.Confirmed(hooked.State, seen)) };
             }
 
             var text = mux.GetTextAsync(pane.Id).GetAwaiter().GetResult();

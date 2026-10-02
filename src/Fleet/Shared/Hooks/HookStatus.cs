@@ -26,6 +26,7 @@ public static class HookStatus
     [
         "UserPromptSubmit",
         "PreToolUse",
+        "PostToolUse",
         "Stop",
         "SessionStart",
         "SessionEnd",
@@ -47,14 +48,15 @@ public static class HookStatus
             return null;
         }
 
-        return new AgentReport(hook.Cwd, hook.Session, found.State, now, hook.Transcript, found.Reason);
+        return new AgentReport(
+            hook.Cwd, hook.Session, found.State, now, hook.Transcript, found.Reason, StartsSession: hook.Name == "SessionStart");
     }
 
     private static bool Ends(AgentState state) => state is AgentState.Idle or AgentState.Unknown;
 
     private static (AgentState State, string Reason)? StateFor(HookEvent hook) => hook.Name switch
     {
-        "UserPromptSubmit" or "PreToolUse" => (AgentState.Working, string.Empty),
+        "UserPromptSubmit" or "PreToolUse" or "PostToolUse" => (AgentState.Working, string.Empty),
         "Stop" or "SessionStart" => (AgentState.Idle, string.Empty),
         "SessionEnd" => (AgentState.Unknown, string.Empty),
         "PermissionRequest" => (AgentState.Blocked, PermissionReason),

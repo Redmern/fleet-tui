@@ -62,6 +62,16 @@ public sealed class TrackStatusTests
     }
 
     [Fact]
+    public void The_folder_claude_was_started_in_wins_over_where_the_session_has_cd_ed_to()
+    {
+        var payload = HookIo.Read(new StringReader("""{"cwd":"C:/w/a/src","hook_event_name":"PreToolUse"}"""));
+
+        Assert.Equal("C:/w/a", HookIo.Event(payload, "C:/w/a").Cwd);
+        Assert.Equal("C:/w/a/src", HookIo.Event(payload, string.Empty).Cwd);
+        Assert.Equal("C:/w/a/src", HookIo.Event(payload).Cwd);
+    }
+
+    [Fact]
     public void An_empty_payload_is_an_event_with_nothing_in_it()
     {
         var hook = HookIo.Event(HookIo.Read(new StringReader(string.Empty)));

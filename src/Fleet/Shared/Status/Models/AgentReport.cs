@@ -8,4 +8,5 @@ public sealed record AgentReport(
     AgentState State,
     DateTime At,
     string Transcript = "",
-    string Reason = "");
+    string Reason = "",
+    bool StartsSession = false);

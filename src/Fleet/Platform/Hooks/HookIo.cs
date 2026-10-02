@@ -26,10 +26,12 @@ public static class HookIo
         }
     }
 
-    public static HookEvent Event(HookPayload payload) =>
+    public const string ProjectDirVariable = "CLAUDE_PROJECT_DIR";
+
+    public static HookEvent Event(HookPayload payload, string? projectDir = null) =>
         new(
             payload.HookEventName ?? string.Empty,
-            payload.Cwd ?? string.Empty,
+            projectDir is { Length: > 0 } started ? started : payload.Cwd ?? string.Empty,
             payload.SessionId ?? string.Empty,
             payload.TranscriptPath ?? string.Empty,
             payload.AgentId ?? string.Empty,

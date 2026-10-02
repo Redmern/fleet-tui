@@ -56,6 +56,9 @@ public sealed class HooksJson
     [JsonPropertyName("PreToolUse")]
     public List<HookGroup>? PreToolUse { get; set; }
 
+    [JsonPropertyName("PostToolUse")]
+    public List<HookGroup>? PostToolUse { get; set; }
+
     [JsonPropertyName("Stop")]
     public List<HookGroup>? Stop { get; set; }
 
@@ -75,6 +78,7 @@ public sealed class HooksJson
     {
         "UserPromptSubmit" => UserPromptSubmit,
         "PreToolUse" => PreToolUse,
+        "PostToolUse" => PostToolUse,
         "Stop" => Stop,
         "SessionStart" => SessionStart,
         "SessionEnd" => SessionEnd,
@@ -92,6 +96,9 @@ public sealed class HooksJson
                 break;
             case "PreToolUse":
                 PreToolUse = groups;
+                break;
+            case "PostToolUse":
+                PostToolUse = groups;
                 break;
             case "Stop":
                 Stop = groups;

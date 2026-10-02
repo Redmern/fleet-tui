@@ -54,7 +54,7 @@ public static class NoticeDetector
 
             if (watch.Hooked is { } hooked)
             {
-                if (watch.PaneAlive && FromHook(hooked, now) is { } notice)
+                if (watch.PaneAlive && FromHook(hooked, text, now) is { } notice)
                 {
                     found.Add(Raise(notice.Kind, notice.Message));
                 }
@@ -85,13 +85,17 @@ public static class NoticeDetector
         return found;
     }
 
-    private static (NoticeKind Kind, string Message)? FromHook(AgentReport hooked, DateTime now) => hooked.State switch
+    private static (NoticeKind Kind, string Message)? FromHook(AgentReport hooked, string paneText, DateTime now) => hooked.State switch
     {
+        AgentState.Blocked when IsBusy(paneText) && !IsQuestion(paneText) && !IsPermission(paneText) => null,
         AgentState.Blocked when hooked.Reason == HookStatus.PermissionReason => (NoticeKind.Permission, "asks for permission"),
         AgentState.Blocked => (NoticeKind.NeedsInput, "has a question for you"),
-        AgentState.Stalled => (NoticeKind.Stalled, $"has reported no progress for {(int)(now - hooked.At).TotalMinutes} min"),
+        AgentState.Stalled when IsBusy(paneText) => (NoticeKind.Stalled, $"has reported no progress for {(int)(now - hooked.At).TotalMinutes} min"),
         _ => null,
     };
+
+    public static bool IsBusy(string text) =>
+        text.Contains("esc to interrupt", StringComparison.OrdinalIgnoreCase);
 
     public static bool IsPermission(string text) =>
         text.Contains("no, and tell claude", StringComparison.OrdinalIgnoreCase)
