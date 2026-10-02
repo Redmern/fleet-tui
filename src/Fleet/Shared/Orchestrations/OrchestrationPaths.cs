@@ -23,6 +23,10 @@ public static class OrchestrationPaths
 
     public static string ReportsFolder(string folder) => Path.Combine(folder, "reports");
 
+    public static string StateFile(string folder) => Path.Combine(folder, "state.json");
+
+    public static string AuditFile(string folder) => Path.Combine(folder, "audit.jsonl");
+
     public static string ReadyMarker(string folder) =>
         Path.Combine(FleetHome.Config, "ready", Key(folder));
 

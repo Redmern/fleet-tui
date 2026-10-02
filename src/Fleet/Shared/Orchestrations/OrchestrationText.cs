@@ -20,7 +20,7 @@ public static class OrchestrationText
         an answer: report it, do not retry in a loop.
         """;
 
-    public const string DefaultAidlc =
+    public const string ClassicAidlc =
         """
         Follow this cycle for every unit of work, and say which phase you're in
         each time you update REPORT.md:
@@ -39,6 +39,9 @@ public static class OrchestrationText
         If a phase reveals the plan was wrong, revise the plan instead of
         pushing on with one you no longer believe.
         """;
+
+    public static bool IsClassicAidlc(string text) =>
+        string.Equals(Normalized(text), Normalized(ClassicAidlc), StringComparison.Ordinal);
 
     public static string Instructions(
         OrchestrationBrief brief, string? howYouWork = null, string? aidlc = null)
@@ -79,6 +82,8 @@ public static class OrchestrationText
 
         return string.Join("\n\n", sections);
     }
+
+    private static string Normalized(string text) => text.ReplaceLineEndings("\n").Trim();
 
     public static string Task(OrchestrationBrief brief) =>
         $"""

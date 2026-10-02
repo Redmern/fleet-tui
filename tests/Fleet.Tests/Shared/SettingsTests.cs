@@ -1,3 +1,4 @@
+using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
@@ -25,7 +26,7 @@ public class SettingsTests
 
         Assert.Equal(ActionPolicy.Ask, config.Commit);
         Assert.Equal(ActionPolicy.Ask, config.Push);
-        Assert.Equal(AidlcMode.Off, config.Aidlc);
+        Assert.Equal(AidlcMode.Off, config.Aidlc.Mode);
     }
 
     [Fact]
@@ -78,7 +79,7 @@ public class SettingsTests
     {
         var config = SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual);
 
-        Assert.Equal(AidlcMode.Manual, config.Aidlc);
+        Assert.Equal(AidlcMode.Manual, config.Aidlc.Mode);
         Assert.Equal(SettingsDefaults.Commit, config.Commit);
         Assert.Equal(SettingsDefaults.Trigger, config.Trigger);
     }
@@ -88,7 +89,7 @@ public class SettingsTests
     {
         var merged = SettingsConfig.Default.WithAidlcMode(AidlcMode.On).MergedOverDefaults();
 
-        Assert.Equal(AidlcMode.On, merged.Aidlc);
+        Assert.Equal(AidlcMode.On, merged.Aidlc.Mode);
     }
 
     [Fact]
@@ -119,6 +120,63 @@ public class SettingsTests
         Assert.NotEqual(before, SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid).Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithTrigger(";").Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithAidlcMode(AidlcMode.On).Signature);
+    }
+
+    [Fact]
+    public void Aidlc_defaults_to_off_express_guided_with_every_part_on()
+    {
+        var aidlc = SettingsConfig.Default.Aidlc;
+
+        Assert.Equal(AidlcMode.Off, aidlc.Mode);
+        Assert.Equal(Profile.Express, aidlc.DefaultProfile);
+        Assert.Equal(Autonomy.Guided, aidlc.Autonomy);
+        Assert.All(AidlcSettings.Parts, p => Assert.True(aidlc.IsOn(p)));
+    }
+
+    [Fact]
+    public void An_aidlc_part_switches_off_and_back_on_without_touching_the_others()
+    {
+        var off = AidlcSettings.Default.With(AidlcPart.Review, on: false).With(AidlcPart.SpecGate, on: false);
+
+        Assert.False(off.IsOn(AidlcPart.Review));
+        Assert.False(off.IsOn(AidlcPart.SpecGate));
+        Assert.True(off.IsOn(AidlcPart.Verify));
+
+        var back = off.With(AidlcPart.Review, on: true);
+
+        Assert.True(back.IsOn(AidlcPart.Review));
+        Assert.False(back.IsOn(AidlcPart.SpecGate));
+    }
+
+    [Fact]
+    public void The_aidlc_settings_resolve_a_plan_for_a_profile()
+    {
+        var plan = AidlcSettings.Default.With(AidlcPart.Verify, on: false).Plan(Profile.Bugfix);
+
+        Assert.Equal(Profile.Bugfix, plan.Profile);
+        Assert.Equal([Stage.Verify], plan.Skipped.Select(s => s.Stage));
+    }
+
+    [Fact]
+    public void The_signature_changes_with_every_aidlc_setting()
+    {
+        var before = SettingsConfig.Default.Signature;
+        var aidlc = SettingsConfig.Default.Aidlc;
+
+        Assert.NotEqual(before, SettingsConfig.Default.WithAidlc(aidlc with { DefaultProfile = Profile.Feature }).Signature);
+        Assert.NotEqual(before, SettingsConfig.Default.WithAidlc(aidlc with { Autonomy = Autonomy.Automatic }).Signature);
+
+        Assert.All(
+            AidlcSettings.Parts,
+            p => Assert.NotEqual(before, SettingsConfig.Default.WithAidlc(aidlc.With(p, on: false)).Signature));
+    }
+
+    [Fact]
+    public void Merging_keeps_every_aidlc_setting()
+    {
+        var aidlc = new AidlcSettings(AidlcMode.Manual, Profile.Refactor, Autonomy.Automatic, AidlcPart.Learn);
+
+        Assert.Equal(aidlc, SettingsConfig.Default.WithAidlc(aidlc).MergedOverDefaults().Aidlc);
     }
 
     [Theory]

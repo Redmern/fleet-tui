@@ -37,7 +37,7 @@ public static class DispatchCommand
 
         var handler = new DispatchHandler(
             mux.Driver, Adapters.Agents(), Adapters.HarnessConfig(),
-            history: Adapters.History(), namer: Adapters.SlugNamer(), settings: Adapters.Settings());
+            history: Adapters.History(), namer: Adapters.SlugNamer(), settings: Adapters.Settings(), intents: Adapters.Intents());
 
         var reply = await handler
             .HandleAsync(

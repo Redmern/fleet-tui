@@ -14,10 +14,10 @@ public static class EditFleetConfigHandler
         - instructions.md — replaces the "How you work" section fleet writes into
           CLAUDE.md when it dispatches a sub-orchestrator for this project. Add
           project-specific conventions here.
-        - aidlc.md — replaces the built-in AIDLC process guidance spliced into
-          CLAUDE.md as a "## Process" section whenever AIDLC mode is on or
-          manually requested for a dispatch (see the AIDLC mode item in the
-          fleet menu's Settings submenu).
+        - aidlc.md — extra guidance for the AIDLC process. fleet writes the
+          "## Process" section of CLAUDE.md itself from the task's profile and
+          this project's AIDLC settings (the AIDLC item in the fleet menu's
+          Settings submenu); create this file to append your own notes to it.
         """;
 
     public static string Ensure(string projectRoot)
@@ -33,12 +33,6 @@ public static class EditFleetConfigHandler
             File.WriteAllText(instructions, OrchestrationText.DefaultHowYouWork + "\n");
         }
 
-        var aidlc = ProjectConfigPaths.AidlcFile(projectRoot);
-
-        if (!File.Exists(aidlc))
-        {
-            File.WriteAllText(aidlc, OrchestrationText.DefaultAidlc + "\n");
-        }
 
         var readme = ProjectConfigPaths.ReadmeFile(projectRoot);
 

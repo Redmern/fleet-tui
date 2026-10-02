@@ -75,7 +75,7 @@ public sealed class McpActions(
     private readonly SecretsHandler _secrets = new();
 
     private readonly DispatchHandler _dispatcher =
-        new(mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings());
+        new(mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(), intents: Adapters.Intents());
 
     private readonly ReportStatusHandler _reporter = new(store);
 
@@ -520,7 +520,11 @@ public sealed class McpActions(
         var reply = await _dispatcher
             .HandleAsync(
                 new DispatchCommand(
-                    project, root, ToolArguments.Text(request, ToolArguments.Message), caller),
+                    project,
+                    root,
+                    ToolArguments.Text(request, ToolArguments.Message),
+                    caller,
+                    ToolArguments.Text(request, ToolArguments.Profile)),
                 DateTimeOffset.UtcNow.ToString("O"))
             .ConfigureAwait(false);
 

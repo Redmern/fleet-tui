@@ -7,7 +7,7 @@ public sealed record SettingsConfig(
     IReadOnlyDictionary<HarnessTool, ToolRule> Rules,
     ActionPolicy Commit,
     ActionPolicy Push,
-    AidlcMode Aidlc)
+    AidlcSettings Aidlc)
 {
     public static SettingsConfig Default => new(
         SettingsDefaults.Trigger,
@@ -39,7 +39,9 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithPush(ActionPolicy policy) => this with { Push = policy };
 
-    public SettingsConfig WithAidlcMode(AidlcMode mode) => this with { Aidlc = mode };
+    public SettingsConfig WithAidlcMode(AidlcMode mode) => this with { Aidlc = Aidlc with { Mode = mode } };
+
+    public SettingsConfig WithAidlc(AidlcSettings aidlc) => this with { Aidlc = aidlc };
 
     public SettingsConfig MergedOverDefaults()
     {
@@ -70,5 +72,5 @@ public sealed record SettingsConfig(
                 .Prepend($"trigger={Trigger}")
                 .Append($"commit={Commit}")
                 .Append($"push={Push}")
-                .Append($"aidlc={Aidlc}"));
+                .Append(Aidlc.Signature));
 }

@@ -6,6 +6,7 @@ using Fleet.Features.Agents.MoveProject;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
+using Fleet.Features.Menu.EditAidlc;
 using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
@@ -273,23 +274,17 @@ public static class MenuCommand
             case FleetAction.EditAidlcMode:
                 {
                     var aidlcSettings = Adapters.Settings();
-                    var current = aidlcSettings.Load(project.Name);
 
-                    var picked = FleetPicker.Choose(
+                    EditAidlcView.Show(
                         app,
-                        $"{SettingsDefaults.AidlcLabel} — {project.Name}",
-                        [
-                            new PickerEntry("off", "sub-orchestrators never get AIDLC guidance", "o"),
-                        new PickerEntry("on", "every dispatch gets AIDLC guidance", "n"),
-                        new PickerEntry("manual", "only when the prompt doubles the dispatch trigger", "m"),
-                        ],
                         keymap,
-                        (int)current.Aidlc);
-
-                    if (picked is not null)
-                    {
-                        aidlcSettings.Save(project.Name, current.WithAidlcMode((AidlcMode)picked.Value));
-                    }
+                        project.Name,
+                        aidlcSettings.Load(project.Name),
+                        next =>
+                        {
+                            aidlcSettings.Save(project.Name, next);
+                            return null;
+                        });
 
                     break;
                 }
