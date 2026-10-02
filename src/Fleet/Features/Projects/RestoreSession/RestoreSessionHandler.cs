@@ -1,3 +1,4 @@
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
@@ -51,7 +52,7 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
     public static bool Wanted(AgentRecord agent, IReadOnlyList<Pane> panes) =>
         agent.Open
         && Directory.Exists(agent.Worktree)
-        && !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree));
+        && !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree) && !AgentPaneMatch.IsEditor(p, agent));
 
     public static SpawnOptions Options(string project, AgentRecord agent, string? window, bool workspaces = false) =>
         new()

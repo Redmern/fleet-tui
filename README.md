@@ -311,6 +311,7 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `n` | new project (picker) / new agent / add repository |
 | `enter` | open the selection / open an agent, restarting it if needed |
 | `m` | manage an agent / manage a repository |
+| `e` | open nvim (neo-tree) in the selected agent's or sub's folder, beside its pane; focuses it if already open |
 | `p` | pull the highlighted repository |
 | `d` | remove a repository |
 | `r` | refresh (dashboard) |
@@ -406,6 +407,16 @@ lists every worktree that would go and any branch that is not pushed.
 Keys follow the tab: `n` and `d` mean agent things on Agents and repository
 things on Repositories. Hiding and the harness picker do nothing on the
 Repositories tab.
+
+### Opening an editor
+
+`e` on an agent or sub-orchestrator opens nvim with neo-tree in its folder (the
+worktree, or `.fleet/orchestrations/<slug>` for a sub), titled `<repo>/<branch> editor`.
+It splits beside the agent's pane; if that pane is closed or hidden it opens in the
+project window instead. Pressing `e` again focuses the editor rather than opening a
+second one. **Open editor here** in the fleet menu does the same for the agent whose
+pane you are in. The editor is a helper, not the agent: hiding or stopping the agent
+leaves it alone, and an agent with only its editor open still counts as not running.
 
 ### Hiding an agent
 
