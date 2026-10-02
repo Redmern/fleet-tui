@@ -242,9 +242,22 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
     private static bool IsStatusHook(HookEntry entry) =>
         entry.Args is [var verb, ..]
         && verb == HookStatus.Verb
-        && string.Equals(FleetExecutableName, Path.GetFileNameWithoutExtension(entry.Command.Trim('"', '\'')), StringComparison.OrdinalIgnoreCase);
+        && IsFleetExecutable(entry.Command);
 
     private const string FleetExecutableName = "fleet";
+
+    private static bool IsFleetExecutable(string command)
+    {
+        var path = command.Trim().Trim('"', '\'');
+        var name = path[(path.LastIndexOfAny(['/', '\\']) + 1)..];
+
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name[..^".exe".Length];
+        }
+
+        return string.Equals(FleetExecutableName, name, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static void ApplyHook(
         ClaudeSettingsFile file, string command, IReadOnlyList<string> args)
