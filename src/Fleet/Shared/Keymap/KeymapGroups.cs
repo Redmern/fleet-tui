@@ -33,6 +33,8 @@ public static class KeymapGroups
             FleetAction.CleanupProject,
             FleetAction.EditAidlcMode,
             FleetAction.EditClaudeProfile,
+            FleetAction.EditMainOrchestratorInNvim,
+            FleetAction.EditSubOrchestratorsInNvim,
         ]),
         ("dashboard",
         [

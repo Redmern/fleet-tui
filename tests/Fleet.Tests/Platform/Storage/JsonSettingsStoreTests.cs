@@ -148,6 +148,54 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_main_orchestrator_and_sub_orchestrators_run_in_nvim_by_default()
+    {
+        var config = Store.Load("techweb");
+
+        Assert.True(config.MainOrchestratorInNvim);
+        Assert.True(config.SubOrchestratorsInNvim);
+    }
+
+    [Fact]
+    public void Main_orchestrator_off_round_trips_without_touching_the_subs()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithMainOrchestratorInNvim(false));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.False(loaded.MainOrchestratorInNvim);
+        Assert.True(loaded.SubOrchestratorsInNvim);
+        Assert.True(Store.Load("other").MainOrchestratorInNvim);
+    }
+
+    [Fact]
+    public void Sub_orchestrators_off_round_trips_without_touching_the_main_orchestrator()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithSubOrchestratorsInNvim(false));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.True(loaded.MainOrchestratorInNvim);
+        Assert.False(loaded.SubOrchestratorsInNvim);
+    }
+
+    [Fact]
+    public void Each_nvim_setting_is_stored_only_when_it_differs_from_the_default()
+    {
+        var file = Path.Combine(FleetPaths.Settings, "techweb.json");
+
+        Store.Save("techweb", SettingsConfig.Default.WithMainOrchestratorInNvim(false));
+        var raw = File.ReadAllText(file);
+        Assert.Contains("\"mainOrchestratorInNvim\": \"off\"", raw);
+        Assert.Contains("\"subOrchestratorsInNvim\": \"\"", raw);
+
+        Store.Save("techweb", SettingsConfig.Default.WithSubOrchestratorsInNvim(false));
+        raw = File.ReadAllText(file);
+        Assert.Contains("\"mainOrchestratorInNvim\": \"\"", raw);
+        Assert.Contains("\"subOrchestratorsInNvim\": \"off\"", raw);
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));

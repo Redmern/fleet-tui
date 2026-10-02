@@ -124,4 +124,19 @@ public class RebuildDashboardTests
 
         Assert.False(result.Succeeded);
     }
+
+    [Fact]
+    public async Task With_main_orchestrator_in_nvim_off_a_fresh_harness_runs_bare_claude()
+    {
+        var (harness, dash) = await ProjectAsync();
+        await _mux.KillPaneAsync(harness);
+
+        var result = await new RebuildDashboardHandler(_mux, mainOrchestratorInNvim: false)
+            .HandleAsync(Root, [Sub], AgentHarness.Orchestrator);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var fresh = Assert.Single(await _mux.ListPanesAsync(), p => p.Id != dash);
+        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(fresh.Id));
+    }
 }

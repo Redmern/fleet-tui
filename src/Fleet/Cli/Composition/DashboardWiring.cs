@@ -490,7 +490,6 @@ public static class DashboardWiring
         }
 
         var spawner = new NewAgentHandler(git, mux, agents);
-        var opener = new OpenAgentHandler(mux, agents);
         var hider = new HideAgentHandler(mux, agents);
         var editor = new OpenEditorHandler(mux);
         var branches = new ListBranchesHandler(git);
@@ -540,7 +539,8 @@ public static class DashboardWiring
 
         async Task<string?> OpenFlow(AgentRecord agent)
         {
-            var executable = AgentHarness.CommandFor(agent.Harness)[0];
+            var inNvim = settings.Load(project.Name).SubOrchestratorsInNvim;
+            var executable = AgentHarness.CommandFor(agent.Harness, orchestratorInNvim: inNvim)[0];
 
             if (!Adapters.OnPath(executable))
             {
@@ -549,7 +549,8 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await opener.HandleAsync(project.Name, agent, project.Root)
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim)
+                .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 
             Note(log, project.Name, outcome.Succeeded
@@ -756,7 +757,7 @@ public static class DashboardWiring
 
             RebuildDashboard: () =>
             {
-                var rebuilt = new RebuildDashboardHandler(mux)
+                var rebuilt = new RebuildDashboardHandler(mux, settings.Load(project.Name).MainOrchestratorInNvim)
                     .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Orchestrator)
                     .GetAwaiter()
                     .GetResult();

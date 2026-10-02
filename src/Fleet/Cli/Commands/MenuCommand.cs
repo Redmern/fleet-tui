@@ -71,6 +71,8 @@ public static class MenuCommand
         FleetAction.CleanupProject,
         FleetAction.EditAidlcMode,
         FleetAction.EditClaudeProfile,
+        FleetAction.EditMainOrchestratorInNvim,
+        FleetAction.EditSubOrchestratorsInNvim,
     ];
 
     public static async Task<int> RunAsync(Invocation invocation)
@@ -288,6 +290,52 @@ public static class MenuCommand
                             aidlcSettings.Save(project.Name, next);
                             return null;
                         });
+
+                    break;
+                }
+
+            case FleetAction.EditMainOrchestratorInNvim:
+                {
+                    var hostSettings = Adapters.Settings();
+                    var current = hostSettings.Load(project.Name);
+
+                    var picked = FleetPicker.Choose(
+                        app,
+                        $"{SettingsDefaults.MainOrchestratorInNvimLabel} — {project.Name}",
+                        [
+                            new PickerEntry("on", "the main orchestrator runs claude inside nvim", "n"),
+                            new PickerEntry("off", "the main orchestrator runs bare claude", "f"),
+                        ],
+                        keymap,
+                        current.MainOrchestratorInNvim ? 0 : 1);
+
+                    if (picked is not null)
+                    {
+                        hostSettings.Save(project.Name, current.WithMainOrchestratorInNvim(picked.Value == 0));
+                    }
+
+                    break;
+                }
+
+            case FleetAction.EditSubOrchestratorsInNvim:
+                {
+                    var hostSettings = Adapters.Settings();
+                    var current = hostSettings.Load(project.Name);
+
+                    var picked = FleetPicker.Choose(
+                        app,
+                        $"{SettingsDefaults.SubOrchestratorsInNvimLabel} — {project.Name}",
+                        [
+                            new PickerEntry("on", "dispatched sub-orchestrators run claude inside nvim", "n"),
+                            new PickerEntry("off", "dispatched sub-orchestrators run bare claude", "f"),
+                        ],
+                        keymap,
+                        current.SubOrchestratorsInNvim ? 0 : 1);
+
+                    if (picked is not null)
+                    {
+                        hostSettings.Save(project.Name, current.WithSubOrchestratorsInNvim(picked.Value == 0));
+                    }
 
                     break;
                 }
@@ -715,7 +763,7 @@ public static class MenuCommand
             .Where(p => !string.Equals(p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        var mover = new MoveProjectHandler(mux);
+        var mover = new MoveProjectHandler(mux, Adapters.MainOrchestratorInNvim(target.Name));
 
         foreach (var park in toPark)
         {
@@ -771,7 +819,8 @@ public static class MenuCommand
         IMuxDriver mux, Project project, string? windowId = null)
     {
         var result = await new OpenProjectHandler(mux)
-            .HandleAsync(new OpenProjectCommand(project, AgentHarness.Orchestrator, Adapters.Executable, windowId))
+            .HandleAsync(new OpenProjectCommand(
+                project, AgentHarness.Orchestrator, Adapters.Executable, windowId, Adapters.MainOrchestratorInNvim(project.Name)))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -782,10 +831,11 @@ public static class MenuCommand
         var agents = new ListAgentsHandler(Adapters.Agents()).Handle(project.Name);
 
         var runnable = agents
-            .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
+            .Where(a => Adapters.OnPath(
+                AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(project.Name))[0]))
             .ToList();
 
-        await new RestoreSessionHandler(mux)
+        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(project.Name))
             .HandleAsync(project.Name, project.Root, runnable)
             .ConfigureAwait(false);
 

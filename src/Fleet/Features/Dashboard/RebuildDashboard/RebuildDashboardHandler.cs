@@ -9,7 +9,7 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Dashboard.RebuildDashboard;
 
-public sealed class RebuildDashboardHandler(IMuxDriver mux)
+public sealed class RebuildDashboardHandler(IMuxDriver mux, bool mainOrchestratorInNvim = true)
 {
     public async Task<Result<string>> HandleAsync(
         string projectRoot,
@@ -61,7 +61,7 @@ public sealed class RebuildDashboardHandler(IMuxDriver mux)
                     {
                         Percent = 50,
                         Cwd = projectRoot,
-                        Args = AgentHarness.CommandFor(harness),
+                        Args = AgentHarness.CommandFor(harness, orchestratorInNvim: mainOrchestratorInNvim),
                     },
                     ct)
                 .ConfigureAwait(false);

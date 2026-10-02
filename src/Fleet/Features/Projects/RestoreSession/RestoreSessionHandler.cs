@@ -8,7 +8,7 @@ using Fleet.Shared.Constants;
 
 namespace Fleet.Features.Projects.RestoreSession;
 
-public sealed class RestoreSessionHandler(IMuxDriver mux)
+public sealed class RestoreSessionHandler(IMuxDriver mux, bool subOrchestratorsInNvim = true)
 {
     public async Task<int> HandleAsync(
         string project,
@@ -29,7 +29,9 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
                 continue;
             }
 
-            var pane = await mux.SpawnAsync(Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces)), ct)
+            var pane = await mux.SpawnAsync(
+                    Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim),
+                    ct)
                 .ConfigureAwait(false);
 
             if (pane.IsNone)
@@ -54,7 +56,12 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
         && Directory.Exists(agent.Worktree)
         && !panes.Any(p => PathKey.Same(p.Cwd, agent.Worktree) && !AgentPaneMatch.IsEditor(p, agent));
 
-    public static SpawnOptions Options(string project, AgentRecord agent, string? window, bool workspaces = false) =>
+    public static SpawnOptions Options(
+        string project,
+        AgentRecord agent,
+        string? window,
+        bool workspaces = false,
+        bool subOrchestratorsInNvim = true) =>
         new()
         {
             Cwd = agent.Worktree,
@@ -63,7 +70,10 @@ public sealed class RestoreSessionHandler(IMuxDriver mux)
             WindowId = agent.Hidden ? null : window,
             NewWindow = agent.Hidden,
             Args = AgentHarness.IsOrchestrator(agent.Harness)
-                ? AgentHarness.OrchestratorCommand(resume: true)
+                ? AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim)
                 : AgentHarness.CommandFor(agent.Harness, withClaude: agent.RunsClaude),
+            Env = AgentHarness.IsOrchestrator(agent.Harness)
+                ? AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim)
+                : new Dictionary<string, string>(),
         };
 }

@@ -7,14 +7,18 @@ public sealed record SettingsConfig(
     IReadOnlyDictionary<HarnessTool, ToolRule> Rules,
     ActionPolicy Commit,
     ActionPolicy Push,
-    AidlcSettings Aidlc)
+    AidlcSettings Aidlc,
+    bool MainOrchestratorInNvim = SettingsDefaults.MainOrchestratorInNvim,
+    bool SubOrchestratorsInNvim = SettingsDefaults.SubOrchestratorsInNvim)
 {
     public static SettingsConfig Default => new(
         SettingsDefaults.Trigger,
         SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value),
         SettingsDefaults.Commit,
         SettingsDefaults.Push,
-        SettingsDefaults.Aidlc);
+        SettingsDefaults.Aidlc,
+        SettingsDefaults.MainOrchestratorInNvim,
+        SettingsDefaults.SubOrchestratorsInNvim);
 
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
@@ -43,6 +47,10 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithAidlc(AidlcSettings aidlc) => this with { Aidlc = aidlc };
 
+    public SettingsConfig WithMainOrchestratorInNvim(bool inNvim) => this with { MainOrchestratorInNvim = inNvim };
+
+    public SettingsConfig WithSubOrchestratorsInNvim(bool inNvim) => this with { SubOrchestratorsInNvim = inNvim };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -60,7 +68,9 @@ public sealed record SettingsConfig(
             rules,
             Commit,
             Push,
-            Aidlc);
+            Aidlc,
+            MainOrchestratorInNvim,
+            SubOrchestratorsInNvim);
     }
 
     public string Signature =>
@@ -72,5 +82,7 @@ public sealed record SettingsConfig(
                 .Prepend($"trigger={Trigger}")
                 .Append($"commit={Commit}")
                 .Append($"push={Push}")
-                .Append(Aidlc.Signature));
+                .Append(Aidlc.Signature)
+                .Append($"main-nvim={MainOrchestratorInNvim}")
+                .Append($"sub-nvim={SubOrchestratorsInNvim}"));
 }

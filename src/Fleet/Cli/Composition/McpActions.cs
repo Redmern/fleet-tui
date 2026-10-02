@@ -54,8 +54,6 @@ public sealed class McpActions(
 
     private readonly NewAgentHandler _spawner = new(git, mux, store);
 
-    private readonly OpenAgentHandler _opener = new(mux, store);
-
     private readonly HideAgentHandler _hider = new(mux, store);
 
     private readonly StopAgentHandler _stopper = new(mux, store);
@@ -286,6 +284,8 @@ public sealed class McpActions(
         return pane?.Id;
     }
 
+    private bool SubOrchestratorsInNvim() => Adapters.SubOrchestratorsInNvim(project);
+
     private async Task Deliver(AgentRecord agent, PaneId pane, string message, CancellationToken ct)
     {
         var dir = Path.Combine(agent.Worktree, ".fleet");
@@ -293,7 +293,7 @@ public sealed class McpActions(
         await File.WriteAllTextAsync(
             Path.Combine(dir, AgentHarness.AgentInstructionFile), message, ct).ConfigureAwait(false);
 
-        if (AgentHarness.HostedInNvim(agent.Harness))
+        if (AgentHarness.HostedInNvim(agent.Harness, SubOrchestratorsInNvim()))
         {
             return;
         }
@@ -321,7 +321,9 @@ public sealed class McpActions(
 
         ClaudeWiring.TrustFolder(agent.Worktree);
 
-        var outcome = await _opener.HandleAsync(project, agent, root, ct).ConfigureAwait(false);
+        var outcome = await new OpenAgentHandler(mux, store, SubOrchestratorsInNvim())
+            .HandleAsync(project, agent, root, ct)
+            .ConfigureAwait(false);
 
         return From(outcome, $"opened {Repo(request)}/{Branch(request)}.");
     }

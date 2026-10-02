@@ -13,9 +13,17 @@ public static class SettingsDefaults
 
     public static AidlcSettings Aidlc => AidlcSettings.Default;
 
+    public const bool MainOrchestratorInNvim = true;
+
+    public const bool SubOrchestratorsInNvim = true;
+
     public const string CommitLabel = "Agents commit changes";
 
     public const string PushLabel = "Agents push changes";
+
+    public const string MainOrchestratorInNvimLabel = "Main orchestrator in nvim";
+
+    public const string SubOrchestratorsInNvimLabel = "Sub-orchestrators in nvim";
 
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);

@@ -70,8 +70,13 @@ public static class AgentHarness
         + "end,{buffer=tb}) end end, 400) "
         + "vim.api.nvim_set_current_win(term) vim.cmd('startinsert') end, 150) end)";
 
-    public static IReadOnlyList<string> OrchestratorCommand(bool resume) =>
-        [Nvim, "-c", NvimStartupClaudeOnly(resume ? " " + ResumeArgument : string.Empty)];
+    public static IReadOnlyList<string> OrchestratorCommand(bool resume, bool inNvim = true) =>
+        (inNvim, resume) switch
+        {
+            (true, _) => [Nvim, "-c", NvimStartupClaudeOnly(resume ? " " + ResumeArgument : string.Empty)],
+            (false, true) => [Claude, ResumeArgument],
+            (false, false) => [Claude],
+        };
 
     public static IReadOnlyList<string> Resumed(IReadOnlyList<string> command) => command switch
     {
@@ -82,7 +87,8 @@ public static class AgentHarness
         _ => command,
     };
 
-    public static bool HostedInNvim(string harness) => CommandFor(harness)[0] == Nvim;
+    public static bool HostedInNvim(string harness, bool orchestratorInNvim = true) =>
+        CommandFor(harness, orchestratorInNvim: orchestratorInNvim)[0] == Nvim;
 
     public const string TellPrefix = ":FleetTell ";
 
@@ -103,8 +109,10 @@ public static class AgentHarness
             ["CLAUDE_CODE_CHILD_SESSION"] = string.Empty,
         };
 
-    public static IReadOnlyDictionary<string, string> SpawnEnv(string harness) =>
-        CommandFor(harness)[0] == Claude ? SessionPersistence : new Dictionary<string, string>();
+    public static IReadOnlyDictionary<string, string> SpawnEnv(string harness, bool orchestratorInNvim = true) =>
+        CommandFor(harness, orchestratorInNvim: orchestratorInNvim)[0] == Claude
+            ? SessionPersistence
+            : new Dictionary<string, string>();
 
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
 
@@ -133,11 +141,12 @@ public static class AgentHarness
 
     public static bool IsOrchestrator(string harness) => Normalize(harness) == Orchestrator;
 
-    public static IReadOnlyList<string> CommandFor(string harness, bool withClaude = false) =>
+    public static IReadOnlyList<string> CommandFor(
+        string harness, bool withClaude = false, bool orchestratorInNvim = true) =>
         Normalize(harness) switch
         {
             Nvim => [Nvim, "-c", withClaude ? NvimStartupWithClaude : NvimStartup],
-            Orchestrator => OrchestratorCommand(resume: false),
+            Orchestrator => OrchestratorCommand(resume: false, inNvim: orchestratorInNvim),
             _ => [Claude],
         };
 

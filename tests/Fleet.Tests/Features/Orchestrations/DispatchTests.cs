@@ -463,6 +463,46 @@ public sealed class DispatchTests : IDisposable
         Assert.Equal(OrchestrationStatus.Working, record.Status);
     }
 
+    [Fact]
+    public async Task With_main_off_and_subs_on_the_sub_runs_inside_nvim_and_nothing_is_typed_into_it()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default
+                .WithMainOrchestratorInNvim(false)
+                .WithSubOrchestratorsInNvim(true)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), _mux.ArgsFor(pane.Id));
+        Assert.Empty(_mux.EnvFor(pane.Id));
+        Assert.Empty(_mux.SentTo(pane.Id));
+        Assert.Equal(
+            AgentHarness.OrchestratorKickoff,
+            File.ReadAllText(Path.Combine(reply.Value!.Folder, ".fleet", AgentHarness.AgentInstructionFile)));
+    }
+
+    [Fact]
+    public async Task With_main_on_and_subs_off_the_sub_runs_bare_claude_and_the_kickoff_is_typed_in()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default
+                .WithMainOrchestratorInNvim(true)
+                .WithSubOrchestratorsInNvim(false)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
+        Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(pane.Id));
+        Assert.Equal(reply.Value!.Folder, pane.Cwd);
+        Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], _mux.SentTo(pane.Id));
+    }
+
     private sealed class FakeSettingsStore(SettingsConfig config) : ISettingsStore
     {
         public SettingsConfig Load(string project) => config;

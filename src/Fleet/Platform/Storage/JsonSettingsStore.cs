@@ -56,7 +56,9 @@ public sealed class JsonSettingsStore : ISettingsStore
                     rules,
                     ParsePolicy(stored.Commit, SettingsDefaults.Commit),
                     ParsePolicy(stored.Push, SettingsDefaults.Push),
-                    ParseAidlc(stored))
+                    ParseAidlc(stored),
+                    ParseOnOff(stored.MainOrchestratorInNvim, SettingsDefaults.MainOrchestratorInNvim),
+                    ParseOnOff(stored.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim))
                 .MergedOverDefaults();
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -83,6 +85,10 @@ public sealed class JsonSettingsStore : ISettingsStore
             AidlcProfile = WordAgainstDefault(config.Aidlc.DefaultProfile, SettingsDefaults.Aidlc.DefaultProfile),
             AidlcAutonomy = WordAgainstDefault(config.Aidlc.Autonomy, SettingsDefaults.Aidlc.Autonomy),
             AidlcOff = [.. AidlcSettings.Parts.Where(p => !config.Aidlc.IsOn(p)).Select(Words.Of)],
+            MainOrchestratorInNvim = OnOffAgainstDefault(
+                config.MainOrchestratorInNvim, SettingsDefaults.MainOrchestratorInNvim),
+            SubOrchestratorsInNvim = OnOffAgainstDefault(
+                config.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim),
             Tools = SettingsDiff.AgainstDefaults(config.Rules).ToDictionary(
                 r => HarnessToolIds.For(r.Key),
                 r => new ToolRuleEntry
@@ -128,6 +134,16 @@ public sealed class JsonSettingsStore : ISettingsStore
     private static string WordAgainstDefault<T>(T value, T fallback)
         where T : struct, Enum =>
         EqualityComparer<T>.Default.Equals(value, fallback) ? string.Empty : Words.Of(value);
+
+    private static bool ParseOnOff(string stored, bool fallback) => stored.Trim().ToLowerInvariant() switch
+    {
+        "on" => true,
+        "off" => false,
+        _ => fallback,
+    };
+
+    private static string OnOffAgainstDefault(bool value, bool fallback) =>
+        value == fallback ? string.Empty : value ? "on" : "off";
 
     private static string? FileFor(string project)
     {
