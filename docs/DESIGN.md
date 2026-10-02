@@ -4273,8 +4273,8 @@ field means its default, so older files load unchanged):
 The settings are edited from the AIDLC item (`A`) in the menu's Settings submenu, which
 now opens a screen with all of them instead of a three-way mode picker.
 
-**Intake on dispatch.** When AIDLC applies, dispatch picks the profile (prefix, then the
-`profile` argument, then the project default), writes `state.json` (profile, autonomy,
+**Intake on dispatch.** When AIDLC applies, dispatch picks the profile (the prefix; with
+the mode `on` and no prefix, the `profile` argument, then the project default), writes `state.json` (profile, autonomy,
 stages with their states, units, created/updated) and starts `audit.jsonl` with
 `IntentCreated`, `ProfileSet` (with where the profile came from) and one `StageSkipped`
 per switched-off stage. Both go through `IIntentStore`; the JSON store uses the
