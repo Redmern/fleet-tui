@@ -42,11 +42,11 @@ public sealed record SwitchTabs(
         var localTargets = local.Select(e => new SwitchTarget(e.Label)).ToList();
         var remote = machines
             .Select(m => (
-                m.Name,
+                m.Label,
                 Entries: (IReadOnlyList<PickerEntry>)[.. m.Projects.Select(p => new PickerEntry(p, m.IsRunning(p) ? OpenDetail : string.Empty))],
                 Targets: (IReadOnlyList<SwitchTarget>)[.. m.Projects.Select(p => new SwitchTarget(p, m.Host))],
-                AllEntries: m.Projects.Select(p => new PickerEntry(p, m.IsRunning(p) ? $"{m.Name} · {OpenDetail}" : m.Name)),
-                Open: m.Projects.Where(m.IsRunning).Select(p => (Entry: new PickerEntry(p, $"{m.Name} · {OpenDetail}"), Target: new SwitchTarget(p, m.Host)))))
+                AllEntries: m.Projects.Select(p => new PickerEntry(p, m.IsRunning(p) ? $"{m.Label} · {OpenDetail}" : m.Label)),
+                Open: m.Projects.Where(m.IsRunning).Select(p => (Entry: new PickerEntry(p, $"{m.Label} · {OpenDetail}"), Target: new SwitchTarget(p, m.Host)))))
             .ToList();
         var open = local
             .Where(e => inWindow.Contains(e.Label, StringComparer.OrdinalIgnoreCase))
@@ -66,7 +66,7 @@ public sealed record SwitchTabs(
         var thisMachine = tabs.Count;
         tabs.Add((ThisMachineTitle, local));
         targets.Add(localTargets);
-        tabs.AddRange(remote.Select(r => (r.Name, r.Entries)));
+        tabs.AddRange(remote.Select(r => (r.Label, r.Entries)));
         targets.AddRange(remote.Select(r => r.Targets));
 
         return new SwitchTabs(tabs, targets, thisMachine);

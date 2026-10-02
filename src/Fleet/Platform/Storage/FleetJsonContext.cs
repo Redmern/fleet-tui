@@ -9,6 +9,7 @@ namespace Fleet.Platform.Storage;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ProjectFile))]
 [JsonSerializable(typeof(KeymapFile))]
+[JsonSerializable(typeof(KnownRemotesFile))]
 [JsonSerializable(typeof(SessionFile))]
 [JsonSerializable(typeof(SettingsFile))]
 [JsonSerializable(typeof(AskFile))]

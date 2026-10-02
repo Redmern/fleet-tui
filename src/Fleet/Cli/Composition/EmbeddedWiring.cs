@@ -439,7 +439,7 @@ public static class EmbeddedWiring
     public static RemoteNoticeView? WindowRemoteNotices()
     {
         var names = Adapters.Remotes().ListAsync().GetAwaiter().GetResult()
-            .ToDictionary(m => m.Host, m => m.Name, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(m => m.Host, m => m.Label, StringComparer.OrdinalIgnoreCase);
         var labels = CurrentWindow()
             .Where(e => e.Host is not null)
             .ToDictionary(

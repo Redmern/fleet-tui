@@ -1,3 +1,4 @@
+using Fleet.Features.Remotes.ManageRemotes.Models;
 using Fleet.Ports.Remotes;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
@@ -12,11 +13,13 @@ namespace Fleet.Features.Remotes.ManageRemotes;
 
 public static class ManageRemotesView
 {
-    public const string EmptyHint = "(no remote machines; n connects one)";
+    public const string EmptyHint = "(no remote machines yet; n connects one and fleet remembers it)";
+
+    public const string KnownDetail = "known · not connected";
 
     public static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
 
-    public static void Show(IApplication app, Keymap keymap, IRemoteMachines remotes)
+    public static void Show(IApplication app, Keymap keymap, IRemoteMachines remotes, IKnownRemoteStore known)
     {
         var window = FleetTheme.Overlay("remote machines", 90, 16);
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
@@ -24,23 +27,33 @@ public static class ManageRemotesView
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
         FleetKeys.ApplyMotions(list, keymap);
 
-        IReadOnlyList<RemoteMachine> shown = [];
+        IReadOnlyList<RemoteEntry> shown = [];
         var busy = 0;
 
-        void Fill(IReadOnlyList<RemoteMachine> machines)
+        void Fill(IReadOnlyList<RemoteEntry> entries)
         {
-            shown = machines;
-            FleetRows.Fill(list, Rows(machines), FleetRows.Selected(list));
+            shown = entries;
+            FleetRows.Fill(list, Rows(entries), FleetRows.Selected(list));
         }
 
         void Reload() =>
             _ = Task.Run(async () =>
             {
                 var machines = await remotes.ListAsync().ConfigureAwait(false);
-                app.Invoke(() => Fill(machines));
+                var remembered = known.Load();
+
+                foreach (var machine in machines.Where(m => m.State == RemoteState.Connected
+                    && !remembered.Any(k => string.Equals(k.Host, m.Host, StringComparison.OrdinalIgnoreCase))))
+                {
+                    known.Remember(machine.Host, DateTimeOffset.Now);
+                    remembered = known.Load();
+                }
+
+                var entries = RemoteEntry.Merge(machines, remembered);
+                app.Invoke(() => Fill(entries));
             });
 
-        RemoteMachine? Selected()
+        RemoteEntry? Selected()
         {
             var index = FleetRows.Selected(list);
             return index >= 0 && index < shown.Count ? shown[index] : null;
@@ -75,33 +88,96 @@ public static class ManageRemotesView
                 return;
             }
 
-            status.Text = $"connecting to {host.Trim()}...";
-            Run(() => ConnectFlowAsync(app, remotes, host.Trim(), line => app.Invoke(() => status.Text = line)));
+            ConnectTo(host.Trim());
+        }
+
+        void ConnectTo(string host)
+        {
+            status.Text = $"connecting to {host}...";
+            Run(() => ConnectFlowAsync(app, remotes, known, host, line => app.Invoke(() => status.Text = line)));
         }
 
         void Answer()
         {
-            if (Selected() is not { } machine)
+            if (Selected() is not { } entry)
             {
                 return;
             }
 
-            if (machine.State is RemoteState.Asking or RemoteState.Failed)
+            if (entry.Live is null or { State: RemoteState.Asking or RemoteState.Failed })
             {
-                status.Text = $"connecting to {machine.Host}...";
-                Run(() => ConnectFlowAsync(app, remotes, machine.Host, line => app.Invoke(() => status.Text = line)));
+                ConnectTo(entry.Host);
             }
         }
 
         void Disconnect()
         {
-            if (Selected() is not { } machine
-                || !FleetDialog.Confirm(app, $"Disconnect {machine.Name}?", ["Its projects leave your list; they keep running there."], "Disconnect"))
+            if (Selected() is not { Live: not null } entry
+                || !FleetDialog.Confirm(app, $"Disconnect {entry.Described}?", ["Its projects leave your list; they keep running there."], "Disconnect"))
             {
                 return;
             }
 
-            Run(() => remotes.DisconnectAsync(machine.Host));
+            Run(() => remotes.DisconnectAsync(entry.Host));
+        }
+
+        void Rename()
+        {
+            if (Selected() is not { } entry)
+            {
+                return;
+            }
+
+            if (entry.Known is null)
+            {
+                if (entry.Live is not { State: RemoteState.Connected })
+                {
+                    status.Text = $"connect {entry.Host} first; then it can have a nickname";
+                    return;
+                }
+
+                known.Remember(entry.Host, DateTimeOffset.Now);
+            }
+
+            var nickname = FleetDialog.Ask(
+                app,
+                "Rename remote machine",
+                $"Nickname for {entry.Host} (empty clears it)",
+                initial: entry.Known?.Nickname ?? string.Empty);
+            if (nickname is null)
+            {
+                return;
+            }
+
+            known.Rename(entry.Host, nickname);
+            status.Text = string.IsNullOrWhiteSpace(nickname) ? $"{entry.Host} has no nickname" : $"{entry.Host} is now {nickname.Trim()}";
+            Reload();
+        }
+
+        void Forget()
+        {
+            if (Selected() is not { } entry)
+            {
+                return;
+            }
+
+            if (entry.Known is null)
+            {
+                status.Text = $"{entry.Host} is not remembered";
+                return;
+            }
+
+            string[] lines = entry.Live is null
+                ? ["fleet stops listing it here; n connects it again."]
+                : ["fleet stops remembering it; it stays connected until you disconnect it."];
+            if (!FleetDialog.Confirm(app, $"Forget {entry.Described}?", lines, "Forget"))
+            {
+                return;
+            }
+
+            known.Forget(entry.Host);
+            status.Text = $"forgot {entry.Host}";
+            Reload();
         }
 
         list.Accepting += (_, e) =>
@@ -113,7 +189,9 @@ public static class ManageRemotesView
         bar.Show(
         [
             ("n", "connect", Connect),
-            ("enter", "answer / retry", Answer),
+            ("enter", "answer / retry / reconnect", Answer),
+            ("e", "rename", Rename),
+            ("x", "forget", Forget),
             ("d", "disconnect", Disconnect),
             ("q/esc", "close", () => app.RequestStop(window)),
         ]);
@@ -138,6 +216,14 @@ public static class ManageRemotesView
             else if (key == Key.D)
             {
                 Disconnect();
+            }
+            else if (key == Key.E)
+            {
+                Rename();
+            }
+            else if (key == Key.X)
+            {
+                Forget();
             }
             else
             {
@@ -175,7 +261,8 @@ public static class ManageRemotesView
         }
     }
 
-    public static IReadOnlyList<string> ConnectAll(IApplication app, IRemoteMachines remotes, IReadOnlyList<string> hosts)
+    public static IReadOnlyList<string> ConnectAll(
+        IApplication app, IRemoteMachines remotes, IKnownRemoteStore known, IReadOnlyList<string> hosts)
     {
         var window = FleetTheme.Overlay("connecting remote machines", 70, 6);
         var status = FleetTheme.StatusLine(1);
@@ -188,7 +275,7 @@ public static class ManageRemotesView
             {
                 foreach (var host in hosts)
                 {
-                    await ConnectFlowAsync(app, remotes, host, line => app.Invoke(() => status.Text = line)).ConfigureAwait(false);
+                    await ConnectFlowAsync(app, remotes, known, host, line => app.Invoke(() => status.Text = line)).ConfigureAwait(false);
 
                     var machine = (await remotes.ListAsync().ConfigureAwait(false))
                         .FirstOrDefault(m => string.Equals(m.Host, host, StringComparison.OrdinalIgnoreCase));
@@ -221,7 +308,8 @@ public static class ManageRemotesView
         return failures;
     }
 
-    public static async Task ConnectFlowAsync(IApplication app, IRemoteMachines remotes, string host, Action<string> say)
+    public static async Task ConnectFlowAsync(
+        IApplication app, IRemoteMachines remotes, IKnownRemoteStore known, string host, Action<string> say)
     {
         await remotes.ConnectAsync(host).ConfigureAwait(false);
         string? answered = null;
@@ -238,7 +326,8 @@ public static class ManageRemotesView
                     return;
 
                 case { State: RemoteState.Connected }:
-                    say($"connected to {machine.Name}: {Projects(machine.Projects.Count)}");
+                    known.Remember(machine.Host, DateTimeOffset.Now);
+                    say($"connected to {machine.Label}: {Projects(machine.Projects.Count)}");
                     return;
 
                 case { State: RemoteState.Failed }:
@@ -270,17 +359,26 @@ public static class ManageRemotesView
         say($"{host}: still connecting; check it here later");
     }
 
-    public static IReadOnlyList<FleetRow> Rows(IReadOnlyList<RemoteMachine> machines)
+    public static IReadOnlyList<FleetRow> Rows(IReadOnlyList<RemoteEntry> entries)
     {
-        if (machines.Count == 0)
+        if (entries.Count == 0)
         {
             return [FleetRow.Plain(EmptyHint)];
         }
 
-        var widest = machines.Max(m => m.Name.Length);
+        var widest = entries.Max(e => e.Label.Length);
 
-        return [.. machines.Select(m =>
+        return [.. entries.Select(e =>
         {
+            var host = string.Equals(e.Label, e.Host, StringComparison.OrdinalIgnoreCase) ? string.Empty : $"  {e.Host}";
+
+            if (e.Live is not { } m)
+            {
+                return new FleetRow(
+                    [FleetSpan.Muted(" ○ "), FleetSpan.Muted(e.Label.PadRight(widest)), FleetSpan.Muted(host)],
+                    [FleetSpan.Muted($"{KnownDetail} ")]);
+            }
+
             var (mark, tone, state) = m.State switch
             {
                 RemoteState.Connected => ("●", FleetTones.Good, Projects(m.Projects.Count)),
@@ -290,7 +388,7 @@ public static class ManageRemotesView
             };
 
             return new FleetRow(
-                [new FleetSpan($" {mark} ", tone), FleetSpan.Plain(m.Name.PadRight(widest)), FleetSpan.Muted($"  {m.Host}")],
+                [new FleetSpan($" {mark} ", tone), FleetSpan.Plain(e.Label.PadRight(widest)), FleetSpan.Muted(host)],
                 [FleetSpan.Muted($"{state} ")]);
         })];
     }
