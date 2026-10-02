@@ -4395,8 +4395,18 @@ built, and notices no longer depend on reading pane text when an agent reports.
 uniquely named temp file and is moved over the target, so two hook processes of one
 session never share a temp file and a reader never sees half a file. Readers aggregate
 on read; a corrupt file is skipped; a report older than a day is dropped and its file
-deleted, so a session that crashed without `SessionEnd` cannot stay "working" forever.
-`SessionEnd` deletes the session's file.
+deleted. `SessionEnd` deletes the session's file, and **`SessionStart` deletes every
+other session's file for the same folder**: a pane that was killed or crashed never
+sends `SessionEnd`, and without this its last Working or Blocked report would outrank
+the new session for a day. One Claude per agent folder is the normal case, so this
+costs nothing in practice.
+
+On Windows a file another process has open cannot be replaced, and the dashboard
+reads these files every 500 ms. The replace and the delete therefore retry for up to a
+second (as `BusyFiles` does elsewhere) instead of giving up at the first collision, a
+failed write removes its temp file, and readers open with `ReadWrite | Delete` sharing
+so a `SessionEnd` delete is never refused. Temp files older than a minute are cleaned up
+on read.
 
 Why files and not a state daemon: no driver needs a background process for status;
 fail-silent comes for free (a missing file is an unknown agent); and one file per
@@ -4407,15 +4417,22 @@ The WezTerm Lua `state.json` writer is still not needed and still not designated
 
 ### The hook
 
-`fleet hook` (no flags) reads the payload Claude Code sends on stdin and uses its
-`hook_event_name`, `cwd` (the key), `session_id`, `transcript_path` (stored with each
+`fleet hook` (no flags) reads the payload Claude Code sends on stdin. It keys the report
+on `CLAUDE_PROJECT_DIR`, the folder Claude was started in (fleet starts it in the agent's
+worktree or orchestration folder), and falls back to the payload's `cwd` only when that
+variable is missing: `cwd` follows the session's `cd`, and a session that moved into
+`src` would otherwise write a second file and leave a stale one behind. It also uses
+`hook_event_name`, `session_id`, `transcript_path` (stored with each
 report, ready for cost totals), `agent_id` and `notification_type`. It does not resolve
 the project or load settings, so it stays a stdin read and one file write. Every
 failure is swallowed into the log and the exit code is always 0: a hook can never
 block Claude.
 
-The contract as written, with three refinements that follow from what the payloads
-carry:
+The contract as written, with four refinements that follow from what the payloads
+carry and from running it:
+
+- **PostToolUse → Working** (added after review). A Blocked report otherwise lasts until
+  the next `PreToolUse` or `Stop`, which after a long tool can be a long think away.
 
 - **Notification** is `Blocked` except `idle_prompt` (Claude's "still waiting" reminder
   after a turn ends), which is `Idle`, and `auth_success`, which reports nothing. A
@@ -4439,7 +4456,7 @@ Aggregate and the dashboard sort are one ordering.
 
 `ClaudeConfigWriter` writes the hook into `.claude/settings.local.json` for agent
 worktrees (`SyncWorktree`) and for the project root and orchestration folders
-(`Sync`), on all seven contract events, in Claude Code's exec form
+(`Sync`), on all eight contract events, in Claude Code's exec form
 (`"command": <fleet>, "args": ["hook"]`, 10 s timeout) so no shell parses the path.
 A hook is fleet's when its first argument is `hook`; re-syncing replaces fleet's
 entries and leaves the user's own hooks on the same events, matchers and unknown keys
@@ -4463,22 +4480,35 @@ permissions; orchestration folders pick it up when next dispatched.
 ### Dashboard and notices
 
 When an agent's pane is alive and a hook report exists, the row shows the aggregated,
-derived state (`waiting` for Blocked, `stalled`, `working`, `idle`) and the pane is not
-read. `NoticeDetector` gets the report on `AgentWatch.Hooked`: Blocked on a permission
-raises **Permission**, Blocked on input **NeedsInput**, and Working past 600 s
-**Stalled**. With no report, the pane-text checks run exactly as before, so harnesses
-without hooks and agents started before this version keep working. Done, failed, pane
-lost and branch notices are unchanged.
+derived state (`waiting` for Blocked, `stalled`, `working`, `idle`). `NoticeDetector`
+gets the report on `AgentWatch.Hooked`: Blocked on a permission raises **Permission**,
+Blocked on input **NeedsInput**, and Working past 600 s **Stalled**. With no report, the
+pane-text checks run exactly as before, so harnesses without hooks and agents started
+before this version keep working. Done, failed, pane lost and branch notices are
+unchanged.
+
+Two states no hook can end, so the pane confirms them (it is read only for these, so
+Working and Idle agents are never scraped):
+
+- **Stalled needs the busy spinner.** Esc interrupts a turn without a `Stop`, leaving
+  the last report Working. If the pane shows no `esc to interrupt`, the agent is idle at
+  the prompt: the row says idle and no Stalled notice is raised.
+- **Blocked ends when the approved tool runs.** No hook fires when you approve a
+  permission; the next one is `PostToolUse`, after the tool. If the pane shows the
+  spinner and no prompt, the row says working and the permission notice resolves.
+
+A pane not read yet keeps the reported state: a Blocked report still raises its notice,
+and a Stalled one does not.
 
 ### Rejected
 
 - **Async hooks**, for the ordering reason above.
 - **One file per worktree** holding every session: needs read-modify-write across
   concurrent hook processes.
-- **`PostToolUse` → Working**, which would clear a Blocked as soon as an approved tool
-  finishes rather than at the next tool call. It is outside the fixed contract and
-  doubles the processes per tool call; the cost is that an approved, long-running tool
-  keeps the agent Blocked until it ends.
+- **Walking up from `cwd` to the folder holding `.git`** to find the key. Orchestration
+  folders are not repositories, and the project root may be one, so it would key them
+  wrongly; `CLAUDE_PROJECT_DIR` names the right folder directly.
+- **Trusting hook state alone for Stalled and Blocked**, for the two cases above.
 
 ### Not verified
 
@@ -4486,8 +4516,12 @@ lost and branch notices are unchanged.
   Verified: exec-form `args` against Claude Code 2.1.287's hook schema; a headless
   `claude -p` run in a scratch folder with these hooks, which left an `Idle` report
   from `Stop` carrying the session's cwd, id and transcript path (and none when
-  `SessionEnd` was wired, as intended); and `fleet hook` fed by hand (Blocked with its
-  reason, garbage stdin exits 0).
+  `SessionEnd` was wired, as intended); a second such run with a probe hook showing
+  that exec-form hooks receive `CLAUDE_PROJECT_DIR`; and `fleet hook` fed by hand
+  (Blocked with its reason, garbage stdin exits 0).
+- The spinner and prompt texts the pane checks rely on (`esc to interrupt`,
+  `do you want`, `no, and tell claude`) are Claude Code's current wording, the same the
+  pane-only detection already used.
 - The `cwd` Claude reports is the long path; a worktree recorded under an 8.3 short
   name (`REDMER~1.NAU`) would not match it. fleet records full paths, so this is
   noted rather than handled.
