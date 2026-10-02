@@ -39,4 +39,5 @@ public sealed record DashboardCallbacks(
     Action DrainSignals,
     Func<NoticeBoard>? LoadNotices = null,
     Action<IReadOnlyList<string>>? DismissNotices = null,
-    Func<string, Task<string?>>? OpenNotice = null);
+    Func<string, Task<string?>>? OpenNotice = null,
+    Func<int, int, Task<string?>>? OpenEditor = null);

@@ -1,7 +1,9 @@
 using Fleet.Features.Agents.AutoClose;
 using Fleet.Features.Agents.AutoClose.Models;
 using Fleet.Features.Agents.ListAgents;
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Settings.Models;
 
@@ -146,6 +148,51 @@ public sealed class IdleAgentsTests
     public void An_agent_without_a_pane_has_nothing_to_close()
     {
         Assert.False(IdleAgents.ShouldClose(Idle(alive: false), On, ProjectRoot, Now));
+    }
+
+    private static Pane PaneAt(string id, string cwd, bool active, string paneTitle = "", string workspace = "techweb") =>
+        new(new PaneId(id), workspace, "t" + id, workspace, string.Empty, cwd, active, paneTitle);
+
+    [Fact]
+    public void An_agents_editor_pane_is_not_counted_as_the_agents_pane()
+    {
+        var agent = Agent();
+        var editor = PaneAt("2", agent.Worktree, active: true, AgentPaneMatch.EditorTitle(agent));
+
+        Assert.Empty(IdleAgents.PanesOf(agent, [editor]));
+    }
+
+    [Fact]
+    public void Focus_in_the_editor_pane_does_not_keep_the_agent_open()
+    {
+        var agent = Agent();
+        var panes = new[]
+        {
+            PaneAt("1", agent.Worktree, active: false),
+            PaneAt("2", agent.Worktree, active: true, AgentPaneMatch.EditorTitle(agent)),
+        };
+
+        var owned = IdleAgents.PanesOf(agent, panes);
+
+        Assert.Equal("1", Assert.Single(owned).Id.Value);
+        Assert.False(IdleAgents.Focused(owned));
+    }
+
+    [Fact]
+    public void The_active_agent_pane_counts_as_focused()
+    {
+        var agent = Agent();
+
+        Assert.True(IdleAgents.Focused(IdleAgents.PanesOf(agent, [PaneAt("1", agent.Worktree, active: true)])));
+    }
+
+    [Fact]
+    public void The_active_pane_of_the_hidden_workspace_is_not_focused()
+    {
+        var agent = Agent();
+        var hidden = PaneAt("1", agent.Worktree, active: true, workspace: FleetWorkspaces.Hidden);
+
+        Assert.False(IdleAgents.Focused(IdleAgents.PanesOf(agent, [hidden])));
     }
 
     [Fact]

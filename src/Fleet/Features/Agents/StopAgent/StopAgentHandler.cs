@@ -13,7 +13,9 @@ public sealed class StopAgentHandler(IMuxDriver mux, IAgentStore store)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var running = panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)).ToList();
+        var running = panes
+            .Where(p => PathKey.Same(p.Cwd, agent.Worktree) && !AgentPaneMatch.IsEditor(p, agent))
+            .ToList();
 
         if (running.Count == 0)
         {

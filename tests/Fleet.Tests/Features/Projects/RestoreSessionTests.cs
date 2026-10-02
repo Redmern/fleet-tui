@@ -160,4 +160,45 @@ public sealed class RestoreSessionTests : IDisposable
 
         Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), options.Args);
     }
+
+    [Fact]
+    public void With_sub_orchestrators_in_nvim_off_a_sub_orchestrator_is_restored_as_claude_continue()
+    {
+        var worktree = Path.Combine(ProjectRoot, "orchestrations", "sub");
+        Directory.CreateDirectory(worktree);
+        var sub = new AgentRecord(
+            worktree, "orchestrations", "sub", AgentHarness.Orchestrator, string.Empty, false, false, true);
+
+        var options = RestoreSessionHandler.Options("techweb", sub, "w7", subOrchestratorsInNvim: false);
+
+        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], options.Args);
+        Assert.Equal(AgentHarness.SessionPersistence, options.Env);
+        Assert.Equal(worktree, options.Cwd);
+    }
+
+    [Fact]
+    public void Sub_orchestrators_in_nvim_off_leaves_ordinary_agents_alone()
+    {
+        var options = RestoreSessionHandler.Options(
+            "techweb", Agent("dev", open: true), "w7", subOrchestratorsInNvim: false);
+
+        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), options.Args);
+        Assert.Empty(options.Env);
+    }
+
+    [Fact]
+    public async Task The_handler_spawns_a_sub_orchestrator_as_claude_continue_when_the_setting_is_off()
+    {
+        var worktree = Path.Combine(ProjectRoot, "orchestrations", "sub2");
+        Directory.CreateDirectory(worktree);
+        var sub = new AgentRecord(
+            worktree, "orchestrations", "sub2", AgentHarness.Orchestrator, string.Empty, false, false, true);
+        var mux = new FakeMuxDriver();
+
+        await new RestoreSessionHandler(mux, subOrchestratorsInNvim: false).HandleAsync("techweb", ProjectRoot, [sub]);
+
+        var pane = Assert.Single(await mux.ListPanesAsync());
+        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], mux.ArgsFor(pane.Id));
+        Assert.Equal(AgentHarness.SessionPersistence, mux.EnvFor(pane.Id));
+    }
 }

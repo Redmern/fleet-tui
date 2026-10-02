@@ -97,6 +97,20 @@ public class WezTermDriverTests
     }
 
     [Fact]
+    public void SplitArgs_wrap_the_command_with_its_env_like_a_spawn()
+    {
+        var env = new Dictionary<string, string> { ["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"] = "1" };
+
+        var args = WezTermDriver.SplitArgs(
+            new SplitOptions(new PaneId("4"), SplitDirection.Left) { Cwd = "C:/x", Args = ["claude"], Env = env });
+
+        Assert.Equal(
+            ["split-pane", "--pane-id", "4", "--left", "--cwd", "C:/x", "--",
+                .. EnvLaunch.Wrap(OperatingSystem.IsWindows(), env, ["claude"])],
+            args);
+    }
+
+    [Fact]
     public void ParsePanes_keeps_the_window_and_the_tab_apart()
     {
         var panes = WezTermDriver.ParsePanes(RealOutput);

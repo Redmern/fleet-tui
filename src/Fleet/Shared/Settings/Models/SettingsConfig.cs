@@ -7,7 +7,9 @@ public sealed record SettingsConfig(
     IReadOnlyDictionary<HarnessTool, ToolRule> Rules,
     ActionPolicy Commit,
     ActionPolicy Push,
-    AidlcMode Aidlc,
+    AidlcSettings Aidlc,
+    bool MainOrchestratorInNvim = SettingsDefaults.MainOrchestratorInNvim,
+    bool SubOrchestratorsInNvim = SettingsDefaults.SubOrchestratorsInNvim,
     bool AutoClose = SettingsDefaults.AutoClose,
     int AutoCloseMinutes = SettingsDefaults.AutoCloseMinutes)
 {
@@ -16,7 +18,9 @@ public sealed record SettingsConfig(
         SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value),
         SettingsDefaults.Commit,
         SettingsDefaults.Push,
-        SettingsDefaults.Aidlc);
+        SettingsDefaults.Aidlc,
+        SettingsDefaults.MainOrchestratorInNvim,
+        SettingsDefaults.SubOrchestratorsInNvim);
 
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
@@ -41,7 +45,13 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithPush(ActionPolicy policy) => this with { Push = policy };
 
-    public SettingsConfig WithAidlcMode(AidlcMode mode) => this with { Aidlc = mode };
+    public SettingsConfig WithAidlcMode(AidlcMode mode) => this with { Aidlc = Aidlc with { Mode = mode } };
+
+    public SettingsConfig WithAidlc(AidlcSettings aidlc) => this with { Aidlc = aidlc };
+
+    public SettingsConfig WithMainOrchestratorInNvim(bool inNvim) => this with { MainOrchestratorInNvim = inNvim };
+
+    public SettingsConfig WithSubOrchestratorsInNvim(bool inNvim) => this with { SubOrchestratorsInNvim = inNvim };
 
     public SettingsConfig WithAutoClose(bool on, int minutes) =>
         this with { AutoClose = on, AutoCloseMinutes = minutes };
@@ -64,6 +74,8 @@ public sealed record SettingsConfig(
             Commit,
             Push,
             Aidlc,
+            MainOrchestratorInNvim,
+            SubOrchestratorsInNvim,
             AutoClose,
             AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes);
     }
@@ -77,6 +89,8 @@ public sealed record SettingsConfig(
                 .Prepend($"trigger={Trigger}")
                 .Append($"commit={Commit}")
                 .Append($"push={Push}")
-                .Append($"aidlc={Aidlc}")
+                .Append(Aidlc.Signature)
+                .Append($"main-nvim={MainOrchestratorInNvim}")
+                .Append($"sub-nvim={SubOrchestratorsInNvim}")
                 .Append($"autoclose={AutoClose}:{AutoCloseMinutes}"));
 }

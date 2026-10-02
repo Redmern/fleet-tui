@@ -45,11 +45,14 @@ public static class KeymapDefaults
             [FleetAction.EditAidlcMode] = "A",
             [FleetAction.EditAutoClose] = "i",
             [FleetAction.EditClaudeProfile] = "C",
+            [FleetAction.EditMainOrchestratorInNvim] = "v",
+            [FleetAction.EditSubOrchestratorsInNvim] = "V",
             [FleetAction.Notifications] = "n",
             [FleetAction.Remotes] = "r",
             [FleetAction.SaveSession] = "w",
             [FleetAction.DismissNotice] = "d",
             [FleetAction.DismissAllNotices] = "D",
+            [FleetAction.OpenEditor] = "e",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -82,14 +85,17 @@ public static class KeymapDefaults
             FleetAction.RebuildDashboard => "rebuild dash",
             FleetAction.EditFleetConfig => "edit fleet config",
             FleetAction.OpenSettings => "settings",
-            FleetAction.EditAidlcMode => "aidlc mode",
+            FleetAction.EditAidlcMode => "aidlc",
             FleetAction.EditAutoClose => "auto-close",
             FleetAction.EditClaudeProfile => "claude profile",
+            FleetAction.EditMainOrchestratorInNvim => "main in nvim",
+            FleetAction.EditSubOrchestratorsInNvim => "subs in nvim",
             FleetAction.Notifications => "notifications",
             FleetAction.Remotes => "remotes",
             FleetAction.SaveSession => "save session",
             FleetAction.DismissNotice => "dismiss",
             FleetAction.DismissAllNotices => "dismiss all",
+            FleetAction.OpenEditor => "editor",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -131,14 +137,17 @@ public static class KeymapDefaults
             FleetAction.RebuildDashboard => "Rebuild the dashboard layout",
             FleetAction.EditFleetConfig => "Edit fleet config",
             FleetAction.OpenSettings => "Settings",
-            FleetAction.EditAidlcMode => "AIDLC mode",
+            FleetAction.EditAidlcMode => "AIDLC settings",
             FleetAction.EditAutoClose => "Auto-close idle agents",
             FleetAction.EditClaudeProfile => "Claude profile",
+            FleetAction.EditMainOrchestratorInNvim => "Main orchestrator in nvim",
+            FleetAction.EditSubOrchestratorsInNvim => "Sub-orchestrators in nvim",
             FleetAction.Notifications => "Notifications",
             FleetAction.Remotes => "Remote machines",
             FleetAction.SaveSession => "Save window as session",
             FleetAction.DismissNotice => "Dismiss a notification",
             FleetAction.DismissAllNotices => "Dismiss all shown notifications",
+            FleetAction.OpenEditor => "Open editor here",
             _ => action.ToString(),
         };
 }

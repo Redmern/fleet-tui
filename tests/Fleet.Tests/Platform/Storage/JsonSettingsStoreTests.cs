@@ -1,4 +1,5 @@
 using Fleet.Platform.Storage;
+using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
@@ -63,7 +64,7 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     [Fact]
     public void The_aidlc_mode_defaults_to_off()
     {
-        Assert.Equal(AidlcMode.Off, Store.Load("techweb").Aidlc);
+        Assert.Equal(AidlcMode.Off, Store.Load("techweb").Aidlc.Mode);
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     {
         Store.Save("techweb", SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual));
 
-        Assert.Equal(AidlcMode.Manual, Store.Load("techweb").Aidlc);
+        Assert.Equal(AidlcMode.Manual, Store.Load("techweb").Aidlc.Mode);
     }
 
     [Fact]
@@ -116,6 +117,116 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
         Assert.Contains("\"autoCloseMinutes\": 0", raw);
         Assert.False(Store.Load("techweb").AutoClose);
         Assert.Equal(30, Store.Load("techweb").AutoCloseMinutes);
+    }
+
+    [Fact]
+    public void Every_aidlc_setting_round_trips()
+    {
+        var aidlc = new AidlcSettings(
+            AidlcMode.On, Profile.Feature, Autonomy.Automatic, AidlcPart.PlanGate | AidlcPart.Review | AidlcPart.WalkingSkeleton);
+
+        Store.Save("techweb", SettingsConfig.Default.WithAidlc(aidlc));
+
+        Assert.Equal(aidlc, Store.Load("techweb").Aidlc);
+    }
+
+    [Fact]
+    public void Default_aidlc_settings_write_nothing_but_empty_values()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"aidlcProfile\": \"\"", raw);
+        Assert.Contains("\"aidlcAutonomy\": \"\"", raw);
+        Assert.Contains("\"aidlcOff\": []", raw);
+    }
+
+    [Fact]
+    public void Switched_off_parts_are_written_as_words()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithAidlc(AidlcSettings.Default.With(AidlcPart.Verify, on: false)));
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"verify\"", raw);
+    }
+
+    [Fact]
+    public void An_old_settings_file_without_the_new_aidlc_fields_gets_their_defaults()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{"version":1,"trigger":";","aidlc":"manual","tools":{}}""");
+
+        var aidlc = Store.Load("techweb").Aidlc;
+
+        Assert.Equal(AidlcMode.Manual, aidlc.Mode);
+        Assert.Equal(Profile.Express, aidlc.DefaultProfile);
+        Assert.Equal(Autonomy.Guided, aidlc.Autonomy);
+        Assert.Equal(AidlcPart.None, aidlc.Off);
+    }
+
+    [Fact]
+    public void Unknown_aidlc_words_fall_back_to_the_defaults()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{"version":1,"aidlc":"sometimes","aidlcProfile":"epic","aidlcAutonomy":"7","aidlcOff":["review","bogus","none"]}""");
+
+        var aidlc = Store.Load("techweb").Aidlc;
+
+        Assert.Equal(AidlcSettings.Default with { Off = AidlcPart.Review }, aidlc);
+    }
+
+    [Fact]
+    public void The_main_orchestrator_and_sub_orchestrators_run_in_nvim_by_default()
+    {
+        var config = Store.Load("techweb");
+
+        Assert.True(config.MainOrchestratorInNvim);
+        Assert.True(config.SubOrchestratorsInNvim);
+    }
+
+    [Fact]
+    public void Main_orchestrator_off_round_trips_without_touching_the_subs()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithMainOrchestratorInNvim(false));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.False(loaded.MainOrchestratorInNvim);
+        Assert.True(loaded.SubOrchestratorsInNvim);
+        Assert.True(Store.Load("other").MainOrchestratorInNvim);
+    }
+
+    [Fact]
+    public void Sub_orchestrators_off_round_trips_without_touching_the_main_orchestrator()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithSubOrchestratorsInNvim(false));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.True(loaded.MainOrchestratorInNvim);
+        Assert.False(loaded.SubOrchestratorsInNvim);
+    }
+
+    [Fact]
+    public void Each_nvim_setting_is_stored_only_when_it_differs_from_the_default()
+    {
+        var file = Path.Combine(FleetPaths.Settings, "techweb.json");
+
+        Store.Save("techweb", SettingsConfig.Default.WithMainOrchestratorInNvim(false));
+        var raw = File.ReadAllText(file);
+        Assert.Contains("\"mainOrchestratorInNvim\": \"off\"", raw);
+        Assert.Contains("\"subOrchestratorsInNvim\": \"\"", raw);
+
+        Store.Save("techweb", SettingsConfig.Default.WithSubOrchestratorsInNvim(false));
+        raw = File.ReadAllText(file);
+        Assert.Contains("\"mainOrchestratorInNvim\": \"\"", raw);
+        Assert.Contains("\"subOrchestratorsInNvim\": \"off\"", raw);
     }
 
     [Fact]

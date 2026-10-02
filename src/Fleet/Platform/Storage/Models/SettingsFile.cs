@@ -12,6 +12,16 @@ public sealed class SettingsFile
 
     public string Aidlc { get; set; } = string.Empty;
 
+    public string AidlcProfile { get; set; } = string.Empty;
+
+    public string AidlcAutonomy { get; set; } = string.Empty;
+
+    public List<string> AidlcOff { get; set; } = [];
+
+    public string MainOrchestratorInNvim { get; set; } = string.Empty;
+
+    public string SubOrchestratorsInNvim { get; set; } = string.Empty;
+
     public string AutoClose { get; set; } = string.Empty;
 
     public int AutoCloseMinutes { get; set; }

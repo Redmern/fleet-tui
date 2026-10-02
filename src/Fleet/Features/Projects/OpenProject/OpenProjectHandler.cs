@@ -19,7 +19,9 @@ public sealed class OpenProjectHandler(IMuxDriver mux)
                 WindowId = command.WindowId,
                 SessionName = command.Project.Name,
                 Cwd = command.Project.Root,
-                Args = AgentHarness.CommandFor(command.Harness),
+                Args = AgentHarness.CommandFor(
+                    command.Harness, orchestratorInNvim: command.MainOrchestratorInNvim),
+                Env = AgentHarness.SpawnEnv(command.Harness, command.MainOrchestratorInNvim),
             },
             ct).ConfigureAwait(false);
 

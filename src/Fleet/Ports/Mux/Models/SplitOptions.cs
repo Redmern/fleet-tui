@@ -11,4 +11,7 @@ public sealed record SplitOptions(PaneId Source, SplitDirection Direction)
     public IReadOnlyList<string> Args { get; init; } = [];
 
     public PaneId MovePane { get; init; } = PaneId.None;
+
+    public IReadOnlyDictionary<string, string> Env { get; init; } =
+        new Dictionary<string, string>();
 }

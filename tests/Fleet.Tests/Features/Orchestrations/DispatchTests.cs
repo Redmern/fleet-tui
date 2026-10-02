@@ -1,5 +1,6 @@
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
+using Fleet.Platform.Aidlc;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
@@ -7,6 +8,8 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
 using Fleet.Ports.Settings;
+using Fleet.Shared.Aidlc;
+using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings.Enums;
@@ -22,6 +25,8 @@ public sealed class DispatchTests : IDisposable
     private readonly FakeMuxDriver _mux = new();
 
     private readonly RecordingStore _store = new();
+
+    private readonly JsonIntentStore _intents = new();
 
     public DispatchTests() => Directory.CreateDirectory(_root);
 
@@ -74,85 +79,217 @@ public sealed class DispatchTests : IDisposable
         Assert.DoesNotContain(OrchestrationText.DefaultHowYouWork, instructions);
     }
 
-    [Fact]
-    public async Task Aidlc_mode_off_never_adds_a_process_section_even_with_a_doubled_trigger()
-    {
-        var handler = new DispatchHandler(
+    private DispatchHandler Aidlc(AidlcSettings aidlc) =>
+        new(
             _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
-            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Off)));
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlc(aidlc)),
+            intents: _intents);
 
-        var reply = await handler.HandleAsync(Command(",,do the thing"), "t");
+    private DispatchHandler Aidlc(AidlcMode mode) => Aidlc(AidlcSettings.Default with { Mode = mode });
 
-        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
+    private static string InstructionsOf(DispatchReply reply) =>
+        File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Folder));
 
-        Assert.DoesNotContain("## Process", instructions);
+    [Fact]
+    public async Task Aidlc_off_adds_no_process_and_no_record_even_with_a_profile_prefix()
+    {
+        var reply = (await Aidlc(AidlcMode.Off).HandleAsync(Command("feature: do the thing"), "t")).Value!;
+
+        Assert.DoesNotContain("## Process", InstructionsOf(reply));
+        Assert.False(File.Exists(OrchestrationPaths.StateFile(reply.Folder)));
+        Assert.False(File.Exists(OrchestrationPaths.AuditFile(reply.Folder)));
+        Assert.Contains("feature: do the thing", File.ReadAllText(OrchestrationPaths.TaskFile(reply.Folder)));
     }
 
     [Fact]
-    public async Task Aidlc_mode_on_adds_a_process_section_for_a_plain_prompt()
+    public async Task Aidlc_on_runs_a_plain_prompt_with_the_project_default_profile()
     {
-        var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
-            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.On)));
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "2026-10-02T10:00:00Z")).Value!;
 
-        var reply = await handler.HandleAsync(Command("do the thing"), "t");
-
-        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
+        var instructions = InstructionsOf(reply);
+        var state = _intents.Load(reply.Folder)!;
 
         Assert.Contains("## Process", instructions);
-        Assert.Contains(OrchestrationText.DefaultAidlc, instructions);
+        Assert.Contains("**express** profile", instructions);
+        Assert.Equal(Profile.Express, state.Profile);
+        Assert.Equal(reply.Slug, state.Slug);
+        Assert.Equal("2026-10-02T10:00:00Z", state.Created);
+        Assert.Equal(StageState.Done, state.Stages[0].State);
+        Assert.Equal(ProfileCatalog.StagesOf(Profile.Express), state.Stages.Select(s => s.Stage));
+        Assert.Contains("AIDLC express", reply.Note);
     }
 
     [Fact]
-    public async Task Aidlc_mode_manual_ignores_a_plain_prompt()
+    public async Task The_record_logs_creation_and_where_the_profile_came_from()
     {
-        var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
-            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual)));
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "t")).Value!;
 
-        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+        var audit = _intents.Audit(reply.Folder);
 
-        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
-
-        Assert.DoesNotContain("## Process", instructions);
+        Assert.Equal([AuditEvent.IntentCreated, AuditEvent.ProfileSet], audit.Select(e => e.Event));
+        Assert.Equal(reply.Slug, audit[0].Detail);
+        Assert.Equal("express (the project default)", audit[1].Detail);
     }
 
     [Fact]
-    public async Task Aidlc_mode_manual_adds_a_process_section_when_the_prompt_still_starts_with_the_trigger()
+    public async Task The_project_default_profile_comes_from_the_settings()
     {
-        var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
-            settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.Manual)));
+        var handler = Aidlc(AidlcSettings.Default with { Mode = AidlcMode.On, DefaultProfile = Profile.Bugfix });
 
-        var reply = await handler.HandleAsync(Command(",do the thing"), "t");
+        var reply = (await handler.HandleAsync(Command("the login loops"), "t")).Value!;
 
-        var folder = reply.Value!.Folder;
-        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(folder));
-        var task = File.ReadAllText(OrchestrationPaths.TaskFile(folder));
-
-        Assert.Contains("## Process", instructions);
-        Assert.Contains(OrchestrationText.DefaultAidlc, instructions);
-        Assert.Contains("do the thing", task);
-        Assert.DoesNotContain(",do the thing", task);
-        Assert.Equal("do-the-thing", reply.Value!.Slug);
+        Assert.Equal(Profile.Bugfix, _intents.Load(reply.Folder)!.Profile);
+        Assert.Contains("**bugfix** profile", InstructionsOf(reply));
     }
 
     [Fact]
-    public async Task A_project_level_aidlc_override_replaces_the_default_process_section()
+    public async Task A_profile_prefix_picks_the_profile_and_is_stripped_from_the_task()
+    {
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("feature: add oauth login"), "t")).Value!;
+
+        var task = File.ReadAllText(OrchestrationPaths.TaskFile(reply.Folder));
+
+        Assert.Equal(Profile.Feature, _intents.Load(reply.Folder)!.Profile);
+        Assert.Contains("add oauth login", task);
+        Assert.DoesNotContain("feature:", task);
+        Assert.Equal("add-oauth-login", reply.Slug);
+        Assert.Equal("feature (from the task prefix)", _intents.Audit(reply.Folder)[1].Detail);
+    }
+
+    [Fact]
+    public async Task Aidlc_manual_ignores_a_plain_prompt()
+    {
+        var reply = (await Aidlc(AidlcMode.Manual).HandleAsync(Command("do the thing"), "t")).Value!;
+
+        Assert.DoesNotContain("## Process", InstructionsOf(reply));
+        Assert.Null(_intents.Load(reply.Folder));
+    }
+
+    [Fact]
+    public async Task Aidlc_manual_no_longer_treats_a_doubled_trigger_as_a_request()
+    {
+        var reply = (await Aidlc(AidlcMode.Manual).HandleAsync(Command(",do the thing"), "t")).Value!;
+
+        Assert.DoesNotContain("## Process", InstructionsOf(reply));
+        Assert.Null(_intents.Load(reply.Folder));
+    }
+
+    [Fact]
+    public async Task Aidlc_manual_applies_when_the_task_starts_with_a_profile()
+    {
+        var reply = (await Aidlc(AidlcMode.Manual).HandleAsync(Command("research: how do others gate merges"), "t")).Value!;
+
+        Assert.Contains("**research** profile", InstructionsOf(reply));
+        Assert.Equal(Profile.Research, _intents.Load(reply.Folder)!.Profile);
+    }
+
+    [Fact]
+    public async Task A_profile_argument_picks_the_profile_when_there_is_no_prefix()
+    {
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("tidy the store") with { Profile = "Refactor" }, "t")).Value!;
+
+        Assert.Equal(Profile.Refactor, _intents.Load(reply.Folder)!.Profile);
+        Assert.Equal("refactor (from the dispatch argument)", _intents.Audit(reply.Folder)[1].Detail);
+    }
+
+    [Fact]
+    public async Task A_prefix_wins_over_the_profile_argument()
+    {
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("bugfix: the login loops") with { Profile = "feature" }, "t")).Value!;
+
+        Assert.Equal(Profile.Bugfix, _intents.Load(reply.Folder)!.Profile);
+    }
+
+    [Fact]
+    public async Task In_manual_mode_a_profile_argument_without_a_prefix_does_not_apply_aidlc()
+    {
+        var reply = (await Aidlc(AidlcMode.Manual).HandleAsync(Command("tidy the store") with { Profile = "refactor" }, "t")).Value!;
+
+        Assert.DoesNotContain("## Process", InstructionsOf(reply));
+        Assert.Null(_intents.Load(reply.Folder));
+    }
+
+    [Fact]
+    public async Task In_manual_mode_a_prefix_still_wins_over_the_profile_argument()
+    {
+        var reply = (await Aidlc(AidlcMode.Manual).HandleAsync(Command("bugfix: the login loops") with { Profile = "feature" }, "t")).Value!;
+
+        Assert.Equal(Profile.Bugfix, _intents.Load(reply.Folder)!.Profile);
+    }
+
+    [Fact]
+    public async Task An_unknown_profile_argument_fails_before_touching_the_disk()
+    {
+        var reply = await Aidlc(AidlcMode.On).HandleAsync(Command("do it") with { Profile = "epic" }, "t");
+
+        Assert.False(reply.Succeeded);
+        Assert.Contains("'epic' is not an AIDLC profile", reply.Error);
+        Assert.Contains("express, bugfix, feature, refactor, research", reply.Error);
+        Assert.False(Directory.Exists(OrchestrationPaths.Root(_root)));
+    }
+
+    [Fact]
+    public async Task Parts_switched_off_are_recorded_as_skipped_and_left_out_of_the_process()
+    {
+        var aidlc = AidlcSettings.Default with { Mode = AidlcMode.On, DefaultProfile = Profile.Feature };
+        var handler = Aidlc(aidlc.With(AidlcPart.Review, on: false).With(AidlcPart.SpecGate, on: false));
+
+        var reply = (await handler.HandleAsync(Command("add oauth"), "t")).Value!;
+
+        var state = _intents.Load(reply.Folder)!;
+        var review = state.Stages.Single(s => s.Stage == Stage.Review);
+        var specify = state.Stages.Single(s => s.Stage == Stage.Specify);
+
+        Assert.Equal(StageState.Skipped, review.State);
+        Assert.Equal("off in settings", review.Reason);
+        Assert.False(specify.HumanGate);
+        Assert.Contains(_intents.Audit(reply.Folder), e => e.Event == AuditEvent.StageSkipped && e.Detail == "review: off in settings");
+        Assert.Contains("Skipped: review (off in settings).", InstructionsOf(reply));
+    }
+
+    [Fact]
+    public async Task A_project_aidlc_file_is_appended_to_the_rendered_process()
     {
         Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
-        File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), "Skip straight to implementing.");
+        File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), "Always run the e2e suite too.");
 
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "t")).Value!;
+
+        var instructions = InstructionsOf(reply);
+
+        Assert.Contains("**Deliver**", instructions);
+        Assert.Contains("### Project guidance", instructions);
+        Assert.Contains("Always run the e2e suite too.", instructions);
+        Assert.True(
+            instructions.IndexOf("**Deliver**", StringComparison.Ordinal)
+            < instructions.IndexOf("Always run the e2e suite too.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_aidlc_file_still_holding_the_old_built_in_text_is_ignored()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), OrchestrationText.ClassicAidlc.ReplaceLineEndings("\r\n") + "\r\n");
+
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "t")).Value!;
+
+        var instructions = InstructionsOf(reply);
+
+        Assert.DoesNotContain("### Project guidance", instructions);
+        Assert.DoesNotContain("Follow this cycle for every unit of work", instructions);
+    }
+
+    [Fact]
+    public async Task Without_an_intent_store_dispatch_still_renders_the_process()
+    {
         var handler = new DispatchHandler(
             _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
             settings: new FakeSettingsStore(SettingsConfig.Default.WithAidlcMode(AidlcMode.On)));
 
-        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+        var reply = (await handler.HandleAsync(Command("do the thing"), "t")).Value!;
 
-        var instructions = File.ReadAllText(OrchestrationPaths.InstructionsFile(reply.Value!.Folder));
-
-        Assert.Contains("Skip straight to implementing.", instructions);
-        Assert.DoesNotContain(OrchestrationText.DefaultAidlc, instructions);
+        Assert.Contains("## Process", InstructionsOf(reply));
+        Assert.False(File.Exists(OrchestrationPaths.StateFile(reply.Folder)));
     }
 
     [Fact]
@@ -324,6 +461,46 @@ public sealed class DispatchTests : IDisposable
 
         Assert.True(record.Open);
         Assert.Equal(OrchestrationStatus.Working, record.Status);
+    }
+
+    [Fact]
+    public async Task With_main_off_and_subs_on_the_sub_runs_inside_nvim_and_nothing_is_typed_into_it()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default
+                .WithMainOrchestratorInNvim(false)
+                .WithSubOrchestratorsInNvim(true)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), _mux.ArgsFor(pane.Id));
+        Assert.Empty(_mux.EnvFor(pane.Id));
+        Assert.Empty(_mux.SentTo(pane.Id));
+        Assert.Equal(
+            AgentHarness.OrchestratorKickoff,
+            File.ReadAllText(Path.Combine(reply.Value!.Folder, ".fleet", AgentHarness.AgentInstructionFile)));
+    }
+
+    [Fact]
+    public async Task With_main_on_and_subs_off_the_sub_runs_bare_claude_and_the_kickoff_is_typed_in()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default
+                .WithMainOrchestratorInNvim(true)
+                .WithSubOrchestratorsInNvim(false)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
+        Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(pane.Id));
+        Assert.Equal(reply.Value!.Folder, pane.Cwd);
+        Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], _mux.SentTo(pane.Id));
     }
 
     private sealed class FakeSettingsStore(SettingsConfig config) : ISettingsStore

@@ -4224,6 +4224,130 @@ The trade-off is accepted knowingly: `k` is also move-up, and a menu matches its
 keys before the list's motions, so in a menu that lists Keybinds `k` opens it instead
 of moving up — the collision the move to `e` once fixed. The arrow keys still move.
 
+## AIDLC engine, 2026-10
+
+AIDLC used to be prose: with AIDLC on, dispatch pasted a five-step Plan/Implement/Test/
+Review/Report text into the sub-orchestrator's CLAUDE.md, and nothing knew where a task
+stood. Milestone 1 of the plan in `.fleet/orchestrations/ai-sdlc-research-plan` gives
+it an engine core: fleet decides the process and keeps a record; the model carries it out.
+
+**Profiles size the ceremony.** Five profiles, each a fixed set of stages with fixed
+human gates (`Shared/Aidlc/ProfileCatalog`):
+
+| Profile | Stages | Human gates |
+|---|---|---|
+| `express` (default) | Intake, Specify (short), Build, Verify, Review, Deliver | Deliver |
+| `bugfix` | Intake, Discover, Specify (repro + expected), Build (failing test first), Verify, Review, Deliver | Specify, Deliver |
+| `feature` | all nine | Specify, Plan, Build (walking skeleton), Deliver |
+| `refactor` | Intake, Discover, Plan, Build (characterisation tests first), Verify, Review, Deliver | Plan, Deliver |
+| `research` | Intake, Discover, Deliver (the report) | Deliver |
+
+Stages have AI-DLC's six states (`pending`, `active`, `awaiting`, `revising`, `done`,
+`skipped`) and units have their own nine. `Transitions` lists the allowed moves and
+returns a failed `Result` for any other; a gated stage cannot go from `active` to `done`
+without passing `awaiting`. `UnitGraph` validates a `units.json` plan (cycles, unknown
+repositories and dependencies, duplicate ids and branches, acceptance-criteria coverage
+through `Traceability`), computes the ready set (a walking skeleton runs alone first)
+and reports `owns` globs that overlap between units of one repository that could run
+at the same time. The glob check is conservative: when in doubt it reports an overlap,
+because the cost is only that two units run one after the other.
+
+**Settings, per project** (`AidlcSettings`, in the project's settings file; a missing
+field means its default, so older files load unchanged):
+
+- *Mode*: `off` (default), `on`, or `manual`. Manual used to mean "the prompt doubles the
+  dispatch trigger" (`,,task`), which nobody found. It now means "only when the task
+  starts with a profile prefix", such as `,feature: add oauth`. The `profile` argument of
+  the `dispatch` MCP tool does not turn it on in manual mode; it only picks the profile
+  when the mode is `on`. The prefix is the profile word and a colon; a colon keeps
+  ordinary sentences that start with "feature" or "research" from being taken as one.
+- *Default profile* (`express`) and *autonomy* (`guided`, or `automatic` to go on from
+  unit to unit after the walking skeleton; failures still stop either way).
+- Seven parts, all on by default: the spec, plan and deliver gates, the walking
+  skeleton, and the verify, review and learn stages. A gate switched off keeps its stage
+  but makes the gate automatic; verify, review or learn switched off skips the stage,
+  recorded as `skipped` with the reason "off in settings". One pure function,
+  `ProcessPlan.Resolve(profile, autonomy, off)`, turns this into the effective plan, so
+  the record, the rendered text and the tests cannot disagree.
+
+The settings are edited from the AIDLC item (`A`) in the menu's Settings submenu, which
+now opens a screen with all of them instead of a three-way mode picker.
+
+**Intake on dispatch.** When AIDLC applies, dispatch picks the profile (the prefix; with
+the mode `on` and no prefix, the `profile` argument, then the project default), writes `state.json` (profile, autonomy,
+stages with their states, units, created/updated) and starts `audit.jsonl` with
+`IntentCreated`, `ProfileSet` (with where the profile came from) and one `StageSkipped`
+per switched-off stage. Both go through `IIntentStore`; the JSON store uses the
+source-generated `AidlcJsonContext`, writes `state.json` through a temporary file, and
+appends one compact JSON object per audit line. Then it renders CLAUDE.md's
+`## Process` from the effective plan: the stages in order, the artifacts each writes
+(`discover.md`, `spec.md` with numbered AC-n, `design.md` and `units.json`,
+`progress/<unit>.md`, `reviews/<unit>-<round>.md`, `learnings.md`), and which stages wait
+for the user.
+
+**Gates are honour-system until M3.** There are no gate tools yet, so the process text
+tells the conductor to stop at each human gate, summarise the artifact, and wait for the
+user's reply. The engine cannot enforce that yet; M3 moves gates onto the dashboard's
+approval channel, where the conductor cannot answer its own prompt.
+
+**`aidlc.md` is appended, not substituted.** A project's `.fleet/config/aidlc.md` used
+to replace the process. With a generated, per-profile process, replacing it would throw
+away the stage list and the gates, so the file now lands under `### Project guidance`
+at the end of the process. Opening the fleet config used to seed `aidlc.md` with the old
+built-in text; such a file would now append a contradicting second process, so a file
+whose text is exactly the old default (`OrchestrationText.ClassicAidlc`) is ignored, and
+the config folder no longer seeds one.
+
+**Deferred.** M2: hook-based agent status (a sibling branch). M3: `aidlc_status` and
+`aidlc_submit`, gates through the approval channel, the `GateWaiting` notice, refusing
+illegal moves at the tool. M4: `aidlc_verify` with receipts keyed by commit SHA. M5:
+`aidlc_plan_units`, unit agents with fleet-rendered briefs, the dependency scheduler
+with its concurrency cap. M6: the read-only reviewer harness and the two-round review
+loop. M7: the pipeline view, cost and metrics, and Deliver. M8: the learning loop.
+Until then the record's later stages stay `pending`; only Intake is marked done.
+
+## Main and sub-orchestrators in nvim, per project, 2026-10-02
+
+Two per-project settings in *fleet menu > Settings* pick whether orchestrators are hosted in
+nvim (on, the default and the old behaviour) or run as bare `claude` (off):
+
+- *Main orchestrator in nvim* (`v`): the project's own orchestrator, the pane in the project
+  root that open project, switch/move project and rebuild dashboard start.
+- *Sub-orchestrators in nvim* (`V`): orchestrators started by dispatch, and their
+  restore/open.
+
+Fleet already tells the two apart without a new marker: the main orchestrator is never an
+agent record (it is the project-root pane), while every sub-orchestrator is a record with the
+`orchestrator` harness whose worktree is its `.fleet/orchestrations/<slug>` folder. So the
+project-root paths read the main setting, and the record paths read the sub setting. Each is
+stored on its own (`mainOrchestratorInNvim` / `subOrchestratorsInNvim: "off"`) and only when
+it differs from the default.
+
+The nvim wrapper only carried the instruction pump, `:FleetTell`, ctrl+hjkl falling through
+to WezTerm, and the session-persistence env. With a setting off, a bare orchestrator gets
+the env through `SpawnOptions.Env`, resumes as `claude --continue`, and receives
+instructions (tell_agent, a dispatch's kickoff) by send-text, the way the `claude` harness
+does. The composition root reads the settings and hands a bool to the handlers;
+`AgentHarness` stays free of storage. A running orchestrator keeps what it was started with;
+a setting applies to the next launch.
+
+Delivery follows how the running pane was started, not the current setting: dispatch,
+restore and open store the host on the sub's `AgentRecord` (`InNvim`), and `TellAgentHandler`
+types the prompt only for a sub started bare. Reading the setting at delivery time instead
+double-delivered (pump plus send-text into nvim) or lost the message (a bare pane nobody types
+into) once the setting flipped under a running sub. A record without `InNvim` was saved before
+it existed, when every sub ran in nvim, so it counts as nvim. The daemon's session restore
+relaunches a pane's own command, so the stored host stays true across a fleetd restart. A
+mux-side signal was not used: panes carry no command in the `Pane` model, and WezTerm's pane
+list does not report the process reliably.
+
+Rebuild dashboard re-creates the main harness with a split, so `SplitOptions` gained `Env`,
+handled like `SpawnOptions.Env` (WezTerm wraps the command through `EnvLaunch`, the embedded
+driver sends it to fleetd, which already started split panes with a request's env).
+
+Not verified on a real machine: in a bare pane fleet installs no ctrl+hjkl mapping, so pane
+navigation depends on the WezTerm config.
+
 ## Auto-close idle agents, 2026-10-02
 
 Every open agent costs about 400 MB (claude, nvim, supermaven, a fleet MCP server,

@@ -34,6 +34,8 @@ public static class KeymapGroups
             FleetAction.EditAidlcMode,
             FleetAction.EditAutoClose,
             FleetAction.EditClaudeProfile,
+            FleetAction.EditMainOrchestratorInNvim,
+            FleetAction.EditSubOrchestratorsInNvim,
         ]),
         ("dashboard",
         [
@@ -42,6 +44,7 @@ public static class KeymapGroups
             FleetAction.NewAgent,
             FleetAction.RemoveAgent,
             FleetAction.ToggleHidden,
+            FleetAction.OpenEditor,
             FleetAction.AddRepository,
             FleetAction.RemoveRepository,
             FleetAction.PullRepository,

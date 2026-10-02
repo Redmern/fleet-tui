@@ -1,4 +1,6 @@
 using Fleet.Features.Agents.AutoClose.Models;
+using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Settings.Models;
@@ -17,6 +19,12 @@ public static class IdleAgents
         && !PathKey.Same(watch.Agent.Worktree, projectRoot)
         && Finished(watch.Agent.Status)
         && now - watch.LastActivity >= TimeSpan.FromMinutes(settings.AutoCloseMinutes);
+
+    public static IReadOnlyList<Pane> PanesOf(AgentRecord agent, IEnumerable<Pane> panes) =>
+        [.. panes.Where(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p))];
+
+    public static bool Focused(IEnumerable<Pane> owned) =>
+        owned.Any(p => p.IsActive && !FleetWorkspaces.IsHidden(p.SessionName));
 
     public static bool Finished(string status) =>
         status.Trim().Length > 0

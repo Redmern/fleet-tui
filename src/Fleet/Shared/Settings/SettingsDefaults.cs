@@ -11,7 +11,11 @@ public static class SettingsDefaults
 
     public const ActionPolicy Push = ActionPolicy.Ask;
 
-    public const AidlcMode Aidlc = AidlcMode.Off;
+    public static AidlcSettings Aidlc => AidlcSettings.Default;
+
+    public const bool MainOrchestratorInNvim = true;
+
+    public const bool SubOrchestratorsInNvim = true;
 
     public const bool AutoClose = false;
 
@@ -21,7 +25,9 @@ public static class SettingsDefaults
 
     public const string PushLabel = "Agents push changes";
 
-    public const string AidlcLabel = "AIDLC mode";
+    public const string MainOrchestratorInNvimLabel = "Main orchestrator in nvim";
+
+    public const string SubOrchestratorsInNvimLabel = "Sub-orchestrators in nvim";
 
     public const string AutoCloseLabel = "Auto-close idle agents";
 

@@ -82,7 +82,8 @@ public static class PickProjectCommand
         }
 
         var result = await new OpenProjectHandler(mux.Driver)
-            .HandleAsync(new OpenProjectCommand(chosen, AgentHarness.Orchestrator, Adapters.Executable, windowId))
+            .HandleAsync(new OpenProjectCommand(
+                chosen, AgentHarness.Orchestrator, Adapters.Executable, windowId, Adapters.MainOrchestratorInNvim(chosen.Name)))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -93,18 +94,20 @@ public static class PickProjectCommand
         var agents = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name);
 
         var runnable = agents
-            .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
+            .Where(a => Adapters.OnPath(
+                AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0]))
             .ToList();
 
         foreach (var stranded in agents.Except(runnable)
-            .Select(a => AgentHarness.CommandFor(a.Harness)[0])
+            .Select(a => AgentHarness.CommandFor(
+                a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0])
             .Distinct())
         {
             Console.Error.WriteLine(
                 $"fleet: {stranded} is not on PATH, so agents that open it stay closed.");
         }
 
-        await new RestoreSessionHandler(mux.Driver)
+        await new RestoreSessionHandler(mux.Driver, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents())
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 
@@ -172,7 +175,8 @@ public static class PickProjectCommand
         if (!located.TryGetValue(chosen.Name, out var where) || !where.Open)
         {
             var opened = await new OpenProjectHandler(mux)
-                .HandleAsync(new OpenProjectCommand(chosen, AgentHarness.Orchestrator, Adapters.Executable, null))
+                .HandleAsync(new OpenProjectCommand(
+                    chosen, AgentHarness.Orchestrator, Adapters.Executable, null, Adapters.MainOrchestratorInNvim(chosen.Name)))
                 .ConfigureAwait(false);
 
             if (!opened.Succeeded)
@@ -181,10 +185,11 @@ public static class PickProjectCommand
             }
 
             var runnable = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name)
-                .Where(a => Adapters.OnPath(AgentHarness.CommandFor(a.Harness)[0]))
+                .Where(a => Adapters.OnPath(
+                    AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0]))
                 .ToList();
 
-            await new RestoreSessionHandler(mux)
+            await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents())
                 .HandleAsync(chosen.Name, chosen.Root, runnable)
                 .ConfigureAwait(false);
 

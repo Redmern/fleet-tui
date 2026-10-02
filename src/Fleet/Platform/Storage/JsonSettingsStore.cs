@@ -2,6 +2,8 @@ using System.Text.Json;
 using Fleet.Platform.Storage.Models;
 using Fleet.Ports.Settings;
 using Fleet.Shared;
+using Fleet.Shared.Aidlc;
+using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
@@ -54,8 +56,10 @@ public sealed class JsonSettingsStore : ISettingsStore
                     rules,
                     ParsePolicy(stored.Commit, SettingsDefaults.Commit),
                     ParsePolicy(stored.Push, SettingsDefaults.Push),
-                    ParseAidlc(stored.Aidlc, SettingsDefaults.Aidlc),
-                    ParseSwitch(stored.AutoClose, SettingsDefaults.AutoClose),
+                    ParseAidlc(stored),
+                    ParseOnOff(stored.MainOrchestratorInNvim, SettingsDefaults.MainOrchestratorInNvim),
+                    ParseOnOff(stored.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim),
+                    ParseOnOff(stored.AutoClose, SettingsDefaults.AutoClose),
                     stored.AutoCloseMinutes)
                 .MergedOverDefaults();
         }
@@ -79,8 +83,15 @@ public sealed class JsonSettingsStore : ISettingsStore
             Trigger = SettingsDiff.TriggerAgainstDefault(config.Trigger),
             Commit = PolicyAgainstDefault(config.Commit, SettingsDefaults.Commit),
             Push = PolicyAgainstDefault(config.Push, SettingsDefaults.Push),
-            Aidlc = AidlcAgainstDefault(config.Aidlc, SettingsDefaults.Aidlc),
-            AutoClose = SwitchAgainstDefault(config.AutoClose, SettingsDefaults.AutoClose),
+            Aidlc = WordAgainstDefault(config.Aidlc.Mode, SettingsDefaults.Aidlc.Mode),
+            AidlcProfile = WordAgainstDefault(config.Aidlc.DefaultProfile, SettingsDefaults.Aidlc.DefaultProfile),
+            AidlcAutonomy = WordAgainstDefault(config.Aidlc.Autonomy, SettingsDefaults.Aidlc.Autonomy),
+            AidlcOff = [.. AidlcSettings.Parts.Where(p => !config.Aidlc.IsOn(p)).Select(Words.Of)],
+            MainOrchestratorInNvim = OnOffAgainstDefault(
+                config.MainOrchestratorInNvim, SettingsDefaults.MainOrchestratorInNvim),
+            SubOrchestratorsInNvim = OnOffAgainstDefault(
+                config.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim),
+            AutoClose = OnOffAgainstDefault(config.AutoClose, SettingsDefaults.AutoClose),
             AutoCloseMinutes = config.AutoCloseMinutes == SettingsDefaults.AutoCloseMinutes ? 0 : config.AutoCloseMinutes,
             Tools = SettingsDiff.AgainstDefaults(config.Rules).ToDictionary(
                 r => HarnessToolIds.For(r.Key),
@@ -108,17 +119,34 @@ public sealed class JsonSettingsStore : ISettingsStore
     private static string PolicyAgainstDefault(ActionPolicy value, ActionPolicy fallback) =>
         value == fallback ? string.Empty : value.ToString().ToLowerInvariant();
 
-    private static AidlcMode ParseAidlc(string stored, AidlcMode fallback) =>
-        Enum.TryParse<AidlcMode>(stored, ignoreCase: true, out var parsed) ? parsed : fallback;
+    private static AidlcSettings ParseAidlc(SettingsFile stored)
+    {
+        var fallback = SettingsDefaults.Aidlc;
 
-    private static string AidlcAgainstDefault(AidlcMode value, AidlcMode fallback) =>
-        value == fallback ? string.Empty : value.ToString().ToLowerInvariant();
+        var off = stored.AidlcOff
+            .Select(Words.Parse<AidlcPart>)
+            .Where(p => p is { } part && AidlcSettings.Parts.Contains(part))
+            .Aggregate(AidlcPart.None, (all, p) => all | p!.Value);
 
-    private static bool ParseSwitch(string stored, bool fallback) =>
-        string.Equals(stored, "on", StringComparison.OrdinalIgnoreCase)
-        || (!string.Equals(stored, "off", StringComparison.OrdinalIgnoreCase) && fallback);
+        return new AidlcSettings(
+            Words.Parse<AidlcMode>(stored.Aidlc) ?? fallback.Mode,
+            Words.Parse<Profile>(stored.AidlcProfile) ?? fallback.DefaultProfile,
+            Words.Parse<Autonomy>(stored.AidlcAutonomy) ?? fallback.Autonomy,
+            off);
+    }
 
-    private static string SwitchAgainstDefault(bool value, bool fallback) =>
+    private static string WordAgainstDefault<T>(T value, T fallback)
+        where T : struct, Enum =>
+        EqualityComparer<T>.Default.Equals(value, fallback) ? string.Empty : Words.Of(value);
+
+    private static bool ParseOnOff(string stored, bool fallback) => stored.Trim().ToLowerInvariant() switch
+    {
+        "on" => true,
+        "off" => false,
+        _ => fallback,
+    };
+
+    private static string OnOffAgainstDefault(bool value, bool fallback) =>
         value == fallback ? string.Empty : value ? "on" : "off";
 
     private static string? FileFor(string project)

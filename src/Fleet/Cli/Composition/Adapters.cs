@@ -1,5 +1,6 @@
 using System.Text;
 using Fleet.Cli.Composition.Models;
+using Fleet.Platform.Aidlc;
 using Fleet.Platform.Approvals;
 using Fleet.Platform.Claude;
 using Fleet.Platform.Git;
@@ -18,6 +19,7 @@ using Fleet.Platform.Hooks;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
+using Fleet.Ports.Aidlc;
 using Fleet.Ports.Approvals;
 using Fleet.Ports.Git;
 using Fleet.Ports.Mcp;
@@ -58,6 +60,10 @@ public static class Adapters
     public static IKeymapStore Keymaps() => new JsonKeymapStore();
 
     public static ISettingsStore Settings() => new JsonSettingsStore();
+
+    public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorInNvim;
+
+    public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsInNvim;
 
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
@@ -106,6 +112,8 @@ public static class Adapters
     public static Ports.Remotes.IKnownRemoteStore KnownRemotes() => new JsonKnownRemoteStore();
 
     public static IDispatchHistory History() => new FileDispatchHistory();
+
+    public static IIntentStore Intents() => new JsonIntentStore();
 
     public static ISlugNamer SlugNamer() => new ClaudeSlugNamer();
 

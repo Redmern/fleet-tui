@@ -9,6 +9,7 @@ using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Features.Agents.OpenAgent;
+using Fleet.Features.Agents.OpenEditor;
 using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.RenameAgent;
@@ -492,8 +493,8 @@ public static class DashboardWiring
         }
 
         var spawner = new NewAgentHandler(git, mux, agents);
-        var opener = new OpenAgentHandler(mux, agents);
         var hider = new HideAgentHandler(mux, agents);
+        var editor = new OpenEditorHandler(mux);
         var branches = new ListBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
         var stopper = new StopAgentHandler(mux, agents);
@@ -541,7 +542,8 @@ public static class DashboardWiring
 
         async Task<string?> OpenFlow(AgentRecord agent)
         {
-            var executable = AgentHarness.CommandFor(agent.Harness)[0];
+            var inNvim = settings.Load(project.Name).SubOrchestratorsInNvim;
+            var executable = AgentHarness.CommandFor(agent.Harness, orchestratorInNvim: inNvim)[0];
 
             if (!Adapters.OnPath(executable))
             {
@@ -550,7 +552,8 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await opener.HandleAsync(project.Name, agent, project.Root)
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim)
+                .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 
             Note(log, project.Name, outcome.Succeeded
@@ -659,7 +662,7 @@ public static class DashboardWiring
             {
                 foreach (var agent in lister.Handle(project.Name).Where(a => IdleAgents.Finished(a.Status)))
                 {
-                    var owned = panes.Where(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p)).ToList();
+                    var owned = IdleAgents.PanesOf(agent, panes);
 
                     if (owned.Count == 0)
                     {
@@ -685,7 +688,7 @@ public static class DashboardWiring
                     var watch = new IdleWatch(
                         agent,
                         PaneAlive: true,
-                        Focused: owned.Any(p => p.IsActive && !FleetWorkspaces.IsHidden(p.SessionName)),
+                        Focused: IdleAgents.Focused(owned),
                         Working: live == AgentActivity.Working,
                         AsksTheUser: live == AgentActivity.Waiting
                             || mine.Any(n => n.Kind is NoticeKind.Permission or NoticeKind.NeedsInput),
@@ -824,7 +827,7 @@ public static class DashboardWiring
 
             RebuildDashboard: () =>
             {
-                var rebuilt = new RebuildDashboardHandler(mux)
+                var rebuilt = new RebuildDashboardHandler(mux, settings.Load(project.Name).MainOrchestratorInNvim)
                     .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Orchestrator)
                     .GetAwaiter()
                     .GetResult();
@@ -945,7 +948,7 @@ public static class DashboardWiring
 
                 var reply = await new DispatchHandler(
                         mux, agents, Adapters.HarnessConfig(),
-                        history: history, namer: Adapters.SlugNamer(), settings: Adapters.Settings())
+                        history: history, namer: Adapters.SlugNamer(), settings: Adapters.Settings(), intents: Adapters.Intents())
                     .HandleAsync(
                         new DispatchRequest(project.Name, project.Root, prompt),
                         DateTimeOffset.UtcNow.ToString("O"))
@@ -1453,6 +1456,23 @@ public static class DashboardWiring
             DismissNotices: keys =>
                 noticeStore.Save(project.Name, NoticeSync.Dismiss(noticeStore.Load(project.Name), [.. keys], DateTime.UtcNow)),
 
-            OpenNotice: OpenNotice);
+            OpenNotice: OpenNotice,
+
+            OpenEditor: async (tab, index) =>
+            {
+                var agent = At(lister, project.Name, tab, index);
+
+                if (agent is null)
+                {
+                    return null;
+                }
+
+                var outcome = await editor.HandleAsync(project.Name, agent, project.Root)
+                    .ConfigureAwait(false);
+
+                return outcome.Succeeded
+                    ? null
+                    : Noted(log, project.Name, $"could not open an editor for {Label(agent)}: {outcome.Error}");
+            });
     }
 }

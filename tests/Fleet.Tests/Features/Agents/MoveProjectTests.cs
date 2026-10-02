@@ -209,4 +209,19 @@ public class MoveProjectTests
         Assert.Equal(dest, panes.Single(p => p.Id == agentPane).WindowId);
         Assert.Contains(panes, p => _mux.ArgsFor(p.Id).Contains("dash"));
     }
+
+    [Fact]
+    public async Task With_main_orchestrator_in_nvim_off_a_project_with_no_panes_reopens_claude_continue()
+    {
+        var moved = await new MoveProjectHandler(_mux, mainOrchestratorInNvim: false).HandleAsync(
+            "techweb", Root, [], null, null, null, "fleet");
+
+        Assert.True(moved.Succeeded, moved.Error);
+
+        var claude = (await _mux.ListPanesAsync()).Single(p => !_mux.ArgsFor(p.Id).Contains("dash"));
+
+        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], _mux.ArgsFor(claude.Id));
+        Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(claude.Id));
+        Assert.Equal(Root, claude.Cwd);
+    }
 }

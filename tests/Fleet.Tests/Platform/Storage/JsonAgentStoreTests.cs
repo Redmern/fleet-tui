@@ -175,4 +175,30 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
 
         Assert.Equal(writers, _store.List("techweb").Count);
     }
+
+    [Fact]
+    public void The_host_an_orchestrator_was_started_in_survives_the_round_trip()
+    {
+        var bare = Path.Combine(ConfigHome, "orchestrations", "bare");
+        var nvim = Path.Combine(ConfigHome, "orchestrations", "nvim");
+
+        _store.Save("techweb", Agent(bare, "bare") with { Harness = "orchestrator", InNvim = false });
+        _store.Save("techweb", Agent(nvim, "nvim") with { Harness = "orchestrator", InNvim = true });
+
+        var agents = _store.List("techweb");
+
+        Assert.False(agents.Single(a => a.Branch == "bare").StartedInNvim);
+        Assert.True(agents.Single(a => a.Branch == "nvim").StartedInNvim);
+    }
+
+    [Fact]
+    public void An_agent_saved_without_a_host_reads_back_as_nvim()
+    {
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop")));
+
+        var agent = Assert.Single(_store.List("techweb"));
+
+        Assert.Null(agent.InNvim);
+        Assert.True(agent.StartedInNvim);
+    }
 }

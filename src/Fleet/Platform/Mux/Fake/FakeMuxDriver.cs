@@ -137,7 +137,8 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
             source.Pane.TabId,
             source.Pane.SessionName,
             options.Cwd ?? source.Pane.Cwd,
-            options.Args);
+            options.Args,
+            options.Env);
 
         return Task.FromResult(id);
     }

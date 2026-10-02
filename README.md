@@ -311,6 +311,7 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `n` | new project (picker) / new agent / add repository |
 | `enter` | open the selection / open an agent, restarting it if needed |
 | `m` | manage an agent / manage a repository |
+| `e` | open nvim (neo-tree) in the selected agent's or sub's folder, beside its pane; focuses it if already open |
 | `p` | pull the highlighted repository |
 | `d` | remove a repository |
 | `r` | refresh (dashboard) |
@@ -416,6 +417,16 @@ Keys follow the tab: `n` and `d` mean agent things on Agents and repository
 things on Repositories. Hiding and the harness picker do nothing on the
 Repositories tab.
 
+### Opening an editor
+
+`e` on an agent or sub-orchestrator opens nvim with neo-tree in its folder (the
+worktree, or `.fleet/orchestrations/<slug>` for a sub), titled `<repo>/<branch> editor`.
+It splits beside the agent's pane; if that pane is closed or hidden it opens in the
+project window instead. Pressing `e` again focuses the editor rather than opening a
+second one. **Open editor here** in the fleet menu does the same for the agent whose
+pane you are in. The editor is a helper, not the agent: hiding or stopping the agent
+leaves it alone, and an agent with only its editor open still counts as not running.
+
 ### Hiding an agent
 
 **Hide or show it**, from the `m` menu, hides an agent from the WezTerm tab bar
@@ -518,6 +529,27 @@ creates repo agents that are stamped as its own, and reports back with
 sub-orchestrator with the agents it created and shows its status — working, done, or
 failed — until you remove it.
 
+**AIDLC.** A sub-orchestrator can run a structured process instead of free-form. Press
+`A` in the menu's Settings submenu to set it per project:
+
+- **Mode** — `off` (default), `on` (every dispatch), or `manual` (only when the task
+  starts with a profile prefix).
+- **Profile** — how much ceremony a task gets: `express` (default; short spec, build,
+  verify, review, PR), `bugfix` (reproduction first), `feature` (spec, plan, walking
+  skeleton; may span repositories), `refactor` (no behaviour change) or `research`
+  (investigate and report, no code). Name one per task with a prefix after the trigger,
+  `,feature: add oauth login`. With the mode `on`, the `profile` argument of the
+  `dispatch` tool also picks one; otherwise the project default applies.
+- **Autonomy** — `guided` checks in with you after each unit; `automatic` goes on by
+  itself. A failure always stops and asks.
+- **Parts** — switch off the spec, plan or deliver gate (the stage still runs, without
+  waiting for you), the walking skeleton, or the verify, review or learn stage (skipped).
+
+fleet writes the process into the sub-orchestrator's CLAUDE.md, keeps the task's record
+next to it (`state.json`, and `audit.jsonl` for what happened), and tells it to stop and
+ask you at each approval point. `.fleet/config/aidlc.md` adds your own notes to that
+process.
+
 ## Configuration
 
 Everything lives under `%APPDATA%\fleet`:
@@ -525,7 +557,7 @@ Everything lives under `%APPDATA%\fleet`:
 ```
 projects/<name>.json    a name and a root, with ~ for the home directory
 keybinds.json           the prefix and every action binding
-settings/<name>.json    the per-project tool permissions and dispatch trigger
+settings/<name>.json    the per-project tool permissions, dispatch trigger and AIDLC settings
 approvals/<name>/       in-flight MCP approval requests (transient)
 fleet.log               failures fleet degraded past, shown by doctor
 ```
