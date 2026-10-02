@@ -201,4 +201,21 @@ public class SettingsTests
         Assert.Equal(";", DispatchTrigger.FromKeyText(";"));
         Assert.Equal(string.Empty, DispatchTrigger.FromKeyText("A"));
     }
+
+    [Fact]
+    public void Both_nvim_settings_default_on_and_each_changes_the_signature()
+    {
+        var main = SettingsConfig.Default.WithMainOrchestratorInNvim(false);
+        var subs = SettingsConfig.Default.WithSubOrchestratorsInNvim(false);
+
+        Assert.True(SettingsConfig.Default.MainOrchestratorInNvim);
+        Assert.True(SettingsConfig.Default.SubOrchestratorsInNvim);
+        Assert.NotEqual(SettingsConfig.Default.Signature, main.Signature);
+        Assert.NotEqual(SettingsConfig.Default.Signature, subs.Signature);
+        Assert.NotEqual(main.Signature, subs.Signature);
+        Assert.False(main.MergedOverDefaults().MainOrchestratorInNvim);
+        Assert.True(main.MergedOverDefaults().SubOrchestratorsInNvim);
+        Assert.False(subs.MergedOverDefaults().SubOrchestratorsInNvim);
+        Assert.True(subs.MergedOverDefaults().MainOrchestratorInNvim);
+    }
 }

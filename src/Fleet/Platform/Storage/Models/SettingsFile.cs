@@ -18,6 +18,10 @@ public sealed class SettingsFile
 
     public List<string> AidlcOff { get; set; } = [];
 
+    public string MainOrchestratorInNvim { get; set; } = string.Empty;
+
+    public string SubOrchestratorsInNvim { get; set; } = string.Empty;
+
     public Dictionary<string, ToolRuleEntry> Tools { get; set; } = [];
 }
 

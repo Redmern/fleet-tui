@@ -11,7 +11,10 @@ public sealed record AgentRecord(
     bool Open = false,
     string Owner = "",
     string Status = "",
-    bool? Claude = null)
+    bool? Claude = null,
+    bool? InNvim = null)
 {
     public bool RunsClaude => Claude ?? Owner.Length > 0;
+
+    public bool StartedInNvim => InNvim ?? true;
 }

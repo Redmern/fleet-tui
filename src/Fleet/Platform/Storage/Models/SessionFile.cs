@@ -30,4 +30,6 @@ public sealed class AgentEntry
     public string Status { get; set; } = string.Empty;
 
     public bool? Claude { get; set; }
+
+    public bool? InNvim { get; set; }
 }

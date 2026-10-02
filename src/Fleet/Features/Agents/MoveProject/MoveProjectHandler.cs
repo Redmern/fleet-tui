@@ -9,7 +9,7 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.MoveProject;
 
-public sealed class MoveProjectHandler(IMuxDriver mux)
+public sealed class MoveProjectHandler(IMuxDriver mux, bool mainOrchestratorInNvim = true)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -64,7 +64,8 @@ public sealed class MoveProjectHandler(IMuxDriver mux)
                     SessionName = project,
                     WindowId = destWindow,
                     NewWindow = destWindow is null,
-                    Args = AgentHarness.OrchestratorCommand(resume: true),
+                    Args = AgentHarness.OrchestratorCommand(resume: true, inNvim: mainOrchestratorInNvim),
+                    Env = AgentHarness.SpawnEnv(AgentHarness.Orchestrator, mainOrchestratorInNvim),
                 },
                 ct).ConfigureAwait(false);
 

@@ -7,6 +7,7 @@ using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.StopAgent;
+using Fleet.Features.Agents.TellAgent;
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
@@ -54,8 +55,6 @@ public sealed class McpActions(
 
     private readonly NewAgentHandler _spawner = new(git, mux, store);
 
-    private readonly OpenAgentHandler _opener = new(mux, store);
-
     private readonly HideAgentHandler _hider = new(mux, store);
 
     private readonly StopAgentHandler _stopper = new(mux, store);
@@ -78,6 +77,8 @@ public sealed class McpActions(
         new(mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(), intents: Adapters.Intents());
 
     private readonly ReportStatusHandler _reporter = new(store);
+
+    private readonly TellAgentHandler _teller = new(mux);
 
     private readonly BranchStates _states = new(git);
 
@@ -244,7 +245,7 @@ public sealed class McpActions(
             return false;
         }
 
-        await Deliver(agent, pane.Value, message, ct).ConfigureAwait(false);
+        await _teller.DeliverAsync(agent, pane.Value, message, ct).ConfigureAwait(false);
 
         return true;
     }
@@ -272,7 +273,7 @@ public sealed class McpActions(
                 $"{Repo(request)}/{Branch(request)} is not open; open it first, then tell it.");
         }
 
-        await Deliver(agent, pane.Value, ToolArguments.Text(request, ToolArguments.Message), ct)
+        await _teller.DeliverAsync(agent, pane.Value, ToolArguments.Text(request, ToolArguments.Message), ct)
             .ConfigureAwait(false);
 
         return Ok($"sent to {Repo(request)}/{Branch(request)}.");
@@ -286,24 +287,7 @@ public sealed class McpActions(
         return pane?.Id;
     }
 
-    private async Task Deliver(AgentRecord agent, PaneId pane, string message, CancellationToken ct)
-    {
-        var dir = Path.Combine(agent.Worktree, ".fleet");
-        Directory.CreateDirectory(dir);
-        await File.WriteAllTextAsync(
-            Path.Combine(dir, AgentHarness.AgentInstructionFile), message, ct).ConfigureAwait(false);
-
-        if (AgentHarness.HostedInNvim(agent.Harness))
-        {
-            return;
-        }
-
-        var prompt = AgentHarness.AgentInstructionPrompt;
-
-        await mux.SendTextAsync(pane, prompt, ct).ConfigureAwait(false);
-        await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
-        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
-    }
+    private bool SubOrchestratorsInNvim() => Adapters.SubOrchestratorsInNvim(project);
 
     private async Task<McpResult> OpenAgent(McpRequest request, CancellationToken ct)
     {
@@ -321,7 +305,9 @@ public sealed class McpActions(
 
         ClaudeWiring.TrustFolder(agent.Worktree);
 
-        var outcome = await _opener.HandleAsync(project, agent, root, ct).ConfigureAwait(false);
+        var outcome = await new OpenAgentHandler(mux, store, SubOrchestratorsInNvim())
+            .HandleAsync(project, agent, root, ct)
+            .ConfigureAwait(false);
 
         return From(outcome, $"opened {Repo(request)}/{Branch(request)}.");
     }

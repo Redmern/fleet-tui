@@ -103,4 +103,27 @@ public class OpenProjectTests
         Assert.Contains("did not respond", result.Error);
         Assert.Contains("fleet doctor", result.Error);
     }
+
+    [Fact]
+    public async Task With_main_orchestrator_in_nvim_off_the_left_pane_runs_bare_claude_with_session_persistence()
+    {
+        var mux = new FakeMuxDriver();
+
+        var result = await new OpenProjectHandler(mux).HandleAsync(Command with { MainOrchestratorInNvim = false });
+
+        Assert.Equal([AgentHarness.Claude], mux.ArgsFor(result.Value.HarnessPane));
+        Assert.Equal(AgentHarness.SessionPersistence, mux.EnvFor(result.Value.HarnessPane));
+        Assert.Equal("/repos/backend", (await mux.ListPanesAsync()).Single(p => p.Id == result.Value.HarnessPane).Cwd);
+    }
+
+    [Fact]
+    public async Task With_main_orchestrator_in_nvim_on_the_left_pane_gets_no_extra_env()
+    {
+        var mux = new FakeMuxDriver();
+
+        var result = await new OpenProjectHandler(mux).HandleAsync(Command with { MainOrchestratorInNvim = true });
+
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), mux.ArgsFor(result.Value.HarnessPane));
+        Assert.Empty(mux.EnvFor(result.Value.HarnessPane));
+    }
 }

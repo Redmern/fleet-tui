@@ -8,7 +8,7 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.OpenAgent;
 
-public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
+public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store, bool subOrchestratorsInNvim = true)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -110,10 +110,10 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
                 SessionName = project,
                 WindowId = window,
                 Args = orchestrator
-                    ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true)
+                    ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim)
                     : Shared.Constants.AgentHarness.CommandFor(
                         agent.Harness, withClaude: agent.RunsClaude),
-                Env = Shared.Constants.AgentHarness.SpawnEnv(agent.Harness),
+                Env = Shared.Constants.AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim),
             },
             ct).ConfigureAwait(false);
 
@@ -124,9 +124,11 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store)
 
         await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
 
-        if (agent.Hidden || !agent.Open)
+        var started = orchestrator ? agent with { InNvim = subOrchestratorsInNvim } : agent;
+
+        if (agent.Hidden || !agent.Open || started != agent)
         {
-            store.Save(project, agent with { Hidden = false, Open = true });
+            store.Save(project, started with { Hidden = false, Open = true });
         }
 
         return Result.Ok();

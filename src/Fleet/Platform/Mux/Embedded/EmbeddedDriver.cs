@@ -103,6 +103,7 @@ public sealed class EmbeddedDriver(
                 Percent = options.Percent,
                 Cwd = options.Cwd,
                 Args = [.. options.Args],
+                Env = new Dictionary<string, string>(options.Env),
                 MovePane = options.MovePane.IsNone ? null : options.MovePane.Value,
             },
             ct).ConfigureAwait(false);

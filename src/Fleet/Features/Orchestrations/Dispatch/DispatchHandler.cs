@@ -16,6 +16,7 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Orchestrations.Models;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
@@ -102,6 +103,8 @@ public sealed class DispatchHandler(
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
 
+        var inNvim = settings?.Load(command.ProjectName).SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
+
         var record = new AgentRecord(
             folder,
             string.Empty,
@@ -112,7 +115,8 @@ public sealed class DispatchHandler(
             Hidden: true,
             Open: true,
             Owner: command.Caller,
-            Status: OrchestrationStatus.Working);
+            Status: OrchestrationStatus.Working,
+            InNvim: inNvim);
 
         store.Save(command.ProjectName, record);
 
@@ -127,7 +131,8 @@ public sealed class DispatchHandler(
                 SessionName = command.ProjectName,
                 WindowId = window,
                 NewWindow = window is null,
-                Args = AgentHarness.CommandFor(AgentHarness.Orchestrator),
+                Args = AgentHarness.CommandFor(AgentHarness.Orchestrator, orchestratorInNvim: inNvim),
+                Env = AgentHarness.SpawnEnv(AgentHarness.Orchestrator, inNvim),
             },
             ct).ConfigureAwait(false);
 
@@ -146,7 +151,7 @@ public sealed class DispatchHandler(
             await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
         }
 
-        await KickOff(folder, ct).ConfigureAwait(false);
+        await KickOff(folder, inNvim ? null : pane, ct).ConfigureAwait(false);
 
         return Result<DispatchReply>.Ok(
             new DispatchReply(slug, folder, DispatchNote.Dispatched(slug, aidlc?.Profile)));
@@ -239,7 +244,7 @@ public sealed class DispatchHandler(
         }
     }
 
-    private async Task KickOff(string folder, CancellationToken ct)
+    private async Task KickOff(string folder, PaneId? bareClaude, CancellationToken ct)
     {
         var marker = OrchestrationPaths.ReadyMarker(folder);
 
@@ -260,5 +265,12 @@ public sealed class DispatchHandler(
                 AgentHarness.OrchestratorKickoff,
                 ct)
             .ConfigureAwait(false);
+
+        if (bareClaude is { } pane)
+        {
+            await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff, ct).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
+            await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
+        }
     }
 }

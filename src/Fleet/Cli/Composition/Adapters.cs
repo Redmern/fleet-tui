@@ -61,6 +61,10 @@ public static class Adapters
 
     public static ISettingsStore Settings() => new JsonSettingsStore();
 
+    public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorInNvim;
+
+    public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsInNvim;
+
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
     public static IHarnessConfig HarnessConfig() => new ClaudeHarnessConfig();

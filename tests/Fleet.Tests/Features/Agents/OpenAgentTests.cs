@@ -358,4 +358,52 @@ public sealed class OpenAgentTests : IDisposable
 
         Assert.Empty(_store.Saved);
     }
+
+    [Fact]
+    public async Task With_sub_orchestrators_in_nvim_off_an_orchestrator_reopens_as_claude_continue()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+
+        var result = await new OpenAgentHandler(_mux, _store, subOrchestratorsInNvim: false)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+
+        var claude = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], _mux.ArgsFor(claude.Id));
+        Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(claude.Id));
+        Assert.Equal(agent.Worktree, claude.Cwd);
+    }
+
+    [Fact]
+    public async Task With_sub_orchestrators_in_nvim_on_an_orchestrator_reopens_inside_nvim_without_extra_env()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+
+        await new OpenAgentHandler(_mux, _store, subOrchestratorsInNvim: true).HandleAsync("techweb", agent, ProjectRoot);
+
+        var claude = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), _mux.ArgsFor(claude.Id));
+        Assert.Empty(_mux.EnvFor(claude.Id));
+    }
+
+    [Fact]
+    public async Task A_running_orchestrator_keeps_its_command_when_the_setting_changes()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+        var running = await _mux.SpawnAsync(new SpawnOptions
+        {
+            Cwd = agent.Worktree,
+            NewWindow = true,
+            Args = AgentHarness.OrchestratorCommand(resume: false),
+        });
+
+        await new OpenAgentHandler(_mux, _store, subOrchestratorsInNvim: false).HandleAsync("techweb", agent, ProjectRoot);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(running, pane.Id);
+        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), _mux.ArgsFor(pane.Id));
+    }
 }
