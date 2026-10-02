@@ -4306,6 +4306,38 @@ with its concurrency cap. M6: the read-only reviewer harness and the two-round r
 loop. M7: the pipeline view, cost and metrics, and Deliver. M8: the learning loop.
 Until then the record's later stages stay `pending`; only Intake is marked done.
 
+## Main and sub-orchestrators in nvim, per project, 2026-10-02
+
+Two per-project settings in *fleet menu > Settings* pick whether orchestrators are hosted in
+nvim (on, the default and the old behaviour) or run as bare `claude` (off):
+
+- *Main orchestrator in nvim* (`v`): the project's own orchestrator, the pane in the project
+  root that open project, switch/move project and rebuild dashboard start.
+- *Sub-orchestrators in nvim* (`V`): orchestrators started by dispatch, and their
+  restore/open.
+
+Fleet already tells the two apart without a new marker: the main orchestrator is never an
+agent record (it is the project-root pane), while every sub-orchestrator is a record with the
+`orchestrator` harness whose worktree is its `.fleet/orchestrations/<slug>` folder. So the
+project-root paths read the main setting, and the record paths read the sub setting. Each is
+stored on its own (`mainOrchestratorInNvim` / `subOrchestratorsInNvim: "off"`) and only when
+it differs from the default.
+
+The nvim wrapper only carried the instruction pump, `:FleetTell`, ctrl+hjkl falling through
+to WezTerm, and the session-persistence env. With a setting off, a bare orchestrator gets
+the env through `SpawnOptions.Env`, resumes as `claude --continue`, and receives
+instructions (tell_agent, a dispatch's kickoff) by send-text, the way the `claude` harness
+does. The composition root reads the settings and hands a bool to the handlers;
+`AgentHarness` stays free of storage. A running orchestrator keeps what it was started with;
+a setting applies to the next launch.
+
+Known gaps: delivery picks the path from the setting at the moment of delivery, not from how
+the running pane was started, so flipping the sub setting while a sub-orchestrator runs can
+double-deliver (nvim) or not type the prompt (bare) until that pane is relaunched. Rebuild
+dashboard splits a fresh harness pane, and `SplitOptions` carries no env, so a bare main
+orchestrator started that way runs without the session-persistence env. In a bare pane
+fleet installs no ctrl+hjkl mapping, so pane navigation depends on the WezTerm config.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
