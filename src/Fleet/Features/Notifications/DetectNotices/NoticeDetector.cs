@@ -88,6 +88,8 @@ public static class NoticeDetector
     private static (NoticeKind Kind, string Message)? FromHook(AgentReport hooked, string paneText, DateTime now) => hooked.State switch
     {
         AgentState.Blocked when IsBusy(paneText) && !IsQuestion(paneText) && !IsPermission(paneText) => null,
+        AgentState.Blocked when hooked.Reason == HookStatus.PermissionReason
+            && paneText.Trim().Length > 0 && !IsQuestion(paneText) && !IsPermission(paneText) => null,
         AgentState.Blocked when hooked.Reason == HookStatus.PermissionReason => (NoticeKind.Permission, "asks for permission"),
         AgentState.Blocked => (NoticeKind.NeedsInput, "has a question for you"),
         AgentState.Stalled when IsPermission(paneText) => (NoticeKind.Permission, "asks for permission"),

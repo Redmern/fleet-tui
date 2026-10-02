@@ -28,5 +28,8 @@ public sealed class HookPayload
     [JsonPropertyName("notification_type")]
     public string? NotificationType { get; set; }
 
+    [JsonPropertyName("source")]
+    public string? Source { get; set; }
+
     public string Text => Prompt ?? UserPrompt ?? string.Empty;
 }

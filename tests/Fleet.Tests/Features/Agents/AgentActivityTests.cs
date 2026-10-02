@@ -1,4 +1,5 @@
 using Fleet.Features.Agents.ListAgents;
+using Fleet.Shared.Hooks;
 using Fleet.Shared.Status.Enums;
 
 namespace Fleet.Tests.Features.Agents;
@@ -38,6 +39,20 @@ public class AgentActivityTests
         Assert.Equal(AgentState.Stalled, AgentActivity.Confirmed(AgentState.Stalled, "* Churning... (esc to interrupt)"));
         Assert.Equal(AgentState.Idle, AgentActivity.Confirmed(AgentState.Stalled, "Interrupted by user\n> "));
         Assert.Equal(AgentState.Idle, AgentActivity.Confirmed(AgentState.Stalled, string.Empty));
+    }
+
+    [Fact]
+    public void A_permission_prompt_dismissed_with_esc_is_idle_but_an_unread_pane_keeps_the_block()
+    {
+        Assert.Equal(AgentState.Idle, AgentActivity.Confirmed(AgentState.Blocked, "Interrupted by user\n> ", HookStatus.PermissionReason));
+        Assert.Equal(AgentState.Blocked, AgentActivity.Confirmed(AgentState.Blocked, string.Empty, HookStatus.PermissionReason));
+        Assert.Equal(AgentState.Blocked, AgentActivity.Confirmed(AgentState.Blocked, "Do you want to proceed?\n2. No, and tell Claude", HookStatus.PermissionReason));
+    }
+
+    [Fact]
+    public void A_block_on_input_is_not_released_by_an_idle_looking_pane()
+    {
+        Assert.Equal(AgentState.Blocked, AgentActivity.Confirmed(AgentState.Blocked, "Pick a server to connect\n> ", HookStatus.InputReason));
     }
 
     [Theory]

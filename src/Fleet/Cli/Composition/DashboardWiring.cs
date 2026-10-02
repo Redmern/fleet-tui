@@ -512,7 +512,7 @@ public static class DashboardWiring
                     ? mux.GetTextAsync(pane.Id).GetAwaiter().GetResult()
                     : string.Empty;
                 paneTexts[agent.Worktree] = seen;
-                return agent with { Status = AgentActivity.For(AgentActivity.Confirmed(hooked.State, seen)) };
+                return agent with { Status = AgentActivity.For(AgentActivity.Confirmed(hooked.State, seen, hooked.Reason)) };
             }
 
             var text = mux.GetTextAsync(pane.Id).GetAwaiter().GetResult();

@@ -4440,6 +4440,8 @@ carry and from running it:
   or `notification_type: permission_prompt`) or on **input**, so the notice can say
   which.
 - **SessionEnd** clears the session's report (Unknown) rather than leaving it Idle.
+- **SessionStart with `source: compact`** reports nothing: auto-compaction fires it in
+  the middle of a turn, and the agent goes on working.
 - **Subagents** (`agent_id` present): Working and Blocked still count, since a
   subagent's permission prompt is the parent's too, but anything that would report
   Idle or clear the session is dropped. `SubagentStop`/`SubagentStart` are not in the
@@ -4499,7 +4501,12 @@ Working and Idle agents are never scraped):
   the row says waiting and the Permission or NeedsInput notice is raised.
 - **Blocked ends when the approved tool runs.** No hook fires when you approve a
   permission; the next one is `PostToolUse`, after the tool. If the pane shows the
-  spinner and no prompt, the row says working and the permission notice resolves.
+  spinner and no prompt, the row says working and the permission notice resolves. A
+  permission prompt dismissed with Esc sends no hook either: a permission block whose
+  pane was read and shows neither the prompt nor the spinner is idle. A block on
+  **input** is not released this way, since elicitation dialogs and other attention
+  notifications do not reliably show the wording fleet looks for, and hiding a real
+  question is worse than a stale "waiting".
 
 A pane not read yet keeps the reported state: a Blocked report still raises its notice,
 and a Stalled one does not.

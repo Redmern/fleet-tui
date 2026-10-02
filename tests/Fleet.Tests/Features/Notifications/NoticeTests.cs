@@ -107,6 +107,20 @@ public sealed class NoticeTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_permission_prompt_dismissed_with_esc_resolves_but_a_question_stays()
+    {
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(Agent("esc"), "Interrupted by user\n> ") with { Hooked = Hook(AgentState.Blocked, HookStatus.PermissionReason) },
+            Watch(Agent("unread")) with { Hooked = Hook(AgentState.Blocked, HookStatus.PermissionReason) },
+            Watch(Agent("asks"), "Pick a server to connect\n> ") with { Hooked = Hook(AgentState.Blocked, HookStatus.InputReason) },
+        ], T0);
+
+        Assert.Equal(
+            [(NoticeKind.Permission, "unread"), (NoticeKind.NeedsInput, "asks")],
+            found.Select(n => (n.Kind, n.Worktree.Split('/')[^1])));
+    }
+
+    [Fact]
     public void Hook_state_wins_over_what_the_pane_shows()
     {
         var found = NoticeDetector.Detect("alpha", [

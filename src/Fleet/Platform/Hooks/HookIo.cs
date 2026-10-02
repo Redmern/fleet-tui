@@ -35,7 +35,8 @@ public static class HookIo
             payload.SessionId ?? string.Empty,
             payload.TranscriptPath ?? string.Empty,
             payload.AgentId ?? string.Empty,
-            payload.NotificationType ?? string.Empty);
+            payload.NotificationType ?? string.Empty,
+            payload.Source ?? string.Empty);
 
     public static string Block(string reason) =>
         JsonSerializer.Serialize(

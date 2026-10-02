@@ -44,6 +44,25 @@ public sealed class HookStatusTests
     }
 
     [Fact]
+    public void A_compaction_mid_turn_does_not_report_the_agent_idle()
+    {
+        Assert.Null(HookStatus.ReportFor(new HookEvent("SessionStart", "C:/w/a", "s1", Source: HookStatus.CompactSource), Now));
+    }
+
+    [Theory]
+    [InlineData("startup")]
+    [InlineData("resume")]
+    [InlineData("clear")]
+    [InlineData("")]
+    public void Any_other_session_start_is_a_fresh_idle_session(string source)
+    {
+        var report = HookStatus.ReportFor(new HookEvent("SessionStart", "C:/w/a", "s1", Source: source), Now)!;
+
+        Assert.Equal(AgentState.Idle, report.State);
+        Assert.True(report.StartsSession);
+    }
+
+    [Fact]
     public void Only_a_session_start_marks_a_new_session()
     {
         Assert.True(HookStatus.ReportFor(Event("SessionStart"), Now)!.StartsSession);

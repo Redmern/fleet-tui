@@ -9,7 +9,8 @@ public sealed record HookEvent(
     string Session = "",
     string Transcript = "",
     string AgentId = "",
-    string NotificationType = "")
+    string NotificationType = "",
+    string Source = "")
 {
     public bool FromSubagent => AgentId.Length > 0;
 }
@@ -21,6 +22,8 @@ public static class HookStatus
     public const string PermissionReason = "permission";
 
     public const string InputReason = "input";
+
+    public const string CompactSource = "compact";
 
     public static IReadOnlyList<string> Events { get; } =
     [
@@ -57,6 +60,7 @@ public static class HookStatus
     private static (AgentState State, string Reason)? StateFor(HookEvent hook) => hook.Name switch
     {
         "UserPromptSubmit" or "PreToolUse" or "PostToolUse" => (AgentState.Working, string.Empty),
+        "SessionStart" when hook.Source == CompactSource => null,
         "Stop" or "SessionStart" => (AgentState.Idle, string.Empty),
         "SessionEnd" => (AgentState.Unknown, string.Empty),
         "PermissionRequest" => (AgentState.Blocked, PermissionReason),

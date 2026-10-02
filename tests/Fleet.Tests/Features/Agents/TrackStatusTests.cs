@@ -72,6 +72,14 @@ public sealed class TrackStatusTests
     }
 
     [Fact]
+    public void The_session_start_source_is_read_from_the_payload()
+    {
+        var payload = HookIo.Read(new StringReader("""{"cwd":"C:/w/a","hook_event_name":"SessionStart","source":"compact"}"""));
+
+        Assert.Equal("compact", HookIo.Event(payload).Source);
+    }
+
+    [Fact]
     public void An_empty_payload_is_an_event_with_nothing_in_it()
     {
         var hook = HookIo.Event(HookIo.Read(new StringReader(string.Empty)));

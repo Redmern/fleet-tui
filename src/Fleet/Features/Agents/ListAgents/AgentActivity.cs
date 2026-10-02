@@ -1,3 +1,4 @@
+using Fleet.Shared.Hooks;
 using Fleet.Shared.Status.Enums;
 
 namespace Fleet.Features.Agents.ListAgents;
@@ -12,8 +13,10 @@ public static class AgentActivity
 
     public const string Stalled = "stalled";
 
-    public static AgentState Confirmed(AgentState state, string paneText) => state switch
+    public static AgentState Confirmed(AgentState state, string paneText, string reason = "") => state switch
     {
+        AgentState.Blocked when reason == HookStatus.PermissionReason
+            && Classify(paneText) == Idle && !Prompting(paneText) => AgentState.Idle,
         AgentState.Stalled when Prompting(paneText) => AgentState.Blocked,
         AgentState.Stalled when Classify(paneText) != Working => AgentState.Idle,
         AgentState.Blocked when Classify(paneText) == Working && !Prompting(paneText) => AgentState.Working,
