@@ -31,6 +31,22 @@ public static class DoctorCommand
         return report.Healthy ? 0 : 1;
     }
 
+    private static string StatusHooks(string project)
+    {
+        if (!Adapters.Settings().Load(project).StatusHooks)
+        {
+            return "off (fleet reads the panes instead)";
+        }
+
+        var agents = Adapters.Agents().List(project);
+        var wired = agents.Count(a => ClaudeWiring.Inspect(a.Worktree).StatusHooksInstalled);
+
+        return agents.Count == 0
+            ? "on, no agents yet"
+            : $"on, wired in {wired} of {agents.Count} agent(s)"
+              + (wired < agents.Count ? " — the rest pick them up when fleet next syncs their settings" : string.Empty);
+    }
+
     private static void Print(DoctorReport report)
     {
         Console.WriteLine("fleet doctor");
@@ -55,6 +71,8 @@ public static class DoctorCommand
                 $"                  mcp: {(claude.ServerRegistered ? "registered" : "NOT registered")}, "
                 + $"{(claude.ServerEnabled ? "enabled" : "NOT enabled")}, "
                 + $"dispatch hook {(claude.HookInstalled ? "installed" : "NOT installed")}");
+
+            Console.WriteLine($"                  status hooks: {StatusHooks(project.Name)}");
 
             if (EmbeddedWiring.ClaudeProfileOf(project) is { } profile)
             {

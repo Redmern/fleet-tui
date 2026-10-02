@@ -118,6 +118,12 @@ public class CommandLineTests
     }
 
     [Fact]
+    public void Hook_is_the_status_reporter_verb()
+    {
+        Assert.Equal(FleetVerb.Hook, CommandLine.Parse(["hook"]).Verb);
+    }
+
+    [Fact]
     public void A_free_text_prompt_is_read_whether_it_comes_before_or_after_the_flags()
     {
         Assert.Equal(

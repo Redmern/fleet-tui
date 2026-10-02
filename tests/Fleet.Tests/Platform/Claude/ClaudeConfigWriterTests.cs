@@ -190,6 +190,145 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         Assert.Contains("agent:backend/login", mcp);
     }
 
+    private System.Text.Json.JsonElement Hooks() =>
+        System.Text.Json.JsonDocument.Parse(File.ReadAllText(SettingsPath)).RootElement.GetProperty("hooks");
+
+    private static int StatusHookCount(System.Text.Json.JsonElement groups) =>
+        groups.EnumerateArray()
+            .SelectMany(g => g.GetProperty("hooks").EnumerateArray())
+            .Count(h => h.TryGetProperty("args", out var args) && args.GetArrayLength() > 0 && args[0].GetString() == "hook");
+
+    [Fact]
+    public void A_worktree_gets_a_status_hook_on_every_contract_event()
+    {
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, [], [], [], "C:/bin/fleet.exe");
+
+        var hooks = Hooks();
+
+        foreach (var name in Fleet.Shared.Hooks.HookStatus.Events)
+        {
+            Assert.Equal(1, StatusHookCount(hooks.GetProperty(name)));
+        }
+
+        var entry = hooks.GetProperty("PreToolUse")[0].GetProperty("hooks")[0];
+        Assert.Equal("C:/bin/fleet.exe", entry.GetProperty("command").GetString());
+        Assert.Equal("command", entry.GetProperty("type").GetString());
+        Assert.True(entry.GetProperty("timeout").GetDouble() > 0);
+        Assert.True(new ClaudeConfigWriter().Inspect(_dir, "fleet").StatusHooksInstalled);
+    }
+
+    [Fact]
+    public void Re_syncing_status_hooks_does_not_pile_them_up()
+    {
+        var writer = new ClaudeConfigWriter();
+
+        writer.SyncWorktree(AgentServer(), _dir, [], [], [], "fleet.exe");
+        writer.SyncWorktree(AgentServer(), _dir, [], [], [], "fleet.exe");
+
+        Assert.Equal(1, StatusHookCount(Hooks().GetProperty("Stop")));
+    }
+
+    [Fact]
+    public void Status_hooks_merge_with_the_users_hooks_on_the_same_events()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """
+            {"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo stopped","timeout":1.5,"async":true}]}],
+            "PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"lint"}]}],
+            "PostToolUse":[{"hooks":[{"type":"command","command":"echo done"}]}]},
+            "model":"opus"}
+            """);
+
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, [], [], [], "fleet.exe");
+
+        var settings = File.ReadAllText(SettingsPath);
+
+        Assert.Contains("echo stopped", settings);
+        Assert.Contains("\"async\": true", settings);
+        Assert.Contains("\"matcher\": \"Bash\"", settings);
+        Assert.Contains("echo done", settings);
+        Assert.Contains("\"model\": \"opus\"", settings);
+        Assert.Equal(2, Hooks().GetProperty("Stop").GetArrayLength());
+        Assert.Equal(1, StatusHookCount(Hooks().GetProperty("Stop")));
+    }
+
+    [Theory]
+    [InlineData("fleet.exe")]
+    [InlineData("")]
+    public void A_users_own_hook_verb_on_another_program_is_never_taken_for_fleets(string statusHook)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"git","args":["hook","run","pre-tool"]}]}]}}""");
+
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, [], [], [], statusHook);
+
+        var entries = Hooks().GetProperty("PreToolUse").EnumerateArray()
+            .SelectMany(g => g.GetProperty("hooks").EnumerateArray())
+            .Select(h => h.GetProperty("command").GetString())
+            .ToList();
+
+        Assert.Contains("git", entries);
+        Assert.Equal(statusHook.Length > 0 ? 2 : 1, entries.Count);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\me\.local\bin\fleet.exe")]
+    [InlineData("/usr/local/bin/fleet")]
+    [InlineData("\"C:\\Program Files\\fleet\\FLEET.EXE\"")]
+    public void Fleets_own_status_hook_is_recognised_whatever_path_it_was_installed_at(string command)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"""
+            + System.Text.Json.JsonSerializer.Serialize(command)
+            + ""","args":["hook"]}]}]}}""");
+
+        new ClaudeConfigWriter().SyncWorktree(AgentServer(), _dir, [], [], []);
+
+        Assert.False(Hooks().TryGetProperty("Stop", out _));
+    }
+
+    [Fact]
+    public void Turning_status_hooks_off_removes_only_fleets_status_hooks()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo stopped"}]}]}}""");
+
+        var writer = new ClaudeConfigWriter();
+
+        writer.SyncWorktree(AgentServer(), _dir, [], [], [], "fleet.exe");
+        writer.SyncWorktree(AgentServer(), _dir, [], [], []);
+
+        var hooks = Hooks();
+
+        Assert.Equal(0, StatusHookCount(hooks.GetProperty("Stop")));
+        Assert.Contains("echo stopped", File.ReadAllText(SettingsPath));
+        Assert.False(hooks.TryGetProperty("PreToolUse", out _));
+        Assert.False(new ClaudeConfigWriter().Inspect(_dir, "fleet").StatusHooksInstalled);
+    }
+
+    [Fact]
+    public void An_orchestration_folder_gets_both_the_dispatch_hook_and_the_status_hooks()
+    {
+        var plan = Plan() with { StatusHook = "fleet.exe" };
+
+        new ClaudeConfigWriter().Sync(plan);
+
+        var submit = Hooks().GetProperty("UserPromptSubmit");
+
+        Assert.Equal(2, submit.GetArrayLength());
+        Assert.Equal(1, StatusHookCount(submit));
+        Assert.Contains("hook-dispatch", File.ReadAllText(SettingsPath));
+        Assert.True(new ClaudeConfigWriter().Inspect(_dir, "fleet").StatusHooksInstalled);
+    }
+
     [Fact]
     public void Approving_a_worktree_keeps_the_agents_own_settings()
     {

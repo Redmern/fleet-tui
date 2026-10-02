@@ -31,6 +31,10 @@ public static class SettingsDefaults
 
     public const string AutoCloseLabel = "Auto-close idle agents";
 
+    public const bool StatusHooks = true;
+
+    public const string StatusHooksLabel = "Live status via hooks";
+
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);
 

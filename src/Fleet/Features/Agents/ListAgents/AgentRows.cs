@@ -57,7 +57,7 @@ public static class AgentRows
     private static string ToneFor(string status) => status switch
     {
         AgentActivity.Working => FleetTones.Warn,
-        AgentActivity.Waiting => FleetTones.Bad,
+        AgentActivity.Waiting or AgentActivity.Stalled => FleetTones.Bad,
         AgentActivity.Idle => FleetTones.Good,
         _ => FleetTones.Muted,
     };

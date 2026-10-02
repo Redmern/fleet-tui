@@ -58,6 +58,18 @@ public class SettingsRowsTests
     }
 
     [Fact]
+    public void The_last_row_switches_status_hooks()
+    {
+        var last = SettingsRows.Count - 1;
+
+        Assert.True(SettingsRows.IsStatusHooksRow(last));
+        Assert.Equal(HarnessTool.None, SettingsRows.ToolAt(last));
+        Assert.Contains(SettingsDefaults.StatusHooksLabel, SettingsRows.For(SettingsConfig.Default)[last].Text);
+        Assert.Contains("on", SettingsRows.For(SettingsConfig.Default)[last].Text);
+        Assert.Contains("off", SettingsRows.For(SettingsConfig.Default.WithStatusHooks(false))[last].Text);
+    }
+
+    [Fact]
     public void Its_policy_keys_read_as_mnemonics()
     {
         Assert.Equal(["a", "s", "f"], SettingsRows.PolicyEntries().Select(e => e.Key));

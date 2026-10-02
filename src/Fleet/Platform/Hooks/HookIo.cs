@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Fleet.Platform.Hooks.Models;
+using Fleet.Shared.Hooks;
 
 namespace Fleet.Platform.Hooks;
 
@@ -24,6 +25,18 @@ public static class HookIo
             return new HookPayload();
         }
     }
+
+    public const string ProjectDirVariable = "CLAUDE_PROJECT_DIR";
+
+    public static HookEvent Event(HookPayload payload, string? projectDir = null) =>
+        new(
+            payload.HookEventName ?? string.Empty,
+            projectDir is { Length: > 0 } started ? started : payload.Cwd ?? string.Empty,
+            payload.SessionId ?? string.Empty,
+            payload.TranscriptPath ?? string.Empty,
+            payload.AgentId ?? string.Empty,
+            payload.NotificationType ?? string.Empty,
+            payload.Source ?? string.Empty);
 
     public static string Block(string reason) =>
         JsonSerializer.Serialize(

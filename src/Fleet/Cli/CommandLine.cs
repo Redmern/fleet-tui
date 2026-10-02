@@ -65,6 +65,7 @@ public static class CommandLine
         "setup" => FleetVerb.Setup,
         "dispatch" => FleetVerb.Dispatch,
         "hook-dispatch" => FleetVerb.HookDispatch,
+        Shared.Hooks.HookStatus.Verb => FleetVerb.Hook,
         "report" => FleetVerb.Report,
         "mcp" => FleetVerb.Mcp,
         "quit" => FleetVerb.Quit,

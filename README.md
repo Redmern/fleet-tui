@@ -13,8 +13,8 @@ the fleet menu from **any** pane, including one running nothing but Claude.
 > the terminal, change what it opens, hide it from the tab bar, stop it, and
 > remove it together with its worktree. The orchestrator works too: Claude drives
 > fleet over an MCP server under per-project permissions, and a `,`-prefixed
-> prompt dispatches a sub-orchestrator that appears on its own tab. Live agent
-> status via hooks is not built yet. Only the WezTerm driver ships; tmux and the
+> prompt dispatches a sub-orchestrator that appears on its own tab. Agents report
+> their status live through Claude Code hooks. Only the WezTerm driver ships; tmux and the
 > embedded driver are designed but unwritten. Linux is built and tested by CI but
 > has not been used in anger.
 
@@ -263,6 +263,14 @@ The dashboard watches its agents and opens a notice when one:
 | `✗` | failed, or its pane disappeared |
 | `…` | shows the spinner with no new output for 10 minutes |
 | `↕` | has a branch that conflicts with its base or is 20+ commits behind it |
+
+Agents report their own status through Claude Code hooks: fleet writes a `fleet hook`
+entry into each agent worktree's and orchestration folder's `.claude/settings.local.json`,
+next to any hooks you have there. Question, permission and stall notices then come from
+those reports (a stall is 10 minutes of work with no new hook event), and the agent row
+shows working, waiting, stalled or idle. An agent with no report yet, or a project with
+**Live status via hooks** turned off in the settings (`enter` on its row), falls back to
+reading the pane. `fleet doctor` shows whether the hooks are wired.
 
 A notice resolves on its own when its cause goes away, and `d` dismisses it. Resolved and
 dismissed notices are kept for a day: greyed out in the dashboard's tab, and in the

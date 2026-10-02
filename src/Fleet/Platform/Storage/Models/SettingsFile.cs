@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Fleet.Platform.Storage.Models;
 
 public sealed class SettingsFile
@@ -27,6 +29,9 @@ public sealed class SettingsFile
     public int AutoCloseMinutes { get; set; }
 
     public Dictionary<string, ToolRuleEntry> Tools { get; set; } = [];
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? StatusHooks { get; set; }
 }
 
 public sealed class ToolRuleEntry

@@ -22,6 +22,8 @@ public sealed record SettingsConfig(
         SettingsDefaults.MainOrchestratorInNvim,
         SettingsDefaults.SubOrchestratorsInNvim);
 
+    public bool StatusHooks { get; init; } = SettingsDefaults.StatusHooks;
+
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
 
@@ -56,6 +58,8 @@ public sealed record SettingsConfig(
     public SettingsConfig WithAutoClose(bool on, int minutes) =>
         this with { AutoClose = on, AutoCloseMinutes = minutes };
 
+    public SettingsConfig WithStatusHooks(bool on) => this with { StatusHooks = on };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -77,7 +81,10 @@ public sealed record SettingsConfig(
             MainOrchestratorInNvim,
             SubOrchestratorsInNvim,
             AutoClose,
-            AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes);
+            AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes)
+        {
+            StatusHooks = StatusHooks,
+        };
     }
 
     public string Signature =>
@@ -92,5 +99,6 @@ public sealed record SettingsConfig(
                 .Append(Aidlc.Signature)
                 .Append($"main-nvim={MainOrchestratorInNvim}")
                 .Append($"sub-nvim={SubOrchestratorsInNvim}")
-                .Append($"autoclose={AutoClose}:{AutoCloseMinutes}"));
+                .Append($"autoclose={AutoClose}:{AutoCloseMinutes}")
+                .Append($"hooks={StatusHooks}"));
 }

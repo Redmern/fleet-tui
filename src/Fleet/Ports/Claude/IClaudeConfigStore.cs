@@ -14,7 +14,8 @@ public interface IClaudeConfigStore
         string directory,
         IReadOnlyList<string> allow,
         IReadOnlyList<string> deny,
-        IReadOnlyList<string> ask);
+        IReadOnlyList<string> ask,
+        string statusHook = "");
 
     ClaudeState Inspect(string directory, string serverName);
 }

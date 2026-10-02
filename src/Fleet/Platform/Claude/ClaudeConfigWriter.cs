@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Fleet.Platform.Claude.Models;
+using Fleet.Platform.Storage;
 using Fleet.Ports.Claude;
 using Fleet.Ports.Claude.Models;
+using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 
@@ -18,14 +20,14 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (mcp is null)
         {
-            return Result.Fail($"{mcpPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{mcpPath} could not be read as JSON; fleet left it untouched.");
         }
 
         var settings = ReadSettings(settingsPath);
 
         if (settings is null)
         {
-            return Result.Fail($"{settingsPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{settingsPath} could not be read as JSON; fleet left it untouched.");
         }
 
         Apply(mcp, plan.Server);
@@ -52,7 +54,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (file is null)
         {
-            return Result.Fail($"{userSettingsPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{userSettingsPath} could not be read as JSON; fleet left it untouched.");
         }
 
         if (file.EnabledMcpjsonServers.Contains(serverName))
@@ -72,7 +74,8 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         string directory,
         IReadOnlyList<string> allow,
         IReadOnlyList<string> deny,
-        IReadOnlyList<string> ask)
+        IReadOnlyList<string> ask,
+        string statusHook = "")
     {
         var mcpPath = Path.Combine(directory, ".mcp.json");
         var settingsPath = Path.Combine(directory, ".claude", "settings.local.json");
@@ -82,12 +85,12 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (mcp is null)
         {
-            return Result.Fail($"{mcpPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{mcpPath} could not be read as JSON; fleet left it untouched.");
         }
 
         if (settings is null)
         {
-            return Result.Fail($"{settingsPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{settingsPath} could not be read as JSON; fleet left it untouched.");
         }
 
         Apply(mcp, server);
@@ -101,6 +104,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         settings.Permissions.Allow = Merge(settings.Permissions.Allow, allow);
         settings.Permissions.Deny = Merge(settings.Permissions.Deny, deny);
         settings.Permissions.Ask = Merge(settings.Permissions.Ask, ask);
+        ApplyStatusHooks(settings, statusHook);
 
         if (!Write(mcpPath, JsonSerializer.Serialize(mcp, ClaudeJsonContext.Default.McpJsonFile)))
         {
@@ -120,7 +124,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         if (file is null)
         {
-            return Result.Fail($"{claudeJsonPath} is not valid JSON; fleet left it untouched.");
+            return Result.Fail($"{claudeJsonPath} could not be read as JSON; fleet left it untouched.");
         }
 
         var key = Path.GetFullPath(folder).Replace('\\', '/');
@@ -165,11 +169,15 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         var hookInstalled = settings.Hooks?.UserPromptSubmit
             .Any(group => group.Hooks.Any(IsOwnedHook)) ?? false;
 
+        var statusHooksInstalled = settings.Hooks is { } hooks
+            && HookStatus.Events.All(name => hooks.For(name)?.Any(group => group.Hooks.Any(IsStatusHook)) ?? false);
+
         return new ClaudeState(
             mcp.McpServers.ContainsKey(serverName),
             settings.EnabledMcpjsonServers.Contains(serverName),
             hookInstalled,
-            settings.Permissions.Allow);
+            settings.Permissions.Allow,
+            statusHooksInstalled);
     }
 
     private static void Apply(McpJsonFile file, McpServerEntry server)
@@ -197,6 +205,58 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         }
 
         ApplyHook(file, plan.HookCommand, plan.HookArgs);
+        ApplyStatusHooks(file, plan.StatusHook);
+    }
+
+    private static void ApplyStatusHooks(ClaudeSettingsFile file, string command)
+    {
+        var on = command.Trim().Length > 0;
+
+        if (!on && file.Hooks is null)
+        {
+            return;
+        }
+
+        var hooks = file.Hooks ??= new HooksJson();
+
+        foreach (var name in HookStatus.Events)
+        {
+            var kept = (hooks.For(name) ?? [])
+                .Where(group => !group.Hooks.Any(IsStatusHook))
+                .ToList();
+
+            if (on)
+            {
+                kept.Add(new HookGroup
+                {
+                    Hooks = [new HookEntry { Type = "command", Command = command, Args = [HookStatus.Verb], Timeout = StatusHookTimeout }],
+                });
+            }
+
+            hooks.Set(name, kept.Count == 0 ? null : kept);
+        }
+    }
+
+    private const double StatusHookTimeout = 10;
+
+    private static bool IsStatusHook(HookEntry entry) =>
+        entry.Args is [var verb, ..]
+        && verb == HookStatus.Verb
+        && IsFleetExecutable(entry.Command);
+
+    private const string FleetExecutableName = "fleet";
+
+    private static bool IsFleetExecutable(string command)
+    {
+        var path = command.Trim().Trim('"', '\'');
+        var name = path[(path.LastIndexOfAny(['/', '\\']) + 1)..];
+
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name[..^".exe".Length];
+        }
+
+        return string.Equals(FleetExecutableName, name, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ApplyHook(
@@ -247,53 +307,29 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         string path, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> info, Func<T> empty)
         where T : class
     {
+        var text = BusyFiles.Retry(
+            () => File.Exists(path) ? File.ReadAllText(path) : string.Empty, BusyFiles.Patience);
+
+        if (text is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return empty();
+        }
+
         try
         {
-            if (!File.Exists(path))
-            {
-                return empty();
-            }
-
-            var text = File.ReadAllText(path);
-
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return empty();
-            }
-
             return JsonSerializer.Deserialize(text, info) ?? empty();
         }
         catch (JsonException)
         {
             return null;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return empty();
-        }
     }
 
-    private static bool Write(string path, string content)
-    {
-        try
-        {
-            var directory = Path.GetDirectoryName(path);
-
-            if (directory is { Length: > 0 })
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var temp = path + ".tmp";
-
-            File.WriteAllText(temp, content);
-            File.Move(temp, path, overwrite: true);
-
-            return true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+    private static bool Write(string path, string content) =>
+        BusyFiles.Replace(path, temp => File.WriteAllText(temp, content));
 }
