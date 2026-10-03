@@ -580,12 +580,15 @@ as if you had.
   already running keeps its mode, so to switch, run `/voice` inside it. Voice needs a
   claude.ai login, as it does anywhere in Claude Code.
 - Both chords are direct, with no prefix, and are rebindable under **Keybinds** in the
-  *anywhere, no prefix* group. Re-run `fleet apply-keybinds` after changing them.
-- **WezTerm has no floating panes**, so the head lives in a workspace of its own,
+  *anywhere, no prefix* group. On WezTerm, re-run `fleet apply-keybinds` after changing
+  them; the built-in multiplexer picks them up on its next attach or `prefix r`.
+- **On the built-in multiplexer** the head is a real float: 80% of the screen, over
+  whichever project the window shows. Hiding moves it out of sight without stopping it,
+  and showing it from another project brings the same head along. `embedded-keys.json`
+  can still rebind or unbind the chord (`"keys": { "alt+o": "none" }`).
+- **WezTerm has no floating panes**, so there the head lives in a workspace of its own,
   `fleet-head`: the chord switches the window into it and back to the workspace you came
-  from. Your project windows stay exactly as they were. The chords come from
-  `fleet apply-keybinds`, so they are WezTerm's; the built-in multiplexer does not bind
-  them yet (run `fleet head` in a float there with `ctrl+s f`).
+  from. Your project windows stay exactly as they were.
 
 The head runs in `%APPDATA%\fleet\head`, where fleet writes its `CLAUDE.md` (its role and
 tools) and registers `fleet mcp --head` as its MCP server every time it starts. Its tools:
