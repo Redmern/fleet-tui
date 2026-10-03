@@ -39,7 +39,7 @@ public static class HelpCommand
               x/& close pane/tab, o next pane, s switch project, space menu, [ copy, ] paste,
               f/t/e/g floats, r reload keys, d detach; ctrl+s again sends ctrl+s
               without prefix: ctrl/alt+h/j/k/l move focus (nvim gets them), alt+left/right tabs,
-              ctrl+enter menu, shift+enter newline for claude
+              ctrl+enter menu, shift+enter newline for claude, alt+o / alt+shift+o the head
             """);
 
         return 0;

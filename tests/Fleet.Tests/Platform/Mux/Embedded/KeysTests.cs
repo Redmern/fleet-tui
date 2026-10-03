@@ -218,4 +218,40 @@ public class KeysTests
         Assert.Null(no);
         Assert.False(confirm.Active);
     }
+
+    private static readonly Dictionary<string, string> HeadKeys = new()
+    {
+        ["alt+o"] = "head",
+        ["alt+shift+o"] = "head voice",
+    };
+
+    [Fact]
+    public void Extra_direct_keys_bind_the_head_chords_on_both_paths()
+    {
+        var keys = MuxKeys.From(null, null, HeadKeys);
+
+        Assert.Equal("head", keys.DirectCommand(Key.O, Mods.Alt, "o"));
+        Assert.Equal("head voice", keys.DirectCommand(Key.O, Mods.Alt | Mods.Shift, "O"));
+        Assert.Equal(("head", 2), keys.DirectBytes("\eo"u8));
+        Assert.Equal(("head voice", 2), keys.DirectBytes("\eO"u8));
+        Assert.Equal("menu", keys.DirectCommand(Key.Enter, Mods.Ctrl, null));
+    }
+
+    [Fact]
+    public void The_keys_file_still_wins_over_extra_direct_keys()
+    {
+        var keys = MuxKeys.From(new MuxKeysFile { Keys = new() { ["alt+o"] = "none" } }, null, HeadKeys);
+
+        Assert.Null(keys.DirectCommand(Key.O, Mods.Alt, "o"));
+        Assert.Equal("head voice", keys.DirectCommand(Key.O, Mods.Alt | Mods.Shift, "O"));
+    }
+
+    [Fact]
+    public void An_extra_key_that_does_not_parse_is_dropped_and_the_rest_still_load()
+    {
+        var keys = MuxKeys.From(null, null, new Dictionary<string, string> { ["hyper+o"] = "head" });
+
+        Assert.Equal("menu", keys.DirectCommand(Key.Enter, Mods.Ctrl, null));
+        Assert.DoesNotContain(keys.DirectKeys, b => b.Command == "head");
+    }
 }

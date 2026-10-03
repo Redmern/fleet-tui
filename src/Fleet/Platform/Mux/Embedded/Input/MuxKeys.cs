@@ -90,7 +90,8 @@ public sealed class MuxKeys
 
     public static MuxKeys Defaults => From(null, null);
 
-    public static MuxKeys From(MuxKeysFile? file, string? prefixOverride)
+    public static MuxKeys From(
+        MuxKeysFile? file, string? prefixOverride, IReadOnlyDictionary<string, string>? extraDirect = null)
     {
         var prefixSpec = prefixOverride ?? file?.Prefix ?? DefaultPrefix;
         var prefix = KeyChord.Parse(prefixSpec) ?? throw new FormatException("the prefix is empty");
@@ -99,22 +100,26 @@ public sealed class MuxKeys
             prefix,
             prefixSpec,
             Bindings(DefaultPrefixKeys, file?.PrefixKeys),
-            Bindings(DefaultDirectKeys, file?.Keys));
+            Bindings(WithExtra(DefaultDirectKeys, extraDirect), file?.Keys));
     }
 
-    public static MuxKeys Load(string path, string? prefixOverride, Action<string> log)
+    public static MuxKeys Load(
+        string path,
+        string? prefixOverride,
+        Action<string> log,
+        IReadOnlyDictionary<string, string>? extraDirect = null)
     {
         try
         {
             var file = File.Exists(path)
                 ? JsonSerializer.Deserialize(File.ReadAllText(path), MuxKeysJsonContext.Default.MuxKeysFile)
                 : null;
-            return From(file, prefixOverride);
+            return From(file, prefixOverride, extraDirect);
         }
         catch (Exception e) when (e is IOException or JsonException or FormatException or UnauthorizedAccessException)
         {
             log($"keys: {path} not used ({e.Message}); using the defaults");
-            return From(null, prefixOverride);
+            return From(null, prefixOverride, extraDirect);
         }
     }
 
@@ -143,6 +148,34 @@ public sealed class MuxKeys
         }
 
         return (command, length);
+    }
+
+    private static Dictionary<string, string> WithExtra(
+        IReadOnlyDictionary<string, string> defaults, IReadOnlyDictionary<string, string>? extra)
+    {
+        var merged = new Dictionary<string, string>(defaults, StringComparer.Ordinal);
+
+        foreach (var (spec, command) in extra ?? new Dictionary<string, string>())
+        {
+            if (Parses(spec))
+            {
+                merged[spec] = command;
+            }
+        }
+
+        return merged;
+    }
+
+    private static bool Parses(string spec)
+    {
+        try
+        {
+            return KeyChord.Parse(spec) is not null;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     private static List<Binding> Bindings(IReadOnlyDictionary<string, string> defaults, Dictionary<string, string>? overrides)

@@ -19,6 +19,7 @@ using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Models;
 
@@ -551,7 +552,32 @@ public static class EmbeddedWiring
     public static string KeysFile => Path.Combine(FleetPaths.Config, MuxKeys.FileName);
 
     public static MuxKeys Keys(IFleetLog log) =>
-        MuxKeys.Load(KeysFile, Environment.GetEnvironmentVariable(PrefixVariable), line => log.Write(line));
+        MuxKeys.Load(
+            KeysFile,
+            Environment.GetEnvironmentVariable(PrefixVariable),
+            line => log.Write(line),
+            HeadKeys(new Keymap(Adapters.Keymaps().Load())));
+
+    public static IReadOnlyDictionary<string, string> HeadKeys(Keymap keymap)
+    {
+        var keys = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (action, command) in new[]
+                 {
+                     (FleetAction.OpenHead, MuxModel.HeadVerb),
+                     (FleetAction.OpenHeadVoice, MuxModel.HeadVerb + " voice"),
+                 })
+        {
+            var spec = keymap.TextFor(action).Trim().ToLowerInvariant();
+
+            if (spec.Length > 0)
+            {
+                keys[spec] = command;
+            }
+        }
+
+        return keys;
+    }
 
     public static async Task<int> BridgeAsync()
     {
