@@ -128,6 +128,21 @@ public sealed class ReportStatusTests
         Assert.True(result.Succeeded, result.Error);
     }
 
+    [Fact]
+    public void A_report_keeps_its_summary_and_when_it_was_made()
+    {
+        Seed("upgrade");
+        var at = new DateTimeOffset(2026, 10, 3, 10, 0, 0, TimeSpan.Zero);
+
+        new ReportStatusHandler(_store, () => at)
+            .Handle("techweb", "upgrade", OrchestrationStatus.Done, "  shipped #42  ");
+
+        var written = Assert.Single(_store.Written);
+
+        Assert.Equal("shipped #42", written.Summary);
+        Assert.Equal("2026-10-03T10:00:00.0000000+00:00", written.ReportedAt);
+    }
+
     private sealed class RecordingStore : IAgentStore
     {
         public List<AgentRecord> Saved { get; } = [];

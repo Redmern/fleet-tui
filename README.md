@@ -541,6 +541,25 @@ creates repo agents that are stamped as its own, and reports back with
 sub-orchestrator with the agents it created and shows its status — working, done, or
 failed — until you remove it.
 
+**Managing subs.** The orchestrator (or a sub) can manage sub-orchestrators with three
+MCP tools, each with its own row in the permissions screen:
+
+| Tool | What it does | Default |
+|---|---|---|
+| `list_subs` | every sub with its slug, status, whether its pane is open, its last report (time and summary) and its agents | allow |
+| `stop_sub(slug)` | closes the sub's pane; its record and folder stay | ask |
+| `remove_sub(slug, delete_folder, remove_agents)` | fleet forgets the sub; its folder stays unless `delete_folder` is true | ask |
+
+`remove_sub` refuses a sub that is still `working` (a sub that never reported counts as
+working; stop it and remove it from the Subs tab instead) and refuses the caller's own sub.
+It leaves the sub's agents alone unless `remove_agents` is true: they stay registered,
+keep running, and become top-level agents on the Agents tab. With `remove_agents`, each
+agent is removed with its worktree, except one with uncommitted changes or commits that
+are on no remote (and not on its base branch); that one is kept as a top-level agent and
+named in the result. Removing a sub from the Subs tab without throwing away its agents
+moves them to the Agents tab the same way. The approval prompt says when a `remove_sub`
+would delete the folder or the agents.
+
 **AIDLC.** A sub-orchestrator can run a structured process instead of free-form. Press
 `A` in the menu's Settings submenu to set it per project:
 

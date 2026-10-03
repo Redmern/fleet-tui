@@ -29,6 +29,9 @@ public static class HarnessToolIds
         HarnessTool.SetDefaultBranch => "set_default_branch",
         HarnessTool.DistributeSecrets => "distribute_secrets",
         HarnessTool.Dispatch => "dispatch",
+        HarnessTool.ListSubs => "list_subs",
+        HarnessTool.StopSub => "stop_sub",
+        HarnessTool.RemoveSub => "remove_sub",
         HarnessTool.Report => "report",
         _ => string.Empty,
     };

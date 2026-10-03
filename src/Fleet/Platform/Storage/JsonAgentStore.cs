@@ -34,6 +34,8 @@ public sealed class JsonAgentStore : IAgentStore
                 Status = agent.Status,
                 Claude = agent.Claude,
                 InNvim = agent.InNvim,
+                Summary = agent.Summary,
+                ReportedAt = agent.ReportedAt,
             });
         });
     }
@@ -60,7 +62,9 @@ public sealed class JsonAgentStore : IAgentStore
                 a.Owner,
                 a.Status,
                 a.Claude,
-                a.InNvim))
+                a.InNvim,
+                a.Summary,
+                a.ReportedAt))
             .OrderBy(a => a.Repository, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Branch, StringComparer.OrdinalIgnoreCase)
             .ToList();

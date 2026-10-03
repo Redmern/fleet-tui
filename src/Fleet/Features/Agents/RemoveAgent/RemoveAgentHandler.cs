@@ -30,6 +30,32 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
         return new WorktreeState(true, status.Ok ? WorktreeDirt.Parse(status.Out) : []);
     }
 
+    public async Task<int?> UnpushedAsync(AgentRecord agent, CancellationToken ct = default)
+    {
+        if (AgentHarness.IsOrchestrator(agent.Harness) || !IsWorktree(agent.Worktree))
+        {
+            return 0;
+        }
+
+        string[] elsewhere = ["rev-list", "--count", "HEAD", "--not", "--remotes"];
+
+        if (agent.BaseRef.Length > 0
+            && await CountAsync(agent.Worktree, [.. elsewhere, agent.BaseRef], ct).ConfigureAwait(false)
+                is { } beyondBase)
+        {
+            return beyondBase;
+        }
+
+        return await CountAsync(agent.Worktree, elsewhere, ct).ConfigureAwait(false);
+    }
+
+    private async Task<int?> CountAsync(string worktree, string[] args, CancellationToken ct)
+    {
+        var counted = await git.RunAsync(worktree, args, null, ct).ConfigureAwait(false);
+
+        return counted.Ok && int.TryParse(counted.Out, out var count) ? count : null;
+    }
+
     public async Task<Result> HandleAsync(
         string project,
         AgentRecord agent,

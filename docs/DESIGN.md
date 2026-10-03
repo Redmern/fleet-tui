@@ -4622,6 +4622,49 @@ the pane or its process. The head is that float:
 Quitting a project while the head is shown in it closes the head with that workspace's
 panes. Its next start resumes the conversation.
 
+## Managing sub-orchestrators over MCP, 2026-10-03
+
+Until now only the dashboard's Subs tab could stop or remove a sub: `list_agents`
+(`ToolText`) filters orchestrators out, so an orchestrator could neither see nor address
+one. Three tools close that gap: `list_subs`, `stop_sub(slug)` and
+`remove_sub(slug, delete_folder = false, remove_agents = false)`. They are `HarnessTool`
+values like every other tool, so they get permission rows and Claude rules for free.
+`list_subs` is a read (allowed); the other two ask. They are not in the sub-autonomous
+set (`McpGate.SubAutonomous`): stopping or removing *another* sub is not routine work
+for a sub.
+
+- **Listing** (`ListSubs/SubSummary`) reuses `SubTree`. "Pane open" is measured from the
+  live panes, as `tell_agent` does, not from the stored `Open` flag. The last report's
+  summary and time were never kept, only the status, so `ReportStatusHandler` now also
+  stores `Summary` and `ReportedAt` (ISO 8601) on the `AgentRecord`. Older records show
+  no report line until the next report.
+- **Stopping** is `StopAgentHandler`, unchanged: it kills the panes in the sub's folder
+  and keeps the record (`Open = false`) and the folder.
+- **Removing** is `RemoveSubHandler`, in the `Agents/RemoveAgent` slice beside
+  `RemoveAgentHandler`, whose orchestrator branch (discard the folder rather than a
+  worktree) it reuses. It lives there and not in `Orchestrations` because a slice may not
+  reference another, and the removal *is* `RemoveAgentHandler`. It refuses a sub whose
+  status is still `working` and the caller's own sub. A sub that never reported counts
+  as working; the Subs tab is the way out for one that died silently. The sub goes first,
+  so a busy folder fails the call before any child is touched.
+- **The children.** By default they are left registered and running, with `Owner`
+  cleared, so they become top-level agents. Keeping the owner would leave them in an
+  orphan group on the Subs tab and let a later sub with the same slug adopt them (and
+  cascade over them on its own removal). Clearing it also pins `Claude` to the agent's
+  current `RunsClaude`, because a record without an explicit `Claude` derives it from
+  `Owner`. `SubChildren` holds both the lookup and the release, and the dashboard's
+  removal uses them too: declining "throw away its agents" now moves them to the Agents
+  tab instead of leaving them as orphans.
+- **`remove_agents`** removes each child with its worktree (the branch is kept, as
+  always), but first refuses one with uncommitted changes (`InspectAsync`) or with
+  commits on no remote and not on its base (`UnpushedAsync`:
+  `git rev-list --count HEAD --not --remotes <base>`, falling back to dropping `<base>`
+  if it doesn't resolve). If the count can't be read, the child is kept. A refused child
+  is released like an untouched one and named in the result, which never fails because
+  of a child.
+- The head is unchanged. It reaches a project only through `relay` to that project's
+  orchestrator, which now has these tools.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
