@@ -138,15 +138,10 @@ public sealed class FileAgentStateStoreTests : IDisposable
         await store.ReportAsync(Report(AgentState.Working));
         var file = Directory.GetFiles(_dir, "*.json").Single();
 
-        var held = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None);
-        var release = Task.Run(async () =>
+        using (HeldShut.For(file, TimeSpan.FromMilliseconds(200)))
         {
-            await Task.Delay(200);
-            await held.DisposeAsync();
-        });
-
-        await store.ReportAsync(Report(AgentState.Idle));
-        await release;
+            await store.ReportAsync(Report(AgentState.Idle));
+        }
 
         Assert.Equal(AgentState.Idle, Assert.Single((await store.GetSnapshotAsync()).Reports).State);
         Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));

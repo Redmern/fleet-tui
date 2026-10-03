@@ -129,19 +129,15 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
     }
 
     [Fact]
-    public async Task A_save_waits_for_a_session_file_someone_else_holds_open()
+    public void A_save_waits_for_a_session_file_someone_else_holds_open()
     {
         _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "first"), "first"));
         var file = Path.Combine(FleetPaths.Sessions, "techweb.json");
 
-        Task saving;
-        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (HeldShut.For(file, TimeSpan.FromMilliseconds(300)))
         {
-            saving = Task.Run(() => _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "second"), "second")));
-            await Task.Delay(300);
+            _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "second"), "second"));
         }
-
-        await saving;
 
         Assert.Equal(["first", "second"], _store.List("techweb").Select(a => a.Branch));
     }
