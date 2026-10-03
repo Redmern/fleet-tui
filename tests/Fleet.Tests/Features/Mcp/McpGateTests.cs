@@ -95,4 +95,26 @@ public sealed class McpGateTests
         Assert.False(decision.Allowed);
         Assert.False(decision.Forbidden);
     }
+
+    [Fact]
+    public void Listing_subs_is_a_read_and_allowed_by_default()
+    {
+        Assert.True(McpGate.Decide(HarnessTool.ListSubs, SettingsConfig.Default).Allowed);
+    }
+
+    [Fact]
+    public void Stopping_or_removing_a_sub_asks_by_default_even_for_a_sub()
+    {
+        Assert.False(McpGate.Decide(HarnessTool.StopSub, SettingsConfig.Default).Allowed);
+        Assert.False(McpGate.Decide(HarnessTool.StopSub, SettingsConfig.Default, isSub: true).Allowed);
+        Assert.False(McpGate.Decide(HarnessTool.RemoveSub, SettingsConfig.Default, isSub: true).Allowed);
+    }
+
+    [Fact]
+    public void A_project_can_forbid_removing_subs()
+    {
+        var settings = With(HarnessTool.RemoveSub, ActionPolicy.Forbid, AskChannel.Both);
+
+        Assert.True(McpGate.Decide(HarnessTool.RemoveSub, settings).Forbidden);
+    }
 }

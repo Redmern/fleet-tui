@@ -12,7 +12,9 @@ public sealed record AgentRecord(
     string Owner = "",
     string Status = "",
     bool? Claude = null,
-    bool? InNvim = null)
+    bool? InNvim = null,
+    string Summary = "",
+    string ReportedAt = "")
 {
     public bool RunsClaude => Claude ?? Owner.Length > 0;
 

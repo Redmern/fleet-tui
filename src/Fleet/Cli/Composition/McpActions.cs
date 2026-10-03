@@ -6,11 +6,13 @@ using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Features.Agents.RemoveAgent;
+using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Agents.TellAgent;
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
+using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.ReportStatus;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
@@ -61,6 +63,8 @@ public sealed class McpActions(
 
     private readonly RemoveAgentHandler _remover = new(git, mux, store);
 
+    private readonly RemoveSubHandler _subRemover = new(new RemoveAgentHandler(git, mux, store), store);
+
     private readonly ChangeHarnessHandler _harnesses = new(store);
 
     private readonly AddRepositoryHandler _adder = new(git);
@@ -107,6 +111,9 @@ public sealed class McpActions(
             HarnessTool.SetDefaultBranch => await SetDefaultBranch(request, ct).ConfigureAwait(false),
             HarnessTool.DistributeSecrets => await DistributeSecrets(request, ct).ConfigureAwait(false),
             HarnessTool.Dispatch => await Dispatch(request, ct).ConfigureAwait(false),
+            HarnessTool.ListSubs => await ListSubs(ct).ConfigureAwait(false),
+            HarnessTool.StopSub => await StopSub(request, ct).ConfigureAwait(false),
+            HarnessTool.RemoveSub => await RemoveSub(request, ct).ConfigureAwait(false),
             HarnessTool.Report => Report(request),
             _ => McpResult.Error($"{request.Tool} is not available."),
         };
@@ -515,6 +522,58 @@ public sealed class McpActions(
             .ConfigureAwait(false);
 
         return reply.Succeeded ? Ok(reply.Value!.Note) : McpResult.Error(reply.Error!);
+    }
+
+    private async Task<McpResult> ListSubs(CancellationToken ct)
+    {
+        var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+
+        return Ok(SubSummary.Text(
+            _agents.Handle(project),
+            agent => panes.Any(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p))));
+    }
+
+    private async Task<McpResult> StopSub(McpRequest request, CancellationToken ct)
+    {
+        if (Missing(request, ToolArguments.Slug) is { } error)
+        {
+            return error;
+        }
+
+        var slug = ToolArguments.Text(request, ToolArguments.Slug);
+        var sub = RemoveSubHandler.Find(_agents.Handle(project), slug);
+
+        if (sub is null)
+        {
+            return McpResult.Error(RemoveSubHandler.NotFound(slug));
+        }
+
+        var outcome = await _stopper.HandleAsync(project, sub, ct).ConfigureAwait(false);
+
+        return outcome.Succeeded
+            ? Ok($"stopped {sub.Branch}; its record and folder are kept.")
+            : McpResult.Error($"{sub.Branch} is not running.");
+    }
+
+    private async Task<McpResult> RemoveSub(McpRequest request, CancellationToken ct)
+    {
+        if (Missing(request, ToolArguments.Slug) is { } error)
+        {
+            return error;
+        }
+
+        var removed = await _subRemover
+            .HandleAsync(
+                new RemoveSubCommand(
+                    project,
+                    ToolArguments.Text(request, ToolArguments.Slug),
+                    caller,
+                    ToolArguments.Flag(request, ToolArguments.DeleteFolder),
+                    ToolArguments.Flag(request, ToolArguments.RemoveAgents)),
+                ct)
+            .ConfigureAwait(false);
+
+        return removed.Succeeded ? Ok(removed.Value!.Note) : McpResult.Error(removed.Error!);
     }
 
     private McpResult Report(McpRequest request)

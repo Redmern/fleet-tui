@@ -104,4 +104,23 @@ public sealed class McpToolsTests
         Assert.Contains(spec.Params, p => p.Name == "message" && p.Required);
         Assert.Contains(spec.Params, p => p.Name == "profile" && !p.Required && p.Description.Contains("feature", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Remove_sub_takes_a_slug_and_two_optional_flags()
+    {
+        var remove = McpTools.Find("remove_sub")!;
+
+        Assert.Equal(HarnessTool.RemoveSub, remove.Tool);
+        Assert.True(remove.Params.Single(p => p.Name == "slug").Required);
+        Assert.False(remove.Params.Single(p => p.Name == "delete_folder").Required);
+        Assert.False(remove.Params.Single(p => p.Name == "remove_agents").Required);
+    }
+
+    [Fact]
+    public void The_sub_tools_are_exposed_by_their_ids()
+    {
+        Assert.Equal(HarnessTool.ListSubs, McpTools.Find("list_subs")!.Tool);
+        Assert.Equal(HarnessTool.StopSub, McpTools.Find("stop_sub")!.Tool);
+        Assert.Equal(HarnessTool.RemoveSub, McpTools.Find("remove_sub")!.Tool);
+    }
 }

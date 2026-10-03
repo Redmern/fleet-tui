@@ -1,3 +1,4 @@
+using System.Globalization;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Constants;
@@ -6,8 +7,10 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Orchestrations.ReportStatus;
 
-public sealed class ReportStatusHandler(IAgentStore store)
+public sealed class ReportStatusHandler(IAgentStore store, Func<DateTimeOffset>? clock = null)
 {
+    private readonly Func<DateTimeOffset> _now = clock ?? (() => DateTimeOffset.UtcNow);
+
     public Result<string> Handle(string project, string caller, string status, string summary)
     {
         if (caller.Trim().Length == 0)
@@ -33,7 +36,12 @@ public sealed class ReportStatusHandler(IAgentStore store)
 
         var normalized = OrchestrationStatus.Normalize(status);
 
-        store.Save(project, record with { Status = normalized });
+        store.Save(project, record with
+        {
+            Status = normalized,
+            Summary = summary.Trim(),
+            ReportedAt = _now().ToString("O", CultureInfo.InvariantCulture),
+        });
 
         return Result<string>.Ok(ReportNote.For(id, normalized, summary));
     }

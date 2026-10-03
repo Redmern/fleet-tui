@@ -15,6 +15,9 @@ public static class McpTools
     private static readonly ToolParam Branch =
         new(ToolArguments.Branch, "string", "The agent's branch.", true);
 
+    private static readonly ToolParam Slug =
+        new(ToolArguments.Slug, "string", "The sub-orchestrator's slug, as list_subs shows it.", true);
+
     public static string RuleId(HarnessTool tool) => McpServerId.RuleId(tool);
 
     public static IReadOnlyList<ToolSpec> All { get; } =
@@ -95,6 +98,29 @@ public static class McpTools
                 ToolArguments.Profile,
                 "string",
                 "Optional AIDLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this. Used only when AIDLC mode is on; in manual mode only a prefix applies AIDLC.",
+                false)),
+        Spec(
+            HarnessTool.ListSubs,
+            "List every sub-orchestrator in this project with its status, last report and agents."),
+        Spec(
+            HarnessTool.StopSub,
+            "Stop a sub-orchestrator: close its pane, keeping its record and folder.",
+            Slug),
+        Spec(
+            HarnessTool.RemoveSub,
+            "Remove a sub-orchestrator that is done or failed. Its agents stay registered as "
+            + "top-level agents unless remove_agents is set.",
+            Slug,
+            new ToolParam(
+                ToolArguments.DeleteFolder,
+                "boolean",
+                "true to also delete its orchestration folder.",
+                false),
+            new ToolParam(
+                ToolArguments.RemoveAgents,
+                "boolean",
+                "true to also remove its agents and their worktrees; an agent with uncommitted "
+                + "changes or unpushed commits is kept and named instead.",
                 false)),
         Spec(
             HarnessTool.Report,

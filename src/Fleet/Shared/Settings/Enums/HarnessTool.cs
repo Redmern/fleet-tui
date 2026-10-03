@@ -23,5 +23,8 @@ public enum HarnessTool
     SetDefaultBranch,
     DistributeSecrets,
     Dispatch,
+    ListSubs,
+    StopSub,
+    RemoveSub,
     Report,
 }
