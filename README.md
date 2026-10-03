@@ -56,6 +56,24 @@ curl -fsSL https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-
 Running on a fork? Point either script at it instead with `-Repo <owner>/fleet`
 (PowerShell) or `FLEET_REPO=<owner>/fleet` (sh).
 
+On Linux the binary goes to `~/.local/bin` (or `FLEET_BIN_DIR`). When that folder
+isn't on `PATH`, both `get-fleet.sh` and `install.sh` add one line, marked
+`# added by fleet installer`, to the startup file of your `$SHELL` and print which
+file it was:
+
+| Shell | File |
+|---|---|
+| bash | `~/.bashrc`, at the top so it runs before the "not interactive, return" guard |
+| zsh | `~/.zshenv` |
+| fish | `~/.config/fish/conf.d/fleet.fish` |
+| anything else | `~/.profile` |
+
+These are files a non-interactive shell reads too, so `ssh <host> fleet bridge`
+(what `fleet attach --ssh` runs) finds fleet. Open a new shell, or source that file,
+to pick it up now. Running the installer again doesn't add a second line. To keep
+your startup files untouched, pass `--no-path` or set `FLEET_NO_PATH=1`; the
+installer then only prints the `export PATH=...` line to add yourself.
+
 From source:
 
 ```powershell
@@ -111,7 +129,8 @@ still to do:
 It is safe to run again: an already-wired config is left alone.
 
 `.\install.ps1 -Uninstall` reverses a Windows install. Add `-Purge` to delete
-`%APPDATA%\fleet` as well. On Linux, `./install.sh --uninstall`.
+`%APPDATA%\fleet` as well. On Linux, `./install.sh --uninstall`
+removes the binary and the marked `PATH` line.
 
 If publishing fails with `'vswhere.exe' is not recognized` followed by `MSB3073`,
 the toolchain is fine and only `vswhere` is missing from `PATH`; the installer

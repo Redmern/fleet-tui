@@ -2066,6 +2066,19 @@ already had one. It now treats any uncommented line mentioning both `require` an
 repository is deliberately not baked in — it comes from `-Repo`/`FLEET_REPO`, and the
 scripts refuse with an explanation rather than guessing a URL.
 
+**On Linux, "put it on `PATH`" means editing a startup file.** At first the scripts
+only printed an `export PATH=...` hint. On Arch, which doesn't put `~/.local/bin`
+on `PATH`, that left `fleet: command not found`, and it broke `fleet attach --ssh`,
+whose `ssh <host> fleet bridge` runs in a non-interactive shell. So the installers
+now add one marked line (`# added by fleet installer`) to a file that shell
+actually reads. For bash that is `~/.bashrc`, and the line goes at the **top**:
+Arch's stock `.bashrc` starts with `[[ $- != *i* ]] && return`, so an appended line
+never runs for an ssh command. zsh gets `~/.zshenv` rather than `~/.zshrc` for the
+same reason, fish gets `conf.d/fleet.fish`, and any other shell gets `~/.profile`. The line
+checks `PATH` itself, so nested shells don't stack copies. The marker makes the edit
+idempotent and lets `install.sh --uninstall` remove exactly that line.
+`--no-path`/`FLEET_NO_PATH=1` keeps the old hint.
+
 ## A machine that is missing things, 2026-08-11
 
 Tested by stripping `PATH` down to system directories plus git and running the real
