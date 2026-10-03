@@ -15,6 +15,10 @@ public sealed class MuxModel
 
     public const int MinFloatHeight = 4;
 
+    public const string HeadVerb = "head";
+
+    public const string HeadHolding = FleetWorkspaces.Head + FleetWorkspaces.HiddenSuffix;
+
     private readonly List<WorkspaceState> _workspaces = [];
     private readonly Dictionary<string, PaneState> _panes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ClientState> _clients = new(StringComparer.Ordinal);
@@ -92,6 +96,57 @@ public sealed class MuxModel
         workspace.Floats.Add(box);
         workspace.FloatFocused = true;
         return true;
+    }
+
+    public static bool IsHead(PaneState pane) => pane.Args is [_, HeadVerb, ..];
+
+    public PaneState? HeadPane() => _panes.Values.FirstOrDefault(IsHead);
+
+    public PaneState SpawnHead(string workspace, string cwd, IReadOnlyList<string> args)
+    {
+        var (cols, rows) = Reference();
+        var usable = Math.Max(1, rows - StatusRows);
+        var width = Math.Max(MinFloatWidth, cols * 4 / 5);
+        var height = Math.Max(MinFloatHeight, usable * 4 / 5);
+
+        var pane = NewPane(cwd, args);
+        AddFloat(
+            WorkspaceOrNew(workspace),
+            pane,
+            new Rect((cols - width) / 2, StatusRows + (usable - height) / 2, width, height),
+            modal: true);
+
+        return pane;
+    }
+
+    public HeadToggle ToggleHead(string client)
+    {
+        if (View(client)?.Workspace is not { } here)
+        {
+            return HeadToggle.Nothing;
+        }
+
+        if (HeadPane() is not { } head)
+        {
+            return HeadToggle.Missing;
+        }
+
+        if (FloatOf(head.Id) is not var (from, box))
+        {
+            return HeadToggle.Nothing;
+        }
+
+        RemoveFloat(from, box);
+
+        if (ReferenceEquals(from, here))
+        {
+            WorkspaceOrNew(HeadHolding).Floats.Add(box);
+            return HeadToggle.Hidden;
+        }
+
+        here.Floats.Add(box);
+        here.FloatFocused = true;
+        return HeadToggle.Shown;
     }
 
     public IReadOnlyList<string> StrandedParked() =>
@@ -1434,6 +1489,14 @@ public sealed class ClientState(string id)
     public bool Leaving { get; set; }
 
     public string? Label { get; set; }
+}
+
+public enum HeadToggle
+{
+    Nothing,
+    Missing,
+    Shown,
+    Hidden,
 }
 
 public enum MouseHitKind

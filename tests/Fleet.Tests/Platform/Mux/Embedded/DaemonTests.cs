@@ -1225,4 +1225,29 @@ public sealed class DaemonTests : IAsyncLifetime
             }
         }
     }
+
+    [Fact]
+    public async Task The_head_command_starts_one_head_float_then_hides_and_shows_it_without_restarting()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("head", "voice");
+        await Eventually(() => _panes.ByProgram("fleet") is { } head && head.Args.Contains("--voice"));
+        await client.SendKeyAsync("k");
+        await Eventually(() => _panes.ByProgram("fleet")!.Written == "k");
+
+        await client.SendCommandAsync("head");
+        await client.SendKeyAsync("j");
+        await Eventually(() => _panes.ByProgram("tile")!.Written == "j");
+
+        await client.SendCommandAsync("head");
+        await client.SendKeyAsync("x");
+        await Eventually(() => _panes.ByProgram("fleet")!.Written == "kx");
+
+        Assert.Single(_panes.Started, p => p.Program == "fleet");
+        Assert.False(_panes.ByProgram("fleet")!.IsDisposed);
+    }
 }

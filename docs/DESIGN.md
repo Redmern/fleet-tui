@@ -3472,6 +3472,7 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
 | `ctrl`/`alt` + `h j k l` | move focus; when the pane runs nvim the key goes to nvim (the `is_nvim` rule) |
 | `alt+←/→`, `ctrl+tab`, `ctrl+shift+tab` | previous / next tab |
 | `ctrl+enter` | the menu: the dashboard's over a dashboard, fleet's elsewhere |
+| `alt+o`, `alt+shift+o` | show or hide the head orchestrator's float (from the fleet keymap; see "The head orchestrator") |
 | `shift+enter` | Claude's newline: Ctrl+J for a shell or Claude, Shift+Enter (CSI-u off Windows) for nvim |
 
 - **Which-key.** Pressing the prefix draws a box at the bottom listing the
@@ -4595,9 +4596,31 @@ One Claude above every project's orchestrator, opened by a global chord.
   giving up after an hour without progress). The queue is in memory: it dies with the
   head's Claude.
 
-Not done: the built-in multiplexer does not bind the chords (its keys come from
-`embedded-keys.json`, and a fleetd float belongs to one workspace, so a cross-project
-float needs daemon work). There `fleet head` can run in an ordinary float.
+**On the built-in multiplexer, a float that moves.** fleetd has floats, but a float
+belongs to one workspace. Panes are global to the model, though, and a float is only a
+`FloatState` in a workspace's list, so moving the entry moves the float without touching
+the pane or its process. The head is that float:
+
+- `alt+o` sends the `head` command (`head voice` for `alt+shift+o`). The attach client
+  reads the chords from the fleet keymap (`EmbeddedWiring.HeadKeys`), so Keybinds rebinds
+  them here too. They are merged over fleetd's default direct keys, and
+  `embedded-keys.json` still wins over them. A chord that does not parse is dropped
+  rather than discarding the whole keys file.
+- `MuxModel.ToggleHead`: with no head pane (one whose command is `fleet head`), fleetd
+  spawns one as a modal float, 80% of the screen, in the workspace the client shows. If
+  the head float is in that workspace, it moves to `fleet-head~hidden`, a holding
+  workspace whose `~hidden` suffix keeps it out of every project list. If it is anywhere
+  else, it moves here, on top, with the keys.
+- Modal, because a modal float is drawn whether or not the workspace's floats are shown,
+  and is never counted, toggled with `prefix t` or tiled. So the head is independent of
+  the ordinary floats. It is not saved in the session snapshot either: after a fleetd
+  restart the next `alt+o` starts a fresh `fleet head`, which resumes its conversation.
+- The head pane gets `FLEET_CLIENT`, so its `fleet mcp --head` shows workspaces on the
+  client that opened it. `switch_project` leaves the head float where it was. Pressing
+  `alt+o` in the new project brings it along.
+
+Quitting a project while the head is shown in it closes the head with that workspace's
+panes. Its next start resumes the conversation.
 
 ## Still to verify
 ## Still to verify

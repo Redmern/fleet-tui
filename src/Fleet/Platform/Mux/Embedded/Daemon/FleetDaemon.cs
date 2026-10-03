@@ -848,6 +848,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                 case "float-new":
                     NewFloat(session.Client);
                     break;
+                case "head":
+                    ToggleHead(session.Client, command.Arg == "voice");
+                    break;
                 case "float-toggle":
                     _model.ToggleFloats(session.Client);
                     break;
@@ -1721,6 +1724,32 @@ public sealed class FleetDaemon(DaemonOptions options)
             : Environment.CurrentDirectory;
 
         var created = _model.SpawnFloat(workspace.Name, cwd, []);
+        ApplyResizes();
+
+        try
+        {
+            Start(created, new Dictionary<string, string> { [ClientVariable] = client });
+        }
+        catch (InvalidOperationException e)
+        {
+            options.Log(e.Message);
+        }
+    }
+
+    private void ToggleHead(string client, bool voice)
+    {
+        if (_model.ToggleHead(client) != HeadToggle.Missing
+            || _model.View(client) is not { Workspace: { } workspace })
+        {
+            return;
+        }
+
+        IReadOnlyList<string> args = voice
+            ? [options.FleetExecutable, MuxModel.HeadVerb, "--voice"]
+            : [options.FleetExecutable, MuxModel.HeadVerb];
+
+        var created = _model.SpawnHead(
+            workspace.Name, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), args);
         ApplyResizes();
 
         try
