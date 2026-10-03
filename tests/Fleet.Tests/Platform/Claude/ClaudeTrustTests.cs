@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Fleet.Platform.Claude;
+using Fleet.Shared.Results;
+using Fleet.Tests.Platform.Storage;
 
 namespace Fleet.Tests.Platform.Claude;
 
@@ -117,7 +119,7 @@ public sealed class ClaudeTrustTests : IDisposable
     }
 
     [Fact]
-    public async Task A_file_briefly_held_by_another_process_is_waited_for_not_treated_as_empty()
+    public void A_file_briefly_held_by_another_process_is_waited_for_not_treated_as_empty()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -127,15 +129,11 @@ public sealed class ClaudeTrustTests : IDisposable
         var folder = Path.Combine(_dir, "worktree");
         SeedUntrusted(folder);
 
-        var locked = new FileStream(_claudeJson, FileMode.Open, FileAccess.Read, FileShare.None);
-        var release = Task.Run(async () =>
+        Result result;
+        using (HeldShut.For(_claudeJson, TimeSpan.FromMilliseconds(300)))
         {
-            await Task.Delay(300);
-            await locked.DisposeAsync();
-        });
-
-        var result = new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet");
-        await release;
+            result = new ClaudeConfigWriter().TrustFolder(_claudeJson, folder, "fleet");
+        }
 
         Assert.True(result.Succeeded, result.Error);
 

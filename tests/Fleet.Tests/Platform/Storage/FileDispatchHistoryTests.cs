@@ -27,19 +27,15 @@ public sealed class FileDispatchHistoryTests : ConfigHomeFixture
     }
 
     [Fact]
-    public async Task A_prompt_waits_for_a_history_file_someone_else_holds_open()
+    public void A_prompt_waits_for_a_history_file_someone_else_holds_open()
     {
         _history.Add("techweb", "first task");
         var file = Path.Combine(FleetPaths.Config, "history", "techweb.txt");
 
-        Task adding;
-        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (HeldShut.For(file, TimeSpan.FromMilliseconds(300)))
         {
-            adding = Task.Run(() => _history.Add("techweb", "second task"));
-            await Task.Delay(300);
+            _history.Add("techweb", "second task");
         }
-
-        await adding;
 
         Assert.Equal(["second task", "first task"], _history.List("techweb"));
     }
