@@ -4536,6 +4536,69 @@ and a Stalled one does not.
 - The `cwd` Claude reports is the long path; a worktree recorded under an 8.3 short
   name (`REDMER~1.NAU`) would not match it. fleet records full paths, so this is
   noted rather than handled.
+
+## The head orchestrator, 2026-10-02
+
+One Claude above every project's orchestrator, opened by a global chord.
+
+- **Chords.** `alt+o` and `alt+shift+o`, direct (no prefix), are two new keymap actions
+  (`OpenHead`, `OpenHeadVoice`) in their own Keybinds group, *anywhere, no prefix*, so
+  they are rebindable like everything else. `fleet apply-keybinds` emits them into
+  `fleet.lua`. In a window without a fleet dashboard they are forwarded to the pane, as
+  the prefix is. In the head's own workspace they always hide it.
+- **No float on WezTerm, so a workspace.** WezTerm has no floating panes. The closest
+  equivalent that keeps the session alive is a workspace of its own, `fleet-head`:
+  `SwitchToWorkspace` with a `spawn` creates it with `fleet head` the first time and only
+  switches afterwards, and the chord in the head switches back to the workspace it came
+  from (`wezterm.GLOBAL.fleet_head_return`, which survives config reloads). A hidden head
+  keeps running, and workspaces are GUI-wide, so the head is one session for every
+  project and window. A separate OS window was the alternative. It was rejected because
+  WezTerm can only minimise a window (`Hide`), and refocusing a minimised window is
+  platform-dependent.
+- **Voice.** Claude Code has no CLI flag for voice. Its dictation is the setting
+  `voice.enabled` (older: `voiceEnabled`), which `/voice` writes to user settings and
+  which also needs a claude.ai login and the `allow_voice_mode` flag. This was found by
+  reading the 2.1.287 binary. `fleet head` starts `claude --settings <file>` with
+  `{"voice":{"enabled":true}}` for the voice chord and `false` for the plain one, so
+  `alt+o` means typing mode even if the user enabled voice globally. It only applies at
+  start: a running head keeps its mode, and `/voice` switches it there.
+- **Persistence.** `fleet head` runs Claude in `<fleet config>\head`, writing `CLAUDE.md`
+  (the brief), `.mcp.json` (`fleet mcp --head`), the head tools pre-approved in
+  `.claude/settings.local.json`, and folder trust, every start. After the first start it
+  passes `--continue`; if that exits non-zero within five seconds (no conversation to
+  continue) it starts fresh.
+- **`fleet mcp --head`** is a second tool set on the same `fleet` server name, in its own
+  slice (`Features/Head/ServeHead`): `list_projects`, `switch_project`, `menu_action`,
+  `list_agents`, `relay`. Opening, switching and dashboard handover reuse
+  `ProjectOpener`, `LocateProjectHandler` and `fleet request`'s store through the
+  composition root. On WezTerm, switching focuses the project's dashboard pane and asks for
+  its workspace through the workspace request file. On a multiplexer with workspaces it
+  shows the workspace.
+- **Permissions.** Inside project X the head is gated by X's own settings: `relay` is X's
+  `dispatch` rule and `list_agents` X's `list_agents` rule. *Ask* always goes to X's
+  dashboard dialog (`IApprovalChannel`), whatever channel the rule names, because the
+  head's Claude has one permission rule per tool, not per project, so Claude's own prompt
+  could not honour X's choice. Navigation needs no permission.
+- **Relay.** The main orchestrator is the pane in X's root that is not the dashboard
+  (`DashPaneMarker`), not hidden and not in `fleet-head`. The relay sends the prompt with
+  X's trigger in front, and after 400 ms Enter, as raw keys (`send-text --no-paste`). When
+  X's *Main orchestrator in nvim* setting is on, `Ctrl-\ Ctrl-N` then `i` go first, to take
+  nvim from any mode into its Claude terminal; when it is off, Claude gets the keys directly.
+  The setting is read at delivery time, so a pane started before the setting flipped gets
+  the wrong form until the project is reopened.
+  The orchestrator's `UserPromptSubmit` hook then dispatches exactly as for a typed
+  prompt. *Ready* is read from the screen: two samples a second apart that are identical,
+  with no spinner (`esc to interrupt`), no question or permission prompt, and a Claude
+  input marker (`? for shortcuts`, `shift+tab to cycle`, `❯`, `> `). A closed project is
+  opened and waited on for up to 90 s. A busy one gets the prompt queued in the MCP
+  server, per project and in order, and a pump delivers it when idle (polling every 2 s,
+  giving up after an hour without progress). The queue is in memory: it dies with the
+  head's Claude.
+
+Not done: the built-in multiplexer does not bind the chords (its keys come from
+`embedded-keys.json`, and a fleetd float belongs to one workspace, so a cross-project
+float needs daemon work). There `fleet head` can run in an ordinary float.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

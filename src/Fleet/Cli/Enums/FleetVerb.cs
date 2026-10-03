@@ -13,6 +13,7 @@ public enum FleetVerb
     Hook,
     Report,
     Mcp,
+    Head,
     Quit,
     Doctor,
     Version,

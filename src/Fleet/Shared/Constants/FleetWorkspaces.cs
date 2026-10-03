@@ -8,6 +8,8 @@ public static class FleetWorkspaces
 
     public const string HiddenSuffix = "~hidden";
 
+    public const string Head = "fleet-head";
+
     public static string HiddenFor(string project) => project + HiddenSuffix;
 
     public static bool IsHidden(string workspace) =>

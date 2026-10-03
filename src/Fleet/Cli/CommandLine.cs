@@ -68,6 +68,7 @@ public static class CommandLine
         Shared.Hooks.HookStatus.Verb => FleetVerb.Hook,
         "report" => FleetVerb.Report,
         "mcp" => FleetVerb.Mcp,
+        "head" => FleetVerb.Head,
         "quit" => FleetVerb.Quit,
         "doctor" => FleetVerb.Doctor,
         "version" or "--version" or "-v" => FleetVerb.Version,

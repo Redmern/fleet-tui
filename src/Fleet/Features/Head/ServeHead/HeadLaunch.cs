@@ -1,0 +1,23 @@
+namespace Fleet.Features.Head.ServeHead;
+
+public static class HeadLaunch
+{
+    public const string VoiceFlag = "--voice";
+
+    public const string HeadFlag = "--head";
+
+    public const string VoiceOnFile = "voice-on.json";
+
+    public const string VoiceOffFile = "voice-off.json";
+
+    public const string StartedMarker = "started";
+
+    public const string VoiceOn = """{"voice":{"enabled":true}}""";
+
+    public const string VoiceOff = """{"voice":{"enabled":false}}""";
+
+    public static IReadOnlyList<string> McpArgs { get; } = ["mcp", HeadFlag];
+
+    public static IReadOnlyList<string> ClaudeArgs(string settingsFile, bool resume) =>
+        resume ? ["--settings", settingsFile, "--continue"] : ["--settings", settingsFile];
+}
