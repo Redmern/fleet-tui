@@ -6,6 +6,8 @@ public static class RelayText
 
     public const string Submit = "\r";
 
+    public static string Keys(string text, bool inNvim) => inNvim ? IntoNvimTerminal + text : text;
+
     public static string Dispatch(string prompt, string trigger)
     {
         var text = prompt.Trim().ReplaceLineEndings("\n");

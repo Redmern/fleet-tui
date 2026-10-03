@@ -102,6 +102,17 @@ public sealed class HeadServiceTests
     }
 
     [Fact]
+    public async Task Relay_types_straight_into_a_main_orchestrator_that_runs_without_nvim()
+    {
+        var (main, _) = Open(Web, Idle);
+        _settings.Config = SettingsConfig.Default.WithMainOrchestratorInNvim(false);
+
+        await Service().HandleAsync(Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, "go")));
+
+        Assert.Equal([",go", RelayText.Submit], _mux.SentTo(main));
+    }
+
+    [Fact]
     public async Task Relay_uses_the_projects_own_trigger_and_never_doubles_it()
     {
         var (main, _) = Open(Web, Idle);

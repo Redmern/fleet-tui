@@ -4580,9 +4580,12 @@ One Claude above every project's orchestrator, opened by a global chord.
   head's Claude has one permission rule per tool, not per project, so Claude's own prompt
   could not honour X's choice. Navigation needs no permission.
 - **Relay.** The main orchestrator is the pane in X's root that is not the dashboard
-  (`DashPaneMarker`), not hidden and not in `fleet-head`. It runs Claude inside nvim, so
-  the relay sends `Ctrl-\ Ctrl-N` then `i` (any nvim mode to terminal mode), the prompt with
-  X's trigger in front, and after 400 ms Enter, as raw keys (`send-text --no-paste`).
+  (`DashPaneMarker`), not hidden and not in `fleet-head`. The relay sends the prompt with
+  X's trigger in front, and after 400 ms Enter, as raw keys (`send-text --no-paste`). When
+  X's *Main orchestrator in nvim* setting is on, `Ctrl-\ Ctrl-N` then `i` go first, to take
+  nvim from any mode into its Claude terminal; when it is off, Claude gets the keys directly.
+  The setting is read at delivery time, so a pane started before the setting flipped gets
+  the wrong form until the project is reopened.
   The orchestrator's `UserPromptSubmit` hook then dispatches exactly as for a typed
   prompt. *Ready* is read from the screen: two samples a second apart that are identical,
   with no spinner (`esc to interrupt`), no question or permission prompt, and a Claude

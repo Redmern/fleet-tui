@@ -75,7 +75,7 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
         if (pane is { } target && readiness == Readiness.Ready && Pending(project.Name) == 0)
         {
-            await TypeAsync(target.Id, text, ct).ConfigureAwait(false);
+            await TypeAsync(project.Name, target.Id, text, ct).ConfigureAwait(false);
             Log(project.Name, $"head relayed a prompt to the orchestrator: {text}");
 
             return McpResult.Ok($"{lead}relayed to {project.Name}'s orchestrator: {text}");
@@ -139,7 +139,7 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
             if (pane is { } target && readiness == Readiness.Ready)
             {
-                await TypeAsync(target.Id, next, CancellationToken.None).ConfigureAwait(false);
+                await TypeAsync(project.Name, target.Id, next, CancellationToken.None).ConfigureAwait(false);
                 Log(project.Name, $"head delivered a queued prompt to the orchestrator: {next}");
 
                 lock (_lock)
@@ -204,13 +204,15 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
         return (pane, PaneReadiness.Settled(first, second));
     }
 
-    private async Task TypeAsync(PaneId pane, string text, CancellationToken ct)
+    private async Task TypeAsync(string project, PaneId pane, string text, CancellationToken ct)
     {
         await _typing.WaitAsync(ct).ConfigureAwait(false);
 
         try
         {
-            await deps.Mux.SendTextAsync(pane, RelayText.IntoNvimTerminal + text, ct).ConfigureAwait(false);
+            var keys = RelayText.Keys(text, deps.Settings.Load(project).MainOrchestratorInNvim);
+
+            await deps.Mux.SendTextAsync(pane, keys, ct).ConfigureAwait(false);
             await Task.Delay(timing.KeyDelay, ct).ConfigureAwait(false);
             await deps.Mux.SendTextAsync(pane, RelayText.Submit, ct).ConfigureAwait(false);
         }
