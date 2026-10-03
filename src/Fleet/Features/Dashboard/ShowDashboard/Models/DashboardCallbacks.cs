@@ -40,4 +40,8 @@ public sealed record DashboardCallbacks(
     Func<NoticeBoard>? LoadNotices = null,
     Action<IReadOnlyList<string>>? DismissNotices = null,
     Func<string, Task<string?>>? OpenNotice = null,
-    Func<int, int, Task<string?>>? OpenEditor = null);
+    Func<int, int, Task<string?>>? OpenEditor = null,
+    Func<IReadOnlyList<RepositoryChoice>>? LoadRepositoriesFast = null,
+    Func<AgentBoard>? LoadAgentsFast = null,
+    Func<SubBoard>? LoadSubsFast = null,
+    Func<NoticeBoard>? LoadNoticesFast = null);
