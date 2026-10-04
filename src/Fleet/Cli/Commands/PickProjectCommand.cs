@@ -37,7 +37,7 @@ public static class PickProjectCommand
         FleetAction.Close,
     ];
 
-    public static async Task<int> RunAsync()
+    public static async Task<int> RunAsync(bool startNew = false)
     {
         var log = Adapters.Log();
         var mux = Adapters.Mux(log);
@@ -47,7 +47,7 @@ public static class PickProjectCommand
             return Fail(mux.Unsupported);
         }
 
-        var picked = Choose();
+        var picked = Choose(startNew);
 
         if (picked is null)
         {
@@ -261,33 +261,27 @@ public static class PickProjectCommand
             "New window");
     }
 
-    private static ProjectPick? Choose()
+    public static Func<string, string?>? FolderPicker(IMuxDriver driver) =>
+        Adapters.OnPath(FileBrowser.Command) && Adapters.CanShowPaneHere(driver)
+            ? wanted => Adapters.PickFolder(
+                driver,
+                "fleet",
+                FileBrowser.StartIn(wanted, Directory.Exists, Adapters.HomeDirectory))
+            : null;
+
+    private static ProjectPick? Choose(bool startNew)
     {
         var driver = Adapters.Mux(Adapters.Log()).Driver;
 
-        Func<string, string?>? folders = null;
-        var browseInTerminal = false;
-
-        if (Adapters.OnPath(FileBrowser.Command))
-        {
-            if (Adapters.CanShowPaneHere(driver))
-            {
-                folders = wanted => Adapters.PickFolder(
-                    driver,
-                    "fleet",
-                    FileBrowser.StartIn(wanted, Directory.Exists, Adapters.HomeDirectory));
-            }
-            else
-            {
-                browseInTerminal = true;
-            }
-        }
+        var folders = FolderPicker(driver);
+        var browseInTerminal = folders is null && Adapters.OnPath(FileBrowser.Command);
 
         ProjectDraft? draft = null;
 
         while (true)
         {
-            var (picked, browse) = ChooseOnce(driver, folders, draft, browseInTerminal);
+            var (picked, browse) = ChooseOnce(driver, folders, draft, browseInTerminal, startNew);
+            startNew = false;
 
             if (browse is null)
             {
@@ -300,7 +294,7 @@ public static class PickProjectCommand
     }
 
     private static (ProjectPick? Picked, ProjectDraft? Browse) ChooseOnce(
-        IMuxDriver driver, Func<string, string?>? folders, ProjectDraft? draft, bool browseInTerminal)
+        IMuxDriver driver, Func<string, string?>? folders, ProjectDraft? draft, bool browseInTerminal, bool startNew)
     {
         var projects = Adapters.Projects();
         var keymaps = Adapters.Keymaps();
@@ -313,7 +307,7 @@ public static class PickProjectCommand
 
         using IApplication app = FleetUi.Start();
 
-        if (draft is not null)
+        if (draft is not null || startNew)
         {
             var made = CreateProjectView.Show(app, creator, folders, draft, leaveToBrowse);
 

@@ -247,6 +247,12 @@ saved there, running or not (running ones say `open`); opening one that is not r
 starts it on that machine first. `enter` shows a remote project
 in this window; `SHIFT` opens it in a new window attached over ssh.
 
+**this machine** and every machine's tab end with **+ New project...** (`n`). On this
+machine it opens the same New project form as the startup picker and then opens the new
+project. On a remote it shows that machine here and opens the remote's own New project
+form, so the project and its folder are made there; a machine with no projects yet still
+has this entry, so its tab is never empty.
+
 A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar
 reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode and the
 fleet menu (`ctrl+enter`) all act on the remote. Switch project always opens this machine's
@@ -337,7 +343,7 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `ctrl+d` / `ctrl+u` | page down / up |
 | `h` / `l` | previous / next tab (dashboard) |
 | `l` or `enter` | open the selection (picker) |
-| `n` | new project (picker) / new agent / add repository |
+| `n` | new project (picker, switcher) / new agent / add repository |
 | `enter` | open the selection / open an agent, restarting it if needed |
 | `m` | manage an agent / manage a repository |
 | `e` | open nvim (neo-tree) in the selected agent's or sub's folder, beside its pane; focuses it if already open |

@@ -15,4 +15,6 @@ public interface IRemoteMachines
     Task OpenInNewWindowAsync(string host, string project, CancellationToken ct = default);
 
     Task ShowHereAsync(string host, string project, CancellationToken ct = default);
+
+    Task NewProjectAsync(string host, CancellationToken ct = default);
 }

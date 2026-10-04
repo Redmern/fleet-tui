@@ -31,4 +31,6 @@ public sealed class NicknamedRemotes(IRemoteMachines inner, IKnownRemoteStore kn
 
     public Task ShowHereAsync(string host, string project, CancellationToken ct = default) =>
         inner.ShowHereAsync(host, project, ct);
+
+    public Task NewProjectAsync(string host, CancellationToken ct = default) => inner.NewProjectAsync(host, ct);
 }

@@ -4749,6 +4749,25 @@ so mixing remote projects into it would invite relaying to a project the head ca
   `known · not connected`. A link that is connecting, asking or failed shows its state and
   no projects: fleet keeps no last-known project list for a machine.
 
+## New project from the switcher, 2026-10-04
+
+Connecting to a remote with fleet running but no projects left nothing to do: its
+machine tab was empty and the startup picker's *New project* only works on this machine.
+
+- **Entry, not key handling.** `SwitchTabs.For` appends `+  New project...` to *this
+  machine* and to each machine tab, keyed by the keymap's `new-project` text (`n`), and a
+  `SwitchTarget` with `IsNew` (and the machine's `Host`). Explicit keys win over
+  accelerators in `PickerKeys`, so `n` reaches it without `FleetTabbedPicker` changing.
+  *Open* and *All* get none: they are about existing projects, and a new one needs a machine.
+- **This machine** reuses `CreateProjectView` with `PickProjectCommand.FolderPicker`, then
+  opens the project through `SwitchByWorkspace` (or a new window on `SHIFT`).
+- **A remote.** `IRemoteMachines.NewProjectAsync` sends `new-remote-project`; the local
+  fleetd shows the `@<machine>` viewer (`ShowViewer`, split out of `ShowRemote`, which needs
+  no project) and `RemoteLink.NewProjectAsync` sends the remote the `menu` command with
+  `new-project`, as if typed there. The remote runs `fleet menu --action new-project`,
+  which now opens the New project form straight away (cancel falls back to its picker).
+  The project, its folder and its orchestrator all live on the remote.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

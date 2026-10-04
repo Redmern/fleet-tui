@@ -272,6 +272,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "show-remote":
                         response.Ms = ShowRemote(ClientFor(request, attachedClient), request.Host, request.Workspace);
                         break;
+                    case "new-remote-project":
+                        response.Ms = NewRemoteProject(ClientFor(request, attachedClient), request.Host);
+                        break;
                     case "list-projects":
                         response.Projects = [.. options.SavedProjects()];
                         break;
@@ -1107,6 +1110,48 @@ public sealed class FleetDaemon(DaemonOptions options)
             throw new InvalidOperationException($"{host} is not connected");
         }
 
+        var shown = ShowViewer(client, link);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await link.ShowAsync(project).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
+            {
+                options.Log($"remote {link.Host}: could not show {project}: {e.Message}");
+            }
+        });
+
+        return shown;
+    }
+
+    private double NewRemoteProject(string? client, string? host)
+    {
+        var link = RemoteFor(host);
+        if (client is null || !link.IsConnected)
+        {
+            throw new InvalidOperationException($"{host} is not connected");
+        }
+
+        var shown = ShowViewer(client, link);
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await link.NewProjectAsync().ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException or InvalidOperationException or OperationCanceledException)
+            {
+                options.Log($"remote {link.Host}: could not start a new project: {e.Message}");
+            }
+        });
+
+        return shown;
+    }
+
+    private double ShowViewer(string client, RemoteLink link)
+    {
         var workspace = RemoteWorkspace(link.Name);
         if (_model.Workspace(workspace) is not { } existing || existing.RemoteHost != link.Host
             || existing.Tabs.SelectMany(t => t.Root.Panes()).All(p => _runtimes.GetValueOrDefault(p)?.Pty != link.Pty))
@@ -1122,20 +1167,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             Start(pane, null, link.Pty);
         }
 
-        var shown = Show(client, workspace);
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await link.ShowAsync(project).ConfigureAwait(false);
-            }
-            catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
-            {
-                options.Log($"remote {link.Host}: could not show {project}: {e.Message}");
-            }
-        });
-
-        return shown;
+        return Show(client, workspace);
     }
 
     public const string HandedBack = "switch-project";
