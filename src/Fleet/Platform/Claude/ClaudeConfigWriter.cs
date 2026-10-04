@@ -275,9 +275,11 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
         hooks.UserPromptSubmit.Add(new HookGroup
         {
-            Hooks = [new HookEntry { Type = "command", Command = command, Args = [.. args] }],
+            Hooks = [new HookEntry { Type = "command", Command = command, Args = [.. args], Timeout = DispatchHookTimeout }],
         });
     }
+
+    private const double DispatchHookTimeout = 90;
 
     private static bool IsOwnedHook(HookEntry entry) =>
         entry.Command.Contains("hook-dispatch", StringComparison.Ordinal)

@@ -141,6 +141,36 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         Assert.Single(Occurrences(File.ReadAllText(SettingsPath), "hook-dispatch"));
     }
 
+    private System.Text.Json.JsonElement DispatchHookEntry() =>
+        Hooks().GetProperty("UserPromptSubmit").EnumerateArray()
+            .SelectMany(g => g.GetProperty("hooks").EnumerateArray())
+            .Single(h => h.GetProperty("args")[0].GetString() == "hook-dispatch");
+
+    [Fact]
+    public void The_dispatch_hook_outlasts_claudes_default_timeout()
+    {
+        new ClaudeConfigWriter().Sync(Plan());
+
+        // Claude Code's 30 s default drops the hook's exit code 2, so a slow dispatch would also reach the orchestrator.
+        Assert.Equal(90, DispatchHookEntry().GetProperty("timeout").GetDouble());
+    }
+
+    [Fact]
+    public void A_dispatch_hook_written_without_a_timeout_gets_one_on_the_next_sync()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """
+            {"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"fleet.exe","args":["hook-dispatch","--project","techweb"]}]}]}}
+            """);
+
+        new ClaudeConfigWriter().Sync(Plan());
+
+        Assert.Single(Occurrences(File.ReadAllText(SettingsPath), "hook-dispatch"));
+        Assert.Equal(90, DispatchHookEntry().GetProperty("timeout").GetDouble());
+    }
+
     [Fact]
     public void A_users_own_hooks_survive_the_merge()
     {
