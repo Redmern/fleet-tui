@@ -4,6 +4,7 @@ using Fleet.Features.Head.ServeHead.Models;
 using Fleet.Features.Projects.LocateProject;
 using Fleet.Platform.Claude;
 using Fleet.Platform.Mcp;
+using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
@@ -103,15 +104,25 @@ public static class HeadWiring
 
     private static int RunClaude(string folder, IReadOnlyList<string> args)
     {
-        var psi = new ProcessStartInfo(AgentHarness.Claude)
+        var psi = new ProcessStartInfo
         {
             UseShellExecute = false,
             WorkingDirectory = folder,
         };
 
-        foreach (var arg in args)
+        if (OperatingSystem.IsWindows())
         {
-            psi.ArgumentList.Add(arg);
+            psi.FileName = HeadLaunch.WindowsShell;
+            psi.Arguments = HeadLaunch.ShellArguments(AgentHarness.Claude, args, WindowsCommandLine.Quote);
+        }
+        else
+        {
+            psi.FileName = AgentHarness.Claude;
+
+            foreach (var arg in args)
+            {
+                psi.ArgumentList.Add(arg);
+            }
         }
 
         foreach (var (key, value) in AgentHarness.SessionPersistence)

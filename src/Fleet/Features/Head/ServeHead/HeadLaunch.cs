@@ -20,4 +20,9 @@ public static class HeadLaunch
 
     public static IReadOnlyList<string> ClaudeArgs(string settingsFile, bool resume) =>
         resume ? ["--settings", settingsFile, "--continue"] : ["--settings", settingsFile];
+
+    public const string WindowsShell = "cmd.exe";
+
+    public static string ShellArguments(string program, IReadOnlyList<string> args, Func<string, string> quote) =>
+        $"/s /c \"{string.Join(' ', new[] { program }.Concat(args).Select(quote))}\"";
 }
