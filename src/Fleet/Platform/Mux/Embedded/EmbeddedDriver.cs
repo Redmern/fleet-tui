@@ -15,6 +15,8 @@ public sealed class EmbeddedDriver(
 {
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(2);
 
+    private static readonly TimeSpan AnswerWithin = TimeSpan.FromSeconds(10);
+
     private readonly SemaphoreSlim _connectGate = new(1, 1);
     private readonly ConcurrentDictionary<int, TaskCompletionSource<ControlResponse>> _pending = new();
     private Wire? _wire;
@@ -213,6 +215,13 @@ public sealed class EmbeddedDriver(
     public Task NewRemoteProjectAsync(string host, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "new-remote-project", Host = host, Client = CurrentClient }, ct);
 
+    public Task<ControlResponse> RemoteHeadAsync(
+        string host, string tool, IReadOnlyDictionary<string, string> arguments, CancellationToken ct = default) =>
+        RequestAsync(
+            new ControlRequest { Op = "remote-head", Host = host, Text = tool, Env = new Dictionary<string, string>(arguments) },
+            ct,
+            RemoteLink.HeadWithin + AnswerWithin);
+
     public Task OpenRemoteWindowAsync(string host, string project, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "open-remote-window", Host = host, Workspace = project, Client = CurrentClient }, ct);
 
@@ -234,7 +243,7 @@ public sealed class EmbeddedDriver(
         _connectGate.Dispose();
     }
 
-    private async Task<ControlResponse> RequestAsync(ControlRequest request, CancellationToken ct)
+    private async Task<ControlResponse> RequestAsync(ControlRequest request, CancellationToken ct, TimeSpan? within = null)
     {
         var wire = await ConnectAsync(ct).ConfigureAwait(false);
         request.Id = Interlocked.Increment(ref _nextId);
@@ -247,7 +256,7 @@ public sealed class EmbeddedDriver(
         {
             await wire.SendAsync(MessageType.Request, request, WireJsonContext.Default.ControlRequest, ct)
                 .ConfigureAwait(false);
-            var response = await reply.Task.WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+            var response = await reply.Task.WaitAsync(within ?? AnswerWithin, ct).ConfigureAwait(false);
 
             if (!response.Ok)
             {

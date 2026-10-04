@@ -20,6 +20,8 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
     private readonly HeadGate _gate = new(deps);
 
+    private readonly HeadRemotes _remotes = new(deps, timing ?? HeadTiming.Default);
+
     private HeadRelay? _relay;
 
     public HeadRelay Relay => _relay ??= new HeadRelay(deps, _gate, timing ?? HeadTiming.Default);
@@ -27,17 +29,50 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
     public static IReadOnlyList<FleetAction> MenuActions { get; } =
         [.. DashboardActions.Served.Where(a => a != FleetAction.Close)];
 
-    public async Task<McpResult> HandleAsync(McpRequest request, CancellationToken ct = default) =>
+    public async Task<McpResult> HandleAsync(McpRequest request, CancellationToken ct = default)
+    {
+        var remote = request.Value(HeadTools.Remote).Trim();
+
+        return request.Tool switch
+        {
+            HeadTools.ListRemotes => await _remotes.ListAsync(ct).ConfigureAwait(false),
+            HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
+            HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
+                or HeadTools.Relay when !HeadRemotes.IsLocal(remote) =>
+                await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
+            _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
+        };
+    }
+
+    public async Task<McpResult> ServeOriginAsync(McpRequest request, CancellationToken ct = default)
+    {
+        if (!HeadRemotes.IsLocal(request.Value(HeadTools.Remote).Trim()))
+        {
+            return McpResult.Error(
+                "this fleet acts on its own projects only; the machine fleet was opened on reaches the others.");
+        }
+
+        return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.Relay
+            ? await HandleHereAsync(request, show: false, ct).ConfigureAwait(false)
+            : McpResult.Error($"{request.Tool} is not served to another machine.");
+    }
+
+    private async Task<McpResult> HandleHereAsync(McpRequest request, bool show, CancellationToken ct) =>
         request.Tool switch
         {
             HeadTools.ListProjects => await ListProjectsAsync(ct).ConfigureAwait(false),
-            HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
             HeadTools.SwitchProject => await WithProject(request, p => SwitchAsync(p, ct)).ConfigureAwait(false),
-            HeadTools.MenuAction => await WithProject(request, p => MenuAsync(p, request, ct)).ConfigureAwait(false),
+            HeadTools.MenuAction => await WithProject(request, p => MenuAsync(p, request, show, ct)).ConfigureAwait(false),
             HeadTools.ListAgents => await ListAgentsAsync(request, ct).ConfigureAwait(false),
             HeadTools.Relay => await WithProject(request, p => RelayAsync(p, request, ct)).ConfigureAwait(false),
             _ => McpResult.Error($"the head has no tool named '{request.Tool}'."),
         };
+
+    public static string? MenuActionError(McpRequest request) =>
+        MenuActions.Contains(FleetActionIds.Parse(request.Value(HeadTools.Action)))
+            ? null
+            : $"'{request.Value(HeadTools.Action).Trim()}' is not a menu action the head can run; use one of "
+              + string.Join(", ", MenuActions.Select(FleetActionIds.For)) + ".";
 
     private async Task<McpResult> ListProjectsAsync(CancellationToken ct)
     {
@@ -55,7 +90,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             var open = await deps.IsOpen(project, ct).ConfigureAwait(false);
             var queued = Relay.Pending(project.Name);
 
-            lines.Add($"{project.Name}  {(open ? "open" : "closed")}  {project.Root}"
+            lines.Add($"{project.Name}  {(open ? "open" : "closed")}  {project.Root}  on {HeadTools.Local}"
                 + (queued > 0 ? $"  {queued} prompt(s) queued" : string.Empty));
         }
 
@@ -146,17 +181,14 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             : $"switched to {project.Name}.");
     }
 
-    private async Task<McpResult> MenuAsync(Project project, McpRequest request, CancellationToken ct)
+    private async Task<McpResult> MenuAsync(Project project, McpRequest request, bool show, CancellationToken ct)
     {
-        var action = FleetActionIds.Parse(request.Value(HeadTools.Action));
-
-        if (!MenuActions.Contains(action))
+        if (MenuActionError(request) is { } invalid)
         {
-            return McpResult.Error(
-                $"'{request.Value(HeadTools.Action).Trim()}' is not a menu action the head can run; use one of "
-                + string.Join(", ", MenuActions.Select(FleetActionIds.For)) + ".");
+            return McpResult.Error(invalid);
         }
 
+        var action = FleetActionIds.Parse(request.Value(HeadTools.Action));
         var opened = await OpenAsync(project, ct).ConfigureAwait(false);
 
         if (opened.Error is { } error)
@@ -165,6 +197,12 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         }
 
         deps.Requests.Submit(project.Name, action);
+
+        if (!show)
+        {
+            return McpResult.Ok($"asked {project.Name}'s dashboard for {FleetActionIds.For(action)}.");
+        }
+
         await ShowAsync(project, ct).ConfigureAwait(false);
 
         return McpResult.Ok(

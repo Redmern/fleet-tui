@@ -393,6 +393,257 @@ public sealed class HeadServiceTests
         Assert.Contains("web, api", result.Text);
     }
 
+    private const string Hostinger = "red@100.76.65.9";
+
+    private static readonly RemoteMachine HostingerUp =
+        new(Hostinger, "srv-1", RemoteState.Connected, ["DeVrolijkeViervoeters", "shop"], Running: ["shop"]);
+
+    private void KnowHostinger() =>
+        _known.Remotes =
+        [
+            new KnownRemote(Hostinger, "hostinger", new DateTimeOffset(2026, 10, 1, 9, 30, 0, TimeSpan.Zero)),
+            new KnownRemote("red@laptop", "laptop", DateTimeOffset.UnixEpoch),
+        ];
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("LOCAL")]
+    public async Task Without_a_remote_or_with_local_the_tools_act_on_the_origin(string? remote)
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+        var (_, dash) = Open(Web, Idle);
+        var call = remote is null
+            ? Call(HeadTools.SwitchProject, (HeadTools.Project, "web"))
+            : Call(HeadTools.SwitchProject, (HeadTools.Project, "web"), (HeadTools.Remote, remote));
+
+        var result = await Service().HandleAsync(call);
+
+        Assert.False(result.IsError, result.Text);
+        Assert.True((await _mux.ListPanesAsync()).Single(p => p.Id == dash).IsActive);
+        Assert.Empty(_remotes.Shown);
+        Assert.Empty(_remotes.Forwarded);
+        Assert.Empty(_remotes.Connected);
+    }
+
+    [Fact]
+    public async Task List_projects_without_a_remote_says_each_is_on_local()
+    {
+        var result = await Service().HandleAsync(Call(HeadTools.ListProjects));
+
+        Assert.All(result.Text.Split('\n'), line => Assert.Contains("  on local", line));
+    }
+
+    [Theory]
+    [InlineData("homelab")]
+    [InlineData("red@100.76.65.9")]
+    public async Task An_unknown_nickname_or_a_raw_ssh_host_is_refused_and_names_the_machines(string remote)
+    {
+        KnowHostinger();
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.Relay, (HeadTools.Project, "shop"), (HeadTools.Prompt, "go"), (HeadTools.Remote, remote)));
+
+        Assert.True(result.IsError);
+        Assert.Contains($"no remote machine is nicknamed '{remote}'", result.Text);
+        Assert.Contains("local, hostinger, laptop", result.Text);
+        Assert.Empty(_remotes.Connected);
+        Assert.Empty(_remotes.Forwarded);
+    }
+
+    [Fact]
+    public async Task A_disconnected_remote_is_connected_first_then_the_project_is_shown_here()
+    {
+        KnowHostinger();
+        _remotes.OnConnect = HostingerUp;
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.SwitchProject, (HeadTools.Project, "devrolijkeviervoeters"), (HeadTools.Remote, "Hostinger")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal([Hostinger], _remotes.Connected);
+        Assert.Equal((Hostinger, "DeVrolijkeViervoeters"), Assert.Single(_remotes.Shown));
+        Assert.Equal([Hostinger], _known.Remembered);
+        Assert.Equal("switched to DeVrolijkeViervoeters on hostinger.", result.Text);
+        Assert.Empty(_workspaces.Submitted);
+    }
+
+    [Fact]
+    public async Task A_remote_ssh_cannot_reach_says_so()
+    {
+        KnowHostinger();
+        _remotes.OnConnect = new RemoteMachine(Hostinger, Hostinger, RemoteState.Failed, [], Error: "Connection timed out");
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.ListProjects, (HeadTools.Remote, "hostinger")));
+
+        Assert.True(result.IsError);
+        Assert.Equal("could not reach hostinger (red@100.76.65.9) over ssh: Connection timed out.", result.Text);
+    }
+
+    [Fact]
+    public async Task A_remote_whose_ssh_asks_a_question_points_the_user_at_remote_machines()
+    {
+        KnowHostinger();
+        _remotes.OnConnect = new RemoteMachine(Hostinger, Hostinger, RemoteState.Asking, [], Prompt: "red@100.76.65.9's password: ");
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.SwitchProject, (HeadTools.Project, "shop"), (HeadTools.Remote, "hostinger")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("password", result.Text);
+        Assert.Contains("Remote machines", result.Text);
+        Assert.Empty(_remotes.Shown);
+    }
+
+    [Fact]
+    public async Task A_remote_that_stays_connecting_times_out_with_a_reason()
+    {
+        KnowHostinger();
+        _remotes.OnConnect = new RemoteMachine(Hostinger, Hostinger, RemoteState.Connecting, []);
+        var service = new HeadService(
+            new HeadDeps(
+                new Projects(Web), _mux, _settings, _approvals, _agents, _requests, _workspaces,
+                (_, _) => Task.FromResult(false), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known),
+            Fast with { ConnectTimeout = TimeSpan.FromMilliseconds(50) });
+
+        var result = await service.HandleAsync(Call(HeadTools.ListAgents, (HeadTools.Remote, "hostinger")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("still connecting", result.Text);
+    }
+
+    [Fact]
+    public async Task A_project_that_is_not_on_the_remote_names_the_ones_that_are()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, "go"), (HeadTools.Remote, "hostinger")));
+
+        Assert.True(result.IsError);
+        Assert.Equal("no project named 'web' on hostinger. Projects there: DeVrolijkeViervoeters, shop.", result.Text);
+        Assert.Empty(_remotes.Forwarded);
+        Assert.Empty(_remotes.Connected);
+    }
+
+    [Fact]
+    public async Task Relay_on_a_remote_goes_to_that_machines_fleet_without_the_remote_argument()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+        _remotes.Reply = McpResult.Error("shop does not allow dispatch; change it in that project's permissions.");
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.Relay, (HeadTools.Project, "SHOP"), (HeadTools.Prompt, "ship"), (HeadTools.Remote, "hostinger")));
+
+        Assert.True(result.IsError);
+        Assert.Equal("on hostinger: shop does not allow dispatch; change it in that project's permissions.", result.Text);
+        var (host, forwarded) = Assert.Single(_remotes.Forwarded);
+        Assert.Equal(Hostinger, host);
+        Assert.Equal(HeadTools.Relay, forwarded.Tool);
+        Assert.Equal("shop", forwarded.Value(HeadTools.Project));
+        Assert.Equal("ship", forwarded.Value(HeadTools.Prompt));
+        Assert.False(forwarded.Arguments.ContainsKey(HeadTools.Remote));
+        Assert.Empty(_approvals.Asked);
+    }
+
+    [Fact]
+    public async Task Menu_action_on_a_remote_asks_its_dashboard_then_shows_it_here()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+        _remotes.Reply = McpResult.Ok("asked shop's dashboard for new-agent.");
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.MenuAction, (HeadTools.Project, "shop"), (HeadTools.Action, "new-agent"), (HeadTools.Remote, "hostinger")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(HeadTools.MenuAction, Assert.Single(_remotes.Forwarded).Request.Tool);
+        Assert.Equal((Hostinger, "shop"), Assert.Single(_remotes.Shown));
+        Assert.Empty(_requests.Submitted);
+    }
+
+    [Fact]
+    public async Task List_projects_on_a_remote_says_each_is_on_that_machine()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ListProjects, (HeadTools.Remote, "hostinger")));
+
+        Assert.Equal("DeVrolijkeViervoeters  closed  on hostinger\nshop  open  on hostinger", result.Text);
+    }
+
+    [Fact]
+    public async Task List_remotes_puts_local_first_then_each_remote_with_host_last_connection_and_state()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp, new RemoteMachine("pi@garage", "garage", RemoteState.Connected, [])];
+
+        var lines = (await Service().HandleAsync(Call(HeadTools.ListRemotes))).Text.Split('\n');
+
+        Assert.StartsWith("local  ", lines[0]);
+        Assert.StartsWith($"hostinger  {Hostinger}  connected  last connected ", lines[1]);
+        Assert.Equal("laptop  red@laptop  not connected  last connected "
+            + DateTimeOffset.UnixEpoch.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+            lines[2]);
+        Assert.StartsWith("(no nickname)  pi@garage  connected", lines[3]);
+        Assert.Equal(4, lines.Length);
+    }
+
+    [Fact]
+    public async Task Served_to_the_origin_a_menu_action_is_handed_over_without_showing_here()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        await mux.SpawnAsync(new SpawnOptions { Cwd = Web.Root, SessionName = "web" });
+        var service = new HeadService(
+            new HeadDeps(
+                new Projects(Web), mux, _settings, _approvals, _agents, _requests, _workspaces,
+                (_, _) => Task.FromResult(true), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known),
+            Fast);
+
+        var result = await service.ServeOriginAsync(
+            Call(HeadTools.MenuAction, (HeadTools.Project, "web"), (HeadTools.Action, "new-agent")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(("web", FleetAction.NewAgent), Assert.Single(_requests.Submitted));
+        Assert.Null(mux.ShowingFor(mux.CurrentClient));
+    }
+
+    [Fact]
+    public async Task Served_to_the_origin_the_projects_own_permissions_still_apply()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.Dispatch, ActionPolicy.Forbid);
+
+        var result = await Service().ServeOriginAsync(
+            Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, "go")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("does not allow dispatch", result.Text);
+        Assert.Empty(_opened);
+    }
+
+    [Theory]
+    [InlineData(HeadTools.SwitchProject, null)]
+    [InlineData(HeadTools.ListAgents, "laptop")]
+    public async Task Served_to_the_origin_a_remote_never_shows_here_or_reaches_another_machine(string tool, string? remote)
+    {
+        KnowHostinger();
+        var call = remote is null
+            ? Call(tool, (HeadTools.Project, "web"))
+            : Call(tool, (HeadTools.Remote, remote));
+
+        var result = await Service().ServeOriginAsync(call);
+
+        Assert.True(result.IsError);
+        Assert.Empty(_remotes.Connected);
+        Assert.Empty(_remotes.Forwarded);
+        Assert.Empty(_workspaces.Submitted);
+    }
+
     private sealed class Projects(params Project[] projects) : IProjectStore
     {
         public Project? Load(string name) =>
@@ -474,11 +725,25 @@ public sealed class HeadServiceTests
 
         public List<string> Connected { get; } = [];
 
+        public RemoteMachine? OnConnect { get; set; }
+
+        public List<(string Host, string Project)> Shown { get; } = [];
+
+        public List<(string Host, McpRequest Request)> Forwarded { get; } = [];
+
+        public McpResult Reply { get; set; } = McpResult.Ok("done");
+
         public Task<IReadOnlyList<RemoteMachine>> ListAsync(CancellationToken ct = default) => Task.FromResult(Machines);
 
         public Task ConnectAsync(string host, CancellationToken ct = default)
         {
             Connected.Add(host);
+
+            if (OnConnect is { } connected)
+            {
+                Machines = [.. Machines.Where(m => m.Host != host), connected];
+            }
+
             return Task.CompletedTask;
         }
 
@@ -488,20 +753,30 @@ public sealed class HeadServiceTests
 
         public Task OpenInNewWindowAsync(string host, string project, CancellationToken ct = default) => Task.CompletedTask;
 
-        public Task ShowHereAsync(string host, string project, CancellationToken ct = default) => Task.CompletedTask;
+        public Task ShowHereAsync(string host, string project, CancellationToken ct = default)
+        {
+            Shown.Add((host, project));
+            return Task.CompletedTask;
+        }
 
         public Task NewProjectAsync(string host, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<McpResult> HeadAsync(string host, McpRequest request, CancellationToken ct = default)
+        {
+            Forwarded.Add((host, request));
+            return Task.FromResult(Reply);
+        }
     }
 
     private sealed class Known : IKnownRemoteStore
     {
         public IReadOnlyList<KnownRemote> Remotes { get; set; } = [];
 
+        public List<string> Remembered { get; } = [];
+
         public IReadOnlyList<KnownRemote> Load() => Remotes;
 
-        public void Remember(string host, DateTimeOffset connected)
-        {
-        }
+        public void Remember(string host, DateTimeOffset connected) => Remembered.Add(host);
 
         public void Rename(string host, string? nickname)
         {

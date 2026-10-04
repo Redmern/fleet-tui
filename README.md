@@ -660,7 +660,8 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 
 | Tool | Does |
 |---|---|
-| `list_projects` | every project, open or closed, and how many relayed prompts wait for it |
+| `list_remotes` | the machines the head can act on: `local` (the machine fleet was opened on) first, then each remote's nickname, ssh host, last connection and whether it is connected now |
+| `list_projects` | the projects of one machine (`remote`, default `local`), open or closed, and how many relayed prompts wait for it |
 | `list_remote_projects` | the projects per machine: this machine first, then every remote machine fleet knows (nickname and ssh host, `connected` or `known · not connected`), each project `open` or `closed` |
 | `switch_project` | shows a project, opening it first if it is closed |
 | `menu_action` | hands a dashboard action (`new-agent`, `add-repository`, `keybinds`, ...) to a project's dashboard and shows it |
@@ -678,7 +679,18 @@ The queue lives in the head's MCP server, so it is lost if the head's Claude exi
 **Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
 connection, so a machine that is not connected is listed with its state and no projects.
-The other head tools act on this machine's projects only.
+
+`list_projects`, `switch_project`, `menu_action`, `list_agents` and `relay` take an optional
+`remote`: a nickname from `remotes.json` (never an ssh host). Leave it out, or pass `local`,
+for the machine fleet was opened on. A remote that is not connected is connected first, the
+same way **Remote machines** does; if ssh asks a question (a password, a host key), the head
+says so and you answer it there. `switch_project` shows the remote project in this window;
+`relay`, `list_agents` and `menu_action` run on the remote's own fleet over the existing ssh
+link, so that project's permissions apply there exactly as they do locally. A remote fleet
+never opens ssh to another remote: everything goes through the origin.
+
+**One head.** The head always runs on the origin. Pressing its chord while you look at a
+project on a remote machine shows the origin's head over it, not a head on that machine.
 
 **Permissions.** What the head does inside a project goes through that project's own
 permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule and

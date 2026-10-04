@@ -1,5 +1,6 @@
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Remotes;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
@@ -55,6 +56,20 @@ public sealed class EmbeddedRemotes(Func<EmbeddedDriver> driver) : IRemoteMachin
     {
         using var fleetd = driver();
         await fleetd.NewRemoteProjectAsync(host, ct).ConfigureAwait(false);
+    }
+
+    public async Task<McpResult> HeadAsync(string host, McpRequest request, CancellationToken ct = default)
+    {
+        using var fleetd = driver();
+        try
+        {
+            var reply = await fleetd.RemoteHeadAsync(host, request.Tool, request.Arguments, ct).ConfigureAwait(false);
+            return reply.ToolFailed ? McpResult.Error(reply.Text ?? string.Empty) : McpResult.Ok(reply.Text ?? string.Empty);
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+        {
+            return McpResult.Error(e.Message);
+        }
     }
 
     public static RemoteMachine ToMachine(RemoteDto dto) =>

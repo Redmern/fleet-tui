@@ -35,6 +35,10 @@ public sealed class NicknamedRemotesTests
         public Task ShowHereAsync(string host, string project, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task NewProjectAsync(string host, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task<Fleet.Ports.Mcp.Models.McpResult> HeadAsync(
+            string host, Fleet.Ports.Mcp.Models.McpRequest request, CancellationToken ct = default) =>
+            Task.FromResult(Fleet.Ports.Mcp.Models.McpResult.Ok(string.Empty));
     }
 
     private sealed class FakeKnown(IReadOnlyList<KnownRemote> known) : IKnownRemoteStore

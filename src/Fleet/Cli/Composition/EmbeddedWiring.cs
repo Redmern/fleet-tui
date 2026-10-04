@@ -90,6 +90,7 @@ public static class EmbeddedWiring
             },
             AlertSettings = () => Adapters.Notices().Settings() is var s ? (s.Bell, s.Toast) : (false, false),
             Toast = (title, body) => Platform.Notifications.DesktopToast.Show(title, body),
+            Head = HeadWiring.ServeOrigin(Driver, log),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);

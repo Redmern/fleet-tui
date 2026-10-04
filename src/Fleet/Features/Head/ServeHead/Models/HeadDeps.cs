@@ -32,6 +32,8 @@ public sealed record HeadTiming(
     TimeSpan OpenTimeout,
     TimeSpan QueueTimeout)
 {
+    public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromSeconds(60);
+
     public static HeadTiming Default => new(
         TimeSpan.FromSeconds(2),
         TimeSpan.FromSeconds(1),

@@ -33,6 +33,19 @@ public static class HeadWiring
         return 0;
     }
 
+    public static Func<string, IReadOnlyDictionary<string, string>, CancellationToken, Task<(string Text, bool Failed)>>
+        ServeOrigin(Func<IMuxDriver> mux, Ports.IFleetLog log)
+    {
+        var service = new Lazy<HeadService>(() => new HeadService(Deps(mux(), log)));
+
+        return async (tool, arguments, ct) =>
+        {
+            log.Write($"fleetd: the origin's head runs {tool} here");
+            var result = await service.Value.ServeOriginAsync(new McpRequest(tool, arguments), ct).ConfigureAwait(false);
+            return (result.Text, result.IsError);
+        };
+    }
+
     public static HeadDeps Deps(IMuxDriver mux, Ports.IFleetLog log) =>
         new(
             Adapters.Projects(),

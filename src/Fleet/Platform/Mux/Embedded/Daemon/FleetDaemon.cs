@@ -51,6 +51,8 @@ public sealed class DaemonOptions
     public Func<(bool Bell, bool Toast)> AlertSettings { get; init; } = () => (false, false);
 
     public Action<string, string> Toast { get; init; } = (_, _) => { };
+
+    public Func<string, IReadOnlyDictionary<string, string>, CancellationToken, Task<(string Text, bool Failed)>>? Head { get; init; }
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -439,6 +441,13 @@ public sealed class FleetDaemon(DaemonOptions options)
             case MessageType.Request:
                 {
                     var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
+
+                    if (request.Op is RemoteLink.HeadOp or RemoteHeadOp)
+                    {
+                        _ = Task.Run(() => AnswerHeadAsync(wire, request, ct), CancellationToken.None);
+                        break;
+                    }
+
                     var response = Execute(request, session?.Client);
                     await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
                         .ConfigureAwait(false);
@@ -487,6 +496,61 @@ public sealed class FleetDaemon(DaemonOptions options)
             case MessageType.Command when session is not null:
                 Command(session, Wire.Read(payload, WireJsonContext.Default.CommandMessage));
                 break;
+        }
+    }
+
+    public const string RemoteHeadOp = "remote-head";
+
+    private async Task AnswerHeadAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    {
+        var tool = request.Text ?? string.Empty;
+        IReadOnlyDictionary<string, string> arguments = request.Env ?? [];
+        ControlResponse response;
+
+        try
+        {
+            if (request.Op == RemoteHeadOp)
+            {
+                RemoteLink link;
+                lock (_gate)
+                {
+                    link = RemoteFor(request.Host);
+                }
+
+                response = link.IsConnected
+                    ? await link.HeadAsync(tool, arguments).ConfigureAwait(false)
+                    : new ControlResponse { Ok = false, Error = $"{request.Host} is not connected" };
+
+                if (!response.Ok && response.Error?.StartsWith("unknown operation", StringComparison.Ordinal) == true)
+                {
+                    response.Error = $"the fleet on {link.Name} is too old to take head tools; update fleet there";
+                }
+            }
+            else if (options.Head is { } head)
+            {
+                var (text, failed) = await head(tool, arguments, ct).ConfigureAwait(false);
+                response = new ControlResponse { Ok = true, Text = text, ToolFailed = failed };
+            }
+            else
+            {
+                response = new ControlResponse { Ok = false, Error = "this fleetd cannot serve head tools" };
+            }
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or OperationCanceledException)
+        {
+            response = new ControlResponse { Ok = false, Error = e.Message };
+        }
+
+        response.Id = request.Id;
+
+        try
+        {
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            options.Log($"could not answer {request.Op} {tool}: {e.Message}");
         }
     }
 
@@ -1070,7 +1134,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         options.Log($"remote {host}: connecting");
     }
 
-    public const string LocalCommands = "|switch-project|next-workspace|show|redraw|";
+    public const string LocalCommands = "|switch-project|next-workspace|show|redraw|head|";
 
     public static string RemoteWorkspace(string machine) => "@" + machine;
 
