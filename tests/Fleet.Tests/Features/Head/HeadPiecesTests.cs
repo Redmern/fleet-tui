@@ -36,6 +36,17 @@ public sealed class HeadPiecesTests
         Assert.Equal(expected, RelayText.Dispatch(prompt, trigger));
     }
 
+    [Theory]
+    [InlineData("what is the status?", ",", "what is the status?")]
+    [InlineData(",do it", ",", "do it")]
+    [InlineData("  , ,do it", ",", "do it")]
+    [InlineData(",", ",", "")]
+    [InlineData(",keep", "", ",keep")]
+    public void Plain_text_never_starts_with_the_trigger(string prompt, string trigger, string expected)
+    {
+        Assert.Equal(expected, RelayText.Plain(prompt, trigger));
+    }
+
     [Fact]
     public void Relayed_keys_leave_any_nvim_mode_and_enter_the_terminal_first()
     {
@@ -65,6 +76,7 @@ public sealed class HeadPiecesTests
         Assert.Equal(HeadTools.Names.Count, HeadTools.Names.Distinct().Count());
         Assert.All(HeadTools.All, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
         Assert.Contains(HeadTools.Relay, HeadTools.Names);
+        Assert.Contains(HeadTools.Tell, HeadTools.Names);
     }
 
     [Fact]

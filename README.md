@@ -666,6 +666,7 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 | `switch_project` | shows a project, opening it first if it is closed |
 | `menu_action` | hands a dashboard action (`new-agent`, `add-repository`, `keybinds`, ...) to a project's dashboard and shows it |
 | `list_agents` | the agents of one project, or of every open project |
+| `tell` | types a plain message into a project's main orchestrator; never dispatches |
 | `relay` | types a dispatch prompt into a project's main orchestrator |
 
 **Relaying.** `relay` puts the project's dispatch trigger in front of the task and types it
@@ -676,16 +677,22 @@ question or permission prompt on screen), the prompt is **queued** and the head 
 so; fleet types it in as soon as the orchestrator is idle, in order, for up to an hour.
 The queue lives in the head's MCP server, so it is lost if the head's Claude exits.
 
+**Telling.** `tell` is the head's tool for everything that is not a dispatch: asking the
+orchestrator for a status update, a follow-up, an answer to its question. It types the
+message as-is (a leading dispatch trigger is stripped, so it can never dispatch), with the
+same opening, queueing and typing as `relay`. The head uses `relay` only when you
+explicitly ask it to dispatch.
+
 **Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
 connection, so a machine that is not connected is listed with its state and no projects.
 
-`list_projects`, `switch_project`, `menu_action`, `list_agents` and `relay` take an optional
+`list_projects`, `switch_project`, `menu_action`, `list_agents`, `tell` and `relay` take an optional
 `remote`: a nickname from `remotes.json` (never an ssh host). Leave it out, or pass `local`,
 for the machine fleet was opened on. A remote that is not connected is connected first, the
 same way **Remote machines** does; if ssh asks a question (a password, a host key), the head
 says so and you answer it there. `switch_project` shows the remote project in this window;
-`relay`, `list_agents` and `menu_action` run on the remote's own fleet over the existing ssh
+`relay`, `tell`, `list_agents` and `menu_action` run on the remote's own fleet over the existing ssh
 link, so that project's permissions apply there exactly as they do locally. A remote fleet
 never opens ssh to another remote: everything goes through the origin.
 
@@ -693,8 +700,8 @@ never opens ssh to another remote: everything goes through the origin.
 project on a remote machine shows the origin's head over it, not a head on that machine.
 
 **Permissions.** What the head does inside a project goes through that project's own
-permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule and
-`list_agents` its `list_agents` rule. *Forbid* refuses; *ask* shows the Allow/Deny dialog in
+permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule, `tell`
+its `tell_agent` rule and `list_agents` its `list_agents` rule. *Forbid* refuses; *ask* shows the Allow/Deny dialog in
 that project's dashboard, whichever channel the rule names, because the head's own Claude
 cannot tell projects apart. Switching projects, opening menus and showing or hiding the
 head are navigation and always allowed.

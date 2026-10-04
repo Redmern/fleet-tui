@@ -16,4 +16,16 @@ public static class RelayText
             ? text
             : trigger + text;
     }
+
+    public static string Plain(string prompt, string trigger)
+    {
+        var text = prompt.Trim().ReplaceLineEndings("\n");
+
+        while (trigger.Length > 0 && text.StartsWith(trigger, StringComparison.Ordinal))
+        {
+            text = text[trigger.Length..].TrimStart();
+        }
+
+        return text;
+    }
 }

@@ -16,6 +16,8 @@ public static class HeadTools
 
     public const string Relay = "relay";
 
+    public const string Tell = "tell";
+
     public const string Project = "project";
 
     public const string Action = "action";
@@ -75,10 +77,18 @@ public static class HeadTools
             "List the agents of one project, or of every open project when no project is given.",
             [new(Project, "string", "The project; leave out for every open project.", false), RemoteParam]),
         new(
+            Tell,
+            "Pass a plain message to a project's main orchestrator: a question (\"what is the status?\"), a "
+            + "follow-up or an instruction. Types the prompt as-is into its Claude as if the user typed it, never "
+            + "as a dispatch. Use this for everything except an explicit dispatch. Opens the project if it is "
+            + "closed; queues the prompt if its Claude is busy.",
+            [ProjectParam, new(Prompt, "string", "The message for the orchestrator, as the user worded it.", true), RemoteParam]),
+        new(
             Relay,
-            "Tell a project's main orchestrator to dispatch a task: types the prompt, with the project's "
-            + "dispatch trigger in front, into its Claude as if the user typed it. Opens the project if it "
-            + "is closed; queues the prompt if its Claude is busy.",
+            "Have a project's main orchestrator dispatch a new sub-orchestrator: types the prompt, with the "
+            + "project's dispatch trigger in front, into its Claude. Use only when the user explicitly asks to "
+            + "dispatch a task; use tell for anything else. Opens the project if it is closed; queues the prompt "
+            + "if its Claude is busy.",
             [ProjectParam, new(Prompt, "string", "The task for the orchestrator to dispatch.", true), RemoteParam]),
     ];
 

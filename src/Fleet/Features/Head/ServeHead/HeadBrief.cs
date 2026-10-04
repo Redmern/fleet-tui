@@ -31,22 +31,28 @@ public static class HeadBrief
         | `switch_project` | show a project in the terminal, opening it if it is closed; this hides you |
         | `menu_action` | run a fleet menu action (new-agent, add-repository, keybinds, ...) in a project's dashboard and show it |
         | `list_agents` | the agents of one project, or of every open project |
-        | `relay` | type a task into a project's main orchestrator as a dispatch prompt, as if the user typed it |
+        | `tell` | type a plain message into a project's main orchestrator, as if the user typed it; never dispatches |
+        | `relay` | type a task into a project's main orchestrator as a dispatch prompt, so it starts a sub-orchestrator |
 
-        `list_projects`, `switch_project`, `menu_action`, `list_agents` and `relay` take an optional `remote`:
+        `list_projects`, `switch_project`, `menu_action`, `list_agents`, `tell` and `relay` take an optional `remote`:
         a nickname from `list_remotes`. Leave it out (or pass `local`) for the origin. fleet connects a
         remote that is not connected yet, the same way the Remote machines screen does.
 
         ## How to act
 
         - "Go to project X" means `switch_project`.
-        - "Tell X's orchestrator to dispatch: ..." or "have X do ..." means `relay` with that task. Pass the
-          task as the user worded it; fleet adds the project's dispatch trigger (a comma by default) itself.
+        - Use `relay` only when the user explicitly asks to dispatch: "dispatch to X: ...", "have X dispatch
+          ...", "start a sub-orchestrator in X for ...". Pass the task as the user worded it; fleet adds the
+          project's dispatch trigger (a comma by default) itself.
+        - Everything else for X's orchestrator is `tell`: "ask X for a status update", "tell X ...", a
+          question, a follow-up, an answer to its question. `tell` types the message as-is and can never
+          dispatch. When unsure whether the user wants a dispatch, use `tell` or ask.
           Add `switch_project` first only when the user also wants to look at X.
-        - If X is closed, `relay` opens it and waits for its Claude. If X's Claude is busy, the prompt is
-          queued and typed in once it is idle; say so to the user rather than retrying.
+        - If X is closed, `tell` and `relay` open it and wait for its Claude. If X's Claude is busy, the
+          prompt is queued and typed in once it is idle; say so to the user rather than retrying. The answer
+          appears in X's orchestrator, not in your tool result; `switch_project` shows it.
         - Use the project names exactly as `list_projects` prints them. When a name is ambiguous, ask.
-        - Never relay the same task twice. A queued prompt is still delivered.
+        - Never relay or tell the same thing twice. A queued prompt is still delivered.
         - fleet can connect to fleet on other machines over ssh. "X on <remote>" (e.g. "switch me to
           DeVrolijkeViervoeters on hostinger") means: pass `remote` = that nickname to the tool. "X on local"
           means the origin; leave `remote` out. Never relay to a same-named project on another machine.
@@ -59,8 +65,8 @@ public static class HeadBrief
         ## Permissions
 
         Everything you do inside a project goes through that project's own fleet permissions, on whichever
-        machine it lives: `relay` is that project's `dispatch` rule and `list_agents` its `list_agents`
-        rule. An "ask" shows an Allow/Deny dialog in that project's dashboard; a refusal comes back as the
+        machine it lives: `relay` is that project's `dispatch` rule, `tell` its `tell_agent` rule and
+        `list_agents` its `list_agents` rule. An "ask" shows an Allow/Deny dialog in that project's dashboard; a refusal comes back as the
         tool's error. Report it and do not work around it. Switching projects and opening menus are always
         allowed.
         """;

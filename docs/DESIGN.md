@@ -4606,13 +4606,13 @@ One Claude above every project's orchestrator, opened by a global chord.
   continue) it starts fresh.
 - **`fleet mcp --head`** is a second tool set on the same `fleet` server name, in its own
   slice (`Features/Head/ServeHead`): `list_projects`, `switch_project`, `menu_action`,
-  `list_agents`, `relay`. Opening, switching and dashboard handover reuse
+  `list_agents`, `relay`, `tell`. Opening, switching and dashboard handover reuse
   `ProjectOpener`, `LocateProjectHandler` and `fleet request`'s store through the
   composition root. On WezTerm, switching focuses the project's dashboard pane and asks for
   its workspace through the workspace request file. On a multiplexer with workspaces it
   shows the workspace.
 - **Permissions.** Inside project X the head is gated by X's own settings: `relay` is X's
-  `dispatch` rule and `list_agents` X's `list_agents` rule. *Ask* always goes to X's
+  `dispatch` rule, `tell` X's `tell_agent` rule (a plain message is not a dispatch) and `list_agents` X's `list_agents` rule. *Ask* always goes to X's
   dashboard dialog (`IApprovalChannel`), whatever channel the rule names, because the
   head's Claude has one permission rule per tool, not per project, so Claude's own prompt
   could not honour X's choice. Navigation needs no permission.
@@ -4622,7 +4622,8 @@ One Claude above every project's orchestrator, opened by a global chord.
   X's *Main orchestrator in nvim* setting is on, `Ctrl-\ Ctrl-N` then `i` go first, to take
   nvim from any mode into its Claude terminal; when it is off, Claude gets the keys directly.
   The setting is read at delivery time, so a pane started before the setting flipped gets
-  the wrong form until the project is reopened.
+  the wrong form until the project is reopened. `tell` shares the path but sends the prompt
+  as-is, with any leading trigger stripped, so the orchestrator's hook never dispatches it.
   The orchestrator's `UserPromptSubmit` hook then dispatches exactly as for a typed
   prompt. *Ready* is read from the screen: two samples a second apart that are identical,
   with no spinner (`esc to interrupt`), no question or permission prompt, and a Claude
