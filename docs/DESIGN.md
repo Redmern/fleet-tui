@@ -4678,6 +4678,24 @@ for a sub.
 - The head is unchanged. It reaches a project only through `relay` to that project's
   orchestrator, which now has these tools.
 
+## The head lists projects per machine, 2026-10-04
+
+The head could not tell which machine a project lives on. `list_remote_projects` is a new
+head tool rather than more output from `list_projects`: every other head tool takes a
+*local* project name, and `list_projects`' queue counts and roots only mean anything here,
+so mixing remote projects into it would invite relaying to a project the head cannot reach.
+
+- **Sources.** `HeadDeps` gains `IRemoteMachines` (the nicknamed fleetd links, the same
+  list Switch project's machine tabs use) and `IKnownRemoteStore` (`remotes.json`). Both
+  only read: `list-remotes` asks the running fleetd, and with no fleetd the list is empty.
+  No ssh connection is opened, so nothing can prompt for a password.
+- **Shape.** `this machine` first, each project `open` or `closed` (`IsOpen`, as for
+  `list_projects`); then each live link in fleetd's order, as `nickname (host)` or just the
+  host, with its state; a connected one lists its saved projects (`Projects`, `open` when
+  in `Running`), as the switcher does. Then the known hosts with no link, newest first, as
+  `known · not connected`. A link that is connecting, asking or failed shows its state and
+  no projects: fleet keeps no last-known project list for a machine.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
