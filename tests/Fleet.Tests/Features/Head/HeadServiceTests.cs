@@ -393,7 +393,7 @@ public sealed class HeadServiceTests
         Assert.Contains("web, api", result.Text);
     }
 
-    private const string Hostinger = "red@100.76.65.9";
+    private const string Hostinger = "red@hostinger.example";
 
     private static readonly RemoteMachine HostingerUp =
         new(Hostinger, "srv-1", RemoteState.Connected, ["DeVrolijkeViervoeters", "shop"], Running: ["shop"]);
@@ -437,7 +437,7 @@ public sealed class HeadServiceTests
 
     [Theory]
     [InlineData("homelab")]
-    [InlineData("red@100.76.65.9")]
+    [InlineData("red@hostinger.example")]
     public async Task An_unknown_nickname_or_a_raw_ssh_host_is_refused_and_names_the_machines(string remote)
     {
         KnowHostinger();
@@ -479,14 +479,14 @@ public sealed class HeadServiceTests
             Call(HeadTools.ListProjects, (HeadTools.Remote, "hostinger")));
 
         Assert.True(result.IsError);
-        Assert.Equal("could not reach hostinger (red@100.76.65.9) over ssh: Connection timed out.", result.Text);
+        Assert.Equal("could not reach hostinger (red@hostinger.example) over ssh: Connection timed out.", result.Text);
     }
 
     [Fact]
     public async Task A_remote_whose_ssh_asks_a_question_points_the_user_at_remote_machines()
     {
         KnowHostinger();
-        _remotes.OnConnect = new RemoteMachine(Hostinger, Hostinger, RemoteState.Asking, [], Prompt: "red@100.76.65.9's password: ");
+        _remotes.OnConnect = new RemoteMachine(Hostinger, Hostinger, RemoteState.Asking, [], Prompt: "red@hostinger.example's password: ");
 
         var result = await Service().HandleAsync(
             Call(HeadTools.SwitchProject, (HeadTools.Project, "shop"), (HeadTools.Remote, "hostinger")));
