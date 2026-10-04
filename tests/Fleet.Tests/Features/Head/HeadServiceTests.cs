@@ -10,6 +10,9 @@ using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Remotes;
+using Fleet.Ports.Remotes.Enums;
+using Fleet.Ports.Remotes.Models;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
 using Fleet.Shared.Keymap.Enums;
@@ -51,6 +54,10 @@ public sealed class HeadServiceTests
 
     private readonly List<string> _opened = [];
 
+    private readonly Remotes _remotes = new();
+
+    private readonly Known _known = new();
+
     private HeadService Service() => new(
         new HeadDeps(
             new Projects(Web, Api),
@@ -68,7 +75,9 @@ public sealed class HeadServiceTests
                 return Task.FromResult<string?>(null);
             },
             name => _open.TryGetValue(name, out var panes) ? panes.Dash.Value : null,
-            new NoLog()),
+            new NoLog(),
+            _remotes,
+            _known),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
@@ -233,6 +242,63 @@ public sealed class HeadServiceTests
     }
 
     [Fact]
+    public async Task List_remote_projects_groups_projects_by_machine_with_this_machine_first()
+    {
+        Open(Web, Idle);
+        _remotes.Machines =
+        [
+            new RemoteMachine("user@homelab", "homelab-01", RemoteState.Connected, ["site", "blog"], Running: ["site"]),
+        ];
+        _known.Remotes = [new KnownRemote("USER@HOMELAB", "lab", DateTimeOffset.UnixEpoch)];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ListRemoteProjects));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(
+            "this machine\n  api  closed\n  web  open\nlab (user@homelab)  connected\n  blog  closed\n  site  open",
+            result.Text);
+    }
+
+    [Fact]
+    public async Task List_remote_projects_lists_a_known_machine_that_is_not_connected_without_projects()
+    {
+        _known.Remotes =
+        [
+            new KnownRemote("pi@garage", null, DateTimeOffset.UnixEpoch),
+            new KnownRemote("user@nas", "nas", DateTimeOffset.UnixEpoch.AddDays(1)),
+        ];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ListRemoteProjects));
+
+        Assert.EndsWith("\nnas (user@nas)  known · not connected\npi@garage  known · not connected", result.Text);
+        Assert.Empty(_remotes.Connected);
+    }
+
+    [Fact]
+    public async Task List_remote_projects_shows_the_state_of_a_link_that_is_not_connected_yet()
+    {
+        _remotes.Machines =
+        [
+            new RemoteMachine("user@homelab", "user@homelab", RemoteState.Asking, ["site"]),
+            new RemoteMachine("pi@garage", "garage", RemoteState.Failed, [], Error: "host unreachable"),
+        ];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ListRemoteProjects));
+
+        Assert.Contains("\nuser@homelab  connecting · ssh is asking a question in Remote machines\n", result.Text);
+        Assert.EndsWith("\ngarage (pi@garage)  failed: host unreachable", result.Text);
+        Assert.DoesNotContain("site", result.Text);
+    }
+
+    [Fact]
+    public async Task List_remote_projects_says_when_no_remote_machine_is_known()
+    {
+        var result = await Service().HandleAsync(Call(HeadTools.ListRemoteProjects));
+
+        Assert.Equal("this machine\n  api  closed\n  web  closed\nno remote machines are known.", result.Text);
+    }
+
+    [Fact]
     public async Task Switch_project_focuses_the_dashboard_and_asks_for_its_workspace()
     {
         var (_, dash) = Open(Web, Idle);
@@ -266,7 +332,7 @@ public sealed class HeadServiceTests
         var service = new HeadService(
             new HeadDeps(
                 new Projects(Web), mux, _settings, _approvals, _agents, _requests, _workspaces,
-                (_, _) => Task.FromResult(true), _ => Task.FromResult<string?>(null), _ => null, new NoLog()),
+                (_, _) => Task.FromResult(true), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known),
             Fast);
 
         await service.HandleAsync(Call(HeadTools.SwitchProject, (HeadTools.Project, "web")));
@@ -400,6 +466,48 @@ public sealed class HeadServiceTests
         public List<string> Submitted { get; } = [];
 
         public void Submit(string workspace) => Submitted.Add(workspace);
+    }
+
+    private sealed class Remotes : IRemoteMachines
+    {
+        public IReadOnlyList<RemoteMachine> Machines { get; set; } = [];
+
+        public List<string> Connected { get; } = [];
+
+        public Task<IReadOnlyList<RemoteMachine>> ListAsync(CancellationToken ct = default) => Task.FromResult(Machines);
+
+        public Task ConnectAsync(string host, CancellationToken ct = default)
+        {
+            Connected.Add(host);
+            return Task.CompletedTask;
+        }
+
+        public Task AnswerAsync(string host, string answer, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task DisconnectAsync(string host, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task OpenInNewWindowAsync(string host, string project, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task ShowHereAsync(string host, string project, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    private sealed class Known : IKnownRemoteStore
+    {
+        public IReadOnlyList<KnownRemote> Remotes { get; set; } = [];
+
+        public IReadOnlyList<KnownRemote> Load() => Remotes;
+
+        public void Remember(string host, DateTimeOffset connected)
+        {
+        }
+
+        public void Rename(string host, string? nickname)
+        {
+        }
+
+        public void Forget(string host)
+        {
+        }
     }
 
     private sealed class NoLog : IFleetLog

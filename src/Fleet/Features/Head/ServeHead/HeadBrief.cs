@@ -20,6 +20,7 @@ public static class HeadBrief
         | Tool | Does |
         |---|---|
         | `list_projects` | every project, whether it is open, and how many relayed prompts wait for it |
+        | `list_remote_projects` | the projects of every machine: this machine first, then each remote machine (nickname and ssh host, connected or not), each project open or closed |
         | `switch_project` | show a project in the terminal, opening it if it is closed; this hides you |
         | `menu_action` | run a fleet menu action (new-agent, add-repository, keybinds, ...) in a project's dashboard and show it |
         | `list_agents` | the agents of one project, or of every open project |
@@ -35,6 +36,10 @@ public static class HeadBrief
           queued and typed in once it is idle; say so to the user rather than retrying.
         - Use the project names exactly as `list_projects` prints them. When a name is ambiguous, ask.
         - Never relay the same task twice. A queued prompt is still delivered.
+        - fleet can connect to fleet on other machines over ssh. "Which machine is X on?" or "what runs on
+          homelab?" means `list_remote_projects`. Your other tools act on this machine's projects only: if
+          a project lives on a remote machine, tell the user so rather than relaying to a same-named local
+          one. A remote that is not connected shows no projects; the user connects it under Remote machines.
 
         ## Permissions
 
