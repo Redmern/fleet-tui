@@ -3243,8 +3243,10 @@ phases"), checked against `embedded`.
   fleet MCP server runs inside that pane and knows its id.
   1. On a multiplexer with floats (`MuxCaps.Popup`), the MCP server tags the
      request with its pane.
-  2. It opens `fleet approve --project <p> <pane>` in a modal float centred
-     over that pane (50–72 columns by 10–14 rows, kept on screen).
+  2. It opens `fleet approve --project <p> <pane>` in a modal float sized
+     from that pane (50–72 columns by 10–14 rows) and centred in the whole
+     window, so it does not land in whichever split asked (changed
+     2026-10-04; it used to be centred over the pane).
   3. That float shows the same Allow/No dialog as the dashboard, answers,
      and exits. The MCP side closes the float if it is still there when the
      answer arrives by some other route.
@@ -3522,8 +3524,9 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
       dialog size;
     - full screens (log, keybinds, settings) take the large area in the
       middle;
-    - a sized float keeps its own centre, so an approval stays over the
-      agent that asked;
+    - a sized float is centred in the whole window (until 2026-10-04 it
+      kept its own centre, which left an approval in the asking split);
+      one the user moved (drag or keys) keeps its own centre instead;
     - when a dialog closes, the screen below gets its title and size back.
 - **Fixed on the way.** `FleetActionIds.Parse` did not know ids that fall back
   to the enum name (`viewlogs`, `browsefiles`, …), so such requests were

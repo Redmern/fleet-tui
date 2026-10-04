@@ -202,7 +202,9 @@ public sealed class MuxModel
             return false;
         }
 
-        box.Bounds = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(StatusRows, y) };
+        var moved = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(StatusRows, y) };
+        box.Moved |= moved != box.Bounds;
+        box.Bounds = moved;
         return true;
     }
 
@@ -756,11 +758,7 @@ public sealed class MuxModel
         var width = Math.Clamp(cols + 2, MinFloatWidth, content.Width);
         var height = Math.Clamp(rows + 2, MinFloatHeight, content.Height);
 
-        var now = FloatArea(box.Bounds, content);
-        var centreX = now.X + now.Width / 2;
-        var centreY = now.Y + now.Height / 2;
-
-        box.Bounds = FloatArea(new Rect(centreX - width / 2, centreY - height / 2, width, height), content);
+        box.Bounds = FloatArea(box.Moved ? KeepCentre(box.Bounds, width, height, content) : Centred(width, height, content), content);
         return true;
     }
 
@@ -1114,15 +1112,31 @@ public sealed class MuxModel
         };
     }
 
-    public static Rect Over(Rect pane)
+    public static Rect Over(Rect pane, Rect window)
     {
         var width = Math.Clamp(pane.Width, 50, 72);
         var height = Math.Clamp(pane.Height, 10, 14);
-        return new Rect(
-            Math.Max(0, pane.X + (pane.Width - width) / 2),
-            Math.Max(0, pane.Y + (pane.Height - height) / 2),
+        return Centred(width, height, window);
+    }
+
+    public static Rect Centred(int width, int height, Rect window) =>
+        new(
+            Math.Max(window.X, window.X + (window.Width - width) / 2),
+            Math.Max(window.Y, window.Y + (window.Height - height) / 2),
             width,
             height);
+
+    private static Rect KeepCentre(Rect bounds, int width, int height, Rect content)
+    {
+        var now = FloatArea(bounds, content);
+        return new Rect(now.X + now.Width / 2 - width / 2, now.Y + now.Height / 2 - height / 2, width, height);
+    }
+
+    public Rect WindowArea(string workspace)
+    {
+        var found = Workspace(workspace);
+        var (cols, rows) = found is not null ? SizeFor(found) : Reference();
+        return Area(found, cols, rows);
     }
 
     public static Rect FloatArea(Rect bounds, Rect content)
@@ -1453,6 +1467,8 @@ public sealed class FloatState(string pane, Rect bounds)
     public string Title { get; set; } = string.Empty;
 
     public bool Modal { get; init; }
+
+    public bool Moved { get; set; }
 
     public bool Parked { get; set; }
 

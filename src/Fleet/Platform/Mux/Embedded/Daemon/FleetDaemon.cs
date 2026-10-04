@@ -1694,7 +1694,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 home,
                 request.Cwd ?? _model.Pane(over)?.Cwd ?? Environment.CurrentDirectory,
                 request.Args ?? [],
-                below is { } area ? MuxModel.Over(area) : null,
+                below is { } area ? MuxModel.Over(area, _model.WindowArea(home)) : null,
                 modal: true);
             ApplyResizes();
             Start(box, request.Env);
