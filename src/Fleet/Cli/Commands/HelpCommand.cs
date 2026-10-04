@@ -19,7 +19,7 @@ public static class HelpCommand
               fleet dispatch --project <p> "<task>"
                                           spin up a hidden sub-orchestrator for a task
               fleet apply-keybinds        write the wezterm keybinding module
-              fleet head [--voice]        the head orchestrator's Claude (alt+o / alt+shift+o toggle it)
+              fleet head [--voice]        the head orchestrator's Claude (alt+o text, alt+shift+o voice)
               fleet mcp --head            the head's cross-project MCP tools over stdio
               fleet doctor                check the environment
               fleet version               show the version, and check for an update

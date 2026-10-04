@@ -347,8 +347,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
 | `ctrl+enter` | the fleet menu, from any pane |
-| `alt+o` | show or hide the head orchestrator, from any pane of a fleet window |
-| `alt+shift+o` | the same, starting the head with voice dictation on |
+| `alt+o` | show or hide the head orchestrator in text mode, from any pane of a fleet window |
+| `alt+shift+o` | the same in voice mode; the other chord switches a running head's mode |
 
 Adding a repository has no bare key on purpose — it lives in the menu only, so
 the dashboard's letters stay free for navigation.
@@ -611,12 +611,20 @@ as if you had.
   Hiding never stops it: it is one Claude session that lives across projects and
   windows, and comes back with the conversation where you left it. After a restart of
   WezTerm it resumes the last conversation (`claude --continue`).
-- **`alt+shift+o`** does the same, but starts the head with Claude Code's voice dictation
-  on (hold space to talk). Voice is a Claude Code setting, `voice.enabled`, so fleet
-  starts the head with `claude --settings <file>` holding `{"voice":{"enabled":true}}`;
-  `alt+o` passes `false`. This only takes effect when the head starts. A head that is
-  already running keeps its mode, so to switch, run `/voice` inside it. Voice needs a
-  claude.ai login, as it does anywhere in Claude Code.
+- **`alt+shift+o`** does the same in voice mode: Claude Code's voice dictation is on (hold
+  space to talk). `alt+o` is always text mode, `alt+shift+o` always voice mode, whether
+  the head is new or already running:
+  - no head yet: the chord starts it in its mode;
+  - the same chord as the running mode: shows the head, or hides it when it is shown;
+  - the other chord: restarts the head in the new mode and shows it. The restart resumes
+    the conversation (`claude --continue`), but a turn the head is in the middle of is
+    cut off.
+
+  Voice is a Claude Code setting, `voice.enabled`, so fleet starts the head with
+  `claude --settings <file>` holding `{"voice":{"enabled":true}}` or `false`. That is why
+  switching needs a restart: `/voice` saves to your user settings, which the head's
+  `--settings` file outranks, so don't use `/voice` in the head. Voice needs a claude.ai
+  login, as it does anywhere in Claude Code.
 - Both chords are direct, with no prefix, and are rebindable under **Keybinds** in the
   *anywhere, no prefix* group. On WezTerm, re-run `fleet apply-keybinds` after changing
   them; the built-in multiplexer picks them up on its next attach or `prefix r`.
@@ -634,6 +642,7 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 | Tool | Does |
 |---|---|
 | `list_projects` | every project, open or closed, and how many relayed prompts wait for it |
+| `list_remote_projects` | the projects per machine: this machine first, then every remote machine fleet knows (nickname and ssh host, `connected` or `known · not connected`), each project `open` or `closed` |
 | `switch_project` | shows a project, opening it first if it is closed |
 | `menu_action` | hands a dashboard action (`new-agent`, `add-repository`, `keybinds`, ...) to a project's dashboard and shows it |
 | `list_agents` | the agents of one project, or of every open project |
@@ -646,6 +655,11 @@ it and waits up to 90 seconds for its Claude. If that Claude is busy (a spinner,
 question or permission prompt on screen), the prompt is **queued** and the head is told
 so; fleet types it in as soon as the orchestrator is idle, in order, for up to an hour.
 The queue lives in the head's MCP server, so it is lost if the head's Claude exits.
+
+**Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
+links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
+connection, so a machine that is not connected is listed with its state and no projects.
+The other head tools act on this machine's projects only.
 
 **Permissions.** What the head does inside a project goes through that project's own
 permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule and

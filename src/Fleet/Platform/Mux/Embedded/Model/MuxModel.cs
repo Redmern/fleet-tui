@@ -17,6 +17,8 @@ public sealed class MuxModel
 
     public const string HeadVerb = "head";
 
+    public const string HeadVoiceFlag = "--voice";
+
     public const string HeadHolding = FleetWorkspaces.Head + FleetWorkspaces.HiddenSuffix;
 
     private readonly List<WorkspaceState> _workspaces = [];
@@ -100,6 +102,8 @@ public sealed class MuxModel
 
     public static bool IsHead(PaneState pane) => pane.Args is [_, HeadVerb, ..];
 
+    public static bool IsVoiceHead(PaneState pane) => IsHead(pane) && pane.Args.Contains(HeadVoiceFlag);
+
     public PaneState? HeadPane() => _panes.Values.FirstOrDefault(IsHead);
 
     public PaneState SpawnHead(string workspace, string cwd, IReadOnlyList<string> args)
@@ -119,7 +123,7 @@ public sealed class MuxModel
         return pane;
     }
 
-    public HeadToggle ToggleHead(string client)
+    public HeadToggle ToggleHead(string client, bool voice)
     {
         if (View(client)?.Workspace is not { } here)
         {
@@ -129,6 +133,11 @@ public sealed class MuxModel
         if (HeadPane() is not { } head)
         {
             return HeadToggle.Missing;
+        }
+
+        if (IsVoiceHead(head) != voice)
+        {
+            return HeadToggle.OtherMode;
         }
 
         if (FloatOf(head.Id) is not var (from, box))
@@ -1495,6 +1504,7 @@ public enum HeadToggle
 {
     Nothing,
     Missing,
+    OtherMode,
     Shown,
     Hidden,
 }

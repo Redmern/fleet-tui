@@ -1269,15 +1269,44 @@ public sealed class DaemonTests : IAsyncLifetime
         await client.SendKeyAsync("k");
         await Eventually(() => _panes.ByProgram("fleet")!.Written == "k");
 
-        await client.SendCommandAsync("head");
+        await client.SendCommandAsync("head", "voice");
         await client.SendKeyAsync("j");
         await Eventually(() => _panes.ByProgram("tile")!.Written == "j");
 
-        await client.SendCommandAsync("head");
+        await client.SendCommandAsync("head", "voice");
         await client.SendKeyAsync("x");
         await Eventually(() => _panes.ByProgram("fleet")!.Written == "kx");
 
         Assert.Single(_panes.Started, p => p.Program == "fleet");
         Assert.False(_panes.ByProgram("fleet")!.IsDisposed);
+    }
+
+    [Fact]
+    public async Task The_other_head_chord_restarts_the_head_in_its_mode_and_shows_it()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync("head");
+        await Eventually(() => _panes.ByProgram("fleet") is { } head && !head.Args.Contains("--voice"));
+        var text = _panes.ByProgram("fleet")!;
+
+        await client.SendCommandAsync("head");
+        await client.SendCommandAsync("head", "voice");
+        await Eventually(() => _panes.Started.Count(p => p.Program == "fleet") == 2);
+
+        var voice = _panes.Started.Last(p => p.Program == "fleet");
+        Assert.Contains("--voice", voice.Args);
+        await Eventually(() => text.IsDisposed);
+
+        await client.SendKeyAsync("v");
+        await Eventually(() => voice.Written == "v");
+
+        await client.SendCommandAsync("head");
+        await Eventually(() => _panes.Started.Count(p => p.Program == "fleet") == 3);
+        Assert.DoesNotContain("--voice", _panes.Started.Last(p => p.Program == "fleet").Args);
+        await Eventually(() => voice.IsDisposed);
     }
 }

@@ -197,8 +197,22 @@ public class WezTermKeybindsTests
         Assert.Contains("toggle_head(window, pane, false, 'o', 'ALT')", lua);
         Assert.Contains("toggle_head(window, pane, true, 'o', 'ALT|SHIFT')", lua);
         Assert.Contains("M.head_workspace = 'fleet-head'", lua);
-        Assert.Contains("spawn = { args = args }", lua);
+        Assert.Contains("spawn = { args = head_args(voice) }", lua);
         Assert.Contains("table.insert(args, '--voice')", lua);
+    }
+
+    [Fact]
+    public void The_other_head_chord_restarts_the_head_in_its_mode_and_kills_the_old_pane()
+    {
+        var lua = Lua();
+
+        Assert.Contains("local running = wezterm.GLOBAL.fleet_head_voice == true", lua);
+        Assert.Contains("if voice ~= running then", lua);
+        Assert.Contains("old[1]:split { args = head_args(voice) }", lua);
+        Assert.Contains("'wezterm', 'cli', 'kill-pane', '--pane-id', tostring(p:pane_id()),", lua);
+        Assert.Contains("wezterm.background_child_process", lua);
+        Assert.DoesNotContain("wezterm.run_child_process", lua);
+        Assert.Contains("wezterm.GLOBAL.fleet_head_voice = voice", lua);
     }
 
     [Fact]

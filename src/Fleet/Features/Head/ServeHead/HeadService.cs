@@ -3,6 +3,8 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Remotes.Enums;
+using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
@@ -12,6 +14,10 @@ namespace Fleet.Features.Head.ServeHead;
 
 public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 {
+    public const string ThisMachine = "this machine";
+
+    private const string Indent = "  ";
+
     private readonly HeadGate _gate = new(deps);
 
     private HeadRelay? _relay;
@@ -25,6 +31,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         request.Tool switch
         {
             HeadTools.ListProjects => await ListProjectsAsync(ct).ConfigureAwait(false),
+            HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
             HeadTools.SwitchProject => await WithProject(request, p => SwitchAsync(p, ct)).ConfigureAwait(false),
             HeadTools.MenuAction => await WithProject(request, p => MenuAsync(p, request, ct)).ConfigureAwait(false),
             HeadTools.ListAgents => await ListAgentsAsync(request, ct).ConfigureAwait(false),
@@ -54,6 +61,74 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
         return McpResult.Ok(string.Join('\n', lines));
     }
+
+    private async Task<McpResult> ListRemoteProjectsAsync(CancellationToken ct)
+    {
+        var lines = new List<string> { ThisMachine };
+        var projects = deps.Projects.List();
+
+        if (projects.Count == 0)
+        {
+            lines.Add(Indent + "no projects");
+        }
+
+        foreach (var project in projects.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var open = await deps.IsOpen(project, ct).ConfigureAwait(false);
+            lines.Add($"{Indent}{project.Name}  {(open ? "open" : "closed")}");
+        }
+
+        var live = await deps.Remotes.ListAsync(ct).ConfigureAwait(false);
+        var known = deps.KnownRemotes.Load()
+            .DistinctBy(k => k.Host, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(k => k.Host, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var machine in live)
+        {
+            var label = known.GetValueOrDefault(machine.Host)?.Nickname ?? machine.Label;
+            lines.Add($"{Machine(label, machine.Host)}  {Describe(machine)}");
+
+            if (machine.State != RemoteState.Connected)
+            {
+                continue;
+            }
+
+            if (machine.Projects.Count == 0)
+            {
+                lines.Add(Indent + "no projects");
+            }
+
+            lines.AddRange(machine.Projects
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .Select(p => $"{Indent}{p}  {(machine.IsRunning(p) ? "open" : "closed")}"));
+        }
+
+        var connected = live.Select(m => m.Host).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        lines.AddRange(known.Values
+            .Where(k => !connected.Contains(k.Host))
+            .OrderByDescending(k => k.LastConnected)
+            .Select(k => $"{Machine(k.Label, k.Host)}  known · not connected"));
+
+        if (live.Count == 0 && known.Count == 0)
+        {
+            lines.Add("no remote machines are known.");
+        }
+
+        return McpResult.Ok(string.Join('\n', lines));
+    }
+
+    private static string Machine(string label, string host) =>
+        string.Equals(label, host, StringComparison.OrdinalIgnoreCase) ? host : $"{label} ({host})";
+
+    private static string Describe(RemoteMachine machine) =>
+        machine.State switch
+        {
+            RemoteState.Connected => "connected",
+            RemoteState.Asking => "connecting · ssh is asking a question in Remote machines",
+            RemoteState.Failed => "failed" + (machine.Error is { Length: > 0 } error ? $": {error}" : string.Empty),
+            _ => "connecting",
+        };
 
     private async Task<McpResult> SwitchAsync(Project project, CancellationToken ct)
     {

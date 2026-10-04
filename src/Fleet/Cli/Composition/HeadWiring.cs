@@ -45,7 +45,9 @@ public static class HeadWiring
             (project, ct) => IsOpenAsync(mux, project, ct),
             project => ProjectOpener.EnsureOpenAsync(mux, project),
             Adapters.DashPane,
-            log);
+            log,
+            Adapters.Remotes(),
+            Adapters.KnownRemotes());
 
     public static int Launch(bool voice)
     {
