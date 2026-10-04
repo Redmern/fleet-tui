@@ -17,7 +17,17 @@ public static class ClaudeWiring
     public static Result SyncFolder(string project, string folder, string caller) =>
         Sync(project, folder, caller, Adapters.Settings().Load(project).MergedOverDefaults());
 
+    private static readonly Lock ConfigGate = new();
+
     public static Result Sync(string project, string directory, string caller, SettingsConfig settings)
+    {
+        lock (ConfigGate)
+        {
+            return SyncLocked(project, directory, caller, settings);
+        }
+    }
+
+    private static Result SyncLocked(string project, string directory, string caller, SettingsConfig settings)
     {
         var permissions = ClaudePermissionPlanner.Plan(settings);
         var server = McpRegistration.For(Adapters.Executable, project, caller);
@@ -73,8 +83,13 @@ public static class ClaudeWiring
     private static string StatusHook(SettingsConfig settings) =>
         settings.StatusHooks ? Adapters.Executable : string.Empty;
 
-    public static void TrustFolder(string folder) =>
-        new ClaudeConfigWriter().TrustFolder(ClaudeJsonPathFor(folder), folder, McpTools.ServerName);
+    public static void TrustFolder(string folder)
+    {
+        lock (ConfigGate)
+        {
+            new ClaudeConfigWriter().TrustFolder(ClaudeJsonPathFor(folder), folder, McpTools.ServerName);
+        }
+    }
 
     private static readonly string[] FleetExcludes =
         ["/.mcp.json", "/.claude/", "/.fleet/", "/.fleet-ready"];
