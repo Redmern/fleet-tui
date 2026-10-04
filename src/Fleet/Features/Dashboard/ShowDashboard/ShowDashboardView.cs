@@ -1,6 +1,7 @@
 using Fleet.Features.Dashboard.ShowDashboard.Constants;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Ports.Approvals.Models;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
@@ -198,30 +199,26 @@ public static class ShowDashboardView
         IReadOnlyList<RepositoryChoice> repositories = [];
         var repoRows = new FleetRowSource([]);
 
-        void Bind(
-            IReadOnlyList<RepositoryChoice> loaded,
-            IReadOnlyList<FleetRow> repoRowsData,
-            AgentBoard agentBoard,
-            SubBoard subBoard,
-            NoticeBoard noticeBoard)
+        void BindNotices(NoticeBoard noticeBoard)
         {
             notices = noticeBoard;
             FleetRows.Fill(noticeList, notices.Rows, FleetRows.Selected(noticeList));
             tabBar.Retitle(DashboardTabs.NotificationsTab, DashboardTabs.Notifications(notices.Open));
+        }
 
+        void BindRepositories(IReadOnlyList<RepositoryChoice> loaded, IReadOnlyList<FleetRow> repoRowsData)
+        {
             repositories = loaded;
             FleetRows.Fill(repoList, repoRowsData, FleetRows.Selected(repoList));
             repoRows = (FleetRowSource)repoList.Source!;
             tabBar.Retitle(DashboardTabs.RepositoriesTab, DashboardTabs.Repositories(loaded.Count));
+        }
 
+        void BindAgents(AgentBoard agentBoard)
+        {
             if (board.Count != agentBoard.Count)
             {
                 marks[DashboardTabs.AgentsTab].Clear();
-            }
-
-            if (subs.Rows.Count != subBoard.Rows.Count)
-            {
-                marks[DashboardTabs.SubsTab].Clear();
             }
 
             board = agentBoard;
@@ -231,6 +228,14 @@ public static class ShowDashboardView
                 FleetRows.Selected(agentList));
             tabBar.Retitle(DashboardTabs.AgentsTab, DashboardTabs.Agents(board.Count));
             ShowBarFor(DashboardTabs.AgentsTab);
+        }
+
+        void BindSubs(SubBoard subBoard)
+        {
+            if (subs.Rows.Count != subBoard.Rows.Count)
+            {
+                marks[DashboardTabs.SubsTab].Clear();
+            }
 
             subs = subBoard;
             FleetRows.Fill(
@@ -242,17 +247,51 @@ public static class ShowDashboardView
             ShowBarFor(DashboardTabs.SubsTab);
         }
 
-        async Task RefreshAsync()
+        void BindSkeleton()
+        {
+            if (callbacks.LoadRepositoriesFast is { } fastRepositories)
+            {
+                var loaded = fastRepositories();
+                BindRepositories(loaded, DashboardRows.ForRepositories(loaded, _ => BranchState.Unknown));
+            }
+
+            if (callbacks.LoadAgentsFast is { } fastAgents)
+            {
+                BindAgents(fastAgents());
+            }
+
+            if (callbacks.LoadSubsFast is { } fastSubs)
+            {
+                BindSubs(fastSubs());
+            }
+
+            if (callbacks.LoadNoticesFast is { } fastNotices)
+            {
+                BindNotices(fastNotices());
+            }
+        }
+
+        async Task RefreshRepositoriesAsync()
         {
             var loaded = await callbacks.LoadRepositories().ConfigureAwait(false);
-
             var repoRowsData = DashboardRows.ForRepositories(loaded, callbacks.RepositoryState);
-            var agentBoard = callbacks.LoadAgents();
-            var subBoard = callbacks.LoadSubs();
-            var noticeBoard = callbacks.LoadNotices?.Invoke() ?? NoticeBoard.Empty;
 
-            app.Invoke(() => Bind(loaded, repoRowsData, agentBoard, subBoard, noticeBoard));
+            app.Invoke(() => BindRepositories(loaded, repoRowsData));
         }
+
+        void RefreshPanes()
+        {
+            var agentBoard = callbacks.LoadAgents();
+            app.Invoke(() => BindAgents(agentBoard));
+
+            var subBoard = callbacks.LoadSubs();
+            app.Invoke(() => BindSubs(subBoard));
+
+            var noticeBoard = callbacks.LoadNotices?.Invoke() ?? NoticeBoard.Empty;
+            app.Invoke(() => BindNotices(noticeBoard));
+        }
+
+        Task RefreshAsync() => Task.WhenAll(RefreshRepositoriesAsync(), Task.Run(RefreshPanes));
 
         async Task AutoRefreshAsync()
         {
@@ -1195,6 +1234,7 @@ public static class ShowDashboardView
             hints.Root,
             tip);
 
+        BindSkeleton();
         ShowTab(DashboardTabs.AgentsTab);
 
         if (notice is not null)

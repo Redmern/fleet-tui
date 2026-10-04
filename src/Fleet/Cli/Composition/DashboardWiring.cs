@@ -634,11 +634,7 @@ public static class DashboardWiring
             return known ? (last.Behind, last.Conflicts) : (0, false);
         }
 
-        NoticeBoard Board(IReadOnlyList<Notice> all, DateTime now) =>
-            new(NoticeRows.For(all, withProject: false, now),
-                [.. all.Select(n => n.Key)],
-                [.. all.Select(n => n.Worktree)],
-                all.Count(n => n.IsOpen));
+        NoticeBoard Board(IReadOnlyList<Notice> all, DateTime now) => DashboardSkeleton.Notices(all, now);
 
         NoticeBoard LoadNotices()
         {
@@ -1507,6 +1503,15 @@ public static class DashboardWiring
                 return outcome.Succeeded
                     ? null
                     : Noted(log, project.Name, $"could not open an editor for {Label(agent)}: {outcome.Error}");
-            });
+            },
+
+            LoadRepositoriesFast: () => DashboardSkeleton.Repositories(project.Root),
+
+            LoadAgentsFast: () => DashboardSkeleton.Agents(lister.Handle(project.Name)),
+
+            LoadSubsFast: () => DashboardSkeleton.Subs(
+                lister.Handle(project.Name), settings.Load(project.Name).Trigger),
+
+            LoadNoticesFast: () => DashboardSkeleton.Notices(noticeStore.Load(project.Name), DateTime.UtcNow));
     }
 }
