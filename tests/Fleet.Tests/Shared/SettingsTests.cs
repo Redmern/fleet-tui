@@ -26,6 +26,7 @@ public class SettingsTests
 
         Assert.Equal(ActionPolicy.Ask, config.Commit);
         Assert.Equal(ActionPolicy.Ask, config.Push);
+        Assert.Equal(ActionPolicy.Allow, config.Merge);
         Assert.Equal(AidlcMode.Off, config.Aidlc.Mode);
     }
 
@@ -121,6 +122,15 @@ public class SettingsTests
         Assert.NotEqual(before, SettingsConfig.Default.WithTrigger(";").Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithAidlcMode(AidlcMode.On).Signature);
         Assert.NotEqual(before, SettingsConfig.Default.WithStatusHooks(false).Signature);
+        Assert.NotEqual(before, SettingsConfig.Default.WithMerge(ActionPolicy.Forbid).Signature);
+    }
+
+    [Fact]
+    public void The_merge_gate_survives_a_merge_over_the_defaults()
+    {
+        Assert.Equal(
+            ActionPolicy.Ask,
+            SettingsConfig.Default.WithMerge(ActionPolicy.Ask).MergedOverDefaults().Merge);
     }
 
     [Fact]

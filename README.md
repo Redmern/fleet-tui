@@ -550,6 +550,12 @@ an Allow/Deny dialog — even though the MCP call is a separate process — and 
 answer travels back over the filesystem. If no dashboard is running, the tool fails
 fast with a clear error instead of hanging.
 
+The same screen has three git gates that fleet writes as Claude permission rules into
+every orchestrator and agent folder: **Agents commit changes** (`git commit`), **Agents
+push changes** (`git push`) and **Agents merge pull requests** (`gh pr merge`, in Bash and
+PowerShell). Each is `auto`, `ask` or `no`; commit and push ask by default, merge is
+`auto`.
+
 **Dispatch.** Type a prompt in the main pane beginning with the dispatch trigger — a
 comma by default, configurable in the permissions screen — and instead of answering,
 the orchestrator spins up a *sub-orchestrator*: its own Claude in a hidden pane,

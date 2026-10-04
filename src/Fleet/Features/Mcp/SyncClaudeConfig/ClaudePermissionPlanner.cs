@@ -42,6 +42,8 @@ public static class ClaudePermissionPlanner
 
         Gate(GitGates.CommitRule, settings.Commit, allow, deny, ask);
         Gate(GitGates.PushRule, settings.Push, allow, deny, ask);
+        Gate(GitGates.MergeRule, settings.Merge, allow, deny, ask);
+        Gate(GitGates.MergePowerShellRule, settings.Merge, allow, deny, ask);
 
         return new ClaudePermissions(allow, deny, ask);
     }

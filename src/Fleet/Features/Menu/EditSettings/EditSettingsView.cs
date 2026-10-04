@@ -109,11 +109,8 @@ public static class EditSettingsView
             }
         }
 
-        void EditGate(bool push, int index)
+        void EditGate(string label, ActionPolicy current, Func<ActionPolicy, SettingsConfig> with, int index)
         {
-            var current = push ? config.Push : config.Commit;
-            var label = push ? SettingsDefaults.PushLabel : SettingsDefaults.CommitLabel;
-
             var picked = FleetPicker.Choose(
                 app,
                 $"{label} — permission",
@@ -128,7 +125,7 @@ public static class EditSettingsView
 
             var policy = (ActionPolicy)picked.Value;
 
-            Persist(push ? config.WithPush(policy) : config.WithCommit(policy), "Saved.");
+            Persist(with(policy), "Saved.");
             Refill(index);
         }
 
@@ -144,13 +141,19 @@ public static class EditSettingsView
 
             if (SettingsRows.IsCommitRow(index))
             {
-                EditGate(push: false, index);
+                EditGate(SettingsDefaults.CommitLabel, config.Commit, config.WithCommit, index);
                 return;
             }
 
             if (SettingsRows.IsPushRow(index))
             {
-                EditGate(push: true, index);
+                EditGate(SettingsDefaults.PushLabel, config.Push, config.WithPush, index);
+                return;
+            }
+
+            if (SettingsRows.IsMergeRow(index))
+            {
+                EditGate(SettingsDefaults.MergeLabel, config.Merge, config.WithMerge, index);
                 return;
             }
 
@@ -205,6 +208,13 @@ public static class EditSettingsView
             if (SettingsRows.IsPushRow(index))
             {
                 Persist(config.WithPush(SettingsDefaults.Push), "Reset to the default.");
+                Refill(index);
+                return;
+            }
+
+            if (SettingsRows.IsMergeRow(index))
+            {
+                Persist(config.WithMerge(SettingsDefaults.Merge), "Reset to the default.");
                 Refill(index);
                 return;
             }
