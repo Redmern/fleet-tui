@@ -17,7 +17,7 @@ public class KittyRepliesTests
     }
 
     [Fact]
-    public void A_conpty_pane_never_tells_its_program_that_kitty_keys_are_available()
+    public async Task A_conpty_pane_never_tells_its_program_that_kitty_keys_are_available()
     {
         var panes = new FakePanes();
         using var conpty = new PaneRuntime("p1", panes.NewPty(), panes.NewTerminal, 80, 24);
@@ -25,27 +25,23 @@ public class KittyRepliesTests
 
         conpty.Reply("\e[?1u\e[0n"u8.ToArray());
 
-        Assert.Equal("\e[0n", WrittenSoon((FakePanes.FakePty)conpty.Pty));
+        Assert.Equal("\e[0n", await FirstWritten((FakePanes.FakePty)conpty.Pty));
     }
 
     [Fact]
-    public void Other_panes_keep_the_kitty_answer()
+    public async Task Other_panes_keep_the_kitty_answer()
     {
         var panes = new FakePanes();
         using var unix = new PaneRuntime("p1", panes.NewPty(), panes.NewTerminal, 80, 24);
 
         unix.Reply("\e[?1u"u8.ToArray());
 
-        Assert.Equal("\e[?1u", WrittenSoon((FakePanes.FakePty)unix.Pty));
+        Assert.Equal("\e[?1u", await FirstWritten((FakePanes.FakePty)unix.Pty));
     }
 
-    private static string WrittenSoon(FakePanes.FakePty pty)
+    private static async Task<string> FirstWritten(FakePanes.FakePty pty)
     {
-        for (var i = 0; i < 100 && pty.Written.Length == 0; i++)
-        {
-            Thread.Sleep(20);
-        }
-
+        await pty.FirstWrite.WaitAsync(TimeSpan.FromSeconds(10));
         return pty.Written;
     }
 }
