@@ -4,6 +4,7 @@ using Fleet.Ports.Approvals;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Remotes;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
 
@@ -20,7 +21,9 @@ public sealed record HeadDeps(
     Func<Project, CancellationToken, Task<bool>> IsOpen,
     Func<Project, Task<string?>> EnsureOpen,
     Func<string, string?> DashPane,
-    IFleetLog Log);
+    IFleetLog Log,
+    IRemoteMachines Remotes,
+    IKnownRemoteStore KnownRemotes);
 
 public sealed record HeadTiming(
     TimeSpan Poll,

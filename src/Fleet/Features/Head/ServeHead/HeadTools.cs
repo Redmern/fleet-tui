@@ -6,6 +6,8 @@ public static class HeadTools
 {
     public const string ListProjects = "list_projects";
 
+    public const string ListRemoteProjects = "list_remote_projects";
+
     public const string SwitchProject = "switch_project";
 
     public const string MenuAction = "menu_action";
@@ -28,6 +30,13 @@ public static class HeadTools
         new(
             ListProjects,
             "List every fleet project: whether it is open, and how many relayed prompts wait for its orchestrator.",
+            []),
+        new(
+            ListRemoteProjects,
+            "List the projects of every machine: this machine first, then each remote machine fleet knows "
+            + "(nickname and ssh host, and whether it is connected), with each project's name and whether it is "
+            + "open. A remote that is not connected is listed without projects. The other head tools act on "
+            + "this machine's projects only.",
             []),
         new(
             SwitchProject,

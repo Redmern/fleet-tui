@@ -634,6 +634,7 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 | Tool | Does |
 |---|---|
 | `list_projects` | every project, open or closed, and how many relayed prompts wait for it |
+| `list_remote_projects` | the projects per machine: this machine first, then every remote machine fleet knows (nickname and ssh host, `connected` or `known · not connected`), each project `open` or `closed` |
 | `switch_project` | shows a project, opening it first if it is closed |
 | `menu_action` | hands a dashboard action (`new-agent`, `add-repository`, `keybinds`, ...) to a project's dashboard and shows it |
 | `list_agents` | the agents of one project, or of every open project |
@@ -646,6 +647,11 @@ it and waits up to 90 seconds for its Claude. If that Claude is busy (a spinner,
 question or permission prompt on screen), the prompt is **queued** and the head is told
 so; fleet types it in as soon as the orchestrator is idle, in order, for up to an hour.
 The queue lives in the head's MCP server, so it is lost if the head's Claude exits.
+
+**Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
+links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
+connection, so a machine that is not connected is listed with its state and no projects.
+The other head tools act on this machine's projects only.
 
 **Permissions.** What the head does inside a project goes through that project's own
 permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule and
