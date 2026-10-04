@@ -211,8 +211,26 @@ if ((Test-Path (Join-Path $vsInstaller 'vswhere.exe')) -and
 
 Write-Step 'Publishing (NativeAOT)'
 
+# The embedded multiplexer (fleetd) needs libghostty-vt linked statically into the
+# binary. Fleet.csproj links it only when the archive exists for the RID being
+# published, and only sees the RID when it is passed with -r: without it the
+# archive is skipped silently and the installed fleet cannot run fleetd.
+$rid = 'win-x64'
+$ghosttyLib = Join-Path $RepoRoot "artifacts\ghostty\$rid\lib\ghostty-vt-static.lib"
+if (-not (Test-Path $ghosttyLib)) {
+    $ghostty = Invoke-WithSpinner 'building libghostty-vt (once, a few minutes)' (Get-Process -Id $PID).Path @(
+        '-NoProfile', '-File', (Join-Path $RepoRoot 'scripts\ghostty\build.ps1'))
+    if ($ghostty.ExitCode -ne 0 -or -not (Test-Path $ghosttyLib)) {
+        Write-Host $ghostty.Output
+        Write-Warn2 'libghostty-vt did not build; fleet will install, but cannot run fleetd'
+    }
+    else {
+        Write-Ok 'built libghostty-vt'
+    }
+}
+
 $publishDir = Join-Path $RepoRoot 'out'
-$publish = Invoke-WithSpinner 'dotnet publish' 'dotnet' @('publish', (Join-Path $RepoRoot 'src\Fleet'), '-c', 'Release', '-o', $publishDir)
+$publish = Invoke-WithSpinner 'dotnet publish' 'dotnet' @('publish', (Join-Path $RepoRoot 'src\Fleet'), '-c', 'Release', '-r', $rid, '-o', $publishDir)
 
 if ($publish.ExitCode -ne 0 -or -not (Test-Path (Join-Path $publishDir 'fleet.exe'))) {
     Write-Host $publish.Output
