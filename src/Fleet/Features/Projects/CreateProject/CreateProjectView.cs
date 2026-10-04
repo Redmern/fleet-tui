@@ -12,7 +12,11 @@ public static class CreateProjectView
     public const string PickLabel = "browse";
 
     public static Project? Show(
-        IApplication app, CreateProjectHandler handler, Func<string, string?>? pickFolder = null)
+        IApplication app,
+        CreateProjectHandler handler,
+        Func<string, string?>? pickFolder = null,
+        ProjectDraft? draft = null,
+        Action<ProjectDraft>? leaveToBrowse = null)
     {
         Project? created = null;
 
@@ -23,10 +27,24 @@ public static class CreateProjectView
         var browse = FleetTheme.Choice(11, 4, PickLabel);
         var error = FleetTheme.ErrorText(1, 6);
 
-        browse.Visible = pickFolder is not null;
+        browse.Visible = pickFolder is not null || leaveToBrowse is not null;
+
+        if (draft is not null)
+        {
+            nameField.Text = draft.Name;
+            rootField.Text = draft.Root;
+        }
 
         browse.Accepting += (_, e) =>
         {
+            if (pickFolder is null && leaveToBrowse is not null)
+            {
+                leaveToBrowse(new ProjectDraft(nameField.Text, rootField.Text));
+                app.RequestStop(window);
+                e.Handled = true;
+                return;
+            }
+
             var chosen = pickFolder?.Invoke(rootField.Text);
 
             if (chosen is { Length: > 0 })

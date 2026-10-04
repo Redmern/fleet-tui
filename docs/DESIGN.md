@@ -4700,6 +4700,37 @@ for a sub.
 - The head is unchanged. It reaches a project only through `relay` to that project's
   orchestrator, which now has these tools.
 
+## No folder picker where its pane can't be seen, 2026-10-04
+
+Running `fleet` from a plain terminal on `embedded`, then *New project* → *browse*,
+froze the picker. The picker runs outside any fleetd pane there, so `SpawnHereAsync`
+fell back to `spawn` and yazi opened in a fleetd workspace no client was showing.
+`PickFolder` then blocked the UI loop polling for a choice nobody could make, until
+its ten-minute ceiling.
+
+The same freeze hit inside fleetd, which is how it was reported (embedded, in
+WezTerm). Opening fleet on no project runs the picker as the client's overlay: a pane
+in `fleet~overlay` that `list-panes` leaves out. The picker does have a current pane
+there, so browse asked for a float, but `CallerWorkspace` found no workspace for the
+overlay pane and the float fell through to `default`, which no client was showing.
+`DaemonTests.A_float_asked_for_from_the_overlay_lands_where_no_client_draws_it` pins
+this down. It was not a sync-over-async deadlock: every await under the embedded
+driver carries `ConfigureAwait(false)`.
+
+`Adapters.CanShowPaneHere` says whether a spawned pane reaches the user: always on a
+multiplexer without workspaces (WezTerm opens a tab or window), and on one with
+workspaces only from a pane it lists, which rules out both no pane and the overlay.
+From a project's pane (the menu float's *New project*) and on WezTerm nothing changes.
+
+Where it is false, *browse* runs yazi in the picker's own terminal instead. Terminal.Gui
+can't lend the console mid-dialog (its input thread would eat yazi's keys, and
+`Driver.Suspend` is SIGTSTP), so the form hands back a `ProjectDraft` of what was
+typed and closes. The picker stops too, its `IApplication` is disposed, yazi runs
+with the inherited console, and a fresh application reopens *New project* filled
+in with the name and the chosen folder (or the typed root if yazi was cancelled).
+Escaping that form falls back to the picker. Disposing and starting a second
+`IApplication` in one process was already done here (`PromptTakeOver`).
+
 ## The head lists projects per machine, 2026-10-04
 
 The head could not tell which machine a project lives on. `list_remote_projects` is a new

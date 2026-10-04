@@ -1,6 +1,7 @@
 using Fleet.Cli.Composition;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Projects.CreateProject;
+using Fleet.Features.Projects.CreateProject.Models;
 using Fleet.Features.Projects.OpenProject;
 using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.PickProject;
@@ -262,34 +263,84 @@ public static class PickProjectCommand
 
     private static ProjectPick? Choose()
     {
+        var driver = Adapters.Mux(Adapters.Log()).Driver;
+
+        Func<string, string?>? folders = null;
+        var browseInTerminal = false;
+
+        if (Adapters.OnPath(FileBrowser.Command))
+        {
+            if (Adapters.CanShowPaneHere(driver))
+            {
+                folders = wanted => Adapters.PickFolder(
+                    driver,
+                    "fleet",
+                    FileBrowser.StartIn(wanted, Directory.Exists, Adapters.HomeDirectory));
+            }
+            else
+            {
+                browseInTerminal = true;
+            }
+        }
+
+        ProjectDraft? draft = null;
+
+        while (true)
+        {
+            var (picked, browse) = ChooseOnce(driver, folders, draft, browseInTerminal);
+
+            if (browse is null)
+            {
+                return picked;
+            }
+
+            draft = browse.Browsed(Adapters.PickFolderInTerminal(
+                FileBrowser.StartIn(browse.Root, Directory.Exists, Adapters.HomeDirectory)));
+        }
+    }
+
+    private static (ProjectPick? Picked, ProjectDraft? Browse) ChooseOnce(
+        IMuxDriver driver, Func<string, string?>? folders, ProjectDraft? draft, bool browseInTerminal)
+    {
         var projects = Adapters.Projects();
         var keymaps = Adapters.Keymaps();
         var creator = new CreateProjectHandler(projects);
         var remover = new RemoveProjectHandler(projects);
         var sessions = Adapters.Sessions();
 
-        var driver = Adapters.Mux(Adapters.Log()).Driver;
-
-        Func<string, string?>? folders = null;
-
-        if (Adapters.OnPath(FileBrowser.Command))
-        {
-            folders = wanted => Adapters.PickFolder(
-                driver,
-                "fleet",
-                FileBrowser.StartIn(wanted, Directory.Exists, Adapters.HomeDirectory));
-        }
+        ProjectDraft? browse = null;
+        Action<ProjectDraft>? leaveToBrowse = browseInTerminal ? left => browse = left : null;
 
         using IApplication app = FleetUi.Start();
 
+        if (draft is not null)
+        {
+            var made = CreateProjectView.Show(app, creator, folders, draft, leaveToBrowse);
+
+            if (made is not null || browse is not null)
+            {
+                return (made is null ? null : new ProjectPick(made, NewWindow: false), browse);
+            }
+        }
+
         var keymap = new Keymap(keymaps.Load());
 
-        return PickProjectView.Show(
+        var picked = PickProjectView.Show(
             app,
             keymap,
             new PickProjectHandler(projects),
             new PickProjectCallbacks(
-                CreateProject: () => CreateProjectView.Show(app, creator, folders),
+                CreateProject: () =>
+                {
+                    var made = CreateProjectView.Show(app, creator, folders, null, leaveToBrowse);
+
+                    if (browse is not null)
+                    {
+                        app.RequestStop();
+                    }
+
+                    return made;
+                },
                 RemoveProject: project =>
                 {
                     var confirmed = FleetDialog.Confirm(
@@ -317,6 +368,8 @@ public static class PickProjectCommand
                     FleetDialog.Confirm(app, $"Remove session {session.Name}?", ["Its projects stay; only the saved set is forgotten."], "Remove")
                         ? (sessions.Remove(session.Name) ? $"removed session {session.Name}" : null)
                         : null));
+
+        return (browse is null ? picked : null, browse);
     }
 
     private static int Fail(string reason)

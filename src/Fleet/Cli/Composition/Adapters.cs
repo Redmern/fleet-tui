@@ -159,26 +159,60 @@ public static class Adapters
 
     public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
 
-    public static string? PickFolder(IMuxDriver mux, string project, string startIn)
+    public static string? PickFolder(IMuxDriver mux, string project, string startIn) =>
+        WithFolderFile(file =>
+        {
+            var pane = SpawnHereAsync(mux, FileBrowser.Choose(startIn, project, CurrentWindow(mux), file))
+                .GetAwaiter()
+                .GetResult();
+
+            if (pane.IsNone)
+            {
+                return null;
+            }
+
+            mux.SetTitleAsync(pane, FileBrowser.ChooseTitle).GetAwaiter().GetResult();
+            mux.FocusPaneAsync(pane).GetAwaiter().GetResult();
+
+            return WaitForChoice(mux, pane, file);
+        });
+
+    public static string? PickFolderInTerminal(string startIn) =>
+        WithFolderFile(file =>
+        {
+            var options = FileBrowser.Choose(startIn, string.Empty, null, file);
+            var start = new System.Diagnostics.ProcessStartInfo(options.Args[0])
+            {
+                UseShellExecute = false,
+                WorkingDirectory = startIn,
+            };
+
+            foreach (var arg in options.Args.Skip(1))
+            {
+                start.ArgumentList.Add(arg);
+            }
+
+            try
+            {
+                using var process = System.Diagnostics.Process.Start(start);
+                process?.WaitForExit();
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                return null;
+            }
+
+            return File.Exists(file) ? FileBrowser.Chosen(file, ReadOrNull) : null;
+        });
+
+    private static string? WithFolderFile(Func<string, string?> pick)
     {
         var file = Path.Combine(
             Path.GetTempPath(), $"fleet-folder-{Guid.NewGuid():N}");
 
-        var pane = SpawnHereAsync(mux, FileBrowser.Choose(startIn, project, CurrentWindow(mux), file))
-            .GetAwaiter()
-            .GetResult();
-
-        if (pane.IsNone)
-        {
-            return null;
-        }
-
-        mux.SetTitleAsync(pane, FileBrowser.ChooseTitle).GetAwaiter().GetResult();
-        mux.FocusPaneAsync(pane).GetAwaiter().GetResult();
-
         try
         {
-            return WaitForChoice(mux, pane, file);
+            return pick(file);
         }
         finally
         {
@@ -249,6 +283,11 @@ public static class Adapters
         mux.Caps.HasFlag(MuxCaps.Popup) && !mux.CurrentPane.IsNone
             ? mux.SpawnFloatingAsync(PaneId.None, options with { Workspace = null, SessionName = null, WindowId = null })
             : mux.SpawnAsync(options);
+
+    public static bool CanShowPaneHere(IMuxDriver mux) =>
+        !mux.Caps.HasFlag(MuxCaps.Workspaces)
+        || (!mux.CurrentPane.IsNone
+            && mux.ListPanesAsync().GetAwaiter().GetResult().Any(p => p.Id == mux.CurrentPane));
 
     public static string? CurrentWindow(IMuxDriver mux)
     {

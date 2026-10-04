@@ -155,4 +155,21 @@ public sealed class CreateProjectTests : ConfigHomeFixture
         Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
         Assert.Contains("Could not create", reply.Error);
     }
+
+    [Fact]
+    public void A_folder_browsed_in_the_terminal_replaces_the_typed_root_and_keeps_the_name()
+    {
+        var draft = new ProjectDraft("techweb", "C:/repos/tech").Browsed("C:/repos/techweb");
+
+        Assert.Equal(new ProjectDraft("techweb", "C:/repos/techweb"), draft);
+    }
+
+    [Fact]
+    public void Browsing_in_the_terminal_without_choosing_keeps_what_was_typed()
+    {
+        var typed = new ProjectDraft("techweb", "C:/repos/tech");
+
+        Assert.Equal(typed, typed.Browsed(null));
+        Assert.Equal(typed, typed.Browsed(string.Empty));
+    }
 }
