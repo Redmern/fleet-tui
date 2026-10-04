@@ -11,6 +11,8 @@ namespace Fleet.Features.Projects.RestoreSession;
 public sealed class RestoreSessionHandler(
     IMuxDriver mux, bool subOrchestratorsInNvim = true, IAgentStore? store = null)
 {
+    private const int AtOnce = 4;
+
     public async Task<int> HandleAsync(
         string project,
         string projectRoot,
@@ -20,39 +22,89 @@ public sealed class RestoreSessionHandler(
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
         var window = ProjectWindows.For(mux, panes, project, projectRoot, preferCaller: false);
+        var wanted = agents.Where(a => Wanted(a, panes)).ToList();
 
-        var restored = 0;
+        var restored = await Task.WhenAll(
+                InOrderAsync(project, [.. wanted.Where(a => !a.Hidden)], window, ct),
+                SideBySideAsync(project, [.. wanted.Where(a => a.Hidden)], window, ct))
+            .ConfigureAwait(false);
+
+        var all = restored.SelectMany(r => r).ToList();
+
+        foreach (var agent in all.Where(a => AgentHarness.IsOrchestrator(a.Harness)))
+        {
+            store?.Save(project, agent with { InNvim = subOrchestratorsInNvim });
+        }
+
+        return all.Count;
+    }
+
+    private async Task<IReadOnlyList<AgentRecord>> InOrderAsync(
+        string project, IReadOnlyList<AgentRecord> agents, string? window, CancellationToken ct)
+    {
+        var restored = new List<AgentRecord>();
+        var titles = new List<Task>();
 
         foreach (var agent in agents)
         {
-            if (!Wanted(agent, panes))
-            {
-                continue;
-            }
-
-            var pane = await mux.SpawnAsync(
-                    Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim),
-                    ct)
-                .ConfigureAwait(false);
+            var pane = await SpawnAsync(project, agent, window, ct).ConfigureAwait(false);
 
             if (pane.IsNone)
             {
                 continue;
             }
 
-            await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct)
-                .ConfigureAwait(false);
-
-            if (AgentHarness.IsOrchestrator(agent.Harness))
-            {
-                store?.Save(project, agent with { InNvim = subOrchestratorsInNvim });
-            }
-
-            restored++;
+            titles.Add(Task.Run(() => TitleAsync(pane, agent, ct), ct));
+            restored.Add(agent);
         }
+
+        await Task.WhenAll(titles).ConfigureAwait(false);
 
         return restored;
     }
+
+    private async Task<IReadOnlyList<AgentRecord>> SideBySideAsync(
+        string project, IReadOnlyList<AgentRecord> agents, string? window, CancellationToken ct)
+    {
+        if (agents.Count == 0)
+        {
+            return [];
+        }
+
+        var restored = new bool[agents.Count];
+
+        restored[0] = await RestoreAsync(project, agents[0], window, ct).ConfigureAwait(false);
+
+        await Parallel.ForEachAsync(
+                Enumerable.Range(1, agents.Count - 1),
+                new ParallelOptions { MaxDegreeOfParallelism = AtOnce, CancellationToken = ct },
+                async (i, token) => restored[i] = await RestoreAsync(project, agents[i], window, token).ConfigureAwait(false))
+            .ConfigureAwait(false);
+
+        return [.. agents.Where((_, i) => restored[i])];
+    }
+
+    private async Task<bool> RestoreAsync(string project, AgentRecord agent, string? window, CancellationToken ct)
+    {
+        var pane = await SpawnAsync(project, agent, window, ct).ConfigureAwait(false);
+
+        if (pane.IsNone)
+        {
+            return false;
+        }
+
+        await TitleAsync(pane, agent, ct).ConfigureAwait(false);
+
+        return true;
+    }
+
+    private Task<PaneId> SpawnAsync(string project, AgentRecord agent, string? window, CancellationToken ct) =>
+        mux.SpawnAsync(
+            Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim),
+            ct);
+
+    private Task TitleAsync(PaneId pane, AgentRecord agent, CancellationToken ct) =>
+        mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct);
 
     public static string HiddenWorkspace(string project, bool workspaces) =>
         workspaces ? FleetWorkspaces.HiddenFor(project) : FleetWorkspaces.Hidden;

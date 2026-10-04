@@ -1,7 +1,10 @@
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Projects;
@@ -184,6 +187,222 @@ public sealed class RestoreSessionTests : IDisposable
 
         Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), options.Args);
         Assert.Empty(options.Env);
+    }
+
+    [Fact]
+    public async Task Visible_agents_open_one_at_a_time_in_order_while_the_titles_are_set_alongside()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+        var agents = new[] { Agent("c", open: true), Agent("a", open: true), Agent("b", open: true) };
+        var slow = new SlowMux(_mux, agents.Length);
+
+        var restored = await new RestoreSessionHandler(slow).HandleAsync("techweb", ProjectRoot, agents);
+
+        Assert.Equal(3, restored);
+        Assert.Equal(agents.Select(a => a.Worktree), slow.SpawnedCwds);
+        Assert.Equal(1, slow.MostVisibleAtOnce);
+        Assert.True(slow.NextSpawnedWhileTitling, "a title should be set while the next agent opens");
+
+        var panes = await _mux.ListPanesAsync();
+        Assert.All(agents, a => Assert.Equal(
+            AgentTitle.For(a.Repository, a.Branch),
+            _mux.TitleOf(panes.Single(p => p.Cwd == a.Worktree).Id)));
+    }
+
+    [Fact]
+    public async Task Hidden_agents_open_side_by_side_after_the_first_but_no_more_than_four_at_once()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
+        var agents = Enumerable.Range(0, 9).Select(i => Agent($"h{i}", open: true, hidden: true)).ToList();
+        var slow = new SlowMux(_mux, agents.Count);
+
+        var restored = await new RestoreSessionHandler(slow).HandleAsync("techweb", ProjectRoot, agents);
+
+        // Side by side is shown by overlap, not by wall-clock time, which a busy CI runner stretches.
+        Assert.Equal(9, restored);
+        Assert.Equal(agents[0].Worktree, slow.SpawnedCwds[0]);
+        Assert.False(slow.FirstHiddenOverlapped);
+        Assert.InRange(slow.MostHiddenAtOnce, 2, 4);
+    }
+
+    // Waits for the behaviour under test (the next spawn, a second hidden spawn) instead of a fixed delay,
+    // so a slow CI runner can't make overlap look absent. A handler that serializes falls through on Fallback.
+    private sealed class SlowMux(FakeMuxDriver inner, int expected) : IMuxDriver
+    {
+        private static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(20);
+        private static readonly TimeSpan Fallback = TimeSpan.FromSeconds(2);
+        private readonly Lock _gate = new();
+        private readonly List<string> _spawned = [];
+        private readonly Dictionary<PaneId, int> _order = [];
+        private int _visible;
+        private int _hidden;
+        private int _hiddenStarted;
+        private bool _firstRunning;
+        private bool _nextSpawned;
+
+        public IReadOnlyList<string> SpawnedCwds
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _spawned];
+                }
+            }
+        }
+
+        public int MostVisibleAtOnce { get; private set; }
+
+        public int MostHiddenAtOnce { get; private set; }
+
+        public bool NextSpawnedWhileTitling => Volatile.Read(ref _nextSpawned);
+
+        private int Started
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _spawned.Count;
+                }
+            }
+        }
+
+        private int HiddenRunning
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _hidden;
+                }
+            }
+        }
+
+        public bool FirstHiddenOverlapped { get; private set; }
+
+        public string Name => inner.Name;
+
+        public MuxCaps Caps => inner.Caps;
+
+        public PaneId CurrentPane => inner.CurrentPane;
+
+        public async Task<PaneId> SpawnAsync(SpawnOptions options, CancellationToken ct = default)
+        {
+            var hidden = options.NewWindow;
+            bool first;
+            int index;
+
+            lock (_gate)
+            {
+                index = _spawned.Count;
+                _spawned.Add(options.Cwd ?? string.Empty);
+                first = hidden && _hiddenStarted++ == 0;
+                FirstHiddenOverlapped |= hidden && !first && _firstRunning;
+                _firstRunning |= first;
+
+                if (hidden)
+                {
+                    MostHiddenAtOnce = Math.Max(MostHiddenAtOnce, ++_hidden);
+                }
+                else
+                {
+                    MostVisibleAtOnce = Math.Max(MostVisibleAtOnce, ++_visible);
+                }
+            }
+
+            await Task.Delay(Pause, ct);
+
+            if (hidden && !first)
+            {
+                await WaitUntilAsync(() => HiddenRunning > 1 || Started >= expected, ct);
+            }
+
+            lock (_gate)
+            {
+                _firstRunning &= !first;
+
+                if (hidden)
+                {
+                    _hidden--;
+                }
+                else
+                {
+                    _visible--;
+                }
+            }
+
+            var pane = await inner.SpawnAsync(options, ct);
+
+            lock (_gate)
+            {
+                _order[pane] = index;
+            }
+
+            return pane;
+        }
+
+        public async Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default)
+        {
+            int index;
+
+            lock (_gate)
+            {
+                index = _order[id];
+            }
+
+            if (index + 1 < expected && await WaitUntilAsync(() => Started > index + 1, ct))
+            {
+                Volatile.Write(ref _nextSpawned, true);
+            }
+
+            await inner.SetTitleAsync(id, title, ct);
+        }
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> done, CancellationToken ct)
+        {
+            var until = DateTime.UtcNow + Fallback;
+
+            while (!done())
+            {
+                if (DateTime.UtcNow >= until)
+                {
+                    return false;
+                }
+
+                await Task.Delay(5, ct);
+            }
+
+            return true;
+        }
+
+        public Task<bool> IsAvailableAsync(CancellationToken ct = default) => inner.IsAvailableAsync(ct);
+
+        public Task<IReadOnlyList<Pane>> ListPanesAsync(CancellationToken ct = default) => inner.ListPanesAsync(ct);
+
+        public Task<PaneId> SplitAsync(SplitOptions options, CancellationToken ct = default) => inner.SplitAsync(options, ct);
+
+        public Task<PaneId> SpawnFloatingAsync(PaneId over, SpawnOptions options, CancellationToken ct = default) => inner.SpawnFloatingAsync(over, options, ct);
+
+        public Task KillPaneAsync(PaneId id, CancellationToken ct = default) => inner.KillPaneAsync(id, ct);
+
+        public Task MovePaneAsync(PaneId id, MovePaneOptions options, CancellationToken ct = default) => inner.MovePaneAsync(id, options, ct);
+
+        public Task FocusPaneAsync(PaneId id, CancellationToken ct = default) => inner.FocusPaneAsync(id, ct);
+
+        public Task SendTextAsync(PaneId id, string text, CancellationToken ct = default) => inner.SendTextAsync(id, text, ct);
+
+        public Task<string> GetTextAsync(PaneId id, CancellationToken ct = default) => inner.GetTextAsync(id, ct);
+
+        public Task<IReadOnlyList<Workspace>> ListWorkspacesAsync(CancellationToken ct = default) => inner.ListWorkspacesAsync(ct);
+
+        public Task ShowWorkspaceAsync(string name, CancellationToken ct = default) => inner.ShowWorkspaceAsync(name, ct);
+
+        public Task CloseWorkspaceAsync(string name, CancellationToken ct = default) => inner.CloseWorkspaceAsync(name, ct);
+
+        public Task OpenWindowAsync(string name, CancellationToken ct = default) => inner.OpenWindowAsync(name, ct);
     }
 
     [Fact]

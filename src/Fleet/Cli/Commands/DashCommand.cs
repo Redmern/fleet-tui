@@ -32,12 +32,22 @@ public static class DashCommand
 
         Adapters.MarkDashboardPane(project.Name);
 
-        var synced = ClaudeWiring.SyncRoot(project.Name, project.Root);
-
-        if (!synced.Succeeded)
+        var syncing = Task.Run(() =>
         {
-            log.Write(LogTag.For(project.Name, $"claude config: {synced.Error}"));
-        }
+            try
+            {
+                var synced = ClaudeWiring.SyncRoot(project.Name, project.Root);
+
+                if (!synced.Succeeded)
+                {
+                    log.Write(LogTag.For(project.Name, $"claude config: {synced.Error}"));
+                }
+            }
+            catch (Exception e)
+            {
+                log.Write(LogTag.For(project.Name, $"claude config: {e.Message}"));
+            }
+        });
 
         var approvals = Adapters.ApprovalInbox();
 
@@ -77,6 +87,7 @@ public static class DashCommand
         finally
         {
             approvals.Retire(project.Name);
+            syncing.GetAwaiter().GetResult();
         }
 
         return 0;
