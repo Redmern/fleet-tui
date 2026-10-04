@@ -294,6 +294,8 @@ public sealed class RemoteLinkTests : IAsyncLifetime
 
         var workspace = FleetDaemon.RemoteWorkspace(Environment.MachineName);
         await Eventually(async () => (await PanesAsync(home)).Any(p => p.Session == workspace));
+        await Eventually(async () => ((await home.RequestAsync(new ControlRequest { Op = "window", Client = window.Id })).Window ?? [])
+            .Any(e => e is { Name: "homelab", Host: "red@far" }));
         return (far, home, window, workspace);
     }
 
