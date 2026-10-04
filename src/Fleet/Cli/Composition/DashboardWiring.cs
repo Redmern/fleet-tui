@@ -86,11 +86,8 @@ public static class DashboardWiring
         FleetAction.Close,
     ];
 
-    private static Func<AgentRecord, BranchState> Warmed(BranchStates states, IEnumerable<AgentRecord> agents)
-    {
-        states.Warm(agents.Select(a => (a.Worktree, (string?)a.BaseRef)));
-        return agent => states.For(agent.Worktree, agent.BaseRef);
-    }
+    private static Func<AgentRecord, BranchState> Peeked(BranchStates states) =>
+        agent => states.Peek(agent.Worktree, agent.BaseRef);
 
     private static AgentRecord? At(ListAgentsHandler lister, string project, int tab, int index)
     {
@@ -788,9 +785,6 @@ public static class DashboardWiring
                     .Select(r => new RepositoryChoice(r.Name, r.Path, r.DefaultBranch))
                     .ToList();
 
-                states.Warm(found.Select(r =>
-                    (RepositoryWorktree.For(r.Directory, r.DefaultBranch, Directory.Exists), (string?)null)));
-
                 return (IReadOnlyList<RepositoryChoice>)found;
             },
 
@@ -877,7 +871,7 @@ public static class DashboardWiring
                     .ToList();
 
                 return new AgentBoard(
-                    AgentRows.For(board, Warmed(states, board)),
+                    AgentRows.For(board, Peeked(states)),
                     board.Count,
                     [.. board.Select(a => a.Hidden)],
                     [.. board.Select(a => a.Status)]);
@@ -893,7 +887,7 @@ public static class DashboardWiring
                 var trigger = settings.Load(project.Name).Trigger;
 
                 return new SubBoard(
-                    SubRows.For(listing, Warmed(states, listing.Flat.Select(e => e.Agent)), trigger),
+                    SubRows.For(listing, Peeked(states), trigger),
                     listing.Flat.Count(e => !e.IsChild),
                     [.. listing.Flat.Select(e => e.Agent.Hidden)],
                     SubRows.GapsAfter(listing));
@@ -1466,7 +1460,7 @@ public static class DashboardWiring
 
             AgentState: agent => states.For(agent.Worktree, agent.BaseRef),
 
-            RepositoryState: repository => states.For(
+            RepositoryState: repository => states.Peek(
                 RepositoryWorktree.For(
                     repository.Directory, repository.DefaultBranch, Directory.Exists)),
 

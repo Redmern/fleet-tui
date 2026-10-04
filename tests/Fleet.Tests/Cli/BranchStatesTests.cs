@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Fleet.Cli.Composition;
 using Fleet.Ports.Git;
 using Fleet.Ports.Git.Models;
+using Fleet.Shared;
 
 namespace Fleet.Tests.Cli;
 
@@ -64,12 +65,68 @@ public sealed class BranchStatesTests : IDisposable
         Assert.All(trees, t => Assert.Equal(1, git.StatusCalls(t)));
     }
 
+    [Fact]
+    public void Peeking_returns_unknown_at_once_and_the_measured_state_once_git_has_answered()
+    {
+        var git = new CountingGit { Gate = new TaskCompletionSource() };
+        var states = new BranchStates(git);
+        var tree = Worktree("api");
+
+        Assert.Equal(BranchState.Unknown, states.Peek(tree, "origin/main"));
+        Assert.Equal(BranchState.Unknown, states.Peek(tree, "origin/main"));
+
+        git.Gate.SetResult();
+
+        Assert.True(SpinWait.SpinUntil(
+            () => states.Peek(tree, "origin/main") != BranchState.Unknown, TimeSpan.FromSeconds(10)));
+        Assert.Equal((2, 1, true), (states.Peek(tree, "origin/main").Ahead, states.Peek(tree, "origin/main").Behind, states.Peek(tree, "origin/main").Dirty));
+        Assert.Equal(1, git.StatusCalls(tree));
+    }
+
+    [Fact]
+    public void A_stale_state_is_still_shown_while_it_is_measured_again()
+    {
+        var git = new CountingGit();
+        var states = new BranchStates(git, TimeSpan.Zero);
+        var tree = Worktree("api");
+        var measured = states.For(tree);
+
+        git.Gate = new TaskCompletionSource();
+
+        Assert.Equal(measured, states.Peek(tree));
+        Assert.Equal(measured, states.Peek(tree));
+
+        git.Gate.SetResult();
+
+        Assert.True(SpinWait.SpinUntil(() => git.StatusCalls(tree) == 2, TimeSpan.FromSeconds(10)));
+        Assert.False(SpinWait.SpinUntil(() => git.StatusCalls(tree) > 2, TimeSpan.FromMilliseconds(200)));
+    }
+
+    [Fact]
+    public void Peeking_many_worktrees_runs_a_bounded_number_of_git_at_a_time()
+    {
+        var git = new CountingGit { Delay = TimeSpan.FromMilliseconds(100) };
+        var states = new BranchStates(git);
+        var trees = Enumerable.Range(0, 12).Select(i => Worktree($"wt{i}")).ToList();
+
+        foreach (var tree in trees)
+        {
+            Assert.Equal(BranchState.Unknown, states.Peek(tree));
+        }
+
+        Assert.True(SpinWait.SpinUntil(
+            () => trees.All(t => git.StatusCalls(t) == 1), TimeSpan.FromSeconds(20)));
+        Assert.InRange(git.MostAtOnce, 1, 6);
+    }
+
     private sealed class CountingGit : IGitRunner
     {
         private readonly ConcurrentDictionary<string, int> _status = new();
         private int _running;
 
         public TimeSpan Delay { get; init; }
+
+        public TaskCompletionSource? Gate { get; set; }
 
         public int MostAtOnce { get; private set; }
 
@@ -85,6 +142,11 @@ public sealed class BranchStatesTests : IDisposable
 
             try
             {
+                if (Gate is { } gate)
+                {
+                    await gate.Task.WaitAsync(ct);
+                }
+
                 if (Delay > TimeSpan.Zero)
                 {
                     await Task.Delay(Delay, ct);
