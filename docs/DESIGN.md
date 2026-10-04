@@ -4678,6 +4678,21 @@ for a sub.
 - The head is unchanged. It reaches a project only through `relay` to that project's
   orchestrator, which now has these tools.
 
+## No folder picker where its pane can't be seen, 2026-10-04
+
+Running `fleet` from a plain terminal on `embedded`, then *New project* → *browse*,
+froze the picker. The picker runs outside any fleetd pane there, so `SpawnHereAsync`
+fell back to `spawn` and yazi opened in a fleetd workspace no client was showing.
+`PickFolder` then blocked the UI loop polling for a choice nobody could make, until
+its ten-minute ceiling.
+
+`Adapters.CanShowPaneHere` says whether a spawned pane reaches the user: always on a
+multiplexer without workspaces (WezTerm opens a tab or window), and on one with
+workspaces only from inside one of its panes. The picker hides *browse* when it is
+false; typing the root still works. Inside fleetd (the menu's *New project*) and on
+WezTerm nothing changes. Making browse work from the plain terminal would mean
+running yazi in the picker's own terminal, which Terminal.Gui would have to hand over.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

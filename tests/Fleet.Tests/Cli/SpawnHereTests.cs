@@ -35,6 +35,29 @@ public class SpawnHereTests
     }
 
     [Fact]
+    public void Outside_any_pane_of_a_workspace_multiplexer_a_spawned_pane_is_shown_nowhere()
+    {
+        // `fleet` run from a plain terminal on the embedded mux: yazi would open in a workspace
+        // no client shows, and the folder picker would block its UI waiting for it.
+        Assert.False(Adapters.CanShowPaneHere(new FakeMuxDriver(workspaces: true)));
+    }
+
+    [Fact]
+    public async Task Inside_a_pane_of_a_workspace_multiplexer_a_spawned_pane_is_shown()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["fleet", "menu"] });
+
+        Assert.True(Adapters.CanShowPaneHere(mux));
+    }
+
+    [Fact]
+    public void A_multiplexer_without_workspaces_shows_a_spawned_pane_from_anywhere()
+    {
+        Assert.True(Adapters.CanShowPaneHere(new FakeMuxDriver()));
+    }
+
+    [Fact]
     public async Task A_multiplexer_without_floats_opens_a_normal_pane_as_before()
     {
         var mux = new FakeMuxDriver();

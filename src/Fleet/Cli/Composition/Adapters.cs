@@ -250,6 +250,9 @@ public static class Adapters
             ? mux.SpawnFloatingAsync(PaneId.None, options with { Workspace = null, SessionName = null, WindowId = null })
             : mux.SpawnAsync(options);
 
+    public static bool CanShowPaneHere(IMuxDriver mux) =>
+        !mux.Caps.HasFlag(MuxCaps.Workspaces) || !mux.CurrentPane.IsNone;
+
     public static string? CurrentWindow(IMuxDriver mux)
     {
         var panes = mux.ListPanesAsync().GetAwaiter().GetResult();

@@ -272,7 +272,7 @@ public static class PickProjectCommand
 
         Func<string, string?>? folders = null;
 
-        if (Adapters.OnPath(FileBrowser.Command))
+        if (Adapters.OnPath(FileBrowser.Command) && Adapters.CanShowPaneHere(driver))
         {
             folders = wanted => Adapters.PickFolder(
                 driver,
