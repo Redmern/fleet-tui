@@ -1288,11 +1288,7 @@ public static class DashboardWiring
 
                 if (AgentHarness.IsOrchestrator(agent.Harness))
                 {
-                    var children = lister.Handle(project.Name)
-                        .Where(a => !AgentHarness.IsOrchestrator(a.Harness)
-                                 && string.Equals(
-                                     a.Owner, agent.Branch, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
+                    var children = SubChildren.Of(lister.Handle(project.Name), agent.Branch);
 
                     var cascade = children.Count > 0 && await FleetAsync
                         .OnUi(app, () => FleetDialog.Confirm(
@@ -1305,6 +1301,13 @@ public static class DashboardWiring
                     if (cascade)
                     {
                         doomed.AddRange(children.Select(c => (c, true)));
+                    }
+                    else
+                    {
+                        foreach (var child in children)
+                        {
+                            agents.Save(project.Name, SubChildren.Released(child));
+                        }
                     }
                 }
 

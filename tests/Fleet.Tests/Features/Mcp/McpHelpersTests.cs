@@ -141,4 +141,24 @@ public sealed class McpHelpersTests
         Assert.Contains("2 ahead", text);
         Assert.Contains("dirty", text);
     }
+
+    [Fact]
+    public void The_approval_prompt_for_remove_sub_names_the_sub_and_what_it_deletes()
+    {
+        var prompt = ApprovalPrompt.For(
+            HarnessTool.RemoveSub,
+            Request("remove_sub", ("slug", "upgrade"), ("delete_folder", "true"), ("remove_agents", "true")),
+            caller: "");
+
+        Assert.Contains("Remove a sub-orchestrator — upgrade (deleting its folder, removing its agents)", prompt);
+    }
+
+    [Fact]
+    public void The_approval_prompt_for_a_plain_remove_sub_has_no_extras()
+    {
+        var prompt = ApprovalPrompt.For(
+            HarnessTool.RemoveSub, Request("remove_sub", ("slug", "upgrade")), caller: "");
+
+        Assert.EndsWith("— upgrade", prompt);
+    }
 }

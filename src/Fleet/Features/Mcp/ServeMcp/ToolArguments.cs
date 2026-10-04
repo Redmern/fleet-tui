@@ -26,6 +26,12 @@ public static class ToolArguments
 
     public const string Visible = "visible";
 
+    public const string Slug = "slug";
+
+    public const string DeleteFolder = "delete_folder";
+
+    public const string RemoveAgents = "remove_agents";
+
     public const string Lines = "lines";
 
     public static string Text(McpRequest request, string key) => request.Value(key).Trim();

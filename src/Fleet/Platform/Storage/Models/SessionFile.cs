@@ -32,4 +32,8 @@ public sealed class AgentEntry
     public bool? Claude { get; set; }
 
     public bool? InNvim { get; set; }
+
+    public string Summary { get; set; } = string.Empty;
+
+    public string ReportedAt { get; set; } = string.Empty;
 }

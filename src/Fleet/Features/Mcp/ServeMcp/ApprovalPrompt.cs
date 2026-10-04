@@ -24,6 +24,7 @@ public static class ApprovalPrompt
         var repository = SafeText.Clean(request.Value(ToolArguments.Repository), 60);
         var branch = SafeText.Clean(request.Value(ToolArguments.Branch), 60);
         var message = SafeText.Clean(request.Value(ToolArguments.Message));
+        var slug = SafeText.Clean(request.Value(ToolArguments.Slug), 60);
 
         if (repository.Length > 0 && branch.Length > 0)
         {
@@ -35,6 +36,23 @@ public static class ApprovalPrompt
             return repository;
         }
 
-        return message;
+        return slug.Length > 0 ? slug + Extent(request) : message;
+    }
+
+    private static string Extent(McpRequest request)
+    {
+        var also = new List<string>();
+
+        if (request.Flag(ToolArguments.DeleteFolder))
+        {
+            also.Add("deleting its folder");
+        }
+
+        if (request.Flag(ToolArguments.RemoveAgents))
+        {
+            also.Add("removing its agents");
+        }
+
+        return also.Count == 0 ? string.Empty : $" ({string.Join(", ", also)})";
     }
 }

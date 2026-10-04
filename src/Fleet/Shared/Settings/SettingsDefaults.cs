@@ -60,6 +60,9 @@ public static class SettingsDefaults
         HarnessTool.DistributeSecrets,
         HarnessTool.RemoveRepository,
         HarnessTool.Dispatch,
+        HarnessTool.ListSubs,
+        HarnessTool.StopSub,
+        HarnessTool.RemoveSub,
         HarnessTool.Report,
     ];
 
@@ -80,6 +83,7 @@ public static class SettingsDefaults
         or HarnessTool.AgentStatus
         or HarnessTool.RepositoryStatus
         or HarnessTool.LogTail
+        or HarnessTool.ListSubs
         or HarnessTool.Report;
 
     private static bool AllowedByDefault(HarnessTool tool) =>
@@ -113,6 +117,9 @@ public static class SettingsDefaults
         HarnessTool.SetDefaultBranch => "Change a default branch",
         HarnessTool.DistributeSecrets => "Copy secrets into worktrees",
         HarnessTool.Dispatch => "Dispatch a sub-orchestrator",
+        HarnessTool.ListSubs => "List the sub-orchestrators",
+        HarnessTool.StopSub => "Stop a sub-orchestrator",
+        HarnessTool.RemoveSub => "Remove a sub-orchestrator",
         HarnessTool.Report => "Report its own status",
         _ => tool.ToString(),
     };
