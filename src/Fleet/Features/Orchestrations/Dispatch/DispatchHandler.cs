@@ -33,7 +33,7 @@ public sealed class DispatchHandler(
     ISettingsStore? settings = null,
     IIntentStore? intents = null)
 {
-    private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(60);
 
     private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(200);
 
@@ -103,6 +103,8 @@ public sealed class DispatchHandler(
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
 
+        await LeaveKickoff(folder, ct).ConfigureAwait(false);
+
         var inNvim = settings?.Load(command.ProjectName).SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
 
         var record = new AgentRecord(
@@ -151,7 +153,10 @@ public sealed class DispatchHandler(
             await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
         }
 
-        await KickOff(folder, inNvim ? null : pane, ct).ConfigureAwait(false);
+        if (!inNvim)
+        {
+            await TypeKickoff(folder, pane, ct).ConfigureAwait(false);
+        }
 
         return Result<DispatchReply>.Ok(
             new DispatchReply(slug, folder, DispatchNote.Dispatched(slug, aidlc?.Profile)));
@@ -244,7 +249,22 @@ public sealed class DispatchHandler(
         }
     }
 
-    private async Task KickOff(string folder, PaneId? bareClaude, CancellationToken ct)
+    private static async Task LeaveKickoff(string folder, CancellationToken ct)
+    {
+        var inbox = Path.Combine(folder, ".fleet");
+        Directory.CreateDirectory(inbox);
+
+        await File.WriteAllTextAsync(Path.Combine(inbox, AgentHarness.InstructionSeenFile), "0", ct)
+            .ConfigureAwait(false);
+
+        await File.WriteAllTextAsync(
+                Path.Combine(inbox, AgentHarness.AgentInstructionFile),
+                AgentHarness.OrchestratorKickoff,
+                ct)
+            .ConfigureAwait(false);
+    }
+
+    private async Task TypeKickoff(string folder, PaneId pane, CancellationToken ct)
     {
         var marker = OrchestrationPaths.ReadyMarker(folder);
 
@@ -257,20 +277,8 @@ public sealed class DispatchHandler(
             await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
         }
 
-        var inbox = Path.Combine(folder, ".fleet");
-        Directory.CreateDirectory(inbox);
-
-        await File.WriteAllTextAsync(
-                Path.Combine(inbox, AgentHarness.AgentInstructionFile),
-                AgentHarness.OrchestratorKickoff,
-                ct)
-            .ConfigureAwait(false);
-
-        if (bareClaude is { } pane)
-        {
-            await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff, ct).ConfigureAwait(false);
-            await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
-            await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
-        }
+        await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff, ct).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
+        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 }

@@ -4358,6 +4358,19 @@ relaunches a pane's own command, so the stored host stays true across a fleetd r
 mux-side signal was not used: panes carry no command in the `Pane` model, and WezTerm's pane
 list does not report the process reliably.
 
+The nvim pump delivers `.fleet/instruction.md` only once that pane's Claude is ready: when
+fleet's MCP server answers `initialize` it touches `.fleet/claude.ready` in its working folder
+(next to the ready marker in the fleet config), and the pump waits for a flag newer than its
+own nvim start. A file younger than two seconds waits a tick too, so a rewrite within the same
+second (`getftime` has one-second resolution) is not marked seen before it lands. With no flag
+after 60 seconds (a Claude without fleet's MCP server) it delivers anyway. A dispatch writes the
+kickoff and `instruction.seen` = `0` before it spawns the sub, so nvim never seeds `seen` from
+the kickoff itself, and the hook no longer waits for the ready marker in nvim mode. Before this,
+a sub whose Claude was slow to start (a cold remote) could get the kickoff typed into a screen
+that was not taking input, or have it marked seen at boot, and sat "working" with no task. A
+bare sub still waits for the ready marker (now up to 60 seconds, inside the hook's 90) and then
+types the kickoff.
+
 Rebuild dashboard re-creates the main harness with a split, so `SplitOptions` gained `Env`,
 handled like `SpawnOptions.Env` (WezTerm wraps the command through `EnvLaunch`, the embedded
 driver sends it to fleetd, which already started split panes with a request's env).

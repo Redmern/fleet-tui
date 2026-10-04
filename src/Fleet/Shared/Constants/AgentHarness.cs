@@ -15,7 +15,8 @@ public static class AgentHarness
         + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
         + "if c then vim.fn.chansend(c, o.args) "
         + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) end end end end, {nargs='+'}) "
-        + "local seenf='.fleet/instruction.seen' "
+        + "local seenf='.fleet/" + InstructionSeenFile + "' "
+        + "local readyf='.fleet/" + ClaudeReadyFile + "' local fleet_boot=os.time() "
         + "if vim.fn.filereadable(seenf)==0 then pcall(vim.fn.mkdir,'.fleet','p') "
         + "pcall(vim.fn.writefile,{tostring(math.max(0,"
         + "vim.fn.getftime('.fleet/" + AgentInstructionFile + "')))},seenf) end "
@@ -25,6 +26,9 @@ public static class AgentHarness
         + "local seen=vim.fn.filereadable(seenf)==1 "
         + "and tonumber(vim.fn.readfile(seenf)[1]) or 0 "
         + "if m<=(seen or 0) then return end "
+        + "local age=os.time()-m "
+        + "if age<" + InstructionSettleSeconds + " then return end "
+        + "if vim.fn.getftime(readyf)<fleet_boot and age<" + ReadyFallbackSeconds + " then return end "
         + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
         + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
         + "if c then vim.fn.chansend(c, '" + AgentInstructionPrompt + "') "
@@ -92,6 +96,14 @@ public static class AgentHarness
     public const string TellPrefix = ":FleetTell ";
 
     public const string AgentInstructionFile = "instruction.md";
+
+    public const string InstructionSeenFile = "instruction.seen";
+
+    public const string ClaudeReadyFile = "claude.ready";
+
+    public const string InstructionSettleSeconds = "2";
+
+    public const string ReadyFallbackSeconds = "60";
 
     public const string AgentInstructionPrompt =
         "Read .fleet/instruction.md in this folder and do what it says.";
