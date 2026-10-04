@@ -285,7 +285,9 @@ public static class Adapters
             : mux.SpawnAsync(options);
 
     public static bool CanShowPaneHere(IMuxDriver mux) =>
-        !mux.Caps.HasFlag(MuxCaps.Workspaces) || !mux.CurrentPane.IsNone;
+        !mux.Caps.HasFlag(MuxCaps.Workspaces)
+        || (!mux.CurrentPane.IsNone
+            && mux.ListPanesAsync().GetAwaiter().GetResult().Any(p => p.Id == mux.CurrentPane));
 
     public static string? CurrentWindow(IMuxDriver mux)
     {

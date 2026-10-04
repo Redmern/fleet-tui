@@ -246,6 +246,36 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_float_asked_for_from_the_overlay_lands_where_no_client_draws_it()
+    {
+        // The freeze behind "new project, browse": the picker runs in the overlay when fleet opens on no
+        // project, so yazi's float goes to a workspace nobody shows while the picker blocks waiting for it.
+        var control = await ControlAsync();
+        var client = await AttachAsync();
+        await client.WaitForFramesAsync(1);
+        await client.SendCommandAsync("menu");
+        await Eventually(() => _panes.ByProgram("fleet") is not null);
+        var picker = _panes.ByProgram("fleet")!;
+        picker.Emit("picker");
+        await client.WaitForAsync("picker");
+
+        var spawned = await control.RequestAsync(new ControlRequest
+        {
+            Op = "spawn-float",
+            Caller = picker.Env[FleetDaemon.PaneVariable],
+            Args = ["yazi"],
+        });
+        Assert.True(spawned.Ok, spawned.Error);
+        _panes.ByProgram("yazi")!.Emit("yazifolders");
+        picker.Emit(" waiting");
+        await client.WaitForAsync("waiting");
+
+        var listed = (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!;
+        Assert.Equal(FleetWorkspaces.Default, listed.Single(p => p.Id == spawned.Pane).Session);
+        Assert.DoesNotContain("yazifolders", client.AllText);
+    }
+
+    [Fact]
     public async Task A_pane_whose_process_exits_is_removed()
     {
         var control = await ControlAsync();

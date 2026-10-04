@@ -52,6 +52,16 @@ public class SpawnHereTests
     }
 
     [Fact]
+    public void From_a_pane_the_multiplexer_does_not_list_a_spawned_pane_is_shown_nowhere()
+    {
+        // fleetd's overlay (the picker when fleet opens on no project) is a pane that list-panes leaves out;
+        // a float asked for from it lands in a workspace no client shows.
+        var mux = new FakeMuxDriver(workspaces: true) { CurrentPane = new PaneId("overlay-7") };
+
+        Assert.False(Adapters.CanShowPaneHere(mux));
+    }
+
+    [Fact]
     public void A_multiplexer_without_workspaces_shows_a_spawned_pane_from_anywhere()
     {
         Assert.True(Adapters.CanShowPaneHere(new FakeMuxDriver()));

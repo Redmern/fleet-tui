@@ -4686,10 +4686,19 @@ fell back to `spawn` and yazi opened in a fleetd workspace no client was showing
 `PickFolder` then blocked the UI loop polling for a choice nobody could make, until
 its ten-minute ceiling.
 
+The same freeze hit inside fleetd, which is how it was reported (embedded, in
+WezTerm). Opening fleet on no project runs the picker as the client's overlay: a pane
+in `fleet~overlay` that `list-panes` leaves out. The picker does have a current pane
+there, so browse asked for a float, but `CallerWorkspace` found no workspace for the
+overlay pane and the float fell through to `default`, which no client was showing.
+`DaemonTests.A_float_asked_for_from_the_overlay_lands_where_no_client_draws_it` pins
+this down. It was not a sync-over-async deadlock: every await under the embedded
+driver carries `ConfigureAwait(false)`.
+
 `Adapters.CanShowPaneHere` says whether a spawned pane reaches the user: always on a
 multiplexer without workspaces (WezTerm opens a tab or window), and on one with
-workspaces only from inside one of its panes. Inside fleetd (the menu's *New project*)
-and on WezTerm nothing changes.
+workspaces only from a pane it lists, which rules out both no pane and the overlay.
+From a project's pane (the menu float's *New project*) and on WezTerm nothing changes.
 
 Where it is false, *browse* runs yazi in the picker's own terminal instead. Terminal.Gui
 can't lend the console mid-dialog (its input thread would eat yazi's keys, and
