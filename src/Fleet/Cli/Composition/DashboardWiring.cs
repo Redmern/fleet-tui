@@ -443,7 +443,8 @@ public static class DashboardWiring
 
         IReadOnlyList<Pane>? barPanes = null;
         var barPanesAt = DateTime.MinValue;
-        var paneTexts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var activity = new PaneActivity(mux);
+        var paneTexts = activity.Texts;
 
         IReadOnlyList<AgentRecord> WithBarState(IReadOnlyList<AgentRecord> records)
         {
@@ -464,7 +465,7 @@ public static class DashboardWiring
         AgentSnapshot? hookSnapshot = null;
         var hookSnapshotAt = DateTime.MinValue;
 
-        AgentReport? Hooked(AgentRecord agent)
+        Func<AgentRecord, AgentReport?> HookedNow()
         {
             var now = DateTime.UtcNow;
 
@@ -476,48 +477,15 @@ public static class DashboardWiring
                 hookSnapshotAt = now;
             }
 
-            return AgentStatusRules.For(hookSnapshot, agent.Worktree, now, AgentStatusRules.StallAfter);
+            var snapshot = hookSnapshot;
+
+            return agent => AgentStatusRules.For(snapshot, agent.Worktree, now, AgentStatusRules.StallAfter);
         }
 
-        AgentRecord WithActivity(AgentRecord agent)
-        {
-            if (barPanes is null)
-            {
-                return agent;
-            }
+        AgentReport? Hooked(AgentRecord agent) => HookedNow()(agent);
 
-            var orchestrator = AgentHarness.IsOrchestrator(agent.Harness);
-
-            if (orchestrator
-                && OrchestrationStatus.Normalize(agent.Status)
-                    is OrchestrationStatus.Done or OrchestrationStatus.Failed)
-            {
-                return agent;
-            }
-
-            var pane = barPanes.FirstOrDefault(
-                p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p));
-
-            if (pane is null)
-            {
-                return agent;
-            }
-
-            if (Hooked(agent) is { } hooked)
-            {
-                var seen = AgentActivity.NeedsPane(hooked.State)
-                    ? mux.GetTextAsync(pane.Id).GetAwaiter().GetResult()
-                    : string.Empty;
-                paneTexts[agent.Worktree] = seen;
-                return agent with { Status = AgentActivity.For(AgentActivity.Confirmed(hooked.State, seen, hooked.Reason)) };
-            }
-
-            var text = mux.GetTextAsync(pane.Id).GetAwaiter().GetResult();
-            paneTexts[agent.Worktree] = text;
-            var live = AgentActivity.Classify(text);
-
-            return live.Length == 0 && orchestrator ? agent : agent with { Status = live };
-        }
+        IReadOnlyList<AgentRecord> WithActivity(IReadOnlyList<AgentRecord> records) =>
+            barPanes is null ? records : activity.For(records, barPanes, HookedNow());
 
         var spawner = new NewAgentHandler(git, mux, agents);
         var hider = new HideAgentHandler(mux, agents);
@@ -866,9 +834,7 @@ public static class DashboardWiring
 
             LoadAgents: () =>
             {
-                var board = SubTree.Of(WithBarState(lister.Handle(project.Name))).Board
-                    .Select(WithActivity)
-                    .ToList();
+                var board = WithActivity(SubTree.Of(WithBarState(lister.Handle(project.Name))).Board);
 
                 return new AgentBoard(
                     AgentRows.For(board, Peeked(states)),
@@ -879,11 +845,8 @@ public static class DashboardWiring
 
             LoadSubs: () =>
             {
-                var everyone = WithBarState(lister.Handle(project.Name))
-                    .Select(WithActivity)
-                    .ToList();
-
-                var listing = SubTree.Of(everyone);
+                var shown = SubTree.Of(WithBarState(lister.Handle(project.Name)));
+                var listing = SubTree.Of([.. shown.Board, .. WithActivity([.. shown.Flat.Select(e => e.Agent)])]);
                 var trigger = settings.Load(project.Name).Trigger;
 
                 return new SubBoard(
