@@ -11,7 +11,8 @@ public sealed record SettingsConfig(
     bool MainOrchestratorInNvim = SettingsDefaults.MainOrchestratorInNvim,
     bool SubOrchestratorsInNvim = SettingsDefaults.SubOrchestratorsInNvim,
     bool AutoClose = SettingsDefaults.AutoClose,
-    int AutoCloseMinutes = SettingsDefaults.AutoCloseMinutes)
+    int AutoCloseMinutes = SettingsDefaults.AutoCloseMinutes,
+    ActionPolicy Merge = SettingsDefaults.Merge)
 {
     public static SettingsConfig Default => new(
         SettingsDefaults.Trigger,
@@ -20,7 +21,8 @@ public sealed record SettingsConfig(
         SettingsDefaults.Push,
         SettingsDefaults.Aidlc,
         SettingsDefaults.MainOrchestratorInNvim,
-        SettingsDefaults.SubOrchestratorsInNvim);
+        SettingsDefaults.SubOrchestratorsInNvim,
+        Merge: SettingsDefaults.Merge);
 
     public bool StatusHooks { get; init; } = SettingsDefaults.StatusHooks;
 
@@ -46,6 +48,8 @@ public sealed record SettingsConfig(
     public SettingsConfig WithCommit(ActionPolicy policy) => this with { Commit = policy };
 
     public SettingsConfig WithPush(ActionPolicy policy) => this with { Push = policy };
+
+    public SettingsConfig WithMerge(ActionPolicy policy) => this with { Merge = policy };
 
     public SettingsConfig WithAidlcMode(AidlcMode mode) => this with { Aidlc = Aidlc with { Mode = mode } };
 
@@ -81,7 +85,8 @@ public sealed record SettingsConfig(
             MainOrchestratorInNvim,
             SubOrchestratorsInNvim,
             AutoClose,
-            AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes)
+            AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes,
+            Merge)
         {
             StatusHooks = StatusHooks,
         };
@@ -96,6 +101,7 @@ public sealed record SettingsConfig(
                 .Prepend($"trigger={Trigger}")
                 .Append($"commit={Commit}")
                 .Append($"push={Push}")
+                .Append($"merge={Merge}")
                 .Append(Aidlc.Signature)
                 .Append($"main-nvim={MainOrchestratorInNvim}")
                 .Append($"sub-nvim={SubOrchestratorsInNvim}")

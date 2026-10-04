@@ -11,6 +11,8 @@ public static class SettingsDefaults
 
     public const ActionPolicy Push = ActionPolicy.Ask;
 
+    public const ActionPolicy Merge = ActionPolicy.Allow;
+
     public static AidlcSettings Aidlc => AidlcSettings.Default;
 
     public const bool MainOrchestratorInNvim = true;
@@ -24,6 +26,8 @@ public static class SettingsDefaults
     public const string CommitLabel = "Agents commit changes";
 
     public const string PushLabel = "Agents push changes";
+
+    public const string MergeLabel = "Agents merge pull requests";
 
     public const string MainOrchestratorInNvimLabel = "Main orchestrator in nvim";
 

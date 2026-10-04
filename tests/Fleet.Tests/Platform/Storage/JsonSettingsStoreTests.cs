@@ -62,6 +62,30 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_merge_gate_defaults_to_allow_and_round_trips()
+    {
+        Assert.Equal(ActionPolicy.Allow, Store.Load("techweb").Merge);
+
+        Store.Save("techweb", SettingsConfig.Default.WithMerge(ActionPolicy.Forbid));
+
+        Assert.Equal(ActionPolicy.Forbid, Store.Load("techweb").Merge);
+    }
+
+    [Fact]
+    public void A_file_written_before_the_merge_gate_loads_it_as_the_default()
+    {
+        Directory.CreateDirectory(FleetPaths.Settings);
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{ "version": 1, "push": "forbid" }""");
+
+        var loaded = Store.Load("techweb");
+
+        Assert.Equal(ActionPolicy.Forbid, loaded.Push);
+        Assert.Equal(ActionPolicy.Allow, loaded.Merge);
+    }
+
+    [Fact]
     public void The_aidlc_mode_defaults_to_off()
     {
         Assert.Equal(AidlcMode.Off, Store.Load("techweb").Aidlc.Mode);

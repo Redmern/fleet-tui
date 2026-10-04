@@ -60,7 +60,8 @@ public sealed class JsonSettingsStore : ISettingsStore
                     ParseOnOff(stored.MainOrchestratorInNvim, SettingsDefaults.MainOrchestratorInNvim),
                     ParseOnOff(stored.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim),
                     ParseOnOff(stored.AutoClose, SettingsDefaults.AutoClose),
-                    stored.AutoCloseMinutes)
+                    stored.AutoCloseMinutes,
+                    ParsePolicy(stored.Merge, SettingsDefaults.Merge))
                 .MergedOverDefaults() with
             {
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
@@ -86,6 +87,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             Trigger = SettingsDiff.TriggerAgainstDefault(config.Trigger),
             Commit = PolicyAgainstDefault(config.Commit, SettingsDefaults.Commit),
             Push = PolicyAgainstDefault(config.Push, SettingsDefaults.Push),
+            Merge = PolicyAgainstDefault(config.Merge, SettingsDefaults.Merge),
             Aidlc = WordAgainstDefault(config.Aidlc.Mode, SettingsDefaults.Aidlc.Mode),
             AidlcProfile = WordAgainstDefault(config.Aidlc.DefaultProfile, SettingsDefaults.Aidlc.DefaultProfile),
             AidlcAutonomy = WordAgainstDefault(config.Aidlc.Autonomy, SettingsDefaults.Aidlc.Autonomy),

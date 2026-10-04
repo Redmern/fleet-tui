@@ -12,6 +12,8 @@ public sealed class SettingsFile
 
     public string Push { get; set; } = string.Empty;
 
+    public string Merge { get; set; } = string.Empty;
+
     public string Aidlc { get; set; } = string.Empty;
 
     public string AidlcProfile { get; set; } = string.Empty;

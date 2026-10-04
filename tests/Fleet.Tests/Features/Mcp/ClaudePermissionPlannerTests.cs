@@ -97,4 +97,27 @@ public sealed class ClaudePermissionPlannerTests
         Assert.Contains(GitGates.PushRule, plan.Deny);
         Assert.DoesNotContain(GitGates.PushRule, plan.Allow);
     }
+
+    [Fact]
+    public void Merging_a_pull_request_is_allowed_by_default_in_bash_and_powershell()
+    {
+        var plan = ClaudePermissionPlanner.Plan(SettingsConfig.Default);
+
+        Assert.Contains(GitGates.MergeRule, plan.Allow);
+        Assert.Contains(GitGates.MergePowerShellRule, plan.Allow);
+    }
+
+    [Fact]
+    public void Forbidding_merge_denies_it_and_asking_asks()
+    {
+        var forbidden = ClaudePermissionPlanner.Plan(SettingsConfig.Default.WithMerge(ActionPolicy.Forbid));
+        var asked = ClaudePermissionPlanner.Plan(SettingsConfig.Default.WithMerge(ActionPolicy.Ask));
+
+        Assert.Contains(GitGates.MergeRule, forbidden.Deny);
+        Assert.Contains(GitGates.MergePowerShellRule, forbidden.Deny);
+        Assert.DoesNotContain(GitGates.MergeRule, forbidden.Allow);
+        Assert.Contains(GitGates.MergeRule, asked.Ask);
+        Assert.Contains(GitGates.MergePowerShellRule, asked.Ask);
+        Assert.DoesNotContain(GitGates.MergeRule, asked.Allow);
+    }
 }

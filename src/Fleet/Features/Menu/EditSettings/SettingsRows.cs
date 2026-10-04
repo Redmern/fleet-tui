@@ -12,7 +12,7 @@ public static class SettingsRows
 
     public static IReadOnlyList<HarnessTool> Tools => SettingsDefaults.Configurable;
 
-    public static int Count => Tools.Count + 4;
+    public static int Count => Tools.Count + 5;
 
     public static bool IsTriggerRow(int index) => index == 0;
 
@@ -20,7 +20,9 @@ public static class SettingsRows
 
     public static bool IsPushRow(int index) => index == Tools.Count + 2;
 
-    public static bool IsStatusHooksRow(int index) => index == Tools.Count + 3;
+    public static bool IsMergeRow(int index) => index == Tools.Count + 3;
+
+    public static bool IsStatusHooksRow(int index) => index == Tools.Count + 4;
 
     public static HarnessTool ToolAt(int index) =>
         index >= 1 && index <= Tools.Count ? Tools[index - 1] : HarnessTool.None;
@@ -34,6 +36,7 @@ public static class SettingsRows
                 TriggerLabel.Length,
                 SettingsDefaults.CommitLabel.Length,
                 SettingsDefaults.PushLabel.Length,
+                SettingsDefaults.MergeLabel.Length,
                 SettingsDefaults.StatusHooksLabel.Length,
                 Tools.Max(t => SettingsDefaults.Describe(t).Length),
             }
@@ -49,6 +52,7 @@ public static class SettingsRows
         rows.AddRange(Tools.Select(t => Row(t, config.RuleFor(t), labelWidth)));
         rows.Add(GateRow(SettingsDefaults.CommitLabel, config.Commit, labelWidth));
         rows.Add(GateRow(SettingsDefaults.PushLabel, config.Push, labelWidth));
+        rows.Add(GateRow(SettingsDefaults.MergeLabel, config.Merge, labelWidth));
         rows.Add(SwitchRow(SettingsDefaults.StatusHooksLabel, config.StatusHooks, labelWidth));
 
         return rows;
