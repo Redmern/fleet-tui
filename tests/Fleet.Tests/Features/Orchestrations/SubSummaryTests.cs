@@ -74,6 +74,42 @@ public sealed class SubSummaryTests
     }
 
     [Fact]
+    public void An_agent_that_reported_shows_its_last_report_under_its_line()
+    {
+        var reported = Agent("backend", "story", "upgrade", OrchestrationStatus.Done) with
+        {
+            Summary = "story merged",
+            ReportedAt = "2026-10-04T09:00:00Z",
+        };
+
+        var lines = Text([Sub("upgrade"), reported]).Split('\n');
+
+        Assert.Equal(["  - backend/story — closed, done", "      last report 2026-10-04T09:00:00Z: story merged"], lines[1..]);
+    }
+
+    [Fact]
+    public void Unowned_lists_only_the_agents_no_sub_started_sorted_by_repository_and_branch()
+    {
+        var text = SubSummary.Unowned(
+            [
+                Sub("upgrade"),
+                Agent("frontend", "form", "upgrade"),
+                Agent("frontend", "solo", status: "idle"),
+                Agent("backend", "fix"),
+                Agent("backend", "story", "vanished"),
+            ],
+            a => a.Branch == "solo");
+
+        Assert.Equal("- backend/fix — closed, no report\n- frontend/solo — open, idle", text);
+    }
+
+    [Fact]
+    public void Unowned_says_so_when_every_agent_belongs_to_a_sub()
+    {
+        Assert.Equal(SubSummary.NoUnowned, SubSummary.Unowned([Sub("upgrade"), Agent("backend", "story", "upgrade")], _ => false));
+    }
+
+    [Fact]
     public void Agents_whose_sub_is_gone_are_listed_under_its_old_name()
     {
         var text = Text([Sub("upgrade"), Agent("backend", "story", "vanished")]);

@@ -1,5 +1,6 @@
 using Fleet.Features.Head.ServeHead;
 using Fleet.Features.Head.ServeHead.Models;
+using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
@@ -15,6 +16,7 @@ using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
@@ -58,6 +60,18 @@ public sealed class HeadServiceTests
 
     private readonly Known _known = new();
 
+    private readonly Dictionary<string, List<string>> _repositories = new(StringComparer.OrdinalIgnoreCase);
+
+    private Task<ProjectStructure> Structure(Project project, CancellationToken ct)
+    {
+        var agents = _agents.List(project.Name);
+
+        return Task.FromResult(new ProjectStructure(
+            _repositories.GetValueOrDefault(project.Name) ?? [],
+            SubSummary.Text(agents, a => a.Open),
+            SubSummary.Unowned(agents, a => a.Open)));
+    }
+
     private HeadService Service() => new(
         new HeadDeps(
             new Projects(Web, Api),
@@ -77,7 +91,8 @@ public sealed class HeadServiceTests
             name => _open.TryGetValue(name, out var panes) ? panes.Dash.Value : null,
             new NoLog(),
             _remotes,
-            _known),
+            _known,
+            Structure),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
@@ -385,7 +400,7 @@ public sealed class HeadServiceTests
         var service = new HeadService(
             new HeadDeps(
                 new Projects(Web), mux, _settings, _approvals, _agents, _requests, _workspaces,
-                (_, _) => Task.FromResult(true), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known),
+                (_, _) => Task.FromResult(true), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known, Structure),
             Fast);
 
         await service.HandleAsync(Call(HeadTools.SwitchProject, (HeadTools.Project, "web")));
@@ -435,6 +450,147 @@ public sealed class HeadServiceTests
         Assert.Contains("web  site/login  nvim  open", result.Text);
         Assert.Contains("api: api does not allow list_agents", result.Text);
         Assert.DoesNotContain("core/fix", result.Text);
+    }
+
+    private static AgentRecord Orchestrator(string slug, string status = "", string summary = "", string at = "") =>
+        new($"C:/p/web/.fleet/orchestrations/{slug}", string.Empty, slug, AgentHarness.Orchestrator, "origin/main", false,
+            Status: status, Summary: summary, ReportedAt: at);
+
+    private static AgentRecord Worker(
+        string repo, string branch, string owner = "", string status = "", string summary = "", string at = "", bool open = false) =>
+        new($"C:/p/web/{repo}/{branch}", repo, branch, AgentHarness.Nvim, "origin/main", true,
+            Open: open, Owner: owner, Status: status, Summary: summary, ReportedAt: at);
+
+    [Fact]
+    public async Task Project_structure_shows_repositories_each_sub_with_its_agents_and_the_agents_under_no_sub()
+    {
+        _repositories["web"] = ["api", "site"];
+        _agents.Records["web"] =
+        [
+            Orchestrator("upgrade", OrchestrationStatus.Working, "two agents started", "2026-10-04T09:00:00Z"),
+            Worker("site", "login", "upgrade", "done", "login page merged", "2026-10-04T09:30:00Z", open: true),
+            Worker("api", "auth", "upgrade"),
+            Worker("api", "hotfix", status: "idle", open: true),
+        ];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ProjectStructure, (HeadTools.Project, "WEB")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(
+            """
+            web  C:/p/web
+            repositories
+              api
+              site
+            sub-orchestrators
+              upgrade — working, pane closed
+                last report 2026-10-04T09:00:00Z: two agents started
+                - api/auth — closed, no report
+                - site/login — open, done
+                    last report 2026-10-04T09:30:00Z: login page merged
+            agents not under a sub-orchestrator
+              - api/hotfix — open, idle
+            """.ReplaceLineEndings("\n"),
+            result.Text);
+        Assert.Empty(_remotes.Forwarded);
+    }
+
+    [Fact]
+    public async Task Project_structure_of_a_project_without_subs_lists_its_agents_as_under_no_sub()
+    {
+        _agents.Records["api"] = [Worker("core", "fix", status: "working"), Worker("core", "docs")];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ProjectStructure, (HeadTools.Project, "api")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("repositories\n  none\nsub-orchestrators\n  " + SubSummary.None + "\n", result.Text);
+        Assert.EndsWith(
+            "agents not under a sub-orchestrator\n  - core/docs — closed, no report\n  - core/fix — closed, working",
+            result.Text);
+    }
+
+    [Fact]
+    public async Task Project_structure_says_when_every_agent_is_under_a_sub()
+    {
+        _agents.Records["web"] = [Orchestrator("upgrade"), Worker("site", "login", "upgrade")];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ProjectStructure, (HeadTools.Project, "web")));
+
+        Assert.Contains("  - site/login — closed, no report", result.Text);
+        Assert.EndsWith("agents not under a sub-orchestrator\n  " + SubSummary.NoUnowned, result.Text);
+    }
+
+    [Fact]
+    public async Task Project_structure_keeps_each_section_under_its_own_permission()
+    {
+        _repositories["web"] = ["site"];
+        _agents.Records["web"] = [Orchestrator("upgrade"), Worker("site", "solo")];
+        _settings.PerProject["web"] = SettingsConfig.Default.With(HarnessTool.ListSubs, ActionPolicy.Forbid);
+
+        var result = await Service().HandleAsync(Call(HeadTools.ProjectStructure, (HeadTools.Project, "web")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("sub-orchestrators\n  web does not allow list_subs", result.Text);
+        Assert.DoesNotContain("upgrade", result.Text);
+        Assert.Contains("repositories\n  site", result.Text);
+        Assert.Contains("  - site/solo", result.Text);
+    }
+
+    [Fact]
+    public async Task Project_structure_needs_a_known_project()
+    {
+        var missing = await Service().HandleAsync(Call(HeadTools.ProjectStructure));
+        var unknown = await Service().HandleAsync(Call(HeadTools.ProjectStructure, (HeadTools.Project, "nope")));
+
+        Assert.True(missing.IsError);
+        Assert.Contains("'project' is required", missing.Text);
+        Assert.True(unknown.IsError);
+        Assert.Contains("web, api", unknown.Text);
+    }
+
+    [Fact]
+    public async Task Project_structure_on_a_remote_comes_from_that_machines_fleet()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+        _remotes.Reply = McpResult.Ok("shop  /srv/shop\nrepositories\n  store");
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.ProjectStructure, (HeadTools.Project, "SHOP"), (HeadTools.Remote, "hostinger")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal("on hostinger: shop  /srv/shop\nrepositories\n  store", result.Text);
+        var (host, forwarded) = Assert.Single(_remotes.Forwarded);
+        Assert.Equal(Hostinger, host);
+        Assert.Equal(HeadTools.ProjectStructure, forwarded.Tool);
+        Assert.Equal("shop", forwarded.Value(HeadTools.Project));
+        Assert.False(forwarded.Arguments.ContainsKey(HeadTools.Remote));
+    }
+
+    [Fact]
+    public async Task Project_structure_on_a_remote_needs_a_project()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+
+        var result = await Service().HandleAsync(Call(HeadTools.ProjectStructure, (HeadTools.Remote, "hostinger")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("'project' is required", result.Text);
+        Assert.Empty(_remotes.Forwarded);
+    }
+
+    [Fact]
+    public async Task Served_to_the_origin_project_structure_runs_here()
+    {
+        _agents.Records["web"] = [Orchestrator("upgrade"), Worker("site", "login", "upgrade")];
+
+        var result = await Service().ServeOriginAsync(Call(HeadTools.ProjectStructure, (HeadTools.Project, "web")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("upgrade — working", result.Text);
+        Assert.Contains("    - site/login", result.Text);
+        Assert.Empty(_remotes.Forwarded);
     }
 
     [Fact]
@@ -558,7 +714,7 @@ public sealed class HeadServiceTests
         var service = new HeadService(
             new HeadDeps(
                 new Projects(Web), _mux, _settings, _approvals, _agents, _requests, _workspaces,
-                (_, _) => Task.FromResult(false), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known),
+                (_, _) => Task.FromResult(false), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known, Structure),
             Fast with { ConnectTimeout = TimeSpan.FromMilliseconds(50) });
 
         var result = await service.HandleAsync(Call(HeadTools.ListAgents, (HeadTools.Remote, "hostinger")));
@@ -671,7 +827,7 @@ public sealed class HeadServiceTests
         var service = new HeadService(
             new HeadDeps(
                 new Projects(Web), mux, _settings, _approvals, _agents, _requests, _workspaces,
-                (_, _) => Task.FromResult(true), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known),
+                (_, _) => Task.FromResult(true), _ => Task.FromResult<string?>(null), _ => null, new NoLog(), _remotes, _known, Structure),
             Fast);
 
         var result = await service.ServeOriginAsync(

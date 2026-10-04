@@ -23,7 +23,8 @@ public sealed record HeadDeps(
     Func<string, string?> DashPane,
     IFleetLog Log,
     IRemoteMachines Remotes,
-    IKnownRemoteStore KnownRemotes);
+    IKnownRemoteStore KnownRemotes,
+    Func<Project, CancellationToken, Task<ProjectStructure>> Structure);
 
 public sealed record HeadTiming(
     TimeSpan Poll,

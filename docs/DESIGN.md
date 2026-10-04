@@ -4785,6 +4785,30 @@ machine tab was empty and the startup picker's *New project* only works on this 
   which now opens the New project form straight away (cancel falls back to its picker).
   The project, its folder and its orchestrator all live on the remote.
 
+## The head shows a project's structure, 2026-10-04
+
+The head had no way to list a project's repositories, and `list_agents` is flat: it cannot
+say which agents a sub-orchestrator started. `project_structure(project, remote)` is one
+new head tool rather than a head `list_repositories` plus a second agents listing, because
+"what does X look like?" wants all of it at once and one call is one approval round.
+
+- **Reuse, not a second copy.** The head slice may not reference `ListRepositories` or
+  `ListSubs`, so `HeadDeps` gains a `Structure` delegate. The composition root's
+  `ProjectStructureReader` fills it from `ListRepositoriesHandler`, `SubSummary.Text` (the
+  `list_subs` text, sub → its agents) and `SubSummary.Unowned` (`SubTree`'s board: agents
+  with no owner). `list_subs` and the reader share the pane check (`PaneOpenAsync`).
+- **Last reports.** A repo agent's `report` was stored but shown nowhere over MCP;
+  `SubSummary` now prints its `last report` line under the agent, as it does for a sub.
+- **Shape.** `name  root`, then `repositories`, `sub-orchestrators` and `agents not under a
+  sub-orchestrator`, each with its lines indented. Agents whose sub is gone stay under the
+  sub's old name, as in `list_subs`.
+- **Permissions.** Each part goes through its own project rule (`list_repositories`,
+  `list_subs`, `list_agents`); a refused part shows the refusal in its place, as
+  `list_agents` does per project.
+- **Remote.** Like `list_agents`: the origin forwards it over the fleetd link and the
+  remote's `ServeOriginAsync` answers it from its own stores. An older remote fleet
+  answers that it does not serve the tool.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

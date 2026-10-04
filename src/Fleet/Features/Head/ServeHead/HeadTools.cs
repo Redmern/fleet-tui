@@ -14,6 +14,8 @@ public static class HeadTools
 
     public const string ListAgents = "list_agents";
 
+    public const string ProjectStructure = "project_structure";
+
     public const string Relay = "relay";
 
     public const string Tell = "tell";
@@ -76,6 +78,11 @@ public static class HeadTools
             ListAgents,
             "List the agents of one project, or of every open project when no project is given.",
             [new(Project, "string", "The project; leave out for every open project.", false), RemoteParam]),
+        new(
+            ProjectStructure,
+            "Show one project's full structure: its repositories, its sub-orchestrators each with the agents it "
+            + "started (status and last report), and the agents that are not under any sub-orchestrator.",
+            [ProjectParam, RemoteParam]),
         new(
             Tell,
             "Pass a plain message to a project's main orchestrator: a question (\"what is the status?\"), a "
