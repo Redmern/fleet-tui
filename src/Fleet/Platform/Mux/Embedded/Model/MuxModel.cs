@@ -202,7 +202,9 @@ public sealed class MuxModel
             return false;
         }
 
-        box.Bounds = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(StatusRows, y) };
+        var moved = box.Bounds with { X = Math.Max(0, x), Y = Math.Max(StatusRows, y) };
+        box.Moved |= moved != box.Bounds;
+        box.Bounds = moved;
         return true;
     }
 
@@ -756,7 +758,7 @@ public sealed class MuxModel
         var width = Math.Clamp(cols + 2, MinFloatWidth, content.Width);
         var height = Math.Clamp(rows + 2, MinFloatHeight, content.Height);
 
-        box.Bounds = FloatArea(Centred(width, height, content), content);
+        box.Bounds = FloatArea(box.Moved ? KeepCentre(box.Bounds, width, height, content) : Centred(width, height, content), content);
         return true;
     }
 
@@ -1124,6 +1126,12 @@ public sealed class MuxModel
             width,
             height);
 
+    private static Rect KeepCentre(Rect bounds, int width, int height, Rect content)
+    {
+        var now = FloatArea(bounds, content);
+        return new Rect(now.X + now.Width / 2 - width / 2, now.Y + now.Height / 2 - height / 2, width, height);
+    }
+
     public Rect WindowArea(string workspace)
     {
         var found = Workspace(workspace);
@@ -1459,6 +1467,8 @@ public sealed class FloatState(string pane, Rect bounds)
     public string Title { get; set; } = string.Empty;
 
     public bool Modal { get; init; }
+
+    public bool Moved { get; set; }
 
     public bool Parked { get; set; }
 

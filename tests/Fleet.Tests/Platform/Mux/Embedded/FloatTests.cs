@@ -125,7 +125,6 @@ public class FloatTests
         Assert.True(_model.FitFloat(menu.Id, 40, 10));
         Assert.Equal(new Rect(29, 15, 42, 12), _model.View(client.Id)!.FloatingPanes.Single().Area);
 
-        _model.MoveFloat(menu.Id, 2, 3);
         Assert.True(_model.FitFloat(menu.Id, 20, 4));
         Assert.Equal(new Rect(39, 18, 22, 6), _model.View(client.Id)!.FloatingPanes.Single().Area);
 
@@ -135,6 +134,34 @@ public class FloatTests
         Assert.True(_model.FitFloat(menu.Id, 500, 500));
         Assert.Equal(new Rect(0, 1, 100, 40), _model.View(client.Id)!.FloatingPanes.Single().Area);
         Assert.False(_model.FitFloat("p404", 10, 10));
+    }
+
+    [Fact]
+    public void A_moved_float_keeps_its_own_centre_when_it_fits_a_new_screen()
+    {
+        var (_, client) = Workspace("techweb");
+        var menu = _model.SpawnFloat("techweb", "C:/x", ["fleet", "menu"], modal: true);
+        _model.FitFloat(menu.Id, 40, 10);
+
+        Assert.True(_model.MoveFloat(menu.Id, 2, 3));
+        Assert.True(_model.FitFloat(menu.Id, 20, 4));
+
+        Assert.Equal(new Rect(12, 6, 22, 6), _model.View(client.Id)!.FloatingPanes.Single().Area);
+    }
+
+    [Fact]
+    public void Resizing_a_float_in_place_does_not_count_as_moving_it()
+    {
+        var (_, client) = Workspace("techweb");
+        var menu = _model.SpawnFloat("techweb", "C:/x", ["fleet", "menu"], modal: true);
+        _model.FitFloat(menu.Id, 40, 10);
+        _model.Resizes();
+
+        Assert.True(_model.NudgeFloat(client.Id, 0, 0, 4, 2));
+        Assert.True(_model.FitFloat(menu.Id, 20, 4));
+
+        Assert.False(_model.Float(menu.Id)!.Moved);
+        Assert.Equal(new Rect(39, 18, 22, 6), _model.View(client.Id)!.FloatingPanes.Single().Area);
     }
     [Fact]
     public void Toggling_without_floats_does_nothing()

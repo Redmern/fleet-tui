@@ -3526,6 +3526,7 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
       middle;
     - a sized float is centred in the whole window (until 2026-10-04 it
       kept its own centre, which left an approval in the asking split);
+      one the user moved (drag or keys) keeps its own centre instead;
     - when a dialog closes, the screen below gets its title and size back.
 - **Fixed on the way.** `FleetActionIds.Parse` did not know ids that fall back
   to the enum name (`viewlogs`, `browsefiles`, …), so such requests were
