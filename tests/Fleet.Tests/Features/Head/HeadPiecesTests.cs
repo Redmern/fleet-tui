@@ -1,5 +1,6 @@
 using Fleet.Features.Head.ServeHead;
 using Fleet.Features.Head.ServeHead.Enums;
+using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Tests.Features.Head;
@@ -74,6 +75,34 @@ public sealed class HeadPiecesTests
         Assert.Contains("\"enabled\":true", HeadLaunch.VoiceOn);
         Assert.Contains("\"enabled\":false", HeadLaunch.VoiceOff);
         Assert.Equal(["mcp", "--head"], HeadLaunch.McpArgs);
+    }
+
+    [Fact]
+    public void On_windows_the_head_runs_claude_through_cmd_so_its_autorun_hook_picks_the_account()
+    {
+        var args = HeadLaunch.ClaudeArgs(@"C:\Users\Jo Doe\AppData\Roaming\fleet\head\.fleet\voice-off.json", resume: true);
+
+        var line = HeadLaunch.ShellArguments("claude", args, WindowsCommandLine.Quote);
+
+        Assert.Equal("cmd.exe", HeadLaunch.WindowsShell);
+        Assert.Equal(
+            "/s /c \"claude --settings \"C:\\Users\\Jo Doe\\AppData\\Roaming\\fleet\\head\\.fleet\\voice-off.json\" --continue\"",
+            line);
+        Assert.DoesNotContain("/d", line.Split(' '), StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Cmd_strips_only_the_outer_quotes_and_leaves_claudes_own_command_line()
+    {
+        string[] args = ["--settings", @"C:\a b\voice-on.json"];
+
+        var line = HeadLaunch.ShellArguments(@"C:\Program Files\claude\claude.exe", args, WindowsCommandLine.Quote);
+        var command = line["/s /c ".Length..];
+
+        // cmd /s /c removes the first and last quote and runs the rest verbatim.
+        Assert.Equal(
+            WindowsCommandLine.For(@"C:\Program Files\claude\claude.exe", args, p => p),
+            command[1..^1]);
     }
 
     [Fact]
