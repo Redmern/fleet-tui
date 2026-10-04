@@ -12,6 +12,10 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
     private readonly ConcurrentDictionary<string, (DateTime At, BranchState State)> _known =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly ConcurrentDictionary<string, byte> _measuring = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly SemaphoreSlim _atOnce = new(AtOnce);
+
     private readonly TimeSpan _freshFor = freshFor ?? TimeSpan.FromSeconds(2);
 
     public BranchState For(string worktree, string? fallback = null)
@@ -25,6 +29,32 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
         var state = Measure(worktree, fallback);
         _known[key] = (DateTime.UtcNow, state);
         return state;
+    }
+
+    public BranchState Peek(string worktree, string? fallback = null)
+    {
+        var key = $"{worktree}|{fallback}";
+        var known = _known.TryGetValue(key, out var last);
+
+        if ((!known || DateTime.UtcNow - last.At >= _freshFor) && _measuring.TryAdd(key, 0))
+        {
+            _ = Task.Run(async () =>
+            {
+                await _atOnce.WaitAsync().ConfigureAwait(false);
+
+                try
+                {
+                    _known[key] = (DateTime.UtcNow, Measure(worktree, fallback));
+                }
+                finally
+                {
+                    _atOnce.Release();
+                    _measuring.TryRemove(key, out _);
+                }
+            });
+        }
+
+        return known ? last.State : BranchState.Unknown;
     }
 
     public void Warm(IEnumerable<(string Worktree, string? Fallback)> worktrees) =>
