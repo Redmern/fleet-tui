@@ -5,7 +5,13 @@
 #   ./install.sh                build, install, run 'fleet setup'
 #   ./install.sh --with-deps    install wezterm, neovim, yazi and a neovim config first
 #   ./install.sh --deps-only    install only those dependencies
-#   ./install.sh --uninstall    remove the binary (configuration is kept)
+#   ./install.sh --uninstall    remove the binary and the PATH line (configuration is kept)
+#   ./install.sh --no-path      don't add the bin folder to PATH in a shell startup file
+#
+# When the bin folder isn't on PATH, a marked line adding it goes into the startup
+# file of $SHELL: ~/.bashrc (at the top, ahead of the non-interactive guard, so
+# 'ssh host fleet bridge' finds it), ~/.zshenv, fish's conf.d or ~/.profile.
+# FLEET_NO_PATH=1 does the same as --no-path.
 #
 # --with-deps uses the package manager it can find. FLEET_NVIM_CONFIG picks the
 # neovim config to clone; DEFAULT_NVIM_CONFIG below is used when it is unset.
@@ -15,6 +21,11 @@ set -eu
 DEFAULT_NVIM_CONFIG="https://github.com/Redmern/nvim_0.12.git"
 WITH_DEPS=0
 DEPS_ONLY=0
+NO_PATH=0
+if [ -n "${FLEET_NO_PATH:-}" ] && [ "$FLEET_NO_PATH" != 0 ]; then
+    NO_PATH=1
+fi
+PATH_MARK='# added by fleet installer'
 
 REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 BIN_DIR="${FLEET_BIN_DIR:-$HOME/.local/bin}"
@@ -114,8 +125,69 @@ for arg in "$@"; do
     case "$arg" in
         --with-deps) WITH_DEPS=1 ;;
         --deps-only) DEPS_ONLY=1; WITH_DEPS=1 ;;
+        --no-path) NO_PATH=1 ;;
     esac
 done
+
+path_rc_file() {
+    case "${SHELL:-}" in
+        */bash) echo "$HOME/.bashrc" ;;
+        */zsh) echo "${ZDOTDIR:-$HOME}/.zshenv" ;;
+        */fish) echo "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/fleet.fish" ;;
+        *) echo "$HOME/.profile" ;;
+    esac
+}
+
+add_to_path() {
+    case ":$PATH:" in
+        *":$BIN_DIR:"*) ok "already on PATH: $BIN_DIR"; return ;;
+    esac
+    if [ "$NO_PATH" = 1 ]; then
+        ok "add to PATH: export PATH=\"$BIN_DIR:\$PATH\""
+        return
+    fi
+    rc="$(path_rc_file)"
+    if [ -f "$rc" ] && grep -qF "$PATH_MARK" "$rc"; then
+        ok "PATH is already set in $rc - open a new shell, or run: . $rc"
+        return
+    fi
+    case "$rc" in
+        *.fish) line="contains -- '$BIN_DIR' \$PATH; or set -gx PATH '$BIN_DIR' \$PATH $PATH_MARK" ;;
+        *) line="case \":\$PATH:\" in *\":$BIN_DIR:\"*) ;; *) export PATH=\"$BIN_DIR:\$PATH\" ;; esac $PATH_MARK" ;;
+    esac
+    mkdir -p "$(dirname -- "$rc")"
+    if [ "${rc##*/}" = .bashrc ] && [ -s "$rc" ]; then
+        tmp="$(mktemp)"
+        { printf '%s\n' "$line"; cat "$rc"; } >"$tmp"
+        cat "$tmp" >"$rc"
+        rm -f "$tmp"
+    else
+        if [ -s "$rc" ] && [ -n "$(tail -c 1 "$rc")" ]; then
+            printf '\n' >>"$rc"
+        fi
+        printf '%s\n' "$line" >>"$rc"
+    fi
+    ok "added $BIN_DIR to PATH in $rc"
+    ok "open a new shell, or run: . $rc"
+}
+
+remove_from_path() {
+    for rc in "$HOME/.bashrc" "${ZDOTDIR:-$HOME}/.zshenv" "$HOME/.profile" \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/fleet.fish"; do
+        if [ ! -f "$rc" ] || ! grep -qF "$PATH_MARK" "$rc"; then
+            continue
+        fi
+        tmp="$(mktemp)"
+        grep -vF "$PATH_MARK" "$rc" >"$tmp" || true
+        if [ "${rc##*/}" = fleet.fish ] && [ ! -s "$tmp" ]; then
+            rm -f "$rc"
+        else
+            cat "$tmp" >"$rc"
+        fi
+        rm -f "$tmp"
+        ok "removed the PATH line from $rc"
+    done
+}
 
 install_deps() {
     step 'Installing dependencies'
@@ -166,6 +238,7 @@ if [ "${1:-}" = "--uninstall" ]; then
     step 'Uninstalling'
     rm -f "$BIN"
     ok "removed $BIN"
+    remove_from_path
     ok "configuration kept in ${XDG_CONFIG_HOME:-$HOME/.config}/fleet"
     steps_done
     exit 0
@@ -233,10 +306,7 @@ pkill -x fleet 2>/dev/null && ok 'stopped a running fleet' || true
 install -m 755 "$OUT/fleet" "$BIN"
 ok "$BIN"
 
-case ":$PATH:" in
-    *":$BIN_DIR:"*) ok "already on PATH: $BIN_DIR" ;;
-    *) ok "add to PATH: export PATH=\"$BIN_DIR:\$PATH\"" ;;
-esac
+add_to_path
 
 step 'Setting up'
 "$BIN" setup || true
