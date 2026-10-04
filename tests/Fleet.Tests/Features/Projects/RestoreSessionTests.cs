@@ -194,15 +194,15 @@ public sealed class RestoreSessionTests : IDisposable
     {
         Directory.CreateDirectory(ProjectRoot);
         await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
-        var slow = new SlowMux(_mux);
         var agents = new[] { Agent("c", open: true), Agent("a", open: true), Agent("b", open: true) };
+        var slow = new SlowMux(_mux, agents.Length);
 
         var restored = await new RestoreSessionHandler(slow).HandleAsync("techweb", ProjectRoot, agents);
 
         Assert.Equal(3, restored);
         Assert.Equal(agents.Select(a => a.Worktree), slow.SpawnedCwds);
         Assert.Equal(1, slow.MostVisibleAtOnce);
-        Assert.True(slow.SpawnedWhileTitling, "a title should be set while the next agent opens");
+        Assert.True(slow.NextSpawnedWhileTitling, "a title should be set while the next agent opens");
 
         var panes = await _mux.ListPanesAsync();
         Assert.All(agents, a => Assert.Equal(
@@ -215,8 +215,8 @@ public sealed class RestoreSessionTests : IDisposable
     {
         Directory.CreateDirectory(ProjectRoot);
         await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
-        var slow = new SlowMux(_mux);
         var agents = Enumerable.Range(0, 9).Select(i => Agent($"h{i}", open: true, hidden: true)).ToList();
+        var slow = new SlowMux(_mux, agents.Count);
 
         var restored = await new RestoreSessionHandler(slow).HandleAsync("techweb", ProjectRoot, agents);
 
@@ -227,16 +227,20 @@ public sealed class RestoreSessionTests : IDisposable
         Assert.InRange(slow.MostHiddenAtOnce, 2, 4);
     }
 
-    private sealed class SlowMux(FakeMuxDriver inner) : IMuxDriver
+    // Waits for the behaviour under test (the next spawn, a second hidden spawn) instead of a fixed delay,
+    // so a slow CI runner can't make overlap look absent. A handler that serializes falls through on Fallback.
+    private sealed class SlowMux(FakeMuxDriver inner, int expected) : IMuxDriver
     {
-        private static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(60);
+        private static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(20);
+        private static readonly TimeSpan Fallback = TimeSpan.FromSeconds(2);
         private readonly Lock _gate = new();
         private readonly List<string> _spawned = [];
+        private readonly Dictionary<PaneId, int> _order = [];
         private int _visible;
         private int _hidden;
-        private int _titling;
         private int _hiddenStarted;
         private bool _firstRunning;
+        private bool _nextSpawned;
 
         public IReadOnlyList<string> SpawnedCwds
         {
@@ -253,7 +257,29 @@ public sealed class RestoreSessionTests : IDisposable
 
         public int MostHiddenAtOnce { get; private set; }
 
-        public bool SpawnedWhileTitling { get; private set; }
+        public bool NextSpawnedWhileTitling => Volatile.Read(ref _nextSpawned);
+
+        private int Started
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _spawned.Count;
+                }
+            }
+        }
+
+        private int HiddenRunning
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _hidden;
+                }
+            }
+        }
 
         public bool FirstHiddenOverlapped { get; private set; }
 
@@ -267,11 +293,12 @@ public sealed class RestoreSessionTests : IDisposable
         {
             var hidden = options.NewWindow;
             bool first;
+            int index;
 
             lock (_gate)
             {
+                index = _spawned.Count;
                 _spawned.Add(options.Cwd ?? string.Empty);
-                SpawnedWhileTitling |= _titling > 0;
                 first = hidden && _hiddenStarted++ == 0;
                 FirstHiddenOverlapped |= hidden && !first && _firstRunning;
                 _firstRunning |= first;
@@ -288,6 +315,11 @@ public sealed class RestoreSessionTests : IDisposable
 
             await Task.Delay(Pause, ct);
 
+            if (hidden && !first)
+            {
+                await WaitUntilAsync(() => HiddenRunning > 1 || Started >= expected, ct);
+            }
+
             lock (_gate)
             {
                 _firstRunning &= !first;
@@ -300,25 +332,50 @@ public sealed class RestoreSessionTests : IDisposable
                 {
                     _visible--;
                 }
-
             }
 
-            return await inner.SpawnAsync(options, ct);
+            var pane = await inner.SpawnAsync(options, ct);
+
+            lock (_gate)
+            {
+                _order[pane] = index;
+            }
+
+            return pane;
         }
 
         public async Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default)
         {
-            Interlocked.Increment(ref _titling);
+            int index;
 
-            try
+            lock (_gate)
             {
-                await Task.Delay(Pause * 2, ct);
-                await inner.SetTitleAsync(id, title, ct);
+                index = _order[id];
             }
-            finally
+
+            if (index + 1 < expected && await WaitUntilAsync(() => Started > index + 1, ct))
             {
-                Interlocked.Decrement(ref _titling);
+                Volatile.Write(ref _nextSpawned, true);
             }
+
+            await inner.SetTitleAsync(id, title, ct);
+        }
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> done, CancellationToken ct)
+        {
+            var until = DateTime.UtcNow + Fallback;
+
+            while (!done())
+            {
+                if (DateTime.UtcNow >= until)
+                {
+                    return false;
+                }
+
+                await Task.Delay(5, ct);
+            }
+
+            return true;
         }
 
         public Task<bool> IsAvailableAsync(CancellationToken ct = default) => inner.IsAvailableAsync(ct);
