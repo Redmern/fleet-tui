@@ -152,8 +152,8 @@ public static class KeymapDefaults
             FleetAction.DismissNotice => "Dismiss a notification",
             FleetAction.DismissAllNotices => "Dismiss all shown notifications",
             FleetAction.OpenEditor => "Open editor here",
-            FleetAction.OpenHead => "Show or hide the head orchestrator",
-            FleetAction.OpenHeadVoice => "Show or hide the head, voice on",
+            FleetAction.OpenHead => "Show or hide the head, text mode",
+            FleetAction.OpenHeadVoice => "Show or hide the head, voice mode",
             _ => action.ToString(),
         };
 }
