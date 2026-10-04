@@ -45,6 +45,74 @@ public class WireTests
     }
 
     [Fact]
+    public async Task A_message_without_a_payload_is_one_write_so_a_peer_that_hangs_up_on_reading_it_cannot_break_the_pipe()
+    {
+        var peer = new HangsUpAfterOneWrite();
+
+        await new Wire(peer).SendAsync(MessageType.Bye, ReadOnlyMemory<byte>.Empty);
+
+        peer.Position = 0;
+        Assert.Equal(MessageType.Bye, (await new Wire(peer).ReceiveAsync())!.Value.Type);
+    }
+
+    private sealed class HangsUpAfterOneWrite : MemoryStream
+    {
+        private int _writes;
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ++_writes > 1
+                ? throw new IOException("Broken pipe")
+                : base.WriteAsync(buffer, cancellationToken);
+    }
+
+    [Fact]
+    public async Task Closing_the_wire_lets_a_message_being_sent_finish_so_the_peer_never_gets_half_of_it()
+    {
+        var peer = new SlowPayload();
+        var wire = new Wire(peer);
+        var sending = wire.SendAsync(MessageType.Text, new byte[10]);
+        await peer.PayloadStarted.Task;
+
+        var closing = Task.Run(wire.Dispose);
+        await Task.WhenAny(closing, Task.Delay(200));
+        peer.FinishPayload.SetResult();
+        await sending;
+        await closing;
+
+        Assert.False(peer.ClosedMidMessage);
+    }
+
+    private sealed class SlowPayload : MemoryStream
+    {
+        private volatile bool _inPayload;
+
+        public TaskCompletionSource PayloadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource FinishPayload { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool ClosedMidMessage { get; private set; }
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (Length >= 5)
+            {
+                _inPayload = true;
+                PayloadStarted.SetResult();
+                await FinishPayload.Task;
+                _inPayload = false;
+            }
+
+            await base.WriteAsync(buffer, cancellationToken);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            ClosedMidMessage |= _inPayload;
+            base.Dispose(disposing);
+        }
+    }
+
+    [Fact]
     public async Task A_closed_stream_reads_as_the_end_not_an_error()
     {
         var received = await new Wire(new MemoryStream()).ReceiveAsync();

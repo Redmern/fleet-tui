@@ -11,6 +11,8 @@ public sealed class Wire(Stream stream) : IDisposable
 
     public const int MaxMessage = 16 * 1024 * 1024;
 
+    public static readonly TimeSpan FinishSendingWithin = TimeSpan.FromSeconds(1);
+
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly byte[] _header = new byte[5];
 
@@ -26,7 +28,11 @@ public sealed class Wire(Stream stream) : IDisposable
         try
         {
             await stream.WriteAsync(header, ct).ConfigureAwait(false);
-            await stream.WriteAsync(payload, ct).ConfigureAwait(false);
+            if (!payload.IsEmpty)
+            {
+                await stream.WriteAsync(payload, ct).ConfigureAwait(false);
+            }
+
             await stream.FlushAsync(ct).ConfigureAwait(false);
         }
         finally
@@ -79,8 +85,18 @@ public sealed class Wire(Stream stream) : IDisposable
 
     public void Dispose()
     {
-        _writeGate.Dispose();
-        stream.Dispose();
+        var sendFinished = _writeGate.Wait(FinishSendingWithin);
+        try
+        {
+            stream.Dispose();
+        }
+        finally
+        {
+            if (sendFinished)
+            {
+                _writeGate.Release();
+            }
+        }
     }
 
     private async Task<bool> FillAsync(byte[] buffer, CancellationToken ct)
