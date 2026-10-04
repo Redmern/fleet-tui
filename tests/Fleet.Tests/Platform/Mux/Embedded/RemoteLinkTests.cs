@@ -255,7 +255,7 @@ public sealed class RemoteLinkTests : IAsyncLifetime
             },
             WireJsonContext.Default.Hello);
         var client = Wire.Read((await wire.ReceiveAsync())!.Value.Payload, WireJsonContext.Default.Welcome).Client;
-        _ = Task.Run(async () =>
+        var reader = Task.Run(async () =>
         {
             while (await wire.ReceiveAsync() is not null)
             {
@@ -274,6 +274,7 @@ public sealed class RemoteLinkTests : IAsyncLifetime
             window.Select(e => (e.Name, e.Host, e.Shown)));
 
         await wire.SendAsync(MessageType.Bye, ReadOnlyMemory<byte>.Empty);
+        await reader.WaitAsync(TimeSpan.FromSeconds(10));
         wire.Dispose();
     }
 

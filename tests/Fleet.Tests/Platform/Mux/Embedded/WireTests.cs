@@ -45,6 +45,27 @@ public class WireTests
     }
 
     [Fact]
+    public async Task A_message_without_a_payload_is_one_write_so_a_peer_that_hangs_up_on_reading_it_cannot_break_the_pipe()
+    {
+        var peer = new HangsUpAfterOneWrite();
+
+        await new Wire(peer).SendAsync(MessageType.Bye, ReadOnlyMemory<byte>.Empty);
+
+        peer.Position = 0;
+        Assert.Equal(MessageType.Bye, (await new Wire(peer).ReceiveAsync())!.Value.Type);
+    }
+
+    private sealed class HangsUpAfterOneWrite : MemoryStream
+    {
+        private int _writes;
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ++_writes > 1
+                ? throw new IOException("Broken pipe")
+                : base.WriteAsync(buffer, cancellationToken);
+    }
+
+    [Fact]
     public async Task A_closed_stream_reads_as_the_end_not_an_error()
     {
         var received = await new Wire(new MemoryStream()).ReceiveAsync();

@@ -26,7 +26,11 @@ public sealed class Wire(Stream stream) : IDisposable
         try
         {
             await stream.WriteAsync(header, ct).ConfigureAwait(false);
-            await stream.WriteAsync(payload, ct).ConfigureAwait(false);
+            if (!payload.IsEmpty)
+            {
+                await stream.WriteAsync(payload, ct).ConfigureAwait(false);
+            }
+
             await stream.FlushAsync(ct).ConfigureAwait(false);
         }
         finally
