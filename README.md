@@ -674,6 +674,17 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 | `project_structure` | one project's full structure: its repositories, each sub-orchestrator with the agents it started indented under it (status and last report), and the agents under no sub-orchestrator |
 | `tell` | types a plain message into a project's main orchestrator; never dispatches |
 | `relay` | types a dispatch prompt into a project's main orchestrator |
+| `show_agent` | shows one agent's or sub-orchestrator's pane in its project's window, by name, starting it if it is not running |
+| `hide_agent` | hides one agent's or sub-orchestrator's pane by name, without stopping it |
+
+**Showing and hiding panes.** `show_agent` and `hide_agent` act on a named target, not on
+the dashboard's selection: `repository` + `branch` for an agent, `sub` alone for a
+sub-orchestrator, or `sub` + `repository` + `branch` for an agent that sub-orchestrator
+started. They do what the dashboard's hide toggle and the project's `set_agent_visible` and
+`open_agent` tools do: a hidden pane moves back into the project's window, a visible one
+moves out of sight, and a stopped agent is started (and its project opened if it is closed).
+Showing a visible pane or hiding a hidden one succeeds and changes nothing. An unknown
+project, sub-orchestrator, repository or branch is an error that lists the names there are.
 
 **Relaying.** `relay` puts the project's dispatch trigger in front of the task and types it
 into that project's orchestrator, so the orchestrator's own hook dispatches a
@@ -693,12 +704,14 @@ explicitly ask it to dispatch.
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
 connection, so a machine that is not connected is listed with its state and no projects.
 
-`list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell` and `relay` take an optional
-`remote`: a nickname from `remotes.json` (never an ssh host). Leave it out, or pass `local`,
-for the machine fleet was opened on. A remote that is not connected is connected first, the
-same way **Remote machines** does; if ssh asks a question (a password, a host key), the head
-says so and you answer it there. `switch_project` shows the remote project in this window;
-`relay`, `tell`, `list_agents`, `project_structure` and `menu_action` run on the remote's own fleet over the existing ssh
+`list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell`,
+`relay`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from
+`remotes.json` (never an ssh host). Leave it out, or pass `local`, for the machine fleet was
+opened on. A remote that is not connected is connected first, the same way **Remote
+machines** does; if ssh asks a question (a password, a host key), the head says so and you
+answer it there. `switch_project` shows the remote project in this window; `relay`, `tell`,
+`list_agents`, `project_structure`, `menu_action`, `show_agent` and `hide_agent` run on the
+remote's own fleet over the existing ssh
 link, so that project's permissions apply there exactly as they do locally. A remote fleet
 never opens ssh to another remote: everything goes through the origin.
 
@@ -709,7 +722,8 @@ project on a remote machine shows the origin's head over it, not a head on that 
 permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule, `tell`
 its `tell_agent` rule and `list_agents` its `list_agents` rule. `project_structure` checks each part
 under its own rule (`list_repositories`, `list_subs`, `list_agents`) and shows a refusal in that
-part's place. *Forbid* refuses; *ask* shows the Allow/Deny dialog in
+part's place. `show_agent` and `hide_agent` are its `set_agent_visible` rule, or `open_agent`
+when the agent has to be started. *Forbid* refuses; *ask* shows the Allow/Deny dialog in
 that project's dashboard, whichever channel the rule names, because the head's own Claude
 cannot tell projects apart. Switching projects, opening menus and showing or hiding the
 head are navigation and always allowed.

@@ -34,9 +34,17 @@ public static class HeadBrief
         | `project_structure` | one project's full structure: its repositories, each sub-orchestrator with the agents it started under it (status and last report), and the agents under no sub-orchestrator |
         | `tell` | type a plain message into a project's main orchestrator, as if the user typed it; never dispatches |
         | `relay` | type a task into a project's main orchestrator as a dispatch prompt, so it starts a sub-orchestrator |
+        | `show_agent` | show one agent's or sub-orchestrator's pane in its project's window, by name; starts it if it is not running |
+        | `hide_agent` | hide one agent's or sub-orchestrator's pane by name, without stopping it |
 
-        `list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell` and `relay` take an optional `remote`:
-        a nickname from `list_remotes`. Leave it out (or pass `local`) for the origin. fleet connects a
+        `show_agent` and `hide_agent` name their target: `repository` + `branch` for an agent, `sub` alone for
+        a sub-orchestrator, or `sub` + `repository` + `branch` for an agent that sub-orchestrator started. The
+        names are the ones `list_agents` and `project_structure` print. Showing a visible pane or hiding a
+        hidden one succeeds and changes nothing.
+
+        `list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell`, `relay`,
+        `show_agent` and `hide_agent` take an optional `remote`: a nickname from `list_remotes`. Leave it out
+        (or pass `local`) for the origin. fleet connects a
         remote that is not connected yet, the same way the Remote machines screen does.
 
         ## How to act
@@ -60,6 +68,10 @@ public static class HeadBrief
         - "What does X look like?", "what runs in X?" or "show X's structure" means `project_structure`.
           Show its answer as it comes back: the sub-orchestrators with their agents indented under them.
           You do not need to ask X's orchestrator.
+        - "Show me X's api/login agent" or "hide sub-orchestrator Y in X" means `show_agent` or `hide_agent`
+          with that target. Never use `menu_action` toggle-hidden for this: it acts on whatever is selected
+          in the dashboard. Neither switches the terminal to X; add `switch_project` when the user wants to
+          look at it.
         - "Which machine is X on?" or "what runs on homelab?" means `list_remote_projects`, or
           `list_projects` with that `remote`. "Which machines are there?" means `list_remotes`.
         - Only nicknames from `list_remotes` work as `remote`, never an ssh host. A remote without a
@@ -72,7 +84,8 @@ public static class HeadBrief
         machine it lives: `relay` is that project's `dispatch` rule, `tell` its `tell_agent` rule and
         `list_agents` its `list_agents` rule. `project_structure` checks each part under its own rule
         (`list_repositories`, `list_subs`, `list_agents`); a refused part shows the refusal in its place.
-        An "ask" shows an Allow/Deny dialog in that project's dashboard; a refusal comes back as the
+        `show_agent` and `hide_agent` are its `set_agent_visible` rule, or `open_agent` when the agent has to
+        be started first. An "ask" shows an Allow/Deny dialog in that project's dashboard; a refusal comes back as the
         tool's error. Report it and do not work around it. Switching projects and opening menus are always
         allowed.
         """;
