@@ -1,3 +1,4 @@
+using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Remotes.Models;
 
 namespace Fleet.Ports.Remotes;
@@ -17,4 +18,6 @@ public interface IRemoteMachines
     Task ShowHereAsync(string host, string project, CancellationToken ct = default);
 
     Task NewProjectAsync(string host, CancellationToken ct = default);
+
+    Task<McpResult> HeadAsync(string host, McpRequest request, CancellationToken ct = default);
 }

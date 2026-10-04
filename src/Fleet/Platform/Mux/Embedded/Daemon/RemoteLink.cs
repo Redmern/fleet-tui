@@ -374,7 +374,28 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
     private void Resize(int cols, int rows) =>
         _ = _wire?.SendAsync(MessageType.Resize, new ResizeMessage { Cols = cols, Rows = rows }, WireJsonContext.Default.ResizeMessage);
 
-    private async Task<ControlResponse> RequestAsync(ControlRequest request, CancellationToken ct)
+    public async Task<ControlResponse> HeadAsync(string tool, IReadOnlyDictionary<string, string> arguments)
+    {
+        try
+        {
+            return await RequestAsync(
+                new ControlRequest { Op = HeadOp, Text = tool, Env = new Dictionary<string, string>(arguments) },
+                _stop.Token,
+                HeadWithin,
+                raw: true).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return new ControlResponse { Ok = false, Error = $"{Name} did not answer {tool} within {HeadWithin.TotalMinutes:0} minutes" };
+        }
+    }
+
+    public const string HeadOp = "head";
+
+    public static readonly TimeSpan HeadWithin = TimeSpan.FromMinutes(10);
+
+    private async Task<ControlResponse> RequestAsync(
+        ControlRequest request, CancellationToken ct, TimeSpan? within = null, bool raw = false)
     {
         var wire = _wire ?? throw new IOException("not connected");
         request.Id = Interlocked.Increment(ref _nextId);
@@ -384,8 +405,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
         try
         {
             await wire.SendAsync(MessageType.Request, request, WireJsonContext.Default.ControlRequest, ct).ConfigureAwait(false);
-            var response = await reply.Task.WaitAsync(AnswerWithin, ct).ConfigureAwait(false);
-            return response.Ok ? response : throw new InvalidOperationException($"remote: {response.Error}");
+            var response = await reply.Task.WaitAsync(within ?? AnswerWithin, ct).ConfigureAwait(false);
+            return response.Ok || raw ? response : throw new InvalidOperationException($"remote: {response.Error}");
         }
         finally
         {

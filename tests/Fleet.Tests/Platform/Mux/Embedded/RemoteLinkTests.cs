@@ -22,6 +22,7 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Project, IReadOnlyList<string> Keys)> _farDismissed = new();
     private readonly System.Collections.Concurrent.ConcurrentQueue<string> _toasts = new();
     private FleetDaemon _homeDaemon = null!;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(string Machine, string Tool, IReadOnlyDictionary<string, string> Arguments)> _headCalls = new();
 
     private static Endpoint NewEndpoint()
     {
@@ -42,6 +43,11 @@ public sealed class RemoteLinkTests : IAsyncLifetime
             DismissNotices = (project, keys) => _farDismissed.Enqueue((project, keys)),
             AlertSettings = () => (true, true),
             Toast = (title, _) => _toasts.Enqueue(title),
+            Head = (tool, arguments, _) =>
+            {
+                _headCalls.Enqueue((endpoint == _far ? "far" : "home", tool, arguments));
+                return Task.FromResult((tool == "relay" ? "relayed" : "refused", tool != "relay"));
+            },
             SavedProjects = () => ["homelab", "dormant"],
             OpenProject = async name =>
             {
@@ -309,6 +315,43 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is { } menu
             && menu.Args.SequenceEqual(["menu", "--project", "homelab"])));
         Assert.Null(_homePanes.ByProgram("fleet"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("voice")]
+    public async Task The_head_chord_in_a_remote_project_opens_the_origins_head_over_it(string? voice)
+    {
+        var (_, _, window, workspace) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("head", voice);
+
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } head
+            && head.Args.SequenceEqual(voice is null ? ["head"] : ["head", "--voice"])));
+        Assert.Equal(window.Id, _homePanes.ByProgram("fleet")!.Env[FleetDaemon.ClientVariable]);
+        Assert.Null(_farPanes.ByProgram("fleet"));
+        Assert.Contains(_homeDaemon.Model.HeadPane()!.Id, _homeDaemon.Model.PanesIn(workspace));
+
+        await window.SendKeyAsync("x");
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet")!.Written == "x"));
+        Assert.Equal(string.Empty, _farPanes.ByProgram("remote-claude")!.Written);
+    }
+
+    [Fact]
+    public async Task A_head_tool_for_a_remote_runs_on_that_remotes_fleet_over_the_link()
+    {
+        await ShowingHomelabAsync();
+        using var home = new EmbeddedDriver(_home);
+
+        var relayed = await home.RemoteHeadAsync("red@far", "relay", new Dictionary<string, string> { ["project"] = "homelab", ["prompt"] = "go" });
+        var refused = await home.RemoteHeadAsync("red@far", "switch_project", new Dictionary<string, string>());
+
+        Assert.Equal(("relayed", false), (relayed.Text, relayed.ToolFailed));
+        Assert.Equal(("refused", true), (refused.Text, refused.ToolFailed));
+        Assert.All(_headCalls, c => Assert.Equal("far", c.Machine));
+        Assert.Equal("go", _headCalls.First().Arguments["prompt"]);
+        await Assert.ThrowsAsync<Fleet.Ports.Mux.Exceptions.MuxUnavailableException>(
+            () => home.RemoteHeadAsync("red@nowhere", "relay", new Dictionary<string, string>()));
     }
 
     [Fact]

@@ -409,6 +409,9 @@ public sealed class ControlResponse
 
     [JsonPropertyName("projects")]
     public List<string>? Projects { get; set; }
+
+    [JsonPropertyName("toolFailed")]
+    public bool ToolFailed { get; set; }
 }
 
 public sealed class NoticeDto

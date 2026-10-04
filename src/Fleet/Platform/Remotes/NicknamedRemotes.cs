@@ -1,3 +1,4 @@
+using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Remotes;
 using Fleet.Ports.Remotes.Models;
 
@@ -33,4 +34,7 @@ public sealed class NicknamedRemotes(IRemoteMachines inner, IKnownRemoteStore kn
         inner.ShowHereAsync(host, project, ct);
 
     public Task NewProjectAsync(string host, CancellationToken ct = default) => inner.NewProjectAsync(host, ct);
+
+    public Task<McpResult> HeadAsync(string host, McpRequest request, CancellationToken ct = default) =>
+        inner.HeadAsync(host, request, ct);
 }
