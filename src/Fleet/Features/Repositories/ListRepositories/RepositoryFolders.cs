@@ -1,29 +1,28 @@
+using Fleet.Features.Repositories.ListRepositories.Enums;
 using Fleet.Features.Repositories.ListRepositories.Models;
 
 namespace Fleet.Features.Repositories.ListRepositories;
 
 public static class RepositoryFolders
 {
-    private const string FallbackBranch = "main";
+    public const string FallbackBranch = "main";
     private const string HeadPrefix = "ref: refs/heads/";
 
-    public static IReadOnlyList<RepositorySummary> Skim(string projectRoot)
+    public static IReadOnlyList<RepositorySummary> Skim(string projectRoot) =>
+        [
+            .. Probe(projectRoot)
+                .Where(p => p.Kind == FolderKind.Bare)
+                .Select(p => new RepositorySummary(Path.GetFileName(p.Directory), p.Directory, p.DefaultBranch))
+                .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase),
+        ];
+
+    public static IReadOnlyList<FolderProbe> Probe(string projectRoot)
     {
         try
         {
-            if (!Directory.Exists(projectRoot))
-            {
-                return [];
-            }
-
-            return
-            [
-                .. Directory.EnumerateDirectories(projectRoot)
-                    .Select(dir => (Dir: dir, GitDir: BareGitDir(dir)))
-                    .Where(r => r.GitDir is not null)
-                    .Select(r => new RepositorySummary(Path.GetFileName(r.Dir), r.Dir, HeadBranch(r.GitDir!)))
-                    .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase),
-            ];
+            return Directory.Exists(projectRoot)
+                ? [.. Directory.EnumerateDirectories(projectRoot).Select(ProbeFolder)]
+                : [];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -31,31 +30,58 @@ public static class RepositoryFolders
         }
     }
 
-    private static string? BareGitDir(string dir)
+    public static FolderProbe ProbeFolder(string dir)
     {
-        var nested = Path.Combine(dir, ".git");
+        try
+        {
+            var nested = Path.Combine(dir, ".git");
+            var gitDir = Directory.Exists(nested) ? nested
+                : File.Exists(Path.Combine(dir, "HEAD")) ? dir
+                : null;
 
-        return IsBare(nested) ? nested : IsBare(dir) ? dir : null;
+            if (gitDir is null)
+            {
+                return new FolderProbe(dir, FolderKind.Plain);
+            }
+
+            var config = Path.Combine(gitDir, "config");
+
+            if (!File.Exists(Path.Combine(gitDir, "HEAD"))
+                || !Directory.Exists(Path.Combine(gitDir, "objects"))
+                || !Directory.Exists(Path.Combine(gitDir, "refs"))
+                || !File.Exists(config))
+            {
+                return new FolderProbe(dir, FolderKind.Unclear);
+            }
+
+            return File.ReadLines(config).Select(BareSetting).LastOrDefault(b => b is not null) switch
+            {
+                true => new FolderProbe(dir, FolderKind.Bare, HeadBranch(gitDir)),
+                false => new FolderProbe(dir, FolderKind.Plain),
+                null => new FolderProbe(dir, FolderKind.Unclear),
+            };
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new FolderProbe(dir, FolderKind.Unclear);
+        }
     }
 
-    private static bool IsBare(string gitDir)
-    {
-        var config = Path.Combine(gitDir, "config");
-
-        return File.Exists(Path.Combine(gitDir, "HEAD"))
-            && Directory.Exists(Path.Combine(gitDir, "objects"))
-            && Directory.Exists(Path.Combine(gitDir, "refs"))
-            && File.Exists(config)
-            && File.ReadLines(config).Any(SaysBare);
-    }
-
-    private static bool SaysBare(string line)
+    private static bool? BareSetting(string line)
     {
         var parts = line.Split('=', 2, StringSplitOptions.TrimEntries);
 
-        return parts.Length == 2
-            && parts[0].Equals("bare", StringComparison.OrdinalIgnoreCase)
-            && parts[1].Equals("true", StringComparison.OrdinalIgnoreCase);
+        if (parts.Length != 2 || !parts[0].Equals("bare", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return parts[1].ToLowerInvariant() switch
+        {
+            "true" or "yes" or "on" or "1" => true,
+            "false" or "no" or "off" or "0" => false,
+            _ => null,
+        };
     }
 
     private static string HeadBranch(string gitDir)
