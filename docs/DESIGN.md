@@ -4688,10 +4688,17 @@ its ten-minute ceiling.
 
 `Adapters.CanShowPaneHere` says whether a spawned pane reaches the user: always on a
 multiplexer without workspaces (WezTerm opens a tab or window), and on one with
-workspaces only from inside one of its panes. The picker hides *browse* when it is
-false; typing the root still works. Inside fleetd (the menu's *New project*) and on
-WezTerm nothing changes. Making browse work from the plain terminal would mean
-running yazi in the picker's own terminal, which Terminal.Gui would have to hand over.
+workspaces only from inside one of its panes. Inside fleetd (the menu's *New project*)
+and on WezTerm nothing changes.
+
+Where it is false, *browse* runs yazi in the picker's own terminal instead. Terminal.Gui
+can't lend the console mid-dialog (its input thread would eat yazi's keys, and
+`Driver.Suspend` is SIGTSTP), so the form hands back a `ProjectDraft` of what was
+typed and closes. The picker stops too, its `IApplication` is disposed, yazi runs
+with the inherited console, and a fresh application reopens *New project* filled
+in with the name and the chosen folder (or the typed root if yazi was cancelled).
+Escaping that form falls back to the picker. Disposing and starting a second
+`IApplication` in one process was already done here (`PromptTakeOver`).
 
 ## Still to verify
 ## Still to verify
