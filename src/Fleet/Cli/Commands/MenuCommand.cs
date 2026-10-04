@@ -14,6 +14,7 @@ using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Notifications.ShowNotices;
 using Fleet.Features.Notifications.SyncNotices;
+using Fleet.Features.Projects.CreateProject;
 using Fleet.Features.Projects.LocateProject;
 using Fleet.Features.Projects.LocateProject.Models;
 using Fleet.Features.Projects.OpenProject;
@@ -103,7 +104,7 @@ public static class MenuCommand
 
         if (requested is FleetAction.OpenProject or FleetAction.NewProject || project is null)
         {
-            return await PickProjectCommand.RunAsync().ConfigureAwait(false);
+            return await PickProjectCommand.RunAsync(startNew: requested == FleetAction.NewProject).ConfigureAwait(false);
         }
 
         var keymaps = Adapters.Keymaps();
@@ -740,12 +741,20 @@ public static class MenuCommand
             .Where(m => m.State == Ports.Remotes.Enums.RemoteState.Connected)
             .ToList();
 
-        var tabs = SwitchTabs.For(localEntries, [.. all.Where(p => Where(located, p).InWindow).Select(p => p.Name)], machines);
+        var tabs = SwitchTabs.For(
+            localEntries, [.. all.Where(p => Where(located, p).InWindow).Select(p => p.Name)], machines, keymap.TextFor(FleetAction.NewProject));
         var machineTab = machines.FindIndex(m => string.Equals(m.Name, onMachine, StringComparison.OrdinalIgnoreCase));
         var (startTab, startEntry) = machineTab >= 0
             ? tabs.Start(t => t.Host == machines[machineTab].Host, (tabs.MachineTab(machineTab), 0))
             : tabs.Start(t => t.Host is null && string.Equals(t.Project, current?.Name, StringComparison.OrdinalIgnoreCase), (tabs.ThisMachine, here));
         var tabbed = FleetTabbedPicker.Choose(app, SwitchTitle, tabs.Tabs, keymap, startTab, startEntry);
+
+        if (tabbed is var (newTab, newIndex, newInWindow) && tabs.Targets[newTab][newIndex] is { IsNew: true } fresh)
+        {
+            await NewProjectFrom(app, switchMux.Driver, remotes, fresh.Host, newInWindow).ConfigureAwait(false);
+            switchLog.Write($"switch {from} -> new project{(fresh.Host is null ? string.Empty : " on " + fresh.Host)}");
+            return;
+        }
 
         if (tabbed is var (tabIndex, entryIndex, remoteWindow)
             && tabs.Targets[tabIndex][entryIndex] is { Host: { } host } remoteTarget)
@@ -792,6 +801,38 @@ public static class MenuCommand
         if (switched is not null)
         {
             FleetDialog.Error(app, "Switch project", switched);
+        }
+    }
+
+    private static async Task NewProjectFrom(
+        IApplication app, IMuxDriver mux, Ports.Remotes.IRemoteMachines remotes, string? host, bool newWindow)
+    {
+        if (host is not null)
+        {
+            try
+            {
+                await remotes.NewProjectAsync(host).ConfigureAwait(false);
+            }
+            catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+            {
+                FleetDialog.Error(app, "New project", e.Message);
+            }
+
+            return;
+        }
+
+        if (CreateProjectView.Show(app, new CreateProjectHandler(Adapters.Projects()), PickProjectCommand.FolderPicker(mux)) is not { } made)
+        {
+            return;
+        }
+
+        var opened = newWindow
+            ? await OpenInNewWindow(mux, made, ProjectLocation.Closed).ConfigureAwait(false)
+            : await SwitchByWorkspace(mux, made, ProjectLocation.Closed).ConfigureAwait(false);
+
+        if (opened is not null)
+        {
+            FleetDialog.Error(app, "New project", opened);
         }
     }
 

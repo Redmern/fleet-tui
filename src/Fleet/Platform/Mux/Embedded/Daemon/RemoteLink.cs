@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -193,6 +195,21 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
         await RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token).ConfigureAwait(false);
         Showing = project;
+    }
+
+    public async Task NewProjectAsync()
+    {
+        if (_wire is not { } wire)
+        {
+            throw new InvalidOperationException($"{Name} is not connected");
+        }
+
+        await wire.SendAsync(
+            MessageType.Command,
+            new CommandMessage { Name = "menu", Arg = FleetActionIds.For(FleetAction.NewProject) },
+            WireJsonContext.Default.CommandMessage,
+            _stop.Token).ConfigureAwait(false);
+        Showing = null;
     }
 
     private async Task<bool> RunningAsync(string project) =>

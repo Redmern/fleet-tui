@@ -3,7 +3,7 @@ using Fleet.Ui.Models;
 
 namespace Fleet.Features.Projects.SwitchProject;
 
-public sealed record SwitchTarget(string Project, string? Host = null);
+public sealed record SwitchTarget(string Project, string? Host = null, bool IsNew = false);
 
 public sealed record SwitchTabs(
     IReadOnlyList<(string Title, IReadOnlyList<PickerEntry> Entries)> Tabs,
@@ -22,6 +22,8 @@ public sealed record SwitchTabs(
 
     public const string InWindowDetail = "this window";
 
+    public const string NewLabel = "+  New project...";
+
     public int MachineTab(int machine) => ThisMachine + 1 + machine;
 
     public (int Tab, int Entry) Start(Func<SwitchTarget, bool> isCurrent, (int Tab, int Entry) otherwise)
@@ -37,7 +39,10 @@ public sealed record SwitchTabs(
     }
 
     public static SwitchTabs For(
-        IReadOnlyList<PickerEntry> local, IReadOnlyCollection<string> inWindow, IReadOnlyList<RemoteMachine> machines)
+        IReadOnlyList<PickerEntry> local,
+        IReadOnlyCollection<string> inWindow,
+        IReadOnlyList<RemoteMachine> machines,
+        string newKey = "")
     {
         var localTargets = local.Select(e => new SwitchTarget(e.Label)).ToList();
         var remote = machines
@@ -64,11 +69,13 @@ public sealed record SwitchTabs(
         }
 
         var thisMachine = tabs.Count;
-        tabs.Add((ThisMachineTitle, local));
-        targets.Add(localTargets);
-        tabs.AddRange(remote.Select(r => (r.Label, r.Entries)));
-        targets.AddRange(remote.Select(r => r.Targets));
+        tabs.Add((ThisMachineTitle, [.. local, New(newKey)]));
+        targets.Add([.. localTargets, new SwitchTarget(string.Empty, IsNew: true)]);
+        tabs.AddRange(remote.Select(r => (r.Label, (IReadOnlyList<PickerEntry>)[.. r.Entries, New(newKey)])));
+        targets.AddRange(machines.Zip(remote, (m, r) => (IReadOnlyList<SwitchTarget>)[.. r.Targets, new SwitchTarget(string.Empty, m.Host, IsNew: true)]));
 
         return new SwitchTabs(tabs, targets, thisMachine);
     }
+
+    private static PickerEntry New(string key) => new(NewLabel, string.Empty, key);
 }

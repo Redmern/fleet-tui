@@ -312,6 +312,27 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_new_project_on_a_remote_with_nothing_running_shows_it_here_and_opens_its_new_project_flow()
+    {
+        var home = await ClientAsync(_home, ClientRoles.Control);
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "local", Cwd = ".", Args = ["shell"] })).Ok);
+        var window = await ClientAsync(_home, ClientRoles.Attach, 80, 24, "local");
+        await window.WaitForFramesAsync(1);
+
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "remote-connect", Host = "red@far" })).Ok);
+        await Eventually(async () => (await RemotesAsync()).SingleOrDefault() is { State: RemoteLink.Connected });
+
+        var made = await home.RequestAsync(new ControlRequest { Op = "new-remote-project", Client = window.Id, Host = "red@far" });
+        Assert.True(made.Ok, made.Error);
+
+        var workspace = FleetDaemon.RemoteWorkspace(Environment.MachineName);
+        await Eventually(async () => (await PanesAsync(home)).Any(p => p.Session == workspace));
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--action", "new-project"])));
+        Assert.Null(_homePanes.ByProgram("fleet"));
+    }
+
+    [Fact]
     public async Task Quitting_the_project_on_the_remote_closes_the_view_here_and_a_later_one_opens_again()
     {
         var (far, home, window, workspace) = await ShowingHomelabAsync();

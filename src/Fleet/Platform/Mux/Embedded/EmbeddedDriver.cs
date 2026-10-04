@@ -210,6 +210,9 @@ public sealed class EmbeddedDriver(
     public Task ShowRemoteAsync(string host, string project, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "show-remote", Host = host, Workspace = project, Client = CurrentClient }, ct);
 
+    public Task NewRemoteProjectAsync(string host, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "new-remote-project", Host = host, Client = CurrentClient }, ct);
+
     public Task OpenRemoteWindowAsync(string host, string project, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "open-remote-window", Host = host, Workspace = project, Client = CurrentClient }, ct);
 

@@ -92,4 +92,40 @@ public sealed class SwitchTabsTests
         Assert.Empty(tabs.Tabs[SwitchTabs.Open].Entries);
         Assert.Equal((tabs.ThisMachine, 1), tabs.Start(t => t.Project == "pc", (tabs.ThisMachine, 1)));
     }
+
+    [Fact]
+    public void This_machine_and_every_remote_end_with_a_new_project_entry_on_the_new_project_key()
+    {
+        var tabs = SwitchTabs.For([new PickerEntry("fleet")], [], [Homelab], "n");
+
+        foreach (var tab in (int[])[tabs.ThisMachine, tabs.MachineTab(0)])
+        {
+            Assert.Equal(new PickerEntry(SwitchTabs.NewLabel, string.Empty, "n"), tabs.Tabs[tab].Entries[^1]);
+            Assert.True(tabs.Targets[tab][^1].IsNew);
+            Assert.Equal(tabs.Tabs[tab].Entries.Count, tabs.Targets[tab].Count);
+        }
+
+        Assert.Null(tabs.Targets[tabs.ThisMachine][^1].Host);
+        Assert.Equal(Homelab.Host, tabs.Targets[tabs.MachineTab(0)][^1].Host);
+    }
+
+    [Fact]
+    public void Open_and_all_offer_no_new_project_entry()
+    {
+        var tabs = WithHomelab();
+
+        Assert.DoesNotContain(tabs.Targets[SwitchTabs.Open], t => t.IsNew);
+        Assert.DoesNotContain(tabs.Targets[1], t => t.IsNew);
+    }
+
+    [Fact]
+    public void A_remote_without_projects_is_not_a_dead_end()
+    {
+        var empty = new RemoteMachine("user@fresh", "fresh", RemoteState.Connected, []);
+        var tabs = SwitchTabs.For([], [], [empty]);
+
+        var entry = Assert.Single(tabs.Tabs[tabs.MachineTab(0)].Entries);
+        Assert.Equal(SwitchTabs.NewLabel, entry.Label);
+        Assert.Equal(new SwitchTarget(string.Empty, "user@fresh", IsNew: true), Assert.Single(tabs.Targets[tabs.MachineTab(0)]));
+    }
 }

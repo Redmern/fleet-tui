@@ -489,6 +489,8 @@ public sealed class HeadServiceTests
         public Task OpenInNewWindowAsync(string host, string project, CancellationToken ct = default) => Task.CompletedTask;
 
         public Task ShowHereAsync(string host, string project, CancellationToken ct = default) => Task.CompletedTask;
+
+        public Task NewProjectAsync(string host, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private sealed class Known : IKnownRemoteStore
