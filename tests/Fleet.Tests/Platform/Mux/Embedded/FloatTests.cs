@@ -82,23 +82,42 @@ public class FloatTests
         Assert.Null(Composer.FloatSpan(_model.View(client.Id)!));
     }
 
-    [Fact]
-    public void A_float_over_a_pane_is_centred_on_it_and_sized_for_a_dialog()
+    [Theory]
+    [InlineData(1, 0)]
+    [InlineData(2, 0)]
+    [InlineData(2, 1)]
+    [InlineData(3, 0)]
+    [InlineData(3, 1)]
+    [InlineData(3, 2)]
+    public void A_float_over_a_pane_is_centred_in_the_whole_window_whichever_split_asks(int splits, int asking)
     {
         var (tile, client) = Workspace("techweb");
-        var agent = _model.Split(tile.Id, true, false, 50, "C:/x", ["claude"])!;
+        var panes = new List<PaneState> { tile };
+        for (var i = 1; i < splits; i++)
+        {
+            panes.Add(_model.Split(panes[^1].Id, true, false, 50, "C:/x", ["claude"])!);
+        }
 
+        var agent = panes[asking];
         var area = _model.PaneArea(agent.Id)!.Value;
-        var over = MuxModel.Over(area);
+        var window = _model.WindowArea("techweb");
+        var over = MuxModel.Over(area, window);
 
         Assert.Equal(_model.View(client.Id)!.Panes.Single(p => p.Pane == agent.Id).Area, area);
-        Assert.Equal((50, 14), (over.Width, over.Height));
-        Assert.Equal(area.X + (area.Width - 50) / 2, over.X);
-        Assert.Equal(area.Y + (area.Height - 14) / 2, over.Y);
+        Assert.Equal(new Rect(0, 1, 100, 40), window);
+        Assert.Equal((Math.Clamp(area.Width, 50, 72), 14), (over.Width, over.Height));
+        Assert.Equal((100 - over.Width) / 2, over.X);
+        Assert.Equal(1 + (40 - 14) / 2, over.Y);
     }
 
     [Fact]
-    public void A_float_fits_the_screen_inside_it_centred_and_within_the_client()
+    public void A_dialog_wider_than_the_window_starts_at_its_left_edge()
+    {
+        Assert.Equal(new Rect(0, 1, 72, 14), MuxModel.Over(new Rect(0, 1, 200, 40), new Rect(0, 1, 60, 10)));
+    }
+
+    [Fact]
+    public void A_float_fits_the_screen_inside_it_centred_in_the_window_and_within_the_client()
     {
         var (_, client) = Workspace("techweb");
         var menu = _model.SpawnFloat("techweb", "C:/x", ["fleet", "menu"], modal: true);
@@ -108,8 +127,7 @@ public class FloatTests
 
         _model.MoveFloat(menu.Id, 2, 3);
         Assert.True(_model.FitFloat(menu.Id, 20, 4));
-        Assert.Equal(new Rect(12, 6, 22, 6), _model.View(client.Id)!.FloatingPanes.Single().Area);
-        _model.MoveFloat(menu.Id, 29, 15);
+        Assert.Equal(new Rect(39, 18, 22, 6), _model.View(client.Id)!.FloatingPanes.Single().Area);
 
         Assert.True(_model.FitFloat(menu.Id, 0, 0));
         Assert.Equal(MuxModel.OverlayArea(100, 41), _model.View(client.Id)!.FloatingPanes.Single().Area);
