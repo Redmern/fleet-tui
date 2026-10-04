@@ -1738,14 +1738,21 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void ToggleHead(string client, bool voice)
     {
-        if (_model.ToggleHead(client) != HeadToggle.Missing
+        var toggled = _model.ToggleHead(client, voice);
+
+        if (toggled is not (HeadToggle.Missing or HeadToggle.OtherMode)
             || _model.View(client) is not { Workspace: { } workspace })
         {
             return;
         }
 
+        if (toggled == HeadToggle.OtherMode)
+        {
+            Kill(_model.HeadPane()?.Id);
+        }
+
         IReadOnlyList<string> args = voice
-            ? [options.FleetExecutable, MuxModel.HeadVerb, "--voice"]
+            ? [options.FleetExecutable, MuxModel.HeadVerb, MuxModel.HeadVoiceFlag]
             : [options.FleetExecutable, MuxModel.HeadVerb];
 
         var created = _model.SpawnHead(

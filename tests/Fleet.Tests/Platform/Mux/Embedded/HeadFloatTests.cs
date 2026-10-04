@@ -18,7 +18,7 @@ public class HeadFloatTests
     {
         var client = Attach("techweb");
 
-        Assert.Equal(HeadToggle.Missing, _model.ToggleHead(client.Id));
+        Assert.Equal(HeadToggle.Missing, _model.ToggleHead(client.Id, voice: false));
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class HeadFloatTests
         var tile = _model.PanesIn("techweb").Single();
         var head = _model.SpawnHead("techweb", "C:/home", ["fleet", "head"]);
 
-        Assert.Equal(HeadToggle.Hidden, _model.ToggleHead(client.Id));
+        Assert.Equal(HeadToggle.Hidden, _model.ToggleHead(client.Id, voice: false));
 
         var hidden = _model.View(client.Id)!;
         Assert.Empty(hidden.FloatingPanes);
@@ -52,10 +52,38 @@ public class HeadFloatTests
         Assert.True(FleetWorkspaces.IsHidden(MuxModel.HeadHolding));
         Assert.DoesNotContain(MuxModel.HeadHolding, client.Projects);
 
-        Assert.Equal(HeadToggle.Shown, _model.ToggleHead(client.Id));
+        Assert.Equal(HeadToggle.Shown, _model.ToggleHead(client.Id, voice: false));
 
         Assert.Equal(head.Id, _model.View(client.Id)!.Focused);
         Assert.Null(_model.Workspace(MuxModel.HeadHolding));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void The_chord_of_the_other_mode_leaves_the_head_alone_and_says_so(bool shown)
+    {
+        var client = Attach("techweb");
+        var head = _model.SpawnHead("techweb", "C:/home", ["fleet", "head"]);
+
+        if (!shown)
+        {
+            _model.ToggleHead(client.Id, voice: false);
+        }
+
+        Assert.Equal(HeadToggle.OtherMode, _model.ToggleHead(client.Id, voice: true));
+        Assert.Equal(shown, _model.PanesIn("techweb").Contains(head.Id));
+    }
+
+    [Fact]
+    public void Only_a_head_started_with_voice_is_a_voice_head()
+    {
+        Attach("techweb");
+        var other = _model.Spawn("techweb", "C:/x", ["claude", "--voice"]);
+        var voice = _model.SpawnHead("techweb", "C:/home", ["fleet", "head", "--voice"]);
+
+        Assert.True(MuxModel.IsVoiceHead(voice));
+        Assert.False(MuxModel.IsVoiceHead(other));
     }
 
     [Fact]
@@ -67,7 +95,7 @@ public class HeadFloatTests
 
         _model.Show(client.Id, "api");
 
-        Assert.Equal(HeadToggle.Shown, _model.ToggleHead(client.Id));
+        Assert.Equal(HeadToggle.Shown, _model.ToggleHead(client.Id, voice: false));
         Assert.Contains(head.Id, _model.PanesIn("api"));
         Assert.DoesNotContain(head.Id, _model.PanesIn("techweb"));
         Assert.Equal(head.Id, _model.View(client.Id)!.Focused);

@@ -4559,7 +4559,8 @@ One Claude above every project's orchestrator, opened by a global chord.
   (`OpenHead`, `OpenHeadVoice`) in their own Keybinds group, *anywhere, no prefix*, so
   they are rebindable like everything else. `fleet apply-keybinds` emits them into
   `fleet.lua`. In a window without a fleet dashboard they are forwarded to the pane, as
-  the prefix is. In the head's own workspace they always hide it.
+  the prefix is. In the head's own workspace the chord of the running mode hides it and
+  the other one switches the mode (below).
 - **No float on WezTerm, so a workspace.** WezTerm has no floating panes. The closest
   equivalent that keeps the session alive is a workspace of its own, `fleet-head`:
   `SwitchToWorkspace` with a `spawn` creates it with `fleet head` the first time and only
@@ -4574,8 +4575,27 @@ One Claude above every project's orchestrator, opened by a global chord.
   which also needs a claude.ai login and the `allow_voice_mode` flag. This was found by
   reading the 2.1.287 binary. `fleet head` starts `claude --settings <file>` with
   `{"voice":{"enabled":true}}` for the voice chord and `false` for the plain one, so
-  `alt+o` means typing mode even if the user enabled voice globally. It only applies at
-  start: a running head keeps its mode, and `/voice` switches it there.
+  `alt+o` means typing mode even if the user enabled voice globally.
+- **Switching mode, 2026-10-04.** Each chord means its mode for a running head too: the
+  chord of the running mode shows or hides the head, the other one restarts it in the
+  new mode, shown. In-session switching was checked first and rejected. Claude Code
+  2.1.289 has an explicit `/voice [hold|tap|off]`, so the state would not have to be
+  guessed, but it saves to `userSettings`. The head's `--settings` file is flag settings,
+  which outrank user settings, so the write would not take effect in the head and would
+  turn voice on or off for every other Claude session of the profile. (The precedence is
+  Claude Code's documented order, not tested against a running head.) A settings file
+  rewritten under a running Claude is not re-read either. So fleet kills the head and
+  starts a new `fleet head [--voice]`, which passes `--continue` (the started marker
+  exists) and keeps the conversation. A turn in progress is cut off; waiting for idle
+  would need the head MCP server's readiness check to reach the multiplexer, and an
+  explicit chord press was judged enough. The mode is known without asking Claude:
+  fleetd reads `--voice` from the head pane's command (`MuxModel.IsVoiceHead`), and
+  `ToggleHead` answers `OtherMode`. On WezTerm, `fleet.lua` keeps it in
+  `wezterm.GLOBAL.fleet_head_voice`. There, the new head splits off the old pane so the
+  `fleet-head` workspace never empties, and the old panes are killed with `wezterm cli
+  kill-pane` from `background_child_process`; a blocking `run_child_process` would wait
+  on the GUI that runs the callback. A head started by an older `fleet.lua` has no
+  recorded mode and counts as text.
 - **Persistence.** `fleet head` runs Claude in `<fleet config>\head`, writing `CLAUDE.md`
   (the brief), `.mcp.json` (`fleet mcp --head`), the head tools pre-approved in
   `.claude/settings.local.json`, and folder trust, every start. After the first start it
@@ -4623,7 +4643,9 @@ the pane or its process. The head is that float:
   spawns one as a modal float, 80% of the screen, in the workspace the client shows. If
   the head float is in that workspace, it moves to `fleet-head~hidden`, a holding
   workspace whose `~hidden` suffix keeps it out of every project list. If it is anywhere
-  else, it moves here, on top, with the keys.
+  else, it moves here, on top, with the keys. If the head runs in the other mode, it
+  answers `OtherMode` without moving anything, and fleetd kills the head pane and
+  spawns a new one in the chord's mode, here.
 - Modal, because a modal float is drawn whether or not the workspace's floats are shown,
   and is never counted, toggled with `prefix t` or tiled. So the head is independent of
   the ordinary floats. It is not saved in the session snapshot either: after a fleetd
