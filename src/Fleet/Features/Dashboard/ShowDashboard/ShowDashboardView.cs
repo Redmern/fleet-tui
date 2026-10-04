@@ -25,6 +25,7 @@ public static class ShowDashboardView
         string? notice = null)
     {
         var window = FleetTheme.Screen(menu ? "menu" : $"fleet — {projectName}");
+        var claim = 0;
 
         var keys = keymap;
         var prefix = new PrefixRecognizer(keys);
@@ -99,7 +100,7 @@ public static class ShowDashboardView
 
         agentList.MouseEvent += (_, m) =>
         {
-            if (busy || FleetModal.Any)
+            if (busy || !FleetModal.Owns(claim))
             {
                 HideTip();
                 return;
@@ -1051,7 +1052,7 @@ public static class ShowDashboardView
 
         void Keys(object? sender, Key key)
         {
-            if (busy || FleetModal.Any)
+            if (busy || !FleetModal.Owns(claim))
             {
                 return;
             }
@@ -1090,6 +1091,14 @@ public static class ShowDashboardView
                 return;
             }
 
+            if (menu && FleetKeys.GoesBack(key))
+            {
+                key.Handled = true;
+                FleetModal.Back();
+                app.RequestStop(window);
+                return;
+            }
+
             var direct = DashboardKeys.For(key, keys, tabBar.Selected);
 
             if (direct.Consume)
@@ -1117,7 +1126,7 @@ public static class ShowDashboardView
                 return true;
             }
 
-            if (!FleetModal.Any)
+            if (FleetModal.Owns(claim))
             {
                 var approval = callbacks.TakeApproval();
 
@@ -1186,7 +1195,7 @@ public static class ShowDashboardView
 
         tabBar.Chosen += index =>
         {
-            if (!busy && !FleetModal.Any && index != tabBar.Selected)
+            if (!busy && FleetModal.Owns(claim) && index != tabBar.Selected)
             {
                 ShowTab(index);
             }
@@ -1246,12 +1255,22 @@ public static class ShowDashboardView
 
         Start(RefreshAsync);
 
+        if (menu)
+        {
+            claim = FleetModal.Enter();
+        }
+
         try
         {
             app.Run(window);
         }
         finally
         {
+            if (menu)
+            {
+                FleetModal.Leave();
+            }
+
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();
         }

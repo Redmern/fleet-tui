@@ -76,6 +76,12 @@ public static class EditKeybindsView
                 app.RequestStop(window);
                 key.Handled = true;
             }
+            else if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+            }
         };
 
         window.Add(list, status, FleetTheme.HintBar(FleetHints.Keybinds));

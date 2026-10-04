@@ -49,6 +49,14 @@ public static class SecretsView
                 return;
             }
 
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+                return;
+            }
+
             if (key == FleetKeys.Cancel)
             {
                 app.RequestStop(window);

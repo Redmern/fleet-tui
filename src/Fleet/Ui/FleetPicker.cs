@@ -79,6 +79,12 @@ public static class FleetPicker
             e.Handled = true;
         };
 
+        void Back()
+        {
+            FleetModal.Back();
+            app.RequestStop(window);
+        }
+
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
         var items = new List<(string, string, Action)>
@@ -92,6 +98,7 @@ public static class FleetPicker
         }
 
         items.Add(("esc", "cancel", () => app.RequestStop(window)));
+        items.Add(("bksp", "back", Back));
 
         bar.Show(items);
 
@@ -114,6 +121,13 @@ public static class FleetPicker
             if (key == FleetKeys.Cancel)
             {
                 app.RequestStop(window);
+                key.Handled = true;
+                return;
+            }
+
+            if (FleetKeys.GoesBack(key))
+            {
+                Back();
                 key.Handled = true;
                 return;
             }

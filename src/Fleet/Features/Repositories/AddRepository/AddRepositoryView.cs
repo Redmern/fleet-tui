@@ -132,6 +132,12 @@ public static class AddRepositoryView
                 app.RequestStop(window);
                 key.Handled = true;
             }
+            else if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+            }
         };
 
         window.Add(list, FleetTheme.HintBar(FleetHints.AddRepository));

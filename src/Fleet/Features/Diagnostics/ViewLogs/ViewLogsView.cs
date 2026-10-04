@@ -53,6 +53,14 @@ public static class ViewLogsView
                 return;
             }
 
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+                return;
+            }
+
             if (key == FleetKeys.Cancel || key == keymap.KeyFor(Shared.Keymap.Enums.FleetAction.Close))
             {
                 app.RequestStop(window);
@@ -95,6 +103,14 @@ public static class ViewLogsView
         {
             if (!FleetModal.Owns(claim))
             {
+                return;
+            }
+
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
                 return;
             }
 

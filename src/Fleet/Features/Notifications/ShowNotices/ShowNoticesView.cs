@@ -152,6 +152,14 @@ public static class ShowNoticesView
                 return;
             }
 
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+                return;
+            }
+
             if (key == FleetKeys.Cancel || key == keymap.KeyFor(FleetAction.Close))
             {
                 app.RequestStop(window);
