@@ -29,6 +29,7 @@ public sealed class FakePanes
     public sealed class FakePty(FakePanes owner) : IPanePty
     {
         private readonly ConcurrentQueue<byte[]> _written = new();
+        private readonly TaskCompletionSource _firstWrite = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public event Action<byte[], int>? Output;
 
@@ -68,7 +69,13 @@ public sealed class FakePanes
 
         public void Exit() => Exited?.Invoke(0);
 
-        public void Write(ReadOnlySpan<byte> data) => _written.Enqueue(data.ToArray());
+        public Task FirstWrite => _firstWrite.Task;
+
+        public void Write(ReadOnlySpan<byte> data)
+        {
+            _written.Enqueue(data.ToArray());
+            _firstWrite.TrySetResult();
+        }
 
         public void Resize(int cols, int rows) => Size = (cols, rows);
 
