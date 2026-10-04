@@ -363,6 +363,35 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task In_nvim_the_kickoff_is_left_before_the_spawn_and_marked_unseen_without_waiting_for_ready()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50));
+
+        var started = DateTime.UtcNow;
+        var reply = await handler.HandleAsync(Command("start work"), "t");
+
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
+        var inbox = Path.Combine(reply.Value!.Folder, ".fleet");
+        Assert.Equal("0", File.ReadAllText(Path.Combine(inbox, AgentHarness.InstructionSeenFile)));
+        Assert.Equal(AgentHarness.OrchestratorKickoff, File.ReadAllText(Path.Combine(inbox, AgentHarness.AgentInstructionFile)));
+    }
+
+    [Fact]
+    public void The_nvim_pump_waits_for_claude_to_be_ready_and_for_the_file_to_settle()
+    {
+        var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
+
+        Assert.Contains($"local readyf='.fleet/{AgentHarness.ClaudeReadyFile}' local fleet_boot=os.time()", boot);
+        Assert.Contains($"if age<{AgentHarness.InstructionSettleSeconds} then return end", boot);
+        Assert.Contains(
+            $"if vim.fn.getftime(readyf)<fleet_boot and age<{AgentHarness.ReadyFallbackSeconds} then return end", boot);
+        Assert.True(
+            boot.IndexOf("local age=", StringComparison.Ordinal)
+            < boot.IndexOf("pcall(vim.fn.writefile,{tostring(m)},seenf)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void The_claude_only_nvim_drops_the_empty_no_name_buffer()
     {
         var boot = AgentHarness.OrchestratorCommand(resume: false)[2];

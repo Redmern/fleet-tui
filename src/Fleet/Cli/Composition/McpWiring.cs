@@ -3,6 +3,7 @@ using Fleet.Features.Mcp.ServeMcp.Models;
 using Fleet.Platform.Mcp;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Projects.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Orchestrations;
 
@@ -54,6 +55,7 @@ public static class McpWiring
         }
 
         var marker = OrchestrationPaths.ReadyMarker(Environment.CurrentDirectory);
+        var inFolder = Path.Combine(Environment.CurrentDirectory, ".fleet", AgentHarness.ClaudeReadyFile);
 
         return () =>
         {
@@ -61,6 +63,8 @@ public static class McpWiring
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
                 File.WriteAllText(marker, string.Empty);
+                Directory.CreateDirectory(Path.GetDirectoryName(inFolder)!);
+                File.WriteAllText(inFolder, string.Empty);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {

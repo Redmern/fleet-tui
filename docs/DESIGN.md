@@ -4358,6 +4358,19 @@ relaunches a pane's own command, so the stored host stays true across a fleetd r
 mux-side signal was not used: panes carry no command in the `Pane` model, and WezTerm's pane
 list does not report the process reliably.
 
+The nvim pump delivers `.fleet/instruction.md` only once that pane's Claude is ready: when
+fleet's MCP server answers `initialize` it touches `.fleet/claude.ready` in its working folder
+(next to the ready marker in the fleet config), and the pump waits for a flag newer than its
+own nvim start. A file younger than two seconds waits a tick too, so a rewrite within the same
+second (`getftime` has one-second resolution) is not marked seen before it lands. With no flag
+after 60 seconds (a Claude without fleet's MCP server) it delivers anyway. A dispatch writes the
+kickoff and `instruction.seen` = `0` before it spawns the sub, so nvim never seeds `seen` from
+the kickoff itself, and the hook no longer waits for the ready marker in nvim mode. Before this,
+a sub whose Claude was slow to start (a cold remote) could get the kickoff typed into a screen
+that was not taking input, or have it marked seen at boot, and sat "working" with no task. A
+bare sub still waits for the ready marker (now up to 60 seconds, inside the hook's 90) and then
+types the kickoff.
+
 Rebuild dashboard re-creates the main harness with a split, so `SplitOptions` gained `Env`,
 handled like `SpawnOptions.Env` (WezTerm wraps the command through `EnvLaunch`, the embedded
 driver sends it to fleetd, which already started split panes with a request's env).
@@ -4606,13 +4619,13 @@ One Claude above every project's orchestrator, opened by a global chord.
   continue) it starts fresh.
 - **`fleet mcp --head`** is a second tool set on the same `fleet` server name, in its own
   slice (`Features/Head/ServeHead`): `list_projects`, `switch_project`, `menu_action`,
-  `list_agents`, `relay`. Opening, switching and dashboard handover reuse
+  `list_agents`, `relay`, `tell`. Opening, switching and dashboard handover reuse
   `ProjectOpener`, `LocateProjectHandler` and `fleet request`'s store through the
   composition root. On WezTerm, switching focuses the project's dashboard pane and asks for
   its workspace through the workspace request file. On a multiplexer with workspaces it
   shows the workspace.
 - **Permissions.** Inside project X the head is gated by X's own settings: `relay` is X's
-  `dispatch` rule and `list_agents` X's `list_agents` rule. *Ask* always goes to X's
+  `dispatch` rule, `tell` X's `tell_agent` rule (a plain message is not a dispatch) and `list_agents` X's `list_agents` rule. *Ask* always goes to X's
   dashboard dialog (`IApprovalChannel`), whatever channel the rule names, because the
   head's Claude has one permission rule per tool, not per project, so Claude's own prompt
   could not honour X's choice. Navigation needs no permission.
@@ -4622,7 +4635,8 @@ One Claude above every project's orchestrator, opened by a global chord.
   X's *Main orchestrator in nvim* setting is on, `Ctrl-\ Ctrl-N` then `i` go first, to take
   nvim from any mode into its Claude terminal; when it is off, Claude gets the keys directly.
   The setting is read at delivery time, so a pane started before the setting flipped gets
-  the wrong form until the project is reopened.
+  the wrong form until the project is reopened. `tell` shares the path but sends the prompt
+  as-is, with any leading trigger stripped, so the orchestrator's hook never dispatches it.
   The orchestrator's `UserPromptSubmit` hook then dispatches exactly as for a typed
   prompt. *Ready* is read from the screen: two samples a second apart that are identical,
   with no spinner (`esc to interrupt`), no question or permission prompt, and a Claude

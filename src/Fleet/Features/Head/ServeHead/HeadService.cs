@@ -38,7 +38,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.ListRemotes => await _remotes.ListAsync(ct).ConfigureAwait(false),
             HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
             HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
-                or HeadTools.Relay when !HeadRemotes.IsLocal(remote) =>
+                or HeadTools.Relay or HeadTools.Tell when !HeadRemotes.IsLocal(remote) =>
                 await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
@@ -53,6 +53,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         }
 
         return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.Relay
+                or HeadTools.Tell
             ? await HandleHereAsync(request, show: false, ct).ConfigureAwait(false)
             : McpResult.Error($"{request.Tool} is not served to another machine.");
     }
@@ -65,6 +66,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.MenuAction => await WithProject(request, p => MenuAsync(p, request, show, ct)).ConfigureAwait(false),
             HeadTools.ListAgents => await ListAgentsAsync(request, ct).ConfigureAwait(false),
             HeadTools.Relay => await WithProject(request, p => RelayAsync(p, request, ct)).ConfigureAwait(false),
+            HeadTools.Tell => await WithProject(request, p => TellAsync(p, request, ct)).ConfigureAwait(false),
             _ => McpResult.Error($"the head has no tool named '{request.Tool}'."),
         };
 
@@ -273,6 +275,15 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         return prompt.Length == 0
             ? McpResult.Error($"'{HeadTools.Prompt}' is required for {HeadTools.Relay}.")
             : await Relay.RelayAsync(project, prompt, ct).ConfigureAwait(false);
+    }
+
+    private async Task<McpResult> TellAsync(Project project, McpRequest request, CancellationToken ct)
+    {
+        var prompt = request.Value(HeadTools.Prompt).Trim();
+
+        return prompt.Length == 0
+            ? McpResult.Error($"'{HeadTools.Prompt}' is required for {HeadTools.Tell}.")
+            : await Relay.TellAsync(project, prompt, ct).ConfigureAwait(false);
     }
 
     private async Task<(bool Opened, string? Error)> OpenAsync(Project project, CancellationToken ct)

@@ -231,6 +231,59 @@ public sealed class HeadServiceTests
     }
 
     [Fact]
+    public async Task Tell_types_the_message_as_is_without_the_dispatch_trigger()
+    {
+        var (main, _) = Open(Web, Idle);
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, "what is the status?")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal([RelayText.IntoNvimTerminal + "what is the status?", RelayText.Submit], _mux.SentTo(main));
+    }
+
+    [Fact]
+    public async Task Tell_strips_a_leading_trigger_so_it_can_never_dispatch()
+    {
+        var (main, _) = Open(Web, Idle);
+
+        await Service().HandleAsync(Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, ",fix it")));
+
+        Assert.Equal(RelayText.IntoNvimTerminal + "fix it", _mux.SentTo(main)[0]);
+    }
+
+    [Fact]
+    public async Task Tell_is_gated_as_tell_agent_not_as_dispatch()
+    {
+        var (main, _) = Open(Web, Idle);
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.Dispatch, ActionPolicy.Forbid)
+            .With(HarnessTool.TellAgent, ActionPolicy.Ask);
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, "status?")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal("tell_agent", Assert.Single(_approvals.Asked).Tool);
+        Assert.NotEmpty(_mux.SentTo(main));
+    }
+
+    [Fact]
+    public async Task Tell_queues_while_the_orchestrator_is_busy()
+    {
+        var (main, _) = Open(Web, Busy);
+        var service = Service();
+
+        var result = await service.HandleAsync(
+            Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, "status?")));
+
+        Assert.Contains("queued", result.Text);
+        _mux.SetText(main, Idle);
+        await service.Relay.Drained("web").WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal([RelayText.IntoNvimTerminal + "status?", RelayText.Submit], _mux.SentTo(main));
+    }
+
+    [Fact]
     public async Task List_projects_says_which_are_open()
     {
         Open(Web, Idle);
@@ -548,6 +601,22 @@ public sealed class HeadServiceTests
         Assert.Equal("ship", forwarded.Value(HeadTools.Prompt));
         Assert.False(forwarded.Arguments.ContainsKey(HeadTools.Remote));
         Assert.Empty(_approvals.Asked);
+    }
+
+    [Fact]
+    public async Task Tell_on_a_remote_goes_to_that_machines_fleet()
+    {
+        KnowHostinger();
+        _remotes.Machines = [HostingerUp];
+        _remotes.Reply = McpResult.Ok("told shop's orchestrator: status?");
+
+        var result = await Service().HandleAsync(
+            Call(HeadTools.Tell, (HeadTools.Project, "shop"), (HeadTools.Prompt, "status?"), (HeadTools.Remote, "hostinger")));
+
+        Assert.False(result.IsError, result.Text);
+        var (_, forwarded) = Assert.Single(_remotes.Forwarded);
+        Assert.Equal(HeadTools.Tell, forwarded.Tool);
+        Assert.False(forwarded.Arguments.ContainsKey(HeadTools.Remote));
     }
 
     [Fact]

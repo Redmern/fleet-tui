@@ -34,15 +34,27 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
         }
     }
 
-    public async Task<McpResult> RelayAsync(Project project, string prompt, CancellationToken ct)
+    public Task<McpResult> RelayAsync(Project project, string prompt, CancellationToken ct) =>
+        DeliverAsync(project, HarnessTool.Dispatch, RelayText.Dispatch(prompt, Trigger(project)), "relayed to", ct);
+
+    public async Task<McpResult> TellAsync(Project project, string prompt, CancellationToken ct)
     {
-        if (gate.Refused(project.Name, HarnessTool.Dispatch) is { } refused)
+        var text = RelayText.Plain(prompt, Trigger(project));
+
+        return text.Length == 0
+            ? McpResult.Error($"'{HeadTools.Prompt}' has nothing left once the dispatch trigger is removed.")
+            : await DeliverAsync(project, HarnessTool.TellAgent, text, "told", ct).ConfigureAwait(false);
+    }
+
+    private string Trigger(Project project) => deps.Settings.Load(project.Name).MergedOverDefaults().Trigger;
+
+    private async Task<McpResult> DeliverAsync(
+        Project project, HarnessTool tool, string text, string verb, CancellationToken ct)
+    {
+        if (gate.Refused(project.Name, tool) is { } refused)
         {
             return McpResult.Error(refused);
         }
-
-        var trigger = deps.Settings.Load(project.Name).MergedOverDefaults().Trigger;
-        var text = RelayText.Dispatch(prompt, trigger);
 
         var opened = false;
 
@@ -65,7 +77,7 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
                 $"opened {project.Name}, but its orchestrator pane did not appear; try again in a moment.");
         }
 
-        if (await gate.CheckAsync(project.Name, HarnessTool.Dispatch, text, ct).ConfigureAwait(false)
+        if (await gate.CheckAsync(project.Name, tool, text, ct).ConfigureAwait(false)
             is { } denied)
         {
             return McpResult.Error(denied);
@@ -76,9 +88,9 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
         if (pane is { } target && readiness == Readiness.Ready && Pending(project.Name) == 0)
         {
             await TypeAsync(project.Name, target.Id, text, ct).ConfigureAwait(false);
-            Log(project.Name, $"head relayed a prompt to the orchestrator: {text}");
+            Log(project.Name, $"head {verb} the orchestrator: {text}");
 
-            return McpResult.Ok($"{lead}relayed to {project.Name}'s orchestrator: {text}");
+            return McpResult.Ok($"{lead}{verb} {project.Name}'s orchestrator: {text}");
         }
 
         var waiting = Enqueue(project, text);
