@@ -1,4 +1,5 @@
 using Fleet.Ui;
+using Terminal.Gui.Input;
 
 namespace Fleet.Tests.Ui;
 
@@ -23,5 +24,28 @@ public class FleetKeysTests
     {
         Assert.Equal(0, FleetList.Wrap(-1, 0));
         Assert.Equal(0, FleetList.Wrap(5, 0));
+    }
+
+    [Fact]
+    public void Backspace_goes_back_when_nothing_is_typed()
+    {
+        Assert.True(FleetKeys.GoesBack(Key.Backspace));
+        Assert.True(FleetKeys.GoesBack(Key.Backspace, string.Empty));
+    }
+
+    [Fact]
+    public void Backspace_in_a_field_with_text_deletes_instead_of_going_back()
+    {
+        Assert.False(FleetKeys.GoesBack(Key.Backspace, "a"));
+        Assert.False(FleetKeys.GoesBack(Key.Backspace, "my-repo"));
+    }
+
+    [Fact]
+    public void Only_a_bare_backspace_goes_back()
+    {
+        Assert.False(FleetKeys.GoesBack(Key.Esc));
+        Assert.False(FleetKeys.GoesBack(Key.H));
+        Assert.False(FleetKeys.GoesBack(Key.Backspace.WithShift));
+        Assert.False(FleetKeys.GoesBack(Key.Backspace.WithCtrl));
     }
 }

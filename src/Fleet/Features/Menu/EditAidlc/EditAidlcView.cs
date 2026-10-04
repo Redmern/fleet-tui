@@ -118,7 +118,12 @@ public static class EditAidlcView
         [
             ("enter", "change", Change),
             ("r", "default", Reset),
-            ("esc", "back", () => app.RequestStop(window)),
+            ("esc", "close", () => app.RequestStop(window)),
+            ("bksp", "back", () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
         ]);
 
         var claim = FleetModal.Enter();
@@ -127,6 +132,14 @@ public static class EditAidlcView
         {
             if (!FleetModal.Owns(claim))
             {
+                return;
+            }
+
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
                 return;
             }
 

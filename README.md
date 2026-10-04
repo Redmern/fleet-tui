@@ -206,6 +206,12 @@ fleet.apply(config)
 of it, one key per entry. It opens as a tab, so no pane is resized, and closes
 itself when done.
 
+`backspace` goes back one level anywhere in the menu: from a screen to the menu or
+submenu it was opened from (Settings > Keybinds back to Settings, Settings back to
+the menu), and on the top level it closes the menu like `esc`. `esc` still closes the
+whole menu at once. In a text field `backspace` deletes what you typed and only goes
+back once the field is empty; the key-capture dialog in **Keybinds** records it as a key.
+
 ```
 ╭┤ fleet menu ├──────────────────────╮
 │ Quit fleet            Q            │
@@ -346,6 +352,7 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
+| `backspace` | back one level in the fleet menu; in a text field it deletes, and goes back only when the field is empty |
 | `ctrl+enter` | the fleet menu, from any pane |
 | `alt+o` | show or hide the head orchestrator in text mode, from any pane of a fleet window |
 | `alt+shift+o` | the same in voice mode; the other chord switches a running head's mode |

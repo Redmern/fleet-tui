@@ -49,6 +49,11 @@ public static class ShowMenuView
         [
             ("enter", "select", Accept),
             ("q/esc", "close", () => app.RequestStop(window)),
+            ("bksp", "back", () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
         ]);
 
         var claim = FleetModal.Enter();
@@ -57,6 +62,14 @@ public static class ShowMenuView
         {
             if (!FleetModal.Owns(claim))
             {
+                return;
+            }
+
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
                 return;
             }
 

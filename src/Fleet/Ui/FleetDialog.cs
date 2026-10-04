@@ -46,6 +46,12 @@ public static class FleetDialog
                 app.RequestStop(window);
                 key.Handled = true;
             }
+            else if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+            }
             else if (key == Key.H || key == Key.CursorLeft)
             {
                 primary.SetFocus();
@@ -114,6 +120,12 @@ public static class FleetDialog
                 app.RequestStop(window);
                 key.Handled = true;
             }
+            else if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+            }
             else if (key == Key.H || key == Key.CursorLeft)
             {
                 yes.SetFocus();
@@ -178,6 +190,16 @@ public static class FleetDialog
             }
         };
 
+        field.KeyDown += (_, key) =>
+        {
+            if (FleetKeys.GoesBack(key, field.Text))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+            }
+        };
+
         window.Add(field, FleetTheme.HintBar(FleetHints.Ask));
         field.SetFocus();
 
@@ -215,6 +237,12 @@ public static class FleetDialog
         {
             if (key == FleetKeys.Cancel || key == Key.Enter)
             {
+                app.RequestStop(window);
+                key.Handled = true;
+            }
+            else if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
                 app.RequestStop(window);
                 key.Handled = true;
             }

@@ -27,9 +27,11 @@ using Fleet.Features.Sessions.SaveSession;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
+using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -111,15 +113,54 @@ public static class MenuCommand
 
         var keymap = new Keymap(keymaps.Load());
 
-        var chosen = requested != FleetAction.None
-            ? requested
-            : FleetUi.Menu(app, keymap, MenuActions);
+        var chosen = requested;
 
-        if (chosen == FleetAction.OpenSettings)
+        while (true)
         {
-            chosen = FleetUi.Menu(app, keymap, SettingsActions);
-        }
+            if (chosen == FleetAction.None)
+            {
+                chosen = FleetUi.Menu(app, keymap, MenuActions);
+            }
 
+            if (chosen == FleetAction.OpenSettings)
+            {
+                chosen = FleetUi.Menu(app, keymap, SettingsActions);
+
+                if (chosen == FleetAction.None && FleetModal.WentBack())
+                {
+                    continue;
+                }
+            }
+
+            if (chosen == FleetAction.None)
+            {
+                return 0;
+            }
+
+            var code = await Perform(app, keymap, keymaps, adder, projects, project, chosen).ConfigureAwait(false);
+
+            if (code != 0 || !FleetModal.WentBack())
+            {
+                return code;
+            }
+
+            keymap = new Keymap(keymaps.Load());
+            chosen = Parent(chosen);
+        }
+    }
+
+    public static FleetAction Parent(FleetAction action) =>
+        SettingsActions.Contains(action) ? FleetAction.OpenSettings : FleetAction.None;
+
+    private static async Task<int> Perform(
+        IApplication app,
+        Keymap keymap,
+        IKeymapStore keymaps,
+        AddRepositoryHandler adder,
+        IProjectStore projects,
+        Project project,
+        FleetAction chosen)
+    {
         switch (chosen)
         {
             case FleetAction.AddRepository:

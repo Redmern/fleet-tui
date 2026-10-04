@@ -40,13 +40,23 @@ public static class FleetPrompt
         window.Add(
             FleetTheme.Caption(2, 1, label),
             field,
-            FleetTheme.HintBar(FleetHints.Form));
+            FleetTheme.HintBar(FleetHints.Prompt));
 
         window.KeyDown += (_, key) =>
         {
             if (key == FleetKeys.Cancel)
             {
                 key.Handled = true;
+                app.RequestStop(window);
+            }
+        };
+
+        field.KeyDown += (_, key) =>
+        {
+            if (FleetKeys.GoesBack(key, field.Text))
+            {
+                key.Handled = true;
+                FleetModal.Back();
                 app.RequestStop(window);
             }
         };

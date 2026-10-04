@@ -81,6 +81,11 @@ public static class FleetTabbedPicker
             ("SHIFT", "new window", () => Take(FleetRows.Selected(list), newWindow: true)),
             ("h/l", "machine", () => Show((current + 1) % tabs.Count, 0)),
             ("esc", "cancel", () => app.RequestStop(window)),
+            ("bksp", "back", () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
         ]);
 
         var claim = FleetModal.Enter();
@@ -98,6 +103,11 @@ public static class FleetTabbedPicker
             }
             else if (key == FleetKeys.Cancel)
             {
+                app.RequestStop(window);
+            }
+            else if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
                 app.RequestStop(window);
             }
             else if (key == Key.CursorLeft || key == keymap.KeyFor(FleetAction.PrevTab))

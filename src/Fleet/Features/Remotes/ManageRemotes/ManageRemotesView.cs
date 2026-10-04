@@ -205,6 +205,14 @@ public static class ManageRemotesView
                 return;
             }
 
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+                return;
+            }
+
             if (key == FleetKeys.Cancel || key == Key.Q)
             {
                 app.RequestStop(window);

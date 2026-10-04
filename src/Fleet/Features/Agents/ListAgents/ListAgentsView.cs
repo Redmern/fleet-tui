@@ -92,6 +92,14 @@ public static class ListAgentsView
                 return;
             }
 
+            if (FleetKeys.GoesBack(key))
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+                key.Handled = true;
+                return;
+            }
+
             if (key == FleetKeys.Cancel || key == keymap.KeyFor(Shared.Keymap.Enums.FleetAction.Close))
             {
                 app.RequestStop(window);

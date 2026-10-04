@@ -8,6 +8,11 @@ public static class FleetKeys
 {
     public static readonly Key Cancel = Key.Esc;
 
+    public static readonly Key Back = Key.Backspace;
+
+    public static bool GoesBack(Key key, string? typed = null) =>
+        key == Back && string.IsNullOrEmpty(typed);
+
     public static void ApplyMotions(View view, Keymap keymap)
     {
         Bind(view, keymap.KeyFor(FleetAction.MoveDown), Command.Down);
