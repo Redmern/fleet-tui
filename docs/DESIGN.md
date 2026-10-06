@@ -5478,7 +5478,10 @@ conversation):
   back chips; tab and move keys still work, and close is the corner.
   The dashboard's agent and sub bars drop the `editor` chip; the Open editor key still works.
   The agent list swaps its hint line for select and back icon chips, and the project
-  picker's new-window chip is the `FleetIcons.NewWindow` icon. The dashboard (its menu mode keeps a close chip) and the
+  picker's new-window chip is the `FleetIcons.NewWindow` icon.
+  New agent, Add repository and the `FleetDialog` choice and confirm dialogs swap their hint
+  lines for select (`enter`, or `y` on confirm) and back chips plus the corners; esc, n and
+  h/l still work. The dashboard (its menu mode keeps a close chip) and the
   small prompts/dialogs without a bar are left as they were.
 
 ## Still to verify

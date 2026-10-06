@@ -2,6 +2,7 @@ using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
 
 namespace Fleet.Ui;
 
@@ -64,7 +65,24 @@ public static class FleetDialog
             }
         };
 
-        window.Add(primary, secondary, FleetTheme.HintBar(FleetHints.Choose));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, () =>
+            {
+                choice = primary.HasFocus ? DialogChoice.Primary : DialogChoice.Secondary;
+                app.RequestStop(window);
+            }),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(primary, secondary, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         primary.SetFocus();
 
@@ -138,7 +156,24 @@ public static class FleetDialog
             }
         };
 
-        window.Add(yes, no, FleetTheme.HintBar(FleetHints.Confirm));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("y", FleetIcons.Select, () =>
+            {
+                confirmed = true;
+                app.RequestStop(window);
+            }),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(yes, no, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         yes.SetFocus();
 

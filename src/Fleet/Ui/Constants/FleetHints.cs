@@ -6,14 +6,6 @@ public static class FleetHints
 
     public const string Prompt = "enter confirm   esc cancel   bksp on empty back";
 
-    public const string AddRepository = "enter select   esc cancel   bksp back";
-
-    public const string NewAgent = "enter select   esc cancel   bksp back";
-
-    public const string Confirm = "h/l move   enter select   y yes   n/esc no   bksp back";
-
-    public const string Choose = "h/l move   enter select   esc cancel   bksp back";
-
     public const string Dismiss = "enter/esc dismiss   bksp back";
 
     public const string Ask = "enter confirm   esc cancel   bksp on empty back";
