@@ -2,6 +2,7 @@ using Fleet.Ports.Notifications;
 using Fleet.Ports.Notifications.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -66,11 +67,11 @@ public static class ShowNoticesView
             var settings = store.Settings();
             bar.Show(
             [
-                ("enter", "open", Open),
-                (keymap.DisplayFor(FleetAction.DismissNotice), "dismiss", () => Dismiss(one: true)),
-                (keymap.DisplayFor(FleetAction.DismissAllNotices), "dismiss all", () => Dismiss(one: false)),
-                ("b", settings.Bell ? "bell on" : "bell off", () => Toggle(bell: true)),
-                ("t", settings.Toast ? "toasts on" : "toasts off", () => Toggle(bell: false)),
+                ("enter", FleetIcons.Select, Open),
+                (keymap.DisplayFor(FleetAction.DismissNotice), FleetIcons.Dismiss, () => Dismiss(one: true)),
+                (keymap.DisplayFor(FleetAction.DismissAllNotices), FleetIcons.DismissAll, () => Dismiss(one: false)),
+                ("b", settings.Bell ? FleetIcons.BellOn : FleetIcons.BellOff, () => Toggle(bell: true)),
+                ("t", settings.Toast ? FleetIcons.ToastsOn : FleetIcons.ToastsOff, () => Toggle(bell: false)),
             ]);
         }
 

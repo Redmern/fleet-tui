@@ -34,9 +34,17 @@ public static class FleetIcons
 
     public const string Menu = "";
 
-    public const string Dismiss = "";
+    public const string Dismiss = "";
 
     public const string DismissAll = "";
+
+    public const string BellOn = "";
+
+    public const string BellOff = "";
+
+    public const string ToastsOn = "";
+
+    public const string ToastsOff = "";
 
     public const string Connect = "";
 

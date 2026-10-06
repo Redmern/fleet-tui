@@ -5489,6 +5489,8 @@ conversation):
   bottom right like the menu's.
 - The dashboard's bars are icons too: add (the action's own icon), open (`Select`), manage,
   show/hide (eye), menu, dismiss, dismiss all and refresh.
+- The notifications screen's bar is icons as well: open, dismiss (x in a circle), dismiss all
+  (eraser), bell on/off (bell / crossed bell) and toasts on/off (filled / outlined speech bubble).
 
 ## Still to verify
 ## Still to verify
