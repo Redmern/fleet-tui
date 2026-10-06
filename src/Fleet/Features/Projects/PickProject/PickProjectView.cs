@@ -281,7 +281,7 @@ public static class PickProjectView
         bar.Show(
         [
             ($"{keymap.DisplayFor(FleetAction.OpenProject)}/enter/A-Z", "open", () => Accept()),
-            ("SHIFT", "new window", () => Accept(newWindow: true)),
+            ("SHIFT", FleetIcons.NewWindow, () => Accept(newWindow: true)),
             (keymap.DisplayFor(FleetAction.NewProject), "new", NewProject),
             (keymap.DisplayFor(FleetAction.RemoveProject), "remove", DropProject),
         ]);

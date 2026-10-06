@@ -10,8 +10,6 @@ public static class FleetHints
 
     public const string NewAgent = "enter select   esc cancel   bksp back";
 
-    public const string AgentList = "enter open   q/esc close   bksp back";
-
     public const string Confirm = "h/l move   enter select   y yes   n/esc no   bksp back";
 
     public const string Choose = "h/l move   enter select   esc cancel   bksp back";

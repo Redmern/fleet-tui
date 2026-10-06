@@ -5476,7 +5476,9 @@ conversation):
   tab still switch machines) and its new-window chip is an icon (`FleetIcons.NewWindow`).
   Keybinds swaps its plain hint line for an action bar: rebind (`FleetIcons.Rebind`) and
   back chips; tab and move keys still work, and close is the corner.
-  The dashboard's agent and sub bars drop the `editor` chip; the Open editor key still works. The dashboard (its menu mode keeps a close chip) and the
+  The dashboard's agent and sub bars drop the `editor` chip; the Open editor key still works.
+  The agent list swaps its hint line for select and back icon chips, and the project
+  picker's new-window chip is the `FleetIcons.NewWindow` icon. The dashboard (its menu mode keeps a close chip) and the
   small prompts/dialogs without a bar are left as they were.
 
 ## Still to verify
