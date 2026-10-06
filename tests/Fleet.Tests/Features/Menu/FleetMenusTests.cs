@@ -227,9 +227,13 @@ public class FleetMenusTests
     [InlineData(FleetAction.RevealMenuKeys, "s", FleetAction.OpenSettings)]
     [InlineData(FleetAction.RevealMenuKeys, "j", FleetAction.MoveDown)]
     [InlineData(FleetAction.RevealMenuKeys, "F5", FleetAction.None)]
-    [InlineData(FleetAction.Refresh, "?", FleetAction.None)]
+    [InlineData(FleetAction.Refresh, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.OpenSettings, "/", FleetAction.HoldMenuKeys)]
+    [InlineData(FleetAction.HoldMenuKeys, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.HoldMenuKeys, "n", FleetAction.Notifications)]
+    [InlineData(FleetAction.OpenHeadVoice, "?", FleetAction.None)]
     [InlineData(FleetAction.OpenSettings, "F5", FleetAction.None)]
-    public void A_rebind_that_puts_reveal_and_a_menu_key_together_clashes(
+    public void A_rebind_that_puts_a_show_keys_key_on_another_key_clashes(
         FleetAction action, string key, FleetAction clash)
     {
         var keymap = new Keymap(KeymapConfig.Default.With(action, key));

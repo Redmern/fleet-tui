@@ -17,6 +17,7 @@ public static class KeymapDefaults
             [FleetAction.EditKeybinds] = "k",
             [FleetAction.EditShowMenuKeys] = "K",
             [FleetAction.RevealMenuKeys] = "?",
+            [FleetAction.HoldMenuKeys] = "/",
             [FleetAction.Close] = "q",
             [FleetAction.MoveDown] = "j",
             [FleetAction.MoveUp] = "k",
@@ -60,8 +61,7 @@ public static class KeymapDefaults
             [FleetAction.DismissNotice] = "d",
             [FleetAction.DismissAllNotices] = "D",
             [FleetAction.OpenEditor] = "e",
-            [FleetAction.OpenHead] = "Alt+O",
-            [FleetAction.OpenHeadVoice] = "Alt+Shift+O",
+            [FleetAction.OpenHeadVoice] = "Alt+o",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -82,6 +82,7 @@ public static class KeymapDefaults
             FleetAction.EditKeybinds => "keybinds",
             FleetAction.EditShowMenuKeys => "show keys",
             FleetAction.RevealMenuKeys => "reveal keys",
+            FleetAction.HoldMenuKeys => "hold for keys",
             FleetAction.OpenProject => "project",
             FleetAction.Refresh => "refresh",
             FleetAction.Close => "close pane",
@@ -112,8 +113,7 @@ public static class KeymapDefaults
             FleetAction.DismissNotice => "dismiss",
             FleetAction.DismissAllNotices => "dismiss all",
             FleetAction.OpenEditor => "editor",
-            FleetAction.OpenHead => "head",
-            FleetAction.OpenHeadVoice => "head (voice)",
+            FleetAction.OpenHeadVoice => "head",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -128,7 +128,8 @@ public static class KeymapDefaults
             FleetAction.Refresh => "Refresh",
             FleetAction.EditKeybinds => "Keybinds",
             FleetAction.EditShowMenuKeys => "Show keybinds in menus",
-            FleetAction.RevealMenuKeys => "Reveal keybinds in this menu",
+            FleetAction.RevealMenuKeys => "Show or hide keybinds",
+            FleetAction.HoldMenuKeys => "Show keybinds while held",
             FleetAction.Close => "Close this pane",
             FleetAction.MoveDown => "Move down",
             FleetAction.MoveUp => "Move up",
@@ -173,8 +174,7 @@ public static class KeymapDefaults
             FleetAction.DismissNotice => "Dismiss a notification",
             FleetAction.DismissAllNotices => "Dismiss all shown notifications",
             FleetAction.OpenEditor => "Open editor here",
-            FleetAction.OpenHead => "Show or hide the head, text mode",
-            FleetAction.OpenHeadVoice => "Show or hide the head, voice mode",
+            FleetAction.OpenHeadVoice => "Show or hide the head, in voice mode",
             _ => action.ToString(),
         };
 }

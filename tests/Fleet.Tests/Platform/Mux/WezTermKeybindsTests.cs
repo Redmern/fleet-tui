@@ -190,19 +190,19 @@ public class WezTermKeybindsTests
     }
 
     [Fact]
-    public void The_generated_lua_binds_both_head_chords_without_the_prefix()
+    public void The_generated_lua_binds_one_voice_head_chord_without_the_prefix()
     {
         var lua = Lua();
 
-        Assert.Contains("toggle_head(window, pane, false, 'o', 'ALT')", lua);
-        Assert.Contains("toggle_head(window, pane, true, 'o', 'ALT|SHIFT')", lua);
+        Assert.Contains("toggle_head(window, pane, true, 'o', 'ALT')", lua);
+        Assert.DoesNotContain("toggle_head(window, pane, false", lua);
         Assert.Contains("M.head_workspace = 'fleet-head'", lua);
         Assert.Contains("spawn = { args = head_args(voice) }", lua);
         Assert.Contains("table.insert(args, '--voice')", lua);
     }
 
     [Fact]
-    public void The_other_head_chord_restarts_the_head_in_its_mode_and_kills_the_old_pane()
+    public void The_chord_restarts_a_text_mode_head_in_voice_mode_and_kills_the_old_pane()
     {
         var lua = Lua();
 
@@ -230,10 +230,10 @@ public class WezTermKeybindsTests
     {
         var keymap = new Keymap(
             Fleet.Shared.Keymap.Models.KeymapConfig.Default
-                .With(Fleet.Shared.Keymap.Enums.FleetAction.OpenHead, "Ctrl+Alt+H"));
+                .With(Fleet.Shared.Keymap.Enums.FleetAction.OpenHeadVoice, "Ctrl+Alt+H"));
 
         var lua = Lua(keymap);
 
-        Assert.Contains("toggle_head(window, pane, false, 'h', 'CTRL|ALT')", lua);
+        Assert.Contains("toggle_head(window, pane, true, 'h', 'CTRL|ALT')", lua);
     }
 }

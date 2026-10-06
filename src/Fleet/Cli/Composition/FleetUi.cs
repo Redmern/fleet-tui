@@ -13,6 +13,7 @@ public static class FleetUi
     {
         var app = Application.Create().Init();
         FleetTheme.Register();
+        FleetKeyHints.Attach(app, () => new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
 
         if (FloatPane.Inside)
         {
@@ -24,8 +25,8 @@ public static class FleetUi
     }
 
     public static FleetAction Menu(
-        IApplication app, Keymap keymap, IReadOnlyList<FleetAction> actions, bool showKeys = true) =>
-        ShowMenuView.Show(app, keymap, new ShowMenuHandler(keymap).Items(actions), showKeys);
+        IApplication app, Keymap keymap, IReadOnlyList<FleetAction> actions) =>
+        ShowMenuView.Show(app, keymap, new ShowMenuHandler(keymap).Items(actions));
 
     public static FleetAction Menu(
         IApplication app,

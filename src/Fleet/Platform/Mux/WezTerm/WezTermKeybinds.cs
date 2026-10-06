@@ -18,7 +18,6 @@ public static class WezTermKeybinds
         string notifyRequest = "")
     {
         var chord = WezTermChord.From(keymap.PrefixText);
-        var head = WezTermChord.From(keymap.TextFor(FleetAction.OpenHead));
         var headVoice = WezTermChord.From(keymap.TextFor(FleetAction.OpenHeadVoice));
         var exe = fleetExecutable.Replace("\\", "\\\\", StringComparison.Ordinal);
         var request = workspaceRequest.Replace("\\", "\\\\", StringComparison.Ordinal);
@@ -179,9 +178,9 @@ public static class WezTermKeybinds
         sb.AppendLine("-- The head orchestrator: one Claude above every project. wezterm has no");
         sb.AppendLine("-- floating panes, so the head lives in a workspace of its own and the chord");
         sb.AppendLine("-- switches the window into it and back. Hiding never stops it, so the session");
-        sb.AppendLine("-- survives across projects and windows. Each chord shows the head in its own");
-        sb.AppendLine("-- mode: the chord of the running mode hides it again, the other chord restarts");
-        sb.AppendLine("-- it in the new mode with --continue, so the conversation carries over.");
+        sb.AppendLine("-- survives across projects and windows. The chord shows the head in voice mode");
+        sb.AppendLine("-- and hides it again; a head started in text mode (fleet head) is restarted");
+        sb.AppendLine("-- in voice mode with --continue, so the conversation carries over.");
         sb.AppendLine("-- Claude's /voice saves to the user's own settings, which the head's");
         sb.AppendLine("-- --settings file outranks, so the mode cannot change inside the session.");
         sb.AppendLine($"M.head_workspace = '{FleetWorkspaces.Head}'");
@@ -308,7 +307,6 @@ public static class WezTermKeybinds
         sb.AppendLine("    end),");
         sb.AppendLine("  })");
         sb.AppendLine();
-        AppendHeadKey(sb, head, voice: false);
         AppendHeadKey(sb, headVoice, voice: true);
         sb.AppendLine("  -- Guard the dashboard pane from the leader close binding (e.g. LEADER x):");
         sb.AppendLine("  -- closing it would tear down the project view, so refuse it there and");

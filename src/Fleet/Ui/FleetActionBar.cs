@@ -31,9 +31,21 @@ public sealed class FleetActionBar
     public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
         _strip.Show(items);
 
+    public void Pin(string key) => _strip.Pinned = key;
+
+    public static IReadOnlyList<(string Key, string Label, Action Run)> Visible(
+        IReadOnlyList<(string Key, string Label, Action Run)> items, bool keys, string? pinned = null) =>
+        keys ? items : [.. items.Select(i => i.Key == pinned ? i : (string.Empty, i.Label, i.Run))];
+
     private sealed class ChipStrip : View
     {
         private readonly List<(int From, int To, Action Run)> _hits = [];
+
+        private IReadOnlyList<(string Key, string Label, Action Run)> _items = [];
+
+        public ChipStrip() => FleetKeyHints.Changed += Rebuild;
+
+        public string? Pinned { get; set; }
 
         private IReadOnlyList<FleetSpan> _spans = [];
 
@@ -45,13 +57,25 @@ public sealed class FleetActionBar
 
         public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
         {
+            _items = items;
+            Rebuild();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            FleetKeyHints.Changed -= Rebuild;
+            base.Dispose(disposing);
+        }
+
+        private void Rebuild()
+        {
             var spans = new List<FleetSpan>();
 
             _hits.Clear();
 
             var offset = 0;
 
-            foreach (var (key, label, run) in items)
+            foreach (var (key, label, run) in Visible(_items, FleetKeyHints.Shown, Pinned))
             {
                 var text = key.Length == 0 ? $" {label} " : $" {key} {label} ";
                 var chip = text.Length + 2;

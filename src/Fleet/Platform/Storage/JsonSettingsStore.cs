@@ -198,8 +198,9 @@ public sealed class JsonSettingsStore : ISettingsStore
         try
         {
             FleetPaths.EnsureDirs();
-            File.WriteAllText(
-                FleetPaths.MenuSettingsFile, JsonSerializer.Serialize(stored, FleetJsonContext.Default.MenuSettingsFile));
+            var temporary = FleetPaths.MenuSettingsFile + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(stored, FleetJsonContext.Default.MenuSettingsFile));
+            File.Move(temporary, FleetPaths.MenuSettingsFile, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

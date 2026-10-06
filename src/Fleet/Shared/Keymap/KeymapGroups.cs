@@ -77,10 +77,10 @@ public static class KeymapGroups
             FleetAction.NextTab,
             FleetAction.Close,
             FleetAction.RevealMenuKeys,
+            FleetAction.HoldMenuKeys,
         ]),
         ("anywhere, no prefix",
         [
-            FleetAction.OpenHead,
             FleetAction.OpenHeadVoice,
         ]),
     ];
