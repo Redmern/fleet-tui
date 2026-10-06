@@ -39,17 +39,33 @@ public sealed class MuxKeys
         ["z"] = "zoom",
         ["o"] = "next-pane",
         ["s"] = "switch-project",
-        ["w"] = "next-workspace",
         ["space"] = "menu",
         ["["] = "copy-mode",
         ["]"] = "paste",
-        ["f"] = "float-new",
-        ["t"] = "float-toggle",
-        ["e"] = "float-embed",
-        ["g"] = "float-mode",
-        ["r"] = "reload",
         ["d"] = "detach",
-        ["q"] = "detach",
+        ["f f"] = "float-new",
+        ["f t"] = "float-toggle",
+        ["f e"] = "float-embed",
+        ["f g"] = "float-mode",
+        ["w w"] = "next-workspace",
+        ["w s"] = "switch-project",
+        ["q d"] = "detach",
+        ["q q"] = "detach",
+        ["q r"] = "reload",
+    };
+
+    public static readonly IReadOnlyDictionary<string, string> DefaultGroups = new Dictionary<string, string>
+    {
+        ["f"] = "float",
+        ["w"] = "project",
+        ["q"] = "session",
+    };
+
+    public static readonly IReadOnlyDictionary<string, string> DefaultIcons = new Dictionary<string, string>
+    {
+        ["f"] = "",
+        ["w"] = "",
+        ["q"] = "",
     };
 
     public static readonly IReadOnlyDictionary<string, string> DefaultDirectKeys = new Dictionary<string, string>
@@ -72,17 +88,23 @@ public sealed class MuxKeys
 
     public const string DefaultPrefix = "ctrl+s";
 
-    private MuxKeys(KeyChord prefix, string prefixSpec, List<Binding> prefixKeys, List<Binding> directKeys)
+    private MuxKeys(KeyChord prefix, string prefixSpec, KeyNode root, List<Binding> directKeys, bool showIcons)
     {
         Prefix = prefix;
         PrefixSpec = prefixSpec;
-        PrefixKeys = prefixKeys;
+        Root = root;
+        PrefixKeys = root.All().ToList();
         DirectKeys = directKeys;
+        ShowIcons = showIcons;
     }
+
+    public bool ShowIcons { get; }
 
     public KeyChord Prefix { get; }
 
     public string PrefixSpec { get; }
+
+    public KeyNode Root { get; }
 
     public IReadOnlyList<Binding> PrefixKeys { get; }
 
@@ -91,16 +113,22 @@ public sealed class MuxKeys
     public static MuxKeys Defaults => From(null, null);
 
     public static MuxKeys From(
-        MuxKeysFile? file, string? prefixOverride, IReadOnlyDictionary<string, string>? extraDirect = null)
+        MuxKeysFile? file,
+        string? prefixOverride,
+        IReadOnlyDictionary<string, string>? extraDirect = null,
+        Action<string>? log = null)
     {
         var prefixSpec = prefixOverride ?? file?.Prefix ?? DefaultPrefix;
         var prefix = KeyChord.Parse(prefixSpec) ?? throw new FormatException("the prefix is empty");
+        log ??= _ => { };
+        var showIcons = file?.ShowIcons ?? true;
 
         return new MuxKeys(
             prefix,
             prefixSpec,
-            Bindings(DefaultPrefixKeys, file?.PrefixKeys),
-            Bindings(WithExtra(DefaultDirectKeys, extraDirect), file?.Keys));
+            Tree(prefix.Label, file?.PrefixKeys, file?.Groups, showIcons ? Icons(file?.Icons, log) : [], log),
+            Bindings(WithExtra(DefaultDirectKeys, extraDirect), file?.Keys, log),
+            showIcons);
     }
 
     public static MuxKeys Load(
@@ -114,22 +142,23 @@ public sealed class MuxKeys
             var file = File.Exists(path)
                 ? JsonSerializer.Deserialize(File.ReadAllText(path), MuxKeysJsonContext.Default.MuxKeysFile)
                 : null;
-            return From(file, prefixOverride, extraDirect);
+            return From(file, prefixOverride, extraDirect, log);
         }
         catch (Exception e) when (e is IOException or JsonException or FormatException or UnauthorizedAccessException)
         {
             log($"keys: {path} not used ({e.Message}); using the defaults");
-            return From(null, prefixOverride, extraDirect);
+            return From(null, prefixOverride, extraDirect, log);
         }
     }
 
     public string? PrefixCommand(Key key, Mods mods, string? text) =>
-        PrefixKeys.FirstOrDefault(b => b.Chord.Matches(key, mods, text))?.Command;
+        Root.Match(key, mods, text) is KeyStep.Run run ? run.Command : null;
 
     public string? DirectCommand(Key key, Mods mods, string? text) =>
         DirectKeys.FirstOrDefault(b => b.Chord.Matches(key, mods, text))?.Command;
 
-    public (string? Command, int Length) PrefixBytes(ReadOnlySpan<byte> bytes) => Longest(PrefixKeys, bytes);
+    public (string? Command, int Length) PrefixBytes(ReadOnlySpan<byte> bytes) =>
+        Root.Match(bytes) is (KeyStep.Run run, var length) ? (run.Command, length) : (null, 0);
 
     public (string? Command, int Length) DirectBytes(ReadOnlySpan<byte> bytes) => Longest(DirectKeys, bytes);
 
@@ -178,20 +207,165 @@ public sealed class MuxKeys
         }
     }
 
-    private static List<Binding> Bindings(IReadOnlyDictionary<string, string> defaults, Dictionary<string, string>? overrides)
+    private static bool IsUnbound(string command) =>
+        command.Trim().Length == 0 || string.Equals(command.Trim(), Unbound, StringComparison.OrdinalIgnoreCase);
+
+    private static List<Binding> Bindings(
+        IReadOnlyDictionary<string, string> defaults, Dictionary<string, string>? overrides, Action<string> log)
     {
         var merged = new Dictionary<string, string>(defaults, StringComparer.Ordinal);
 
         foreach (var (spec, command) in overrides ?? [])
         {
+            if (spec.Trim().Contains(' '))
+            {
+                log($"keys: \"{spec}\" ignored, key sequences only work after the prefix");
+                continue;
+            }
+
             merged[spec] = command;
         }
 
         return merged
-            .Where(kv => !string.Equals(kv.Value, Unbound, StringComparison.OrdinalIgnoreCase) && kv.Value.Length > 0)
+            .Where(kv => !IsUnbound(kv.Value))
             .Select(kv => KeyChord.Parse(kv.Key) is { } chord ? new Binding(kv.Key, chord, kv.Value.Trim(), chord.Bytes()) : null)
             .OfType<Binding>()
             .ToList();
+    }
+
+    private static List<(KeyChord[] Path, string Icon)> Icons(Dictionary<string, string>? overrides, Action<string> log)
+    {
+        var icons = new Dictionary<string, string>(DefaultIcons, StringComparer.Ordinal);
+
+        foreach (var (spec, icon) in overrides ?? [])
+        {
+            var trimmed = icon.Trim();
+            if (!IsUnbound(trimmed) && (trimmed.Length != 1 || char.IsSurrogate(trimmed[0])))
+            {
+                log($"keys: icon for \"{spec}\" ignored, an icon is one character from the basic plane");
+                continue;
+            }
+
+            icons[spec] = trimmed;
+        }
+
+        return icons
+            .Where(kv => !IsUnbound(kv.Value))
+            .Select(kv => (Sequence(kv.Key).Chords, kv.Value))
+            .Where(i => i.Chords.Length > 0)
+            .ToList();
+    }
+
+    private static KeyNode Tree(
+        string prefixLabel,
+        Dictionary<string, string>? overrides,
+        Dictionary<string, string>? groupOverrides,
+        List<(KeyChord[] Path, string Icon)> icons,
+        Action<string> log)
+    {
+        var specs = new Dictionary<string, Entry>(StringComparer.Ordinal);
+
+        foreach (var (spec, command) in DefaultPrefixKeys)
+        {
+            specs[spec] = new Entry(spec, command, false);
+        }
+
+        foreach (var (spec, command) in overrides ?? [])
+        {
+            specs[spec] = new Entry(spec, command, true);
+        }
+
+        var labels = new Dictionary<string, string>(DefaultGroups, StringComparer.Ordinal);
+        foreach (var (spec, label) in groupOverrides ?? [])
+        {
+            labels[spec] = label;
+        }
+
+        var groups = labels
+            .Select(kv => (Path: Sequence(kv.Key).Chords, Label: kv.Value.Trim()))
+            .Where(g => g.Path.Length > 0)
+            .ToList();
+        var dropped = groups.Where(g => IsUnbound(g.Label)).Select(g => g.Path).ToList();
+
+        var live = specs.Values
+            .Where(e => !IsUnbound(e.Command) && e.Chords.Length > 0)
+            .Where(e => !dropped.Any(path => e.Chords.Length > path.Length && e.Chords.AsSpan().StartsWith(path)))
+            .ToList();
+        var kept = live.Where(e => !live.Any(other => Beats(other, e, log))).ToList();
+
+        var root = new KeyNode(prefixLabel);
+        foreach (var entry in kept)
+        {
+            var node = root;
+            for (var i = 0; i < entry.Chords.Length - 1; i++)
+            {
+                var path = entry.Chords[..(i + 1)];
+                var label = groups.FirstOrDefault(g => g.Path.AsSpan().SequenceEqual(path)).Label;
+                var icon = icons.FirstOrDefault(g => g.Path.AsSpan().SequenceEqual(path)).Icon;
+                node = node.Child(
+                    entry.Tokens[i], entry.Chords[i], label is { Length: > 0 } ? label : entry.Chords[i].Label, icon);
+            }
+
+            var last = entry.Chords[^1];
+            node.Add(new Binding(entry.Spec, last, entry.Command.Trim(), last.Bytes()));
+        }
+
+        return root;
+    }
+
+    private static bool Beats(Entry other, Entry entry, Action<string> log)
+    {
+        if (ReferenceEquals(other, entry) || other.Chords.Length == entry.Chords.Length)
+        {
+            return false;
+        }
+
+        var (leaf, sequence) = other.Chords.Length < entry.Chords.Length ? (other, entry) : (entry, other);
+        if (!sequence.Chords.AsSpan().StartsWith(leaf.Chords))
+        {
+            return false;
+        }
+
+        var winner = leaf.User == sequence.User || leaf.User ? leaf : sequence;
+        if (!ReferenceEquals(winner, other))
+        {
+            return false;
+        }
+
+        if (leaf.User && sequence.User)
+        {
+            log($"keys: \"{sequence.Spec}\" ignored, \"{leaf.Spec}\" is already bound");
+        }
+
+        return true;
+    }
+
+    private static (string[] Tokens, KeyChord[] Chords) Sequence(string spec)
+    {
+        var tokens = spec.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var chords = tokens.Select(t => KeyChord.Parse(t) ?? throw new FormatException($"empty key in '{spec}'")).ToArray();
+        return (tokens, chords);
+    }
+
+    private sealed class Entry
+    {
+        public Entry(string spec, string command, bool user)
+        {
+            Spec = spec;
+            Command = command;
+            User = user;
+            (Tokens, Chords) = Sequence(spec);
+        }
+
+        public string Spec { get; }
+
+        public string Command { get; }
+
+        public bool User { get; }
+
+        public string[] Tokens { get; }
+
+        public KeyChord[] Chords { get; }
     }
 
     public sealed record Binding(string Spec, KeyChord Chord, string Command, byte[]? Bytes)
@@ -214,6 +388,15 @@ public sealed class MuxKeysFile
 
     [JsonPropertyName("keys")]
     public Dictionary<string, string>? Keys { get; set; }
+
+    [JsonPropertyName("groups")]
+    public Dictionary<string, string>? Groups { get; set; }
+
+    [JsonPropertyName("icons")]
+    public Dictionary<string, string>? Icons { get; set; }
+
+    [JsonPropertyName("showIcons")]
+    public bool? ShowIcons { get; set; }
 }
 
 [JsonSourceGenerationOptions(ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)]

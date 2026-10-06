@@ -276,6 +276,18 @@ public class HideAgentTests
     }
 
     [Fact]
+    public void Nvim_with_claude_gives_neo_tree_a_quarter_and_claude_the_rest()
+    {
+        var startup = AgentHarness.CommandFor(AgentHarness.Nvim, withClaude: true)[2];
+
+        Assert.Contains("filetype=='neo-tree'", startup);
+        Assert.Contains("vim.wo[term].winfixwidth=false", startup);
+        Assert.Contains("nvim_win_set_width, tree, math.floor(vim.o.columns*0.25)", startup);
+        Assert.Contains("vim.wo[tree].winfixwidth=true", startup);
+        Assert.DoesNotContain("nvim_win_set_width", AgentHarness.CommandFor(AgentHarness.Nvim)[2]);
+    }
+
+    [Fact]
     public void The_startup_commands_are_scheduled_so_lazy_plugins_have_loaded()
     {
         Assert.Contains("vim.schedule(", AgentHarness.NvimStartup);
