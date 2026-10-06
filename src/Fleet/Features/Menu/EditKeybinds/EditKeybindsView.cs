@@ -166,7 +166,19 @@ public static class EditKeybindsView
             key.Handled = true;
         };
 
-        window.Add(tabBar.Root, canvas, status, FleetTheme.HintBar(FleetHints.Keybinds));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Rebind, Rebind),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(tabBar.Root, canvas, status, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
 
         FleetModal.Enter();

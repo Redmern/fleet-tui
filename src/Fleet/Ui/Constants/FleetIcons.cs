@@ -24,6 +24,8 @@ public static class FleetIcons
 
     public const string NewWindow = "";
 
+    public const string Rebind = "";
+
     public const string Connect = "";
 
     public const string Answer = "";

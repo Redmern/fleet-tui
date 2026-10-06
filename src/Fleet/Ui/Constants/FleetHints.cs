@@ -20,8 +20,6 @@ public static class FleetHints
 
     public const string Ask = "enter confirm   esc cancel   bksp on empty back";
 
-    public const string Keybinds = "h/l tab   j/k move   enter rebind   esc close   bksp back";
-
     public const string Capture = "press any key   esc cancel";
 
     public const string Settings = "j/k move   enter change   c channel   r default   esc close   bksp back";

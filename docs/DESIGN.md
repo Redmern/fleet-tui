@@ -5473,7 +5473,9 @@ conversation):
   are shown and pads on the left while they are hidden, so it keeps its width too. The
   remote machines bar uses icons for all its chips (`FleetIcons.Connect` and the rest).
   The Switch project picker drops its `h/l machine` chip (h/l, the arrows and a click on a
-  tab still switch machines) and its new-window chip is an icon (`FleetIcons.NewWindow`). The dashboard (its menu mode keeps a close chip) and the
+  tab still switch machines) and its new-window chip is an icon (`FleetIcons.NewWindow`).
+  Keybinds swaps its plain hint line for an action bar: rebind (`FleetIcons.Rebind`) and
+  back chips; tab and move keys still work, and close is the corner. The dashboard (its menu mode keeps a close chip) and the
   small prompts/dialogs without a bar are left as they were.
 
 ## Still to verify
