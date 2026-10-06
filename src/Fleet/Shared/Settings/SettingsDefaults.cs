@@ -49,6 +49,8 @@ public static class SettingsDefaults
 
     public const string StatusHooksLabel = "Live status via hooks";
 
+    public const bool SubagentGuidance = true;
+
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);
 

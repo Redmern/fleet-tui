@@ -53,7 +53,11 @@ public static class OrchestrationText
         string.Equals(Normalized(text), Normalized(ClassicAidlc), StringComparison.Ordinal);
 
     public static string Instructions(
-        OrchestrationBrief brief, string? howYouWork = null, string? aidlc = null, bool research = false)
+        OrchestrationBrief brief,
+        string? howYouWork = null,
+        string? aidlc = null,
+        bool research = false,
+        bool subagents = false)
     {
         var header =
             $"""
@@ -90,6 +94,11 @@ public static class OrchestrationText
         if (research)
         {
             sections.Add($"## Research\n{Research.Trim()}");
+        }
+
+        if (subagents)
+        {
+            sections.Add($"## Subagents\n{SubagentGuidance.ForSubOrchestrators.Trim()}");
         }
 
         sections.Add(footer);

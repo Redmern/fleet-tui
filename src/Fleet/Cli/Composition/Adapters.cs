@@ -69,6 +69,8 @@ public static class Adapters
 
     public static RoleModels Models(string project) => Settings().Load(project).Models;
 
+    public static bool SubagentGuidance(string project) => Settings().Load(project).SubagentGuidance;
+
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
     public static IHarnessConfig HarnessConfig() => new ClaudeHarnessConfig();

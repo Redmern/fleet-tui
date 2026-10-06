@@ -56,7 +56,7 @@ public sealed class McpActions(
 
     private readonly ListBranchesHandler _branches = new(git);
 
-    private readonly NewAgentHandler _spawner = new(git, mux, store, Adapters.Models);
+    private readonly NewAgentHandler _spawner = new(git, mux, store, Adapters.Models, Adapters.SubagentGuidance);
 
     private readonly HideAgentHandler _hider = new(mux, store);
 

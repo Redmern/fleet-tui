@@ -107,7 +107,7 @@ public sealed class DispatchHandler(
 
         File.WriteAllText(
             OrchestrationPaths.InstructionsFile(folder),
-            OrchestrationText.Instructions(brief, howYouWork, process, route.Research));
+            OrchestrationText.Instructions(brief, howYouWork, process, route.Research, config.SubagentGuidance));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
