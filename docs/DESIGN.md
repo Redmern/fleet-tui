@@ -5484,7 +5484,9 @@ conversation):
   h/l still work.
   The rest followed (New project, the text and question prompts, the error popup, key capture,
   the text viewer), so no screen has a plain hint line any more: `FleetHints` and
-  `FleetTheme.HintBar` are gone. Key capture and the text viewer get only the corners. The dashboard (its menu mode keeps a close chip) and the
+  `FleetTheme.HintBar` are gone. Key capture and the text viewer get only the corners.
+  The dashboard in menu mode drops its `q/esc close` chip for the corners too (the main
+  dashboard has no corners: it is not something you close). The dashboard (its menu mode keeps a close chip) and the
   small prompts/dialogs without a bar are left as they were.
 
 ## Still to verify

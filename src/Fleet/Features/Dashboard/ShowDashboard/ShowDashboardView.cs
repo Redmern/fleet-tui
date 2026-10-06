@@ -948,12 +948,7 @@ public static class ShowDashboardView
             }
         }
 
-        IReadOnlyList<(string, string, Action)> WithClose(
-            IReadOnlyList<(string, string, Action)> bar) =>
-            menu ? [.. bar, ("q/esc", "close", () => app.RequestStop(window))] : bar;
-
         IReadOnlyList<(string, string, Action)> AgentBar() =>
-            WithClose(
             [
                 (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
                 ("enter", "open", () => Start(OpenAsync)),
@@ -965,10 +960,9 @@ public static class ShowDashboardView
                         : AgentWords.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+            ];
 
         IReadOnlyList<(string, string, Action)> SubBar() =>
-            WithClose(
             [
                 (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
                 ("enter", "open", () => Start(OpenAsync)),
@@ -980,16 +974,15 @@ public static class ShowDashboardView
                         : AgentWords.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+            ];
 
         IReadOnlyList<(string, string, Action)> NoticeBar() =>
-            WithClose(
             [
                 ("enter", "open", () => Start(OpenNoticeAsync)),
                 (keys.DisplayFor(FleetAction.DismissNotice), "dismiss", () => FromKey(FleetAction.DismissNotice)),
                 (keys.DisplayFor(FleetAction.DismissAllNotices), "dismiss all", () => FromKey(FleetAction.DismissAllNotices)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+            ];
 
         void Dismiss(IReadOnlyList<string> which)
         {
@@ -1024,7 +1017,6 @@ public static class ShowDashboardView
         }
 
         IReadOnlyList<(string, string, Action)> RepositoryBar() =>
-            WithClose(
             [
                 (keys.DisplayFor(FleetAction.AddRepository), "add",
                     () => FromKey(FleetAction.AddRepository)),
@@ -1033,7 +1025,7 @@ public static class ShowDashboardView
                     () => FromKey(FleetAction.ManageRepository)),
                 (keys.DisplayFor(FleetAction.Refresh), "refresh", () => Start(RefreshAsync)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+            ];
 
         void FromKey(FleetAction action)
         {
@@ -1238,6 +1230,11 @@ public static class ShowDashboardView
             status,
             hints.Root,
             tip);
+
+        if (menu)
+        {
+            FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
+        }
 
         BindSkeleton();
         ShowTab(DashboardTabs.AgentsTab);
