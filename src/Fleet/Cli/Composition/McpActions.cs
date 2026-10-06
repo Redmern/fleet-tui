@@ -526,11 +526,9 @@ public sealed class McpActions(
 
     private async Task<McpResult> ListSubs(CancellationToken ct)
     {
-        var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var paneOpen = await ProjectStructureReader.PaneOpenAsync(mux, ct).ConfigureAwait(false);
 
-        return Ok(SubSummary.Text(
-            _agents.Handle(project),
-            agent => panes.Any(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p))));
+        return Ok(SubSummary.Text(_agents.Handle(project), paneOpen));
     }
 
     private async Task<McpResult> StopSub(McpRequest request, CancellationToken ct)

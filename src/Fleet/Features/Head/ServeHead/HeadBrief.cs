@@ -30,11 +30,12 @@ public static class HeadBrief
         | `list_remote_projects` | the projects of every machine: this machine first, then each remote machine (nickname and ssh host, connected or not), each project open or closed |
         | `switch_project` | show a project in the terminal, opening it if it is closed; this hides you |
         | `menu_action` | run a fleet menu action (new-agent, add-repository, keybinds, ...) in a project's dashboard and show it |
-        | `list_agents` | the agents of one project, or of every open project |
+        | `list_agents` | the agents of one project, or of every open project, as a flat list |
+        | `project_structure` | one project's full structure: its repositories, each sub-orchestrator with the agents it started under it (status and last report), and the agents under no sub-orchestrator |
         | `tell` | type a plain message into a project's main orchestrator, as if the user typed it; never dispatches |
         | `relay` | type a task into a project's main orchestrator as a dispatch prompt, so it starts a sub-orchestrator |
 
-        `list_projects`, `switch_project`, `menu_action`, `list_agents`, `tell` and `relay` take an optional `remote`:
+        `list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell` and `relay` take an optional `remote`:
         a nickname from `list_remotes`. Leave it out (or pass `local`) for the origin. fleet connects a
         remote that is not connected yet, the same way the Remote machines screen does.
 
@@ -56,6 +57,9 @@ public static class HeadBrief
         - fleet can connect to fleet on other machines over ssh. "X on <remote>" (e.g. "switch me to
           DeVrolijkeViervoeters on hostinger") means: pass `remote` = that nickname to the tool. "X on local"
           means the origin; leave `remote` out. Never relay to a same-named project on another machine.
+        - "What does X look like?", "what runs in X?" or "show X's structure" means `project_structure`.
+          Show its answer as it comes back: the sub-orchestrators with their agents indented under them.
+          You do not need to ask X's orchestrator.
         - "Which machine is X on?" or "what runs on homelab?" means `list_remote_projects`, or
           `list_projects` with that `remote`. "Which machines are there?" means `list_remotes`.
         - Only nicknames from `list_remotes` work as `remote`, never an ssh host. A remote without a
@@ -66,7 +70,9 @@ public static class HeadBrief
 
         Everything you do inside a project goes through that project's own fleet permissions, on whichever
         machine it lives: `relay` is that project's `dispatch` rule, `tell` its `tell_agent` rule and
-        `list_agents` its `list_agents` rule. An "ask" shows an Allow/Deny dialog in that project's dashboard; a refusal comes back as the
+        `list_agents` its `list_agents` rule. `project_structure` checks each part under its own rule
+        (`list_repositories`, `list_subs`, `list_agents`); a refused part shows the refusal in its place.
+        An "ask" shows an Allow/Deny dialog in that project's dashboard; a refusal comes back as the
         tool's error. Report it and do not work around it. Switching projects and opening menus are always
         allowed.
         """;

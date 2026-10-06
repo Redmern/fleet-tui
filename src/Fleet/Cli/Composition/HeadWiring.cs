@@ -61,7 +61,8 @@ public static class HeadWiring
             Adapters.DashPane,
             log,
             Adapters.Remotes(),
-            Adapters.KnownRemotes());
+            Adapters.KnownRemotes(),
+            (project, ct) => ProjectStructureReader.ReadAsync(Adapters.Git(), mux, Adapters.Agents(), project, ct));
 
     public static int Launch(bool voice)
     {

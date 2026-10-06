@@ -38,7 +38,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.ListRemotes => await _remotes.ListAsync(ct).ConfigureAwait(false),
             HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
             HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
-                or HeadTools.Relay or HeadTools.Tell when !HeadRemotes.IsLocal(remote) =>
+                or HeadTools.ProjectStructure or HeadTools.Relay or HeadTools.Tell when !HeadRemotes.IsLocal(remote) =>
                 await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
@@ -52,8 +52,8 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
                 "this fleet acts on its own projects only; the machine fleet was opened on reaches the others.");
         }
 
-        return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.Relay
-                or HeadTools.Tell
+        return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.ProjectStructure
+                or HeadTools.Relay or HeadTools.Tell
             ? await HandleHereAsync(request, show: false, ct).ConfigureAwait(false)
             : McpResult.Error($"{request.Tool} is not served to another machine.");
     }
@@ -65,6 +65,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.SwitchProject => await WithProject(request, p => SwitchAsync(p, ct)).ConfigureAwait(false),
             HeadTools.MenuAction => await WithProject(request, p => MenuAsync(p, request, show, ct)).ConfigureAwait(false),
             HeadTools.ListAgents => await ListAgentsAsync(request, ct).ConfigureAwait(false),
+            HeadTools.ProjectStructure => await WithProject(request, p => StructureAsync(p, ct)).ConfigureAwait(false),
             HeadTools.Relay => await WithProject(request, p => RelayAsync(p, request, ct)).ConfigureAwait(false),
             HeadTools.Tell => await WithProject(request, p => TellAsync(p, request, ct)).ConfigureAwait(false),
             _ => McpResult.Error($"the head has no tool named '{request.Tool}'."),
@@ -264,6 +265,32 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
             lines.AddRange(agents.Select(a => $"{project.Name}  {Describe(a)}"));
         }
+
+        return McpResult.Ok(string.Join('\n', lines));
+    }
+
+    private async Task<McpResult> StructureAsync(Project project, CancellationToken ct)
+    {
+        var structure = await deps.Structure(project, ct).ConfigureAwait(false);
+        var lines = new List<string> { $"{project.Name}  {project.Root}" };
+
+        async Task Section(string title, HarnessTool tool, IEnumerable<string> body)
+        {
+            lines.Add(title);
+
+            var denied = await _gate.CheckAsync(project.Name, tool, string.Empty, ct).ConfigureAwait(false);
+
+            lines.AddRange(denied is null ? body.Select(l => Indent + l) : [Indent + denied]);
+        }
+
+        await Section(
+                "repositories",
+                HarnessTool.ListRepositories,
+                structure.Repositories.Count == 0 ? ["none"] : structure.Repositories)
+            .ConfigureAwait(false);
+        await Section("sub-orchestrators", HarnessTool.ListSubs, structure.Subs.Split('\n')).ConfigureAwait(false);
+        await Section("agents not under a sub-orchestrator", HarnessTool.ListAgents, structure.Agents.Split('\n'))
+            .ConfigureAwait(false);
 
         return McpResult.Ok(string.Join('\n', lines));
     }

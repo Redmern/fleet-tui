@@ -670,7 +670,8 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 | `list_remote_projects` | the projects per machine: this machine first, then every remote machine fleet knows (nickname and ssh host, `connected` or `known · not connected`), each project `open` or `closed` |
 | `switch_project` | shows a project, opening it first if it is closed |
 | `menu_action` | hands a dashboard action (`new-agent`, `add-repository`, `keybinds`, ...) to a project's dashboard and shows it |
-| `list_agents` | the agents of one project, or of every open project |
+| `list_agents` | the agents of one project, or of every open project, as a flat list |
+| `project_structure` | one project's full structure: its repositories, each sub-orchestrator with the agents it started indented under it (status and last report), and the agents under no sub-orchestrator |
 | `tell` | types a plain message into a project's main orchestrator; never dispatches |
 | `relay` | types a dispatch prompt into a project's main orchestrator |
 
@@ -692,12 +693,12 @@ explicitly ask it to dispatch.
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
 connection, so a machine that is not connected is listed with its state and no projects.
 
-`list_projects`, `switch_project`, `menu_action`, `list_agents`, `tell` and `relay` take an optional
+`list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell` and `relay` take an optional
 `remote`: a nickname from `remotes.json` (never an ssh host). Leave it out, or pass `local`,
 for the machine fleet was opened on. A remote that is not connected is connected first, the
 same way **Remote machines** does; if ssh asks a question (a password, a host key), the head
 says so and you answer it there. `switch_project` shows the remote project in this window;
-`relay`, `tell`, `list_agents` and `menu_action` run on the remote's own fleet over the existing ssh
+`relay`, `tell`, `list_agents`, `project_structure` and `menu_action` run on the remote's own fleet over the existing ssh
 link, so that project's permissions apply there exactly as they do locally. A remote fleet
 never opens ssh to another remote: everything goes through the origin.
 
@@ -706,7 +707,9 @@ project on a remote machine shows the origin's head over it, not a head on that 
 
 **Permissions.** What the head does inside a project goes through that project's own
 permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule, `tell`
-its `tell_agent` rule and `list_agents` its `list_agents` rule. *Forbid* refuses; *ask* shows the Allow/Deny dialog in
+its `tell_agent` rule and `list_agents` its `list_agents` rule. `project_structure` checks each part
+under its own rule (`list_repositories`, `list_subs`, `list_agents`) and shows a refusal in that
+part's place. *Forbid* refuses; *ask* shows the Allow/Deny dialog in
 that project's dashboard, whichever channel the rule names, because the head's own Claude
 cannot tell projects apart. Switching projects, opening menus and showing or hiding the
 head are navigation and always allowed.

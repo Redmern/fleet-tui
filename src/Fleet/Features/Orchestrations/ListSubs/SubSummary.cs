@@ -7,6 +7,8 @@ public static class SubSummary
 {
     public const string None = "No sub-orchestrators yet.";
 
+    public const string NoUnowned = "No agents outside a sub-orchestrator.";
+
     public static string Text(IReadOnlyList<AgentRecord> agents, Func<AgentRecord, bool> paneOpen)
     {
         var listing = SubTree.Of(agents);
@@ -39,10 +41,22 @@ public static class SubSummary
                 lines.Add($"{entry.Group} — no longer registered; its agents remain");
             }
 
-            lines.Add(Child(entry.Agent, paneOpen(entry.Agent)));
+            lines.AddRange(Child(entry.Agent, paneOpen(entry.Agent), "  "));
         }
 
         return string.Join('\n', lines);
+    }
+
+    public static string Unowned(IReadOnlyList<AgentRecord> agents, Func<AgentRecord, bool> paneOpen)
+    {
+        var board = SubTree.Of(agents).Board
+            .OrderBy(a => a.Repository, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(a => a.Branch, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return board.Count == 0
+            ? NoUnowned
+            : string.Join('\n', board.SelectMany(a => Child(a, paneOpen(a), string.Empty)));
     }
 
     private static IEnumerable<string> Sub(AgentRecord sub, bool open)
@@ -52,20 +66,35 @@ public static class SubSummary
 
         yield return $"{sub.Branch} — {OrchestrationStatus.Normalize(sub.Status)}, {where}{hidden}";
 
-        if (sub.ReportedAt.Length > 0 || sub.Summary.Length > 0)
+        if (LastReport(sub) is { } report)
         {
-            var at = sub.ReportedAt.Length == 0 ? string.Empty : $" {sub.ReportedAt}";
-            var summary = sub.Summary.Length == 0 ? string.Empty : $": {sub.Summary}";
-
-            yield return $"  last report{at}{summary}";
+            yield return $"  {report}";
         }
     }
 
-    private static string Child(AgentRecord agent, bool open)
+    private static IEnumerable<string> Child(AgentRecord agent, bool open, string indent)
     {
         var where = agent.Hidden ? "hidden" : open ? "open" : "closed";
         var status = agent.Status.Trim().Length == 0 ? "no report" : agent.Status.Trim();
 
-        return $"  - {agent.Repository}/{agent.Branch} — {where}, {status}";
+        yield return $"{indent}- {agent.Repository}/{agent.Branch} — {where}, {status}";
+
+        if (LastReport(agent) is { } report)
+        {
+            yield return $"{indent}    {report}";
+        }
+    }
+
+    private static string? LastReport(AgentRecord agent)
+    {
+        if (agent.ReportedAt.Length == 0 && agent.Summary.Length == 0)
+        {
+            return null;
+        }
+
+        var at = agent.ReportedAt.Length == 0 ? string.Empty : $" {agent.ReportedAt}";
+        var summary = agent.Summary.Length == 0 ? string.Empty : $": {agent.Summary}";
+
+        return $"last report{at}{summary}";
     }
 }
