@@ -1,3 +1,5 @@
+using Fleet.Shared.Messaging;
+
 namespace Fleet.Shared.Hooks;
 
 public sealed record HookDecision(bool Take, string Task);
@@ -6,7 +8,7 @@ public static class HookPrompt
 {
     public static HookDecision Intercepted(string prompt, string trigger)
     {
-        if (trigger.Length == 0)
+        if (trigger.Length == 0 || PeerMessage.FromClaude(prompt))
         {
             return new HookDecision(false, string.Empty);
         }

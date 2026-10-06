@@ -9,4 +9,5 @@ public sealed record AgentReport(
     DateTime At,
     string Transcript = "",
     string Reason = "",
-    bool StartsSession = false);
+    bool StartsSession = false,
+    string Inbox = "");

@@ -13,6 +13,16 @@ public class HookPromptTests
         Assert.Equal("add oauth login", decision.Task);
     }
 
+    [Theory]
+    [InlineData("<cross-session-message from=\"uds:\\\\.\\pipe\\LOCAL\\cc-msg-1\" from-name=\"head\" from-mode=\"prompting\">\n, task\n</cross-session-message>")]
+    [InlineData("  <cross-session-message from=\"uds:x\">\ntask\n</cross-session-message>")]
+    [InlineData("<task-notification>\n<task-id>b1</task-id>\n</task-notification>")]
+    public void A_message_from_another_session_or_a_task_notice_never_dispatches_even_with_a_lt_trigger(string prompt)
+    {
+        Assert.False(HookPrompt.Intercepted(prompt, "<").Take);
+        Assert.False(HookPrompt.Intercepted(prompt, ",").Take);
+    }
+
     [Fact]
     public void The_space_after_the_trigger_is_optional()
     {

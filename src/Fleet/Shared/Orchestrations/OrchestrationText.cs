@@ -12,7 +12,9 @@ public static class OrchestrationText
             each agent's last reported status)
           - new_agent to start an agent on a branch; pass `task` to give it its first
             instruction in the same call
-          - tell_agent to send a follow-up instruction to an agent you have started
+          - tell_agent to send a follow-up instruction to an agent you have started;
+            when its result gives an address, send the instruction yourself with
+            SendMessage to that address
           - open_agent / stop_agent / set_agent_visible to manage them
         Agents report their own progress with the report tool, which shows up in
         list_agents. Every tool call is subject to this project's permission settings.
