@@ -218,7 +218,7 @@ public static class Composer
     private static (int Cell, int Columns, int Lines) WhichKeyGrid(int cols, int rows, IReadOnlyList<WhichKeyEntry> entries)
     {
         var keyWidth = entries.Max(e => e.Key.Length);
-        var labelWidth = entries.Max(e => e.Label.Length + (e.Group ? 1 : 0));
+        var labelWidth = entries.Max(e => WhichKeyText(e).Length);
         var cell = keyWidth + 3 + labelWidth;
         var tallest = Math.Min(rows - MuxModel.StatusRows, Math.Max(2 * WhichKeyChrome + 1, rows * 3 / 4));
         var fitRows = Math.Max(1, tallest - 2 * WhichKeyChrome);
@@ -262,12 +262,17 @@ public static class Composer
                 frame,
                 x + keyWidth + 3,
                 y,
-                entry.Group ? "+" + entry.Label : entry.Label,
+                WhichKeyText(entry),
                 entry.Group ? Blue : Text,
                 CellAttr.None,
                 content);
         }
     }
+
+    private static string WhichKeyText(WhichKeyEntry entry) =>
+        (entry.Icon is { Length: 1 } icon && !char.IsSurrogate(icon[0]) ? icon + " " : string.Empty)
+        + (entry.Group ? "+" : string.Empty)
+        + entry.Label;
 
     private static void Write(ClientFrame frame, int x, int y, string text, uint fg, CellAttr attrs, Rect clip)
     {

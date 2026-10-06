@@ -236,6 +236,10 @@ public sealed class WhichKeyEntry
     [JsonPropertyName("fold")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Fold { get; set; }
+
+    [JsonPropertyName("icon")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Icon { get; set; }
 }
 
 public static class HostEffects

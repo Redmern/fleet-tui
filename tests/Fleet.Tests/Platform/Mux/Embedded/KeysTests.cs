@@ -191,6 +191,53 @@ public class KeysTests
     }
 
     [Fact]
+    public void Default_groups_and_folds_carry_their_nerd_font_icons()
+    {
+        var entries = WhichKey.For(MuxKeys.Defaults);
+
+        Assert.Equal("", entries.Single(e => e.Label == "float").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "project").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "session").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "focus").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "resize").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "go to tab").Icon);
+        Assert.All(entries.Where(e => !(e.Group || e.Fold)), e => Assert.Null(e.Icon));
+        Assert.All(
+            entries.Where(e => e.Icon is not null),
+            e => Assert.InRange(e.Icon![0], '', ''));
+    }
+
+    [Fact]
+    public void Show_icons_false_clears_every_icon()
+    {
+        var keys = MuxKeys.From(new MuxKeysFile { ShowIcons = false, Icons = new() { ["f"] = "" } }, null);
+
+        Assert.False(keys.ShowIcons);
+        Assert.All(WhichKey.For(keys), e => Assert.Null(e.Icon));
+    }
+
+    [Fact]
+    public void The_icons_map_overrides_removes_and_adds_icons()
+    {
+        var lines = new List<string>();
+        var keys = MuxKeys.From(
+            new MuxKeysFile
+            {
+                PrefixKeys = new() { ["g s"] = "split-down" },
+                Icons = new() { ["f"] = "", ["q"] = "none", ["g"] = "", ["w"] = "\U0001F4C1" },
+            },
+            null,
+            log: lines.Add);
+        var entries = WhichKey.For(keys);
+
+        Assert.Equal("", entries.Single(e => e.Label == "float").Icon);
+        Assert.Null(entries.Single(e => e.Label == "session").Icon);
+        Assert.Equal("", entries.Single(e => e.Key == "g").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "project").Icon);
+        Assert.Contains(lines, l => l.Contains("icon for \"w\" ignored", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Which_key_marks_only_real_submenus_as_groups()
     {
         var keys = MuxKeys.Defaults;

@@ -61,6 +61,13 @@ public sealed class MuxKeys
         ["q"] = "session",
     };
 
+    public static readonly IReadOnlyDictionary<string, string> DefaultIcons = new Dictionary<string, string>
+    {
+        ["f"] = "",
+        ["w"] = "",
+        ["q"] = "",
+    };
+
     public static readonly IReadOnlyDictionary<string, string> DefaultDirectKeys = new Dictionary<string, string>
     {
         ["ctrl+h"] = "smart-focus left",
@@ -81,14 +88,17 @@ public sealed class MuxKeys
 
     public const string DefaultPrefix = "ctrl+s";
 
-    private MuxKeys(KeyChord prefix, string prefixSpec, KeyNode root, List<Binding> directKeys)
+    private MuxKeys(KeyChord prefix, string prefixSpec, KeyNode root, List<Binding> directKeys, bool showIcons)
     {
         Prefix = prefix;
         PrefixSpec = prefixSpec;
         Root = root;
         PrefixKeys = root.All().ToList();
         DirectKeys = directKeys;
+        ShowIcons = showIcons;
     }
+
+    public bool ShowIcons { get; }
 
     public KeyChord Prefix { get; }
 
@@ -111,12 +121,14 @@ public sealed class MuxKeys
         var prefixSpec = prefixOverride ?? file?.Prefix ?? DefaultPrefix;
         var prefix = KeyChord.Parse(prefixSpec) ?? throw new FormatException("the prefix is empty");
         log ??= _ => { };
+        var showIcons = file?.ShowIcons ?? true;
 
         return new MuxKeys(
             prefix,
             prefixSpec,
-            Tree(prefix.Label, file?.PrefixKeys, file?.Groups, log),
-            Bindings(WithExtra(DefaultDirectKeys, extraDirect), file?.Keys, log));
+            Tree(prefix.Label, file?.PrefixKeys, file?.Groups, showIcons ? Icons(file?.Icons, log) : [], log),
+            Bindings(WithExtra(DefaultDirectKeys, extraDirect), file?.Keys, log),
+            showIcons);
     }
 
     public static MuxKeys Load(
@@ -221,8 +233,35 @@ public sealed class MuxKeys
             .ToList();
     }
 
+    private static List<(KeyChord[] Path, string Icon)> Icons(Dictionary<string, string>? overrides, Action<string> log)
+    {
+        var icons = new Dictionary<string, string>(DefaultIcons, StringComparer.Ordinal);
+
+        foreach (var (spec, icon) in overrides ?? [])
+        {
+            var trimmed = icon.Trim();
+            if (!IsUnbound(trimmed) && (trimmed.Length != 1 || char.IsSurrogate(trimmed[0])))
+            {
+                log($"keys: icon for \"{spec}\" ignored, an icon is one character from the basic plane");
+                continue;
+            }
+
+            icons[spec] = trimmed;
+        }
+
+        return icons
+            .Where(kv => !IsUnbound(kv.Value))
+            .Select(kv => (Sequence(kv.Key).Chords, kv.Value))
+            .Where(i => i.Chords.Length > 0)
+            .ToList();
+    }
+
     private static KeyNode Tree(
-        string prefixLabel, Dictionary<string, string>? overrides, Dictionary<string, string>? groupOverrides, Action<string> log)
+        string prefixLabel,
+        Dictionary<string, string>? overrides,
+        Dictionary<string, string>? groupOverrides,
+        List<(KeyChord[] Path, string Icon)> icons,
+        Action<string> log)
     {
         var specs = new Dictionary<string, Entry>(StringComparer.Ordinal);
 
@@ -262,7 +301,9 @@ public sealed class MuxKeys
             {
                 var path = entry.Chords[..(i + 1)];
                 var label = groups.FirstOrDefault(g => g.Path.AsSpan().SequenceEqual(path)).Label;
-                node = node.Child(entry.Tokens[i], entry.Chords[i], label is { Length: > 0 } ? label : entry.Chords[i].Label);
+                var icon = icons.FirstOrDefault(g => g.Path.AsSpan().SequenceEqual(path)).Icon;
+                node = node.Child(
+                    entry.Tokens[i], entry.Chords[i], label is { Length: > 0 } ? label : entry.Chords[i].Label, icon);
             }
 
             var last = entry.Chords[^1];
@@ -350,6 +391,12 @@ public sealed class MuxKeysFile
 
     [JsonPropertyName("groups")]
     public Dictionary<string, string>? Groups { get; set; }
+
+    [JsonPropertyName("icons")]
+    public Dictionary<string, string>? Icons { get; set; }
+
+    [JsonPropertyName("showIcons")]
+    public bool? ShowIcons { get; set; }
 }
 
 [JsonSourceGenerationOptions(ReadCommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true)]

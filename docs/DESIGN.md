@@ -3472,6 +3472,11 @@ for the prefix. `prefix q r` reloads the file.
     "g": "git-ish stuff",   // the group's label; without one, the label is the key
     "q": "none"             // drops a default group and its children
   },
+  "icons": {
+    "g": "",          // a group's icon, keyed by the group's key
+    "w": "none"             // removes an icon
+  },
+  "showIcons": true,        // false turns every icon off (a terminal without a Nerd Font)
   "keys": { "ctrl+h": "none" }
 }
 ```
@@ -3510,6 +3515,18 @@ A key cannot be a leaf and a group on the same level. When they collide:
   `keys: "t x" ignored, "t" is already bound`.
 
 A group whose children are all unbound disappears.
+
+**Icons.** As in nvim which-key, submenu and fold rows get a Nerd Font icon in
+front of the label, in the row's label colour; plain keys get none. The
+defaults are float `` (window-restore), project `` (folder), session
+`` (power-off), focus `` (arrows), resize `` (expand) and go to
+tab `` (columns). The status bar's powerline caps already assume a Nerd
+Font. Icons are BMP private-use code points only (U+E000–U+F8FF), because the
+composer writes one `char` per cell and a surrogate pair would split; an
+`icons` entry that is not a single basic-plane character is dropped with a log
+line. `icons` covers default and user groups; the folds keep their built-in
+icons, and `"showIcons": false` turns off all of them. On the wire the icon is
+`WhichKeyEntry.icon`, left out when null, so an older daemon ignores it.
 
 **The wire.** `WhichKeyEntry.Group` marks a real submenu (drawn `+label` in
 blue); the display folds (`h j k l ➜ focus`, arrows, `1-9`) set the separate

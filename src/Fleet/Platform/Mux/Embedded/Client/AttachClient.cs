@@ -645,7 +645,7 @@ public sealed class AttachClient(
             new BadgeMessage
             {
                 Text = PrefixState.Breadcrumb,
-                Keys = WhichKey.For(PrefixState.Node ?? _keys.Root, _keys.Prefix),
+                Keys = WhichKey.For(PrefixState.Node ?? _keys.Root, _keys.Prefix, _keys.ShowIcons),
             },
             WireJsonContext.Default.BadgeMessage);
 

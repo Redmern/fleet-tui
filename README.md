@@ -387,7 +387,9 @@ On the built-in multiplexer, the `ctrl+s` popup has submenus: `ctrl+s f` › *fl
 `esc` closes the popup and `backspace` goes up a level. Prefix keys in
 `embedded-keys.json` can be sequences, and `groups` names them:
 `{ "prefixKeys": { "g s": "split-down" }, "groups": { "g": "git" } }`. Binding a group's
-key as a single key (`"f": "float-new"`) gives you the old flat key back. See
+key as a single key (`"f": "float-new"`) gives you the old flat key back. Groups and
+the focus / resize / tab rows show Nerd Font icons; `icons` changes a group's icon
+(`"none"` removes it) and `"showIcons": false` turns them off. See
 `docs/DESIGN.md` › *Keys* for the full table and the rules.
 
 ## The dashboard

@@ -14,13 +14,16 @@ public sealed class KeyNode
     private readonly List<MuxKeys.Binding> _leaves = [];
     private readonly List<KeyGroup> _groups = [];
 
-    public KeyNode(string label, KeyNode? parent = null)
+    public KeyNode(string label, KeyNode? parent = null, string? icon = null)
     {
         Label = label;
         Parent = parent;
+        Icon = icon;
     }
 
     public string Label { get; }
+
+    public string? Icon { get; }
 
     public KeyNode? Parent { get; }
 
@@ -75,14 +78,14 @@ public sealed class KeyNode
 
     internal void Add(MuxKeys.Binding leaf) => _leaves.Add(leaf);
 
-    internal KeyNode Child(string spec, KeyChord chord, string label)
+    internal KeyNode Child(string spec, KeyChord chord, string label, string? icon)
     {
         if (_groups.FirstOrDefault(g => g.Chord == chord) is { } existing)
         {
             return existing.Node;
         }
 
-        var node = new KeyNode(label, this);
+        var node = new KeyNode(label, this, icon);
         _groups.Add(new KeyGroup(spec, chord, chord.Bytes(), node));
         return node;
     }

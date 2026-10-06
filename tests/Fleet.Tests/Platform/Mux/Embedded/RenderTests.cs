@@ -114,6 +114,30 @@ public class RenderTests
     }
 
     [Fact]
+    public void Which_key_draws_an_icon_before_group_and_fold_labels_in_the_label_colour_with_aligned_columns()
+    {
+        List<WhichKeyEntry> entries =
+        [
+            new() { Key = "h j k l", Label = "focus", Fold = true, Icon = "" },
+            new() { Key = "f", Label = "float", Group = true, Icon = "" },
+            new() { Key = "%", Label = "split right" },
+        ];
+        var frame = ComposeWhichKey(80, 24, entries);
+        var area = Composer.WhichKeyArea(80, 24, entries);
+        var rows = Enumerable.Range(area.Y + 2, entries.Count).Select(y => frame.RowText(y)[area.X..]).ToList();
+
+        Assert.StartsWith("│ h j k l ➜  focus ", rows[0]);
+        Assert.StartsWith("│ f       ➜  +float ", rows[1]);
+        Assert.StartsWith("│ %       ➜ split right ", rows[2]);
+        Assert.Single(rows.Select(r => r.IndexOf('➜')).Distinct());
+
+        var icon = area.X + rows[0].IndexOf('');
+        Assert.Equal(Composer.Text, frame.At(icon, area.Y + 2).Fg);
+        Assert.Equal(Composer.Blue, frame.At(icon, area.Y + 3).Fg);
+        Assert.True(area.Width >= "h j k l".Length + 3 + " +float".Length + 4);
+    }
+
+    [Fact]
     public void The_which_key_box_sits_bottom_right_with_a_rounded_titled_border_padding_and_aligned_rows()
     {
         var entries = WhichKeyEntries(3);
