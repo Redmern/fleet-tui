@@ -40,6 +40,21 @@ public sealed class FleetCornersTests : IDisposable
     }
 
     [Fact]
+    public void A_tab_bar_goes_under_the_corner_buttons_across_the_full_width()
+    {
+        using var window = new Terminal.Gui.ViewBase.View { Width = 60, Height = 10 };
+        var tabs = new Terminal.Gui.ViewBase.View { X = 1, Y = 0, Height = 2 };
+        window.Add(tabs);
+
+        FleetCorners.Attach(window, () => { }, below: tabs);
+        window.Layout();
+
+        Assert.Equal(1, tabs.Frame.Y);
+        Assert.Equal(1, tabs.Frame.X);
+        Assert.Equal(58, tabs.Frame.Width);
+    }
+
+    [Fact]
     public void The_reveal_key_defaults_to_a_question_mark()
     {
         Assert.Equal("?", FleetKeyHints.RevealKey);

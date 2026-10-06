@@ -41,7 +41,7 @@ public static class FleetCorners
             new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
         ];
 
-    public static void Attach(View window, Action close, View? between = null, int top = 0)
+    public static void Attach(View window, Action close, View? below = null, int top = 0)
     {
         var help = new Corner(() => Help(FleetKeyHints.Shown, FleetKeyHints.RevealKey), FleetKeyHints.Toggle)
         {
@@ -57,10 +57,11 @@ public static class FleetCorners
 
         window.Add(help, shut);
 
-        if (between is not null)
+        if (below is not null)
         {
-            between.X = Pos.Right(help) + 1;
-            between.Width = Dim.Fill(11);
+            below.X = 1;
+            below.Y = Pos.Bottom(help);
+            below.Width = Dim.Fill(1);
         }
     }
 

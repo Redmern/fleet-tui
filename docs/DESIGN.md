@@ -5462,8 +5462,9 @@ conversation):
 - `Ui/FleetCorners.Attach` puts two buttons, drawn as the same pills as the bar chips, on the top row of a window's content:
   info (and the reveal key while keys are hidden) at the left, close at the right. They sit
   inside the content, not on the border, because a float pane draws no border.
-- The left corner keeps its width when the key goes, so a tab bar or caption beside it
-  (`between`) never shifts. Clicking it is `FleetKeyHints.Toggle`; the key it shows is
+- The left corner keeps its width when the key goes. A screen with a tab bar (or a caption)
+  on its top row passes it as `below`: it moves under the corners at full width, and the
+  content under it follows `Pos.Bottom`. Clicking it is `FleetKeyHints.Toggle`; the key it shows is
   `FleetKeyHints.RevealKey`, read from the keymap with the setting, so it follows a rebind.
 - The corner replaces the menu's pinned `? keys` chip and every bar's close/cancel/quit chip.
   Select and back stay on the bar as icon chips (`FleetIcons.Select`, `FleetIcons.Back`).
