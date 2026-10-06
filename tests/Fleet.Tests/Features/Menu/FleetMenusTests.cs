@@ -135,6 +135,18 @@ public class FleetMenusTests
         Assert.Null(RowFor(FleetAction.EditFleetConfig).Trailing);
     }
 
+    [Theory]
+    [InlineData(FleetAction.EditKeybinds)]
+    [InlineData(FleetAction.ViewLogs)]
+    [InlineData(FleetAction.OpenFleetConfigMenu)]
+    public void Settings_entries_that_open_a_screen_end_in_a_marker(FleetAction action)
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
+        var rows = ShowMenuHandler.Rows(items);
+
+        Assert.Equal("›", Assert.Single(rows[items.ToList().FindIndex(i => i.Action == action)].Trailing!).Text);
+    }
+
     [Fact]
     public void An_empty_section_brings_no_header()
     {

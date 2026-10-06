@@ -53,6 +53,8 @@ public static class FleetMenus
     [
         FleetAction.OpenSettings,
         FleetAction.OpenFleetConfigMenu,
+        FleetAction.EditKeybinds,
+        FleetAction.ViewLogs,
         FleetAction.EditAidlcMode,
         FleetAction.EditClaudeProfile,
         FleetAction.EditSettings,

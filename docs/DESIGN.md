@@ -4868,11 +4868,11 @@ m  Go to dashboard             w  Save window as session         V  Sub-orchestr
 p  Switch project              r  Remote machines                i  Auto-close idle agents     [30m]
 l  List agents                 ── configure ──                   A  AIDLC settings              ›
 e  Open editor here            c  Fleet config               ›   C  Claude profile              ›
-f  File navigator              k  Keybinds                       e  Edit fleet config file
+f  File navigator              k  Keybinds                   ›   e  Edit fleet config file
 n  Notifications               ── maintenance ──                 ── permissions ──
 s  Settings                ›   b  Rebuild the dashboard          p  Permissions                 ›
                                x  Clean up stale agents
-                               l  Show log
+                               l  Show log                   ›
 ```
 
 - **One tree, in `FleetMenus`** (`Features/Menu/ShowMenu`): each menu is a list of sections
@@ -4888,8 +4888,8 @@ s  Settings                ›   b  Rebuild the dashboard          p  Permission
   flips the setting, saves it and redraws the row, and the menu stays open. The `FleetPicker`
   float they opened before is gone. Auto-close shows `[off]` or `[30m]` but keeps its dialog,
   because turning it on also asks for minutes.
-- **`›`** marks the entries that lead to another menu or a settings screen (Settings, Fleet
-  config, AIDLC, Claude profile, Permissions).
+- **`›`** marks the entries that lead to another menu or screen (Settings, Fleet config,
+  Keybinds, Show log, AIDLC, Claude profile, Permissions).
 - **Keys are unique within a menu**, checked by a test over every menu. Clean up moved from `c`
   to `x` to free `c` for Fleet config; overrides in the keymap file keep working because no
   action id changed.
