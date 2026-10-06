@@ -1,6 +1,7 @@
 using System.Globalization;
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui.Constants;
 
@@ -41,6 +42,7 @@ public static class FleetMenus
             FleetAction.EditClaudeProfile,
             FleetAction.EditFleetConfig,
         ]),
+        new("models", ModelRows.Actions, FleetIcons.Models),
         new("permissions", [FleetAction.EditSettings], FleetIcons.Permissions),
     ];
 
@@ -92,8 +94,10 @@ public static class FleetMenus
 
     public static bool IsToggle(FleetAction action) => Toggles.Contains(action);
 
-    public static string? Value(FleetAction action, SettingsConfig settings) => action switch
+    public static string? Value(FleetAction action, SettingsConfig settings, RoleModel? head = null) => action switch
     {
+        _ when ModelRows.IsModelRow(action) =>
+            ModelRows.Value(ModelRows.Current(action, settings, head ?? SettingsDefaults.HeadModel)),
         FleetAction.EditMainOrchestratorInNvim => OnOff(settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => OnOff(settings.SubOrchestratorsInNvim),
         FleetAction.EditAutoClose => settings.AutoClose

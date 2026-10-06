@@ -10,6 +10,8 @@ public static class FleetIcons
 
     public const string Maintenance = "";
 
+    public const string Models = "";
+
     public const string Permissions = "";
 
     public static string? For(FleetAction action) => action switch
@@ -36,6 +38,10 @@ public static class FleetIcons
         FleetAction.EditClaudeProfile => "",
         FleetAction.EditFleetConfig => "",
         FleetAction.EditSettings => "",
+        FleetAction.EditHeadModel => "",
+        FleetAction.EditMainModel => "",
+        FleetAction.EditSubModel => "",
+        FleetAction.EditAgentModel => "",
         FleetAction.NewProject => "",
         FleetAction.OpenProject => "",
         FleetAction.RemoveProject => "",
