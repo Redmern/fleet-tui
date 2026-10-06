@@ -26,6 +26,8 @@ public sealed record SettingsConfig(
 
     public bool StatusHooks { get; init; } = SettingsDefaults.StatusHooks;
 
+    public bool SubagentGuidance { get; init; } = SettingsDefaults.SubagentGuidance;
+
     public RoleModels Models { get; init; } = SettingsDefaults.Models;
 
     public ToolRule RuleFor(HarnessTool tool) =>
@@ -66,6 +68,8 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithStatusHooks(bool on) => this with { StatusHooks = on };
 
+    public SettingsConfig WithSubagentGuidance(bool on) => this with { SubagentGuidance = on };
+
     public SettingsConfig WithModels(RoleModels models) => this with { Models = models };
 
     public SettingsConfig MergedOverDefaults()
@@ -93,6 +97,7 @@ public sealed record SettingsConfig(
             Merge)
         {
             StatusHooks = StatusHooks,
+            SubagentGuidance = SubagentGuidance,
             Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
         };
     }
@@ -112,5 +117,6 @@ public sealed record SettingsConfig(
                 .Append($"sub-nvim={SubOrchestratorsInNvim}")
                 .Append($"autoclose={AutoClose}:{AutoCloseMinutes}")
                 .Append($"hooks={StatusHooks}")
+                .Append($"subagents={SubagentGuidance}")
                 .Append(Models.Signature));
 }

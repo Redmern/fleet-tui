@@ -10,6 +10,7 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
 
@@ -347,5 +348,82 @@ public sealed class NewAgentTests : IDisposable
 
         public void Remove(string project, string worktree) =>
             Saved.RemoveAll(s => s.Project == project && s.Agent.Worktree == worktree);
+    }
+
+    [Fact]
+    public async Task With_subagent_guidance_on_a_repo_agent_launches_with_fleets_guidance_file()
+    {
+        var directory = await RepositoryAsync();
+        var asked = new List<string>();
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, subagentGuidance: project => { asked.Add(project); return true; })
+            .HandleAsync(Command(directory, "feat/x"));
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        var worktree = Path.Combine(directory, "feat_x");
+
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-backend-feat-x", SubagentGuidance.AppendFlag, SubagentGuidance.RelativePath],
+            _mux.ArgsFor(pane.Id));
+        Assert.Equal(SubagentGuidance.ForRepoAgents, File.ReadAllText(Path.Combine(worktree, SubagentGuidance.RelativePath)));
+        Assert.Equal(["techweb"], asked);
+    }
+
+    [Fact]
+    public async Task With_subagent_guidance_off_a_repo_agent_gets_no_flag_and_no_file()
+    {
+        var directory = await RepositoryAsync();
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, subagentGuidance: _ => false)
+            .HandleAsync(Command(directory, "feat/x"));
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.DoesNotContain(SubagentGuidance.AppendFlag, _mux.ArgsFor(pane.Id));
+        Assert.False(SubagentGuidance.IsIn(Path.Combine(directory, "feat_x")));
+    }
+
+    [Fact]
+    public async Task With_subagent_guidance_off_an_existing_worktree_loses_its_old_guidance_file()
+    {
+        var directory = await RepositoryAsync();
+        var worktree = Path.Combine(directory, "feat_x");
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, subagentGuidance: _ => true)
+            .HandleAsync(Command(directory, "feat/x"));
+        Assert.True(SubagentGuidance.IsIn(worktree));
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, subagentGuidance: _ => false)
+            .HandleAsync(Command(directory, "feat/x"));
+
+        Assert.False(SubagentGuidance.IsIn(worktree));
+        Assert.DoesNotContain(SubagentGuidance.AppendFlag, _mux.ArgsFor((await _mux.ListPanesAsync())[^1].Id));
+    }
+
+    [Fact]
+    public async Task A_directly_dispatched_agent_in_nvim_gets_the_guidance_through_claudecode()
+    {
+        var directory = await RepositoryAsync();
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, subagentGuidance: _ => true).HandleAsync(
+            new NewAgentCommand("techweb", "backend", directory, "feat/direct", "main", AgentHarness.Nvim, "main", Claude: true));
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Contains(
+            $"ClaudeCode --name techweb-backend-feat-direct {SubagentGuidance.AppendFlag} {SubagentGuidance.RelativePath}'",
+            _mux.ArgsFor(pane.Id)[2],
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_manual_nvim_agent_without_claude_gets_no_guidance_file()
+    {
+        var directory = await RepositoryAsync();
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, subagentGuidance: _ => true)
+            .HandleAsync(new NewAgentCommand("techweb", "backend", directory, "feature/notes", string.Empty, AgentHarness.Nvim));
+
+        Assert.False(SubagentGuidance.IsIn(Path.Combine(directory, "feature_notes")));
     }
 }

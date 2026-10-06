@@ -487,7 +487,8 @@ public static class DashboardWiring
         IReadOnlyList<AgentRecord> WithActivity(IReadOnlyList<AgentRecord> records) =>
             barPanes is null ? records : activity.For(records, barPanes, HookedNow());
 
-        var spawner = new NewAgentHandler(git, mux, agents, name => settings.Load(name).Models);
+        var spawner = new NewAgentHandler(
+            git, mux, agents, name => settings.Load(name).Models, name => settings.Load(name).SubagentGuidance);
         var hider = new HideAgentHandler(mux, agents);
         var editor = new OpenEditorHandler(mux);
         var branches = new ListBranchesHandler(git);

@@ -392,4 +392,18 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
         Assert.True(File.Exists(FleetPaths.HeadSettingsFile));
         Assert.Equal(SettingsDefaults.Models, Store.Load("head").Models);
     }
+
+    [Fact]
+    public void Subagent_guidance_is_on_by_default_and_stored_only_when_off()
+    {
+        Assert.True(Store.Load("never-saved").SubagentGuidance);
+
+        Store.Save("techweb", SettingsConfig.Default.WithSubagentGuidance(false));
+        Assert.False(Store.Load("techweb").SubagentGuidance);
+        Assert.Contains("subagentGuidance", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+
+        Store.Save("techweb", SettingsConfig.Default.WithSubagentGuidance(true));
+        Assert.True(Store.Load("techweb").SubagentGuidance);
+        Assert.DoesNotContain("subagentGuidance", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+    }
 }

@@ -6,13 +6,20 @@ public sealed record ClaudeLaunch(string Name, RoleModel Model)
 {
     public const string NameFlag = "--name";
 
+    public bool SubagentGuidance { get; init; }
+
     public IReadOnlyList<string> Arguments
     {
         get
         {
             var name = SessionNames.Part(Name);
 
-            return [.. name.Length == 0 ? [] : new[] { NameFlag, name }, .. Model.Arguments];
+            return
+            [
+                .. name.Length == 0 ? [] : new[] { NameFlag, name },
+                .. Model.Arguments,
+                .. SubagentGuidance ? new[] { Orchestrations.SubagentGuidance.AppendFlag, Orchestrations.SubagentGuidance.RelativePath } : [],
+            ];
         }
     }
 
@@ -22,8 +29,11 @@ public sealed record ClaudeLaunch(string Name, RoleModel Model)
         new(SessionNames.MainOrchestrator(project), models.Main);
 
     public static ClaudeLaunch ForAgent(
-        string project, string repository, string branch, bool orchestrator, RoleModels models) =>
+        string project, string repository, string branch, bool orchestrator, RoleModels models, string? worktree = null) =>
         new(
             SessionNames.ForAgent(project, repository, branch, orchestrator),
-            models.ForAgent(orchestrator));
+            models.ForAgent(orchestrator))
+        {
+            SubagentGuidance = !orchestrator && worktree is not null && Orchestrations.SubagentGuidance.IsIn(worktree),
+        };
 }

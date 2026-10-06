@@ -6,6 +6,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
@@ -13,7 +14,11 @@ using Fleet.Shared.Settings.Models;
 namespace Fleet.Features.Agents.NewAgent;
 
 public sealed class NewAgentHandler(
-    IGitRunner git, IMuxDriver mux, IAgentStore store, Func<string, RoleModels>? models = null)
+    IGitRunner git,
+    IMuxDriver mux,
+    IAgentStore store,
+    Func<string, RoleModels>? models = null,
+    Func<string, bool>? subagentGuidance = null)
 {
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
@@ -80,6 +85,11 @@ public sealed class NewAgentHandler(
 
         store.Save(command.ProjectName, agent);
 
+        SubagentGuidance.Apply(
+            agent.Worktree,
+            (agent.RunsClaude || !AgentHarness.HostedInNvim(agent.Harness))
+                && subagentGuidance?.Invoke(command.ProjectName) == true);
+
         var active = (await mux.ListPanesAsync(ct).ConfigureAwait(false)).FirstOrDefault(p => p.IsActive);
 
         var pane = await mux.SpawnAsync(
@@ -97,7 +107,8 @@ public sealed class NewAgentHandler(
                             agent.Repository,
                             agent.Branch,
                             orchestrator: false,
-                            models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models)),
+                            models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models,
+                            agent.Worktree)),
                     Env = AgentHarness.SpawnEnv(command.Harness),
                 }),
             ct).ConfigureAwait(false);
