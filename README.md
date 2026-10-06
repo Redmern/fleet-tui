@@ -207,10 +207,10 @@ of it, one key per entry. It opens as a tab, so no pane is resized, and closes
 itself when done.
 
 `backspace` goes back one level anywhere in the menu: from a screen to the menu or
-submenu it was opened from (Settings > Keybinds back to Settings, Settings back to
-the menu), and on the top level it closes the menu like `esc`. `esc` still closes the
-whole menu at once. In a text field `backspace` deletes what you typed and only goes
-back once the field is empty; the key-capture dialog in **Keybinds** records it as a key.
+submenu it was opened from (Permissions back to Fleet config, Fleet config back to
+Settings, Settings back to the menu), and on the top level it closes the menu like `esc`.
+`esc` still closes the whole menu at once. In a text field `backspace` deletes what you
+typed and only goes back once the field is empty; the key-capture dialog in **Keybinds** records it as a key.
 
 ```
 ╭┤ fleet menu ├──────────────────────╮
@@ -234,7 +234,7 @@ back once the field is empty; the key-capture dialog in **Keybinds** records it 
 
 ### Remote machines
 
-**Remote machines** (`r` in the fleet menu) connects this fleet to fleet on another
+**Remote machines** (`r` in the fleet menu's Settings) connects this fleet to fleet on another
 machine over ssh. `n` asks for the ssh host (for example `user@homelab`); fleet runs
 `ssh <host> fleet bridge` itself and, when ssh wants a password or asks to trust a new
 host key, shows the question in a small dialog. `d` disconnects, and `enter` answers or
@@ -277,7 +277,7 @@ fleet used directly on the remote machine opens the remote's own center.
 ### Sessions
 
 A session is a saved set of projects for one window. **Save window as session** (`w` in
-the fleet menu) stores the window's projects in their order, which one was showing, and
+the fleet menu's Settings) stores the window's projects in their order, which one was showing, and
 for a remote project the machine it runs on; saving under an existing name updates it.
 
 Running plain `fleet` in a terminal then shows **Projects** and **Sessions** tabs (`h`/`l`
@@ -447,7 +447,7 @@ lists it under Agents.
 
 **The branch is always kept** — removing an agent is not deleting work.
 
-**Auto-close idle agents** (fleet menu > settings, `i`) does the stop for you. It is
+**Auto-close idle agents** (fleet menu > settings > fleet config, `i`) does the stop for you. It is
 per project and off by default. When it is on, the project's dashboard stops an agent or
 sub-orchestrator that reported `done` or `failed` and has been idle for the threshold
 (30 minutes by default). "Idle" means no new report and no change in its pane's text
@@ -471,7 +471,8 @@ worktree, or `.fleet/orchestrations/<slug>` for a sub), titled `<repo>/<branch> 
 It splits beside the agent's pane; if that pane is closed or hidden it opens in the
 project window instead. Pressing `e` again focuses the editor rather than opening a
 second one. **Open editor here** in the fleet menu does the same for the agent whose
-pane you are in. The editor is a helper, not the agent: hiding or stopping the agent
+pane you are in; the entry only shows when the menu was opened from such a pane. The
+editor is a helper, not the agent: hiding or stopping the agent
 leaves it alone, and an agent with only its editor open still counts as not running.
 
 ### Hiding an agent
@@ -563,7 +564,7 @@ Code only honours a project's approval in a *trusted* workspace; fleet records t
 trust in `~/.claude.json` for every folder it opens, so there is no `/mcp` step.
 `fleet doctor` reports whether each project is registered and enabled.)
 
-**Permissions.** Press `s` then `p` in the menu (Settings, then Permissions) to say, per project and per tool, whether the
+**Permissions.** Press `s`, `c`, then `p` in the menu (Settings, Fleet config, then Permissions) to say, per project and per tool, whether the
 orchestrator may do the action, must ask, or can't. Reads are allowed by default;
 writes ask. An "ask" can prompt in the fleet dashboard, in Claude's own permission
 prompt, or both. When the prompt lives in the dashboard, the running dashboard shows
@@ -607,7 +608,7 @@ moves them to the Agents tab the same way. The approval prompt says when a `remo
 would delete the folder or the agents.
 
 **AIDLC.** A sub-orchestrator can run a structured process instead of free-form. Press
-`A` in the menu's Settings submenu to set it per project:
+`A` in the menu's Settings > Fleet config submenu to set it per project:
 
 - **Mode** — `off` (default), `on` (every dispatch), or `manual` (only when the task
   starts with a profile prefix).
@@ -722,7 +723,7 @@ never opens ssh to another remote: everything goes through the origin.
 project on a remote machine shows the origin's head over it, not a head on that machine.
 
 **Permissions.** What the head does inside a project goes through that project's own
-permissions (**Settings → Permissions**): `relay` is the project's `dispatch` rule, `tell`
+permissions (**Settings → Fleet config → Permissions**): `relay` is the project's `dispatch` rule, `tell`
 its `tell_agent` rule and `list_agents` its `list_agents` rule. `project_structure` checks each part
 under its own rule (`list_repositories`, `list_subs`, `list_agents`) and shows a refusal in that
 part's place. `show_agent` and `hide_agent` are its `set_agent_visible` rule, or `open_agent`

@@ -16,20 +16,46 @@ public class MenuBackTests
         File.ReadAllText(Path.Combine([RepoRoot, "src", "Fleet", .. path]));
 
     [Theory]
-    [InlineData(FleetAction.EditSettings)]
+    [InlineData(FleetAction.SaveSession)]
+    [InlineData(FleetAction.Remotes)]
     [InlineData(FleetAction.EditKeybinds)]
     [InlineData(FleetAction.ViewLogs)]
+    [InlineData(FleetAction.CleanupProject)]
+    [InlineData(FleetAction.RebuildDashboard)]
+    [InlineData(FleetAction.OpenFleetConfigMenu)]
+    public void A_settings_screen_goes_back_to_the_settings_menu(FleetAction action) =>
+        Assert.Equal(FleetAction.OpenSettings, MenuCommand.Parent(action));
+
+    [Theory]
+    [InlineData(FleetAction.EditSettings)]
+    [InlineData(FleetAction.EditFleetConfig)]
     [InlineData(FleetAction.EditAidlcMode)]
     [InlineData(FleetAction.EditAutoClose)]
     [InlineData(FleetAction.EditClaudeProfile)]
-    public void A_settings_screen_goes_back_to_the_settings_menu(FleetAction action) =>
-        Assert.Equal(FleetAction.OpenSettings, MenuCommand.Parent(action));
+    [InlineData(FleetAction.EditMainOrchestratorInNvim)]
+    public void A_fleet_config_screen_goes_back_to_the_fleet_config_menu(FleetAction action) =>
+        Assert.Equal(FleetAction.OpenFleetConfigMenu, MenuCommand.Parent(action));
+
+    [Fact]
+    public void Back_walks_up_one_level_at_a_time_from_the_deepest_screen()
+    {
+        var path = new List<FleetAction>();
+
+        for (var at = FleetAction.EditSettings; at != FleetAction.None; at = MenuCommand.Parent(at))
+        {
+            path.Add(at);
+        }
+
+        Assert.Equal(
+            [FleetAction.EditSettings, FleetAction.OpenFleetConfigMenu, FleetAction.OpenSettings],
+            path);
+    }
 
     [Theory]
     [InlineData(FleetAction.SwitchProject)]
     [InlineData(FleetAction.ListAgents)]
     [InlineData(FleetAction.Notifications)]
-    [InlineData(FleetAction.Remotes)]
+    [InlineData(FleetAction.OpenEditor)]
     [InlineData(FleetAction.QuitFleet)]
     [InlineData(FleetAction.OpenSettings)]
     public void A_top_level_screen_goes_back_to_the_fleet_menu(FleetAction action) =>

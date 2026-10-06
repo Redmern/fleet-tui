@@ -24,13 +24,18 @@ public sealed class FleetRowSource : IListDataSource
 
     private readonly List<int> _indexOf = [];
 
+    private readonly HashSet<int> _headers = [];
+
     public FleetRowSource(IEnumerable<FleetRow> rows, bool spaced = false)
         : this(rows.ToList(), null, spaced)
     {
     }
 
     public FleetRowSource(
-        IReadOnlyList<FleetRow> rows, IReadOnlyList<int>? gapsAfter, bool spaced = false)
+        IReadOnlyList<FleetRow> rows,
+        IReadOnlyList<int>? gapsAfter,
+        bool spaced = false,
+        IReadOnlyDictionary<int, FleetRow>? headersBefore = null)
     {
         var gaps = new HashSet<int>(gapsAfter ?? []);
 
@@ -38,6 +43,13 @@ public sealed class FleetRowSource : IListDataSource
 
         for (var i = 0; i < rows.Count; i++)
         {
+            if (headersBefore?.GetValueOrDefault(i) is { } header)
+            {
+                _headers.Add(_rows.Count);
+                _rows.Add(header);
+                _itemAt.Add(i);
+            }
+
             _indexOf.Add(_rows.Count);
             _rows.Add(rows[i]);
             _itemAt.Add(i);
@@ -82,7 +94,7 @@ public sealed class FleetRowSource : IListDataSource
         ListView listView, int item, int row, bool isMarked, bool markMultiple) => true;
 
     public bool Holds(int index) =>
-        index >= 0 && index < _rows.Count && _rows[index] is not null;
+        index >= 0 && index < _rows.Count && _rows[index] is not null && !_headers.Contains(index);
 
     public int ItemAt(int index) =>
         index <= 0 || _itemAt.Count == 0
@@ -113,6 +125,7 @@ public sealed class FleetRowSource : IListDataSource
     {
         var normal = listView.GetAttributeForRole(VisualRole.Normal);
         var entry = item >= 0 && item < _rows.Count ? _rows[item] : null;
+        selected = selected && !_headers.Contains(item);
 
         listView.Move(col, row);
 

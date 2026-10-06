@@ -51,4 +51,5 @@ public enum FleetAction
     EditAutoClose,
     OpenHead,
     OpenHeadVoice,
+    OpenFleetConfigMenu,
 }

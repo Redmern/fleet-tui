@@ -4345,8 +4345,9 @@ Until then the record's later stages stay `pending`; only Intake is marked done.
 
 ## Main and sub-orchestrators in nvim, per project, 2026-10-02
 
-Two per-project settings in *fleet menu > Settings* pick whether orchestrators are hosted in
-nvim (on, the default and the old behaviour) or run as bare `claude` (off):
+Two per-project settings in *fleet menu › Settings › Fleet config* pick whether orchestrators
+are hosted in nvim (on, the default and the old behaviour) or run as bare `claude` (off). They
+are plain toggles there (see "The fleet menu as a tree" below):
 
 - *Main orchestrator in nvim* (`v`): the project's own orchestrator, the pane in the project
   root that open project, switch/move project and rebuild dashboard start.
@@ -4854,6 +4855,50 @@ whatever the dashboard has selected. `show_agent` and `hide_agent` name the targ
 - **Remote.** The tools go over the existing `HeadAsync` link like `relay` and
   `list_agents`; the remote's head serves them through `ServeOriginAsync`, so the remote
   project's permissions apply there. Neither tool switches the terminal to the project.
+
+## The fleet menu as a tree, 2026-10-06
+
+The menu outgrew two flat lists: Settings had eleven unrelated entries, and session and
+remote entries sat on the top level next to everyday ones. It is now three levels:
+
+```
+fleet menu                     settings                          settings › fleet config
+Q  Quit fleet                  ── session ──                     v  Main orchestrator in nvim  [on]
+m  Go to dashboard             w  Save window as session         V  Sub-orchestrators in nvim  [off]
+p  Switch project              r  Remote machines                i  Auto-close idle agents     [30m]
+l  List agents                 ── configure ──                   A  AIDLC settings              ›
+e  Open editor here            c  Fleet config               ›   C  Claude profile              ›
+f  File navigator              k  Keybinds                   ›   e  Edit fleet config file
+n  Notifications               ── maintenance ──                 ── permissions ──
+s  Settings                ›   b  Rebuild the dashboard          p  Permissions                 ›
+                               x  Clean up stale agents
+                               l  Show log                   ›
+```
+
+- **One tree, in `FleetMenus`** (`Features/Menu/ShowMenu`): each menu is a list of sections
+  (an optional header plus actions), and a submenu is an action (`OpenSettings`,
+  `OpenFleetConfigMenu`, id `fleet-config-menu`) that maps to its sections. `MenuCommand.Parent`
+  looks an action up in that tree, so `bksp` goes up one level from any depth; before, it was a
+  `Contains` check that only knew Settings. `KeymapGroups` follows the same three groups, so the
+  keybinds screen reads like the menus; Open editor stays in the dashboard group, its first home.
+- **Headers are rows, not items.** `FleetRowSource` takes `headersBefore`; a header maps to the
+  item after it and `Holds` is false for it, so `KeepOffSpacers` steps over it like a gap and
+  item indices stay what the caller passed in.
+- **Toggles flip in place.** The two nvim settings show `[on]`/`[off]`; `enter` or their key
+  flips the setting, saves it and redraws the row, and the menu stays open. The `FleetPicker`
+  float they opened before is gone. Auto-close shows `[off]` or `[30m]` but keeps its dialog,
+  because turning it on also asks for minutes.
+- **`›`** marks the entries that lead to another menu or screen (Settings, Fleet config,
+  Keybinds, Show log, AIDLC, Claude profile, Permissions).
+- **Keys are unique within a menu**, checked by a test over every menu. Clean up moved from `c`
+  to `x` to free `c` for Fleet config; overrides in the keymap file keep working because no
+  action id changed.
+- **Open editor here only shows when it can work.** Before drawing the top level, the menu asks
+  `OpenEditorHandler.CanOpenEditorAsync` (a usable multiplexer, then `Caller` over the pane
+  list) and leaves the entry out when the menu was not opened from an agent or sub-orchestrator
+  pane. The action uses the same `CallerAsync`, and keeps its error dialog for a pane that went
+  away between drawing the menu and choosing the entry. It costs the top level one
+  `ListPanesAsync` before it opens; the driver is fail-silent, so a dead mux only hides the entry.
 
 ## Still to verify
 ## Still to verify

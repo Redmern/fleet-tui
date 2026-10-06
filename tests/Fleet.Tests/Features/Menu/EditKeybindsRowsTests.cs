@@ -45,7 +45,7 @@ public class EditKeybindsRowsTests
     public void The_settings_group_carries_view_logs()
     {
         var rows = EditKeybindsRows.Build();
-        var settings = KeymapGroups.All.Single(g => g.Label == "fleet menu > settings");
+        var settings = KeymapGroups.All.Single(g => g.Label == "fleet menu › settings");
 
         Assert.Contains(FleetAction.ViewLogs, settings.Actions);
         Assert.Contains(rows, r => r.Action == FleetAction.ViewLogs && !r.IsHeader);
