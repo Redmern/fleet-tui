@@ -1,4 +1,5 @@
 using Fleet.Features.Mcp.ServeMcp.Models;
+using Fleet.Ports.Mcp.Models;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
@@ -14,6 +15,11 @@ public static class McpGate
         HarnessTool.SetAgentVisible,
         HarnessTool.StopAgent,
     ];
+
+    public static IReadOnlyList<HarnessTool> Gated(HarnessTool tool, McpRequest request) =>
+        tool == HarnessTool.Dispatch && ToolArguments.Text(request, ToolArguments.Repository).Length > 0
+            ? [HarnessTool.Dispatch, HarnessTool.NewAgent]
+            : [tool];
 
     public static GateDecision Decide(HarnessTool tool, SettingsConfig settings, bool isSub = false)
     {

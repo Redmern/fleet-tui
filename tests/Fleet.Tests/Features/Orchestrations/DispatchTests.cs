@@ -12,6 +12,7 @@ using Fleet.Shared.Aidlc;
 using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
@@ -572,6 +573,174 @@ public sealed class DispatchTests : IDisposable
         Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(pane.Id));
         Assert.Equal(reply.Value!.Folder, pane.Cwd);
         Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], _mux.SentTo(pane.Id));
+    }
+
+    private readonly FakeStarter _starter = new();
+
+    private DispatchHandler Direct(AidlcMode mode = AidlcMode.Off, ISlugNamer? namer = null) =>
+        new(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            namer: namer,
+            settings: new FakeSettingsStore(
+                SettingsConfig.Default.WithAidlc(AidlcSettings.Default with { Mode = mode })),
+            intents: _intents,
+            starter: _starter);
+
+    private DispatchCommand ForRepository(
+        string prompt, string repository = "backend", string? branch = null, bool research = false) =>
+        new("techweb", _root, prompt, "techweb-main", Repository: repository, Branch: branch, Research: research);
+
+    [Fact]
+    public async Task With_a_repository_it_starts_a_repo_agent_and_no_sub_orchestrator()
+    {
+        var reply = await Direct().HandleAsync(ForRepository("fix the login timeout", branch: "fix/login"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Equal([new AgentStart("techweb", "backend", "fix/login", "fix the login timeout")], _starter.Started);
+        Assert.Empty(_store.Saved);
+        Assert.Empty(await _mux.ListPanesAsync());
+        Assert.False(Directory.Exists(OrchestrationPaths.Root(_root)));
+        Assert.Contains("backend/fix/login", reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task Without_a_branch_the_direct_agent_is_named_like_a_sub()
+    {
+        _store.Saved.Add(new AgentRecord(
+            "w", "backend", "fix-login-timeout", AgentHarness.Nvim, "main", RepositoryWasBare: false));
+
+        var reply = await Direct(namer: new FakeSlugNamer(name: "fix login timeout"))
+            .HandleAsync(ForRepository("please make the login page stop timing out"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Equal("fix-login-timeout-2", _starter.Started.Single().Branch);
+    }
+
+    [Fact]
+    public async Task A_derived_branch_skips_a_branch_that_already_exists_in_git()
+    {
+        _starter.Branches.AddRange(["main", "fix-login-timeout"]);
+
+        var reply = await Direct(namer: new FakeSlugNamer(name: "fix login timeout"))
+            .HandleAsync(ForRepository("please make the login page stop timing out"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Equal("fix-login-timeout-2", _starter.Started.Single().Branch);
+    }
+
+    [Fact]
+    public async Task A_blank_branch_is_derived_like_a_missing_one()
+    {
+        var reply = await Direct(namer: new FakeSlugNamer(name: "fix login timeout"))
+            .HandleAsync(ForRepository("fix it", branch: "  "), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Equal("fix-login-timeout", _starter.Started.Single().Branch);
+    }
+
+    [Fact]
+    public async Task A_repository_left_to_a_sub_is_mentioned_in_the_reply()
+    {
+        var reply = await Direct(AidlcMode.On).HandleAsync(ForRepository("fix the login timeout"), "t");
+
+        Assert.Contains("repository was not used", reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task Without_a_repository_the_reply_says_nothing_about_one()
+    {
+        var reply = await Direct().HandleAsync(Command("fix the login timeout"), "t");
+
+        Assert.DoesNotContain("repository was not used", reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task Without_a_repository_the_starter_is_never_used()
+    {
+        var reply = await Direct().HandleAsync(Command("fix the login timeout"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Empty(_starter.Started);
+        Assert.Single(_store.Saved, a => AgentHarness.IsOrchestrator(a.Harness));
+    }
+
+    [Fact]
+    public async Task With_aidlc_on_a_repository_still_gets_a_sub_orchestrator()
+    {
+        var reply = await Direct(AidlcMode.On).HandleAsync(ForRepository("fix the login timeout"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Empty(_starter.Started);
+        Assert.Contains("## Process", InstructionsOf(reply.Value!));
+    }
+
+    [Fact]
+    public async Task A_failed_start_is_the_dispatch_error()
+    {
+        _starter.Fails = "No repository named 'backend' in this project.";
+
+        var reply = await Direct().HandleAsync(ForRepository("fix it"), "t");
+
+        Assert.False(reply.Succeeded);
+        Assert.Equal(_starter.Fails, reply.Error);
+    }
+
+    [Fact]
+    public async Task Without_a_starter_a_repository_is_refused_rather_than_ignored()
+    {
+        var reply = await Handler.HandleAsync(ForRepository("fix it"), "t");
+
+        Assert.False(reply.Succeeded);
+        Assert.Equal(DispatchNote.NoDirect, reply.Error);
+        Assert.Empty(_store.Saved);
+    }
+
+    [Fact]
+    public async Task Research_gets_a_sub_with_the_research_brief_even_with_a_repository()
+    {
+        var reply = await Direct().HandleAsync(ForRepository("compare caching options", research: true), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Empty(_starter.Started);
+        Assert.Contains(OrchestrationText.Research.Trim(), InstructionsOf(reply.Value!));
+    }
+
+    [Fact]
+    public async Task The_research_profile_gets_the_research_brief()
+    {
+        var reply = await Direct(AidlcMode.Manual).HandleAsync(Command("research: compare caching options"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Contains(OrchestrationText.Research.Trim(), InstructionsOf(reply.Value!));
+    }
+
+    [Fact]
+    public async Task Other_dispatches_get_no_research_brief()
+    {
+        var reply = await Direct(AidlcMode.Manual).HandleAsync(Command("feature: add oauth"), "t");
+
+        Assert.DoesNotContain(OrchestrationText.Research.Trim(), InstructionsOf(reply.Value!));
+    }
+
+    private sealed class FakeStarter : IAgentStarter
+    {
+        public List<AgentStart> Started { get; } = [];
+
+        public string? Fails { get; set; }
+
+        public List<string> Branches { get; } = [];
+
+        public Task<IReadOnlyCollection<string>> BranchesAsync(
+            string project, string repository, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyCollection<string>>(Branches);
+
+        public Task<Result<string>> StartAsync(AgentStart request, CancellationToken ct = default)
+        {
+            Started.Add(request);
+
+            return Task.FromResult(
+                Fails is { } reason ? Result<string>.Fail(reason) : Result<string>.Ok("started."));
+        }
     }
 
     private sealed class FakeSettingsStore(SettingsConfig config) : ISettingsStore

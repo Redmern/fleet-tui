@@ -61,11 +61,18 @@ public static class OrchestrationText
         pushing on with one you no longer believe.
         """;
 
+    public const string Research =
+        """
+        This is research. Do not start repository agents: no new_agent, no tell_agent.
+        Do the work yourself with background subagents, or /deep-research, and put
+        the result in reports/.
+        """;
+
     public static bool IsClassicAidlc(string text) =>
         string.Equals(Normalized(text), Normalized(ClassicAidlc), StringComparison.Ordinal);
 
     public static string Instructions(
-        OrchestrationBrief brief, string? howYouWork = null, string? aidlc = null)
+        OrchestrationBrief brief, string? howYouWork = null, string? aidlc = null, bool research = false)
     {
         var header =
             $"""
@@ -79,14 +86,13 @@ public static class OrchestrationText
             Read TASK.md. It holds the request verbatim. Do not edit it.
             """;
 
+        var waiting = research ? string.Empty : $"\n## Waiting for agents\n{WaitingForAgents}\n";
+
         var footer =
             $"""
             ## How you work
             {(string.IsNullOrWhiteSpace(howYouWork) ? DefaultHowYouWork : howYouWork.Trim())}
-
-            ## Waiting for agents
-            {WaitingForAgents}
-
+            {waiting}
             ## Reporting
             Write REPORT.md in this folder as you go: what you decided, which agents you
             started, what is left. Longer artefacts go in reports/.
@@ -100,6 +106,11 @@ public static class OrchestrationText
         if (!string.IsNullOrWhiteSpace(aidlc))
         {
             sections.Add($"## Process\n{aidlc.Trim()}");
+        }
+
+        if (research)
+        {
+            sections.Add($"## Research\n{Research.Trim()}");
         }
 
         sections.Add(footer);
