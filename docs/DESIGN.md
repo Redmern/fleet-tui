@@ -5459,7 +5459,7 @@ conversation):
 
 ## Corner icons on menus and dialogs, 2026-10-06
 
-- `Ui/FleetCorners.Attach` puts two clickable icons on the top row of a window's content:
+- `Ui/FleetCorners.Attach` puts two buttons, drawn as the same pills as the bar chips, on the top row of a window's content:
   info (and the reveal key while keys are hidden) at the left, close at the right. They sit
   inside the content, not on the border, because a float pane draws no border.
 - The left corner keeps its width when the key goes, so a tab bar or caption beside it

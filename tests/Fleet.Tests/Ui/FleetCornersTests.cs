@@ -10,9 +10,11 @@ public sealed class FleetCornersTests : IDisposable
     public void Dispose() => FleetKeyHints.Reset();
 
     [Fact]
-    public void The_help_corner_shows_the_reveal_key_beside_the_info_icon_while_keys_are_hidden()
+    public void The_help_corner_is_a_button_with_the_reveal_key_and_the_info_icon_while_keys_are_hidden()
     {
-        Assert.Equal($"{FleetIcons.Info} ?", string.Concat(FleetCorners.Help(keysShown: false, "?").Select(s => s.Text)));
+        Assert.Equal(
+            $"{FleetGlyphs.PillLeft} ? {FleetIcons.Info} {FleetGlyphs.PillRight}",
+            string.Concat(FleetCorners.Help(keysShown: false, "?").Select(s => s.Text)));
     }
 
     [Fact]
@@ -21,14 +23,16 @@ public sealed class FleetCornersTests : IDisposable
         var hidden = string.Concat(FleetCorners.Help(keysShown: false, "ctrl+k").Select(s => s.Text));
         var shown = string.Concat(FleetCorners.Help(keysShown: true, "ctrl+k").Select(s => s.Text));
 
-        Assert.Equal($"{FleetIcons.Info}       ", shown);
+        Assert.Equal($"{FleetGlyphs.PillLeft} {FleetIcons.Info} {FleetGlyphs.PillRight}       ", shown);
         Assert.Equal(hidden.Length, shown.Length);
     }
 
     [Fact]
-    public void The_close_corner_is_the_close_icon()
+    public void The_close_corner_is_a_button_with_the_close_icon()
     {
-        Assert.Equal(FleetIcons.Close, Assert.Single(FleetCorners.Close()).Text);
+        Assert.Equal(
+            $"{FleetGlyphs.PillLeft} {FleetIcons.Close} {FleetGlyphs.PillRight}",
+            string.Concat(FleetCorners.Close().Select(s => s.Text)));
         Assert.Equal(FleetIcons.Close, FleetIcons.For(Fleet.Shared.Keymap.Enums.FleetAction.Close));
     }
 

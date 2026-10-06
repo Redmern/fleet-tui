@@ -7,14 +7,28 @@ namespace Fleet.Ui;
 
 public static class FleetCorners
 {
-    public static IReadOnlyList<FleetSpan> Help(bool keysShown, string revealKey) =>
-    [
-        new FleetSpan(FleetIcons.Info, FleetTones.Icon),
-        FleetSpan.Plain(" "),
-        keysShown ? FleetSpan.Plain(new string(' ', revealKey.Length)) : new FleetSpan(revealKey, FleetTones.Key),
-    ];
+    public static IReadOnlyList<FleetSpan> Help(bool keysShown, string revealKey) => keysShown
+        ?
+        [
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {FleetIcons.Info} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+            FleetSpan.Plain(new string(' ', revealKey.Length + 1)),
+        ]
+        :
+        [
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {revealKey} ", FleetTones.ChipKey),
+            new FleetSpan($"{FleetIcons.Info} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+        ];
 
-    public static IReadOnlyList<FleetSpan> Close() => [new FleetSpan(FleetIcons.Close, FleetTones.Icon)];
+    public static IReadOnlyList<FleetSpan> Close() =>
+    [
+        new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+        new FleetSpan($" {FleetIcons.Close} ", FleetTones.ChipLabel),
+        new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+    ];
 
     public static void Attach(View window, Action close, View? between = null)
     {
@@ -26,7 +40,7 @@ public static class FleetCorners
 
         var shut = new Corner(Close, close)
         {
-            X = Pos.AnchorEnd(2),
+            X = Pos.AnchorEnd(6),
             Y = 0,
         };
 
@@ -35,7 +49,7 @@ public static class FleetCorners
         if (between is not null)
         {
             between.X = Pos.Right(help) + 1;
-            between.Width = Dim.Fill(3);
+            between.Width = Dim.Fill(7);
         }
     }
 
