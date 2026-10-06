@@ -14,6 +14,8 @@ public class EditKeybindsGridTests
 
     private static string Key(EditKeybindsRow row) => "k";
 
+    private static string Text(IReadOnlyList<Fleet.Ui.Models.FleetSpan> line) => string.Concat(line.Select(s => s.Text));
+
     [Fact]
     public void The_prefix_gets_its_own_box_first_and_every_group_follows_in_order()
     {
@@ -33,6 +35,46 @@ public class EditKeybindsGridTests
     public void Header_rows_never_become_cells()
     {
         Assert.All(RealBoxes().SelectMany(b => b.Cells), c => Assert.False(c.IsHeader));
+    }
+
+    [Theory]
+    [InlineData("fleet menu", EditKeybindsGrid.MenusTab)]
+    [InlineData("fleet menu > settings", EditKeybindsGrid.MenusTab)]
+    [InlineData("fleet menu › settings › fleet config", EditKeybindsGrid.MenusTab)]
+    [InlineData("notifications", EditKeybindsGrid.MenusTab)]
+    [InlineData("dashboard", EditKeybindsGrid.DashboardTab)]
+    [InlineData("project picker", EditKeybindsGrid.DashboardTab)]
+    [InlineData(EditKeybindsGrid.PrefixTitle, EditKeybindsGrid.NavigationTab)]
+    [InlineData("navigation", EditKeybindsGrid.NavigationTab)]
+    [InlineData("anywhere, no prefix", EditKeybindsGrid.NavigationTab)]
+    [InlineData("something new", EditKeybindsGrid.OtherTab)]
+    public void Each_group_lands_on_its_tab(string group, string tab)
+    {
+        Assert.Equal(tab, EditKeybindsGrid.TabFor(group));
+    }
+
+    [Fact]
+    public void The_real_groups_fill_menus_dashboard_and_navigation_and_lose_nothing()
+    {
+        var boxes = RealBoxes();
+        var tabs = EditKeybindsGrid.Tabs(boxes);
+
+        Assert.Equal(
+            [EditKeybindsGrid.MenusTab, EditKeybindsGrid.DashboardTab, EditKeybindsGrid.NavigationTab],
+            tabs.Select(t => t.Title));
+        Assert.Equal(EditKeybindsGrid.PrefixTitle, tabs[2].Boxes[0].Title);
+        Assert.Equal(
+            boxes.Select(b => b.Title).Order(),
+            tabs.SelectMany(t => t.Boxes).Select(b => b.Title).Order());
+    }
+
+    [Fact]
+    public void An_unknown_group_goes_on_a_last_other_tab_and_empty_tabs_are_left_out()
+    {
+        var tabs = EditKeybindsGrid.Tabs([Box("weird", 1), Box("dashboard", 1), Box("odd", 2)]);
+
+        Assert.Equal([EditKeybindsGrid.DashboardTab, EditKeybindsGrid.OtherTab], tabs.Select(t => t.Title));
+        Assert.Equal(["weird", "odd"], tabs[1].Boxes.Select(b => b.Title));
     }
 
     [Theory]
@@ -83,12 +125,12 @@ public class EditKeybindsGridTests
         var layout = EditKeybindsGrid.Layout(boxes, 1, 15);
 
         Assert.Equal(1, layout.Columns);
-        Assert.Equal([0, 4, 9], layout.TopOf);
+        Assert.Equal([0, 5, 11], layout.TopOf);
         Assert.Equal(15, layout.ColumnWidth);
     }
 
     [Fact]
-    public void Down_and_up_walk_the_cells_and_wrap_from_box_to_box()
+    public void Down_and_up_walk_the_cells_in_reading_order_and_flow_from_box_to_box()
     {
         var boxes = new[] { Box("a", 2), Box("b", 3) };
 
@@ -102,62 +144,49 @@ public class EditKeybindsGridTests
     }
 
     [Fact]
-    public void Left_and_right_move_to_the_box_beside_on_the_same_line_and_wrap()
+    public void A_kept_selection_is_clamped_into_the_boxes()
     {
-        var boxes = new[] { Box("a", 4), Box("b", 4), Box("c", 1), Box("d", 2) };
-        var layout = EditKeybindsGrid.Layout(boxes, 1, 200);
+        var boxes = new[] { Box("a", 2), Box("b", 3) };
 
-        Assert.Equal(3, layout.Columns);
-        Assert.Equal([0, 1, 2, 2], layout.ColumnOf);
-
-        Assert.Equal(new EditKeybindsSpot(1, 2), EditKeybindsGrid.Right(boxes, layout, new(0, 2)));
-        Assert.Equal(new EditKeybindsSpot(3, 0), EditKeybindsGrid.Right(boxes, layout, new(1, 3)));
-        Assert.Equal(new EditKeybindsSpot(0, 0), EditKeybindsGrid.Right(boxes, layout, new(2, 0)));
-        Assert.Equal(new EditKeybindsSpot(2, 0), EditKeybindsGrid.Left(boxes, layout, new(0, 0)));
-        Assert.Equal(new EditKeybindsSpot(0, 3), EditKeybindsGrid.Left(boxes, layout, new(1, 3)));
-    }
-
-    [Fact]
-    public void In_one_column_left_and_right_step_between_boxes()
-    {
-        var boxes = new[] { Box("a", 4), Box("b", 2) };
-        var layout = EditKeybindsGrid.Layout(boxes, 1, 20);
-
-        Assert.Equal(1, layout.Columns);
-        Assert.Equal(new EditKeybindsSpot(1, 1), EditKeybindsGrid.Right(boxes, layout, new(0, 3)));
-        Assert.Equal(new EditKeybindsSpot(1, 0), EditKeybindsGrid.Left(boxes, layout, new(0, 0)));
+        Assert.Equal(new EditKeybindsSpot(1, 2), EditKeybindsGrid.Clamp(boxes, new(1, 2)));
+        Assert.Equal(new EditKeybindsSpot(1, 2), EditKeybindsGrid.Clamp(boxes, new(5, 9)));
+        Assert.Equal(new EditKeybindsSpot(0, 0), EditKeybindsGrid.Clamp(boxes, new(-1, -1)));
     }
 
     [Fact]
     public void Every_drawn_line_is_as_wide_as_the_grid()
     {
-        var boxes = RealBoxes();
-
-        foreach (var width in new[] { 40, 90, 160 })
+        foreach (var tab in EditKeybindsGrid.Tabs(RealBoxes()))
         {
-            var layout = EditKeybindsGrid.Layout(boxes, EditKeybindsGrid.KeyWidth(boxes, Key), width);
-            var picture = EditKeybindsGrid.Draw(boxes, layout, Key, new(0, 0));
-            var expected = layout.Columns * layout.ColumnWidth + (layout.Columns - 1) * EditKeybindsGrid.Gap;
+            foreach (var width in new[] { 40, 90, 160 })
+            {
+                var layout = EditKeybindsGrid.Layout(tab.Boxes, EditKeybindsGrid.KeyWidth(tab.Boxes, Key), width);
+                var picture = EditKeybindsGrid.Draw(tab.Boxes, layout, Key, new(0, 0));
+                var expected = layout.Columns * layout.ColumnWidth + (layout.Columns - 1) * EditKeybindsGrid.Gap;
 
-            Assert.All(picture.Lines, line => Assert.Equal(expected, line.Sum(s => s.Text.Length)));
+                Assert.All(picture.Lines, line => Assert.Equal(expected, line.Sum(s => s.Text.Length)));
+            }
         }
     }
 
     [Fact]
-    public void A_box_has_a_titled_top_edge_and_keys_sit_left_in_the_key_tone()
+    public void A_box_has_a_title_a_header_row_and_action_then_key_cells()
     {
         var boxes = new[] { Box("dash", 2) };
         var layout = EditKeybindsGrid.Layout(boxes, 3, 30);
 
         var picture = EditKeybindsGrid.Draw(boxes, layout, r => r.Label.EndsWith('0') ? "Spc" : "r", new(0, 0));
-        var text = picture.Lines.Select(l => string.Concat(l.Select(s => s.Text))).ToList();
+        var text = picture.Lines.Select(Text).ToList();
 
+        Assert.Equal(30, layout.ColumnWidth);
         Assert.StartsWith("╭ dash ─", text[0]);
-        Assert.StartsWith("│ Spc  dash 0", text[1]);
-        Assert.StartsWith("│ r    dash 1", text[2]);
-        Assert.StartsWith("╰─", text[3]);
-        Assert.Contains(picture.Lines[1], s => s.Tone == FleetTones.Key && s.Text == "Spc");
-        Assert.Contains(picture.Lines[2], s => s.Tone == FleetTones.Key && s.Text == "r  ");
+        Assert.Equal("│ " + "action".PadRight(20) + " │ key │", text[1]);
+        Assert.Equal("│ " + "dash 0".PadRight(20) + " │ Spc │", text[2]);
+        Assert.Equal("│ " + "dash 1".PadRight(20) + " │ r   │", text[3]);
+        Assert.StartsWith("╰─", text[4]);
+        Assert.Contains(picture.Lines[1], s => s.Tone == FleetTones.Muted && s.Text.StartsWith("action"));
+        Assert.Contains(picture.Lines[2], s => s.Tone == FleetTones.Key && s.Text == "Spc");
+        Assert.Contains(picture.Lines[3], s => s.Tone == FleetTones.Key && s.Text == "r  ");
     }
 
     [Fact]
@@ -169,7 +198,8 @@ public class EditKeybindsGridTests
         var picture = EditKeybindsGrid.Draw(boxes, layout, Key, new(1, 1));
         var left = layout.Left(1);
 
-        Assert.Equal((2, left + 1, left + layout.ColumnWidth - 1), picture.Highlight);
+        Assert.Equal(2, layout.Columns);
+        Assert.Equal((3, left + 1, left + layout.ColumnWidth - 1), picture.Highlight);
     }
 
     [Fact]
@@ -178,7 +208,7 @@ public class EditKeybindsGridTests
         var boxes = new[] { new EditKeybindsBox("t", [new EditKeybindsRow(new string('x', 50), FleetAction.Refresh, false)]) };
         var layout = EditKeybindsGrid.Layout(boxes, 1, 20);
 
-        var line = string.Concat(EditKeybindsGrid.Draw(boxes, layout, Key, new(0, 0)).Lines[1].Select(s => s.Text));
+        var line = Text(EditKeybindsGrid.Draw(boxes, layout, Key, new(0, 0)).Lines[2]);
 
         Assert.Equal(20, line.Length);
         Assert.Contains("…", line);
@@ -186,11 +216,11 @@ public class EditKeybindsGridTests
     }
 
     [Fact]
-    public void The_key_column_is_as_wide_as_the_longest_key()
+    public void The_key_column_is_as_wide_as_the_longest_key_and_its_heading()
     {
         var boxes = new[] { Box("a", 2) };
 
-        Assert.Equal(1, EditKeybindsGrid.KeyWidth(boxes, _ => string.Empty));
+        Assert.Equal(EditKeybindsGrid.KeyHeading.Length, EditKeybindsGrid.KeyWidth(boxes, _ => string.Empty));
         Assert.Equal(9, EditKeybindsGrid.KeyWidth(boxes, r => r.Label.EndsWith('1') ? "ctrl+bksp" : "q"));
     }
 }

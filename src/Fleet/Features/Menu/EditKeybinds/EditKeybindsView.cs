@@ -17,25 +17,33 @@ public static class EditKeybindsView
     public static KeymapConfig Show(IApplication app, IKeymapStore store, Keymap keymap)
     {
         var config = keymap.Config;
-        var boxes = EditKeybindsGrid.Boxes(EditKeybindsRows.Build());
+        var tabs = EditKeybindsGrid.Tabs(EditKeybindsGrid.Boxes(EditKeybindsRows.Build()));
+        var current = 0;
         var spot = EditKeybindsGrid.First();
-        var layout = EditKeybindsGrid.Layout(boxes, 1, 1);
 
         var window = FleetTheme.Overlay("Keybinds");
-        var canvas = new FleetCanvas(1, 1, Dim.Fill(3));
+        var tabBar = FleetTheme.TabBar(1, 0, [.. tabs.Select(t => t.Title)]);
+        var canvas = new FleetCanvas(1, Pos.Bottom(tabBar.Root), Dim.Fill(3));
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(3), string.Empty);
+
+        IReadOnlyList<EditKeybindsBox> Boxes() => tabs.Count == 0 ? [] : tabs[current].Boxes;
 
         string KeyOf(EditKeybindsRow row) =>
             FleetKeyText.Display(row.Action is null ? config.Prefix : Binding(config, row.Action.Value));
 
         void Fill()
         {
+            var boxes = Boxes();
+
             if (boxes.Count == 0)
             {
                 return;
             }
 
-            layout = EditKeybindsGrid.Layout(
+            spot = EditKeybindsGrid.Clamp(boxes, spot);
+            tabBar.Select(current);
+
+            var layout = EditKeybindsGrid.Layout(
                 boxes, EditKeybindsGrid.KeyWidth(boxes, KeyOf), canvas.Viewport.Width);
 
             var picture = EditKeybindsGrid.Draw(boxes, layout, KeyOf, spot);
@@ -48,8 +56,22 @@ public static class EditKeybindsView
             Fill();
         }
 
+        void SwitchTo(int tab)
+        {
+            if (tabs.Count == 0 || tab == current)
+            {
+                return;
+            }
+
+            current = tab;
+            spot = EditKeybindsGrid.First();
+            Fill();
+        }
+
         void Rebind()
         {
+            var boxes = Boxes();
+
             if (boxes.Count == 0)
             {
                 return;
@@ -75,6 +97,7 @@ public static class EditKeybindsView
         }
 
         canvas.FrameChanged += (_, _) => Fill();
+        tabBar.Chosen += SwitchTo;
 
         canvas.KeyDown += (_, key) =>
         {
@@ -93,6 +116,8 @@ public static class EditKeybindsView
                 return;
             }
 
+            var boxes = Boxes();
+
             if (boxes.Count == 0)
             {
                 return;
@@ -102,6 +127,14 @@ public static class EditKeybindsView
             {
                 Rebind();
             }
+            else if (key == Key.CursorLeft || key == keymap.KeyFor(FleetAction.PrevTab))
+            {
+                SwitchTo((current - 1 + tabs.Count) % tabs.Count);
+            }
+            else if (key == Key.CursorRight || key == keymap.KeyFor(FleetAction.NextTab))
+            {
+                SwitchTo((current + 1) % tabs.Count);
+            }
             else if (key == Key.CursorDown || key == keymap.KeyFor(FleetAction.MoveDown))
             {
                 Move(EditKeybindsGrid.Down(boxes, spot));
@@ -109,14 +142,6 @@ public static class EditKeybindsView
             else if (key == Key.CursorUp || key == keymap.KeyFor(FleetAction.MoveUp))
             {
                 Move(EditKeybindsGrid.Up(boxes, spot));
-            }
-            else if (key == Key.CursorLeft || key == keymap.KeyFor(FleetAction.PrevTab))
-            {
-                Move(EditKeybindsGrid.Left(boxes, layout, spot));
-            }
-            else if (key == Key.CursorRight || key == keymap.KeyFor(FleetAction.NextTab))
-            {
-                Move(EditKeybindsGrid.Right(boxes, layout, spot));
             }
             else if (key == Key.Home || key == keymap.KeyFor(FleetAction.MoveFirst))
             {
@@ -134,7 +159,7 @@ public static class EditKeybindsView
             key.Handled = true;
         };
 
-        window.Add(canvas, status, FleetTheme.HintBar(FleetHints.Keybinds));
+        window.Add(tabBar.Root, canvas, status, FleetTheme.HintBar(FleetHints.Keybinds));
 
         FleetModal.Enter();
 

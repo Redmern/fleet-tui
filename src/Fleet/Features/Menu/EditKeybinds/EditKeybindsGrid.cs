@@ -5,6 +5,8 @@ namespace Fleet.Features.Menu.EditKeybinds;
 
 public sealed record EditKeybindsBox(string Title, IReadOnlyList<EditKeybindsRow> Cells);
 
+public sealed record EditKeybindsTab(string Title, IReadOnlyList<EditKeybindsBox> Boxes);
+
 public readonly record struct EditKeybindsSpot(int Box, int Cell);
 
 public sealed record EditKeybindsLayout(
@@ -16,7 +18,7 @@ public sealed record EditKeybindsLayout(
 {
     public int Left(int column) => column * (ColumnWidth + EditKeybindsGrid.Gap);
 
-    public int LineOf(EditKeybindsSpot spot) => TopOf[spot.Box] + 1 + spot.Cell;
+    public int LineOf(EditKeybindsSpot spot) => TopOf[spot.Box] + 2 + spot.Cell;
 }
 
 public sealed record EditKeybindsPicture(
@@ -29,9 +31,31 @@ public static class EditKeybindsGrid
 
     public const string PrefixTitle = "prefix";
 
+    public const string MenusTab = "menus";
+
+    public const string DashboardTab = "dashboard";
+
+    public const string NavigationTab = "navigation";
+
+    public const string OtherTab = "other";
+
+    public const string ActionHeading = "action";
+
+    public const string KeyHeading = "key";
+
+    private const string MenuGroupStart = "fleet menu";
+
+    private const string Separator = " │ ";
+
     private const int MaxColumns = 3;
 
-    private const int KeyGap = 2;
+    private const int Chrome = 4 + 3;
+
+    private static readonly string[] MenuGroups = ["notifications"];
+
+    private static readonly string[] DashboardGroups = ["dashboard", "project picker"];
+
+    private static readonly string[] NavigationGroups = [PrefixTitle, "navigation", "anywhere, no prefix"];
 
     public static IReadOnlyList<EditKeybindsBox> Boxes(IReadOnlyList<EditKeybindsRow> rows)
     {
@@ -66,14 +90,26 @@ public static class EditKeybindsGrid
         return boxes;
     }
 
-    public static int Height(EditKeybindsBox box) => box.Cells.Count + 2;
+    public static string TabFor(string group) =>
+        group.StartsWith(MenuGroupStart, StringComparison.Ordinal) || MenuGroups.Contains(group) ? MenusTab
+        : DashboardGroups.Contains(group) ? DashboardTab
+        : NavigationGroups.Contains(group) ? NavigationTab
+        : OtherTab;
+
+    public static IReadOnlyList<EditKeybindsTab> Tabs(IReadOnlyList<EditKeybindsBox> boxes) =>
+        [..
+            new[] { MenusTab, DashboardTab, NavigationTab, OtherTab }
+                .Select(tab => new EditKeybindsTab(tab, [.. boxes.Where(b => TabFor(b.Title) == tab)]))
+                .Where(tab => tab.Boxes.Count > 0)];
+
+    public static int Height(EditKeybindsBox box) => box.Cells.Count + 3;
 
     public static int NaturalWidth(IReadOnlyList<EditKeybindsBox> boxes, int keyWidth) =>
         boxes.Count == 0
             ? 0
             : boxes.Max(b => Math.Max(
                 b.Title.Length + 5,
-                4 + keyWidth + KeyGap + (b.Cells.Count == 0 ? 0 : b.Cells.Max(c => c.Label.Length))));
+                Chrome + keyWidth + Math.Max(ActionHeading.Length, b.Cells.Max(c => c.Label.Length))));
 
     public static int Columns(int width, int naturalWidth, int boxCount)
     {
@@ -133,7 +169,7 @@ public static class EditKeybindsGrid
         var columns = Columns(width, natural, boxes.Count);
         var columnOf = Place([.. boxes.Select(Height)], columns);
         var used = columnOf.Count == 0 ? 1 : columnOf[^1] + 1;
-        var columnWidth = Math.Max(4 + keyWidth + KeyGap, (width - (used - 1) * Gap) / used);
+        var columnWidth = Math.Max(Chrome + keyWidth, (width - (used - 1) * Gap) / used);
 
         var topOf = new int[boxes.Count];
         var lines = new int[used];
@@ -169,50 +205,11 @@ public static class EditKeybindsGrid
     public static EditKeybindsSpot Last(IReadOnlyList<EditKeybindsBox> boxes) =>
         new(boxes.Count - 1, boxes[^1].Cells.Count - 1);
 
-    public static EditKeybindsSpot Right(
-        IReadOnlyList<EditKeybindsBox> boxes, EditKeybindsLayout layout, EditKeybindsSpot spot) =>
-        Beside(boxes, layout, spot, 1);
-
-    public static EditKeybindsSpot Left(
-        IReadOnlyList<EditKeybindsBox> boxes, EditKeybindsLayout layout, EditKeybindsSpot spot) =>
-        Beside(boxes, layout, spot, -1);
-
-    private static EditKeybindsSpot Beside(
-        IReadOnlyList<EditKeybindsBox> boxes, EditKeybindsLayout layout, EditKeybindsSpot spot, int step)
+    public static EditKeybindsSpot Clamp(IReadOnlyList<EditKeybindsBox> boxes, EditKeybindsSpot spot)
     {
-        if (layout.Columns == 1)
-        {
-            var box = Wrap(spot.Box + step, boxes.Count);
+        var box = Math.Clamp(spot.Box, 0, boxes.Count - 1);
 
-            return new EditKeybindsSpot(box, Math.Min(spot.Cell, boxes[box].Cells.Count - 1));
-        }
-
-        var column = Wrap(layout.ColumnOf[spot.Box] + step, layout.Columns);
-        var line = layout.LineOf(spot);
-        var best = spot;
-        var distance = int.MaxValue;
-
-        for (var b = 0; b < boxes.Count; b++)
-        {
-            if (layout.ColumnOf[b] != column)
-            {
-                continue;
-            }
-
-            for (var c = 0; c < boxes[b].Cells.Count; c++)
-            {
-                var candidate = new EditKeybindsSpot(b, c);
-                var away = Math.Abs(layout.LineOf(candidate) - line);
-
-                if (away < distance)
-                {
-                    best = candidate;
-                    distance = away;
-                }
-            }
-        }
-
-        return best;
+        return new EditKeybindsSpot(box, Math.Clamp(spot.Cell, 0, boxes[box].Cells.Count - 1));
     }
 
     public static EditKeybindsPicture Draw(
@@ -244,11 +241,12 @@ public static class EditKeybindsGrid
                 var top = layout.TopOf[b];
 
                 segments[top] = TopEdge(boxes[b].Title, layout.ColumnWidth);
+                segments[top + 1] = Heading(layout.KeyWidth, layout.ColumnWidth);
 
                 for (var c = 0; c < boxes[b].Cells.Count; c++)
                 {
                     var cell = boxes[b].Cells[c];
-                    segments[top + 1 + c] = Cell(keyOf(cell), cell.Label, layout.KeyWidth, layout.ColumnWidth);
+                    segments[top + 2 + c] = Cell(cell.Label, keyOf(cell), layout.KeyWidth, layout.ColumnWidth);
                 }
 
                 segments[top + Height(boxes[b]) - 1] = BottomEdge(layout.ColumnWidth);
@@ -265,15 +263,15 @@ public static class EditKeybindsGrid
             }
         }
 
-        var left = layout.Left(layout.ColumnOf[selected.Box]);
+        var left = boxes.Count == 0 ? 0 : layout.Left(layout.ColumnOf[selected.Box]);
 
         return new EditKeybindsPicture(
             lines,
-            (layout.LineOf(selected), left + 1, left + layout.ColumnWidth - 1));
+            boxes.Count == 0 ? (-1, 0, 0) : (layout.LineOf(selected), left + 1, left + layout.ColumnWidth - 1));
     }
 
     public static int KeyWidth(IReadOnlyList<EditKeybindsBox> boxes, Func<EditKeybindsRow, string> keyOf) =>
-        Math.Max(1, boxes.SelectMany(b => b.Cells).Select(c => keyOf(c).Length).DefaultIfEmpty(0).Max());
+        Math.Max(KeyHeading.Length, boxes.SelectMany(b => b.Cells).Select(c => keyOf(c).Length).DefaultIfEmpty(0).Max());
 
     private static IReadOnlyList<FleetSpan> TopEdge(string title, int width)
     {
@@ -291,16 +289,24 @@ public static class EditKeybindsGrid
     private static IReadOnlyList<FleetSpan> BottomEdge(int width) =>
         [new FleetSpan("╰" + new string('─', Math.Max(0, width - 2)) + "╯", FleetTones.Edge)];
 
-    private static IReadOnlyList<FleetSpan> Cell(string key, string label, int keyWidth, int width)
+    private static IReadOnlyList<FleetSpan> Heading(int keyWidth, int width) =>
+        Row(FleetSpan.Muted(ActionHeading), FleetSpan.Muted(KeyHeading), keyWidth, width);
+
+    private static IReadOnlyList<FleetSpan> Cell(string label, string key, int keyWidth, int width) =>
+        Row(FleetSpan.Plain(label), new FleetSpan(key, FleetTones.Key), keyWidth, width);
+
+    private static IReadOnlyList<FleetSpan> Row(FleetSpan label, FleetSpan key, int keyWidth, int width)
     {
-        var room = Math.Max(0, width - 4 - keyWidth - KeyGap);
+        var room = Math.Max(0, width - Chrome - keyWidth);
 
         return
         [
             new FleetSpan("│", FleetTones.Edge),
             FleetSpan.Plain(" "),
-            new FleetSpan(Fit(key, keyWidth).PadRight(keyWidth), FleetTones.Key),
-            FleetSpan.Plain(new string(' ', KeyGap) + Fit(label, room).PadRight(room) + " "),
+            label with { Text = Fit(label.Text, room).PadRight(room) },
+            new FleetSpan(Separator, FleetTones.Edge),
+            key with { Text = Fit(key.Text, keyWidth).PadRight(keyWidth) },
+            FleetSpan.Plain(" "),
             new FleetSpan("│", FleetTones.Edge),
         ];
     }
