@@ -5467,27 +5467,19 @@ conversation):
   `FleetKeyHints.RevealKey`, read from the keymap with the setting, so it follows a rebind.
 - The corner replaces the menu's pinned `? keys` chip and every bar's close/cancel/quit chip.
   Select and back stay on the bar as icon chips (`FleetIcons.Select`, `FleetIcons.Back`).
-- Applied to the fleet menu, the pickers, Settings, AI-DLC, logs, notifications, remotes,
-  secrets, the agent list, keybinds and the project picker. A rebind of the reveal key
-  raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits. The close button shows `esc` while keys
-  are shown and pads on the left while they are hidden, so it keeps its width too. The
-  remote machines bar uses icons for all its chips (`FleetIcons.Connect` and the rest).
-  The Switch project picker drops its `h/l machine` chip (h/l, the arrows and a click on a
-  tab still switch machines) and its new-window chip is an icon (`FleetIcons.NewWindow`).
-  Keybinds swaps its plain hint line for an action bar: rebind (`FleetIcons.Rebind`) and
-  back chips; tab and move keys still work, and close is the corner.
-  The dashboard's agent and sub bars drop the `editor` chip; the Open editor key still works.
-  The agent list swaps its hint line for select and back icon chips, and the project
-  picker's new-window chip is the `FleetIcons.NewWindow` icon.
-  New agent, Add repository and the `FleetDialog` choice and confirm dialogs swap their hint
-  lines for select (`enter`, or `y` on confirm) and back chips plus the corners; esc, n and
-  h/l still work.
-  The rest followed (New project, the text and question prompts, the error popup, key capture,
-  the text viewer), so no screen has a plain hint line any more: `FleetHints` and
-  `FleetTheme.HintBar` are gone. Key capture and the text viewer get only the corners.
-  The dashboard in menu mode drops its `q/esc close` chip for the corners too (the main
-  dashboard has no corners: it is not something you close). The dashboard (its menu mode keeps a close chip) and the
-  small prompts/dialogs without a bar are left as they were.
+- Every fleet screen gets the corners: the fleet menu, the pickers, Settings, AI-DLC, logs,
+  notifications, remotes, secrets, the agent list, keybinds, the project picker, New agent,
+  Add repository, New project, the `FleetDialog` dialogs, the prompts, key capture, the text
+  viewer and the dashboard in menu mode (the main dashboard has none: it is not closed).
+- A rebind of the reveal key raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits.
+  The close button shows `esc` while keys are shown and pads on the left while they are
+  hidden, so it keeps its width too.
+- No screen has a plain hint line any more; `FleetHints` and `FleetTheme.HintBar` are gone.
+  Screens with actions got a `FleetActionBar` of icon chips (select, back, rebind, new window,
+  and connect/answer/rename/forget/disconnect on remotes); key capture and the text viewer
+  get only the corners. The keys the old hint lines listed all still work.
+- Chips that only took room were dropped: Switch project's `h/l machine` (h/l, the arrows and
+  a tab click still switch) and the dashboard's `editor` (the Open editor key still works).
 
 ## Still to verify
 ## Still to verify
