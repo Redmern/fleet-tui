@@ -715,6 +715,13 @@ works the same way for an orchestrator's agents, and its `typed: true` falls bac
 when `SendMessage` can't reach the session. A project or agent whose Claude reported no
 inbox (an older Claude, status hooks off, a remote machine's head) is typed into as before.
 
+**Finished agents push.** A sub-orchestrator doesn't poll `list_agents` to learn that an agent
+finished: it subscribes to the agent's session with `SendMessage`'s `notify_when_idle`
+(`new_agent` names the session) and checks `list_agents` when the notice comes. When an agent
+reports `done` or `failed`, the `report` tool's result tells it to send its one-line summary
+to its owner's session (its sub-orchestrator, or the project's main orchestrator) with
+`SendMessage`. The owner needs a live inbox; otherwise nothing extra happens.
+
 **Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
 connection, so a machine that is not connected is listed with its state and no projects.
