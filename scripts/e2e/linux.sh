@@ -133,7 +133,7 @@ keys q; sleep 1
 
 echo "== 9. switch project from the menu"
 keys C-s Space; sleep 3
-keys s; sleep 3
+keys p; sleep 3
 sees 'demo2' 'switch picker lists demo2'
 keys Enter; sleep 6
 row0="$(screen | head -1)"
