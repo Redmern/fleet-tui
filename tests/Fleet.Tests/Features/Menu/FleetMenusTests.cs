@@ -4,6 +4,7 @@ using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 
 namespace Fleet.Tests.Features.Menu;
@@ -114,8 +115,41 @@ public class FleetMenusTests
         var headers = ShowMenuHandler.Headers(items);
 
         Assert.Equal([0, 2, 4], headers.Keys.Order());
-        Assert.Equal("── configure ──", headers[2].Text);
+        Assert.Equal($"── {FleetIcons.Configure} configure ──", headers[2].Text);
         Assert.Equal(FleetMenus.Actions(FleetMenus.Settings), items.Select(i => i.Action));
+    }
+
+    [Fact]
+    public void A_section_without_an_icon_keeps_a_plain_header()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items([new MenuSection("plain", [FleetAction.ViewLogs])], _ => null);
+
+        Assert.Equal("── plain ──", ShowMenuHandler.Headers(items)[0].Text);
+    }
+
+    [Fact]
+    public void Every_entry_and_section_in_the_fleet_menus_has_a_single_cell_nerd_font_icon()
+    {
+        var sections = FleetMenus.Main.Concat(FleetMenus.Settings).Concat(FleetMenus.FleetConfig).ToList();
+
+        Assert.All(FleetMenus.Actions(sections), a =>
+        {
+            var icon = FleetIcons.For(a);
+            Assert.NotNull(icon);
+            Assert.InRange(Assert.Single(icon), '', '');
+        });
+        Assert.All(sections.Where(s => s.Header is not null), s => Assert.InRange(Assert.Single(s.Icon!), '', ''));
+    }
+
+    [Fact]
+    public void A_row_shows_the_icon_between_the_key_and_the_label()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Main, _ => null);
+        var rows = ShowMenuHandler.Rows(items);
+        var settings = rows[items.ToList().FindIndex(i => i.Action == FleetAction.OpenSettings)];
+
+        Assert.Equal($"{FleetIcons.For(FleetAction.OpenSettings)} ", settings.Spans[1].Text);
+        Assert.Equal(items.Single(i => i.Action == FleetAction.OpenSettings).Label, settings.Spans[2].Text);
     }
 
     [Fact]

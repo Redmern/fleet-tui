@@ -9,4 +9,5 @@ public sealed record FleetMenuItem(
     string? Header = null,
     string? Value = null,
     bool OpensMore = false,
-    bool Toggles = false);
+    bool Toggles = false,
+    string? HeaderIcon = null);

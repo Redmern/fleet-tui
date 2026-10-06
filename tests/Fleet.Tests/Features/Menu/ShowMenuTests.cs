@@ -79,6 +79,29 @@ public class ShowMenuTests
     }
 
     [Fact]
+    public void The_dashboard_and_picker_menus_have_an_icon_on_every_row()
+    {
+        FleetAction[] picker = [FleetAction.NewProject, FleetAction.OpenProject, FleetAction.RemoveProject];
+        FleetAction[] dashboard =
+        [
+            FleetAction.NewAgent, FleetAction.ChangeHarness, FleetAction.ToggleHidden, FleetAction.RemoveAgent,
+            FleetAction.RemoveRepository, FleetAction.ViewLogs, FleetAction.BrowseFiles, FleetAction.RebuildDashboard,
+        ];
+
+        Assert.All(DashboardActions.Concat(picker).Concat(dashboard), a => Assert.NotNull(FleetIcons.For(a)));
+    }
+
+    [Fact]
+    public void Rows_without_an_icon_keep_the_labels_aligned()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items([FleetAction.Refresh, FleetAction.MoveDown]);
+        var rows = ShowMenuHandler.Rows(items);
+
+        Assert.Equal(rows[0].Spans[1].Text.Length, rows[1].Spans[1].Text.Length);
+        Assert.Equal("  ", rows[1].Spans[1].Text);
+    }
+
+    [Fact]
     public void No_items_produces_no_rows()
         => Assert.Empty(ShowMenuHandler.Rows([]));
 }

@@ -3,6 +3,7 @@ using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
+using Fleet.Ui.Constants;
 
 namespace Fleet.Features.Menu.ShowMenu;
 
@@ -25,9 +26,9 @@ public static class FleetMenus
 
     public static IReadOnlyList<MenuSection> Settings { get; } =
     [
-        new("session", [FleetAction.SaveSession, FleetAction.Remotes]),
-        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds]),
-        new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs]),
+        new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
+        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds], FleetIcons.Configure),
+        new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs], FleetIcons.Maintenance),
     ];
 
     public static IReadOnlyList<MenuSection> FleetConfig { get; } =
@@ -41,8 +42,8 @@ public static class FleetMenus
             FleetAction.EditClaudeProfile,
             FleetAction.EditFleetConfig,
         ]),
-        new("models", ModelRows.Actions),
-        new("permissions", [FleetAction.EditSettings]),
+        new("models", ModelRows.Actions, FleetIcons.Models),
+        new("permissions", [FleetAction.EditSettings], FleetIcons.Permissions),
     ];
 
     private static readonly (FleetAction Submenu, IReadOnlyList<MenuSection> Sections)[] Tree =
