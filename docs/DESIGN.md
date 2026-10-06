@@ -5481,9 +5481,11 @@ conversation):
   get only the corners. The keys the old hint lines listed all still work.
 - Chips that only took room were dropped: Switch project's `h/l machine` (h/l, the arrows and
   a tab click still switch) and the dashboard's `editor` (the Open editor key still works).
-- The fleet menu mirrors its footer at the top: a blank row, the corner buttons
-  (`ShowMenuView.CornerRow`), then the padding before the list, so the float is two rows
-  taller. The bars of Switch project, the agent list, notifications and the dashboard sit
+- Every window with corners has the same margins: `FleetCorners.Attach` gives it a one-row
+  `Padding` top and bottom (`FleetCorners.Margin`), so there is a blank row over the corner
+  buttons and under the bottom bar, and fitted floats and modals are `FleetCorners.Rows`
+  taller. The fleet menu adds its list padding inside that. A later branch is to draw the
+  corner and bar buttons in fleetd's float border instead. The bars of Switch project, the agent list, notifications and the dashboard sit
   bottom right like the menu's.
 - The dashboard's bars are icons too: add (the action's own icon), open (`Select`), manage,
   show/hide (eye), menu, dismiss, dismiss all and refresh.

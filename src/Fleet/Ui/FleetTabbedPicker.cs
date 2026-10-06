@@ -31,7 +31,7 @@ public static class FleetTabbedPicker
         var widest = tabs.SelectMany(t => t.Entries).Select(e => e.Label.Length + e.Detail.Length + 16).DefaultIfEmpty(0).Max();
         var tallest = tabs.Max(t => Math.Max(1, t.Entries.Count));
         var tabsWidth = tabs.Sum(t => t.Title.Length + 4);
-        var window = FleetTheme.Overlay(title, Math.Max(Math.Max(widest, tabsWidth + 4), Math.Max(title.Length + 10, 56)), tallest + 9);
+        var window = FleetTheme.Overlay(title, Math.Max(Math.Max(widest, tabsWidth + 4), Math.Max(title.Length + 10, 56)), tallest + 9 + FleetCorners.Rows);
 
         var tabBar = FleetTheme.TabBar(1, 0, [.. tabs.Select(t => t.Title)]);
         var list = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));

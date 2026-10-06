@@ -16,7 +16,7 @@ public static class FleetPrompt
     {
         string? result = null;
 
-        var window = FleetTheme.Modal(title, 70, 8);
+        var window = FleetTheme.Modal(title, 70, 8 + FleetCorners.Rows);
         var field = FleetTheme.Field(2, 3, initial);
 
         void Submit()

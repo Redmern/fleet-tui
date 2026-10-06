@@ -11,13 +11,12 @@ namespace Fleet.Features.Menu.ShowMenu;
 
 public static class ShowMenuView
 {
-    public const int Footer = 2;
+    public const int Footer = 1;
 
     public const int Header = Footer;
 
-    public const int CornerRow = Header - 1;
-
-    public static int FitRows(int height) => height + (2 * ShowMenuHandler.Padding) + Header + Footer;
+    public static int FitRows(int height) =>
+        height + (2 * ShowMenuHandler.Padding) + Header + Footer + FleetCorners.Rows;
 
     public static (ListView List, FleetActionBar Bar) Place(int width, int height)
     {
@@ -150,7 +149,7 @@ public static class ShowMenuView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, bar.Root);
-        FleetCorners.Attach(window, () => app.RequestStop(window), top: CornerRow);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {

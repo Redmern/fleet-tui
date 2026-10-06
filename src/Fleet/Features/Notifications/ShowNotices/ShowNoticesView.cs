@@ -26,7 +26,7 @@ public static class ShowNoticesView
             : [.. store.Projects().Where(p => only.Contains(p, StringComparer.OrdinalIgnoreCase))];
         var names = NoticeTabs.Names([.. projects, .. elsewhere?.Projects ?? []]);
 
-        var window = FleetTheme.Overlay("notifications", 100, 24);
+        var window = FleetTheme.Overlay("notifications", 100, 24 + FleetCorners.Rows);
         var tabBar = FleetTheme.TabBar(1, 0, [.. names.Select(n => $"{n} (0)")]);
         var list = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));

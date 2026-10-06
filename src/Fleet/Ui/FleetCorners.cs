@@ -1,5 +1,6 @@
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
+using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 
@@ -41,18 +42,27 @@ public static class FleetCorners
             new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
         ];
 
-    public static void Attach(View window, Action close, View? below = null, int top = 0)
+    public const int Margin = 1;
+
+    public const int Rows = 2 * Margin;
+
+    public static void Attach(View window, Action close, View? below = null)
     {
+        if (window.Padding is { } padding)
+        {
+            padding.Thickness = new Thickness(0, Margin, 0, Margin);
+        }
+
         var help = new Corner(() => Help(FleetKeyHints.Shown, FleetKeyHints.RevealKey), FleetKeyHints.Toggle)
         {
             X = 1,
-            Y = top,
+            Y = 0,
         };
 
         var shut = new Corner(() => Close(FleetKeyHints.Shown), close)
         {
             X = Pos.AnchorEnd(10),
-            Y = top,
+            Y = 0,
         };
 
         window.Add(help, shut);

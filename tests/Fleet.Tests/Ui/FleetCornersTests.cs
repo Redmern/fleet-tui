@@ -55,6 +55,21 @@ public sealed class FleetCornersTests : IDisposable
     }
 
     [Fact]
+    public void Every_window_with_corners_gets_a_blank_row_over_the_corners_and_under_the_bottom_bar()
+    {
+        using var window = new Terminal.Gui.Views.Window { Width = 60, Height = 12, BorderStyle = Terminal.Gui.Drawing.LineStyle.None };
+        var bar = new FleetActionBar(Terminal.Gui.ViewBase.Pos.AnchorEnd(1));
+        window.Add(bar.Root);
+
+        FleetCorners.Attach(window, () => { });
+        window.Layout();
+
+        Assert.Equal(1, window.Viewport.Y + window.Padding!.Thickness.Top);
+        Assert.Equal(12 - FleetCorners.Rows, window.Viewport.Height);
+        Assert.Equal(window.Viewport.Height - 1, bar.Root.Frame.Y);
+    }
+
+    [Fact]
     public void The_reveal_key_defaults_to_a_question_mark()
     {
         Assert.Equal("?", FleetKeyHints.RevealKey);

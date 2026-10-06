@@ -3,7 +3,9 @@ using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
+using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Fleet.Tests.Features.Menu;
 
@@ -102,9 +104,9 @@ public class ShowMenuTests
         Assert.Equal("   ", rows[1].Spans[1].Text);
     }
 
-    // Inside a float the window is exactly the fitted size; the bar and the blank
-    // line under it sit below the bottom padding, and the corner buttons with a blank
-    // line over them mirror that above the top padding.
+    // Inside a float the window is exactly the fitted size. The corner padding puts a
+    // blank row over the corner buttons and under the bar, and the list sits the same
+    // distance under the corners as the bar sits under the list.
     [Theory]
     [InlineData(3)]
     [InlineData(8)]
@@ -112,8 +114,9 @@ public class ShowMenuTests
     public void The_space_above_the_first_row_equals_the_space_below_the_last(int height)
     {
         var (list, bar) = ShowMenuView.Place(30, height);
-        using var window = new View { Width = 60, Height = ShowMenuView.FitRows(height) };
+        using var window = new Window { Width = 60, Height = ShowMenuView.FitRows(height), BorderStyle = LineStyle.None };
         window.Add(list, bar.Root);
+        FleetCorners.Attach(window, () => { });
 
         window.Layout();
 
@@ -122,9 +125,8 @@ public class ShowMenuTests
 
         Assert.Equal(ShowMenuView.Header + ShowMenuHandler.Padding, above);
         Assert.Equal(ShowMenuHandler.Padding, below);
-        Assert.Equal(window.Frame.Height - 2, bar.Root.Frame.Y);
-        Assert.Equal(ShowMenuView.CornerRow, window.Frame.Height - 1 - bar.Root.Frame.Y);
-        Assert.Equal(ShowMenuView.CornerRow + 1 + ShowMenuHandler.Padding, above);
+        Assert.Equal(window.Viewport.Height - ShowMenuView.Footer, bar.Root.Frame.Y);
+        Assert.Equal(window.Frame.Height - FleetCorners.Rows, window.Viewport.Height);
     }
 
     [Fact]

@@ -9,7 +9,7 @@ public static class FleetKeyCapture
     {
         string? captured = null;
 
-        var window = FleetTheme.Modal("Press a key", 60, 8);
+        var window = FleetTheme.Modal("Press a key", 60, 8 + FleetCorners.Rows);
 
         window.Add(
             FleetTheme.Caption(2, 1, $"New key for: {target}"),

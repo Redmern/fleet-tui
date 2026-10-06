@@ -333,7 +333,7 @@ public static class FleetDialog
     {
         var longest = lines.Count == 0 ? 0 : lines.Max(l => l.Length);
         var width = Math.Clamp(Math.Max(longest, title.Length) + 8, 44, 92);
-        var height = lines.Count + extraRows + 2;
+        var height = lines.Count + extraRows + 2 + FleetCorners.Rows;
 
         return FleetTheme.Modal(title, width, height);
     }
