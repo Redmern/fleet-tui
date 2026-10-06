@@ -565,7 +565,6 @@ public static class EmbeddedWiring
 
         foreach (var (action, command) in new[]
                  {
-                     (FleetAction.OpenHead, MuxModel.HeadVerb),
                      (FleetAction.OpenHeadVoice, MuxModel.HeadVerb + " voice"),
                  })
         {

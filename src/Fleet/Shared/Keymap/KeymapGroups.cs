@@ -80,7 +80,6 @@ public static class KeymapGroups
         ]),
         ("anywhere, no prefix",
         [
-            FleetAction.OpenHead,
             FleetAction.OpenHeadVoice,
         ]),
     ];

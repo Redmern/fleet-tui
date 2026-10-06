@@ -380,8 +380,7 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `esc` | cancel a dialog — never closes the dashboard |
 | `backspace` | back one level in the fleet menu; in a text field it deletes, and goes back only when the field is empty |
 | `ctrl+enter` | the fleet menu, from any pane |
-| `alt+o` | show or hide the head orchestrator in text mode, from any pane of a fleet window |
-| `alt+shift+o` | the same in voice mode; the other chord switches a running head's mode |
+| `alt+o` | show or hide the head orchestrator in voice mode, from any pane of a fleet window |
 
 Adding a repository has no bare key on purpose — it lives in the menu only, so
 the dashboard's letters stay free for navigation.
@@ -684,23 +683,19 @@ as if you had.
   Hiding never stops it: it is one Claude session that lives across projects and
   windows, and comes back with the conversation where you left it. After a restart of
   WezTerm it resumes the last conversation (`claude --continue`).
-- **`alt+shift+o`** does the same in voice mode: Claude Code's voice dictation is on (hold
-  space to talk). `alt+o` is always text mode, `alt+shift+o` always voice mode, whether
-  the head is new or already running:
-  - no head yet: the chord starts it in its mode;
-  - the same chord as the running mode: shows the head, or hides it when it is shown;
-  - the other chord: restarts the head in the new mode and shows it. The restart resumes
-    the conversation (`claude --continue`), but a turn the head is in the middle of is
-    cut off.
+- The head always opens in **voice mode**: Claude Code's voice dictation is on (hold space
+  to talk). A head started in text mode with `fleet head` (no `--voice`) is restarted in
+  voice mode by the chord; the restart resumes the conversation (`claude --continue`), but
+  a turn the head is in the middle of is cut off.
 
   Voice is a Claude Code setting, `voice.enabled`, so fleet starts the head with
   `claude --settings <file>` holding `{"voice":{"enabled":true}}` or `false`. That is why
   switching needs a restart: `/voice` saves to your user settings, which the head's
   `--settings` file outranks, so don't use `/voice` in the head. Voice needs a claude.ai
   login, as it does anywhere in Claude Code.
-- Both chords are direct, with no prefix, and are rebindable under **Keybinds** in the
+- The chord is direct, with no prefix, and rebindable under **Keybinds** in the
   *anywhere, no prefix* group. On WezTerm, re-run `fleet apply-keybinds` after changing
-  them; the built-in multiplexer picks them up on its next attach or `prefix q r`.
+  it; the built-in multiplexer picks them up on its next attach or `prefix q r`.
 - **On the built-in multiplexer** the head is a real float: 80% of the screen, over
   whichever project the window shows. Hiding moves it out of sight without stopping it,
   and showing it from another project brings the same head along. `embedded-keys.json`

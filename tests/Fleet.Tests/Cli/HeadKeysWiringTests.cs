@@ -8,12 +8,12 @@ namespace Fleet.Tests.Cli;
 public class HeadKeysWiringTests
 {
     [Fact]
-    public void Fleetd_gets_the_head_chords_from_the_fleet_keymap()
+    public void Fleetd_gets_one_head_chord_that_opens_voice_mode()
     {
         var keys = EmbeddedWiring.HeadKeys(Keymap.Default);
 
-        Assert.Equal("head", keys["alt+o"]);
-        Assert.Equal("head voice", keys["alt+shift+o"]);
+        Assert.Equal("head voice", Assert.Single(keys).Value);
+        Assert.Equal("head voice", keys["alt+o"]);
     }
 
     [Fact]
@@ -23,6 +23,6 @@ public class HeadKeysWiringTests
             new Keymap(KeymapConfig.Default.With(FleetAction.OpenHeadVoice, "Ctrl+Alt+V")));
 
         Assert.Equal("head voice", keys["ctrl+alt+v"]);
-        Assert.False(keys.ContainsKey("alt+shift+o"));
+        Assert.False(keys.ContainsKey("alt+o"));
     }
 }

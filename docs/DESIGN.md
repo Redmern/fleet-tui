@@ -3539,7 +3539,7 @@ folds as plain rows too.
 | `ctrl`/`alt` + `h j k l` | move focus; when the pane runs nvim the key goes to nvim (the `is_nvim` rule) |
 | `alt+←/→`, `ctrl+tab`, `ctrl+shift+tab` | previous / next tab |
 | `ctrl+enter` | the menu: the dashboard's over a dashboard, fleet's elsewhere |
-| `alt+o`, `alt+shift+o` | show or hide the head orchestrator's float (from the fleet keymap; see "The head orchestrator") |
+| `alt+o` | show or hide the head orchestrator's float, in voice mode (from the fleet keymap; see "The head orchestrator" and "One head chord") |
 | `shift+enter` | Claude's newline: Ctrl+J for a shell or Claude, Shift+Enter (CSI-u off Windows) for nvim |
 
 - **Which-key.** Pressing the prefix draws a box at the bottom listing the
@@ -5419,6 +5419,17 @@ conversation):
   float when the screen stops, so that frame (about 150 ms before the next screen) was
   shown. The key handler no longer moves the selection, except for toggles, which stay
   on screen. Measured again: menu → Settings is one frame.
+
+## One head chord, voice mode, 2026-10-06
+
+- The text-mode chord (`OpenHead`, `alt+o`) is gone. `OpenHeadVoice` is the only head
+  action and is bound to `alt+o`; it sends fleetd `head voice` and binds
+  `toggle_head(..., true, ...)` in the WezTerm Lua.
+- The action keeps its id `head-voice`; the old id `head` parses to it, so a keymap that
+  rebound the text chord now rebinds the one chord.
+- `fleet head` without `--voice` still exists (fleetd and the Lua start the head through
+  it). A head started that way is restarted in voice mode by the chord, the same restart
+  the second chord used to do.
 
 ## Still to verify
 ## Still to verify

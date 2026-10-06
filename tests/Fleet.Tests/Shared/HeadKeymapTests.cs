@@ -8,53 +8,50 @@ namespace Fleet.Tests.Shared;
 
 public class HeadKeymapTests
 {
-    [Theory]
-    [InlineData(FleetAction.OpenHead, "Alt+O")]
-    [InlineData(FleetAction.OpenHeadVoice, "Alt+Shift+O")]
-    public void The_head_chords_ship_as_direct_alt_keys(FleetAction action, string key)
+    [Fact]
+    public void The_head_chord_ships_as_alt_o_and_opens_the_head_in_voice_mode()
     {
-        Assert.Equal(key, KeymapDefaults.Bindings[action]);
+        Assert.Equal("Alt+o", KeymapDefaults.Bindings[FleetAction.OpenHeadVoice]);
+        Assert.Contains("voice mode", KeymapDefaults.Describe(FleetAction.OpenHeadVoice));
     }
 
     [Fact]
-    public void Both_head_chords_are_rebindable_in_their_own_group()
+    public void The_head_chord_is_rebindable_in_its_own_group()
     {
-        var group = KeymapGroups.All.Single(g => g.Actions.Contains(FleetAction.OpenHead));
+        var group = KeymapGroups.All.Single(g => g.Actions.Contains(FleetAction.OpenHeadVoice));
 
         Assert.Equal("anywhere, no prefix", group.Label);
-        Assert.Equal([FleetAction.OpenHead, FleetAction.OpenHeadVoice], group.Actions);
+        Assert.Equal([FleetAction.OpenHeadVoice], group.Actions);
         Assert.Contains(FleetAction.OpenHeadVoice, KeymapDefaults.Configurable);
     }
 
     [Fact]
-    public void The_head_chords_parse_to_distinct_valid_keys()
+    public void The_head_chord_parses_to_alt_o()
     {
-        var keymap = Keymap.Default;
+        var voice = Keymap.Default.KeyFor(FleetAction.OpenHeadVoice);
 
-        var plain = keymap.KeyFor(FleetAction.OpenHead);
-        var voice = keymap.KeyFor(FleetAction.OpenHeadVoice);
-
-        Assert.True(plain.IsValid);
         Assert.True(voice.IsValid);
-        Assert.NotEqual(plain, voice);
-        Assert.NotEqual(Key.Empty, voice);
+        Assert.Equal(new Key("Alt+O"), voice);
     }
 
     [Fact]
     public void A_rebound_head_chord_survives_merging_over_the_defaults()
     {
-        var config = KeymapConfig.Default.With(FleetAction.OpenHead, "Alt+H").MergedOverDefaults();
+        var config = KeymapConfig.Default.With(FleetAction.OpenHeadVoice, "Alt+H").MergedOverDefaults();
 
-        Assert.Equal("Alt+H", config.Bindings[FleetAction.OpenHead]);
-        Assert.Equal("Alt+Shift+O", config.Bindings[FleetAction.OpenHeadVoice]);
+        Assert.Equal("Alt+H", config.Bindings[FleetAction.OpenHeadVoice]);
     }
 
-    [Theory]
-    [InlineData(FleetAction.OpenHead, "head")]
-    [InlineData(FleetAction.OpenHeadVoice, "head-voice")]
-    public void The_head_actions_have_stable_ids(FleetAction action, string id)
+    [Fact]
+    public void The_head_action_keeps_its_id()
     {
-        Assert.Equal(id, FleetActionIds.For(action));
-        Assert.Equal(action, FleetActionIds.Parse(id));
+        Assert.Equal("head-voice", FleetActionIds.For(FleetAction.OpenHeadVoice));
+        Assert.Equal(FleetAction.OpenHeadVoice, FleetActionIds.Parse("head-voice"));
     }
+
+    // The text-mode chord is gone; a keymap that rebound it (id "head") now
+    // rebinds the one head chord.
+    [Fact]
+    public void The_old_text_mode_id_reads_as_the_head_chord()
+        => Assert.Equal(FleetAction.OpenHeadVoice, FleetActionIds.Parse("head"));
 }

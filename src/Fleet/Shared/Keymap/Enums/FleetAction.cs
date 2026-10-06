@@ -49,7 +49,6 @@ public enum FleetAction
     DismissAllNotices,
     OpenEditor,
     EditAutoClose,
-    OpenHead,
     OpenHeadVoice,
     OpenFleetConfigMenu,
     EditHeadModel,
