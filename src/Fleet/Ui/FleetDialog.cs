@@ -235,7 +235,24 @@ public static class FleetDialog
             }
         };
 
-        window.Add(field, FleetTheme.HintBar(FleetHints.Ask));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, () =>
+            {
+                answer = field.Text;
+                app.RequestStop(window);
+            }),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(field, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
         field.SetFocus();
 
         FleetModal.Enter();
@@ -283,7 +300,20 @@ public static class FleetDialog
             }
         };
 
-        window.Add(dismiss, FleetTheme.HintBar(FleetHints.Dismiss));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, () => app.RequestStop(window)),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(dismiss, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         FleetModal.Enter();
 

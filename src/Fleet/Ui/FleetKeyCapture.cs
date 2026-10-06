@@ -1,4 +1,3 @@
-using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 
@@ -14,8 +13,8 @@ public static class FleetKeyCapture
 
         window.Add(
             FleetTheme.Caption(2, 1, $"New key for: {target}"),
-            FleetTheme.Caption(2, 3, "Press the key combination now."),
-            FleetTheme.HintBar(FleetHints.Capture));
+            FleetTheme.Caption(2, 3, "Press the key combination now."));
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         window.KeyDown += (_, key) =>
         {

@@ -198,13 +198,4 @@ public static class FleetTheme
         Text = text,
         SchemeName = FleetSchemes.Error,
     };
-
-    public static Label HintBar(string text) => new()
-    {
-        X = 1,
-        Y = Pos.AnchorEnd(1),
-        Width = Dim.Fill(1),
-        Text = text,
-        SchemeName = FleetSchemes.Hint,
-    };
 }

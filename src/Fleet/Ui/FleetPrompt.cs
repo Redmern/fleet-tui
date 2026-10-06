@@ -1,6 +1,7 @@
 using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
 
 namespace Fleet.Ui;
 
@@ -37,10 +38,20 @@ public static class FleetPrompt
             Submit();
         };
 
-        window.Add(
-            FleetTheme.Caption(2, 1, label),
-            field,
-            FleetTheme.HintBar(FleetHints.Prompt));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, Submit),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(FleetTheme.Caption(2, 1, label), field, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         window.KeyDown += (_, key) =>
         {

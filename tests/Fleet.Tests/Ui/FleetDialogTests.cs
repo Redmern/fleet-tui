@@ -33,6 +33,6 @@ public class FleetDialogTests
         Assert.Contains("(\"y\", FleetIcons.Select,", Source);
         Assert.Contains("(\"bksp\", FleetIcons.Back,", Source);
         Assert.Contains("FleetCorners.Attach(window,", Source);
-        Assert.DoesNotContain("HintBar(FleetHints.Confirm)", Source);
+        Assert.DoesNotContain("HintBar(", Source);
     }
 }

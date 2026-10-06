@@ -5481,7 +5481,10 @@ conversation):
   picker's new-window chip is the `FleetIcons.NewWindow` icon.
   New agent, Add repository and the `FleetDialog` choice and confirm dialogs swap their hint
   lines for select (`enter`, or `y` on confirm) and back chips plus the corners; esc, n and
-  h/l still work. The dashboard (its menu mode keeps a close chip) and the
+  h/l still work.
+  The rest followed (New project, the text and question prompts, the error popup, key capture,
+  the text viewer), so no screen has a plain hint line any more: `FleetHints` and
+  `FleetTheme.HintBar` are gone. Key capture and the text viewer get only the corners. The dashboard (its menu mode keeps a close chip) and the
   small prompts/dialogs without a bar are left as they were.
 
 ## Still to verify
