@@ -96,15 +96,15 @@ keys C-s z; sleep 1
 sees 'Agents' 'unzoom shows them again'
 
 echo "== 5. float: new, type, toggle"
-keys C-s f; sleep 2
+keys C-s f f; sleep 2
 panes | grep -q ' float ' && ok 'float pane exists' || bad 'float pane exists' noscreen
 keys 'echo IN-FLOAT' Enter; sleep 1
 sees 'IN-FLOAT' 'typing reaches the float'
-keys C-s t; sleep 1
+keys C-s f t; sleep 1
 lacks 'IN-FLOAT' 'toggle hides floats'
-keys C-s t; sleep 1
+keys C-s f t; sleep 1
 sees 'IN-FLOAT' 'toggle shows them again'
-keys C-s t; sleep 1
+keys C-s f t; sleep 1
 
 echo "== 6. resize the terminal (SIGWINCH)"
 $T resize-window -t fe -x 100 -y 30; sleep 2
@@ -134,8 +134,9 @@ keys q; sleep 1
 echo "== 9. switch project from the menu"
 keys C-s Space; sleep 3
 keys p; sleep 3
+keys l; sleep 1
 sees 'demo2' 'switch picker lists demo2'
-keys Enter; sleep 6
+keys e; sleep 6
 row0="$(screen | head -1)"
 case "$row0" in *demo2*) ok 'bar shows demo2';; *) bad 'bar shows demo2';; esac
 sees 'nvim-standin in demo2' 'demo2 orchestrator started'
