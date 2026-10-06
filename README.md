@@ -214,14 +214,29 @@ Settings, Settings back to the menu), and on the top level it closes the menu li
 typed and only goes back once the field is empty; the key-capture dialog in **Keybinds** records it as a key.
 
 ```
-╭┤ fleet menu ├──────────────────────╮
-│ Quit fleet            Q            │
-│ Keybinds              k            │
-│ Go to the main pane   m            │
-│ List agents           l            │
+╭─ fleet menu ─────────────────────────╮
+│                                      │
+│                                      │
+│     Q     Quit                       │
+│     m     Dashboard                  │
+│     p     Switch                     │
+│     l     List agents                │
+│     f     Files                      │
+│     s     Settings     ›             │
+│                                      │
+│                                      │
+│   enter select   q/esc close   ...   │
 ```
 
-- **Quit fleet** (`Q`, deliberately shifted) closes every pane of the project, including hidden agents in
+Each row is its key, then its icon, then the label. A submenu with sections (Settings, Fleet
+config) puts a quiet caption over each section and a blank line between them.
+
+**Show keybinds** (`K` in Settings, on by default) hides the key column in every menu when
+it is off; the keys still work. `?` then shows the keys in the menu you are in, until you
+press `?` again or leave that menu, and the bar under the menu shows a `? keys` chip as a
+reminder. `?` can be rebound under **navigation** in Keybinds.
+
+- **Quit** (`Q`, deliberately shifted) closes every pane of the project, including hidden agents in
   their own workspace, so nothing is left running invisibly. Agent records are
   already on disk, so reopening the project lists them again.
 - **keybinds** opens the editor in the dashboard and **focuses that pane**, so you
@@ -277,7 +292,7 @@ fleet used directly on the remote machine opens the remote's own center.
 
 ### Sessions
 
-A session is a saved set of projects for one window. **Save window as session** (`w` in
+A session is a saved set of projects for one window. **Save session** (`w` in
 the fleet menu's Settings) stores the window's projects in their order, which one was showing, and
 for a remote project the machine it runs on; saving under an existing name updates it.
 
