@@ -382,6 +382,16 @@ the prefix. Changes are saved to `%APPDATA%\fleet\keybinds.json`.
 Only keys you actually change are written, so later changes to fleet's shipped
 defaults still reach you.
 
+On the built-in multiplexer, the `ctrl+s` popup has submenus: `ctrl+s f` › *float*,
+`ctrl+s w` › *project*, `ctrl+s q` › *session* (`ctrl+s f t` shows or hides the floats).
+`esc` closes the popup and `backspace` goes up a level. Prefix keys in
+`embedded-keys.json` can be sequences, and `groups` names them:
+`{ "prefixKeys": { "g s": "split-down" }, "groups": { "g": "git" } }`. Binding a group's
+key as a single key (`"f": "float-new"`) gives you the old flat key back. Groups and
+the focus / resize / tab rows show Nerd Font icons; `icons` changes a group's icon
+(`"none"` removes it) and `"showIcons": false` turns them off. See
+`docs/DESIGN.md` › *Keys* for the full table and the rules.
+
 ## The dashboard
 
 Two tabs, **Agents** and **Repositories**, switched with `h` / `l` or the arrow
@@ -655,7 +665,7 @@ as if you had.
   login, as it does anywhere in Claude Code.
 - Both chords are direct, with no prefix, and are rebindable under **Keybinds** in the
   *anywhere, no prefix* group. On WezTerm, re-run `fleet apply-keybinds` after changing
-  them; the built-in multiplexer picks them up on its next attach or `prefix r`.
+  them; the built-in multiplexer picks them up on its next attach or `prefix q r`.
 - **On the built-in multiplexer** the head is a real float: 80% of the screen, over
   whichever project the window shows. Hiding moves it out of sight without stopping it,
   and showing it from another project brings the same head along. `embedded-keys.json`

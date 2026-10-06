@@ -94,6 +94,50 @@ public class RenderTests
     }
 
     [Fact]
+    public void A_nested_which_key_box_shows_the_breadcrumb_the_back_hint_and_plain_fold_rows()
+    {
+        List<WhichKeyEntry> entries =
+        [
+            new() { Key = "h j k l", Label = "focus", Fold = true },
+            new() { Key = "t", Label = "show/hide floats" },
+        ];
+        _model.Spawn("techweb", "C:/x", ["claude"]);
+        var client = _model.Connect(80, 24, "techweb");
+        var frame = Composer.Compose(
+            _model.View(client.Id)!, id => _screens.GetValueOrDefault(id), "ctrl+s › float", whichKey: entries);
+        var area = Composer.WhichKeyArea(80, 24, entries);
+
+        Assert.StartsWith("╭─ ctrl+s › float ─", frame.RowText(area.Y)[area.X..]);
+        Assert.EndsWith(" esc close · bksp back ─╯", frame.RowText(area.Y + area.Height - 1)[area.X..]);
+        Assert.StartsWith("│ h j k l ➜ focus ", frame.RowText(area.Y + 2)[area.X..]);
+        Assert.Equal(Composer.Text, frame.At(area.X + frame.RowText(area.Y + 2)[area.X..].IndexOf('➜') + 2, area.Y + 2).Fg);
+    }
+
+    [Fact]
+    public void Which_key_draws_an_icon_before_group_and_fold_labels_in_the_label_colour_with_aligned_columns()
+    {
+        List<WhichKeyEntry> entries =
+        [
+            new() { Key = "h j k l", Label = "focus", Fold = true, Icon = "" },
+            new() { Key = "f", Label = "float", Group = true, Icon = "" },
+            new() { Key = "%", Label = "split right" },
+        ];
+        var frame = ComposeWhichKey(80, 24, entries);
+        var area = Composer.WhichKeyArea(80, 24, entries);
+        var rows = Enumerable.Range(area.Y + 2, entries.Count).Select(y => frame.RowText(y)[area.X..]).ToList();
+
+        Assert.StartsWith("│ h j k l ➜  focus ", rows[0]);
+        Assert.StartsWith("│ f       ➜  +float ", rows[1]);
+        Assert.StartsWith("│ %       ➜ split right ", rows[2]);
+        Assert.Single(rows.Select(r => r.IndexOf('➜')).Distinct());
+
+        var icon = area.X + rows[0].IndexOf('');
+        Assert.Equal(Composer.Text, frame.At(icon, area.Y + 2).Fg);
+        Assert.Equal(Composer.Blue, frame.At(icon, area.Y + 3).Fg);
+        Assert.True(area.Width >= "h j k l".Length + 3 + " +float".Length + 4);
+    }
+
+    [Fact]
     public void The_which_key_box_sits_bottom_right_with_a_rounded_titled_border_padding_and_aligned_rows()
     {
         var entries = WhichKeyEntries(3);
