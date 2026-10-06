@@ -191,6 +191,23 @@ public class KeysTests
     }
 
     [Fact]
+    public void Which_key_lists_groups_first_then_single_keys_alphanumerically()
+    {
+        var entries = WhichKey.For(MuxKeys.Defaults);
+        var groups = entries.TakeWhile(e => e.Group).ToList();
+        var singles = entries.Skip(groups.Count).ToList();
+
+        Assert.Equal(["focus", "go to tab", "resize"], groups.Select(g => g.Label).Order());
+        Assert.All(singles, e => Assert.False(e.Group));
+        Assert.Equal(
+            singles.Select(e => e.Key).OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ThenBy(k => k, StringComparer.Ordinal),
+            singles.Select(e => e.Key));
+        Assert.Equal(
+            groups.Select(e => e.Key).OrderBy(k => k, StringComparer.OrdinalIgnoreCase),
+            groups.Select(e => e.Key));
+    }
+
+    [Fact]
     public void The_prefix_arms_then_takes_the_next_key_and_a_second_prefix_sends_itself()
     {
         var prefix = new Prefix(KeyChord.Parse("ctrl+s")!.Value);

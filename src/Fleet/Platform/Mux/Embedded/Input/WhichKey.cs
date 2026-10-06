@@ -19,7 +19,11 @@ public static class WhichKey
         }
 
         entries.Add(new WhichKeyEntry { Key = keys.Prefix.Label, Label = "send " + keys.Prefix.Label });
-        return entries;
+        return entries
+            .OrderBy(e => !e.Group)
+            .ThenBy(e => e.Key, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(e => e.Key, StringComparer.Ordinal)
+            .ToList();
     }
 
     public static string Label(string command) => command switch
@@ -48,7 +52,7 @@ public static class WhichKey
             return;
         }
 
-        entries.Add(new WhichKeyEntry { Key = string.Join(' ', members.Select(m => m.Chord.Label)), Label = label });
+        entries.Add(new WhichKeyEntry { Key = string.Join(' ', members.Select(m => m.Chord.Label)), Label = label, Group = true });
         bindings.RemoveAll(b => members.Contains(b));
     }
 }

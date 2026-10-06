@@ -19,6 +19,14 @@ public static class Composer
     public static readonly uint Text = Cell.Rgb(0xcd, 0xd6, 0xf4);
     public static readonly uint Surface0 = Cell.Rgb(0x31, 0x32, 0x44);
     public static readonly uint Yellow = Cell.Rgb(0xf9, 0xe2, 0xaf);
+    public static readonly uint Flamingo = Cell.Rgb(0xf2, 0xcd, 0xcd);
+    public static readonly uint Blue = Cell.Rgb(0x89, 0xb4, 0xfa);
+    public const char WhichKeySeparator = '➜';
+    public const string WhichKeyFooter = "esc close";
+    private const int WhichKeyGap = 3;
+    private const int WhichKeyChrome = 2;
+    private const int WhichKeyMinWidth = 30;
+    private const int WhichKeyMaxWidth = 50;
     public const char LeftCap = '';
     public const char RightCap = '';
 
@@ -197,33 +205,65 @@ public static class Composer
         }
     }
 
-    private static void WhichKeyBox(ClientFrame frame, string title, IReadOnlyList<WhichKeyEntry> entries)
+    public static Rect WhichKeyArea(int cols, int rows, IReadOnlyList<WhichKeyEntry> entries)
+    {
+        var (cell, columns, lines) = WhichKeyGrid(cols, rows, entries);
+        var natural = columns * cell + (columns - 1) * WhichKeyGap + 2 * WhichKeyChrome;
+        var width = Math.Min(cols, columns == 1 ? Math.Clamp(natural, WhichKeyMinWidth, WhichKeyMaxWidth) : natural);
+        var height = Math.Min(Math.Max(0, rows - MuxModel.StatusRows), lines + 2 * WhichKeyChrome);
+        return new Rect(cols - width, rows - height, width, height);
+    }
+
+    private static (int Cell, int Columns, int Lines) WhichKeyGrid(int cols, int rows, IReadOnlyList<WhichKeyEntry> entries)
     {
         var keyWidth = entries.Max(e => e.Key.Length);
-        var labelWidth = entries.Max(e => e.Label.Length);
-        var cell = keyWidth + 2 + labelWidth;
-        var columns = Math.Clamp((frame.Cols - 4 + 3) / (cell + 3), 1, entries.Count);
-        var rows = (entries.Count + columns - 1) / columns;
-        var width = Math.Min(frame.Cols, columns * (cell + 3) - 3 + 4);
-        var height = Math.Min(frame.Rows - MuxModel.StatusRows, rows + 2);
-        var area = new Rect((frame.Cols - width) / 2, frame.Rows - height, width, height);
-        var inner = ClientView.Inner(area);
+        var labelWidth = entries.Max(e => e.Label.Length + (e.Group ? 1 : 0));
+        var cell = keyWidth + 3 + labelWidth;
+        var tallest = Math.Min(rows - MuxModel.StatusRows, Math.Max(2 * WhichKeyChrome + 1, rows * 3 / 4));
+        var fitRows = Math.Max(1, tallest - 2 * WhichKeyChrome);
+        var fitColumns = Math.Max(1, (cols - 2 * WhichKeyChrome + WhichKeyGap) / (cell + WhichKeyGap));
+        var wanted = (entries.Count + fitRows - 1) / fitRows;
+        var columns = Math.Clamp(wanted, 1, fitColumns);
+        var maxRows = columns < wanted ? Math.Max(1, rows - MuxModel.StatusRows - 2 * WhichKeyChrome) : fitRows;
+        var lines = Math.Min(maxRows, (entries.Count + columns - 1) / columns);
+        return (cell, columns, lines);
+    }
 
-        Box(frame, area, Lavender, title);
-        Clear(frame, inner);
+    private static void WhichKeyBox(ClientFrame frame, string title, IReadOnlyList<WhichKeyEntry> entries)
+    {
+        var (cell, _, lines) = WhichKeyGrid(frame.Cols, frame.Rows, entries);
+        var keyWidth = entries.Max(e => e.Key.Length);
+        var area = WhichKeyArea(frame.Cols, frame.Rows, entries);
+        var content = new Rect(
+            area.X + WhichKeyChrome,
+            area.Y + WhichKeyChrome,
+            Math.Max(0, area.Width - 2 * WhichKeyChrome),
+            Math.Max(0, area.Height - 2 * WhichKeyChrome));
+
+        Box(frame, area, Blue, title, WhichKeyFooter);
+        Clear(frame, ClientView.Inner(area));
 
         for (var i = 0; i < entries.Count; i++)
         {
-            var row = i % rows;
-            if (row >= inner.Height)
+            var row = i % lines;
+            var x = content.X + i / lines * (cell + WhichKeyGap);
+            var y = content.Y + row;
+            if (row >= content.Height || x >= content.X + content.Width)
             {
                 continue;
             }
 
-            var x = inner.X + 1 + i / rows * (cell + 3);
-            var y = inner.Y + row;
-            Write(frame, x, y, entries[i].Key.PadRight(keyWidth), Lavender, CellAttr.Bold, inner);
-            Write(frame, x + keyWidth + 2, y, entries[i].Label, Text, CellAttr.None, inner);
+            var entry = entries[i];
+            Write(frame, x, y, entry.Key.PadRight(keyWidth), Flamingo, CellAttr.None, content);
+            Write(frame, x + keyWidth + 1, y, WhichKeySeparator.ToString(), Overlay0, CellAttr.None, content);
+            Write(
+                frame,
+                x + keyWidth + 3,
+                y,
+                entry.Group ? "+" + entry.Label : entry.Label,
+                entry.Group ? Blue : Text,
+                CellAttr.None,
+                content);
         }
     }
 
@@ -246,7 +286,7 @@ public static class Composer
         }
     }
 
-    private static void Box(ClientFrame frame, Rect area, uint fg, string? title)
+    private static void Box(ClientFrame frame, Rect area, uint fg, string? title, string? footer = null)
     {
         for (var y = area.Y; y < area.Y + area.Height && y < frame.Rows; y++)
         {
@@ -280,6 +320,18 @@ public static class Composer
             for (var i = 0; i < label.Length && area.X + 2 + i < frame.Cols; i++)
             {
                 frame.Cells[area.Y * frame.Cols + area.X + 2 + i] = Cell.Of(label[i], fg);
+            }
+        }
+
+        var lastRow = area.Y + area.Height - 1;
+        if (footer is { Length: > 0 } && area.Height > 1 && lastRow < frame.Rows && footer.Length + 2 <= area.Width - 4)
+        {
+            var label = $" {footer} ";
+            var start = area.X + area.Width - 2 - label.Length;
+
+            for (var i = 0; i < label.Length && start + i < frame.Cols; i++)
+            {
+                frame.Cells[lastRow * frame.Cols + start + i] = Cell.Of(label[i], fg);
             }
         }
     }
