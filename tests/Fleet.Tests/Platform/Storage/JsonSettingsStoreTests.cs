@@ -276,17 +276,35 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
-    public void Menu_keys_default_to_shown_and_hidden_round_trips()
+    public void Menu_keys_default_to_shown()
     {
+        Assert.True(Store.LoadShowMenuKeys());
         Assert.True(Store.Load("never-saved").ShowMenuKeys);
+    }
 
-        Store.Save("techweb", SettingsConfig.Default.WithShowMenuKeys(false));
+    [Fact]
+    public void Hiding_menu_keys_is_one_setting_for_every_project()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+        Store.SaveShowMenuKeys(false);
+
+        Assert.False(Store.LoadShowMenuKeys());
         Assert.False(Store.Load("techweb").ShowMenuKeys);
-        Assert.Contains("showMenuKeys", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+        Assert.False(Store.Load("never-saved").ShowMenuKeys);
 
-        Store.Save("techweb", SettingsConfig.Default.WithShowMenuKeys(true));
+        Store.SaveShowMenuKeys(true);
+
         Assert.True(Store.Load("techweb").ShowMenuKeys);
-        Assert.DoesNotContain("showMenuKeys", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+        Assert.DoesNotContain("showKeys", File.ReadAllText(FleetPaths.MenuSettingsFile));
+    }
+
+    [Fact]
+    public void A_project_save_does_not_carry_the_menu_keys_setting()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithShowMenuKeys(false));
+
+        Assert.True(Store.Load("techweb").ShowMenuKeys);
+        Assert.DoesNotContain("enuKeys", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
     }
 
     [Fact]

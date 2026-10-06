@@ -49,9 +49,6 @@ public sealed class SettingsFile
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? SubagentGuidance { get; set; }
-
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? ShowMenuKeys { get; set; }
 }
 
 public sealed class HeadSettingsFile
@@ -61,6 +58,14 @@ public sealed class HeadSettingsFile
     public string Model { get; set; } = string.Empty;
 
     public string Effort { get; set; } = string.Empty;
+}
+
+public sealed class MenuSettingsFile
+{
+    public int Version { get; set; } = 1;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ShowKeys { get; set; }
 }
 
 public sealed class ToolRuleEntry

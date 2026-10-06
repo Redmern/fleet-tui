@@ -231,8 +231,8 @@ typed and only goes back once the field is empty; the key-capture dialog in **Ke
 Each row is its key, then its icon, then the label. A submenu with sections (Settings, Fleet
 config) puts a quiet caption over each section and a blank line between them.
 
-**Show keybinds** (`K` in Settings, on by default) hides the key column in every menu when
-it is off; the keys still work. `?` then shows the keys in the menu you are in, until you
+**Show keybinds** (`K` in Settings, on by default; one switch for every project and the project
+picker) hides the key column in every menu when it is off; the keys still work. `?` then shows the keys in the menu you are in, until you
 press `?` again or leave that menu, and the bar under the menu shows a `? keys` chip as a
 reminder. `?` can be rebound under **navigation** in Keybinds.
 

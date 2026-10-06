@@ -12,7 +12,9 @@ namespace Fleet.Platform.Storage;
 
 public sealed class JsonSettingsStore : ISettingsStore
 {
-    public SettingsConfig Load(string project)
+    public SettingsConfig Load(string project) => LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys() };
+
+    private static SettingsConfig LoadProject(string project)
     {
         var file = FileFor(project);
 
@@ -66,7 +68,6 @@ public sealed class JsonSettingsStore : ISettingsStore
             {
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
                 SubagentGuidance = stored.SubagentGuidance ?? SettingsDefaults.SubagentGuidance,
-                ShowMenuKeys = stored.ShowMenuKeys ?? SettingsDefaults.ShowMenuKeys,
                 Models = new RoleModels(
                     ParseRole(stored.MainModel, stored.MainEffort, SettingsDefaults.MainModel),
                     ParseRole(stored.SubModel, stored.SubEffort, SettingsDefaults.SubModel),
@@ -106,7 +107,6 @@ public sealed class JsonSettingsStore : ISettingsStore
             AutoCloseMinutes = config.AutoCloseMinutes == SettingsDefaults.AutoCloseMinutes ? 0 : config.AutoCloseMinutes,
             StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
-            ShowMenuKeys = config.ShowMenuKeys == SettingsDefaults.ShowMenuKeys ? null : config.ShowMenuKeys,
             MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),
@@ -164,6 +164,42 @@ public sealed class JsonSettingsStore : ISettingsStore
             FleetPaths.EnsureDirs();
             File.WriteAllText(
                 FleetPaths.HeadSettingsFile, JsonSerializer.Serialize(stored, FleetJsonContext.Default.HeadSettingsFile));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    public bool LoadShowMenuKeys()
+    {
+        try
+        {
+            if (File.Exists(FleetPaths.MenuSettingsFile)
+                && JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.MenuSettingsFile), FleetJsonContext.Default.MenuSettingsFile) is { ShowKeys: { } shown })
+            {
+                return shown;
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+        }
+
+        return SettingsDefaults.ShowMenuKeys;
+    }
+
+    public void SaveShowMenuKeys(bool shown)
+    {
+        var stored = new MenuSettingsFile
+        {
+            ShowKeys = shown == SettingsDefaults.ShowMenuKeys ? null : shown,
+        };
+
+        try
+        {
+            FleetPaths.EnsureDirs();
+            File.WriteAllText(
+                FleetPaths.MenuSettingsFile, JsonSerializer.Serialize(stored, FleetJsonContext.Default.MenuSettingsFile));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

@@ -5395,8 +5395,10 @@ conversation):
 - **Padding:** the list sits two rows below the top of the float and the action bar two
   rows below the last item, then one blank line (`ShowMenuView.Place`, `FitRows`). It
   was three above and one below.
-- **Show keybinds** (`ShowMenuKeys`, per project like the other menu toggles, default on,
-  `K` in Settings). Off hides the key column in every fleet menu. `RevealMenuKeys` (`?`)
+- **Show keybinds** (`ShowMenuKeys`, default on, `K` in Settings) is machine-wide, stored in
+  `menu.json` next to `head.json`, so the project picker (which has no project) follows it
+  too. `JsonSettingsStore.Load` lays it over every project's settings; a project save does not
+  write it, and the toggle saves it on its own. Off hides the key column in every fleet menu. `RevealMenuKeys` (`?`)
   flips the column on for the menu on screen until `?` again or the menu closes; the bar
   shows a `? keys` chip while the setting is off. `i` was asked for but is Auto-close in
   Fleet config, and `?` is bound nowhere else. The float is fitted to the keyed width, so

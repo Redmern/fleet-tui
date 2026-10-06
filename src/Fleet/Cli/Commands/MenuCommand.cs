@@ -158,6 +158,7 @@ public static class MenuCommand
             {
                 current = FleetMenus.Flip(action, current);
                 settings.Save(project.Name, current);
+                Adapters.SaveShowMenuKeys(current.ShowMenuKeys);
                 return FleetMenus.Value(action, current, head);
             },
             () => current.ShowMenuKeys);
