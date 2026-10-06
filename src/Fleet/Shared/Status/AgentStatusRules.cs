@@ -37,5 +37,14 @@ public static class AgentStatusRules
             ? null
             : Aggregate(snapshot.Reports.Where(r => PathKey.Within(r.Worktree, worktree)), now, stallAfter);
 
+    public static string? InboxOf(AgentSnapshot snapshot, string folder) =>
+        folder.Length == 0
+            ? null
+            : snapshot.Reports
+                .Where(r => r.Inbox.Length > 0 && PathKey.Same(r.Worktree, folder))
+                .OrderByDescending(r => r.At)
+                .Select(r => r.Inbox)
+                .FirstOrDefault();
+
     public static bool Forgotten(AgentReport report, DateTime now) => now - report.At >= ForgetAfter;
 }

@@ -12,7 +12,9 @@ public static class OrchestrationText
             each agent's last reported status)
           - new_agent to start an agent on a branch; pass `task` to give it its first
             instruction in the same call
-          - tell_agent to send a follow-up instruction to an agent you have started
+          - tell_agent to send a follow-up instruction to an agent you have started;
+            when its result gives an address, send the instruction yourself with
+            SendMessage to that address
           - open_agent / stop_agent / set_agent_visible to manage them
         Agents report their own progress with the report tool, which shows up in
         list_agents. Every tool call is subject to this project's permission settings.
@@ -40,11 +42,18 @@ public static class OrchestrationText
         pushing on with one you no longer believe.
         """;
 
+    public const string Research =
+        """
+        This is research. Do not start repository agents: no new_agent, no tell_agent.
+        Do the work yourself with background subagents, or /deep-research, and put
+        the result in reports/.
+        """;
+
     public static bool IsClassicAidlc(string text) =>
         string.Equals(Normalized(text), Normalized(ClassicAidlc), StringComparison.Ordinal);
 
     public static string Instructions(
-        OrchestrationBrief brief, string? howYouWork = null, string? aidlc = null)
+        OrchestrationBrief brief, string? howYouWork = null, string? aidlc = null, bool research = false)
     {
         var header =
             $"""
@@ -76,6 +85,11 @@ public static class OrchestrationText
         if (!string.IsNullOrWhiteSpace(aidlc))
         {
             sections.Add($"## Process\n{aidlc.Trim()}");
+        }
+
+        if (research)
+        {
+            sections.Add($"## Research\n{Research.Trim()}");
         }
 
         sections.Add(footer);

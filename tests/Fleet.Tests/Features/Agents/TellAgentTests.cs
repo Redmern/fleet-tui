@@ -150,6 +150,42 @@ public sealed class TellAgentTests : IDisposable
         Assert.Empty(_mux.SentTo(nvimPane));
     }
 
+    [Fact]
+    public async Task An_agent_with_an_inbox_is_handed_to_SendMessage_and_nothing_is_typed_or_written()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes(_root, "uds:pipe-a"));
+
+        var address = await teller.RouteAsync(agent, pane, "review the PR", typed: false);
+
+        Assert.Equal("uds:pipe-a", address);
+        Assert.Empty(_mux.SentTo(pane));
+        Assert.False(File.Exists(Path.Combine(_root, ".fleet", AgentHarness.AgentInstructionFile)));
+    }
+
+    [Fact]
+    public async Task Without_an_inbox_or_when_asked_to_type_the_agent_is_told_through_its_pane()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var elsewhere = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes("C:\\other", "uds:pipe-b"));
+        var inbox = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes(_root, "uds:pipe-a"));
+
+        Assert.Null(await elsewhere.RouteAsync(agent, pane, "x", typed: false));
+        Assert.Null(await inbox.RouteAsync(agent, pane, "y", typed: true));
+        Assert.Null(await Teller.RouteAsync(agent, pane, "z", typed: false));
+
+        Assert.Equal(3, Prompts(pane));
+        Assert.Equal("z", Inbox(agent));
+    }
+
+    private sealed class FixedInboxes(string folder, string address) : IAgentInboxes
+    {
+        public Task<string?> AddressAsync(string target, CancellationToken ct = default) =>
+            Task.FromResult(target == folder ? address : null);
+    }
+
     private sealed class MemoryStore : IAgentStore
     {
         private readonly List<AgentRecord> _agents = [];

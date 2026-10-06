@@ -49,6 +49,20 @@ public sealed class FileAgentStateStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task The_inbox_address_reads_back_and_the_inboxes_port_finds_it_by_exact_folder()
+    {
+        var store = new FileAgentStateStore(_dir);
+        await store.ReportAsync(Report(AgentState.Idle) with { Inbox = @"uds:\\.\pipe\LOCAL\cc-msg-1" });
+        await store.ReportAsync(Report(AgentState.Idle, "s2", "C:/w/a/inner") with { Inbox = "uds:inner" });
+
+        var inboxes = new StatusFileInboxes(store);
+
+        Assert.Equal(@"uds:\\.\pipe\LOCAL\cc-msg-1", await inboxes.AddressAsync("C:/w/a"));
+        Assert.Equal("uds:inner", await inboxes.AddressAsync("C:/w/a/inner"));
+        Assert.Null(await inboxes.AddressAsync("C:/w/b"));
+    }
+
+    [Fact]
     public async Task One_file_per_session_and_the_latest_report_wins()
     {
         var store = new FileAgentStateStore(_dir);

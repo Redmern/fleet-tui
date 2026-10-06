@@ -28,7 +28,11 @@ public static class HookIo
 
     public const string ProjectDirVariable = "CLAUDE_PROJECT_DIR";
 
-    public static HookEvent Event(HookPayload payload, string? projectDir = null) =>
+    public const string MessagingSocketVariable = "CLAUDE_CODE_MESSAGING_SOCKET";
+
+    public const string PeerAddressPrefix = "uds:";
+
+    public static HookEvent Event(HookPayload payload, string? projectDir = null, string? messagingSocket = null) =>
         new(
             payload.HookEventName ?? string.Empty,
             projectDir is { Length: > 0 } started ? started : payload.Cwd ?? string.Empty,
@@ -36,7 +40,13 @@ public static class HookIo
             payload.TranscriptPath ?? string.Empty,
             payload.AgentId ?? string.Empty,
             payload.NotificationType ?? string.Empty,
-            payload.Source ?? string.Empty);
+            payload.Source ?? string.Empty,
+            PeerAddress(messagingSocket));
+
+    public static string PeerAddress(string? messagingSocket) =>
+        messagingSocket?.Trim() is { Length: > 0 } socket
+            ? socket.StartsWith(PeerAddressPrefix, StringComparison.Ordinal) ? socket : PeerAddressPrefix + socket
+            : string.Empty;
 
     public static string Block(string reason) =>
         JsonSerializer.Serialize(

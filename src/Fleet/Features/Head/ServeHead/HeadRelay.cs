@@ -4,6 +4,7 @@ using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
+using Fleet.Shared.Messaging;
 using Fleet.Shared.Settings.Enums;
 
 namespace Fleet.Features.Head.ServeHead;
@@ -34,8 +35,18 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
         }
     }
 
-    public Task<McpResult> RelayAsync(Project project, string prompt, CancellationToken ct) =>
-        DeliverAsync(project, HarnessTool.Dispatch, RelayText.Dispatch(prompt, Trigger(project)), "relayed to", ct);
+    public Task<McpResult> RelayAsync(Project project, string prompt, CancellationToken ct)
+    {
+        var trigger = Trigger(project);
+
+        return DeliverAsync(
+            project,
+            HarnessTool.Dispatch,
+            RelayText.Dispatch(prompt, trigger),
+            PeerMessage.DispatchRequest(RelayText.Plain(prompt, trigger)),
+            "relayed to",
+            ct);
+    }
 
     public async Task<McpResult> TellAsync(Project project, string prompt, CancellationToken ct)
     {
@@ -43,13 +54,13 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
         return text.Length == 0
             ? McpResult.Error($"'{HeadTools.Prompt}' has nothing left once the dispatch trigger is removed.")
-            : await DeliverAsync(project, HarnessTool.TellAgent, text, "told", ct).ConfigureAwait(false);
+            : await DeliverAsync(project, HarnessTool.TellAgent, text, text, "told", ct).ConfigureAwait(false);
     }
 
     private string Trigger(Project project) => deps.Settings.Load(project.Name).MergedOverDefaults().Trigger;
 
     private async Task<McpResult> DeliverAsync(
-        Project project, HarnessTool tool, string text, string verb, CancellationToken ct)
+        Project project, HarnessTool tool, string text, string message, string verb, CancellationToken ct)
     {
         if (gate.Refused(project.Name, tool) is { } refused)
         {
@@ -68,6 +79,13 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
             opened = true;
         }
 
+        var lead = opened ? $"opened {project.Name}; " : string.Empty;
+
+        if (!opened && await InboxAsync(project, ct).ConfigureAwait(false) is { } open)
+        {
+            return await ViaMessageAsync(project, tool, message, open, lead, ct).ConfigureAwait(false);
+        }
+
         var (pane, readiness) = await WaitForReadyAsync(
             project, opened ? timing.OpenTimeout : TimeSpan.Zero, ct).ConfigureAwait(false);
 
@@ -83,8 +101,6 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
             return McpResult.Error(denied);
         }
 
-        var lead = opened ? $"opened {project.Name}; " : string.Empty;
-
         if (pane is { } target && readiness == Readiness.Ready && Pending(project.Name) == 0)
         {
             await TypeAsync(project.Name, target.Id, text, ct).ConfigureAwait(false);
@@ -99,6 +115,34 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
         return McpResult.Ok(
             $"{lead}{project.Name}'s orchestrator is {Why(pane, readiness)}, so the prompt is queued "
             + $"({waiting} waiting). fleet types it in as soon as that Claude is idle: {text}");
+    }
+
+    private async Task<string?> InboxAsync(Project project, CancellationToken ct)
+    {
+        if (deps.Inboxes is not { } inboxes || Pending(project.Name) > 0)
+        {
+            return null;
+        }
+
+        var panes = await deps.Mux.ListPanesAsync(ct).ConfigureAwait(false);
+
+        return MainPane.Find(panes, project.Root, deps.DashPane(project.Name)) is null
+            ? null
+            : await inboxes.AddressAsync(project.Root, ct).ConfigureAwait(false);
+    }
+
+    private async Task<McpResult> ViaMessageAsync(
+        Project project, HarnessTool tool, string message, string address, string lead, CancellationToken ct)
+    {
+        if (tool != HarnessTool.Dispatch
+            && await gate.CheckAsync(project.Name, tool, message, ct).ConfigureAwait(false) is { } denied)
+        {
+            return McpResult.Error(denied);
+        }
+
+        Log(project.Name, $"head hands a prompt for the orchestrator to SendMessage ({address})");
+
+        return McpResult.Ok(lead + PeerMessage.SendYourself($"{project.Name}'s orchestrator", address, message));
     }
 
     private int Enqueue(Project project, string text)

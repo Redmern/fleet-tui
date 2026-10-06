@@ -32,6 +32,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Messaging;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -47,7 +48,7 @@ public sealed class McpActions(
     IMuxDriver mux,
     IAgentStore store,
     IHarnessConfig harnessConfig,
-    IFleetLog log)
+    IFleetLog log) : IAgentStarter
 {
     private readonly ListAgentsHandler _agents = new(store);
 
@@ -77,12 +78,9 @@ public sealed class McpActions(
 
     private readonly SecretsHandler _secrets = new();
 
-    private readonly DispatchHandler _dispatcher =
-        new(mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(), intents: Adapters.Intents());
-
     private readonly ReportStatusHandler _reporter = new(store);
 
-    private readonly TellAgentHandler _teller = new(mux);
+    private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes());
 
     private readonly BranchStates _states = new(git);
 
@@ -196,38 +194,69 @@ public sealed class McpActions(
             return NoRepository(request);
         }
 
+        var started = await Start(repo, Branch(request), caller, ToolArguments.Text(request, ToolArguments.Task), ct)
+            .ConfigureAwait(false);
+
+        return started.Succeeded ? Ok(started.Value!) : McpResult.Error(started.Error!);
+    }
+
+    public async Task<Result<string>> StartAsync(AgentStart request, CancellationToken ct = default)
+    {
+        var repo = await Named(request.Repository, ct).ConfigureAwait(false);
+
+        return repo is null
+            ? Result<string>.Fail($"No repository named '{request.Repository}' in this project.")
+            : await Start(repo, request.Branch, caller, request.Task, ct).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyCollection<string>> BranchesAsync(
+        string project, string repository, CancellationToken ct = default)
+    {
+        var repo = await Named(repository, ct).ConfigureAwait(false);
+
+        if (repo is null)
+        {
+            return [];
+        }
+
+        var branches = await _branches.HandleAsync(repo.Path, ct).ConfigureAwait(false);
+
+        return [.. branches.Select(b => b.ShortName)];
+    }
+
+    private async Task<Result<string>> Start(
+        RepositorySummary repo, string branch, string owner, string task, CancellationToken ct)
+    {
         var created = await _spawner
             .HandleAsync(
                 new NewAgentCommand(
-                    project, repo.Name, repo.Path, Branch(request), repo.DefaultBranch,
-                    AgentHarness.Nvim, caller, Claude: true),
+                    project, repo.Name, repo.Path, branch, repo.DefaultBranch,
+                    AgentHarness.Nvim, owner, Claude: true),
                 ct)
             .ConfigureAwait(false);
 
         if (!created.Succeeded)
         {
-            return McpResult.Error(created.Error!);
+            return Result<string>.Fail(created.Error!);
         }
 
-        if (caller.Trim().Length > 0)
+        if (owner.Trim().Length > 0)
         {
-            store.Save(project, created.Value! with { Owner = caller });
+            store.Save(project, created.Value! with { Owner = owner });
         }
 
-        ClaudeWiring.ApproveFolder(project, created.Value!.Worktree, repo.Name, Branch(request));
-
-        var task = ToolArguments.Text(request, ToolArguments.Task);
+        ClaudeWiring.ApproveFolder(project, created.Value!.Worktree, repo.Name, branch);
 
         if (task.Length == 0)
         {
-            return Ok($"started {repo.Name}/{Branch(request)}.");
+            return Result<string>.Ok($"started {repo.Name}/{branch}.");
         }
 
         var delivered = await SendWhenReady(created.Value!, task, ct).ConfigureAwait(false);
 
-        return Ok(delivered
-            ? $"started {repo.Name}/{Branch(request)} and gave it its first task."
-            : $"started {repo.Name}/{Branch(request)}, but it was not ready to take the task; "
+        return Result<string>.Ok(delivered
+            ? $"started {repo.Name}/{branch} and gave it its first task."
+            : $"started {repo.Name}/{branch}, but it was not ready to take the task; "
               + "use tell_agent once it is up.");
     }
 
@@ -280,8 +309,22 @@ public sealed class McpActions(
                 $"{Repo(request)}/{Branch(request)} is not open; open it first, then tell it.");
         }
 
-        await _teller.DeliverAsync(agent, pane.Value, ToolArguments.Text(request, ToolArguments.Message), ct)
+        var message = ToolArguments.Text(request, ToolArguments.Message);
+        var address = await _teller
+            .RouteAsync(agent, pane.Value, message, ToolArguments.Flag(request, ToolArguments.Typed), ct)
             .ConfigureAwait(false);
+
+        if (address is not null)
+        {
+            log.Write(LogTag.For(project, $"tell_agent hands {Repo(request)}/{Branch(request)} to SendMessage"));
+
+            return Ok(PeerMessage.SendYourself(
+                $"{Repo(request)}/{Branch(request)}",
+                address,
+                message,
+                $"If SendMessage can't reach that address, call {HarnessToolIds.For(HarnessTool.TellAgent)} again "
+                + $"with {ToolArguments.Typed}: true."));
+        }
 
         return Ok($"sent to {Repo(request)}/{Branch(request)}.");
     }
@@ -510,14 +553,21 @@ public sealed class McpActions(
             return error;
         }
 
-        var reply = await _dispatcher
+        var dispatcher = new DispatchHandler(
+            mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(),
+            intents: Adapters.Intents(), starter: this);
+
+        var reply = await dispatcher
             .HandleAsync(
                 new DispatchCommand(
                     project,
                     root,
                     ToolArguments.Text(request, ToolArguments.Message),
                     caller,
-                    ToolArguments.Text(request, ToolArguments.Profile)),
+                    ToolArguments.Text(request, ToolArguments.Profile),
+                    Repo(request),
+                    Branch(request),
+                    ToolArguments.Flag(request, ToolArguments.Research)),
                 DateTimeOffset.UtcNow.ToString("O"))
             .ConfigureAwait(false);
 
@@ -595,10 +645,11 @@ public sealed class McpActions(
         return reported.Succeeded ? Ok(reported.Value!) : McpResult.Error(reported.Error!);
     }
 
-    private async Task<RepositorySummary?> Resolve(McpRequest request, CancellationToken ct)
-    {
-        var name = Repo(request);
+    private Task<RepositorySummary?> Resolve(McpRequest request, CancellationToken ct) =>
+        Named(Repo(request), ct);
 
+    private async Task<RepositorySummary?> Named(string name, CancellationToken ct)
+    {
         if (name.Length == 0)
         {
             return null;

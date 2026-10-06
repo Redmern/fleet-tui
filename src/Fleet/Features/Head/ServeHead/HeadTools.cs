@@ -98,14 +98,16 @@ public static class HeadTools
             "Pass a plain message to a project's main orchestrator: a question (\"what is the status?\"), a "
             + "follow-up or an instruction. Types the prompt as-is into its Claude as if the user typed it, never "
             + "as a dispatch. Use this for everything except an explicit dispatch. Opens the project if it is "
-            + "closed; queues the prompt if its Claude is busy.",
+            + "closed; queues the prompt if its Claude is busy. When that Claude takes cross-session messages, "
+            + "types nothing and answers with an address: send the message there with SendMessage.",
             [ProjectParam, new(Prompt, "string", "The message for the orchestrator, as the user worded it.", true), RemoteParam]),
         new(
             Relay,
             "Have a project's main orchestrator dispatch a new sub-orchestrator: types the prompt, with the "
             + "project's dispatch trigger in front, into its Claude. Use only when the user explicitly asks to "
             + "dispatch a task; use tell for anything else. Opens the project if it is closed; queues the prompt "
-            + "if its Claude is busy.",
+            + "if its Claude is busy. When that Claude takes cross-session messages, types nothing and answers "
+            + "with an address and a dispatch request: send it there with SendMessage.",
             [ProjectParam, new(Prompt, "string", "The task for the orchestrator to dispatch.", true), RemoteParam]),
         new(
             ShowAgent,

@@ -599,6 +599,15 @@ creates repo agents that are stamped as its own, and reports back with
 sub-orchestrator with the agents it created and shows its status — working, done, or
 failed — until you remove it.
 
+**Dispatch to one repository.** When the orchestrator calls the `dispatch` tool with a
+`repository` (and optionally a `branch`), fleet skips the sub-orchestrator and starts a
+repo agent on that repository with the task, as `new_agent` would; the call must pass both
+the `dispatch` and the `new_agent` permission. Without a branch, the branch is named from
+the task the way a sub's slug is. A sub-orchestrator is still used when AIDLC applies to
+the task, or when it is research (`research: true`, or the `research` profile); a research
+sub is told to do the work itself with subagents instead of starting repo agents. A typed
+dispatch (`,task`) always starts a sub-orchestrator.
+
 **Managing subs.** The orchestrator (or a sub) can manage sub-orchestrators with three
 MCP tools, each with its own row in the permissions screen:
 
@@ -714,6 +723,17 @@ orchestrator for a status update, a follow-up, an answer to its question. It typ
 message as-is (a leading dispatch trigger is stripped, so it can never dispatch), with the
 same opening, queueing and typing as `relay`. The head uses `relay` only when you
 explicitly ask it to dispatch.
+
+**Messages instead of typing.** When the orchestrator's Claude takes cross-session messages
+(Claude Code 2.1.234 or later on Windows, with live status hooks on), `relay` and `tell` type
+nothing. They answer the head with that session's address, and the head sends the message
+itself with Claude's `SendMessage`. Claude Code delivers it at the orchestrator's next tool
+call, or starts a turn when it is idle, so nothing is queued and nothing has to be read off
+the screen. A relay sent this way asks the orchestrator to call its `dispatch` tool, so the
+project's `dispatch` rule is checked on that call rather than by the head. `tell_agent`
+works the same way for an orchestrator's agents, and its `typed: true` falls back to typing
+when `SendMessage` can't reach the session. A project or agent whose Claude reported no
+inbox (an older Claude, status hooks off, a remote machine's head) is typed into as before.
 
 **Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh

@@ -137,4 +137,20 @@ public sealed class AgentStatusRulesTests
         Assert.False(AgentStatusRules.Forgotten(Report(AgentState.Idle, TimeSpan.FromHours(23)), Now));
         Assert.True(AgentStatusRules.Forgotten(Report(AgentState.Working, TimeSpan.FromHours(24)), Now));
     }
+
+    [Fact]
+    public void The_inbox_of_a_folder_is_the_newest_report_there_that_has_one()
+    {
+        var snapshot = new AgentSnapshot(
+        [
+            Report(AgentState.Idle, TimeSpan.FromMinutes(5), "old") with { Inbox = "uds:old" },
+            Report(AgentState.Working, TimeSpan.FromMinutes(1), "new") with { Inbox = "uds:new" },
+            Report(AgentState.Working, TimeSpan.Zero, "bare"),
+            Report(AgentState.Idle, TimeSpan.Zero, "child", "C:/w/a/src") with { Inbox = "uds:child" },
+        ]);
+
+        Assert.Equal("uds:new", AgentStatusRules.InboxOf(snapshot, "C:/w/a/"));
+        Assert.Null(AgentStatusRules.InboxOf(snapshot, "C:/w"));
+        Assert.Null(AgentStatusRules.InboxOf(snapshot, string.Empty));
+    }
 }

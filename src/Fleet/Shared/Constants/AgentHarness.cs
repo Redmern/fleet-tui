@@ -48,7 +48,15 @@ public static class AgentHarness
         + "if #vim.api.nvim_list_wins()>1 and vim.api.nvim_buf_get_name(b)=='' "
         + "and vim.bo[b].buftype=='' and not vim.bo[b].modified "
         + "and vim.api.nvim_buf_line_count(b)<=1 then "
-        + "pcall(vim.api.nvim_win_close, w, true) end end vim.cmd('stopinsert') end, 150) end)";
+        + "pcall(vim.api.nvim_win_close, w, true) end end "
+        + "local tree,term for _,w in ipairs(vim.api.nvim_list_wins()) do "
+        + "local b=vim.api.nvim_win_get_buf(w) "
+        + "if vim.bo[b].filetype=='neo-tree' then tree=w "
+        + "elseif vim.bo[b].buftype=='terminal' then term=w end end "
+        + "if tree and term then vim.wo[term].winfixwidth=false "
+        + "pcall(vim.api.nvim_win_set_width, tree, math.floor(vim.o.columns*0.25)) "
+        + "vim.wo[tree].winfixwidth=true end "
+        + "vim.cmd('stopinsert') end, 150) end)";
 
     public static string NvimStartupClaudeOnly(string claudeArgs) =>
         NvimBoot

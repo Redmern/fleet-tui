@@ -34,6 +34,10 @@ public static class ToolArguments
 
     public const string Lines = "lines";
 
+    public const string Research = "research";
+
+    public const string Typed = "typed";
+
     public static string Text(McpRequest request, string key) => request.Value(key).Trim();
 
     public static bool Flag(McpRequest request, string key) => request.Flag(key);

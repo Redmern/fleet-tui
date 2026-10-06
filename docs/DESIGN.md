@@ -5021,6 +5021,196 @@ role's setting isn't `inherit`.
 - `--effort` levels a model doesn't support: the docs say "available levels depend on the
   model"; what Claude does with an unsupported one wasn't tried.
 
+## Cross-session messaging spike, 2026-10-06
+
+Question: can `tell_agent`, the head's `relay` and `tell` (and dispatch kickoffs) go
+through Claude Code's cross-session messaging (`SendMessage` / `ListAgents`, one inbox per
+session, a named pipe on Windows) instead of `send-text`, the screen-scraped ready check
+and the head's in-memory queue? Spiked on Claude Code 2.1.291, native Windows, with real
+interactive `claude --name spike-recv-*` sessions in a scratch folder. Each ran in a
+pseudo-terminal so its screen could be read and keys typed, and had a logging hook on
+every event. A fleet agent (Claude inside nvim) did the sending.
+
+- **(a) A delivered message fires `UserPromptSubmit`.** Every delivered message ran
+  the receiver's `UserPromptSubmit` hook, whether it started a turn on an idle session
+  or was injected into a busy one. The hook's `prompt` is the message wrapped as
+  `<cross-session-message from="uds:\\.\pipe\LOCAL\cc-msg-…" from-name="<sender name>"
+  from-mode="prompting">\n<text>\n</cross-session-message>`. `Stop` follows as for a
+  typed prompt, and so does `PreToolUse`/`PostToolUse` for the tools it causes. No
+  other event marks it. A background task finishing (`<task-notification>…`) fires
+  `UserPromptSubmit` the same way. So fleet's status hook sees an ordinary turn, which is
+  correct. The dispatch hook (`HookPrompt.Intercepted`) only takes a prompt that starts
+  with the trigger, and the wrapper starts with `<`. That is safe for every trigger
+  except `<` itself, which `DispatchTrigger.IsValid` allows. With that trigger, every
+  relayed message would be dispatched.
+- **(b) Inbound settings and modes.** Between two prompting sessions (default, auto,
+  `acceptEdits`), messages are delivered with no setting at all: default mode to default
+  mode, and auto (this agent) to default and back. `crossSessionInbound` in a folder's
+  `.claude/settings.local.json` is read: `"hold"` there held a message, and the
+  receiver printed *"This repository's settings set crossSessionInbound to hold (a repo
+  may only tighten, so your own accept cannot override it)"*. By that rule a repo
+  `accept` cannot loosen anything. `/status` shows `Peer address` and `Setting sources`
+  but not the inbound value. Not tested: a receiver that bypasses permissions (which
+  holds by default). Launching one was refused by auto mode. Fleet starts every pane
+  without a permission-mode flag, so its sessions are prompting, and writing
+  `crossSessionInbound: "accept"` is neither needed nor (from a repo file) effective.
+  It is not written.
+- **(c) Delivery timing.** Idle: the message starts a turn within about a second.
+  Busy: a message sent during a 30 s foreground `ping` waited until that tool returned
+  (22 s later) and was injected at the tool boundary, in the same turn, before the next
+  tool call. Nothing was interrupted or lost. This replaces the ready check and the queue.
+- **(d) A non-Claude process posting into an inbox.** Hooks do get
+  `CLAUDE_CODE_MESSAGING_SOCKET` and `CLAUDE_CODE_MESSAGING_TOKEN` (present from
+  `SessionStart` on), so `fleet hook` could publish both. Not pursued, for three reasons:
+  - On native Windows the token is how Claude Code recognises an *own-child* message.
+    Own-child messages skip the inbound defaults. A post from fleet with that token
+    would pass fleet's text off as the session's own Bash/hook output, which defeats
+    the trust rules instead of keeping them.
+  - Writing the token to a status file publishes a credential.
+  - Only the auth line is documented. The message line after it is not, and reading it
+    out of the binary was refused by auto mode.
+
+  The *address* is another matter. It is the same value as `/status`'s `Peer address`,
+  `SendMessage` accepts it as `to` (verified), and it is not a secret. So hooks can
+  safely report it. Hooks also get the session's name as `session_title`
+  (`UserPromptSubmit`, `SessionStart`).
+- **(e) Claude inside nvim.** It binds an inbox. The research sub-orchestrator
+  (`inNvim: true`) and this agent (nvim harness) both appear in `ListAgents` as
+  `interactive`, and both sent and received messages.
+
+**Consequence for the design.** Option A: the calling Claude sends. The MCP tool looks up
+the target's inbox address (reported by the target's own hook) and answers "send this
+with `SendMessage` to `<address>`", and the caller's `SendMessage` carries Claude's own
+trust rules (sender name and mode, held/refused notices). The head is a Claude too, so
+`relay` and `tell` can work the same way. Option B (fleet writes into the pipe) is
+rejected for the reasons under (d). Kickoffs don't fit either option, because the sub's
+session doesn't exist yet when `dispatch` returns. They stay on the nvim pump and the
+ready marker. A target with no known inbox (older Claude, `--bare`, a pane whose hook
+never reported) falls back to `send-text`.
+
+### Built: option A
+
+- **The hook records the address, never the token.** `fleet hook` passes
+  `CLAUDE_CODE_MESSAGING_SOCKET` to `HookIo.Event`. The socket becomes the peer address
+  (`uds:` + socket) on `HookEvent.Inbox`, then on `AgentReport.Inbox`, and is stored in the
+  session's status file (`AgentStateFile.Inbox`). Every event carries it, so the newest
+  report has it. `SessionEnd` deletes the file, and `SessionStart` deletes the folder's other
+  sessions, so a closed session's address goes with it.
+- **A port for the lookup.** `Ports/Agents/IAgentInboxes.AddressAsync(folder)`, implemented by
+  `Platform/Storage/StatusFileInboxes` over the status store, picks the newest report with an
+  inbox through `AgentStatusRules.InboxOf`. It matches the **exact** folder, not `Within`.
+  The project root is the main orchestrator's folder, and agent worktrees can sit under it.
+- **`tell_agent`.** `TellAgentHandler.RouteAsync` returns the address when the agent's
+  folder has one. `McpActions` then answers with `PeerMessage.SendYourself` (the address,
+  the message unchanged, and "a held or refused notice is the receiver's choice"), and
+  nothing is typed or written to `instruction.md`. Without an address it is `DeliverAsync`,
+  as before. A new optional `typed` argument forces typing. The result offers it only for a
+  `SendMessage` that couldn't reach the address (for example a crashed Claude whose pane
+  survived). A held message is not a reason to use it: typing would get round the
+  receiver's hold.
+- **The head's `relay` and `tell`.** `HeadDeps.Inboxes` is set only for the local head
+  (`HeadWiring.RunMcpAsync`). The remote side (`ServeOrigin`) leaves it null, because an
+  address there names a pipe on the other machine. An open project with an address for
+  its root, and nothing in the typed queue for it, gets the address back without the screen
+  being read, as long as the main orchestrator's pane is listed. A project the head had to
+  open is typed into as before. Its status folder may still hold the address of a session
+  that was killed without `SessionEnd`, and that address is only replaced when the new
+  session's `SessionStart` lands, which can be after the pane looks ready. The head has no
+  `typed` retry, so it doesn't take that risk. `tell` still asks through X's `tell_agent` rule. A relay becomes
+  `PeerMessage.DispatchRequest`, which asks the orchestrator to call its `dispatch` tool,
+  because a wrapped message can't trip the hook. So the head checks only that the `dispatch`
+  rule doesn't forbid it, and leaves the *ask* to the orchestrator's own `dispatch` call,
+  which `McpGate` checks against the same rule. Asking in both places would show two
+  dialogs for one relay.
+- **The dispatch hook ignores Claude's own wrappers.** `HookPrompt.Intercepted` never takes
+  a prompt that starts with `<cross-session-message` or `<task-notification>`
+  (`PeerMessage.FromClaude`), whatever the trigger. This change is limited to the hook path.
+- **Briefs.** The head's brief, the head tool descriptions, the `tell_agent` description and
+  `OrchestrationText.DefaultHowYouWork` say to send the returned message with
+  `SendMessage` to the returned address.
+- **Not written:** `crossSessionInbound`. Fleet's sessions are prompting, and a repo file can
+  only tighten (see (b)).
+- **Kept:** send-text, the ready check and the queue, as the fallback; kickoffs through
+  `instruction.md`.
+
+Known limits, from review:
+
+- The address is the newest one reported for the folder, whichever session sent it. A
+  second `claude` started by hand in the same folder outside fleet would take the messages
+  meant for fleet's pane.
+- `typed: true` is a request, not an enforced fallback. A caller that passes it after a
+  *held* delivery types round the receiver's hold. Only the tool text says not to.
+- For `tell_agent`, a Claude that crashed while its pane lived on keeps its old address
+  until its folder starts a new session. The `typed` retry covers that case.
+
+Not verified end to end: a real head relaying to a real orchestrator through
+`SendMessage`, or an orchestrator acting on a dispatch request from the head. The unit
+tests cover the routing, and the spike covers delivery.
+
+## Dispatch without a sub-orchestrator, 2026-10-06
+
+Every dispatch used to start a sub-orchestrator: a full Claude session in its own pane whose
+only job, for a one-repo task, was to call `new_agent` and relay. The orchestration research
+(`fleet-orchestration-research`, §3 and §5 item 4) called that the expensive tier. Now the
+dispatcher can skip it, but only when it says so.
+
+- **Explicit, never guessed.** The `dispatch` MCP tool takes an optional `repository`, an
+  optional `branch` and an optional `research` flag. With a repository, fleet starts a repo
+  agent with the task directly, through the same code as `new_agent` with `task` (`McpActions`
+  implements the new `IAgentStarter` port, so the Orchestrations slice doesn't reach into the
+  Agents slice). The owner is the caller, as with `new_agent`: none when the main orchestrator
+  dispatches, so it shows as a top-level agent, and the sub when a sub dispatches, so it stays in
+  that sub's tree. It gets the repo-agent session name and the `agent` model/effort from #49, because it is spawned
+  by `NewAgentHandler`. Without a branch, the branch is named from the task the way a sub's
+  slug is (the slug namer, then `OrchestrationSlug`), made unique among that repository's
+  agents and its branches (local and `origin/`, through `IAgentStarter.BranchesAsync`), so a
+  derived name never lands on an old branch that `git worktree add` would reuse. Without a repository nothing changes. The reply's `Slug` is the branch and its
+  `Folder` is empty.
+- **One pure rule** (`Shared/Orchestrations/DispatchRouting.Decide`): resolve AIDLC as before
+  (the prefix, then with mode `on` the argument, then the project default; this moved out of
+  `DispatchHandler` unchanged); research is the `research` flag or the `research` profile; a
+  repo agent is started only when a repository is given, AIDLC doesn't apply and it isn't
+  research. Otherwise it is a sub-orchestrator, so the AIDLC record and gates keep living in
+  its orchestration folder, and the reply says the repository was not used and why. With AIDLC off a `feature:` prefix is ordinary text, so it stays in
+  the direct agent's task.
+- **Research.** A research sub gets a `## Research` section after the process:
+  `OrchestrationText.Research`, its own constant, telling it not to start repo agents and to use
+  background subagents or `/deep-research`. `DefaultHowYouWork` is untouched, because the
+  subagent-guidance branch reworks it next.
+- **Permissions.** A `dispatch` call that names a repository is gated as `dispatch` and then
+  `new_agent` (`McpGate.Gated`; `McpDispatcher` runs the same forbid/ask check for each, in that
+  order, and stops at the first refusal). A project that forbids `new_agent` can't start an
+  agent through `dispatch`. It is gated on the arguments, not on the route, so with AIDLC on
+  (where a sub is started after all) `new_agent` is still checked: the gate can't know the
+  route without loading AIDLC settings, and erring towards one more check is the safe side.
+  The dispatch approval text now shows `<repository>: <task>` instead of the repository alone.
+- **Typed trigger and `fleet dispatch` unchanged.** They always start a sub-orchestrator.
+  `DispatchHandler` without a starter refuses a repository instead of ignoring it.
+
+### Rejected
+
+- **Inferring the shape from the prompt** (one repository named in the prose means direct).
+  Wrong guesses would bypass the sub silently; the task says explicit.
+- **A typed form for the hook path**, such as `,repo:backend fix …` or `,backend/fix-x: …`.
+  The `word:` prefix already means an AIDLC profile, so a repository named like a profile, or
+  a sentence that starts with a repository name and a colon, would be read the wrong way; and a
+  typed dispatch has no place for the branch. The main orchestrator's Claude can call the tool
+  with a repository when that's what the user asked for.
+- **Gating only on the route** (check `new_agent` only when a repo agent is really started).
+  The route depends on the project's AIDLC settings, which the gate would have to resolve a
+  second time; the extra check is harmless.
+- **Calling `NewAgentHandler` from `DispatchHandler`.** A slice may not reference another slice.
+
+### Not verified
+
+- An end-to-end direct dispatch against a real Claude and WezTerm. The direct path in
+  `McpActions` (repository lookup, `ClaudeWiring.ApproveFolder`, the ready wait before the task
+  is typed) is the `new_agent` code moved into a method, and `McpActions` has no tests.
+- The task is typed into the new agent the way `new_agent` does it, waiting up to 24 s for the
+  ready marker while the MCP call (and the dispatcher's one-call-at-a-time gate) is held.
+- Whether a branch named only from the slug (no `feat/` prefix) suits every repository's
+  branch conventions; the dispatcher can pass `branch` when it matters.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
