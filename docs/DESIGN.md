@@ -3454,14 +3454,29 @@ list as the drawing.
 
 ### Keys (`<fleet config>\embedded-keys.json`)
 
-The defaults mirror `~/.wezterm/tmux-mode.lua`. The file only needs
-overrides; `"none"` unbinds a key, comments and trailing commas are allowed,
-and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
+The defaults started as a copy of `~/.wezterm/tmux-mode.lua`; since the
+which-key submenus (2026-10-06) the rarely used keys sit in groups, so they no
+longer mirror it one to one. The file only needs overrides; `"none"` unbinds a
+key, comments and trailing commas are allowed, and `FLEET_PREFIX` still wins
+for the prefix. `prefix q r` reloads the file.
 
-```json
+```jsonc
 {
   "prefix": "ctrl+s",
-  "prefixKeys": { "v": "split-right", "x": "none" },
+  "prefixKeys": {
+    "v": "split-right",
+    "x": "none",
+    "g s": "split-down"     // a sequence: g opens a group, s runs in it
+  },
+  "groups": {
+    "g": "git-ish stuff",   // the group's label; without one, the label is the key
+    "q": "none"             // drops a default group and its children
+  },
+  "icons": {
+    "g": "",          // a group's icon, keyed by the group's key
+    "w": "none"             // removes an icon
+  },
+  "showIcons": true,        // false turns every icon off (a terminal without a Nerd Font)
   "keys": { "ctrl+h": "none" }
 }
 ```
@@ -3475,12 +3490,49 @@ and `FLEET_PREFIX` still wins for the prefix. `prefix r` reloads the file.
 | `z` | zoom the focused pane (toggle; moving focus unzooms) |
 | `x`, `&` | close pane / tab, after a `y/n` |
 | `o` | next pane |
-| `s`, `w` | switch project (the picker, as a float) / next project |
+| `s` | switch project (the picker, as a float) |
 | `space` | menu |
 | `[`, `]` | copy mode / paste the Windows clipboard |
-| `f t e g` | new float / show-hide floats / float↔tile / move-resize float |
-| `r`, `d`, `q` | reload keys / detach |
-| the prefix again | sends the prefix to the pane |
+| `d` | detach |
+| `f` › `f t e g` | **+float**: new float / show-hide floats / float↔tile / move-resize float |
+| `w` › `w s` | **+project**: next project / switch project |
+| `q` › `d q r` | **+session**: detach / detach / reload keys |
+| the prefix again | sends the prefix to the pane (inside a group: back to the root) |
+
+**Sequences and groups.** A `prefixKeys` spec with spaces (`"f t"`) is a
+sequence; every key but the last opens a group. The popup stays open inside a
+group and shows only that level, titled with the path (`ctrl+s › float`).
+`esc` closes it, `backspace` goes up a level (`esc close · bksp back` in the
+footer), and an unknown key closes it and does nothing. There is no timeout.
+Depth is unlimited; the defaults use one level. Only prefix keys take
+sequences: one under `keys` is dropped with a log line.
+
+A key cannot be a leaf and a group on the same level. When they collide:
+- the user's entry beats the default: binding `"f": "float-new"` makes `f` a
+  leaf again and drops the default `f …` children (that is how to get the old
+  flat layout back), and binding `"z x": …` drops the default `z` leaf;
+- when both come from the user, the leaf wins and the log says
+  `keys: "t x" ignored, "t" is already bound`.
+
+A group whose children are all unbound disappears.
+
+**Icons.** As in nvim which-key, submenu and fold rows get a Nerd Font icon in
+front of the label, in the row's label colour; plain keys get none. The
+defaults are float `` (window-restore), project `` (folder), session
+`` (power-off), focus `` (arrows), resize `` (expand) and go to
+tab `` (columns). The status bar's powerline caps already assume a Nerd
+Font. Icons are BMP private-use code points only (U+E000–U+F8FF), because the
+composer writes one `char` per cell and a surrogate pair would split; an
+`icons` entry that is not a single basic-plane character is dropped with a log
+line. `icons` covers default and user groups; the folds keep their built-in
+icons, and `"showIcons": false` turns off all of them. On the wire the icon is
+`WhichKeyEntry.icon`, left out when null, so an older daemon ignores it.
+
+**The wire.** `WhichKeyEntry.Group` marks a real submenu (drawn `+label` in
+blue); the display folds (`h j k l ➜ focus`, arrows, `1-9`) set the separate
+`fold` flag and draw as plain rows. Both flags are optional on the wire, so an
+older daemon draws folds as plain rows and a newer one reads an older client's
+folds as plain rows too.
 
 | Key without the prefix | Does |
 |---|---|

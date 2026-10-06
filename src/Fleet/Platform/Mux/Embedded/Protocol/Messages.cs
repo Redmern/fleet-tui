@@ -212,6 +212,8 @@ public sealed class CommandMessage
 
 public sealed class BadgeMessage
 {
+    public const string Breadcrumb = " › ";
+
     [JsonPropertyName("text")]
     public string? Text { get; set; }
 
@@ -230,6 +232,14 @@ public sealed class WhichKeyEntry
     [JsonPropertyName("group")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Group { get; set; }
+
+    [JsonPropertyName("fold")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Fold { get; set; }
+
+    [JsonPropertyName("icon")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Icon { get; set; }
 }
 
 public static class HostEffects
