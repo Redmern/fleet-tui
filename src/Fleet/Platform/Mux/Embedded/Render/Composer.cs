@@ -23,6 +23,7 @@ public static class Composer
     public static readonly uint Blue = Cell.Rgb(0x89, 0xb4, 0xfa);
     public const char WhichKeySeparator = '➜';
     public const string WhichKeyFooter = "esc close";
+    public const string WhichKeyNestedFooter = "esc close · bksp back";
     private const int WhichKeyGap = 3;
     private const int WhichKeyChrome = 2;
     private const int WhichKeyMinWidth = 30;
@@ -240,7 +241,8 @@ public static class Composer
             Math.Max(0, area.Width - 2 * WhichKeyChrome),
             Math.Max(0, area.Height - 2 * WhichKeyChrome));
 
-        Box(frame, area, Blue, title, WhichKeyFooter);
+        var nested = title.Contains(BadgeMessage.Breadcrumb, StringComparison.Ordinal);
+        Box(frame, area, Blue, title, nested ? WhichKeyNestedFooter : WhichKeyFooter);
         Clear(frame, ClientView.Inner(area));
 
         for (var i = 0; i < entries.Count; i++)

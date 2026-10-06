@@ -430,18 +430,22 @@ public sealed class AttachClient(
 
         var command = input.Action == KeyAction.Release
             ? PrefixCommand.None
-            : PrefixState.OnKey(input.Key, input.Mods, input.Utf8);
+            : PrefixState.OnKey(_keys.Root, input.Key, input.Mods, input.Utf8);
 
         switch (command)
         {
-            case PrefixCommand.Armed:
+            case PrefixCommand.Armed or PrefixCommand.Descend or PrefixCommand.Back:
                 _swallowed.Add(input.VirtualKey);
                 await ShowWhichKey(wire).ConfigureAwait(false);
                 return;
             case PrefixCommand.Chord:
                 _swallowed.Add(input.VirtualKey);
                 await Badge(wire, null).ConfigureAwait(false);
-                await Chord(wire, _keys.PrefixCommand(input.Key, input.Mods, input.Utf8), key, null).ConfigureAwait(false);
+                await Chord(wire, PrefixState.Command, key, null).ConfigureAwait(false);
+                return;
+            case PrefixCommand.Cancel:
+                _swallowed.Add(input.VirtualKey);
+                await Badge(wire, null).ConfigureAwait(false);
                 return;
             case PrefixCommand.SendPrefix:
                 await Badge(wire, null).ConfigureAwait(false);
@@ -507,27 +511,35 @@ public sealed class AttachClient(
             if (PrefixState.Armed)
             {
                 await Flush(wire, pending).ConfigureAwait(false);
-                PrefixState.Disarm();
-                await Badge(wire, null).ConfigureAwait(false);
+                var command = PrefixState.OnBytes(_keys.Root, bytes.AsSpan(i), out var length);
+                var original = bytes.AsSpan(i, length).ToArray();
+                i += length;
 
-                if (startsWithPrefix)
+                switch (command)
                 {
-                    pending.AddRange(prefixBytes!);
-                    i += prefixBytes!.Length;
-                    continue;
+                    case PrefixCommand.Armed or PrefixCommand.Descend or PrefixCommand.Back:
+                        await ShowWhichKey(wire).ConfigureAwait(false);
+                        break;
+                    case PrefixCommand.SendPrefix:
+                        await Badge(wire, null).ConfigureAwait(false);
+                        pending.AddRange(original);
+                        break;
+                    case PrefixCommand.Chord:
+                        await Badge(wire, null).ConfigureAwait(false);
+                        await Chord(wire, PrefixState.Command, null, original).ConfigureAwait(false);
+                        break;
+                    default:
+                        await Badge(wire, null).ConfigureAwait(false);
+                        break;
                 }
 
-                var (chord, length) = _keys.PrefixBytes(bytes.AsSpan(i));
-                var original = bytes.AsSpan(i, Math.Max(1, length)).ToArray();
-                i += original.Length;
-                await Chord(wire, chord, null, original).ConfigureAwait(false);
                 continue;
             }
 
             if (startsWithPrefix)
             {
                 await Flush(wire, pending).ConfigureAwait(false);
-                PrefixState.Arm();
+                PrefixState.Arm(_keys.Root);
                 i += prefixBytes!.Length;
                 await ShowWhichKey(wire).ConfigureAwait(false);
                 continue;
@@ -630,7 +642,11 @@ public sealed class AttachClient(
         Send(
             wire,
             MessageType.Badge,
-            new BadgeMessage { Text = PrefixState.Label, Keys = WhichKey.For(_keys) },
+            new BadgeMessage
+            {
+                Text = PrefixState.Breadcrumb,
+                Keys = WhichKey.For(PrefixState.Node ?? _keys.Root, _keys.Prefix),
+            },
             WireJsonContext.Default.BadgeMessage);
 
     private IStickyMode? Sticky =>

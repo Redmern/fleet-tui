@@ -94,6 +94,26 @@ public class RenderTests
     }
 
     [Fact]
+    public void A_nested_which_key_box_shows_the_breadcrumb_the_back_hint_and_plain_fold_rows()
+    {
+        List<WhichKeyEntry> entries =
+        [
+            new() { Key = "h j k l", Label = "focus", Fold = true },
+            new() { Key = "t", Label = "show/hide floats" },
+        ];
+        _model.Spawn("techweb", "C:/x", ["claude"]);
+        var client = _model.Connect(80, 24, "techweb");
+        var frame = Composer.Compose(
+            _model.View(client.Id)!, id => _screens.GetValueOrDefault(id), "ctrl+s › float", whichKey: entries);
+        var area = Composer.WhichKeyArea(80, 24, entries);
+
+        Assert.StartsWith("╭─ ctrl+s › float ─", frame.RowText(area.Y)[area.X..]);
+        Assert.EndsWith(" esc close · bksp back ─╯", frame.RowText(area.Y + area.Height - 1)[area.X..]);
+        Assert.StartsWith("│ h j k l ➜ focus ", frame.RowText(area.Y + 2)[area.X..]);
+        Assert.Equal(Composer.Text, frame.At(area.X + frame.RowText(area.Y + 2)[area.X..].IndexOf('➜') + 2, area.Y + 2).Fg);
+    }
+
+    [Fact]
     public void The_which_key_box_sits_bottom_right_with_a_rounded_titled_border_padding_and_aligned_rows()
     {
         var entries = WhichKeyEntries(3);

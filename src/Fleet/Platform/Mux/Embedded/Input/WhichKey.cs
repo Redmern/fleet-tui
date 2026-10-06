@@ -4,23 +4,34 @@ namespace Fleet.Platform.Mux.Embedded.Input;
 
 public static class WhichKey
 {
-    public static List<WhichKeyEntry> For(MuxKeys keys)
+    public static List<WhichKeyEntry> For(MuxKeys keys) => For(keys.Root, keys.Prefix);
+
+    public static List<WhichKeyEntry> For(KeyNode node, KeyChord prefix)
     {
         var entries = new List<WhichKeyEntry>();
-        var bindings = keys.PrefixKeys.ToList();
+        var bindings = node.Leaves.ToList();
 
-        Group(bindings, entries, b => b.Command.StartsWith("focus-", StringComparison.Ordinal), "focus");
-        Group(bindings, entries, b => b.Command.StartsWith("resize ", StringComparison.Ordinal), "resize");
-        Group(bindings, entries, b => b.Command.StartsWith("tab ", StringComparison.Ordinal), "go to tab");
+        Fold(bindings, entries, b => b.Command.StartsWith("focus-", StringComparison.Ordinal), "focus");
+        Fold(bindings, entries, b => b.Command.StartsWith("resize ", StringComparison.Ordinal), "resize");
+        Fold(bindings, entries, b => b.Command.StartsWith("tab ", StringComparison.Ordinal), "go to tab");
 
         foreach (var binding in bindings)
         {
             entries.Add(new WhichKeyEntry { Key = binding.Chord.Label, Label = Label(binding.Command) });
         }
 
-        entries.Add(new WhichKeyEntry { Key = keys.Prefix.Label, Label = "send " + keys.Prefix.Label });
+        foreach (var group in node.Groups)
+        {
+            entries.Add(new WhichKeyEntry { Key = group.Chord.Label, Label = group.Node.Label, Group = true });
+        }
+
+        if (node.Parent is null)
+        {
+            entries.Add(new WhichKeyEntry { Key = prefix.Label, Label = "send " + prefix.Label });
+        }
+
         return entries
-            .OrderBy(e => !e.Group)
+            .OrderBy(e => !(e.Group || e.Fold))
             .ThenBy(e => e.Key, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.Key, StringComparer.Ordinal)
             .ToList();
@@ -43,7 +54,7 @@ public static class WhichKey
         _ => command.Replace('-', ' '),
     };
 
-    private static void Group(
+    private static void Fold(
         List<MuxKeys.Binding> bindings, List<WhichKeyEntry> entries, Func<MuxKeys.Binding, bool> member, string label)
     {
         var members = bindings.Where(member).ToList();
@@ -52,7 +63,7 @@ public static class WhichKey
             return;
         }
 
-        entries.Add(new WhichKeyEntry { Key = Keys(members.Select(m => m.Chord.Label).ToList()), Label = label, Group = true });
+        entries.Add(new WhichKeyEntry { Key = Keys(members.Select(m => m.Chord.Label).ToList()), Label = label, Fold = true });
         bindings.RemoveAll(b => members.Contains(b));
     }
 
