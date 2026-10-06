@@ -29,49 +29,10 @@ public static class SettingsRows
 
     public static string Title(string project) => $"{project} — harness permissions";
 
-    public const string NameHeading = "setting";
-
-    public const string ValueHeading = "value";
-
-    public const string ChannelHeading = "ask via";
-
-    public const string Separator = " │ ";
-
-    private const int ValueWidth = 6;
-
-    public static FleetRow Header(SettingsConfig config) =>
-        new(
-        [
-            FleetSpan.Muted(NameHeading.PadRight(LabelWidth())),
-            new FleetSpan(Separator, FleetTones.Edge),
-            FleetSpan.Muted(ValueHeading.PadRight(ValueWidthFor(config))),
-            new FleetSpan(Separator, FleetTones.Edge),
-            FleetSpan.Muted(ChannelHeading),
-        ]);
-
     public static IReadOnlyList<FleetRow> For(SettingsConfig config)
     {
-        var labelWidth = LabelWidth();
-        var valueWidth = ValueWidthFor(config);
-
-        List<FleetRow> rows =
-        [
-            Cells(TriggerLabel, labelWidth, new FleetSpan(config.Trigger.PadRight(valueWidth), FleetTones.Key), "—"),
-        ];
-
-        rows.AddRange(Tools.Select(t => Row(t, config.RuleFor(t), labelWidth, valueWidth)));
-        rows.Add(GateRow(SettingsDefaults.CommitLabel, config.Commit, labelWidth, valueWidth));
-        rows.Add(GateRow(SettingsDefaults.PushLabel, config.Push, labelWidth, valueWidth));
-        rows.Add(GateRow(SettingsDefaults.MergeLabel, config.Merge, labelWidth, valueWidth));
-        rows.Add(SwitchRow(SettingsDefaults.StatusHooksLabel, config.StatusHooks, labelWidth, valueWidth));
-
-        return rows;
-    }
-
-    private static int LabelWidth() =>
-        new[]
+        var labelWidth = new[]
             {
-                NameHeading.Length,
                 TriggerLabel.Length,
                 SettingsDefaults.CommitLabel.Length,
                 SettingsDefaults.PushLabel.Length,
@@ -81,18 +42,22 @@ public static class SettingsRows
             }
             .Max();
 
-    private static int ValueWidthFor(SettingsConfig config) =>
-        Math.Max(ValueWidth, config.Trigger.Length);
-
-    private static FleetRow Cells(string label, int labelWidth, FleetSpan value, string channel) =>
-        new(
+        List<FleetRow> rows =
         [
-            FleetSpan.Plain(label.PadRight(labelWidth)),
-            new FleetSpan(Separator, FleetTones.Edge),
-            value,
-            new FleetSpan(Separator, FleetTones.Edge),
-            FleetSpan.Muted(channel),
-        ]);
+            new FleetRow(
+                [FleetSpan.Plain(TriggerLabel.PadRight(labelWidth))],
+                [new FleetSpan(config.Trigger, FleetTones.Key)]),
+        ];
+
+        rows.AddRange(Tools.Select(t => Row(t, config.RuleFor(t), labelWidth)));
+        rows.Add(GateRow(SettingsDefaults.CommitLabel, config.Commit, labelWidth));
+        rows.Add(GateRow(SettingsDefaults.PushLabel, config.Push, labelWidth));
+        rows.Add(GateRow(SettingsDefaults.MergeLabel, config.Merge, labelWidth));
+        rows.Add(SwitchRow(SettingsDefaults.StatusHooksLabel, config.StatusHooks, labelWidth));
+
+        return rows;
+    }
+
     public static IReadOnlyList<PickerEntry> PolicyEntries() =>
     [
         new("allow", "let the harness do it", "a"),
@@ -107,15 +72,15 @@ public static class SettingsRows
         new("no", "never", "f"),
     ];
 
-    private static FleetRow GateRow(string label, ActionPolicy policy, int labelWidth, int valueWidth) =>
-        Cells(label, labelWidth, new FleetSpan(GateWord(policy).PadRight(valueWidth), ToneFor(policy)), "—");
+    private static FleetRow GateRow(string label, ActionPolicy policy, int labelWidth) =>
+        new(
+            [FleetSpan.Plain(label.PadRight(labelWidth))],
+            [new FleetSpan(GateWord(policy).PadRight(6) + "  ", ToneFor(policy)), FleetSpan.Muted("—")]);
 
-    private static FleetRow SwitchRow(string label, bool on, int labelWidth, int valueWidth) =>
-        Cells(
-            label,
-            labelWidth,
-            new FleetSpan((on ? "on" : "off").PadRight(valueWidth), on ? FleetTones.Good : FleetTones.Muted),
-            "—");
+    private static FleetRow SwitchRow(string label, bool on, int labelWidth) =>
+        new(
+            [FleetSpan.Plain(label.PadRight(labelWidth))],
+            [new FleetSpan((on ? "on" : "off").PadRight(6) + "  ", on ? FleetTones.Good : FleetTones.Muted), FleetSpan.Muted("—")]);
 
     private static string GateWord(ActionPolicy policy) => policy switch
     {
@@ -131,18 +96,19 @@ public static class SettingsRows
         new("claudePermission", "only claude asks", "c"),
     ];
 
-    private static FleetRow Row(HarnessTool tool, ToolRule rule, int labelWidth, int valueWidth)
+    private static FleetRow Row(HarnessTool tool, ToolRule rule, int labelWidth)
     {
         var policy = rule.Policy.ToString().ToLowerInvariant();
         var channel = rule.Policy == ActionPolicy.Ask
             ? rule.Channel.ToString().ToLowerInvariant()
             : "—";
 
-        return Cells(
-            SettingsDefaults.Describe(tool),
-            labelWidth,
-            new FleetSpan(policy.PadRight(valueWidth), ToneFor(rule.Policy)),
-            channel);
+        return new FleetRow(
+            [FleetSpan.Plain(SettingsDefaults.Describe(tool).PadRight(labelWidth))],
+            [
+                new FleetSpan(policy.PadRight(6) + "  ", ToneFor(rule.Policy)),
+                FleetSpan.Muted(channel),
+            ]);
     }
 
     private static string ToneFor(ActionPolicy policy) => policy switch

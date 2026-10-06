@@ -31,8 +31,8 @@ public class SettingsRowsTests
         var allowRow = rows[SettingsDefaults.Configurable.ToList().IndexOf(HarnessTool.ListAgents) + 1];
         var forbidRow = rows[SettingsDefaults.Configurable.ToList().IndexOf(HarnessTool.NewAgent) + 1];
 
-        Assert.Contains(allowRow.Spans, s => s.Tone == FleetTones.Good);
-        Assert.Contains(forbidRow.Spans, s => s.Tone == FleetTones.Bad);
+        Assert.Contains(allowRow.Trailing!, s => s.Tone == FleetTones.Good);
+        Assert.Contains(forbidRow.Trailing!, s => s.Tone == FleetTones.Bad);
     }
 
     [Fact]
@@ -74,46 +74,5 @@ public class SettingsRowsTests
     {
         Assert.Equal(["a", "s", "f"], SettingsRows.PolicyEntries().Select(e => e.Key));
         Assert.Equal(["b", "d", "c"], SettingsRows.ChannelEntries().Select(e => e.Key));
-    }
-
-    [Fact]
-    public void A_header_names_the_columns_and_lines_up_with_the_rows()
-    {
-        var config = SettingsConfig.Default;
-        var header = SettingsRows.Header(config).Text;
-        var rows = SettingsRows.For(config);
-
-        Assert.StartsWith(SettingsRows.NameHeading, header);
-        Assert.Contains(SettingsRows.ValueHeading, header);
-        Assert.EndsWith(SettingsRows.ChannelHeading, header);
-
-        var first = header.IndexOf('│');
-        var second = header.IndexOf('│', first + 1);
-
-        Assert.All(rows, r =>
-        {
-            Assert.Equal(first, r.Text.IndexOf('│'));
-            Assert.Equal(second, r.Text.IndexOf('│', first + 1));
-        });
-    }
-
-    [Fact]
-    public void Every_row_keeps_its_value_in_its_own_toned_span_and_has_no_trailing_part()
-    {
-        var rows = SettingsRows.For(SettingsConfig.Default);
-
-        Assert.All(rows, r => Assert.Null(r.Trailing));
-        Assert.Equal(FleetTones.Key, rows[0].Spans[2].Tone);
-        Assert.Contains(SettingsConfig.Default.Trigger, rows[0].Spans[2].Text);
-    }
-
-    [Fact]
-    public void A_long_trigger_widens_the_value_column_for_every_row()
-    {
-        var config = SettingsConfig.Default.WithTrigger("ctrl+shift+enter");
-        var header = SettingsRows.Header(config).Text;
-        var second = header.IndexOf('│', header.IndexOf('│') + 1);
-
-        Assert.All(SettingsRows.For(config), r => Assert.Equal(second, r.Text.IndexOf('│', r.Text.IndexOf('│') + 1)));
     }
 }
