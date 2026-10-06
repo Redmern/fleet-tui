@@ -5485,6 +5485,8 @@ conversation):
   (`ShowMenuView.CornerRow`), then the padding before the list, so the float is two rows
   taller. The bars of Switch project, the agent list, notifications and the dashboard sit
   bottom right like the menu's.
+- The dashboard's bars are icons too: add (the action's own icon), open (`Select`), manage,
+  show/hide (eye), menu, dismiss, dismiss all and refresh.
 
 ## Still to verify
 ## Still to verify

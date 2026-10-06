@@ -26,6 +26,18 @@ public static class FleetIcons
 
     public const string Rebind = "";
 
+    public const string Manage = "";
+
+    public const string Show = "";
+
+    public const string Hide = "";
+
+    public const string Menu = "";
+
+    public const string Dismiss = "";
+
+    public const string DismissAll = "";
+
     public const string Connect = "";
 
     public const string Answer = "";
