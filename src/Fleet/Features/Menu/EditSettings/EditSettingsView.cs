@@ -20,14 +20,19 @@ public static class EditSettingsView
     {
         var window = FleetTheme.Overlay(SettingsRows.Title(project));
 
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
+        var header = new FleetCanvas(1, 1, 1) { CanFocus = false };
+        var list = FleetTheme.Rows(1, 2, Dim.Fill(2));
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
 
+        void ShowHeader() => header.Show([SettingsRows.Header(config).Spans], (-1, 0, 0));
+
+        ShowHeader();
         FleetRows.Fill(list, SettingsRows.For(config));
         FleetKeys.ApplyMotions(list, keymap);
 
         void Refill(int index)
         {
+            ShowHeader();
             FleetRows.Fill(list, SettingsRows.For(config), index);
         }
 
@@ -298,7 +303,7 @@ public static class EditSettingsView
 
         app.Keyboard.KeyDown += Keys;
 
-        window.Add(list, status, bar.Root);
+        window.Add(header, list, status, bar.Root);
 
         try
         {
