@@ -76,4 +76,23 @@ public class OrchestrationTextTests
         Assert.Contains("Custom rules.", text);
         Assert.Contains("call fleet_report with", text);
     }
+
+    [Fact]
+    public void No_research_section_appears_unless_asked()
+    {
+        var text = OrchestrationText.Instructions(Brief);
+
+        Assert.DoesNotContain("## Research", text);
+        Assert.DoesNotContain(OrchestrationText.Research.Trim(), text);
+    }
+
+    [Fact]
+    public void Research_adds_its_own_section_and_keeps_how_you_work()
+    {
+        var text = OrchestrationText.Instructions(Brief, research: true);
+
+        Assert.Contains("## Research", text);
+        Assert.Contains(OrchestrationText.Research.Trim(), text);
+        Assert.Contains(OrchestrationText.DefaultHowYouWork.Trim(), text);
+    }
 }
