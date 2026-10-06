@@ -129,6 +129,7 @@ public static class ListAgentsView
             hiddenList,
             status,
             FleetTheme.HintBar(FleetHints.AgentList));
+        FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
 
         ShowTab(AgentListing.OpenTab);
 

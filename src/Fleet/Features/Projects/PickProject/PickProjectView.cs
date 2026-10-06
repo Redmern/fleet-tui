@@ -284,7 +284,6 @@ public static class PickProjectView
             ("SHIFT", "new window", () => Accept(newWindow: true)),
             (keymap.DisplayFor(FleetAction.NewProject), "new", NewProject),
             (keymap.DisplayFor(FleetAction.RemoveProject), "remove", DropProject),
-            ($"{keymap.DisplayFor(FleetAction.Close)}/esc", "quit", () => app.RequestStop(window)),
         ]);
 
         if (tabBar is not null)
@@ -293,6 +292,7 @@ public static class PickProjectView
         }
 
         window.Add(header, list, status, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window), header);
 
         try
         {

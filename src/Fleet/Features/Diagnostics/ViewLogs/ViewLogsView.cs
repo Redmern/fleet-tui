@@ -1,5 +1,6 @@
 using Fleet.Features.Diagnostics.ViewLogs.Models;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -41,7 +42,6 @@ public static class ViewLogsView
         bar.Show(
         [
             ("enter", "details", Open),
-            ("esc", "close", () => app.RequestStop(window)),
         ]);
 
         var claim = FleetModal.Enter();
@@ -71,6 +71,7 @@ public static class ViewLogsView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {
@@ -95,7 +96,7 @@ public static class ViewLogsView
 
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
-        bar.Show([("esc", "back", () => app.RequestStop(window))]);
+        bar.Show([("esc", FleetIcons.Back, () => app.RequestStop(window))]);
 
         var claim = FleetModal.Enter();
 
@@ -126,6 +127,7 @@ public static class ViewLogsView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {

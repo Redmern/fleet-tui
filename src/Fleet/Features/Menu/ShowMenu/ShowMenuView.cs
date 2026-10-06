@@ -1,6 +1,7 @@
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -41,14 +42,11 @@ public static class ShowMenuView
         var keyedHeaders = ShowMenuHandler.Headers(shown);
         var width = ShowMenuHandler.Width([.. rows, .. keyedHeaders.Values]);
         var height = ShowMenuHandler.Height(rows, keyedHeaders.Count, gaps.Count);
-        var revealKey = keymap.DisplayFor(FleetAction.RevealMenuKeys);
         var (list, bar) = Place(width, height);
-
-        bar.Pin(revealKey);
 
         var window = FleetTheme.Overlay(
             title,
-            Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(revealKey, false, Nothing, Nothing, Nothing, Nothing)) + 4),
+            Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(Nothing, Nothing)) + 4),
             FitRows(height));
 
         void Refill(int index)
@@ -59,7 +57,7 @@ public static class ShowMenuView
 
             list.Width = ShowMenuHandler.Width([.. current, .. headers.Values]);
             FleetRows.Fill(list, current, index, gapsAfter: gaps, headersBefore: headers);
-            bar.Show(Buttons(revealKey, FleetKeyHints.Setting, Accept, FleetKeyHints.Toggle, () => app.RequestStop(window), () =>
+            bar.Show(Buttons(Accept, () =>
             {
                 FleetModal.Back();
                 app.RequestStop(window);
@@ -148,6 +146,7 @@ public static class ShowMenuView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {
@@ -164,13 +163,10 @@ public static class ShowMenuView
         return chosen;
     }
 
-    private static IReadOnlyList<(string Key, string Label, Action Run)> Buttons(
-        string revealKey, bool keyed, Action accept, Action reveal, Action close, Action back) =>
+    private static IReadOnlyList<(string Key, string Label, Action Run)> Buttons(Action accept, Action back) =>
     [
-        ("enter", "select", accept),
-        .. keyed ? [] : new[] { (revealKey, "keys", reveal) },
-        ("q/esc", "close", close),
-        ("bksp", "back", back),
+        ("enter", FleetIcons.Select, accept),
+        ("bksp", FleetIcons.Back, back),
     ];
 
     private static void Nothing()

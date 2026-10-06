@@ -250,8 +250,7 @@ public static class EditSettingsView
             ("enter", "change", Change),
             ("c", "channel", Channel),
             ("r", "default", Reset),
-            ("esc", "close", () => app.RequestStop(window)),
-            ("bksp", "back", () =>
+            ("bksp", FleetIcons.Back, () =>
             {
                 FleetModal.Back();
                 app.RequestStop(window);
@@ -299,6 +298,7 @@ public static class EditSettingsView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, status, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {

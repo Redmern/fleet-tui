@@ -1,4 +1,5 @@
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -89,7 +90,7 @@ public static class FleetPicker
 
         var items = new List<(string, string, Action)>
         {
-            ("enter", "select", () => Take(FleetRows.Selected(list), newWindow: false)),
+            ("enter", FleetIcons.Select, () => Take(FleetRows.Selected(list), newWindow: false)),
         };
 
         if (captureWindow)
@@ -97,8 +98,7 @@ public static class FleetPicker
             items.Add(("SHIFT", "new window", () => Take(FleetRows.Selected(list), newWindow: true)));
         }
 
-        items.Add(("esc", "cancel", () => app.RequestStop(window)));
-        items.Add(("bksp", "back", Back));
+        items.Add(("bksp", FleetIcons.Back, Back));
 
         bar.Show(items);
 
@@ -160,6 +160,7 @@ public static class FleetPicker
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {

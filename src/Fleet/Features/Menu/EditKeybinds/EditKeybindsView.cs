@@ -167,6 +167,7 @@ public static class EditKeybindsView
         };
 
         window.Add(tabBar.Root, canvas, status, FleetTheme.HintBar(FleetHints.Keybinds));
+        FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
 
         FleetModal.Enter();
 
