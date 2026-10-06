@@ -23,12 +23,23 @@ public static class FleetCorners
             new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
         ];
 
-    public static IReadOnlyList<FleetSpan> Close() =>
-    [
-        new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
-        new FleetSpan($" {FleetIcons.Close} ", FleetTones.ChipLabel),
-        new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
-    ];
+    public const string CloseKey = "esc";
+
+    public static IReadOnlyList<FleetSpan> Close(bool keysShown) => keysShown
+        ?
+        [
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {CloseKey} ", FleetTones.ChipKey),
+            new FleetSpan($"{FleetIcons.Close} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+        ]
+        :
+        [
+            FleetSpan.Plain(new string(' ', CloseKey.Length + 1)),
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {FleetIcons.Close} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+        ];
 
     public static void Attach(View window, Action close, View? between = null)
     {
@@ -38,9 +49,9 @@ public static class FleetCorners
             Y = 0,
         };
 
-        var shut = new Corner(Close, close)
+        var shut = new Corner(() => Close(FleetKeyHints.Shown), close)
         {
-            X = Pos.AnchorEnd(6),
+            X = Pos.AnchorEnd(10),
             Y = 0,
         };
 
@@ -49,7 +60,7 @@ public static class FleetCorners
         if (between is not null)
         {
             between.X = Pos.Right(help) + 1;
-            between.Width = Dim.Fill(7);
+            between.Width = Dim.Fill(11);
         }
     }
 

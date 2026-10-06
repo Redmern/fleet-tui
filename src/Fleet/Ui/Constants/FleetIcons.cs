@@ -22,6 +22,16 @@ public static class FleetIcons
 
     public const string Close = "";
 
+    public const string Connect = "";
+
+    public const string Answer = "";
+
+    public const string Rename = "";
+
+    public const string Forget = "";
+
+    public const string Disconnect = "";
+
     public static string? For(FleetAction action) => action switch
     {
         FleetAction.QuitFleet => "",

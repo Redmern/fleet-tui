@@ -188,11 +188,11 @@ public static class ManageRemotesView
 
         bar.Show(
         [
-            ("n", "connect", Connect),
-            ("enter", "answer / retry / reconnect", Answer),
-            ("e", "rename", Rename),
-            ("x", "forget", Forget),
-            ("d", "disconnect", Disconnect),
+            ("n", FleetIcons.Connect, Connect),
+            ("enter", FleetIcons.Answer, Answer),
+            ("e", FleetIcons.Rename, Rename),
+            ("x", FleetIcons.Forget, Forget),
+            ("d", FleetIcons.Disconnect, Disconnect),
         ]);
 
         var claim = FleetModal.Enter();

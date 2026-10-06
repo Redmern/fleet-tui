@@ -28,11 +28,14 @@ public sealed class FleetCornersTests : IDisposable
     }
 
     [Fact]
-    public void The_close_corner_is_a_button_with_the_close_icon()
+    public void The_close_corner_is_a_button_with_the_close_icon_and_esc_while_keys_are_shown()
     {
-        Assert.Equal(
-            $"{FleetGlyphs.PillLeft} {FleetIcons.Close} {FleetGlyphs.PillRight}",
-            string.Concat(FleetCorners.Close().Select(s => s.Text)));
+        var hidden = string.Concat(FleetCorners.Close(keysShown: false).Select(s => s.Text));
+        var shown = string.Concat(FleetCorners.Close(keysShown: true).Select(s => s.Text));
+
+        Assert.Equal($"    {FleetGlyphs.PillLeft} {FleetIcons.Close} {FleetGlyphs.PillRight}", hidden);
+        Assert.Equal($"{FleetGlyphs.PillLeft} esc {FleetIcons.Close} {FleetGlyphs.PillRight}", shown);
+        Assert.Equal(hidden.Length, shown.Length);
         Assert.Equal(FleetIcons.Close, FleetIcons.For(Fleet.Shared.Keymap.Enums.FleetAction.Close));
     }
 
