@@ -1,4 +1,5 @@
 using Fleet.Shared.Constants;
+using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
 
@@ -140,5 +141,46 @@ public sealed class ClaudeLaunchTests
         Assert.Same(resumed, AgentHarness.Resumed(resumed));
         Assert.Same(nvim, AgentHarness.Resumed(nvim));
         Assert.Single(resumed, a => a == AgentHarness.ResumeArgument);
+    }
+
+    [Fact]
+    public void Subagent_guidance_is_appended_only_for_a_repo_agent_whose_worktree_has_the_file()
+    {
+        var worktree = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+
+        try
+        {
+            Assert.False(ClaudeLaunch.ForAgent("p", "api", "b", false, SettingsDefaults.Models, worktree).SubagentGuidance);
+
+            SubagentGuidance.Apply(worktree, on: true);
+
+            Assert.True(ClaudeLaunch.ForAgent("p", "api", "b", false, SettingsDefaults.Models, worktree).SubagentGuidance);
+            Assert.False(ClaudeLaunch.ForAgent("p", string.Empty, "b", true, SettingsDefaults.Models, worktree).SubagentGuidance);
+            Assert.False(ClaudeLaunch.ForAgent("p", "api", "b", false, SettingsDefaults.Models).SubagentGuidance);
+
+            SubagentGuidance.Apply(worktree, on: false);
+
+            Assert.False(SubagentGuidance.IsIn(worktree));
+        }
+        finally
+        {
+            if (Directory.Exists(worktree))
+            {
+                Directory.Delete(worktree, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void The_guidance_names_only_built_in_subagents()
+    {
+        foreach (var personal in new[] { "quick", "worker", "deep", "reviewer" })
+        {
+            Assert.DoesNotContain($"`{personal}`", SubagentGuidance.ForRepoAgents, StringComparison.Ordinal);
+            Assert.DoesNotContain($"`{personal}`", SubagentGuidance.ForSubOrchestrators, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("Explore", SubagentGuidance.ForRepoAgents, StringComparison.Ordinal);
+        Assert.Contains("isolation: worktree", SubagentGuidance.ForRepoAgents, StringComparison.Ordinal);
     }
 }

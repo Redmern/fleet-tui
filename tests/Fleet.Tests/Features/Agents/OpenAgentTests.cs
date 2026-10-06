@@ -1,12 +1,13 @@
 using Fleet.Features.Agents;
 using Fleet.Features.Agents.OpenAgent;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
-using Fleet.Ports.Agents;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings;
 
 namespace Fleet.Tests.Features.Agents;
@@ -429,5 +430,21 @@ public sealed class OpenAgentTests : IDisposable
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.Equal(running, pane.Id);
         Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), _mux.ArgsFor(pane.Id));
+    }
+
+    [Fact]
+    public async Task A_restarted_agent_keeps_the_subagent_guidance_it_was_created_with()
+    {
+        var agent = Agent();
+        SubagentGuidance.Apply(agent.Worktree, on: true);
+
+        await new OpenAgentHandler(_mux, _store).HandleAsync("techweb", agent, ProjectRoot);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Equal(
+            [AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-backend-feature-login",
+                SubagentGuidance.AppendFlag, SubagentGuidance.RelativePath],
+            _mux.ArgsFor(pane.Id));
     }
 }

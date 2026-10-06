@@ -204,7 +204,8 @@ fleet.apply(config)
 
 `ctrl+enter` then opens **fleet's own menu** — drawn by fleet, styled like the rest
 of it, one key per entry. It opens as a tab, so no pane is resized, and closes
-itself when done.
+itself when done. Each entry and section header has a Nerd Font icon, like the
+`ctrl+s` popup (the status bar already assumes a Nerd Font).
 
 `backspace` goes back one level anywhere in the menu: from a screen to the menu or
 submenu it was opened from (Permissions back to Fleet config, Fleet config back to

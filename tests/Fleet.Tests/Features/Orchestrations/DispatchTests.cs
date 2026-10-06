@@ -769,4 +769,38 @@ public sealed class DispatchTests : IDisposable
         public void Remove(string project, string worktree) =>
             Saved.RemoveAll(a => a.Worktree == worktree);
     }
+
+    [Fact]
+    public async Task A_sub_orchestrator_brief_tells_it_to_research_with_subagents_by_default()
+    {
+        var reply = await Handler.HandleAsync(Command("check the api"), "t");
+
+        var instructions = InstructionsOf(reply.Value!);
+
+        Assert.Contains("## Subagents", instructions);
+        Assert.Contains(SubagentGuidance.ForSubOrchestrators.Trim(), instructions);
+    }
+
+    [Fact]
+    public async Task With_subagent_guidance_off_the_sub_orchestrator_brief_leaves_it_out()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithSubagentGuidance(false)));
+
+        var reply = await handler.HandleAsync(Command("check the api"), "t");
+
+        Assert.DoesNotContain("## Subagents", InstructionsOf(reply.Value!));
+    }
+
+    [Fact]
+    public async Task A_project_how_you_work_override_keeps_the_subagent_paragraph()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(ProjectConfigPaths.InstructionsFile(_root), "Only ever touch the api/ folder.");
+
+        var reply = await Handler.HandleAsync(Command("start work"), "t");
+
+        Assert.Contains(SubagentGuidance.ForSubOrchestrators.Trim(), InstructionsOf(reply.Value!));
+    }
 }

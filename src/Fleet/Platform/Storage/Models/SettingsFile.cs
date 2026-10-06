@@ -46,6 +46,9 @@ public sealed class SettingsFile
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? StatusHooks { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SubagentGuidance { get; set; }
 }
 
 public sealed class HeadSettingsFile

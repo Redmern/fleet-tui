@@ -5226,6 +5226,72 @@ Escape in either picker leaves the setting as it was. The choices and the value 
 - **`R`, not `a`, for repo agents.** `a` is free in Fleet config, but the keymap tests use `a` as
   a key no default binds.
 
+## Subagent guidance in the briefs, 2026-10-06
+
+The orchestration research (§2, §3, §5 item 5) found that agents did side work inline, or asked
+for another fleet agent, where one of Claude Code's own subagents would do it for the cost of a
+context window. Fleet now says so in two places, and the text lives in its own constants
+(`Shared/Orchestrations/SubagentGuidance`), so `DefaultHowYouWork` and the brief text other
+branches edit stay untouched.
+
+- **Sub-orchestrators** get a `## Subagents` section in their CLAUDE.md, after the process and
+  research sections and before `## How you work` (`OrchestrationText.Instructions(..., subagents)`):
+  read, check and look things up with a subagent (Explore, or a general-purpose one told not to
+  edit) instead of starting a fleet agent; a fleet agent is for a change that needs its own branch.
+  It is its own section, so a project's how-you-work override doesn't drop it. It tells the sub
+  that fleet already passes the repo-agent guidance on, so subs don't have to remember it.
+- **Repo agents** are launched with `--append-system-prompt-file .fleet/subagent-guidance.md`.
+  `NewAgentHandler` writes the file into the worktree before it spawns the pane, when the agent
+  runs Claude and the project's setting is on, and removes it when the setting is off. Every agent
+  that runs Claude is started there: `new_agent`, a direct dispatch (#54, through `IAgentStarter`
+  and the same handler) and the dashboard. The guidance: delegate searches, logs and test runs
+  whose output you won't need verbatim to a subagent (Explore for code search); run a read-only
+  review subagent on the diff before opening a PR; use `isolation: worktree` subagents for
+  throwaway parallel attempts instead of asking for more fleet agents.
+- **Restarts keep what the agent was created with.** `ClaudeLaunch.ForAgent` takes the worktree
+  and adds the flag when the file is there, so `OpenAgentHandler` and `RestoreSessionHandler`
+  launch a resumed agent the same way, without reading settings. Claude Code records the system
+  prompt on a conversation's first request and reuses it on `--continue` until it compacts, so
+  deciding at creation is what actually happens anyway.
+- **Built-in subagents only.** The text names Explore and general-purpose, never the user's
+  `quick`, `worker`, `deep` or `reviewer`, which live in one profile and aren't on every machine
+  (a test checks this). The review subagent is "a general-purpose subagent told to read the diff
+  and not edit", not a definition fleet ships.
+- **Setting.** `SubagentGuidance` per project, default on, stored only when off
+  (`"subagentGuidance": false` in the project's settings file), like `statusHooks`. No UI. Off
+  removes both the sub-orchestrator section and the repo-agent file.
+- **Cost.** About 100 tokens in each sub-orchestrator's CLAUDE.md and about 150 in each repo
+  agent's system prompt, paid once per session and cached with the rest of the system prompt.
+
+### Rejected
+
+- **Shipping a `fleet-reviewer` through `--agents` JSON.** The JSON would have to survive the
+  WezTerm argv, a single-quoted Lua string in `NvimBoot` and the ClaudeCode plugin's own argument
+  splitting; the file form of `--agents` is `--print` only. Each defined agent also adds its
+  description to every session's Agent tool listing. The built-in general-purpose subagent with
+  a one-line instruction does the same review.
+- **A fleet section in the worktree's `.claude/`** (an agent definition or rules file). `.claude/`
+  is git-excluded in fleet worktrees, but it is the user's repo configuration and a checked-in
+  `.claude/` would be shadowed or mixed with fleet files.
+- **Appending the text to the kickoff (`.fleet/instruction.md`).** It reaches only agents that
+  get a task, and a `tell_agent` overwrites the file; the system prompt reaches every session.
+- **Inline `--append-system-prompt "<text>"`.** Multi-line text with spaces doesn't survive the
+  nvim path's quoting; a relative path with no spaces does.
+- **Re-reading the setting on every restart.** The recorded system prompt wins on `--continue`
+  anyway (see above), and it would mean passing settings into every reopen path.
+
+### Not verified
+
+- That the ClaudeCode nvim plugin passes `--append-system-prompt-file .fleet/subagent-guidance.md`
+  through to `claude` unchanged. The test only checks the `:ClaudeCode` command line fleet builds.
+- `--append-system-prompt-file` in an interactive session. The CLI reference says the system
+  prompt flags "work in both interactive and non-interactive modes"; not run on a real machine.
+- That a resumed session whose worktree lost `.fleet/subagent-guidance.md` behaves: fleet then
+  launches it without the flag, so it can't fail on a missing file, but the recorded prompt still
+  has the old text.
+- Whether agents follow the guidance in practice (fewer inline test logs, a review before the PR).
+  Check a few transcripts with `/usage` attribution.
+
 ## Orchestrators hear about finished agents by push, 2026-10-06
 
 Builds on the cross-session messaging work above (option A, the hook-reported inbox
