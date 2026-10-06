@@ -71,6 +71,10 @@ public static class Adapters
 
     public static bool SubagentGuidance(string project) => Settings().Load(project).SubagentGuidance;
 
+    public static RoleModel HeadModel() => new JsonSettingsStore().LoadHead();
+
+    public static void SaveHeadModel(RoleModel model) => new JsonSettingsStore().SaveHead(model);
+
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
     public static IHarnessConfig HarnessConfig() => new ClaudeHarnessConfig();

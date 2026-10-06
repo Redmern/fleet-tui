@@ -73,8 +73,11 @@ public class WireTests
         var sending = wire.SendAsync(MessageType.Text, new byte[10]);
         await peer.PayloadStarted.Task;
 
-        var closing = Task.Run(wire.Dispose);
-        await Task.WhenAny(closing, Task.Delay(200));
+        // Close on a thread of its own and finish the payload from this thread, inline:
+        // nothing between "close starts waiting" and "send releases the gate" may wait
+        // for the thread pool, which a busy CI runner can hold up past Dispose's 1 s budget.
+        var closing = Task.Factory.StartNew(wire.Dispose, TaskCreationOptions.LongRunning);
+        Thread.Sleep(200);
         peer.FinishPayload.SetResult();
         await sending;
         await closing;
@@ -88,7 +91,7 @@ public class WireTests
 
         public TaskCompletionSource PayloadStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public TaskCompletionSource FinishPayload { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FinishPayload { get; } = new();
 
         public bool ClosedMidMessage { get; private set; }
 
@@ -98,7 +101,7 @@ public class WireTests
             {
                 _inPayload = true;
                 PayloadStarted.SetResult();
-                await FinishPayload.Task;
+                await FinishPayload.Task.ConfigureAwait(false);
                 _inPayload = false;
             }
 

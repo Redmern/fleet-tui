@@ -52,4 +52,8 @@ public enum FleetAction
     OpenHead,
     OpenHeadVoice,
     OpenFleetConfigMenu,
+    EditHeadModel,
+    EditMainModel,
+    EditSubModel,
+    EditAgentModel,
 }
