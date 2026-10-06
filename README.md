@@ -232,10 +232,18 @@ Each row is its key, then its icon, then the label. A submenu with sections (Set
 config) puts a quiet caption over each section and a blank line between them.
 
 **Show keybinds** (`K` in Settings, on by default; one switch for every project and the project
-picker) hides the key column in every menu when it is off; the keys still work. `?` then shows the keys in the menu you are in, until you
-press `?` again or leave that menu, and the bar under the menu shows a `? keys` chip as a
-reminder. `?` can be rebound under **navigation** in Keybinds; the editor refuses a key that would put
-it together with a menu entry or a menu motion, in either direction.
+picker) hides the keys when it is off: the key column in every menu and the keys on every button bar
+(dashboard, pickers, settings screens), which then show only their labels. The keys still work.
+While it is off, anywhere outside a text field:
+
+- **hold `/`** to show the keys while you hold it. fleet sees the key repeat rather than the
+  release (terminals don't report key releases to fleet's panes), so the keys go away a moment after
+  you let go, and a quick tap shows them for about a second;
+- **`?`** shows them until you press `?` again.
+
+The menu's bar keeps a `? keys` chip as a reminder. A change to the setting reaches open screens,
+such as the dashboard, within a second. Both keys can be rebound under **navigation** in Keybinds;
+the editor refuses a key that another fleet action already uses, in either direction.
 
 - **Quit** (`Q`, deliberately shifted) closes every pane of the project, including hidden agents in
   their own workspace, so nothing is left running invisibly. Agent records are

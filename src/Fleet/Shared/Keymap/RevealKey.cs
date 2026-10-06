@@ -4,25 +4,21 @@ namespace Fleet.Shared.Keymap;
 
 public static class RevealKey
 {
-    private const string MenuGroups = "fleet menu";
+    private const string AnywhereGroup = "anywhere, no prefix";
+
+    public static IReadOnlyList<FleetAction> Keys { get; } = [FleetAction.RevealMenuKeys, FleetAction.HoldMenuKeys];
 
     public static IReadOnlyList<FleetAction> Guarded { get; } =
     [
         .. KeymapGroups.All
-            .Where(g => g.Label.StartsWith(MenuGroups, StringComparison.Ordinal))
-            .SelectMany(g => g.Actions),
-        FleetAction.OpenEditor,
-        FleetAction.MoveDown,
-        FleetAction.MoveUp,
-        FleetAction.MoveFirst,
-        FleetAction.MoveLast,
-        FleetAction.PageDown,
-        FleetAction.PageUp,
-        FleetAction.Close,
+            .Where(g => g.Label != AnywhereGroup)
+            .SelectMany(g => g.Actions)
+            .Where(a => !Keys.Contains(a))
+            .Distinct(),
     ];
 
     public static IReadOnlyList<FleetAction> Rivals(FleetAction action) =>
-        action == FleetAction.RevealMenuKeys ? Guarded
-        : Guarded.Contains(action) ? [FleetAction.RevealMenuKeys]
+        Keys.Contains(action) ? [.. Guarded, .. Keys.Where(k => k != action)]
+        : Guarded.Contains(action) ? Keys
         : [];
 }

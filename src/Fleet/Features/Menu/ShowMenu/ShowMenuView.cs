@@ -22,8 +22,8 @@ public static class ShowMenuView
     }
 
     public static FleetAction Show(
-        IApplication app, Keymap keymap, IReadOnlyList<FleetMenuItem> items, bool showKeys = true) =>
-        Show(app, keymap, "fleet menu", items, toggle: null, () => showKeys);
+        IApplication app, Keymap keymap, IReadOnlyList<FleetMenuItem> items) =>
+        Show(app, keymap, "fleet menu", items, toggle: null);
 
     public static FleetAction Show(
         IApplication app,
@@ -35,10 +35,6 @@ public static class ShowMenuView
     {
         var chosen = FleetAction.None;
         var shown = items.ToList();
-        var keysOn = showKeys?.Invoke() ?? true;
-        var revealed = false;
-
-        bool Keyed() => keysOn || revealed;
 
         var gaps = ShowMenuHandler.Gaps(shown);
         var rows = ShowMenuHandler.Rows(shown);
@@ -48,6 +44,8 @@ public static class ShowMenuView
         var revealKey = keymap.DisplayFor(FleetAction.RevealMenuKeys);
         var (list, bar) = Place(width, height);
 
+        bar.Pin(revealKey);
+
         var window = FleetTheme.Overlay(
             title,
             Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(revealKey, false, Nothing, Nothing, Nothing, Nothing)) + 4),
@@ -55,13 +53,13 @@ public static class ShowMenuView
 
         void Refill(int index)
         {
-            var keyed = Keyed();
+            var keyed = FleetKeyHints.Shown;
             var current = ShowMenuHandler.Rows(shown, keyed);
             var headers = ShowMenuHandler.Headers(shown, keyed);
 
             list.Width = ShowMenuHandler.Width([.. current, .. headers.Values]);
             FleetRows.Fill(list, current, index, gapsAfter: gaps, headersBefore: headers);
-            bar.Show(Buttons(revealKey, keysOn, Accept, Reveal, () => app.RequestStop(window), () =>
+            bar.Show(Buttons(revealKey, FleetKeyHints.Setting, Accept, FleetKeyHints.Toggle, () => app.RequestStop(window), () =>
             {
                 FleetModal.Back();
                 app.RequestStop(window);
@@ -79,9 +77,11 @@ public static class ShowMenuView
             if (shown[index].Toggles && toggle is not null)
             {
                 shown[index] = shown[index] with { Value = toggle(shown[index].Action) };
-                var now = showKeys?.Invoke() ?? true;
-                revealed = revealed && now == keysOn;
-                keysOn = now;
+                if (showKeys is not null)
+                {
+                    FleetKeyHints.Apply(showKeys());
+                }
+
                 Refill(index);
                 return;
             }
@@ -100,11 +100,9 @@ public static class ShowMenuView
             }
         }
 
-        void Reveal()
-        {
-            revealed = !revealed;
-            Refill(FleetRows.Selected(list));
-        }
+        void Hints() => Refill(FleetRows.Selected(list));
+
+        FleetKeyHints.Changed += Hints;
 
         list.Accepting += (_, e) =>
         {
@@ -146,12 +144,6 @@ public static class ShowMenuView
                 }
             }
 
-            if (key == keymap.KeyFor(FleetAction.RevealMenuKeys))
-            {
-                Reveal();
-                key.Handled = true;
-                return;
-            }
         }
 
         app.Keyboard.KeyDown += Keys;
@@ -165,6 +157,7 @@ public static class ShowMenuView
         finally
         {
             FleetModal.Leave();
+            FleetKeyHints.Changed -= Hints;
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();
         }

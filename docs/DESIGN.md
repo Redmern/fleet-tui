@@ -5420,6 +5420,32 @@ conversation):
   shown. The key handler no longer moves the selection, except for toggles, which stay
   on screen. Measured again: menu → Settings is one frame.
 
+## Hidden keybinds everywhere, hold to show, 2026-10-06
+
+- **One state per process** (`Ui/FleetKeyHints`): the setting, a `?` toggle and a `/` hold.
+  `FleetUi.Start` attaches it to every Terminal.Gui app with the keymap and the setting, and
+  re-reads `menu.json` once a second so a long-lived dashboard follows a change made in the
+  menu's process. `Changed` fires only when visibility flips; a change of the setting
+  clears the toggle, and `?` does nothing while the setting is on.
+- **Button bars:** `FleetActionBar` drops the key from every chip while keys are hidden,
+  except a pinned one (the menu's `? keys`), and rebuilds on `Changed`. The plain hint lines
+  under dialogs (`FleetHints`) are only key hints, so they are left as they are.
+- **Keys:** `?` (`reveal-menu-keys`) and `/` (`hold-menu-keys`) are handled before any view
+  and ignored while a `TextField` has focus. `RevealKey.Guarded` is now every configurable
+  action outside the no-prefix group, since both keys work on every screen.
+- **Hold has no key-up.** Inside fleetd's panes Terminal.Gui runs its `ansi` driver (logged
+  in a scratch build): a held `/` arrives as repeated key-downs and the release never
+  arrives (15 downs, 0 ups). So a hold follows the auto-repeat: the first press waits
+  `FirstRepeat` (1.1 s, longer than Windows' default repeat delay), and once the key
+  repeats the hold ends `RepeatsMissed` (4) intervals after the last repeat, at least
+  150 ms. `IDriver.KeyUp` still ends a hold at once, should a driver ever report it.
+- **Measured with the real binary** (frame-recording attach client, isolated fleetd,
+  setting off): the dashboard bar shows only labels; holding `/` shows the keys, which hide
+  333 ms after the release at the test's slower repeat pace; a tap shows them for 1.17 s;
+  `?` shows and hides them; turning the setting on reaches the dashboard within 1.6 s. In
+  the menu, `?` brings back both the key column and the chip keys, and `? keys` stays
+  pinned.
+
 ## One head chord, voice mode, 2026-10-06
 
 - The text-mode chord (`OpenHead`, `alt+o`) is gone. `OpenHeadVoice` is the only head

@@ -57,4 +57,5 @@ public enum FleetAction
     EditAgentModel,
     EditShowMenuKeys,
     RevealMenuKeys,
+    HoldMenuKeys,
 }
