@@ -52,7 +52,16 @@ public static class WhichKey
             return;
         }
 
-        entries.Add(new WhichKeyEntry { Key = string.Join(' ', members.Select(m => m.Chord.Label)), Label = label, Group = true });
+        entries.Add(new WhichKeyEntry { Key = Keys(members.Select(m => m.Chord.Label).ToList()), Label = label, Group = true });
         bindings.RemoveAll(b => members.Contains(b));
+    }
+
+    public static string Keys(IReadOnlyList<string> labels)
+    {
+        var digitRun = labels.Count >= 3
+            && labels.All(l => l.Length == 1 && char.IsAsciiDigit(l[0]))
+            && labels.Zip(labels.Skip(1)).All(p => p.Second[0] == p.First[0] + 1);
+
+        return digitRun ? $"{labels[0]}-{labels[^1]}" : string.Join(' ', labels);
     }
 }

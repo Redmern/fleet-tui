@@ -184,10 +184,22 @@ public class KeysTests
 
         Assert.Contains(entries, e => e.Key == "h j k l" && e.Label == "focus");
         Assert.Contains(entries, e => e.Key == "← → ↑ ↓" && e.Label == "resize");
-        Assert.Contains(entries, e => e.Key == "1 2 3 4 5 6 7 8 9" && e.Label == "go to tab");
+        Assert.Contains(entries, e => e.Key == "1-9" && e.Label == "go to tab");
         Assert.Contains(entries, e => e.Key == "%" && e.Label == "split right");
         Assert.Contains(entries, e => e.Key == "ctrl+s" && e.Label == "send ctrl+s");
         Assert.DoesNotContain(entries, e => e.Label == "tab 1");
+    }
+
+    [Theory]
+    [InlineData("1 2 3 4 5 6 7 8 9", "1-9")]
+    [InlineData("1 2 3", "1-3")]
+    [InlineData("1 2", "1 2")]
+    [InlineData("1 2 4", "1 2 4")]
+    [InlineData("3 2 1", "3 2 1")]
+    [InlineData("h j k l", "h j k l")]
+    public void Which_key_compresses_only_a_consecutive_run_of_digits(string labels, string expected)
+    {
+        Assert.Equal(expected, WhichKey.Keys(labels.Split(' ')));
     }
 
     [Fact]
