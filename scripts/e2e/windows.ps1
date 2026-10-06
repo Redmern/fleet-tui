@@ -166,7 +166,7 @@ try {
 
     Write-Host '== 3. a screen opened from the menu draws once'
     $client.Frames.Clear()
-    $client.Key('S')
+    $client.Key('s')
     $client.Pump(2500)
     $drawn = @($client.Frames | Where-Object { $_.Text.Length -gt 200 })
     Check ($drawn.Count -eq 1 -and $drawn[0].Text.Contains('Rebuild')) "Settings drawn in $($drawn.Count) frame(s) (want 1)"
