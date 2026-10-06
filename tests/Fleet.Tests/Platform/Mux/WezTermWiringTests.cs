@@ -1,4 +1,5 @@
 using Fleet.Platform.Mux.WezTerm;
+using Fleet.Shared.Themes;
 
 namespace Fleet.Tests.Platform.Mux;
 
@@ -109,7 +110,7 @@ public class WezTermWiringTests
     [Fact]
     public void The_theme_module_carries_the_personal_visuals_and_tmux_keys()
     {
-        var theme = WezTermTheme.Generate();
+        var theme = WezTermTheme.Generate(BuiltInThemes.CatppuccinMocha);
 
         Assert.Contains("config.leader = { key = \"s\", mods = \"CTRL\"", theme);
         Assert.Contains("CaskaydiaMono Nerd Font", theme);

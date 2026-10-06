@@ -35,6 +35,7 @@ using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Platform.Releases;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Themes;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 
@@ -419,7 +420,7 @@ public static class Adapters
 
         File.WriteAllText(
             Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermTheme.Module),
-            WezTermTheme.Generate());
+            WezTermTheme.Generate(BuiltInThemes.CatppuccinMocha));
 
         return target;
     }
