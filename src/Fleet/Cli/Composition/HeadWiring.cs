@@ -62,7 +62,8 @@ public static class HeadWiring
             log,
             Adapters.Remotes(),
             Adapters.KnownRemotes(),
-            (project, ct) => ProjectStructureReader.ReadAsync(Adapters.Git(), mux, Adapters.Agents(), project, ct));
+            (project, ct) => ProjectStructureReader.ReadAsync(Adapters.Git(), mux, Adapters.Agents(), project, ct),
+            HeadPanes.SetVisible(mux, Adapters.Agents(), Adapters.SubOrchestratorsInNvim, ClaudeWiring.TrustFolder));
 
     public static int Launch(bool voice)
     {

@@ -4619,7 +4619,8 @@ One Claude above every project's orchestrator, opened by a global chord.
   continue) it starts fresh.
 - **`fleet mcp --head`** is a second tool set on the same `fleet` server name, in its own
   slice (`Features/Head/ServeHead`): `list_projects`, `switch_project`, `menu_action`,
-  `list_agents`, `relay`, `tell`. Opening, switching and dashboard handover reuse
+  `list_agents`, `relay`, `tell`, `show_agent`, `hide_agent`. Opening, switching and
+  dashboard handover reuse
   `ProjectOpener`, `LocateProjectHandler` and `fleet request`'s store through the
   composition root. On WezTerm, switching focuses the project's dashboard pane and asks for
   its workspace through the workspace request file. On a multiplexer with workspaces it
@@ -4808,6 +4809,31 @@ new head tool rather than a head `list_repositories` plus a second agents listin
 - **Remote.** Like `list_agents`: the origin forwards it over the fleetd link and the
   remote's `ServeOriginAsync` answers it from its own stores. An older remote fleet
   answers that it does not serve the tool.
+
+## The head shows and hides named panes, 2026-10-04
+
+The head's only way to hide a pane was `menu_action` `toggle-hidden`, which acts on
+whatever the dashboard has selected. `show_agent` and `hide_agent` name the target instead.
+
+- **Addressing.** `repository` + `branch` for an agent, `sub` alone for a sub-orchestrator
+  (its slug, the record's `Branch`), `sub` + `repository` + `branch` for an agent whose
+  `Owner` is that sub. Two tools rather than one with a `visible` flag: "show X" and
+  "hide X" are what the user says, and each reads as its own action in the head's
+  permission list. An unknown name is an error listing what there is at that level.
+- **One mechanism.** `HeadVisibility` (in the head slice) resolves the target, decides the
+  no-op cases and gates on the project's own rules: `set_agent_visible`, or `open_agent`
+  when nothing is running. The work is a `HeadDeps.SetVisible` delegate built in the
+  composition root (`HeadPanes`) from the same handlers the dashboard toggle and the
+  project tools use: `HideAgentHandler` when the agent has panes, `OpenAgentHandler`
+  when it has none, as the dashboard's hide key does. The project's window comes from
+  `ProjectWindows.For` without preferring the caller, because the caller is the head's
+  float or workspace, not the project; `OpenAgentHandler` gained `preferCaller` for that.
+  Focus goes back to the pane that had it, as in the dashboard.
+- **No-ops.** Show is a no-op when the agent has a pane and is not hidden; hide when it is
+  hidden or has no pane. Both succeed and say so; neither asks for permission.
+- **Remote.** The tools go over the existing `HeadAsync` link like `relay` and
+  `list_agents`; the remote's head serves them through `ServeOriginAsync`, so the remote
+  project's permissions apply there. Neither tool switches the terminal to the project.
 
 ## Still to verify
 ## Still to verify

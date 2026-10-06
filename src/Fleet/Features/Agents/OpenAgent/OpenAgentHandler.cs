@@ -8,7 +8,8 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.OpenAgent;
 
-public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store, bool subOrchestratorsInNvim = true)
+public sealed class OpenAgentHandler(
+    IMuxDriver mux, IAgentStore store, bool subOrchestratorsInNvim = true, bool preferCaller = true)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -18,7 +19,7 @@ public sealed class OpenAgentHandler(IMuxDriver mux, IAgentStore store, bool sub
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        var window = ProjectWindows.For(mux, panes, project, projectRoot, preferCaller: true);
+        var window = ProjectWindows.For(mux, panes, project, projectRoot, preferCaller);
         var mine = panes.Where(p => AgentPanes.Owns(p, agent)).ToList();
         var running = mine.FirstOrDefault();
 

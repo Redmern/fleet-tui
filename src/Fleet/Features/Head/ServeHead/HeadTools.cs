@@ -20,7 +20,17 @@ public static class HeadTools
 
     public const string Tell = "tell";
 
+    public const string ShowAgent = "show_agent";
+
+    public const string HideAgent = "hide_agent";
+
     public const string Project = "project";
+
+    public const string Repository = "repository";
+
+    public const string Branch = "branch";
+
+    public const string Sub = "sub";
 
     public const string Action = "action";
 
@@ -97,6 +107,35 @@ public static class HeadTools
             + "dispatch a task; use tell for anything else. Opens the project if it is closed; queues the prompt "
             + "if its Claude is busy.",
             [ProjectParam, new(Prompt, "string", "The task for the orchestrator to dispatch.", true), RemoteParam]),
+        new(
+            ShowAgent,
+            "Show the pane of one agent or sub-orchestrator in its project's window, by name. Starts it if it is "
+            + "not running and opens the project if it is closed. Showing a visible pane does nothing.",
+            TargetParams),
+        new(
+            HideAgent,
+            "Hide the pane of one agent or sub-orchestrator by name, without stopping it. Hiding a hidden pane "
+            + "does nothing.",
+            TargetParams),
+    ];
+
+    private static IReadOnlyList<HeadToolParam> TargetParams =>
+    [
+        ProjectParam,
+        new(
+            Repository,
+            "string",
+            "The agent's repository, as list_agents shows it. Give it with 'branch'; leave both out for a "
+            + "sub-orchestrator.",
+            false),
+        new(Branch, "string", "The agent's branch, as list_agents shows it.", false),
+        new(
+            Sub,
+            "string",
+            "A sub-orchestrator's name. Alone it names that sub-orchestrator; with 'repository' and 'branch' it "
+            + "names an agent that sub-orchestrator started.",
+            false),
+        RemoteParam,
     ];
 
     public static IReadOnlyList<string> Names { get; } = [.. All.Select(t => t.Name)];

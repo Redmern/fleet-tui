@@ -24,6 +24,8 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
     private HeadRelay? _relay;
 
+    private readonly HeadVisibility _visibility = new(deps, new HeadGate(deps));
+
     public HeadRelay Relay => _relay ??= new HeadRelay(deps, _gate, timing ?? HeadTiming.Default);
 
     public static IReadOnlyList<FleetAction> MenuActions { get; } =
@@ -38,7 +40,8 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.ListRemotes => await _remotes.ListAsync(ct).ConfigureAwait(false),
             HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
             HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
-                or HeadTools.ProjectStructure or HeadTools.Relay or HeadTools.Tell when !HeadRemotes.IsLocal(remote) =>
+                or HeadTools.ProjectStructure or HeadTools.Relay or HeadTools.Tell or HeadTools.ShowAgent
+                or HeadTools.HideAgent when !HeadRemotes.IsLocal(remote) =>
                 await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
@@ -53,7 +56,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         }
 
         return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.ProjectStructure
-                or HeadTools.Relay or HeadTools.Tell
+                or HeadTools.Relay or HeadTools.Tell or HeadTools.ShowAgent or HeadTools.HideAgent
             ? await HandleHereAsync(request, show: false, ct).ConfigureAwait(false)
             : McpResult.Error($"{request.Tool} is not served to another machine.");
     }
@@ -68,6 +71,10 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.ProjectStructure => await WithProject(request, p => StructureAsync(p, ct)).ConfigureAwait(false),
             HeadTools.Relay => await WithProject(request, p => RelayAsync(p, request, ct)).ConfigureAwait(false),
             HeadTools.Tell => await WithProject(request, p => TellAsync(p, request, ct)).ConfigureAwait(false),
+            HeadTools.ShowAgent => await WithProject(request, p => _visibility.SetAsync(p, request, visible: true, ct))
+                .ConfigureAwait(false),
+            HeadTools.HideAgent => await WithProject(request, p => _visibility.SetAsync(p, request, visible: false, ct))
+                .ConfigureAwait(false),
             _ => McpResult.Error($"the head has no tool named '{request.Tool}'."),
         };
 
