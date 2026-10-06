@@ -2,6 +2,7 @@ using Fleet.Features.Menu.ShowMenu;
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Keymap.Models;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -212,6 +213,34 @@ public class FleetMenusTests
         Assert.Equal($"{FleetIcons.For(FleetAction.QuitFleet)}  Quit", rows[0].Text);
         Assert.True(ShowMenuHandler.Width(rows) < ShowMenuHandler.Width(ShowMenuHandler.Rows(items)));
     }
+
+    [Fact]
+    public void Every_fleet_menu_entry_is_guarded_against_the_reveal_key()
+        => Assert.All(
+            FleetMenus.Actions([.. FleetMenus.Main, .. FleetMenus.Settings, .. FleetMenus.FleetConfig]),
+            a => Assert.Contains(a, RevealKey.Guarded));
+
+    [Theory]
+    [InlineData(FleetAction.OpenSettings, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.EditAutoClose, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.MoveDown, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.RevealMenuKeys, "s", FleetAction.OpenSettings)]
+    [InlineData(FleetAction.RevealMenuKeys, "j", FleetAction.MoveDown)]
+    [InlineData(FleetAction.RevealMenuKeys, "F5", FleetAction.None)]
+    [InlineData(FleetAction.Refresh, "?", FleetAction.None)]
+    [InlineData(FleetAction.OpenSettings, "F5", FleetAction.None)]
+    public void A_rebind_that_puts_reveal_and_a_menu_key_together_clashes(
+        FleetAction action, string key, FleetAction clash)
+    {
+        var keymap = new Keymap(KeymapConfig.Default.With(action, key));
+
+        Assert.Equal(clash, keymap.ClashFor(action));
+    }
+
+    [Fact]
+    public void The_default_keymap_has_no_reveal_clash()
+        => Assert.All(RevealKey.Guarded.Append(FleetAction.RevealMenuKeys),
+            a => Assert.Equal(FleetAction.None, Keymap.Default.ClashFor(a)));
 
     // The reveal key works in every menu, so it may not be any menu row's key or a motion.
     [Fact]

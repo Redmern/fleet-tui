@@ -5403,6 +5403,11 @@ conversation):
   shows a `? keys` chip while the setting is off. `i` was asked for but is Auto-close in
   Fleet config, and `?` is bound nowhere else. The float is fitted to the keyed width, so
   revealing never resizes it; the list re-centres.
+- **Rebinding never hides an entry behind `?`.** `RevealKey.Guarded` is every action in the
+  fleet menu keybind groups, Open editor, the motions and Close; `Keymap.ClashFor` finds a
+  guarded action sharing the reveal key. The keybinds editor refuses such a rebind in either
+  direction and says what the key already is. A hand-edited keymap can still clash, so the
+  menu checks entry keys before the reveal key: the entry wins and only the reveal is lost.
 - **Opening was already one frame.** A frame-recording attach client (the
   `scripts\e2e\windows.ps1` pipe protocol, isolated fleetd) against a build of `main`
   showed the warm open, a fresh open and Settings each as one frame, with nothing redrawn

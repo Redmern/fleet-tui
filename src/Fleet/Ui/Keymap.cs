@@ -74,6 +74,11 @@ public sealed class Keymap
         return FleetAction.None;
     }
 
+    public FleetAction ClashFor(FleetAction action) =>
+        KeyFor(action) is { IsValid: true } key
+            ? RevealKey.Rivals(action).FirstOrDefault(r => KeyFor(r) == key)
+            : FleetAction.None;
+
     private static Key Parse(string text, string fallback)
     {
         try

@@ -136,13 +136,6 @@ public static class ShowMenuView
                 return;
             }
 
-            if (key == keymap.KeyFor(FleetAction.RevealMenuKeys))
-            {
-                Reveal();
-                key.Handled = true;
-                return;
-            }
-
             for (var i = 0; i < shown.Count; i++)
             {
                 if (keymap.KeyFor(shown[i].Action) == key)
@@ -151,6 +144,13 @@ public static class ShowMenuView
                     key.Handled = true;
                     return;
                 }
+            }
+
+            if (key == keymap.KeyFor(FleetAction.RevealMenuKeys))
+            {
+                Reveal();
+                key.Handled = true;
+                return;
             }
         }
 

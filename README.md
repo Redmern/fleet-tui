@@ -234,7 +234,8 @@ config) puts a quiet caption over each section and a blank line between them.
 **Show keybinds** (`K` in Settings, on by default; one switch for every project and the project
 picker) hides the key column in every menu when it is off; the keys still work. `?` then shows the keys in the menu you are in, until you
 press `?` again or leave that menu, and the bar under the menu shows a `? keys` chip as a
-reminder. `?` can be rebound under **navigation** in Keybinds.
+reminder. `?` can be rebound under **navigation** in Keybinds; the editor refuses a key that would put
+it together with a menu entry or a menu motion, in either direction.
 
 - **Quit** (`Q`, deliberately shifted) closes every pane of the project, including hidden agents in
   their own workspace, so nothing is left running invisibly. Agent records are
