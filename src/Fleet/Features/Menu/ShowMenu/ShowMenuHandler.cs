@@ -28,7 +28,8 @@ public sealed class ShowMenuHandler(Keymap keymap)
                     i == 0 ? s.Header : null,
                     value(a),
                     FleetMenus.OpensMore(a),
-                    FleetMenus.IsToggle(a)))),
+                    FleetMenus.IsToggle(a),
+                    i == 0 ? s.Icon : null))),
         ];
 
     public static IReadOnlyList<FleetRow> Rows(IReadOnlyList<FleetMenuItem> items)
@@ -39,12 +40,14 @@ public sealed class ShowMenuHandler(Keymap keymap)
         }
 
         var keyWidth = items.Max(i => i.KeyText.Length);
+        var icons = items.Any(i => FleetIcons.For(i.Action) is not null);
 
         return
         [
             .. items.Select(i => new FleetRow(
             [
                 new FleetSpan($"{i.KeyText.PadRight(keyWidth)}   ", FleetTones.Key),
+                .. icons ? [FleetSpan.Plain($"{FleetIcons.For(i.Action) ?? " "} ")] : Array.Empty<FleetSpan>(),
                 FleetSpan.Plain(i.Label),
             ],
             Trailing(i))),
@@ -53,9 +56,11 @@ public sealed class ShowMenuHandler(Keymap keymap)
 
     public static IReadOnlyDictionary<int, FleetRow> Headers(IReadOnlyList<FleetMenuItem> items) =>
         items
-            .Select((item, index) => (item.Header, index))
+            .Select((item, index) => (item.Header, item.HeaderIcon, index))
             .Where(h => h.Header is not null)
-            .ToDictionary(h => h.index, h => new FleetRow([FleetSpan.Muted($"── {h.Header} ──")]));
+            .ToDictionary(
+                h => h.index,
+                h => new FleetRow([FleetSpan.Muted(h.HeaderIcon is null ? $"── {h.Header} ──" : $"── {h.HeaderIcon} {h.Header} ──")]));
 
     public static int Width(IReadOnlyList<FleetRow> rows) =>
         rows.Count == 0 ? 0 : rows.Max(r => r.Text.Length + (r.Trailing is { Count: > 0 } ? 3 : 0)) + 2;
