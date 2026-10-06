@@ -143,6 +143,131 @@ public sealed class ReportStatusTests
         Assert.Equal("2026-10-03T10:00:00.0000000+00:00", written.ReportedAt);
     }
 
+    [Fact]
+    public async Task A_finished_agent_is_told_to_message_its_sub_orchestrator()
+    {
+        var sub = Seed("some-sub");
+        SeedAgent("backend", "feature/login");
+        var inboxes = new FakeInboxes { [sub.Worktree] = @"uds:\\.\pipe\LOCAL\cc-msg-sub" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Done, "endpoint added");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Contains("SendMessage", result.Value);
+        Assert.Contains(@"""uds:\\.\pipe\LOCAL\cc-msg-sub""", result.Value);
+        Assert.Contains("techweb-sub-some-sub", result.Value);
+        Assert.Contains("\n\nbackend/feature/login: done — endpoint added\n\n", result.Value);
+        Assert.Equal(OrchestrationStatus.Done, Assert.Single(_store.Written).Status);
+    }
+
+    [Fact]
+    public async Task A_failed_agent_is_told_to_message_its_owner_too()
+    {
+        var sub = Seed("some-sub");
+        SeedAgent("backend", "feature/login");
+        var inboxes = new FakeInboxes { [sub.Worktree] = "uds:sub" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Failed, "build broke");
+
+        Assert.Contains("\"uds:sub\"", result.Value);
+    }
+
+    [Fact]
+    public async Task A_multi_line_summary_is_sent_as_one_line()
+    {
+        var sub = Seed("some-sub");
+        SeedAgent("backend", "feature/login");
+        var inboxes = new FakeInboxes { [sub.Worktree] = "uds:sub" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Done, "added\r\nthe endpoint");
+
+        Assert.Contains("\n\nbackend/feature/login: done — added the endpoint\n\n", result.Value);
+    }
+
+    [Fact]
+    public async Task An_agent_without_an_owner_messages_the_main_orchestrator()
+    {
+        _store.Saved.Add(new AgentRecord(
+            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Nvim, "origin/main", true));
+        var inboxes = new FakeInboxes { [Root] = "uds:main" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "agent:backend/fix", OrchestrationStatus.Done, "fixed");
+
+        Assert.Contains("\"uds:main\"", result.Value);
+        Assert.Contains("techweb-main", result.Value);
+    }
+
+    [Fact]
+    public async Task A_sub_orchestrator_messages_the_main_orchestrator_when_it_finishes()
+    {
+        Seed("upgrade");
+        var inboxes = new FakeInboxes { [Root] = "uds:main" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "upgrade", OrchestrationStatus.Done, "shipped");
+
+        Assert.Contains("\"uds:main\"", result.Value);
+    }
+
+    [Fact]
+    public async Task An_owner_without_an_inbox_gets_no_message()
+    {
+        var sub = Seed("some-sub");
+        SeedAgent("backend", "feature/login");
+        var inboxes = new FakeInboxes { [Root] = "uds:main" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Done, "endpoint added");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal("backend/feature/login: done — endpoint added", result.Value);
+        Assert.Equal([sub.Worktree], inboxes.Asked);
+    }
+
+    [Fact]
+    public async Task A_working_report_sends_nothing_to_the_owner()
+    {
+        var sub = Seed("some-sub");
+        SeedAgent("backend", "feature/login");
+        var inboxes = new FakeInboxes { [sub.Worktree] = "uds:sub" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Working, "halfway");
+
+        Assert.DoesNotContain("SendMessage", result.Value);
+        Assert.Empty(inboxes.Asked);
+    }
+
+    [Fact]
+    public async Task A_failed_lookup_asks_no_inbox()
+    {
+        var inboxes = new FakeInboxes { [Root] = "uds:main" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
+            "techweb", Root, "ghost", OrchestrationStatus.Done, "");
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(inboxes.Asked);
+    }
+
+    private const string Root = "C:/repos/techweb";
+
+    private sealed class FakeInboxes : Dictionary<string, string>, IAgentInboxes
+    {
+        public List<string> Asked { get; } = [];
+
+        public Task<string?> AddressAsync(string folder, CancellationToken ct = default)
+        {
+            Asked.Add(folder);
+
+            return Task.FromResult(TryGetValue(folder, out var address) ? address : null);
+        }
+    }
+
     private sealed class RecordingStore : IAgentStore
     {
         public List<AgentRecord> Saved { get; } = [];

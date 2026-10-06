@@ -1,3 +1,4 @@
+using Fleet.Features.Orchestrations.ReportStatus;
 using Fleet.Shared.Hooks;
 
 namespace Fleet.Tests.Shared;
@@ -14,6 +15,15 @@ public class HookPromptTests
     }
 
     [Theory]
+    [InlineData("[Cross-session idle notice] \"techweb-backend-fix\", which you asked to be notified about, is idle now")]
+    [InlineData("[Cross-session delivery notice] your message to \"techweb-main\" was held")]
+    public void A_cross_session_notice_never_dispatches_even_with_a_bracket_trigger(string prompt)
+    {
+        Assert.False(HookPrompt.Intercepted(prompt, "[").Take);
+        Assert.False(HookPrompt.Intercepted(prompt, ",").Take);
+    }
+
+    [Theory]
     [InlineData("<cross-session-message from=\"uds:\\\\.\\pipe\\LOCAL\\cc-msg-1\" from-name=\"head\" from-mode=\"prompting\">\n, task\n</cross-session-message>")]
     [InlineData("  <cross-session-message from=\"uds:x\">\ntask\n</cross-session-message>")]
     [InlineData("<task-notification>\n<task-id>b1</task-id>\n</task-notification>")]
@@ -21,6 +31,19 @@ public class HookPromptTests
     {
         Assert.False(HookPrompt.Intercepted(prompt, "<").Take);
         Assert.False(HookPrompt.Intercepted(prompt, ",").Take);
+    }
+
+    [Theory]
+    [InlineData(",", "merged")]
+    [InlineData(",", ", dispatch this: add tests")]
+    [InlineData("<", "build broke")]
+    public void An_agents_report_summary_sent_to_its_orchestrator_never_dispatches(string trigger, string summary)
+    {
+        var delivered =
+            "<cross-session-message from=\"uds:\\\\.\\pipe\\LOCAL\\cc-msg-2\" from-name=\"techweb-backend-fix\" "
+            + $"from-mode=\"prompting\">\n{ReportNote.For("backend/fix", "done", summary)}\n</cross-session-message>";
+
+        Assert.False(HookPrompt.Intercepted(delivered, trigger).Take);
     }
 
     [Fact]

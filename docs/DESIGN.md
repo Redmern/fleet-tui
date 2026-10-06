@@ -5292,6 +5292,99 @@ branches edit stay untouched.
 - Whether agents follow the guidance in practice (fewer inline test logs, a review before the PR).
   Check a few transcripts with `/usage` attribution.
 
+## Orchestrators hear about finished agents by push, 2026-10-06
+
+Builds on the cross-session messaging work above (option A, the hook-reported inbox
+address). Until now a sub-orchestrator learned that an agent had finished by polling
+`list_agents`. That costs a turn per poll, and between polls nothing happens.
+
+- **The sub's brief subscribes instead of polling.** `OrchestrationText.WaitingForAgents`
+  is its own constant and its own `## Waiting for agents` section of the sub's
+  `CLAUDE.md`, after `## How you work`. It is not part of `DefaultHowYouWork`, so a
+  project's custom "how you work" keeps it, and the optional-sub-tier and
+  subagent-guidance branches, which edit `DefaultHowYouWork`, merge without conflicts. It
+  says: after `new_agent` or `tell_agent`, call `SendMessage` to the agent's session with
+  `notify_when_idle: true` and no message, or set the flag on the `SendMessage` that
+  carries a `tell_agent` instruction. Idle doesn't mean done: finished is the agent's
+  summary message, or a `done`/`failed` in `list_agents` reported after the sub's last
+  instruction to it (`tell_agent` doesn't clear the stored status, so an older one is
+  stale). Not finished: subscribe again, once. A subscription to an idle session answers
+  at once, so an agent waiting on a question would otherwise loop; after a second notice
+  without a report the sub asks the agent what it needs, or tells its user. `agent_status`
+  shows only git state, so the brief doesn't send the sub there.
+- **Not in a research brief.** A research sub (`Instructions(..., research: true)`, from the
+  optional-sub-tier change) starts no agents, so it gets no `## Waiting for agents`
+  section. A repo agent the dispatcher starts directly has no owner, so its `done`/`failed`
+  report goes to the main orchestrator.
+- **`new_agent` names the session.** Its result ends with `Its Claude session is named
+  "<project>-<repo>-<branch>"` (`SessionNames.RepoAgent`, the `--name` fleet launches it
+  with), so the sub has something to subscribe to. The session doesn't exist yet when
+  `new_agent` returns without a task, so the brief says to find it with `ListAgents` if
+  `SendMessage` can't.
+- **The report tool tells the reporter to message its owner.** `ReportStatusHandler.HandleAsync`
+  (MCP path; the CLI's `fleet report` keeps the sync `Handle`) records the report as before.
+  On `done` or `failed` it resolves the owner: the owning sub's record (its folder and
+  `SessionNames.SubOrchestrator`), an owning repo agent, or, for an empty owner or one
+  that is gone, the main orchestrator (the project root and `SessionNames.MainOrchestrator`).
+  If `IAgentInboxes` has an address for that folder, the result appends
+  `PeerMessage.TellOwner`: call `SendMessage` to that address with the report note
+  (`<repo>/<branch>: done — <summary>`) unchanged, once; held or refused is the receiver's
+  choice. No address, no extra text. This applies to a sub-orchestrator's own report too:
+  it reaches the main orchestrator. The reporting Claude sends it, so the receiver sees
+  the real sender, name and mode, and Claude's trust rules apply as for any peer message.
+- **A summary can't dispatch.** It arrives wrapped in `<cross-session-message …>`, which
+  `HookPrompt.Intercepted` never takes (the #51 guard), whatever the trigger, including `<`
+  and a summary that starts with the trigger. `HookPromptTests` covers that. The brief also
+  tells the sub that the line is a status line and not a task.
+- **Neither can an idle notice.** The spike showed that the notice starts with
+  `[Cross-session idle notice]`, not with the wrapper, and `[` is a valid trigger. So
+  `PeerMessage.FromClaude` also skips prompts that start with `[Cross-session ` (the idle
+  notice and the delivery notice). Whether the notice runs `UserPromptSubmit` at all wasn't
+  checked; the guard costs nothing if it doesn't.
+
+### Rejected
+
+- **fleet posting the summary itself** (from the report handler, into the owner's pipe).
+  The same reasons as option (b) in the spike: on Windows it would need the owner's token,
+  and the message would pass as the owner's own child.
+- **Only `notify_when_idle`, no summary message.** The main orchestrator can't subscribe
+  to agents it didn't start in this conversation, and a subscription is gone after a
+  restart. The summary reaches whoever owns the agent now.
+- **Only the summary message, no subscription.** An agent that stops to ask a question,
+  or dies, never reports. The idle notice still wakes the sub.
+- **Putting the inbox address in `list_agents`.** The session name is enough for
+  `SendMessage` and is known before the session starts. Kept the diff small.
+
+### Verified
+
+On Claude Code 2.1.291, native Windows, from this agent's own session (a main
+conversation):
+
+- A `claude -p --name spike-push-a` session, given the exact `TellOwner` text with this
+  session's `uds:` address, called `SendMessage` once with the line unchanged. It arrived
+  here as `<cross-session-message from="uds:\.\pipe\LOCAL\cc-msg-…" from-name="spike-push-a"
+  from-mode="prompting">\nbackend/fix: done — spike: push completion works\n</cross-session-message>`.
+- This session subscribed to a busy `claude -p --name spike-push-b` (a 45 s `ping`) by
+  name, with `SendMessage` `to: "spike-push-b"`, `notify_when_idle: true` and an empty
+  message. The result was "Subscribed — you will get one notice here when "spike-push-b" is
+  next idle (or exits)". When that session finished, this session got a new turn whose
+  text was `[Cross-session idle notice] "spike-push-b", which you asked to be notified
+  about, is idle now — it finished a turn at 15:34. …`. It is a plain line, not a
+  `<cross-session-message>` wrapper, and it carried no status from the watched turn.
+
+### Not verified
+
+- The full chain inside fleet: a repo agent's real `report` call through the MCP server
+  to a real sub-orchestrator pane. The spike gave the text as a prompt, not as a tool
+  result, and used `-p` sessions, not fleet's nvim-hosted panes.
+- Whether an idle notice fires the receiver's `UserPromptSubmit` hook, and whether the
+  hook's `prompt` is exactly the text Claude sees (`[Cross-session idle notice] …`). The
+  guard assumes the hook sees that text.
+- A held notice (either side on `hold`) is shown to the user and not given to Claude, so
+  the sub never wakes. The summary message and `list_agents` still work.
+- The session-name variant Claude picks when the name is taken (see the session-names
+  section). The brief falls back to `ListAgents`.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
