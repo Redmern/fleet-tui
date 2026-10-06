@@ -74,9 +74,9 @@ lacks 'split right' 'which-key closed'
 echo "== 3. menu float (prefix space), esc closes"
 keys C-s Space; sleep 3
 sees 'fleet menu' 'menu float drawn'
-sees 'Switch project' 'menu items drawn'
+sees 'List agents' 'menu items drawn'
 keys Escape; sleep 2
-lacks 'Switch project' 'menu closed'
+lacks 'List agents' 'menu closed'
 
 echo "== 4. split, new tab, zoom, tab switch"
 before=$(panes | wc -l)

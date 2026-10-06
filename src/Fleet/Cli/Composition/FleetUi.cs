@@ -24,8 +24,8 @@ public static class FleetUi
     }
 
     public static FleetAction Menu(
-        IApplication app, Keymap keymap, IReadOnlyList<FleetAction> actions) =>
-        ShowMenuView.Show(app, keymap, new ShowMenuHandler(keymap).Items(actions));
+        IApplication app, Keymap keymap, IReadOnlyList<FleetAction> actions, bool showKeys = true) =>
+        ShowMenuView.Show(app, keymap, new ShowMenuHandler(keymap).Items(actions), showKeys);
 
     public static FleetAction Menu(
         IApplication app,
@@ -33,11 +33,13 @@ public static class FleetUi
         FleetAction submenu,
         IReadOnlyList<MenuSection> sections,
         Func<FleetAction, string?> value,
-        Func<FleetAction, string?> toggle) =>
+        Func<FleetAction, string?> toggle,
+        Func<bool> showKeys) =>
         ShowMenuView.Show(
             app,
             keymap,
             FleetMenus.Title(submenu),
             new ShowMenuHandler(keymap).Items(sections, value),
-            toggle);
+            toggle,
+            showKeys);
 }

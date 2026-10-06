@@ -27,6 +27,7 @@ public static class KeymapGroups
             FleetAction.Remotes,
             FleetAction.OpenFleetConfigMenu,
             FleetAction.EditKeybinds,
+            FleetAction.EditShowMenuKeys,
             FleetAction.RebuildDashboard,
             FleetAction.CleanupProject,
             FleetAction.ViewLogs,
@@ -75,6 +76,7 @@ public static class KeymapGroups
             FleetAction.PrevTab,
             FleetAction.NextTab,
             FleetAction.Close,
+            FleetAction.RevealMenuKeys,
         ]),
         ("anywhere, no prefix",
         [

@@ -84,10 +84,10 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Screen,
     });
 
-    public static ListView CenteredRows(int width, int height) => Steady(new FleetList
+    public static ListView CenteredRows(int width, int height, int footer = 0) => Steady(new FleetList
     {
         X = Pos.Center(),
-        Y = Pos.Center(),
+        Y = Pos.Center() - footer / 2,
         Width = width,
         Height = height,
         SchemeName = FleetSchemes.Screen,

@@ -28,6 +28,7 @@ public static class FleetIcons
         FleetAction.Remotes => "",
         FleetAction.OpenFleetConfigMenu => "",
         FleetAction.EditKeybinds => "",
+        FleetAction.EditShowMenuKeys => "",
         FleetAction.RebuildDashboard => "",
         FleetAction.CleanupProject => "",
         FleetAction.ViewLogs => "",

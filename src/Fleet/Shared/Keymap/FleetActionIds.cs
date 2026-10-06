@@ -9,6 +9,8 @@ public static class FleetActionIds
     {
         FleetAction.AddRepository => "add-repository",
         FleetAction.EditKeybinds => "keybinds",
+        FleetAction.EditShowMenuKeys => "show-menu-keys",
+        FleetAction.RevealMenuKeys => "reveal-menu-keys",
         FleetAction.OpenProject => "open-project",
         FleetAction.NewProject => "new-project",
         FleetAction.Refresh => "refresh",
@@ -54,6 +56,8 @@ public static class FleetActionIds
     {
         "add-repository" => FleetAction.AddRepository,
         "keybinds" => FleetAction.EditKeybinds,
+        "show-menu-keys" => FleetAction.EditShowMenuKeys,
+        "reveal-menu-keys" => FleetAction.RevealMenuKeys,
         "open-project" => FleetAction.OpenProject,
         "new-project" => FleetAction.NewProject,
         "refresh" => FleetAction.Refresh,

@@ -276,6 +276,20 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Menu_keys_default_to_shown_and_hidden_round_trips()
+    {
+        Assert.True(Store.Load("never-saved").ShowMenuKeys);
+
+        Store.Save("techweb", SettingsConfig.Default.WithShowMenuKeys(false));
+        Assert.False(Store.Load("techweb").ShowMenuKeys);
+        Assert.Contains("showMenuKeys", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+
+        Store.Save("techweb", SettingsConfig.Default.WithShowMenuKeys(true));
+        Assert.True(Store.Load("techweb").ShowMenuKeys);
+        Assert.DoesNotContain("showMenuKeys", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));

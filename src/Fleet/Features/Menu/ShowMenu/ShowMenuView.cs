@@ -4,35 +4,73 @@ using Fleet.Ui;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Fleet.Features.Menu.ShowMenu;
 
 public static class ShowMenuView
 {
+    public const int Footer = 2;
+
+    public static int FitRows(int height) => height + (2 * ShowMenuHandler.Padding) + Footer;
+
+    public static (ListView List, FleetActionBar Bar) Place(int width, int height)
+    {
+        var list = FleetTheme.CenteredRows(width, height, Footer);
+
+        return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding, alignRight: true));
+    }
+
     public static FleetAction Show(
-        IApplication app, Keymap keymap, IReadOnlyList<FleetMenuItem> items) =>
-        Show(app, keymap, "fleet menu", items, toggle: null);
+        IApplication app, Keymap keymap, IReadOnlyList<FleetMenuItem> items, bool showKeys = true) =>
+        Show(app, keymap, "fleet menu", items, toggle: null, () => showKeys);
 
     public static FleetAction Show(
         IApplication app,
         Keymap keymap,
         string title,
         IReadOnlyList<FleetMenuItem> items,
-        Func<FleetAction, string?>? toggle)
+        Func<FleetAction, string?>? toggle,
+        Func<bool>? showKeys = null)
     {
         var chosen = FleetAction.None;
         var shown = items.ToList();
+        var keysOn = showKeys?.Invoke() ?? true;
+        var revealed = false;
+
+        bool Keyed() => keysOn || revealed;
+
+        var gaps = ShowMenuHandler.Gaps(shown);
         var rows = ShowMenuHandler.Rows(shown);
-        var headers = ShowMenuHandler.Headers(shown);
+        var keyedHeaders = ShowMenuHandler.Headers(shown);
+        var width = ShowMenuHandler.Width([.. rows, .. keyedHeaders.Values]);
+        var height = ShowMenuHandler.Height(rows, keyedHeaders.Count, gaps.Count);
+        var revealKey = keymap.DisplayFor(FleetAction.RevealMenuKeys);
+        var (list, bar) = Place(width, height);
 
-        var width = ShowMenuHandler.Width([.. rows, .. headers.Values]);
-        var height = ShowMenuHandler.Height(rows, headers.Count);
+        var window = FleetTheme.Overlay(
+            title,
+            Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(revealKey, false, Nothing, Nothing, Nothing, Nothing)) + 4),
+            FitRows(height));
 
-        var window = FleetTheme.Overlay(title, Math.Max(width + 20, 52), height + 6);
+        void Refill(int index)
+        {
+            var keyed = Keyed();
+            var current = ShowMenuHandler.Rows(shown, keyed);
+            var headers = ShowMenuHandler.Headers(shown, keyed);
 
-        var list = FleetTheme.CenteredRows(width, height);
+            list.Width = ShowMenuHandler.Width([.. current, .. headers.Values]);
+            FleetRows.Fill(list, current, index, gapsAfter: gaps, headersBefore: headers);
+            bar.Show(Buttons(revealKey, keysOn, Accept, Reveal, () => app.RequestStop(window), () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }));
+            list.SetNeedsLayout();
+            list.SetNeedsDraw();
+        }
 
-        FleetRows.Fill(list, rows, headersBefore: headers);
+        Refill(0);
 
         FleetKeys.ApplyMotions(list, keymap);
 
@@ -41,8 +79,10 @@ public static class ShowMenuView
             if (shown[index].Toggles && toggle is not null)
             {
                 shown[index] = shown[index] with { Value = toggle(shown[index].Action) };
-                FleetRows.Fill(list, ShowMenuHandler.Rows(shown), index, headersBefore: headers);
-                list.SetNeedsDraw();
+                var now = showKeys?.Invoke() ?? true;
+                revealed = revealed && now == keysOn;
+                keysOn = now;
+                Refill(index);
                 return;
             }
 
@@ -60,24 +100,17 @@ public static class ShowMenuView
             }
         }
 
+        void Reveal()
+        {
+            revealed = !revealed;
+            Refill(FleetRows.Selected(list));
+        }
+
         list.Accepting += (_, e) =>
         {
             Accept();
             e.Handled = true;
         };
-
-        var bar = new FleetActionBar(Pos.AnchorEnd(2), alignRight: true);
-
-        bar.Show(
-        [
-            ("enter", "select", Accept),
-            ("q/esc", "close", () => app.RequestStop(window)),
-            ("bksp", "back", () =>
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-            }),
-        ]);
 
         var claim = FleetModal.Enter();
 
@@ -103,11 +136,17 @@ public static class ShowMenuView
                 return;
             }
 
+            if (key == keymap.KeyFor(FleetAction.RevealMenuKeys))
+            {
+                Reveal();
+                key.Handled = true;
+                return;
+            }
+
             for (var i = 0; i < shown.Count; i++)
             {
                 if (keymap.KeyFor(shown[i].Action) == key)
                 {
-                    FleetRows.Select(list, i);
                     Choose(i);
                     key.Handled = true;
                     return;
@@ -131,5 +170,18 @@ public static class ShowMenuView
         }
 
         return chosen;
+    }
+
+    private static IReadOnlyList<(string Key, string Label, Action Run)> Buttons(
+        string revealKey, bool keyed, Action accept, Action reveal, Action close, Action back) =>
+    [
+        ("enter", "select", accept),
+        .. keyed ? [] : new[] { (revealKey, "keys", reveal) },
+        ("q/esc", "close", close),
+        ("bksp", "back", back),
+    ];
+
+    private static void Nothing()
+    {
     }
 }
