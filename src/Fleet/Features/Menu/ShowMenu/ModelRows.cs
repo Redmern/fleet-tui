@@ -94,6 +94,12 @@ public static class ModelRows
     public static string? Typed(string answer)
     {
         var trimmed = answer.Trim();
+
+        if (Aliases.FirstOrDefault(a => a.Equals(trimmed, StringComparison.OrdinalIgnoreCase)) is { } alias)
+        {
+            return alias;
+        }
+
         var model = ModelChoice.Model(trimmed);
 
         return model != ModelChoice.Inherit || trimmed.Equals(ModelChoice.Inherit, StringComparison.OrdinalIgnoreCase)

@@ -72,6 +72,7 @@ public class ModelRowsTests
     [Theory]
     [InlineData(" claude-opus-5-5 ", "claude-opus-5-5")]
     [InlineData("Inherit", "inherit")]
+    [InlineData("Opus", "opus")]
     [InlineData("opus'; x", null)]
     [InlineData("", null)]
     public void A_typed_model_is_accepted_only_when_fleet_can_pass_it(string typed, string? expected)
