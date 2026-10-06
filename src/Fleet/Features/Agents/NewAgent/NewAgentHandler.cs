@@ -70,22 +70,26 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
             command.Harness,
             baseRef,
             plan.TargetDirectory != command.RepositoryDirectory,
-            Hidden: false,
+            Hidden: true,
             Open: true,
             Owner: command.Owner,
             Claude: command.Claude ?? command.Owner.Length > 0);
 
         store.Save(command.ProjectName, agent);
 
+        var active = (await mux.ListPanesAsync(ct).ConfigureAwait(false)).FirstOrDefault(p => p.IsActive);
+
         var pane = await mux.SpawnAsync(
-            new SpawnOptions
-            {
-                Cwd = plan.TargetDirectory,
-                SessionName = command.ProjectName,
-                Args = AgentHarness.CommandFor(
-                    command.Harness, withClaude: agent.RunsClaude),
-                Env = AgentHarness.SpawnEnv(command.Harness),
-            },
+            HiddenSpawn.Into(
+                mux,
+                command.ProjectName,
+                new SpawnOptions
+                {
+                    Cwd = plan.TargetDirectory,
+                    Args = AgentHarness.CommandFor(
+                        command.Harness, withClaude: agent.RunsClaude),
+                    Env = AgentHarness.SpawnEnv(command.Harness),
+                }),
             ct).ConfigureAwait(false);
 
         if (pane.IsNone)
@@ -95,6 +99,11 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
 
         await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct)
             .ConfigureAwait(false);
+
+        if (active is not null)
+        {
+            await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
+        }
 
         return Result<AgentRecord>.Ok(agent);
     }

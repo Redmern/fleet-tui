@@ -124,18 +124,17 @@ public sealed class DispatchHandler(
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
         var active = panes.FirstOrDefault(p => p.IsActive);
-        var window = ProjectWindows.For(mux, panes, command.ProjectName, command.ProjectRoot, preferCaller: true);
 
         var pane = await mux.SpawnAsync(
-            new SpawnOptions
-            {
-                Cwd = folder,
-                SessionName = command.ProjectName,
-                WindowId = window,
-                NewWindow = window is null,
-                Args = AgentHarness.CommandFor(AgentHarness.Orchestrator, orchestratorInNvim: inNvim),
-                Env = AgentHarness.SpawnEnv(AgentHarness.Orchestrator, inNvim),
-            },
+            HiddenSpawn.Into(
+                mux,
+                command.ProjectName,
+                new SpawnOptions
+                {
+                    Cwd = folder,
+                    Args = AgentHarness.CommandFor(AgentHarness.Orchestrator, orchestratorInNvim: inNvim),
+                    Env = AgentHarness.SpawnEnv(AgentHarness.Orchestrator, inNvim),
+                }),
             ct).ConfigureAwait(false);
 
         if (pane.IsNone)
