@@ -964,8 +964,6 @@ public static class ShowDashboardView
                         ? AgentWords.Show
                         : AgentWords.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
-                (keys.DisplayFor(FleetAction.OpenEditor), "editor",
-                    () => FromKey(FleetAction.OpenEditor)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
             ]);
 
@@ -981,8 +979,6 @@ public static class ShowDashboardView
                         ? AgentWords.Show
                         : AgentWords.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
-                (keys.DisplayFor(FleetAction.OpenEditor), "editor",
-                    () => FromKey(FleetAction.OpenEditor)),
                 (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
             ]);
 

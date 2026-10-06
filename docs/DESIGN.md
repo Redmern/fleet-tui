@@ -5475,7 +5475,8 @@ conversation):
   The Switch project picker drops its `h/l machine` chip (h/l, the arrows and a click on a
   tab still switch machines) and its new-window chip is an icon (`FleetIcons.NewWindow`).
   Keybinds swaps its plain hint line for an action bar: rebind (`FleetIcons.Rebind`) and
-  back chips; tab and move keys still work, and close is the corner. The dashboard (its menu mode keeps a close chip) and the
+  back chips; tab and move keys still work, and close is the corner.
+  The dashboard's agent and sub bars drop the `editor` chip; the Open editor key still works. The dashboard (its menu mode keeps a close chip) and the
   small prompts/dialogs without a bar are left as they were.
 
 ## Still to verify
