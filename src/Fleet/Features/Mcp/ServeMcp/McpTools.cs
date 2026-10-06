@@ -50,10 +50,16 @@ public static class McpTools
                 ToolArguments.Task, "string", "An optional first instruction to send the agent.", false)),
         Spec(
             HarnessTool.TellAgent,
-            "Send an instruction to a running agent's Claude.",
+            "Send an instruction to a running agent's Claude. When that Claude takes cross-session messages, "
+            + "the result names its address and you send the instruction with SendMessage; otherwise fleet types it in.",
             Repository,
             Branch,
-            new ToolParam(ToolArguments.Message, "string", "The instruction to send.", true)),
+            new ToolParam(ToolArguments.Message, "string", "The instruction to send.", true),
+            new ToolParam(
+                ToolArguments.Typed,
+                "boolean",
+                "true to have fleet type it into the pane; only when SendMessage could not reach the session.",
+                false)),
         Spec(HarnessTool.OpenAgent, "Bring an agent's pane into view.", Repository, Branch),
         Spec(
             HarnessTool.SetAgentVisible,

@@ -27,7 +27,8 @@ public sealed record HeadDeps(
     IRemoteMachines Remotes,
     IKnownRemoteStore KnownRemotes,
     Func<Project, CancellationToken, Task<ProjectStructure>> Structure,
-    Func<Project, AgentRecord, bool, CancellationToken, Task<Result<AgentRecord>>>? SetVisible = null);
+    Func<Project, AgentRecord, bool, CancellationToken, Task<Result<AgentRecord>>>? SetVisible = null,
+    IAgentInboxes? Inboxes = null);
 
 public sealed record HeadTiming(
     TimeSpan Poll,

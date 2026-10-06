@@ -60,6 +60,10 @@ public static class HeadBrief
         - If X is closed, `tell` and `relay` open it and wait for its Claude. If X's Claude is busy, the
           prompt is queued and typed in once it is idle; say so to the user rather than retrying. The answer
           appears in X's orchestrator, not in your tool result; `switch_project` shows it.
+        - When X's orchestrator takes cross-session messages, `tell` and `relay` type nothing: their result
+          gives an address and a message. Send that message with SendMessage to that address, unchanged and
+          once. A held or refused delivery is X's choice; tell the user and don't retry. A relay sent this
+          way asks X's orchestrator to call its dispatch tool, which X's `dispatch` rule still gates.
         - Use the project names exactly as `list_projects` prints them. When a name is ambiguous, ask.
         - Never relay or tell the same thing twice. A queued prompt is still delivered.
         - fleet can connect to fleet on other machines over ssh. "X on <remote>" (e.g. "switch me to

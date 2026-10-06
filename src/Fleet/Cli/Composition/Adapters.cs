@@ -101,11 +101,16 @@ public static class Adapters
     }
 
     public static HookEvent ReadHookEvent() =>
-        HookIo.Event(HookIo.Read(Console.In), Environment.GetEnvironmentVariable(HookIo.ProjectDirVariable));
+        HookIo.Event(
+            HookIo.Read(Console.In),
+            Environment.GetEnvironmentVariable(HookIo.ProjectDirVariable),
+            Environment.GetEnvironmentVariable(HookIo.MessagingSocketVariable));
 
     public static string HookBlockJson(string note) => HookIo.Block(note);
 
     public static IAgentStateStore AgentStates() => new FileAgentStateStore();
+
+    public static IAgentInboxes AgentInboxes() => new StatusFileInboxes(AgentStates());
 
     public static IActionRequestStore Requests() => new FileActionRequestStore();
 

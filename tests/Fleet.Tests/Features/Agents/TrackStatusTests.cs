@@ -62,6 +62,20 @@ public sealed class TrackStatusTests
     }
 
     [Fact]
+    public async Task The_session_inbox_socket_is_stored_as_its_peer_address()
+    {
+        var payload = HookIo.Read(new StringReader("""{"cwd":"C:/w/a","hook_event_name":"Stop","session_id":"s1"}"""));
+        var store = new FakeStateStore();
+
+        var hook = HookIo.Event(payload, "C:/w/a", @"\\.\pipe\LOCAL\cc-msg-1");
+        await new TrackStatusHandler(store).HandleAsync(hook, Now);
+
+        Assert.Equal(@"uds:\\.\pipe\LOCAL\cc-msg-1", Assert.Single(store.Reported).Inbox);
+        Assert.Equal(string.Empty, HookIo.Event(payload, "C:/w/a").Inbox);
+        Assert.Equal("uds:/tmp/s.sock", HookIo.PeerAddress("uds:/tmp/s.sock"));
+    }
+
+    [Fact]
     public void The_folder_claude_was_started_in_wins_over_where_the_session_has_cd_ed_to()
     {
         var payload = HookIo.Read(new StringReader("""{"cwd":"C:/w/a/src","hook_event_name":"PreToolUse"}"""));
