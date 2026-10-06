@@ -41,6 +41,7 @@ using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 using Fleet.Ui.Enums;
 using Fleet.Ui.Models;
@@ -145,18 +146,19 @@ public static class MenuCommand
 
         var settings = Adapters.Settings();
         var current = settings.Load(project.Name);
+        var head = Adapters.HeadModel();
 
         return FleetUi.Menu(
             app,
             keymap,
             submenu,
             sections,
-            action => FleetMenus.Value(action, current),
+            action => FleetMenus.Value(action, current, head),
             action =>
             {
                 current = FleetMenus.Flip(action, current);
                 settings.Save(project.Name, current);
-                return FleetMenus.Value(action, current);
+                return FleetMenus.Value(action, current, head);
             });
     }
 
@@ -362,6 +364,69 @@ public static class MenuCommand
                     var hostSettings = Adapters.Settings();
 
                     hostSettings.Save(project.Name, FleetMenus.Flip(chosen, hostSettings.Load(project.Name)));
+                    break;
+                }
+
+            case FleetAction.EditHeadModel:
+            case FleetAction.EditMainModel:
+            case FleetAction.EditSubModel:
+            case FleetAction.EditAgentModel:
+                {
+                    var modelSettings = Adapters.Settings();
+                    var current = modelSettings.Load(project.Name);
+                    var global = chosen == FleetAction.EditHeadModel;
+                    var title = global
+                        ? $"{ModelRows.Title(chosen)} — all projects"
+                        : $"{ModelRows.Title(chosen)} — {project.Name}";
+                    var was = ModelRows.Current(chosen, current, Adapters.HeadModel());
+
+                    var pickedModel = FleetPicker.Choose(app, title, ModelRows.ModelEntries, keymap, ModelRows.ModelIndex(was));
+
+                    if (pickedModel is null)
+                    {
+                        break;
+                    }
+
+                    var model = ModelRows.ModelAt(pickedModel.Value);
+
+                    if (model is null)
+                    {
+                        var typed = FleetDialog.Ask(
+                            app, title, "Model alias or full model ID (inherit for the profile default):", initial: was.Model);
+
+                        if (typed is null)
+                        {
+                            break;
+                        }
+
+                        model = ModelRows.Typed(typed);
+
+                        if (model is null)
+                        {
+                            FleetDialog.Error(app, title, $"'{typed}' is not a model alias or ID fleet can pass to claude.");
+                            break;
+                        }
+                    }
+
+                    var pickedEffort = FleetPicker.Choose(
+                        app, $"{title} · effort", ModelRows.EffortEntries, keymap, ModelRows.EffortIndex(was));
+
+                    if (pickedEffort is null)
+                    {
+                        break;
+                    }
+
+                    var next = new RoleModel(model, ModelRows.EffortAt(pickedEffort.Value));
+
+                    if (global)
+                    {
+                        Adapters.SaveHeadModel(next);
+                    }
+                    else
+                    {
+                        modelSettings.Save(project.Name, ModelRows.With(chosen, current, next));
+                    }
+
                     break;
                 }
 
