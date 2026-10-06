@@ -17,6 +17,10 @@ public static class FleetGlyphs
     public const string PillRight = "";
 
 
+    public const string MoreLeft = "‹";
+
+    public const string MoreRight = "›";
+
     public const string Hidden = "";
 
     public const string Orchestrator = "";

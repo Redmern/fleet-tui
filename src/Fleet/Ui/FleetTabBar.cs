@@ -11,9 +11,15 @@ public sealed class FleetTabBar
 
     private const char Rule = '═';
 
+    private const int MarkerRoom = 2;
+
     private readonly Label[] _labels;
     private readonly Label _underline;
+    private readonly Label _moreLeft;
+    private readonly Label _moreRight;
+    private readonly View _strip;
     private readonly string[] _titles;
+    private int _scroll;
 
     public FleetTabBar(Pos x, Pos y, IReadOnlyList<string> titles)
     {
@@ -31,6 +37,32 @@ public sealed class FleetTabBar
             Y = 1,
             Text = string.Empty,
             SchemeName = FleetSchemes.Section,
+        };
+
+        _moreLeft = new Label
+        {
+            X = 0,
+            Y = 0,
+            Text = FleetGlyphs.MoreLeft,
+            SchemeName = FleetSchemes.Hint,
+            Visible = false,
+        };
+
+        _moreRight = new Label
+        {
+            X = Pos.AnchorEnd(1),
+            Y = 0,
+            Text = FleetGlyphs.MoreRight,
+            SchemeName = FleetSchemes.Hint,
+            Visible = false,
+        };
+
+        _strip = new View
+        {
+            X = 0,
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = 2,
         };
 
         Root = new View
@@ -53,10 +85,12 @@ public sealed class FleetTabBar
                 }
             };
 
-            Root.Add(_labels[i]);
+            _strip.Add(_labels[i]);
         }
 
-        Root.Add(_underline);
+        _strip.Add(_underline);
+        Root.Add(_strip, _moreLeft, _moreRight);
+        Root.FrameChanged += (_, _) => Arrange();
 
         Arrange();
     }
@@ -95,11 +129,41 @@ public sealed class FleetTabBar
 
     private void Arrange()
     {
-        var offset = 0;
+        var starts = new int[_titles.Length];
+        var total = 0;
+
+        for (var i = 0; i < _titles.Length; i++)
+        {
+            starts[i] = total;
+            total += _titles[i].Length + (i < _titles.Length - 1 ? Gap : 0);
+        }
+
+        var width = Root.Viewport.Width;
+        var overflows = width > 0 && total > width;
+        var room = overflows ? Math.Max(1, width - 2 * MarkerRoom) : width;
+
+        if (overflows && Selected < _titles.Length)
+        {
+            var start = starts[Selected];
+            var end = start + _titles[Selected].Length;
+            _scroll = Math.Max(_scroll, end - room);
+            _scroll = Math.Min(_scroll, start);
+            _scroll = Math.Clamp(_scroll, 0, total - room);
+        }
+        else
+        {
+            _scroll = 0;
+        }
+
+        _strip.X = overflows ? MarkerRoom : 0;
+        _strip.Width = overflows ? Dim.Fill(MarkerRoom) : Dim.Fill();
+        _moreLeft.Visible = overflows && _scroll > 0;
+        _moreRight.Visible = overflows && _scroll + room < total;
 
         for (var i = 0; i < _labels.Length; i++)
         {
             var title = _titles[i];
+            var offset = starts[i] - _scroll;
 
             _labels[i].Text = title;
             _labels[i].X = Pos.Absolute(offset);
@@ -112,8 +176,6 @@ public sealed class FleetTabBar
                 _underline.Width = Dim.Absolute(title.Length);
                 _underline.Text = new string(Rule, title.Length);
             }
-
-            offset += title.Length + Gap;
         }
 
         Root.SetNeedsLayout();
