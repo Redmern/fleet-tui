@@ -226,6 +226,10 @@ public sealed class WhichKeyEntry
 
     [JsonPropertyName("label")]
     public string Label { get; set; } = string.Empty;
+
+    [JsonPropertyName("group")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Group { get; set; }
 }
 
 public static class HostEffects
