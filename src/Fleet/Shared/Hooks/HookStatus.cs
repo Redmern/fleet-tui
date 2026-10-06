@@ -10,7 +10,8 @@ public sealed record HookEvent(
     string Transcript = "",
     string AgentId = "",
     string NotificationType = "",
-    string Source = "")
+    string Source = "",
+    string Inbox = "")
 {
     public bool FromSubagent => AgentId.Length > 0;
 }
@@ -52,7 +53,8 @@ public static class HookStatus
         }
 
         return new AgentReport(
-            hook.Cwd, hook.Session, found.State, now, hook.Transcript, found.Reason, StartsSession: hook.Name == "SessionStart");
+            hook.Cwd, hook.Session, found.State, now, hook.Transcript, found.Reason, StartsSession: hook.Name == "SessionStart",
+            Inbox: hook.Inbox);
     }
 
     private static bool Ends(AgentState state) => state is AgentState.Idle or AgentState.Unknown;

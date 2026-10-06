@@ -37,6 +37,7 @@ public sealed class FileAgentStateStore(string? directory = null) : IAgentStateS
                 At = report.At,
                 Transcript = report.Transcript,
                 Reason = report.Reason,
+                Inbox = report.Inbox,
             },
             FleetJsonContext.Default.AgentStateFile);
 
@@ -169,7 +170,8 @@ public sealed class FileAgentStateStore(string? directory = null) : IAgentStateS
                 state,
                 DateTime.SpecifyKind(stored.At, DateTimeKind.Utc),
                 stored.Transcript,
-                stored.Reason);
+                stored.Reason,
+                Inbox: stored.Inbox ?? string.Empty);
         }
         catch (JsonException)
         {

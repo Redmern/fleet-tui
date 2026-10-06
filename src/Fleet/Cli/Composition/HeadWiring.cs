@@ -26,7 +26,7 @@ public static class HeadWiring
         var log = Adapters.Log();
         var mux = Adapters.Mux(log).Driver;
 
-        var service = new HeadService(Deps(mux, log));
+        var service = new HeadService(Deps(mux, log) with { Inboxes = Adapters.AgentInboxes() });
 
         var serving = new McpServing(McpServerId.ServerName, ToolInfos(), service.HandleAsync);
 

@@ -704,6 +704,17 @@ message as-is (a leading dispatch trigger is stripped, so it can never dispatch)
 same opening, queueing and typing as `relay`. The head uses `relay` only when you
 explicitly ask it to dispatch.
 
+**Messages instead of typing.** When the orchestrator's Claude takes cross-session messages
+(Claude Code 2.1.234 or later on Windows, with live status hooks on), `relay` and `tell` type
+nothing. They answer the head with that session's address, and the head sends the message
+itself with Claude's `SendMessage`. Claude Code delivers it at the orchestrator's next tool
+call, or starts a turn when it is idle, so nothing is queued and nothing has to be read off
+the screen. A relay sent this way asks the orchestrator to call its `dispatch` tool, so the
+project's `dispatch` rule is checked on that call rather than by the head. `tell_agent`
+works the same way for an orchestrator's agents, and its `typed: true` falls back to typing
+when `SendMessage` can't reach the session. A project or agent whose Claude reported no
+inbox (an older Claude, status hooks off, a remote machine's head) is typed into as before.
+
 **Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
 connection, so a machine that is not connected is listed with its state and no projects.

@@ -72,7 +72,7 @@ public sealed class HeadServiceTests
             SubSummary.Unowned(agents, a => a.Open)));
     }
 
-    private HeadService Service() => new(
+    private HeadService Service(IAgentInboxes? inboxes = null) => new(
         new HeadDeps(
             new Projects(Web, Api),
             _mux,
@@ -92,7 +92,8 @@ public sealed class HeadServiceTests
             new NoLog(),
             _remotes,
             _known,
-            Structure),
+            Structure,
+            Inboxes: inboxes),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
@@ -280,6 +281,79 @@ public sealed class HeadServiceTests
         Assert.False(result.IsError, result.Text);
         Assert.Equal("tell_agent", Assert.Single(_approvals.Asked).Tool);
         Assert.NotEmpty(_mux.SentTo(main));
+    }
+
+    [Fact]
+    public async Task Tell_to_an_orchestrator_with_an_inbox_hands_the_message_to_SendMessage_even_when_busy()
+    {
+        var (main, _) = Open(Web, Busy);
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.TellAgent, ActionPolicy.Ask);
+
+        var result = await Service(new Inbox(Web.Root, "uds:web-main")).HandleAsync(
+            Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, ", status?")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("SendMessage with to \"uds:web-main\"", result.Text);
+        Assert.Contains("\nstatus?\n", result.Text);
+        Assert.Equal("tell_agent", Assert.Single(_approvals.Asked).Tool);
+        Assert.Empty(_mux.SentTo(main));
+    }
+
+    [Fact]
+    public async Task Relay_through_an_inbox_asks_the_orchestrator_to_dispatch_and_leaves_the_ask_to_that_call()
+    {
+        var (main, _) = Open(Web, Idle);
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.Dispatch, ActionPolicy.Ask);
+
+        var result = await Service(new Inbox(Web.Root, "uds:web-main")).HandleAsync(
+            Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, "add a login page")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Contains("uds:web-main", result.Text);
+        Assert.Contains("dispatch tool", result.Text);
+        Assert.Contains("add a login page", result.Text);
+        Assert.DoesNotContain(",add a login page", result.Text);
+        Assert.Empty(_approvals.Asked);
+        Assert.Empty(_mux.SentTo(main));
+    }
+
+    [Fact]
+    public async Task A_forbidden_relay_is_refused_before_any_inbox_is_offered()
+    {
+        Open(Web, Idle);
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.Dispatch, ActionPolicy.Forbid);
+
+        var result = await Service(new Inbox(Web.Root, "uds:web-main")).HandleAsync(
+            Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, "go")));
+
+        Assert.True(result.IsError);
+        Assert.DoesNotContain("uds:", result.Text);
+    }
+
+    [Fact]
+    public async Task Without_an_inbox_for_the_project_root_tell_still_types()
+    {
+        var (main, _) = Open(Web, Idle);
+
+        var result = await Service(new Inbox(Api.Root, "uds:api-main")).HandleAsync(
+            Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, "status?")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.DoesNotContain("SendMessage", result.Text);
+        Assert.NotEmpty(_mux.SentTo(main));
+    }
+
+    [Fact]
+    public async Task A_project_the_head_had_to_open_is_typed_into_since_its_stored_address_may_be_the_dead_session()
+    {
+        var result = await Service(new Inbox(Web.Root, "uds:web-old")).HandleAsync(
+            Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, "status?")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(["web"], _opened);
+        Assert.StartsWith("opened web; ", result.Text);
+        Assert.DoesNotContain("uds:web-old", result.Text);
+        Assert.NotEmpty(_mux.SentTo(_open["web"].Main));
     }
 
     [Fact]
@@ -897,6 +971,12 @@ public sealed class HeadServiceTests
         public void Save(string project, SettingsConfig config)
         {
         }
+    }
+
+    private sealed class Inbox(string folder, string address) : IAgentInboxes
+    {
+        public Task<string?> AddressAsync(string target, CancellationToken ct = default) =>
+            Task.FromResult(target == folder ? address : null);
     }
 
     private sealed class Approvals : IApprovalChannel

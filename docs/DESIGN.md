@@ -5036,6 +5036,65 @@ session doesn't exist yet when `dispatch` returns. They stay on the nvim pump an
 ready marker. A target with no known inbox (older Claude, `--bare`, a pane whose hook
 never reported) falls back to `send-text`.
 
+### Built: option A
+
+- **The hook records the address, never the token.** `fleet hook` passes
+  `CLAUDE_CODE_MESSAGING_SOCKET` to `HookIo.Event`. The socket becomes the peer address
+  (`uds:` + socket) on `HookEvent.Inbox`, then on `AgentReport.Inbox`, and is stored in the
+  session's status file (`AgentStateFile.Inbox`). Every event carries it, so the newest
+  report has it. `SessionEnd` deletes the file, and `SessionStart` deletes the folder's other
+  sessions, so a closed session's address goes with it.
+- **A port for the lookup.** `Ports/Agents/IAgentInboxes.AddressAsync(folder)`, implemented by
+  `Platform/Storage/StatusFileInboxes` over the status store, picks the newest report with an
+  inbox through `AgentStatusRules.InboxOf`. It matches the **exact** folder, not `Within`.
+  The project root is the main orchestrator's folder, and agent worktrees can sit under it.
+- **`tell_agent`.** `TellAgentHandler.RouteAsync` returns the address when the agent's
+  folder has one. `McpActions` then answers with `PeerMessage.SendYourself` (the address,
+  the message unchanged, and "a held or refused notice is the receiver's choice"), and
+  nothing is typed or written to `instruction.md`. Without an address it is `DeliverAsync`,
+  as before. A new optional `typed` argument forces typing. The result offers it only for a
+  `SendMessage` that couldn't reach the address (for example a crashed Claude whose pane
+  survived). A held message is not a reason to use it: typing would get round the
+  receiver's hold.
+- **The head's `relay` and `tell`.** `HeadDeps.Inboxes` is set only for the local head
+  (`HeadWiring.RunMcpAsync`). The remote side (`ServeOrigin`) leaves it null, because an
+  address there names a pipe on the other machine. An open project with an address for
+  its root, and nothing in the typed queue for it, gets the address back without the screen
+  being read, as long as the main orchestrator's pane is listed. A project the head had to
+  open is typed into as before. Its status folder may still hold the address of a session
+  that was killed without `SessionEnd`, and that address is only replaced when the new
+  session's `SessionStart` lands, which can be after the pane looks ready. The head has no
+  `typed` retry, so it doesn't take that risk. `tell` still asks through X's `tell_agent` rule. A relay becomes
+  `PeerMessage.DispatchRequest`, which asks the orchestrator to call its `dispatch` tool,
+  because a wrapped message can't trip the hook. So the head checks only that the `dispatch`
+  rule doesn't forbid it, and leaves the *ask* to the orchestrator's own `dispatch` call,
+  which `McpGate` checks against the same rule. Asking in both places would show two
+  dialogs for one relay.
+- **The dispatch hook ignores Claude's own wrappers.** `HookPrompt.Intercepted` never takes
+  a prompt that starts with `<cross-session-message` or `<task-notification>`
+  (`PeerMessage.FromClaude`), whatever the trigger. This change is limited to the hook path.
+- **Briefs.** The head's brief, the head tool descriptions, the `tell_agent` description and
+  `OrchestrationText.DefaultHowYouWork` say to send the returned message with
+  `SendMessage` to the returned address.
+- **Not written:** `crossSessionInbound`. Fleet's sessions are prompting, and a repo file can
+  only tighten (see (b)).
+- **Kept:** send-text, the ready check and the queue, as the fallback; kickoffs through
+  `instruction.md`.
+
+Known limits, from review:
+
+- The address is the newest one reported for the folder, whichever session sent it. A
+  second `claude` started by hand in the same folder outside fleet would take the messages
+  meant for fleet's pane.
+- `typed: true` is a request, not an enforced fallback. A caller that passes it after a
+  *held* delivery types round the receiver's hold. Only the tool text says not to.
+- For `tell_agent`, a Claude that crashed while its pane lived on keeps its old address
+  until its folder starts a new session. The `typed` retry covers that case.
+
+Not verified end to end: a real head relaying to a real orchestrator through
+`SendMessage`, or an orchestrator acting on a dispatch request from the head. The unit
+tests cover the routing, and the spike covers delivery.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
