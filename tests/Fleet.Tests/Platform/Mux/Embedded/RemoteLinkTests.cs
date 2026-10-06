@@ -2,6 +2,7 @@ using Fleet.Features.Projects.SwitchProject;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Platform.Mux.Embedded.Render;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Ui.Models;
@@ -22,6 +23,7 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Project, IReadOnlyList<string> Keys)> _farDismissed = new();
     private readonly System.Collections.Concurrent.ConcurrentQueue<string> _toasts = new();
     private FleetDaemon _homeDaemon = null!;
+    private FleetDaemon _farDaemon = null!;
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Machine, string Tool, IReadOnlyDictionary<string, string> Arguments)> _headCalls = new();
 
     private static Endpoint NewEndpoint()
@@ -64,7 +66,7 @@ public sealed class RemoteLinkTests : IAsyncLifetime
     {
         _home = NewEndpoint();
         _far = NewEndpoint();
-        Start(_far, _farPanes);
+        _farDaemon = Start(_far, _farPanes);
         _homeDaemon = Start(_home, _homePanes, (host, token) => _open!(host, token));
         _open = (_, _) =>
         {
@@ -492,6 +494,78 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         Assert.True(handed.Pending);
         await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
             && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "switch-project"])));
+    }
+
+    [Fact]
+    public async Task Notifications_from_the_remotes_menu_in_a_labelled_client_open_the_center_of_the_machine_viewing_it()
+    {
+        var (far, _, _, workspace) = await ShowingHomelabAsync();
+        var linked = _farDaemon.Model.Clients.Single(c => c.Label is not null).Id;
+
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = linked, Text = FleetDaemon.NoticesMenu });
+
+        Assert.True(handed.Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "notifications"])));
+    }
+
+    [Fact]
+    public async Task A_warm_menu_on_the_remote_hands_notifications_back_through_its_pane()
+    {
+        var (far, _, window, workspace) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu");
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is not null));
+        var menuPane = _farPanes.ByProgram("fleet")!.Env[FleetDaemon.PaneVariable];
+
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Caller = menuPane, Text = FleetDaemon.NoticesMenu });
+
+        Assert.True(handed.Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "notifications"])));
+    }
+
+    [Fact]
+    public async Task A_click_on_the_remotes_notice_pill_opens_its_menu_for_the_labelled_client_which_hands_the_center_back()
+    {
+        var (far, _, window, workspace) = await ShowingHomelabAsync();
+        var linked = _farDaemon.Model.Clients.Single(c => c.Label is not null).Id;
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "notices", Workspace = "homelab", Count = 2 })).Ok);
+        var (start, _) = Composer.NoticeSpan(_farDaemon.Model.View(linked)!)!.Value;
+
+        await window.SendMouseAsync(start, 0, MouseButtons.Left, MouseActions.Press);
+
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", "homelab", "--action", "notifications"])));
+        Assert.Equal(linked, _farPanes.ByProgram("fleet")!.Env[FleetDaemon.ClientVariable]);
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = linked, Text = FleetDaemon.NoticesMenu })).Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "notifications"])));
+    }
+
+    [Fact]
+    public async Task A_remote_fleet_used_directly_keeps_its_own_notification_center()
+    {
+        var (far, _, _, _) = await ShowingHomelabAsync();
+        var direct = await ClientAsync(_far, ClientRoles.Attach, 80, 24, "homelab");
+        await direct.WaitForFramesAsync(1);
+
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = direct.Id, Text = FleetDaemon.NoticesMenu });
+
+        Assert.False(handed.Pending);
+        Assert.Null(_homePanes.ByProgram("fleet"));
+    }
+
+    [Fact]
+    public async Task A_plain_local_project_keeps_its_own_notification_center()
+    {
+        var (_, home, _, _) = await ShowingHomelabAsync();
+        var local = await ClientAsync(_home, ClientRoles.Attach, 80, 24, "local");
+        await local.WaitForFramesAsync(1);
+
+        Assert.False((await home.RequestAsync(new ControlRequest { Op = "hand-back", Client = local.Id, Text = FleetDaemon.NoticesMenu })).Pending);
+        Assert.False((await home.RequestAsync(new ControlRequest { Op = "hand-back", Client = local.Id, Text = "quit" })).Pending);
+        Assert.Null(_homePanes.ByProgram("fleet"));
     }
 
     [Fact]
