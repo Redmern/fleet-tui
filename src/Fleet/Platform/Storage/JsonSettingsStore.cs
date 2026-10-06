@@ -199,10 +199,10 @@ public sealed class JsonSettingsStore : ISettingsStore
         _ => fallback,
     };
 
-    public static RoleModel ParseRole(string model, string effort, RoleModel fallback) =>
+    public static RoleModel ParseRole(string? model, string? effort, RoleModel fallback) =>
         new(
-            Stored(model, ModelChoice.Model(model), fallback.Model),
-            Stored(effort, ModelChoice.Effort(effort), fallback.Effort));
+            Stored(model ?? string.Empty, ModelChoice.Model(model ?? string.Empty), fallback.Model),
+            Stored(effort ?? string.Empty, ModelChoice.Effort(effort ?? string.Empty), fallback.Effort));
 
     private static string Stored(string raw, string parsed, string fallback) =>
         parsed != ModelChoice.Inherit || raw.Trim().Equals(ModelChoice.Inherit, StringComparison.OrdinalIgnoreCase)

@@ -371,6 +371,17 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_null_model_or_effort_falls_back_to_the_default()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{ "version": 1, "subModel": null, "subEffort": null }""");
+
+        Assert.Equal(new RoleModel("sonnet", "medium"), Store.Load("techweb").Models.Sub);
+    }
+
+    [Fact]
     public void The_head_model_defaults_to_inherit_and_round_trips_in_its_own_file()
     {
         Assert.Equal(RoleModel.Inherit, Store.LoadHead());
