@@ -10,9 +10,10 @@ public static class FleetRows
         IReadOnlyList<FleetRow> rows,
         int item = 0,
         bool spaced = false,
-        IReadOnlyList<int>? gapsAfter = null)
+        IReadOnlyList<int>? gapsAfter = null,
+        IReadOnlyDictionary<int, FleetRow>? headersBefore = null)
     {
-        var source = new FleetRowSource(rows, gapsAfter, spaced);
+        var source = new FleetRowSource(rows, gapsAfter, spaced, headersBefore);
 
         list.Source = source;
 

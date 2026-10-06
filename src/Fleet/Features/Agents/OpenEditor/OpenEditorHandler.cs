@@ -73,6 +73,19 @@ public sealed class OpenEditorHandler(IMuxDriver mux)
         return Result.Ok();
     }
 
+    public static async Task<bool> CanOpenEditorAsync(
+        IMuxDriver? usable, string cwd, IReadOnlyList<AgentRecord> agents, CancellationToken ct = default) =>
+        usable is not null && await CallerAsync(usable, cwd, agents, ct).ConfigureAwait(false) is not null;
+
+    public static async Task<AgentRecord?> CallerAsync(
+        IMuxDriver mux, string cwd, IReadOnlyList<AgentRecord> agents, CancellationToken ct = default) =>
+        Caller(
+            await mux.ListPanesAsync(ct).ConfigureAwait(false),
+            mux.CurrentPane,
+            mux.Caps.HasFlag(MuxCaps.Popup),
+            cwd,
+            agents);
+
     public static AgentRecord? Caller(
         IReadOnlyList<Pane> panes,
         PaneId self,

@@ -10,30 +10,53 @@ namespace Fleet.Features.Menu.ShowMenu;
 public static class ShowMenuView
 {
     public static FleetAction Show(
-        IApplication app, Keymap keymap, IReadOnlyList<FleetMenuItem> items)
+        IApplication app, Keymap keymap, IReadOnlyList<FleetMenuItem> items) =>
+        Show(app, keymap, "fleet menu", items, toggle: null);
+
+    public static FleetAction Show(
+        IApplication app,
+        Keymap keymap,
+        string title,
+        IReadOnlyList<FleetMenuItem> items,
+        Func<FleetAction, string?>? toggle)
     {
         var chosen = FleetAction.None;
-        var rows = ShowMenuHandler.Rows(items);
+        var shown = items.ToList();
+        var rows = ShowMenuHandler.Rows(shown);
+        var headers = ShowMenuHandler.Headers(shown);
 
-        var width = ShowMenuHandler.Width(rows);
-        var height = ShowMenuHandler.Height(rows);
+        var width = ShowMenuHandler.Width([.. rows, .. headers.Values]);
+        var height = ShowMenuHandler.Height(rows, headers.Count);
 
-        var window = FleetTheme.Overlay("fleet menu", Math.Max(width + 20, 52), height + 6);
+        var window = FleetTheme.Overlay(title, Math.Max(width + 20, 52), height + 6);
 
         var list = FleetTheme.CenteredRows(width, height);
 
-        FleetRows.Fill(list, rows);
+        FleetRows.Fill(list, rows, headersBefore: headers);
 
         FleetKeys.ApplyMotions(list, keymap);
+
+        void Choose(int index)
+        {
+            if (shown[index].Toggles && toggle is not null)
+            {
+                shown[index] = shown[index] with { Value = toggle(shown[index].Action) };
+                FleetRows.Fill(list, ShowMenuHandler.Rows(shown), index, headersBefore: headers);
+                list.SetNeedsDraw();
+                return;
+            }
+
+            chosen = shown[index].Action;
+            app.RequestStop(window);
+        }
 
         void Accept()
         {
             var index = FleetRows.Selected(list);
 
-            if (index >= 0 && index < items.Count)
+            if (index >= 0 && index < shown.Count)
             {
-                chosen = items[index].Action;
-                app.RequestStop(window);
+                Choose(index);
             }
         }
 
@@ -80,12 +103,12 @@ public static class ShowMenuView
                 return;
             }
 
-            for (var i = 0; i < items.Count; i++)
+            for (var i = 0; i < shown.Count; i++)
             {
-                if (keymap.KeyFor(items[i].Action) == key)
+                if (keymap.KeyFor(shown[i].Action) == key)
                 {
-                    chosen = items[i].Action;
-                    app.RequestStop(window);
+                    FleetRows.Select(list, i);
+                    Choose(i);
                     key.Handled = true;
                     return;
                 }

@@ -1,0 +1,110 @@
+using System.Globalization;
+using Fleet.Features.Menu.ShowMenu.Models;
+using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Settings.Models;
+
+namespace Fleet.Features.Menu.ShowMenu;
+
+public static class FleetMenus
+{
+    public static IReadOnlyList<MenuSection> Main { get; } =
+    [
+        new(null,
+        [
+            FleetAction.QuitFleet,
+            FleetAction.FocusMain,
+            FleetAction.SwitchProject,
+            FleetAction.ListAgents,
+            FleetAction.OpenEditor,
+            FleetAction.BrowseFiles,
+            FleetAction.Notifications,
+            FleetAction.OpenSettings,
+        ]),
+    ];
+
+    public static IReadOnlyList<MenuSection> Settings { get; } =
+    [
+        new("session", [FleetAction.SaveSession, FleetAction.Remotes]),
+        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds]),
+        new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs]),
+    ];
+
+    public static IReadOnlyList<MenuSection> FleetConfig { get; } =
+    [
+        new(null,
+        [
+            FleetAction.EditMainOrchestratorInNvim,
+            FleetAction.EditSubOrchestratorsInNvim,
+            FleetAction.EditAutoClose,
+            FleetAction.EditAidlcMode,
+            FleetAction.EditClaudeProfile,
+            FleetAction.EditFleetConfig,
+        ]),
+        new("permissions", [FleetAction.EditSettings]),
+    ];
+
+    private static readonly (FleetAction Submenu, IReadOnlyList<MenuSection> Sections)[] Tree =
+    [
+        (FleetAction.OpenSettings, Settings),
+        (FleetAction.OpenFleetConfigMenu, FleetConfig),
+    ];
+
+    private static readonly FleetAction[] Deeper =
+    [
+        FleetAction.OpenSettings,
+        FleetAction.OpenFleetConfigMenu,
+        FleetAction.EditAidlcMode,
+        FleetAction.EditClaudeProfile,
+        FleetAction.EditSettings,
+    ];
+
+    private static readonly FleetAction[] Toggles =
+    [
+        FleetAction.EditMainOrchestratorInNvim,
+        FleetAction.EditSubOrchestratorsInNvim,
+    ];
+
+    public static bool IsSubmenu(FleetAction action) => Tree.Any(n => n.Submenu == action);
+
+    public static IReadOnlyList<MenuSection> For(FleetAction submenu) =>
+        Tree.FirstOrDefault(n => n.Submenu == submenu).Sections ?? Main;
+
+    public static string Title(FleetAction submenu) => submenu switch
+    {
+        FleetAction.OpenSettings => "fleet menu › settings",
+        FleetAction.OpenFleetConfigMenu => "fleet menu › settings › fleet config",
+        _ => "fleet menu",
+    };
+
+    public static FleetAction Parent(FleetAction action) =>
+        Tree.FirstOrDefault(n => Actions(n.Sections).Contains(action)).Submenu;
+
+    public static IReadOnlyList<FleetAction> Actions(IReadOnlyList<MenuSection> sections) =>
+        [.. sections.SelectMany(s => s.Actions)];
+
+    public static IReadOnlyList<MenuSection> Without(IReadOnlyList<MenuSection> sections, FleetAction action) =>
+        [.. sections.Select(s => s with { Actions = [.. s.Actions.Where(a => a != action)] })];
+
+    public static bool OpensMore(FleetAction action) => Deeper.Contains(action);
+
+    public static bool IsToggle(FleetAction action) => Toggles.Contains(action);
+
+    public static string? Value(FleetAction action, SettingsConfig settings) => action switch
+    {
+        FleetAction.EditMainOrchestratorInNvim => OnOff(settings.MainOrchestratorInNvim),
+        FleetAction.EditSubOrchestratorsInNvim => OnOff(settings.SubOrchestratorsInNvim),
+        FleetAction.EditAutoClose => settings.AutoClose
+            ? $"[{settings.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture)}m]"
+            : OnOff(false),
+        _ => null,
+    };
+
+    public static SettingsConfig Flip(FleetAction action, SettingsConfig settings) => action switch
+    {
+        FleetAction.EditMainOrchestratorInNvim => settings.WithMainOrchestratorInNvim(!settings.MainOrchestratorInNvim),
+        FleetAction.EditSubOrchestratorsInNvim => settings.WithSubOrchestratorsInNvim(!settings.SubOrchestratorsInNvim),
+        _ => settings,
+    };
+
+    private static string OnOff(bool on) => on ? "[on]" : "[off]";
+}
