@@ -429,6 +429,41 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_dispatched_sub_starts_in_the_projects_hidden_workspace_and_still_gets_its_kickoff()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        var visible = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Cwd = _root });
+        await mux.FocusPaneAsync(visible);
+
+        var handler = new DispatchHandler(
+            mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.True(Assert.Single(_store.Saved).Hidden);
+
+        var sub = Assert.Single(await mux.ListPanesAsync(), p => p.Id != visible);
+        Assert.Equal(FleetWorkspaces.HiddenFor("techweb"), sub.SessionName);
+        Assert.False(sub.IsActive);
+        Assert.True(Assert.Single(await mux.ListPanesAsync(), p => p.Id == visible).IsActive);
+        Assert.DoesNotContain(mux.Calls, c => c == "show" || c.StartsWith("open-window", StringComparison.Ordinal));
+        Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], mux.SentTo(sub.Id));
+    }
+
+    [Fact]
+    public async Task Without_workspaces_a_dispatched_sub_starts_in_the_shared_hidden_workspace()
+    {
+        await _mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Cwd = _root });
+
+        var reply = await Handler.HandleAsync(Command("do the thing"), "t");
+
+        var sub = Assert.Single(await _mux.ListPanesAsync(), p => p.Cwd == reply.Value!.Folder);
+        Assert.Equal(FleetWorkspaces.Hidden, sub.SessionName);
+    }
+
+    [Fact]
     public async Task A_namer_that_returns_a_name_picks_the_slug_over_the_raw_prompt()
     {
         var namer = new FakeSlugNamer(name: "fix login timeout");

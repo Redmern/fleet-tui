@@ -473,6 +473,11 @@ leaves it alone, and an agent with only its editor open still counts as not runn
 
 ### Hiding an agent
 
+Every agent and sub-orchestrator fleet starts, from the dashboard, the MCP tools or
+`dispatch`, **starts hidden**: it runs, takes its first task and later `tell_agent`
+messages in the background without opening a pane or taking focus. Open it yourself
+when you want to watch it.
+
 **Hide or show it**, from the `m` menu, hides an agent from the WezTerm tab bar
 without stopping it. It stays listed
 under Agents marked `(hidden)`, and `enter` brings it back — hiding is a terminal
