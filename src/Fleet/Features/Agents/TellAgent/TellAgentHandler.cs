@@ -1,3 +1,4 @@
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
@@ -5,7 +6,7 @@ using Fleet.Shared.Constants;
 
 namespace Fleet.Features.Agents.TellAgent;
 
-public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null)
+public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null, IAgentInboxes? inboxes = null)
 {
     private readonly TimeSpan _enterDelay = enterDelay ?? TimeSpan.FromMilliseconds(400);
 
@@ -13,6 +14,21 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
         AgentHarness.IsOrchestrator(agent.Harness)
             ? agent.StartedInNvim
             : AgentHarness.HostedInNvim(agent.Harness);
+
+    public async Task<string?> RouteAsync(
+        AgentRecord agent, PaneId pane, string message, bool typed, CancellationToken ct = default)
+    {
+        if (!typed
+            && inboxes is not null
+            && await inboxes.AddressAsync(agent.Worktree, ct).ConfigureAwait(false) is { } address)
+        {
+            return address;
+        }
+
+        await DeliverAsync(agent, pane, message, ct).ConfigureAwait(false);
+
+        return null;
+    }
 
     public async Task DeliverAsync(AgentRecord agent, PaneId pane, string message, CancellationToken ct = default)
     {

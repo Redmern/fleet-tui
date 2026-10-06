@@ -32,6 +32,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Messaging;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -82,7 +83,7 @@ public sealed class McpActions(
 
     private readonly ReportStatusHandler _reporter = new(store);
 
-    private readonly TellAgentHandler _teller = new(mux);
+    private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes());
 
     private readonly BranchStates _states = new(git);
 
@@ -280,8 +281,22 @@ public sealed class McpActions(
                 $"{Repo(request)}/{Branch(request)} is not open; open it first, then tell it.");
         }
 
-        await _teller.DeliverAsync(agent, pane.Value, ToolArguments.Text(request, ToolArguments.Message), ct)
+        var message = ToolArguments.Text(request, ToolArguments.Message);
+        var address = await _teller
+            .RouteAsync(agent, pane.Value, message, ToolArguments.Flag(request, ToolArguments.Typed), ct)
             .ConfigureAwait(false);
+
+        if (address is not null)
+        {
+            log.Write(LogTag.For(project, $"tell_agent hands {Repo(request)}/{Branch(request)} to SendMessage"));
+
+            return Ok(PeerMessage.SendYourself(
+                $"{Repo(request)}/{Branch(request)}",
+                address,
+                message,
+                $"If SendMessage can't reach that address, call {HarnessToolIds.For(HarnessTool.TellAgent)} again "
+                + $"with {ToolArguments.Typed}: true."));
+        }
 
         return Ok($"sent to {Repo(request)}/{Branch(request)}.");
     }
