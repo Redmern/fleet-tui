@@ -84,6 +84,26 @@ public sealed class McpHelpersTests
     }
 
     [Fact]
+    public void A_dispatch_to_a_repository_shows_the_repository_and_the_task()
+    {
+        var prompt = ApprovalPrompt.For(
+            HarnessTool.Dispatch,
+            Request("dispatch", ("message", "fix the login timeout"), ("repository", "backend")),
+            caller: "");
+
+        Assert.Contains("backend: fix the login timeout", prompt);
+    }
+
+    [Fact]
+    public void A_dispatch_without_a_repository_shows_the_task_once()
+    {
+        var prompt = ApprovalPrompt.For(
+            HarnessTool.Dispatch, Request("dispatch", ("message", "fix the login timeout")), caller: "");
+
+        Assert.EndsWith("— fix the login timeout", prompt);
+    }
+
+    [Fact]
     public void The_approval_prompt_calls_the_main_orchestrator_out_when_there_is_no_caller()
     {
         var prompt = ApprovalPrompt.For(HarnessTool.NewAgent, Request("new_agent"), caller: "");

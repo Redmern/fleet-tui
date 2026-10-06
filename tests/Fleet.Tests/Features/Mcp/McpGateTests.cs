@@ -1,4 +1,5 @@
 using Fleet.Features.Mcp.ServeMcp;
+using Fleet.Ports.Mcp.Models;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
@@ -116,5 +117,30 @@ public sealed class McpGateTests
         var settings = With(HarnessTool.RemoveSub, ActionPolicy.Forbid, AskChannel.Both);
 
         Assert.True(McpGate.Decide(HarnessTool.RemoveSub, settings).Forbidden);
+    }
+
+    [Fact]
+    public void A_dispatch_without_a_repository_is_gated_as_dispatch_only()
+    {
+        var request = new McpRequest("dispatch", new Dictionary<string, string> { ["message"] = "fix it" });
+
+        Assert.Equal([HarnessTool.Dispatch], McpGate.Gated(HarnessTool.Dispatch, request));
+    }
+
+    [Fact]
+    public void A_dispatch_with_a_repository_is_gated_as_dispatch_and_new_agent()
+    {
+        var request = new McpRequest(
+            "dispatch", new Dictionary<string, string> { ["message"] = "fix it", ["repository"] = "backend" });
+
+        Assert.Equal([HarnessTool.Dispatch, HarnessTool.NewAgent], McpGate.Gated(HarnessTool.Dispatch, request));
+    }
+
+    [Fact]
+    public void Other_tools_are_gated_as_themselves_whatever_their_arguments()
+    {
+        var request = new McpRequest("tell_agent", new Dictionary<string, string> { ["repository"] = "backend" });
+
+        Assert.Equal([HarnessTool.TellAgent], McpGate.Gated(HarnessTool.TellAgent, request));
     }
 }

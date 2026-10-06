@@ -152,4 +152,94 @@ public sealed class McpDispatcherTests
 
         public IReadOnlyList<string> Tail(int lines) => Lines;
     }
+
+    private static McpRequest Dispatch(string? repository = null) =>
+        new(
+            "dispatch",
+            repository is null
+                ? new Dictionary<string, string> { ["message"] = "fix it" }
+                : new Dictionary<string, string> { ["message"] = "fix it", ["repository"] = repository });
+
+    [Fact]
+    public async Task A_direct_dispatch_is_refused_when_the_project_forbids_new_agent()
+    {
+        _settings.Config = SettingsConfig.Default
+            .With(HarnessTool.Dispatch, ActionPolicy.Allow)
+            .With(HarnessTool.NewAgent, ActionPolicy.Forbid);
+
+        var result = await Dispatcher().HandleAsync(Dispatch("backend"));
+
+        Assert.True(result.IsError);
+        Assert.Contains("new_agent", result.Text);
+        Assert.Equal(0, _performed);
+    }
+
+    [Fact]
+    public async Task A_dispatch_without_a_repository_ignores_the_new_agent_rule()
+    {
+        _settings.Config = SettingsConfig.Default
+            .With(HarnessTool.Dispatch, ActionPolicy.Allow)
+            .With(HarnessTool.NewAgent, ActionPolicy.Forbid);
+
+        var result = await Dispatcher().HandleAsync(Dispatch());
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, _performed);
+    }
+
+    [Fact]
+    public async Task A_direct_dispatch_is_refused_when_dispatch_itself_is_forbidden()
+    {
+        _settings.Config = SettingsConfig.Default
+            .With(HarnessTool.Dispatch, ActionPolicy.Forbid)
+            .With(HarnessTool.NewAgent, ActionPolicy.Allow);
+
+        var result = await Dispatcher().HandleAsync(Dispatch("backend"));
+
+        Assert.True(result.IsError);
+        Assert.Equal(0, _performed);
+    }
+
+    [Fact]
+    public async Task A_direct_dispatch_asks_for_both_tools_when_both_ask()
+    {
+        _settings.Config = SettingsConfig.Default
+            .With(HarnessTool.Dispatch, ActionPolicy.Ask)
+            .With(HarnessTool.NewAgent, ActionPolicy.Ask);
+
+        var result = await Dispatcher().HandleAsync(Dispatch("backend"));
+
+        Assert.False(result.IsError);
+        Assert.Equal(["dispatch", "new_agent"], _approvals.Asked.Select(a => a.Tool));
+        Assert.Equal(1, _performed);
+    }
+
+    [Fact]
+    public async Task A_sub_dispatching_to_a_repository_gets_new_agent_without_asking_like_new_agent_itself()
+    {
+        _settings.Config = SettingsConfig.Default
+            .With(HarnessTool.Dispatch, ActionPolicy.Allow)
+            .With(HarnessTool.NewAgent, ActionPolicy.Ask);
+
+        var result = await Dispatcher("upgrade").HandleAsync(Dispatch("backend"));
+
+        Assert.False(result.IsError);
+        Assert.Empty(_approvals.Asked);
+        Assert.Equal(1, _performed);
+    }
+
+    [Fact]
+    public async Task A_denied_new_agent_stops_a_direct_dispatch_after_dispatch_was_allowed()
+    {
+        _settings.Config = SettingsConfig.Default
+            .With(HarnessTool.Dispatch, ActionPolicy.Allow)
+            .With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        _approvals.Answer = ApprovalOutcome.Deny("not today");
+
+        var result = await Dispatcher().HandleAsync(Dispatch("backend"));
+
+        Assert.True(result.IsError);
+        Assert.Equal("not today", result.Text);
+        Assert.Equal(0, _performed);
+    }
 }

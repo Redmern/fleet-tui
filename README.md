@@ -607,6 +607,15 @@ creates repo agents that are stamped as its own, and reports back with
 sub-orchestrator with the agents it created and shows its status — working, done, or
 failed — until you remove it.
 
+**Dispatch to one repository.** When the orchestrator calls the `dispatch` tool with a
+`repository` (and optionally a `branch`), fleet skips the sub-orchestrator and starts a
+repo agent on that repository with the task, as `new_agent` would; the call must pass both
+the `dispatch` and the `new_agent` permission. Without a branch, the branch is named from
+the task the way a sub's slug is. A sub-orchestrator is still used when AIDLC applies to
+the task, or when it is research (`research: true`, or the `research` profile); a research
+sub is told to do the work itself with subagents instead of starting repo agents. A typed
+dispatch (`,task`) always starts a sub-orchestrator.
+
 **Managing subs.** The orchestrator (or a sub) can manage sub-orchestrators with three
 MCP tools, each with its own row in the permissions screen:
 

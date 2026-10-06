@@ -5147,6 +5147,70 @@ Not verified end to end: a real head relaying to a real orchestrator through
 `SendMessage`, or an orchestrator acting on a dispatch request from the head. The unit
 tests cover the routing, and the spike covers delivery.
 
+## Dispatch without a sub-orchestrator, 2026-10-06
+
+Every dispatch used to start a sub-orchestrator: a full Claude session in its own pane whose
+only job, for a one-repo task, was to call `new_agent` and relay. The orchestration research
+(`fleet-orchestration-research`, §3 and §5 item 4) called that the expensive tier. Now the
+dispatcher can skip it, but only when it says so.
+
+- **Explicit, never guessed.** The `dispatch` MCP tool takes an optional `repository`, an
+  optional `branch` and an optional `research` flag. With a repository, fleet starts a repo
+  agent with the task directly, through the same code as `new_agent` with `task` (`McpActions`
+  implements the new `IAgentStarter` port, so the Orchestrations slice doesn't reach into the
+  Agents slice). The owner is the caller, as with `new_agent`: none when the main orchestrator
+  dispatches, so it shows as a top-level agent, and the sub when a sub dispatches, so it stays in
+  that sub's tree. It gets the repo-agent session name and the `agent` model/effort from #49, because it is spawned
+  by `NewAgentHandler`. Without a branch, the branch is named from the task the way a sub's
+  slug is (the slug namer, then `OrchestrationSlug`), made unique among that repository's
+  agents and its branches (local and `origin/`, through `IAgentStarter.BranchesAsync`), so a
+  derived name never lands on an old branch that `git worktree add` would reuse. Without a repository nothing changes. The reply's `Slug` is the branch and its
+  `Folder` is empty.
+- **One pure rule** (`Shared/Orchestrations/DispatchRouting.Decide`): resolve AIDLC as before
+  (the prefix, then with mode `on` the argument, then the project default; this moved out of
+  `DispatchHandler` unchanged); research is the `research` flag or the `research` profile; a
+  repo agent is started only when a repository is given, AIDLC doesn't apply and it isn't
+  research. Otherwise it is a sub-orchestrator, so the AIDLC record and gates keep living in
+  its orchestration folder, and the reply says the repository was not used and why. With AIDLC off a `feature:` prefix is ordinary text, so it stays in
+  the direct agent's task.
+- **Research.** A research sub gets a `## Research` section after the process:
+  `OrchestrationText.Research`, its own constant, telling it not to start repo agents and to use
+  background subagents or `/deep-research`. `DefaultHowYouWork` is untouched, because the
+  subagent-guidance branch reworks it next.
+- **Permissions.** A `dispatch` call that names a repository is gated as `dispatch` and then
+  `new_agent` (`McpGate.Gated`; `McpDispatcher` runs the same forbid/ask check for each, in that
+  order, and stops at the first refusal). A project that forbids `new_agent` can't start an
+  agent through `dispatch`. It is gated on the arguments, not on the route, so with AIDLC on
+  (where a sub is started after all) `new_agent` is still checked: the gate can't know the
+  route without loading AIDLC settings, and erring towards one more check is the safe side.
+  The dispatch approval text now shows `<repository>: <task>` instead of the repository alone.
+- **Typed trigger and `fleet dispatch` unchanged.** They always start a sub-orchestrator.
+  `DispatchHandler` without a starter refuses a repository instead of ignoring it.
+
+### Rejected
+
+- **Inferring the shape from the prompt** (one repository named in the prose means direct).
+  Wrong guesses would bypass the sub silently; the task says explicit.
+- **A typed form for the hook path**, such as `,repo:backend fix …` or `,backend/fix-x: …`.
+  The `word:` prefix already means an AIDLC profile, so a repository named like a profile, or
+  a sentence that starts with a repository name and a colon, would be read the wrong way; and a
+  typed dispatch has no place for the branch. The main orchestrator's Claude can call the tool
+  with a repository when that's what the user asked for.
+- **Gating only on the route** (check `new_agent` only when a repo agent is really started).
+  The route depends on the project's AIDLC settings, which the gate would have to resolve a
+  second time; the extra check is harmless.
+- **Calling `NewAgentHandler` from `DispatchHandler`.** A slice may not reference another slice.
+
+### Not verified
+
+- An end-to-end direct dispatch against a real Claude and WezTerm. The direct path in
+  `McpActions` (repository lookup, `ClaudeWiring.ApproveFolder`, the ready wait before the task
+  is typed) is the `new_agent` code moved into a method, and `McpActions` has no tests.
+- The task is typed into the new agent the way `new_agent` does it, waiting up to 24 s for the
+  ready marker while the MCP call (and the dispatcher's one-call-at-a-time gate) is held.
+- Whether a branch named only from the slug (no `feat/` prefix) suits every repository's
+  branch conventions; the dispatcher can pass `branch` when it matters.
+
 ## Model rows under Fleet config, 2026-10-06
 
 The follow-up to the section above: four rows in a `models` section of Fleet config, just above

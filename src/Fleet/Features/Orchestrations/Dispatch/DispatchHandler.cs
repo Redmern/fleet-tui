@@ -14,6 +14,7 @@ using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Aidlc.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Orchestrations.Enums;
 using Fleet.Shared.Orchestrations.Models;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -31,7 +32,8 @@ public sealed class DispatchHandler(
     IDispatchHistory? history = null,
     ISlugNamer? namer = null,
     ISettingsStore? settings = null,
-    IIntentStore? intents = null)
+    IIntentStore? intents = null,
+    IAgentStarter? starter = null)
 {
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(60);
 
@@ -61,11 +63,18 @@ public sealed class DispatchHandler(
             }
         }
 
-        var (prompt, aidlc) = ResolveAidlc(trimmed, config.Aidlc.Mode, config.Aidlc.DefaultProfile, argument);
+        var route = DispatchRouting.Decide(
+            trimmed, config.Aidlc.Mode, config.Aidlc.DefaultProfile, argument, command.Repository, command.Research);
+        var (prompt, aidlc) = (route.Prompt, route.Aidlc);
 
         if (prompt.Length == 0)
         {
             return Result<DispatchReply>.Fail(DispatchNote.Nothing);
+        }
+
+        if (route.Target == DispatchTarget.RepoAgent)
+        {
+            return await StartDirect(command, prompt, ct).ConfigureAwait(false);
         }
 
         var existing = store.List(command.ProjectName)
@@ -98,7 +107,7 @@ public sealed class DispatchHandler(
 
         File.WriteAllText(
             OrchestrationPaths.InstructionsFile(folder),
-            OrchestrationText.Instructions(brief, howYouWork, process));
+            OrchestrationText.Instructions(brief, howYouWork, process, route.Research));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
@@ -160,8 +169,10 @@ public sealed class DispatchHandler(
             await TypeKickoff(folder, pane, ct).ConfigureAwait(false);
         }
 
-        return Result<DispatchReply>.Ok(
-            new DispatchReply(slug, folder, DispatchNote.Dispatched(slug, aidlc?.Profile)));
+        var note = DispatchNote.Dispatched(slug, aidlc?.Profile)
+            + (string.IsNullOrWhiteSpace(command.Repository) ? string.Empty : DispatchNote.RepositoryLeftToSub(route.Research));
+
+        return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, note));
     }
 
     private static string? HowYouWorkOverride(string projectRoot)
@@ -194,29 +205,50 @@ public sealed class DispatchHandler(
         }
     }
 
-    private static (string Prompt, (Profile Profile, ProfileSource Source)? Aidlc) ResolveAidlc(
-        string prompt, AidlcMode mode, Profile projectDefault, Profile? argument)
+    private async Task<Result<DispatchReply>> StartDirect(
+        DispatchCommand command, string prompt, CancellationToken ct)
     {
-        if (mode == AidlcMode.Off)
+        if (starter is null)
         {
-            return (prompt, null);
+            return Result<DispatchReply>.Fail(DispatchNote.NoDirect);
         }
 
-        var (prefixed, task) = ProfilePrefix.Split(prompt);
+        var repository = command.Repository!.Trim();
+        var branch = string.IsNullOrWhiteSpace(command.Branch)
+            ? await BranchFor(starter, command.ProjectName, repository, prompt, ct).ConfigureAwait(false)
+            : command.Branch.Trim();
 
-        if (prefixed is { } fromPrefix)
+        var started = await starter
+            .StartAsync(new AgentStart(command.ProjectName, repository, branch, prompt), ct)
+            .ConfigureAwait(false);
+
+        if (!started.Succeeded)
         {
-            return (task, (fromPrefix, ProfileSource.Prefix));
+            return Result<DispatchReply>.Fail(started.Error!);
         }
 
-        if (mode != AidlcMode.On)
-        {
-            return (prompt, null);
-        }
+        history?.Add(command.ProjectName, prompt);
 
-        return argument is { } fromArgument
-            ? (prompt, (fromArgument, ProfileSource.Argument))
-            : (prompt, (projectDefault, ProfileSource.ProjectDefault));
+        return Result<DispatchReply>.Ok(
+            new DispatchReply(branch, string.Empty, DispatchNote.Direct(repository, branch, started.Value!)));
+    }
+
+    private async Task<string> BranchFor(
+        IAgentStarter agents, string project, string repository, string prompt, CancellationToken ct)
+    {
+        var inGit = await agents.BranchesAsync(project, repository, ct).ConfigureAwait(false);
+
+        var taken = store.List(project)
+            .Where(a => string.Equals(a.Repository, repository, StringComparison.OrdinalIgnoreCase))
+            .Select(a => a.Branch)
+            .Concat(inGit)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var named = await NameOrNull(prompt, ct).ConfigureAwait(false);
+
+        return OrchestrationSlug.Unique(
+            OrchestrationSlug.Of(string.IsNullOrWhiteSpace(named) ? prompt : named),
+            taken.Contains);
     }
 
     private void StartIntent(string folder, IntakeRecord record)
