@@ -1,5 +1,6 @@
 using Fleet.Features.Menu.ShowMenu;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Keymap.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -132,11 +133,11 @@ public class ShowMenuTests
     [Fact]
     public void The_action_bar_measures_its_chips_and_the_gaps_between_them()
     {
-        Assert.Equal(" enter select ".Length + 2, FleetActionBar.Measure([("enter", "select", () => { })]));
+        Assert.Equal(" enter select ".Length + 2, FleetActionBar.Measure([("enter", "select", () => { })], ButtonHints.Tooltips));
         Assert.Equal(
             " enter select ".Length + 2 + 1 + " ? keys ".Length + 2,
-            FleetActionBar.Measure([("enter", "select", () => { }), ("?", "keys", () => { })]));
-        Assert.Equal(0, FleetActionBar.Measure([]));
+            FleetActionBar.Measure([("enter", "select", () => { }), ("?", "keys", () => { })], ButtonHints.Tooltips));
+        Assert.Equal(0, FleetActionBar.Measure([], ButtonHints.Tooltips));
     }
 
     [Fact]

@@ -162,7 +162,8 @@ public static class MenuCommand
                 Adapters.SaveButtonHints(current.ButtonHints);
                 return FleetMenus.Value(action, current, head);
             },
-            () => current.ShowMenuKeys);
+            () => current.ShowMenuKeys,
+            () => current.ButtonHints);
     }
 
     private static async Task<bool> CanOpenEditor(Project project)
