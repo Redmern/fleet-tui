@@ -100,13 +100,6 @@ public static class FleetKeyHints
 
         app.Keyboard.KeyDown += (_, key) =>
         {
-            if (!key.Handled && key == Key.F1 && FloatBorder.Enabled)
-            {
-                Toggle();
-                key.Handled = true;
-                return;
-            }
-
             if (key.Handled || Typing(app))
             {
                 return;

@@ -1,16 +1,22 @@
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
+using Terminal.Gui.App;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 
 namespace Fleet.Ui;
 
 public static class FloatBorder
 {
-    public const string RevealSend = "f1";
+    public static readonly IReadOnlyList<string> Sends =
+        ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"];
+
+    private static readonly Key[] Keys =
+        [Key.F1, Key.F2, Key.F3, Key.F4, Key.F5, Key.F6, Key.F7, Key.F8, Key.F9, Key.F10, Key.F11, Key.F12];
 
     private static readonly List<View> Running = [];
 
-    private static readonly HashSet<View> Cornered = [];
+    private static readonly Dictionary<View, Action> Cornered = [];
 
     private static readonly List<FleetActionBar> Bars = [];
 
@@ -20,8 +26,31 @@ public static class FloatBorder
 
     public static bool Enabled => publish is not null;
 
+    public static bool Enable(IApplication app, Func<IReadOnlyList<FloatBorderButton>, bool> sink)
+    {
+        if (!Enable(sink))
+        {
+            return false;
+        }
+
+        app.Keyboard.KeyDown += (_, key) =>
+        {
+            if (!key.Handled && Press(key))
+            {
+                key.Handled = true;
+            }
+        };
+
+        return true;
+    }
+
     public static bool Enable(Func<IReadOnlyList<FloatBorderButton>, bool> sink)
     {
+        if (publish is not null)
+        {
+            return true;
+        }
+
         if (!sink([]))
         {
             return false;
@@ -34,6 +63,7 @@ public static class FloatBorder
 
     public static void Reset()
     {
+        FleetKeyHints.Changed -= Refresh;
         publish = null;
         published = [];
         Running.Clear();
@@ -55,9 +85,9 @@ public static class FloatBorder
         Refresh();
     }
 
-    public static void Corners(View window)
+    public static void Corners(View window, Action close)
     {
-        Cornered.Add(window);
+        Cornered[window] = close;
         Refresh();
     }
 
@@ -72,34 +102,64 @@ public static class FloatBorder
             return;
         }
 
-        var buttons = Current();
+        var buttons = Current().Buttons;
 
-        if (buttons.SequenceEqual(published))
+        if (buttons.SequenceEqual(published) || !publish(buttons))
         {
             return;
         }
 
         published = buttons;
-        publish(buttons);
     }
 
-    public static IReadOnlyList<FloatBorderButton> Current()
+    public static bool Press(Key key)
+    {
+        if (publish is null || Array.IndexOf(Keys, key) is not (var at and >= 0))
+        {
+            return false;
+        }
+
+        var actions = Current().Actions;
+
+        if (at >= actions.Count)
+        {
+            return false;
+        }
+
+        actions[at]();
+        return true;
+    }
+
+    public static (IReadOnlyList<FloatBorderButton> Buttons, IReadOnlyList<Action> Actions) Current()
     {
         if (Running.Count == 0)
         {
-            return [];
+            return ([], []);
         }
 
         var window = Running[^1];
         var bar = Bars.LastOrDefault(b => b.Items.Count > 0 && Inside(b.Root, window));
+        var items = bar?.Items ?? [];
+        var close = Cornered.GetValueOrDefault(window);
 
-        return For(
-            Cornered.Contains(window),
-            bar?.Items ?? [],
+        var buttons = For(
+            close is not null,
+            items,
             bar?.AlignRight ?? false,
             bar?.Pinned,
             FleetKeyHints.Shown,
             FleetKeyHints.RevealKey);
+
+        var actions = new List<Action>();
+
+        if (close is not null)
+        {
+            actions.Add(FleetKeyHints.Toggle);
+            actions.Add(close);
+        }
+
+        actions.AddRange(items.Select(i => i.Run));
+        return (buttons, actions);
     }
 
     public static IReadOnlyList<FloatBorderButton> For(
@@ -114,35 +174,22 @@ public static class FloatBorder
 
         if (corners)
         {
-            buttons.Add(new FloatBorderButton(false, false, keysShown ? string.Empty : revealKey, FleetIcons.Info, RevealSend));
+            buttons.Add(new FloatBorderButton(false, false, keysShown ? string.Empty : revealKey, FleetIcons.Info, Send(0)));
             buttons.Add(new FloatBorderButton(
-                false, true, keysShown ? FleetCorners.CloseKey : string.Empty, FleetIcons.Close, FleetCorners.CloseKey));
+                false, true, keysShown ? FleetCorners.CloseKey : string.Empty, FleetIcons.Close, Send(1)));
         }
 
         var shown = FleetActionBar.Visible(bar, keysShown, pinned);
 
-        for (var i = 0; i < bar.Count; i++)
+        foreach (var chip in shown)
         {
-            buttons.Add(new FloatBorderButton(true, alignRight, shown[i].Key, shown[i].Label, Send(bar[i].Key)));
+            buttons.Add(new FloatBorderButton(true, alignRight, chip.Key, chip.Label, Send(buttons.Count)));
         }
 
         return buttons;
     }
 
-    public static string Send(string key)
-    {
-        if (key.Length > 1 && key.Contains('/'))
-        {
-            return Send(key.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty);
-        }
-
-        return key.ToLowerInvariant() switch
-        {
-            "shift" => "shift+enter",
-            "bksp" => "backspace",
-            _ => key,
-        };
-    }
+    private static string Send(int index) => index < Sends.Count ? Sends[index] : string.Empty;
 
     private static bool Inside(View view, View window)
     {

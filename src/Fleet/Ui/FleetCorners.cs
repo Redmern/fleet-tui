@@ -50,7 +50,7 @@ public static class FleetCorners
     {
         if (FloatBorder.Enabled)
         {
-            FloatBorder.Corners(window);
+            FloatBorder.Corners(window, close);
 
             if (below is not null)
             {

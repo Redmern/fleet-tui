@@ -5502,7 +5502,7 @@ in fleetd's frame.
   float sends a control request `float-buttons` with its own pane as caller and a list of
   `FloatButtonDto { edge: top|bottom, align: left|right, key, label, send }`. `key` and
   `label` are what to draw (key empty while key hints are hidden), `send` is the key to type
-  when it is clicked, as a `KeyChord` spec. An empty list clears them. fleetd keeps the list
+  when it is clicked, as a `KeyChord` spec (see Clicking). An empty list clears them. fleetd keeps the list
   on the pane's `FloatState`; a pane that is not a float gets an error.
 - **Only when it works.** `FleetUi.Start` sends an empty list once when `FloatPane.Inside`.
   If fleetd answers (it is a float and fleetd knows the op), `FloatBorder.Enabled` is on for
@@ -5521,12 +5521,23 @@ in fleetd's frame.
   buttons the same way along the bottom; one `─` between pills; a button that does not fit
   is dropped. `Composer` paints each as the in-content pill (`` `` in Surface0, key in
   Blue and label in Text on Surface0), and keeps the title clear of them.
-- **Clicking.** A left press on a border button focuses the float and types its `send`
-  (win32-input-mode record when ConPTY asked for it, else the Ghostty encoding) instead of
-  starting a move or resize; elsewhere the border still drags. Keys the pane draws as
-  display text are mapped to specs on the pane side (`bksp` → `backspace`, `SHIFT` →
-  `shift+enter`, `o/enter/A-Z` → its first part); a spec fleetd cannot parse swallows the
-  click.
+- **Clicking.** A left press on a border button focuses the float, types its `send`
+  (win32-input-mode record when ConPTY asked for it, else the Ghostty encoding) and swallows
+  the rest of the gesture instead of starting a move or resize; elsewhere the border still
+  drags. An empty or unparsable `send` does nothing.
+- **Reserved keys, not the chip's own key.** Typing the chip's shown key was the first plan,
+  but it is not what a click did: `bksp` in a field with text deletes a character instead of
+  going back, and `SHIFT` or `o/enter/A-Z` are not keys at all. So each button sends a
+  reserved function key, F1 for info, F2 for close, F3 to F12 for the bar's chips in order
+  (no corners: F1 onwards), and `FloatBorder.Press`, on the app's `KeyDown`, runs the action
+  the in-content button would have run (`FleetKeyHints.Toggle`, the `close` given to
+  `Attach`, the chip's `Run`). In a bordered float F1 to F12 belong to the border; no fleet
+  screen binds them. A chip past the twelfth key is drawn but not clickable.
+- **Publishing.** Only a list fleetd accepted counts as sent, so a refused one is sent
+  again on the next change. The buttons are published after the frame is held and fitted,
+  with the window's new size.
+- **Not done.** The bar row stays reserved (now blank) in fitted floats; the two corner
+  margins do go.
 
 ## Still to verify
 ## Still to verify

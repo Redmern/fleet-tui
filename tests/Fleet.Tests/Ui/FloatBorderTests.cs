@@ -36,27 +36,27 @@ public sealed class FloatBorderTests : IDisposable
     }));
 
     [Fact]
-    public void Corners_are_info_top_left_typing_the_reveal_toggle_and_close_top_right_typing_esc()
+    public void Corners_are_info_top_left_and_close_top_right_typing_the_first_two_reserved_keys()
     {
         var shown = FloatBorder.For(true, [], false, null, keysShown: true, "?");
         var hidden = FloatBorder.For(true, [], false, null, keysShown: false, "?");
 
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, FloatBorder.RevealSend),
-                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "esc"),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1"),
+                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2"),
             ],
             shown);
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, "?", FleetIcons.Info, FloatBorder.RevealSend),
-                new FloatBorderButton(false, true, string.Empty, FleetIcons.Close, "esc"),
+                new FloatBorderButton(false, false, "?", FleetIcons.Info, "f1"),
+                new FloatBorderButton(false, true, string.Empty, FleetIcons.Close, "f2"),
             ],
             hidden);
     }
 
     [Fact]
-    public void Bar_chips_go_on_the_bottom_edge_and_keep_their_key_to_type_while_the_key_is_hidden()
+    public void Bar_chips_go_on_the_bottom_edge_each_with_its_own_reserved_key_while_the_key_is_hidden()
     {
         var bar = new List<(string Key, string Label, Action Run)>
         {
@@ -68,22 +68,21 @@ public sealed class FloatBorderTests : IDisposable
 
         Assert.Equal(
             [
-                new FloatBorderButton(true, true, string.Empty, "open", "enter"),
-                new FloatBorderButton(true, true, string.Empty, "back", "backspace"),
+                new FloatBorderButton(true, true, string.Empty, "open", "f1"),
+                new FloatBorderButton(true, true, string.Empty, "back", "f2"),
             ],
             buttons);
     }
 
-    [Theory]
-    [InlineData("enter", "enter")]
-    [InlineData("bksp", "backspace")]
-    [InlineData("SHIFT", "shift+enter")]
-    [InlineData("o/enter/A-Z", "o")]
-    [InlineData("ctrl+r", "ctrl+r")]
-    [InlineData("/", "/")]
-    public void A_shown_key_maps_to_the_key_fleetd_types(string shown, string send)
+    [Fact]
+    public void Chips_past_the_twelfth_reserved_key_get_no_key_to_type()
     {
-        Assert.Equal(send, FloatBorder.Send(shown));
+        var bar = Enumerable.Range(0, 12).Select(i => ($"{i}", $"chip {i}", (Action)(() => { }))).ToList();
+
+        var buttons = FloatBorder.For(true, bar, false, null, keysShown: true, "?");
+
+        Assert.Equal("f12", buttons[11].Send);
+        Assert.Equal(string.Empty, buttons[12].Send);
     }
 
     [Fact]
@@ -127,9 +126,9 @@ public sealed class FloatBorderTests : IDisposable
 
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, FloatBorder.RevealSend),
-                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "esc"),
-                new FloatBorderButton(true, true, "enter", "open", "enter"),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1"),
+                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2"),
+                new FloatBorderButton(true, true, "enter", "open", "f3"),
             ],
             _published[^1]);
 
@@ -141,6 +140,51 @@ public sealed class FloatBorderTests : IDisposable
         FloatBorder.Run(window, false);
 
         Assert.Empty(_published[^1]);
+    }
+
+    [Fact]
+    public void A_reserved_key_runs_the_action_its_in_content_button_ran()
+    {
+        Enable();
+        using var window = new Window();
+        var closed = 0;
+        var backs = 0;
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        window.Add(bar.Root);
+        bar.Show([("enter", "open", () => { }), ("bksp", "back", () => backs++)]);
+        FleetCorners.Attach(window, () => closed++);
+        FloatBorder.Run(window, true);
+        FleetKeyHints.Apply(false);
+
+        Assert.True(FloatBorder.Press(Terminal.Gui.Input.Key.F2));
+        Assert.True(FloatBorder.Press(Terminal.Gui.Input.Key.F4));
+        Assert.True(FloatBorder.Press(Terminal.Gui.Input.Key.F1));
+        Assert.False(FloatBorder.Press(Terminal.Gui.Input.Key.F5));
+        Assert.False(FloatBorder.Press(Terminal.Gui.Input.Key.Esc));
+
+        Assert.Equal((1, 1), (closed, backs));
+        Assert.True(FleetKeyHints.Shown);
+    }
+
+    [Fact]
+    public void A_publish_fleetd_refuses_is_sent_again_on_the_next_refresh()
+    {
+        var accept = true;
+        Assert.True(FloatBorder.Enable(buttons =>
+        {
+            _published.Add(buttons);
+            return accept;
+        }));
+        using var window = new Window();
+        FleetCorners.Attach(window, () => { });
+
+        accept = false;
+        FloatBorder.Run(window, true);
+        accept = true;
+        FloatBorder.Refresh();
+
+        Assert.Equal(2, _published[^1].Count);
+        Assert.Equal(_published[^2], _published[^1]);
     }
 
     [Fact]
