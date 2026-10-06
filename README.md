@@ -456,6 +456,15 @@ you a question or for permission, or the active pane. The log says which agent i
 and why. `enter` reopens the agent, and claude continues the same conversation
 (`--continue`).
 
+**Models** (fleet menu > settings > fleet config). Every claude fleet starts gets a session
+name (`fleet-head`, `<project>-main`, `<project>-sub-<slug>`, `<project>-<repo>-<branch>`), and a
+model and effort per role. `H` sets the head's (all projects), `M` the main orchestrator's, `S`
+the sub-orchestrators' and `R` the repo agents' (per project). Pick a model alias (`sonnet`,
+`opus`, `haiku`, `fable`), type an ID, or `inherit` to pass no `--model` and use the Claude
+profile's default; then an effort (`low` to `max`) or `inherit`. Sub-orchestrators default to
+`sonnet` at `medium`; the rest inherit. A change applies to panes started after it; a running
+pane keeps what it was started with.
+
 `d` on a **repository** deletes the repository and every worktree under it. It
 refuses while any agent is registered on that repository, and the confirmation
 lists every worktree that would go and any branch that is not pushed.

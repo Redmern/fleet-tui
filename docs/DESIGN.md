@@ -4969,6 +4969,21 @@ role's setting isn't `inherit`.
 - `--effort` levels a model doesn't support: the docs say "available levels depend on the
   model"; what Claude does with an unsupported one wasn't tried.
 
+## Model rows under Fleet config, 2026-10-06
+
+The follow-up to the section above: four rows in a `models` section of Fleet config, just above
+`permissions`. Head model (`H`, global, saved to `head.json`), main orchestrator (`M`),
+sub-orchestrators (`S`) and repo agents (`R`), per project. Each row shows its value
+(`[inherit]`, `[sonnet · medium]`) and opens two pickers: the model (`inherit`, the four aliases,
+or "other…", which asks for an ID and refuses one `ModelChoice` would drop), then the effort.
+Escape in either picker leaves the setting as it was. The choices and the value text live in
+`ModelRows`, beside `FleetMenus` in the `ShowMenu` slice, so they're testable without a terminal.
+
+- **Not toggles.** The rows behave like Auto-close: they open a picker in place, so they're
+  neither toggles nor "opens more" rows.
+- **`R`, not `a`, for repo agents.** `a` is free in Fleet config, but the keymap tests use `a` as
+  a key no default binds.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
