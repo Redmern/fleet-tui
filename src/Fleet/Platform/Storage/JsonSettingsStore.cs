@@ -12,7 +12,7 @@ namespace Fleet.Platform.Storage;
 
 public sealed class JsonSettingsStore : ISettingsStore
 {
-    public SettingsConfig Load(string project) => LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints() };
+    public SettingsConfig Load(string project) => LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys() };
 
     private static SettingsConfig LoadProject(string project)
     {
@@ -170,47 +170,30 @@ public sealed class JsonSettingsStore : ISettingsStore
         }
     }
 
-    public bool LoadShowMenuKeys() => LoadMenuSettings() is { ShowKeys: { } shown } ? shown : SettingsDefaults.ShowMenuKeys;
-
-    public void SaveShowMenuKeys(bool shown) =>
-        SaveMenuSettings(LoadMenuSettings(), stored => stored.ShowKeys = shown == SettingsDefaults.ShowMenuKeys ? null : shown);
-
-    public ButtonHints LoadButtonHints() =>
-        LoadMenuSettings()?.ButtonHints?.ToLowerInvariant() switch
-        {
-            "text" => ButtonHints.Text,
-            "tooltips" => ButtonHints.Tooltips,
-            "none" => ButtonHints.None,
-            _ => SettingsDefaults.ButtonHints,
-        };
-
-    public void SaveButtonHints(ButtonHints hints) =>
-        SaveMenuSettings(
-            LoadMenuSettings(),
-            stored => stored.ButtonHints = hints == SettingsDefaults.ButtonHints ? null : hints.ToString().ToLowerInvariant());
-
-    private static MenuSettingsFile? LoadMenuSettings()
+    public bool LoadShowMenuKeys()
     {
         try
         {
-            if (File.Exists(FleetPaths.MenuSettingsFile))
+            if (File.Exists(FleetPaths.MenuSettingsFile)
+                && JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.MenuSettingsFile), FleetJsonContext.Default.MenuSettingsFile) is { ShowKeys: { } shown })
             {
-                return JsonSerializer.Deserialize(
-                    File.ReadAllText(FleetPaths.MenuSettingsFile), FleetJsonContext.Default.MenuSettingsFile);
+                return shown;
             }
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
         }
 
-        return null;
+        return SettingsDefaults.ShowMenuKeys;
     }
 
-    private static void SaveMenuSettings(MenuSettingsFile? current, Action<MenuSettingsFile> change)
+    public void SaveShowMenuKeys(bool shown)
     {
-        var stored = current ?? new MenuSettingsFile();
-
-        change(stored);
+        var stored = new MenuSettingsFile
+        {
+            ShowKeys = shown == SettingsDefaults.ShowMenuKeys ? null : shown,
+        };
 
         try
         {

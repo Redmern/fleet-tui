@@ -79,10 +79,6 @@ public static class Adapters
 
     public static void SaveShowMenuKeys(bool shown) => new JsonSettingsStore().SaveShowMenuKeys(shown);
 
-    public static ButtonHints ButtonHints() => new JsonSettingsStore().LoadButtonHints();
-
-    public static void SaveButtonHints(ButtonHints hints) => new JsonSettingsStore().SaveButtonHints(hints);
-
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
     public static IHarnessConfig HarnessConfig() => new ClaudeHarnessConfig();
