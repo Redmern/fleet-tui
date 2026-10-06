@@ -36,6 +36,18 @@ public class OrchestrationTextTests
         Assert.DoesNotContain(OrchestrationText.DefaultHowYouWork, text);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Only ever touch the api/ folder.")]
+    public void The_brief_says_to_subscribe_to_agents_instead_of_polling_whatever_the_override(string? howYouWork)
+    {
+        var text = OrchestrationText.Instructions(Brief, howYouWork);
+
+        Assert.Contains("## Waiting for agents", text);
+        Assert.Contains(OrchestrationText.WaitingForAgents, text);
+        Assert.Contains("notify_when_idle: true", text);
+    }
+
     [Fact]
     public void The_header_and_reporting_sections_stay_fixed_regardless_of_the_override()
     {

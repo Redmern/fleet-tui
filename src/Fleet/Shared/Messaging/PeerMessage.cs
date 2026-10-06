@@ -6,12 +6,15 @@ public static class PeerMessage
 
     public const string TaskNotificationTag = "<task-notification>";
 
+    public const string CrossSessionNoticePrefix = "[Cross-session ";
+
     public static bool FromClaude(string prompt)
     {
         var text = prompt.TrimStart();
 
         return text.StartsWith(CrossSessionTag, StringComparison.Ordinal)
-               || text.StartsWith(TaskNotificationTag, StringComparison.Ordinal);
+               || text.StartsWith(TaskNotificationTag, StringComparison.Ordinal)
+               || text.StartsWith(CrossSessionNoticePrefix, StringComparison.Ordinal);
     }
 
     public static string SendYourself(string target, string address, string message, string? unreachable = null) =>
@@ -20,6 +23,12 @@ public static class PeerMessage
         + "If a delivery notice says it was held or refused, that is the receiving session's choice: "
         + "tell your user instead of retrying."
         + (unreachable is null ? string.Empty : $" {unreachable}");
+
+    public static string TellOwner(string owner, string address, string line) =>
+        $"Your orchestrator ({owner}) takes cross-session messages, so tell it you're finished: "
+        + $"call SendMessage with to \"{address}\" and this one line as the message, unchanged:\n\n{line}\n\n"
+        + "Send it once, after this report. If a delivery notice says it was held or refused, "
+        + "that is the receiving session's choice: leave it, don't retry.";
 
     public static string DispatchRequest(string task) =>
         "The head orchestrator asks you to dispatch a sub-orchestrator for the task below. "

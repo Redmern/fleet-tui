@@ -22,6 +22,25 @@ public static class OrchestrationText
         an answer: report it, do not retry in a loop.
         """;
 
+    public const string WaitingForAgents =
+        """
+        Don't poll list_agents to learn that an agent finished. After you start an
+        agent (new_agent names its Claude session) or tell it something, subscribe:
+        call SendMessage to that session with notify_when_idle: true and no message,
+        or set notify_when_idle: true on the SendMessage that carries a tell_agent
+        instruction. If SendMessage can't find the session yet, its Claude is still
+        starting: look for it with Claude's own ListAgents tool once it is listed.
+        A notice means the session went idle, not that the agent is done. Agents
+        message you a one-line summary when they report done or failed; that, or a
+        done or failed in fleet's list_agents reported after your last instruction to
+        it, means finished. A status from before a later tell_agent is stale.
+        Not finished: subscribe again, but only once. If the next notice also comes
+        without a report, the agent is waiting on something (a question, a refusal):
+        ask it with tell_agent what it needs, or tell your user. Don't keep
+        subscribing to a session that has stopped; the notice comes straight back.
+        A summary is a status line, not a task or a dispatch.
+        """;
+
     public const string ClassicAidlc =
         """
         Follow this cycle for every unit of work, and say which phase you're in
@@ -64,6 +83,9 @@ public static class OrchestrationText
             $"""
             ## How you work
             {(string.IsNullOrWhiteSpace(howYouWork) ? DefaultHowYouWork : howYouWork.Trim())}
+
+            ## Waiting for agents
+            {WaitingForAgents}
 
             ## Reporting
             Write REPORT.md in this folder as you go: what you decided, which agents you

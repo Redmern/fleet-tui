@@ -81,7 +81,7 @@ public sealed class McpActions(
     private readonly DispatchHandler _dispatcher =
         new(mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(), intents: Adapters.Intents());
 
-    private readonly ReportStatusHandler _reporter = new(store);
+    private readonly ReportStatusHandler _reporter = new(store, inboxes: Adapters.AgentInboxes());
 
     private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes());
 
@@ -115,7 +115,7 @@ public sealed class McpActions(
             HarnessTool.ListSubs => await ListSubs(ct).ConfigureAwait(false),
             HarnessTool.StopSub => await StopSub(request, ct).ConfigureAwait(false),
             HarnessTool.RemoveSub => await RemoveSub(request, ct).ConfigureAwait(false),
-            HarnessTool.Report => Report(request),
+            HarnessTool.Report => await Report(request, ct).ConfigureAwait(false),
             _ => McpResult.Error($"{request.Tool} is not available."),
         };
     }
@@ -219,17 +219,20 @@ public sealed class McpActions(
 
         var task = ToolArguments.Text(request, ToolArguments.Task);
 
+        var name = SessionNames.RepoAgent(project, created.Value!.Repository, created.Value!.Branch);
+        var session = $" Its Claude session is named \"{name}\".";
+
         if (task.Length == 0)
         {
-            return Ok($"started {repo.Name}/{Branch(request)}.");
+            return Ok($"started {repo.Name}/{Branch(request)}.{session}");
         }
 
         var delivered = await SendWhenReady(created.Value!, task, ct).ConfigureAwait(false);
 
         return Ok(delivered
-            ? $"started {repo.Name}/{Branch(request)} and gave it its first task."
+            ? $"started {repo.Name}/{Branch(request)} and gave it its first task.{session}"
             : $"started {repo.Name}/{Branch(request)}, but it was not ready to take the task; "
-              + "use tell_agent once it is up.");
+              + $"use tell_agent once it is up.{session}");
     }
 
     private async Task<bool> SendWhenReady(AgentRecord agent, string message, CancellationToken ct)
@@ -589,15 +592,13 @@ public sealed class McpActions(
         return removed.Succeeded ? Ok(removed.Value!.Note) : McpResult.Error(removed.Error!);
     }
 
-    private McpResult Report(McpRequest request)
+    private async Task<McpResult> Report(McpRequest request, CancellationToken ct)
     {
         var status = ToolArguments.Text(request, ToolArguments.Status);
 
-        var reported = _reporter.Handle(
-            project,
-            caller,
-            status,
-            ToolArguments.Text(request, ToolArguments.Summary));
+        var reported = await _reporter
+            .HandleAsync(project, root, caller, status, ToolArguments.Text(request, ToolArguments.Summary), ct)
+            .ConfigureAwait(false);
 
         if (reported.Succeeded
             && OrchestrationStatus.Normalize(status)
