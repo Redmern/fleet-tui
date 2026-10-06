@@ -1,5 +1,6 @@
 using Fleet.Platform.Storage;
 using Fleet.Shared.Aidlc.Enums;
+using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
@@ -311,5 +312,84 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
         Store.Save("te ch/web", SettingsConfig.Default.WithTrigger(":"));
 
         Assert.Equal(":", Store.Load("te ch/web").Trigger);
+    }
+
+    [Fact]
+    public void Role_models_default_to_inherit_except_sonnet_at_medium_for_sub_orchestrators()
+    {
+        var models = Store.Load("techweb").Models;
+
+        Assert.Equal(RoleModel.Inherit, models.Main);
+        Assert.Equal(new RoleModel("sonnet", "medium"), models.Sub);
+        Assert.Equal(RoleModel.Inherit, models.Agent);
+    }
+
+    [Fact]
+    public void Role_models_round_trip()
+    {
+        var models = new RoleModels(new("opus", "high"), new(ModelChoice.Inherit, ModelChoice.Inherit), new("sonnet", "low"));
+
+        Store.Save("techweb", SettingsConfig.Default.WithModels(models));
+
+        Assert.Equal(models, Store.Load("techweb").Models);
+        Assert.Equal(SettingsDefaults.Models, Store.Load("other").Models);
+    }
+
+    [Fact]
+    public void Role_models_are_stored_only_when_they_differ_from_the_default()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"subModel\": \"\"", raw);
+        Assert.Contains("\"mainModel\": \"\"", raw);
+
+        Store.Save(
+            "techweb",
+            SettingsConfig.Default.WithModels(SettingsDefaults.Models with { Sub = RoleModel.Inherit }));
+
+        raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"subModel\": \"inherit\"", raw);
+        Assert.Contains("\"subEffort\": \"inherit\"", raw);
+        Assert.Contains("\"agentModel\": \"\"", raw);
+    }
+
+    [Fact]
+    public void An_unreadable_model_or_effort_falls_back_to_the_default()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{ "version": 1, "subModel": "two words", "subEffort": "extreme", "agentModel": "haiku" }""");
+
+        var models = Store.Load("techweb").Models;
+
+        Assert.Equal(new RoleModel("sonnet", "medium"), models.Sub);
+        Assert.Equal(new RoleModel("haiku", ModelChoice.Inherit), models.Agent);
+    }
+
+    [Fact]
+    public void A_null_model_or_effort_falls_back_to_the_default()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{ "version": 1, "subModel": null, "subEffort": null }""");
+
+        Assert.Equal(new RoleModel("sonnet", "medium"), Store.Load("techweb").Models.Sub);
+    }
+
+    [Fact]
+    public void The_head_model_defaults_to_inherit_and_round_trips_in_its_own_file()
+    {
+        Assert.Equal(RoleModel.Inherit, Store.LoadHead());
+
+        Store.SaveHead(new RoleModel("sonnet", "medium"));
+
+        Assert.Equal(new RoleModel("sonnet", "medium"), Store.LoadHead());
+        Assert.True(File.Exists(FleetPaths.HeadSettingsFile));
+        Assert.Equal(SettingsDefaults.Models, Store.Load("head").Models);
     }
 }

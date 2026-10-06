@@ -40,9 +40,9 @@ public static class AgentHarness
     public const string NvimStartup =
         NvimBoot + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('stopinsert') end)";
 
-    public const string NvimStartupWithClaude =
+    public static string NvimStartupWithClaude(string claudeArgs) =>
         NvimBoot
-        + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('ClaudeCode') "
+        + "vim.schedule(function() vim.cmd('Neotree show') " + ClaudeCodeCall + claudeArgs + "') "
         + "vim.defer_fn(function() for _,w in ipairs(vim.api.nvim_list_wins()) do "
         + "local b=vim.api.nvim_win_get_buf(w) "
         + "if #vim.api.nvim_list_wins()>1 and vim.api.nvim_buf_get_name(b)=='' "
@@ -52,7 +52,7 @@ public static class AgentHarness
 
     public static string NvimStartupClaudeOnly(string claudeArgs) =>
         NvimBoot
-        + "vim.schedule(function() vim.cmd('ClaudeCode" + claudeArgs + "') "
+        + "vim.schedule(function() " + ClaudeCodeCall + claudeArgs + "') "
         + "vim.defer_fn(function() local term "
         + "for _,w in ipairs(vim.api.nvim_list_wins()) do "
         + "if vim.bo[vim.api.nvim_win_get_buf(w)].buftype=='terminal' then term=w end end "
@@ -74,22 +74,29 @@ public static class AgentHarness
         + "end,{buffer=tb}) end end, 400) "
         + "vim.api.nvim_set_current_win(term) vim.cmd('startinsert') end, 150) end)";
 
-    public static IReadOnlyList<string> OrchestratorCommand(bool resume, bool inNvim = true) =>
-        (inNvim, resume) switch
-        {
-            (true, _) => [Nvim, "-c", NvimStartupClaudeOnly(resume ? " " + ResumeArgument : string.Empty)],
-            (false, true) => [Claude, ResumeArgument],
-            (false, false) => [Claude],
-        };
+    private const string ClaudeCodeCall = "vim.cmd('ClaudeCode";
+
+    public static IReadOnlyList<string> OrchestratorCommand(
+        bool resume, bool inNvim = true, ClaudeLaunch? launch = null) =>
+        inNvim
+            ? [Nvim, "-c", NvimStartupClaudeOnly(NvimArguments(ClaudeArguments(resume, launch)))]
+            : [Claude, .. ClaudeArguments(resume, launch)];
 
     public static IReadOnlyList<string> Resumed(IReadOnlyList<string> command) => command switch
     {
-        [Nvim, "-c", var startup] when startup == NvimStartupClaudeOnly(string.Empty) => OrchestratorCommand(resume: true),
-        [Nvim, "-c", NvimStartupWithClaude] =>
-            [Nvim, "-c", NvimStartupWithClaude.Replace("vim.cmd('ClaudeCode')", $"vim.cmd('ClaudeCode {ResumeArgument}')", StringComparison.Ordinal)],
-        [Claude] => [Claude, ResumeArgument],
+        [Claude, ..] when !command.Contains(ResumeArgument) => [Claude, ResumeArgument, .. command.Skip(1)],
+        [Nvim, "-c", var startup]
+            when startup.Contains(ClaudeCodeCall, StringComparison.Ordinal)
+                && !startup.Contains(ClaudeCodeCall + " " + ResumeArgument, StringComparison.Ordinal) =>
+            [Nvim, "-c", startup.Replace(ClaudeCodeCall, ClaudeCodeCall + " " + ResumeArgument, StringComparison.Ordinal)],
         _ => command,
     };
+
+    private static IReadOnlyList<string> ClaudeArguments(bool resume, ClaudeLaunch? launch) =>
+        [.. resume ? [ResumeArgument] : Array.Empty<string>(), .. launch?.Arguments ?? []];
+
+    private static string NvimArguments(IReadOnlyList<string> arguments) =>
+        string.Concat(arguments.Select(a => " " + a));
 
     public static bool HostedInNvim(string harness) => CommandFor(harness)[0] == Nvim;
 
@@ -153,12 +160,12 @@ public static class AgentHarness
     public static bool IsOrchestrator(string harness) => Normalize(harness) == Orchestrator;
 
     public static IReadOnlyList<string> CommandFor(
-        string harness, bool withClaude = false, bool orchestratorInNvim = true) =>
+        string harness, bool withClaude = false, bool orchestratorInNvim = true, ClaudeLaunch? launch = null) =>
         Normalize(harness) switch
         {
-            Nvim => [Nvim, "-c", withClaude ? NvimStartupWithClaude : NvimStartup],
-            Orchestrator => OrchestratorCommand(resume: false, inNvim: orchestratorInNvim),
-            _ => [Claude],
+            Nvim => [Nvim, "-c", withClaude ? NvimStartupWithClaude(NvimArguments(ClaudeArguments(false, launch))) : NvimStartup],
+            Orchestrator => OrchestratorCommand(resume: false, inNvim: orchestratorInNvim, launch),
+            _ => [Claude, .. ClaudeArguments(false, launch)],
         };
 
     public static string Normalize(string harness) =>

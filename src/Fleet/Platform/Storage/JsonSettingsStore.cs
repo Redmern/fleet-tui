@@ -65,6 +65,10 @@ public sealed class JsonSettingsStore : ISettingsStore
                 .MergedOverDefaults() with
             {
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
+                Models = new RoleModels(
+                    ParseRole(stored.MainModel, stored.MainEffort, SettingsDefaults.MainModel),
+                    ParseRole(stored.SubModel, stored.SubEffort, SettingsDefaults.SubModel),
+                    ParseRole(stored.AgentModel, stored.AgentEffort, SettingsDefaults.AgentModel)),
             };
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -99,6 +103,12 @@ public sealed class JsonSettingsStore : ISettingsStore
             AutoClose = OnOffAgainstDefault(config.AutoClose, SettingsDefaults.AutoClose),
             AutoCloseMinutes = config.AutoCloseMinutes == SettingsDefaults.AutoCloseMinutes ? 0 : config.AutoCloseMinutes,
             StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
+            MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
+            MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
+            SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),
+            SubEffort = EffortAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),
+            AgentModel = ModelAgainstDefault(config.Models.Agent, SettingsDefaults.AgentModel),
+            AgentEffort = EffortAgainstDefault(config.Models.Agent, SettingsDefaults.AgentModel),
             Tools = SettingsDiff.AgainstDefaults(config.Rules).ToDictionary(
                 r => HarnessToolIds.For(r.Key),
                 r => new ToolRuleEntry
@@ -113,6 +123,43 @@ public sealed class JsonSettingsStore : ISettingsStore
             FleetPaths.EnsureDirs();
             File.WriteAllText(
                 file, JsonSerializer.Serialize(stored, FleetJsonContext.Default.SettingsFile));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    public RoleModel LoadHead()
+    {
+        try
+        {
+            if (File.Exists(FleetPaths.HeadSettingsFile)
+                && JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.HeadSettingsFile), FleetJsonContext.Default.HeadSettingsFile) is { } stored)
+            {
+                return ParseRole(stored.Model, stored.Effort, SettingsDefaults.HeadModel);
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+        }
+
+        return SettingsDefaults.HeadModel;
+    }
+
+    public void SaveHead(RoleModel model)
+    {
+        var stored = new HeadSettingsFile
+        {
+            Model = ModelAgainstDefault(model, SettingsDefaults.HeadModel),
+            Effort = EffortAgainstDefault(model, SettingsDefaults.HeadModel),
+        };
+
+        try
+        {
+            FleetPaths.EnsureDirs();
+            File.WriteAllText(
+                FleetPaths.HeadSettingsFile, JsonSerializer.Serialize(stored, FleetJsonContext.Default.HeadSettingsFile));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -151,6 +198,22 @@ public sealed class JsonSettingsStore : ISettingsStore
         "off" => false,
         _ => fallback,
     };
+
+    public static RoleModel ParseRole(string? model, string? effort, RoleModel fallback) =>
+        new(
+            Stored(model ?? string.Empty, ModelChoice.Model(model ?? string.Empty), fallback.Model),
+            Stored(effort ?? string.Empty, ModelChoice.Effort(effort ?? string.Empty), fallback.Effort));
+
+    private static string Stored(string raw, string parsed, string fallback) =>
+        parsed != ModelChoice.Inherit || raw.Trim().Equals(ModelChoice.Inherit, StringComparison.OrdinalIgnoreCase)
+            ? parsed
+            : fallback;
+
+    public static string ModelAgainstDefault(RoleModel value, RoleModel fallback) =>
+        ModelChoice.Model(value.Model) == ModelChoice.Model(fallback.Model) ? string.Empty : ModelChoice.Model(value.Model);
+
+    public static string EffortAgainstDefault(RoleModel value, RoleModel fallback) =>
+        ModelChoice.Effort(value.Effort) == ModelChoice.Effort(fallback.Effort) ? string.Empty : ModelChoice.Effort(value.Effort);
 
     private static string OnOffAgainstDefault(bool value, bool fallback) =>
         value == fallback ? string.Empty : value ? "on" : "off";

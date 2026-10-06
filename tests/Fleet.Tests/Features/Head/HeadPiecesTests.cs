@@ -2,6 +2,8 @@ using Fleet.Features.Head.ServeHead;
 using Fleet.Features.Head.ServeHead.Enums;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Head;
 
@@ -82,23 +84,37 @@ public sealed class HeadPiecesTests
     [Fact]
     public void The_head_starts_claude_with_its_voice_settings_and_resumes_after_the_first_run()
     {
-        Assert.Equal(["--settings", "on.json"], HeadLaunch.ClaudeArgs("on.json", resume: false));
-        Assert.Equal(["--settings", "off.json", "--continue"], HeadLaunch.ClaudeArgs("off.json", resume: true));
+        var head = ClaudeLaunch.Head(RoleModel.Inherit);
+
+        Assert.Equal(["--settings", "on.json", "--name", "fleet-head"], HeadLaunch.ClaudeArgs("on.json", resume: false, head));
+        Assert.Equal(
+            ["--settings", "off.json", "--continue", "--name", "fleet-head"],
+            HeadLaunch.ClaudeArgs("off.json", resume: true, head));
         Assert.Contains("\"enabled\":true", HeadLaunch.VoiceOn);
         Assert.Contains("\"enabled\":false", HeadLaunch.VoiceOff);
         Assert.Equal(["mcp", "--head"], HeadLaunch.McpArgs);
     }
 
     [Fact]
+    public void The_head_passes_its_model_and_effort_only_when_set()
+    {
+        var args = HeadLaunch.ClaudeArgs("on.json", resume: true, ClaudeLaunch.Head(new RoleModel("opus", "high")));
+
+        Assert.Equal(
+            ["--settings", "on.json", "--continue", "--name", "fleet-head", "--model", "opus", "--effort", "high"],
+            args);
+    }
+
+    [Fact]
     public void On_windows_the_head_runs_claude_through_cmd_so_its_autorun_hook_picks_the_account()
     {
-        var args = HeadLaunch.ClaudeArgs(@"C:\Users\Jo Doe\AppData\Roaming\fleet\head\.fleet\voice-off.json", resume: true);
+        var args = HeadLaunch.ClaudeArgs(@"C:\Users\Jo Doe\AppData\Roaming\fleet\head\.fleet\voice-off.json", resume: true, ClaudeLaunch.Head(RoleModel.Inherit));
 
         var line = HeadLaunch.ShellArguments("claude", args, WindowsCommandLine.Quote);
 
         Assert.Equal("cmd.exe", HeadLaunch.WindowsShell);
         Assert.Equal(
-            "/s /c \"claude --settings \"C:\\Users\\Jo Doe\\AppData\\Roaming\\fleet\\head\\.fleet\\voice-off.json\" --continue\"",
+            "/s /c \"claude --settings \"C:\\Users\\Jo Doe\\AppData\\Roaming\\fleet\\head\\.fleet\\voice-off.json\" --continue --name fleet-head\"",
             line);
         Assert.DoesNotContain("/d", line.Split(' '), StringComparer.OrdinalIgnoreCase);
     }

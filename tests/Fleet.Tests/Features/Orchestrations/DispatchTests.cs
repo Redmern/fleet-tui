@@ -12,6 +12,7 @@ using Fleet.Shared.Aidlc;
 using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
@@ -46,6 +47,10 @@ public sealed class DispatchTests : IDisposable
 
     private DispatchCommand Command(string prompt, string caller = "") =>
         new("techweb", _root, prompt, caller);
+
+    private static IReadOnlyList<string> Sub(string slug) =>
+        AgentHarness.OrchestratorCommand(
+            resume: false, launch: ClaudeLaunch.ForAgent("techweb", string.Empty, slug, true, SettingsDefaults.Models));
 
     [Fact]
     public async Task It_scaffolds_the_folder_with_the_prompt_kept_verbatim()
@@ -324,7 +329,7 @@ public sealed class DispatchTests : IDisposable
 
         Assert.Single(panes, p =>
             p.Cwd == reply.Value!.Folder
-            && _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.CommandFor(AgentHarness.Orchestrator)));
+            && _mux.ArgsFor(p.Id).SequenceEqual(Sub("start-work")));
     }
 
     [Fact]
@@ -336,7 +341,7 @@ public sealed class DispatchTests : IDisposable
 
         var claude = Assert.Single(panes, p => p.Cwd == reply.Value!.Folder);
 
-        Assert.Equal(AgentHarness.CommandFor(AgentHarness.Orchestrator), _mux.ArgsFor(claude.Id));
+        Assert.Equal(Sub("start-work"), _mux.ArgsFor(claude.Id));
         Assert.Equal(reply.Value!.Slug, claude.Title);
     }
 
@@ -539,7 +544,7 @@ public sealed class DispatchTests : IDisposable
         var reply = await handler.HandleAsync(Command("do the thing"), "t");
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
-        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), _mux.ArgsFor(pane.Id));
+        Assert.Equal(Sub("do-the-thing"), _mux.ArgsFor(pane.Id));
         Assert.Empty(_mux.EnvFor(pane.Id));
         Assert.Empty(_mux.SentTo(pane.Id));
         Assert.Equal(
@@ -561,7 +566,9 @@ public sealed class DispatchTests : IDisposable
         Assert.True(reply.Succeeded, reply.Error);
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
-        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-do-the-thing", "--model", "sonnet", "--effort", "medium"],
+            _mux.ArgsFor(pane.Id));
         Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(pane.Id));
         Assert.Equal(reply.Value!.Folder, pane.Cwd);
         Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], _mux.SentTo(pane.Id));

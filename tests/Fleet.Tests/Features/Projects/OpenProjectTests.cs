@@ -4,6 +4,7 @@ using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Settings;
 
 namespace Fleet.Tests.Features.Projects;
 
@@ -35,7 +36,8 @@ public class OpenProjectTests
 
         var result = await new OpenProjectHandler(mux).HandleAsync(Command);
 
-        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), mux.ArgsFor(result.Value.HarnessPane));
+        Assert.Equal(AgentHarness.OrchestratorCommand(
+                resume: false, launch: ClaudeLaunch.MainOrchestrator("backend", SettingsDefaults.Models)), mux.ArgsFor(result.Value.HarnessPane));
     }
 
     [Fact]
@@ -111,7 +113,7 @@ public class OpenProjectTests
 
         var result = await new OpenProjectHandler(mux).HandleAsync(Command with { MainOrchestratorInNvim = false });
 
-        Assert.Equal([AgentHarness.Claude], mux.ArgsFor(result.Value.HarnessPane));
+        Assert.Equal([AgentHarness.Claude, "--name", "backend-main"], mux.ArgsFor(result.Value.HarnessPane));
         Assert.Equal(AgentHarness.SessionPersistence, mux.EnvFor(result.Value.HarnessPane));
         Assert.Equal("/repos/backend", (await mux.ListPanesAsync()).Single(p => p.Id == result.Value.HarnessPane).Cwd);
     }
@@ -123,7 +125,8 @@ public class OpenProjectTests
 
         var result = await new OpenProjectHandler(mux).HandleAsync(Command with { MainOrchestratorInNvim = true });
 
-        Assert.Equal(AgentHarness.OrchestratorCommand(resume: false), mux.ArgsFor(result.Value.HarnessPane));
+        Assert.Equal(AgentHarness.OrchestratorCommand(
+                resume: false, launch: ClaudeLaunch.MainOrchestrator("backend", SettingsDefaults.Models)), mux.ArgsFor(result.Value.HarnessPane));
         Assert.Empty(mux.EnvFor(result.Value.HarnessPane));
     }
 }

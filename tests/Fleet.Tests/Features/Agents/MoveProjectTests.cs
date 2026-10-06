@@ -4,6 +4,7 @@ using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Settings;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -145,7 +146,7 @@ public class MoveProjectTests
         Assert.DoesNotContain(panes, p => p.Id == dash);
 
         var resumed = panes.Single(p =>
-            _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.OrchestratorCommand(resume: true)));
+            _mux.ArgsFor(p.Id).SequenceEqual(AgentHarness.OrchestratorCommand(resume: true, launch: ClaudeLaunch.MainOrchestrator("techweb", SettingsDefaults.Models))));
 
         Assert.Equal(FleetTabTitles.Dashboard, _mux.TitleOf(resumed.Id));
     }
@@ -161,7 +162,7 @@ public class MoveProjectTests
         var panes = await _mux.ListPanesAsync();
 
         Assert.Contains(panes, p => _mux.ArgsFor(p.Id)
-            .SequenceEqual(AgentHarness.OrchestratorCommand(resume: true)));
+            .SequenceEqual(AgentHarness.OrchestratorCommand(resume: true, launch: ClaudeLaunch.MainOrchestrator("techweb", SettingsDefaults.Models))));
     }
 
     [Fact]
@@ -220,7 +221,7 @@ public class MoveProjectTests
 
         var claude = (await _mux.ListPanesAsync()).Single(p => !_mux.ArgsFor(p.Id).Contains("dash"));
 
-        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], _mux.ArgsFor(claude.Id));
+        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-main"], _mux.ArgsFor(claude.Id));
         Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(claude.Id));
         Assert.Equal(Root, claude.Cwd);
     }

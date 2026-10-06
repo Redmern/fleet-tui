@@ -487,7 +487,7 @@ public static class DashboardWiring
         IReadOnlyList<AgentRecord> WithActivity(IReadOnlyList<AgentRecord> records) =>
             barPanes is null ? records : activity.For(records, barPanes, HookedNow());
 
-        var spawner = new NewAgentHandler(git, mux, agents);
+        var spawner = new NewAgentHandler(git, mux, agents, name => settings.Load(name).Models);
         var hider = new HideAgentHandler(mux, agents);
         var editor = new OpenEditorHandler(mux);
         var branches = new ListBranchesHandler(git);
@@ -537,7 +537,8 @@ public static class DashboardWiring
 
         async Task<string?> OpenFlow(AgentRecord agent)
         {
-            var inNvim = settings.Load(project.Name).SubOrchestratorsInNvim;
+            var loaded = settings.Load(project.Name);
+            var inNvim = loaded.SubOrchestratorsInNvim;
             var executable = AgentHarness.CommandFor(agent.Harness, orchestratorInNvim: inNvim)[0];
 
             if (!Adapters.OnPath(executable))
@@ -547,7 +548,7 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await new OpenAgentHandler(mux, agents, inNvim)
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models)
                 .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 
@@ -816,7 +817,10 @@ public static class DashboardWiring
 
             RebuildDashboard: () =>
             {
-                var rebuilt = new RebuildDashboardHandler(mux, settings.Load(project.Name).MainOrchestratorInNvim)
+                var rebuilt = new RebuildDashboardHandler(
+                    mux,
+                    settings.Load(project.Name).MainOrchestratorInNvim,
+                    ClaudeLaunch.MainOrchestrator(project.Name, settings.Load(project.Name).Models))
                     .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Orchestrator)
                     .GetAwaiter()
                     .GetResult();

@@ -26,6 +26,8 @@ public sealed record SettingsConfig(
 
     public bool StatusHooks { get; init; } = SettingsDefaults.StatusHooks;
 
+    public RoleModels Models { get; init; } = SettingsDefaults.Models;
+
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
 
@@ -64,6 +66,8 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithStatusHooks(bool on) => this with { StatusHooks = on };
 
+    public SettingsConfig WithModels(RoleModels models) => this with { Models = models };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -89,6 +93,7 @@ public sealed record SettingsConfig(
             Merge)
         {
             StatusHooks = StatusHooks,
+            Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
         };
     }
 
@@ -106,5 +111,6 @@ public sealed record SettingsConfig(
                 .Append($"main-nvim={MainOrchestratorInNvim}")
                 .Append($"sub-nvim={SubOrchestratorsInNvim}")
                 .Append($"autoclose={AutoClose}:{AutoCloseMinutes}")
-                .Append($"hooks={StatusHooks}"));
+                .Append($"hooks={StatusHooks}")
+                .Append(Models.Signature));
 }

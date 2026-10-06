@@ -19,6 +19,16 @@ public static class SettingsDefaults
 
     public const bool SubOrchestratorsInNvim = true;
 
+    public static RoleModel MainModel => RoleModel.Inherit;
+
+    public static RoleModel SubModel { get; } = new("sonnet", "medium");
+
+    public static RoleModel AgentModel => RoleModel.Inherit;
+
+    public static RoleModel HeadModel => RoleModel.Inherit;
+
+    public static RoleModels Models { get; } = new(MainModel, SubModel, AgentModel);
+
     public const bool AutoClose = false;
 
     public const int AutoCloseMinutes = 30;

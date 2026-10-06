@@ -4900,6 +4900,75 @@ s  Settings                ›   b  Rebuild the dashboard          p  Permission
   away between drawing the menu and choosing the entry. It costs the top level one
   `ListPanesAsync` before it opens; the driver is fail-silent, so a dead mux only hides the entry.
 
+## Session names and per-role models, 2026-10-06
+
+Every pane started as plain `claude` or `claude --continue`, so the head, every orchestrator and
+every agent ran on the profile's default model at default effort, and none had a name another
+session could address. Now every Claude launch passes `--name`, and `--model`/`--effort` when the
+role's setting isn't `inherit`.
+
+- **Names** (`Shared/SessionNames`, pure, public): `fleet-head`, `<project>-main`,
+  `<project>-sub-<slug>`, `<project>-<repo>-<branch>`. `SessionNames.Part` keeps ASCII letters,
+  digits and `_`; every other character (`/`, `\`, `.`, space, non-ASCII) becomes one `-`, runs
+  collapse, and leading and trailing hyphens go. That is the set Claude's @-mention takes
+  without quoting. An empty part is left out. An orchestrator record is always named as a sub,
+  whatever its `Repository`. `SessionNames.ForAgent(project, repository, branch, orchestrator)`
+  is the one entry point for an `AgentRecord`; the SendMessage transport builds on it.
+- **One launch value.** `Shared/Constants/ClaudeLaunch(Name, RoleModel)` renders the flags.
+  `AgentHarness.CommandFor` and `OrchestratorCommand` take it as an optional `launch` and put
+  it on every shape: bare (`claude --name …`), resumed (`claude --continue --name …`), and
+  nvim-hosted, where the flags go through the `ClaudeCode` command (`vim.cmd('ClaudeCode
+  --continue --name …')`) in both `NvimStartupClaudeOnly` and `NvimStartupWithClaude`, which
+  is now a function of its arguments. The head gets the same through `HeadLaunch.ClaudeArgs`.
+- **Resume keeps them.** `AgentHarness.Resumed` no longer matches whole commands. It puts
+  `--continue` right after `claude`, or right after `ClaudeCode` in an nvim startup, and leaves
+  the rest of the command alone, so the daemon's session restore (`FleetDaemon.Relaunch`)
+  brings a pane back with the name and model it was started with. A command that already
+  continues is returned unchanged. `claude --continue --name X` renames the resumed session
+  rather than refusing: checked with Claude Code 2.1.291 (`-p`, haiku), where the transcript
+  kept its session ID and gained a second `custom-title` record.
+- **Settings.** Model and effort per role. The model is `inherit` or an alias or ID (ASCII
+  letters, digits and `-_.:/@[]`, starting with a letter or digit, so it is safe inside
+  the nvim Lua string); the effort is `inherit` or `low|medium|high|xhigh|max`
+  (`ModelChoice`). Per project, in `settings/<project>.json` as `mainModel`/`mainEffort`,
+  `subModel`/`subEffort`, `agentModel`/`agentEffort` (`SettingsConfig.Models`, a
+  `RoleModels`), written only when they differ from the default, like
+  `mainOrchestratorInNvim`. Defaults: sub-orchestrators `sonnet` at `medium` (they mostly
+  route and summarise), everything else `inherit`. A sub can be put back on the profile
+  default with `"subModel": "inherit"`. A value that can't be read falls back to the role's
+  default, not to `inherit`. The head is global, so its model lives in its own file,
+  `<config>/head.json` (`model`, `effort`; `JsonSettingsStore.LoadHead`/`SaveHead`), not in a
+  project file and not under a reserved project name.
+- **When it applies.** Handlers read the settings when they spawn (`NewAgentHandler` through
+  a per-project `Func`, the others when they're built), so a change applies to the next pane.
+  A running pane keeps what it was started with, and so does a pane the daemon restores
+  from its saved command.
+- **No settings UI yet.** feat/menu-reorganization rebuilds the settings menus and wasn't in
+  main when this was built, so for now these values live in the settings file only. Rows
+  under Fleet config come in a follow-up.
+
+### Rejected
+
+- **Slashes in names** (`<project>/<repo>/<branch>`, as the orchestration research put it).
+  The @-mention needs quoting for `/`, and the name is meant to be typed and addressed.
+- **Making `Part` lower-case.** The name is shown in the prompt bar and `/resume`, and the
+  inputs (project, repo, branch) are already the user's own spelling.
+- **Per-role settings as six positional `SettingsConfig` parameters.** One `Models` init
+  property, like `StatusHooks`, leaves every existing `new SettingsConfig(...)` alone.
+
+### Not verified
+
+- `--name` with `--continue` in an *interactive* session (only `-p` was tried). The docs
+  also say Claude applies "a variant" of the name when another live session on the machine
+  already has it, so two fleets on one machine opening the same project would get different
+  names. The SendMessage work should check what that variant looks like.
+- Names can collide across projects: project `a-b` with repo `c` and project `a` with repo
+  `b-c` both give `a-b-c-<branch>`.
+- That claudecode.nvim passes `--model`/`--effort` through to `claude` the way it already
+  passes `--continue`.
+- `--effort` levels a model doesn't support: the docs say "available levels depend on the
+  model"; what Claude does with an unsupported one wasn't tried.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

@@ -1,3 +1,5 @@
+using Fleet.Shared.Constants;
+
 namespace Fleet.Features.Head.ServeHead;
 
 public static class HeadLaunch
@@ -18,8 +20,13 @@ public static class HeadLaunch
 
     public static IReadOnlyList<string> McpArgs { get; } = ["mcp", HeadFlag];
 
-    public static IReadOnlyList<string> ClaudeArgs(string settingsFile, bool resume) =>
-        resume ? ["--settings", settingsFile, "--continue"] : ["--settings", settingsFile];
+    public static IReadOnlyList<string> ClaudeArgs(string settingsFile, bool resume, ClaudeLaunch launch) =>
+        [
+            "--settings",
+            settingsFile,
+            .. resume ? [AgentHarness.ResumeArgument] : Array.Empty<string>(),
+            .. launch.Arguments,
+        ];
 
     public const string WindowsShell = "cmd.exe";
 

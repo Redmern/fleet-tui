@@ -5,6 +5,7 @@ using Fleet.Features.Projects.LocateProject;
 using Fleet.Platform.Claude;
 using Fleet.Platform.Mcp;
 using Fleet.Platform.Mux.Embedded.Pty;
+using Fleet.Platform.Storage;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
@@ -93,12 +94,13 @@ public static class HeadWiring
 
         File.WriteAllText(marker, string.Empty);
 
+        var launch = ClaudeLaunch.Head(new JsonSettingsStore().LoadHead());
         var started = DateTime.UtcNow;
-        var exit = RunClaude(folder, HeadLaunch.ClaudeArgs(settings, resume));
+        var exit = RunClaude(folder, HeadLaunch.ClaudeArgs(settings, resume, launch));
 
         if (resume && exit != 0 && DateTime.UtcNow - started < QuickExit)
         {
-            exit = RunClaude(folder, HeadLaunch.ClaudeArgs(settings, resume: false));
+            exit = RunClaude(folder, HeadLaunch.ClaudeArgs(settings, resume: false, launch));
         }
 
         return exit;

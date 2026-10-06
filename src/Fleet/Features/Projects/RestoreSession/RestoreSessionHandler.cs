@@ -5,11 +5,13 @@ using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Features.Projects.RestoreSession;
 
 public sealed class RestoreSessionHandler(
-    IMuxDriver mux, bool subOrchestratorsInNvim = true, IAgentStore? store = null)
+    IMuxDriver mux, bool subOrchestratorsInNvim = true, IAgentStore? store = null, RoleModels? models = null)
 {
     private const int AtOnce = 4;
 
@@ -100,7 +102,7 @@ public sealed class RestoreSessionHandler(
 
     private Task<PaneId> SpawnAsync(string project, AgentRecord agent, string? window, CancellationToken ct) =>
         mux.SpawnAsync(
-            Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim),
+            Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim, models),
             ct);
 
     private Task TitleAsync(PaneId pane, AgentRecord agent, CancellationToken ct) =>
@@ -119,7 +121,28 @@ public sealed class RestoreSessionHandler(
         AgentRecord agent,
         string? window,
         bool workspaces = false,
-        bool subOrchestratorsInNvim = true) =>
+        bool subOrchestratorsInNvim = true,
+        RoleModels? models = null) =>
+        Options(
+            project,
+            agent,
+            window,
+            workspaces,
+            subOrchestratorsInNvim,
+            ClaudeLaunch.ForAgent(
+                project,
+                agent.Repository,
+                agent.Branch,
+                AgentHarness.IsOrchestrator(agent.Harness),
+                models ?? SettingsDefaults.Models));
+
+    private static SpawnOptions Options(
+        string project,
+        AgentRecord agent,
+        string? window,
+        bool workspaces,
+        bool subOrchestratorsInNvim,
+        ClaudeLaunch launch) =>
         new()
         {
             Cwd = agent.Worktree,
@@ -128,8 +151,8 @@ public sealed class RestoreSessionHandler(
             WindowId = agent.Hidden ? null : window,
             NewWindow = agent.Hidden,
             Args = AgentHarness.IsOrchestrator(agent.Harness)
-                ? AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim)
-                : AgentHarness.CommandFor(agent.Harness, withClaude: agent.RunsClaude),
+                ? AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
+                : AgentHarness.CommandFor(agent.Harness, withClaude: agent.RunsClaude, launch: launch),
             Env = AgentHarness.IsOrchestrator(agent.Harness)
                 ? AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim)
                 : new Dictionary<string, string>(),

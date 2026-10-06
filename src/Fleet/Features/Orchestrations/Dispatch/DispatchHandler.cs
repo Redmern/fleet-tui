@@ -105,7 +105,10 @@ public sealed class DispatchHandler(
 
         await LeaveKickoff(folder, ct).ConfigureAwait(false);
 
-        var inNvim = settings?.Load(command.ProjectName).SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
+        var loaded = settings?.Load(command.ProjectName);
+        var inNvim = loaded?.SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
+        var launch = ClaudeLaunch.ForAgent(
+            command.ProjectName, string.Empty, slug, orchestrator: true, loaded?.Models ?? SettingsDefaults.Models);
 
         var record = new AgentRecord(
             folder,
@@ -132,7 +135,7 @@ public sealed class DispatchHandler(
                 new SpawnOptions
                 {
                     Cwd = folder,
-                    Args = AgentHarness.CommandFor(AgentHarness.Orchestrator, orchestratorInNvim: inNvim),
+                    Args = AgentHarness.CommandFor(AgentHarness.Orchestrator, orchestratorInNvim: inNvim, launch: launch),
                     Env = AgentHarness.SpawnEnv(AgentHarness.Orchestrator, inNvim),
                 }),
             ct).ConfigureAwait(false);

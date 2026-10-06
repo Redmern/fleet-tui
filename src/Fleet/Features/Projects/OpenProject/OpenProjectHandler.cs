@@ -4,6 +4,7 @@ using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings;
 
 namespace Fleet.Features.Projects.OpenProject;
 
@@ -20,7 +21,10 @@ public sealed class OpenProjectHandler(IMuxDriver mux)
                 SessionName = command.Project.Name,
                 Cwd = command.Project.Root,
                 Args = AgentHarness.CommandFor(
-                    command.Harness, orchestratorInNvim: command.MainOrchestratorInNvim),
+                    command.Harness,
+                    orchestratorInNvim: command.MainOrchestratorInNvim,
+                    launch: ClaudeLaunch.MainOrchestrator(
+                        command.Project.Name, command.Models ?? SettingsDefaults.Models)),
                 Env = AgentHarness.SpawnEnv(command.Harness, command.MainOrchestratorInNvim),
             },
             ct).ConfigureAwait(false);
