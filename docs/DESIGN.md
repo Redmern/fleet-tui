@@ -5471,7 +5471,9 @@ conversation):
   secrets, the agent list, keybinds and the project picker. A rebind of the reveal key
   raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits. The close button shows `esc` while keys
   are shown and pads on the left while they are hidden, so it keeps its width too. The
-  remote machines bar uses icons for all its chips (`FleetIcons.Connect` and the rest). The dashboard (its menu mode keeps a close chip) and the
+  remote machines bar uses icons for all its chips (`FleetIcons.Connect` and the rest).
+  The Switch project picker drops its `h/l machine` chip (h/l, the arrows and a click on a
+  tab still switch machines) and its new-window chip is an icon (`FleetIcons.NewWindow`). The dashboard (its menu mode keeps a close chip) and the
   small prompts/dialogs without a bar are left as they were.
 
 ## Still to verify

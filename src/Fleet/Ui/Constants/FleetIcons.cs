@@ -22,6 +22,8 @@ public static class FleetIcons
 
     public const string Close = "";
 
+    public const string NewWindow = "";
+
     public const string Connect = "";
 
     public const string Answer = "";

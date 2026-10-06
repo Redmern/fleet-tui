@@ -79,8 +79,7 @@ public static class FleetTabbedPicker
         bar.Show(
         [
             ("enter", FleetIcons.Select, () => Take(FleetRows.Selected(list), newWindow: false)),
-            ("SHIFT", "new window", () => Take(FleetRows.Selected(list), newWindow: true)),
-            ("h/l", "machine", () => Show((current + 1) % tabs.Count, 0)),
+            ("SHIFT", FleetIcons.NewWindow, () => Take(FleetRows.Selected(list), newWindow: true)),
             ("bksp", FleetIcons.Back, () =>
             {
                 FleetModal.Back();

@@ -95,7 +95,7 @@ public static class FleetPicker
 
         if (captureWindow)
         {
-            items.Add(("SHIFT", "new window", () => Take(FleetRows.Selected(list), newWindow: true)));
+            items.Add(("SHIFT", FleetIcons.NewWindow, () => Take(FleetRows.Selected(list), newWindow: true)));
         }
 
         items.Add(("bksp", FleetIcons.Back, Back));
