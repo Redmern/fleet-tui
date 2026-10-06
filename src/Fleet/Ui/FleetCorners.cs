@@ -44,10 +44,24 @@ public static class FleetCorners
 
     public const int Margin = 1;
 
-    public const int Rows = 2 * Margin;
+    public static int Rows => FloatBorder.Enabled ? 0 : 2 * Margin;
 
     public static void Attach(View window, Action close, View? below = null)
     {
+        if (FloatBorder.Enabled)
+        {
+            FloatBorder.Corners(window);
+
+            if (below is not null)
+            {
+                below.X = 1;
+                below.Y = 0;
+                below.Width = Dim.Fill(1);
+            }
+
+            return;
+        }
+
         if (window.Padding is { } padding)
         {
             padding.Thickness = new Thickness(0, Margin, 0, Margin);

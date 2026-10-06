@@ -57,6 +57,8 @@ public static class FleetTheme
         window.Height = Dim.Fill();
         window.IsRunningChanged += (_, running) =>
         {
+            FloatBorder.Run(window, running.Value);
+
             if (FloatScreens.Running(screen, running.Value) is var (cols, rows))
             {
                 window.App?.Driver?.SetScreenSize(cols, rows);
