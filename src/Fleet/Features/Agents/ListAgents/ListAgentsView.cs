@@ -123,7 +123,7 @@ public static class ListAgentsView
 
         app.Keyboard.KeyDown += Keys;
 
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
 
         bar.Show(
         [

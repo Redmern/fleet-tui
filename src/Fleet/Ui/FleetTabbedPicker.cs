@@ -75,7 +75,7 @@ public static class FleetTabbedPicker
             }
         };
 
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
         bar.Show(
         [
             ("enter", FleetIcons.Select, () => Take(FleetRows.Selected(list), newWindow: false)),
