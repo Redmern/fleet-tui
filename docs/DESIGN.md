@@ -5492,6 +5492,42 @@ conversation):
 - The notifications screen's bar is icons as well: open, dismiss (x in a circle), dismiss all
   (eraser), bell on/off (bell / crossed bell) and toasts on/off (filled / outlined speech bubble).
 
+## Buttons in the float border, 2026-10-07
+
+In an embedded fleetd float the screen has no border of its own (fleetd draws the frame), so
+the corner buttons and the bar used to take two content rows plus the margins. They now sit
+in fleetd's frame.
+
+- **The pane tells fleetd.** The same way it asks for its size (`fit`), the fleet process in a
+  float sends a control request `float-buttons` with its own pane as caller and a list of
+  `FloatButtonDto { edge: top|bottom, align: left|right, key, label, send }`. `key` and
+  `label` are what to draw (key empty while key hints are hidden), `send` is the key to type
+  when it is clicked, as a `KeyChord` spec. An empty list clears them. fleetd keeps the list
+  on the pane's `FloatState`; a pane that is not a float gets an error.
+- **Only when it works.** `FleetUi.Start` sends an empty list once when `FloatPane.Inside`.
+  If fleetd answers (it is a float and fleetd knows the op), `FloatBorder.Enabled` is on for
+  the life of the process; otherwise (an older fleetd, the overlay) nothing changes.
+- **Which buttons.** `FloatBorder` follows the running window (the `FloatScreens` stack,
+  pushed and popped by `FleetTheme`'s floating windows). The window's buttons are its
+  corners (`FleetCorners.Attach`: info/reveal top left, close top right) and its
+  `FleetActionBar` (bottom, left or right as the bar aligns). It republishes when the
+  running window changes, a bar is re-shown and `FleetKeyHints.Changed` fires.
+- **What the pane stops drawing.** With `FloatBorder.Enabled`, `Attach` adds no corner views
+  and no padding (`FleetCorners.Rows` is 0, so fitted floats shrink by two rows and the
+  `below` view moves to row 0), and the bar's view is hidden. Outside a float (tiled panes,
+  WezTerm, the dashboard) nothing changes.
+- **Drawing.** `BorderButtons.Place` lays out one box: top-left buttons from column 2, the
+  title after them, top-right buttons ending two columns from the right corner, bottom
+  buttons the same way along the bottom; one `─` between pills; a button that does not fit
+  is dropped. `Composer` paints each as the in-content pill (`` `` in Surface0, key in
+  Blue and label in Text on Surface0), and keeps the title clear of them.
+- **Clicking.** A left press on a border button focuses the float and types its `send`
+  (win32-input-mode record when ConPTY asked for it, else the Ghostty encoding) instead of
+  starting a move or resize; elsewhere the border still drags. Keys the pane draws as
+  display text are mapped to specs on the pane side (`bksp` → `backspace`, `SHIFT` →
+  `shift+enter`, `o/enter/A-Z` → its first part); a spec fleetd cannot parse swallows the
+  click.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
