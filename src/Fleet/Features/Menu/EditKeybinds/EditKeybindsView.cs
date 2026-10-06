@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Fleet.Ports.Keymap;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
@@ -18,30 +17,45 @@ public static class EditKeybindsView
     public static KeymapConfig Show(IApplication app, IKeymapStore store, Keymap keymap)
     {
         var config = keymap.Config;
-        var rows = EditKeybindsRows.Build();
+        var boxes = EditKeybindsGrid.Boxes(EditKeybindsRows.Build());
+        var spot = EditKeybindsGrid.First();
+        var layout = EditKeybindsGrid.Layout(boxes, 1, 1);
 
         var window = FleetTheme.Overlay("Keybinds");
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
+        var canvas = new FleetCanvas(1, 1, Dim.Fill(3));
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(3), string.Empty);
+
+        string KeyOf(EditKeybindsRow row) =>
+            FleetKeyText.Display(row.Action is null ? config.Prefix : Binding(config, row.Action.Value));
 
         void Fill()
         {
-            var texts = rows.Select(r => r.IsHeader
-                ? Header(r.Label)
-                : Row(r.Label, FleetKeyText.Display(r.Action is null ? config.Prefix : Binding(config, r.Action.Value))));
-
-            list.SetSource(new ObservableCollection<string>(texts));
-        }
-
-        void Rebind()
-        {
-            var index = list.SelectedItem ?? -1;
-            if (index < 0 || index >= rows.Count || rows[index].IsHeader)
+            if (boxes.Count == 0)
             {
                 return;
             }
 
-            var row = rows[index];
+            layout = EditKeybindsGrid.Layout(
+                boxes, EditKeybindsGrid.KeyWidth(boxes, KeyOf), canvas.Viewport.Width);
+
+            var picture = EditKeybindsGrid.Draw(boxes, layout, KeyOf, spot);
+            canvas.Show(picture.Lines, picture.Highlight);
+        }
+
+        void Move(EditKeybindsSpot next)
+        {
+            spot = next;
+            Fill();
+        }
+
+        void Rebind()
+        {
+            if (boxes.Count == 0)
+            {
+                return;
+            }
+
+            var row = boxes[spot.Box].Cells[spot.Cell];
             var target = row.Action is null ? PrefixRow : row.Action.Value.ToString();
             var captured = FleetKeyCapture.Show(app, target);
 
@@ -60,31 +74,67 @@ public static class EditKeybindsView
             status.Text = $"Saved. {target} is now {FleetKeyText.Display(captured)}. Reopen panes to apply.";
         }
 
-        Fill();
-        FleetKeys.ApplyMotions(list, keymap);
+        canvas.FrameChanged += (_, _) => Fill();
 
-        list.Accepting += (_, e) =>
-        {
-            Rebind();
-            e.Handled = true;
-        };
-
-        list.KeyDown += (_, key) =>
+        canvas.KeyDown += (_, key) =>
         {
             if (key == Key.Esc)
             {
                 app.RequestStop(window);
                 key.Handled = true;
+                return;
             }
-            else if (FleetKeys.GoesBack(key))
+
+            if (FleetKeys.GoesBack(key))
             {
                 FleetModal.Back();
                 app.RequestStop(window);
                 key.Handled = true;
+                return;
             }
+
+            if (boxes.Count == 0)
+            {
+                return;
+            }
+
+            if (key == Key.Enter)
+            {
+                Rebind();
+            }
+            else if (key == Key.CursorDown || key == keymap.KeyFor(FleetAction.MoveDown))
+            {
+                Move(EditKeybindsGrid.Down(boxes, spot));
+            }
+            else if (key == Key.CursorUp || key == keymap.KeyFor(FleetAction.MoveUp))
+            {
+                Move(EditKeybindsGrid.Up(boxes, spot));
+            }
+            else if (key == Key.CursorLeft || key == keymap.KeyFor(FleetAction.PrevTab))
+            {
+                Move(EditKeybindsGrid.Left(boxes, layout, spot));
+            }
+            else if (key == Key.CursorRight || key == keymap.KeyFor(FleetAction.NextTab))
+            {
+                Move(EditKeybindsGrid.Right(boxes, layout, spot));
+            }
+            else if (key == Key.Home || key == keymap.KeyFor(FleetAction.MoveFirst))
+            {
+                Move(EditKeybindsGrid.First());
+            }
+            else if (key == Key.End || key == keymap.KeyFor(FleetAction.MoveLast))
+            {
+                Move(EditKeybindsGrid.Last(boxes));
+            }
+            else
+            {
+                return;
+            }
+
+            key.Handled = true;
         };
 
-        window.Add(list, status, FleetTheme.HintBar(FleetHints.Keybinds));
+        window.Add(canvas, status, FleetTheme.HintBar(FleetHints.Keybinds));
 
         FleetModal.Enter();
 
@@ -100,10 +150,6 @@ public static class EditKeybindsView
 
         return config;
     }
-
-    private static string Row(string label, string key) => $"  {label.PadRight(24)}   {key}";
-
-    private static string Header(string label) => label;
 
     private static string Binding(KeymapConfig config, FleetAction action) =>
         config.Bindings.TryGetValue(action, out var key) ? key : string.Empty;
