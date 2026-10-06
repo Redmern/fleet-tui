@@ -1,5 +1,8 @@
+using System.Drawing;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
+using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 
@@ -7,35 +10,70 @@ namespace Fleet.Ui;
 
 public static class FleetCorners
 {
-    public static IReadOnlyList<FleetSpan> Help(bool keysShown, string revealKey) =>
-    [
-        new FleetSpan(FleetIcons.Info, FleetTones.Icon),
-        FleetSpan.Plain(" "),
-        keysShown ? FleetSpan.Plain(new string(' ', revealKey.Length)) : new FleetSpan(revealKey, FleetTones.Key),
-    ];
+    public static IReadOnlyList<FleetSpan> Help(bool keysShown, string revealKey, ButtonHints hints = ButtonHints.Tooltips) => keysShown
+        ?
+        [
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {FleetButtonHints.Face(FleetIcons.Info, hints)} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+            FleetSpan.Plain(new string(' ', revealKey.Length + 1)),
+        ]
+        :
+        [
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {revealKey} ", FleetTones.ChipKey),
+            new FleetSpan($"{FleetButtonHints.Face(FleetIcons.Info, hints)} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+        ];
 
-    public static IReadOnlyList<FleetSpan> Close() => [new FleetSpan(FleetIcons.Close, FleetTones.Icon)];
+    public const string CloseKey = "esc";
 
-    public static void Attach(View window, Action close, View? between = null)
+    public static IReadOnlyList<FleetSpan> Close(bool keysShown, ButtonHints hints = ButtonHints.Tooltips) => keysShown
+        ?
+        [
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {CloseKey} ", FleetTones.ChipKey),
+            new FleetSpan($"{FleetButtonHints.Face(FleetIcons.Close, hints)} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+        ]
+        :
+        [
+            FleetSpan.Plain(new string(' ', CloseKey.Length + 1)),
+            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
+            new FleetSpan($" {FleetButtonHints.Face(FleetIcons.Close, hints)} ", FleetTones.ChipLabel),
+            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
+        ];
+
+    public const int Margin = 1;
+
+    public const int Rows = 2 * Margin;
+
+    public static void Attach(View window, Action close, View? below = null)
     {
-        var help = new Corner(() => Help(FleetKeyHints.Shown, FleetKeyHints.RevealKey), FleetKeyHints.Toggle)
+        if (window.Padding is { } padding)
+        {
+            padding.Thickness = new Thickness(0, Margin, 0, Margin);
+        }
+
+        var help = new Corner(
+            () => Help(FleetKeyHints.Shown, FleetKeyHints.RevealKey, FleetButtonHints.Mode), FleetIcons.Info, FleetKeyHints.Toggle)
         {
             X = 1,
             Y = 0,
         };
 
-        var shut = new Corner(Close, close)
+        var shut = new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, anchorEnd: true)
         {
-            X = Pos.AnchorEnd(2),
             Y = 0,
         };
 
         window.Add(help, shut);
 
-        if (between is not null)
+        if (below is not null)
         {
-            between.X = Pos.Right(help) + 1;
-            between.Width = Dim.Fill(3);
+            below.X = 1;
+            below.Y = Pos.Bottom(help);
+            below.Width = Dim.Fill(1);
         }
     }
 
@@ -45,21 +83,64 @@ public static class FleetCorners
 
         private readonly Action _run;
 
-        public Corner(Func<IReadOnlyList<FleetSpan>> spans, Action run)
+        private readonly string _icon;
+
+        private readonly bool _anchorEnd;
+
+        private bool _hovered;
+
+        public Corner(Func<IReadOnlyList<FleetSpan>> spans, string icon, Action run, bool anchorEnd = false)
         {
             _spans = spans;
+            _icon = icon;
             _run = run;
+            _anchorEnd = anchorEnd;
             Height = 1;
             CanFocus = false;
+            MousePositionTracking = true;
             SchemeName = FleetSchemes.Screen;
             Fit();
             FleetKeyHints.Changed += Refresh;
+            FleetButtonHints.Changed += Refresh;
+            MouseLeave += (_, _) => Hover(false);
         }
 
-        private void Fit() => Width = _spans().Sum(s => s.Text.EnumerateRunes().Count());
+        private void Fit()
+        {
+            var width = _spans().Sum(s => s.Text.EnumerateRunes().Count());
+
+            Width = width;
+
+            if (_anchorEnd)
+            {
+                X = Pos.AnchorEnd(width + FleetCorners.Margin);
+            }
+        }
+
+        private void Hover(bool on)
+        {
+            if (on == _hovered)
+            {
+                return;
+            }
+
+            _hovered = on;
+
+            if (on)
+            {
+                var at = ViewportToScreen(new Rectangle(0, 0, 1, 1)).Location;
+
+                FleetToolTip.Show(this, new Point(at.X, at.Y + 1), FleetIcons.Name(_icon));
+            }
+            else
+            {
+                FleetToolTip.Hide();
+            }
+        }
 
         private void Refresh()
         {
+            Hover(false);
             Fit();
             SetNeedsLayout();
             SetNeedsDraw();
@@ -68,6 +149,8 @@ public static class FleetCorners
         protected override void Dispose(bool disposing)
         {
             FleetKeyHints.Changed -= Refresh;
+            FleetButtonHints.Changed -= Refresh;
+            Hover(false);
             base.Dispose(disposing);
         }
 
@@ -88,6 +171,12 @@ public static class FleetCorners
 
         protected override bool OnMouseEvent(Mouse mouse)
         {
+            if (mouse.Flags.HasFlag(MouseFlags.PositionReport))
+            {
+                Hover(true);
+                return false;
+            }
+
             if (!mouse.Flags.HasFlag(MouseFlags.LeftButtonClicked))
             {
                 return false;

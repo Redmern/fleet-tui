@@ -20,7 +20,8 @@ public static class SecretsView
 
         var window = FleetTheme.Overlay(SecretsRows.Title(plan));
 
-        var list = FleetTheme.Rows(1, 2, Dim.Fill(3));
+        var caption = FleetTheme.Caption(1, 0, plan.Root);
+        var list = FleetTheme.Rows(1, Pos.Bottom(caption) + 1, Dim.Fill(3));
 
         FleetRows.Fill(list, SecretsRows.For(plan));
         FleetKeys.ApplyMotions(list, keymap);
@@ -80,8 +81,6 @@ public static class SecretsView
         }
 
         app.Keyboard.KeyDown += Keys;
-
-        var caption = FleetTheme.Caption(1, 0, plan.Root);
 
         window.Add(caption, list, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window), caption);

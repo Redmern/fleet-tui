@@ -21,7 +21,7 @@ public static class ManageRemotesView
 
     public static void Show(IApplication app, Keymap keymap, IRemoteMachines remotes, IKnownRemoteStore known)
     {
-        var window = FleetTheme.Overlay("remote machines", 90, 16);
+        var window = FleetTheme.Overlay("remote machines", 90, 16 + FleetCorners.Rows);
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
@@ -188,11 +188,11 @@ public static class ManageRemotesView
 
         bar.Show(
         [
-            ("n", "connect", Connect),
-            ("enter", "answer / retry / reconnect", Answer),
-            ("e", "rename", Rename),
-            ("x", "forget", Forget),
-            ("d", "disconnect", Disconnect),
+            ("n", FleetIcons.Connect, Connect),
+            ("enter", FleetIcons.Answer, Answer),
+            ("e", FleetIcons.Rename, Rename),
+            ("x", FleetIcons.Forget, Forget),
+            ("d", FleetIcons.Disconnect, Disconnect),
         ]);
 
         var claim = FleetModal.Enter();

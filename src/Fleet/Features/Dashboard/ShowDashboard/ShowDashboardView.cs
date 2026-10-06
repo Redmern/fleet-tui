@@ -41,7 +41,7 @@ public static class ShowDashboardView
         var lists = new[] { agentList, subList, repoList, noticeList };
 
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
-        var hints = new FleetActionBar(Pos.AnchorEnd(1));
+        var hints = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
 
         var tip = FleetTheme.Caption(0, 0, string.Empty);
         tip.Visible = false;
@@ -948,52 +948,41 @@ public static class ShowDashboardView
             }
         }
 
-        IReadOnlyList<(string, string, Action)> WithClose(
-            IReadOnlyList<(string, string, Action)> bar) =>
-            menu ? [.. bar, ("q/esc", "close", () => app.RequestStop(window))] : bar;
-
         IReadOnlyList<(string, string, Action)> AgentBar() =>
-            WithClose(
             [
-                (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
-                ("enter", "open", () => Start(OpenAsync)),
-                (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
+                (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent)),
+                ("enter", FleetIcons.Select, () => Start(OpenAsync)),
+                (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Manage,
                     () => FromKey(FleetAction.RemoveAgent)),
                 (keys.DisplayFor(FleetAction.ToggleHidden),
                     board.IsHidden(FleetRows.Selected(agentList))
-                        ? AgentWords.Show
-                        : AgentWords.Hide,
+                        ? FleetIcons.Show
+                        : FleetIcons.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
-                (keys.DisplayFor(FleetAction.OpenEditor), "editor",
-                    () => FromKey(FleetAction.OpenEditor)),
-                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+            ];
 
         IReadOnlyList<(string, string, Action)> SubBar() =>
-            WithClose(
             [
-                (keys.DisplayFor(FleetAction.NewAgent), "add", () => FromKey(FleetAction.NewAgent)),
-                ("enter", "open", () => Start(OpenAsync)),
-                (keys.DisplayFor(FleetAction.RemoveAgent), "manage",
+                (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent)),
+                ("enter", FleetIcons.Select, () => Start(OpenAsync)),
+                (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Manage,
                     () => FromKey(FleetAction.RemoveAgent)),
                 (keys.DisplayFor(FleetAction.ToggleHidden),
                     subs.IsHidden(FleetRows.Selected(subList))
-                        ? AgentWords.Show
-                        : AgentWords.Hide,
+                        ? FleetIcons.Show
+                        : FleetIcons.Hide,
                     () => FromKey(FleetAction.ToggleHidden)),
-                (keys.DisplayFor(FleetAction.OpenEditor), "editor",
-                    () => FromKey(FleetAction.OpenEditor)),
-                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+            ];
 
         IReadOnlyList<(string, string, Action)> NoticeBar() =>
-            WithClose(
             [
-                ("enter", "open", () => Start(OpenNoticeAsync)),
-                (keys.DisplayFor(FleetAction.DismissNotice), "dismiss", () => FromKey(FleetAction.DismissNotice)),
-                (keys.DisplayFor(FleetAction.DismissAllNotices), "dismiss all", () => FromKey(FleetAction.DismissAllNotices)),
-                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+                ("enter", FleetIcons.Select, () => Start(OpenNoticeAsync)),
+                (keys.DisplayFor(FleetAction.DismissNotice), FleetIcons.Dismiss, () => FromKey(FleetAction.DismissNotice)),
+                (keys.DisplayFor(FleetAction.DismissAllNotices), FleetIcons.DismissAll, () => FromKey(FleetAction.DismissAllNotices)),
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+            ];
 
         void Dismiss(IReadOnlyList<string> which)
         {
@@ -1028,16 +1017,15 @@ public static class ShowDashboardView
         }
 
         IReadOnlyList<(string, string, Action)> RepositoryBar() =>
-            WithClose(
             [
-                (keys.DisplayFor(FleetAction.AddRepository), "add",
+                (keys.DisplayFor(FleetAction.AddRepository), FleetIcons.For(FleetAction.AddRepository)!,
                     () => FromKey(FleetAction.AddRepository)),
-                ("enter", "open", () => Start(OpenRepositoryAsync)),
-                (keys.DisplayFor(FleetAction.ManageRepository), "manage",
+                ("enter", FleetIcons.Select, () => Start(OpenRepositoryAsync)),
+                (keys.DisplayFor(FleetAction.ManageRepository), FleetIcons.Manage,
                     () => FromKey(FleetAction.ManageRepository)),
-                (keys.DisplayFor(FleetAction.Refresh), "refresh", () => Start(RefreshAsync)),
-                (keys.PrefixDisplay, "menu", () => FromKey(FleetAction.OpenMenu)),
-            ]);
+                (keys.DisplayFor(FleetAction.Refresh), FleetIcons.For(FleetAction.Refresh)!, () => Start(RefreshAsync)),
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+            ];
 
         void FromKey(FleetAction action)
         {
@@ -1242,6 +1230,11 @@ public static class ShowDashboardView
             status,
             hints.Root,
             tip);
+
+        if (menu)
+        {
+            FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
+        }
 
         BindSkeleton();
         ShowTab(DashboardTabs.AgentsTab);

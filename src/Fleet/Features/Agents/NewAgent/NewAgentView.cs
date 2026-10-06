@@ -170,13 +170,26 @@ public static class NewAgentView
             }
         };
 
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, Activate),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
         window.Add(
             list,
             FleetTheme.Caption(
                 1,
                 Pos.AnchorEnd(2),
                 "Empty branch works on the base; empty base cuts from the default branch."),
-            FleetTheme.HintBar(FleetHints.NewAgent));
+            bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         FleetModal.Enter();
 

@@ -34,7 +34,8 @@ public static class FleetTextView
 
         app.Keyboard.KeyDown += Keys;
 
-        window.Add(list, FleetTheme.HintBar("q/esc close"));
+        window.Add(list);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {

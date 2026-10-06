@@ -2,6 +2,7 @@ using Fleet.Features.Menu.ShowMenu;
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Keymap.Models;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
@@ -115,7 +116,7 @@ public class FleetMenusTests
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
         var headers = ShowMenuHandler.Headers(items);
 
-        Assert.Equal([0, 2, 5], headers.Keys.Order());
+        Assert.Equal([0, 2, 6], headers.Keys.Order());
         Assert.Equal(FleetMenus.Actions(FleetMenus.Settings), items.Select(i => i.Action));
     }
 
@@ -156,13 +157,13 @@ public class FleetMenusTests
         var source = new FleetRowSource(
             ShowMenuHandler.Rows(items), gaps, headersBefore: ShowMenuHandler.Headers(items));
 
-        Assert.Equal([1, 4], gaps);
+        Assert.Equal([1, 5], gaps);
         Assert.Equal(items.Count + 3 + 2, source.Count);
         Assert.Equal(
             ShowMenuHandler.Height(ShowMenuHandler.Rows(items), 3, gaps.Count),
             source.Count);
         Assert.Equal(string.Empty, source.ToList()[3]);
-        Assert.Equal(string.Empty, source.ToList()[8]);
+        Assert.Equal(string.Empty, source.ToList()[9]);
     }
 
     [Fact]
@@ -178,6 +179,7 @@ public class FleetMenusTests
     [InlineData(FleetAction.RebuildDashboard, "Rebuild dashboard")]
     [InlineData(FleetAction.CleanupProject, "Clean up agents")]
     [InlineData(FleetAction.EditShowMenuKeys, "Show keybinds")]
+    [InlineData(FleetAction.EditButtonHints, "Button hints")]
     [InlineData(FleetAction.ListAgents, "List agents")]
     public void Menu_rows_use_the_short_labels(FleetAction action, string label)
     {
@@ -185,6 +187,39 @@ public class FleetMenusTests
         var items = new ShowMenuHandler(Keymap.Default).Items(sections, _ => null);
 
         Assert.Equal(label, items.Single(i => i.Action == action).Label);
+    }
+
+    [Fact]
+    public void Button_hints_sit_directly_under_show_keybinds_in_configure()
+    {
+        var configure = FleetMenus.Settings.Single(s => s.Header == "configure").Actions;
+        var shown = configure.ToList().IndexOf(FleetAction.EditShowMenuKeys);
+
+        Assert.Equal(FleetAction.EditButtonHints, configure[shown + 1]);
+        Assert.True(FleetMenus.IsToggle(FleetAction.EditButtonHints));
+        Assert.False(FleetMenus.OpensMore(FleetAction.EditButtonHints));
+    }
+
+    [Fact]
+    public void Button_hints_default_to_tooltips_and_flip_through_text_tooltips_and_none()
+    {
+        var settings = SettingsConfig.Default;
+
+        Assert.Equal(ButtonHints.Tooltips, settings.ButtonHints);
+        Assert.Equal("[tooltips]", FleetMenus.Value(FleetAction.EditButtonHints, settings));
+
+        settings = FleetMenus.Flip(FleetAction.EditButtonHints, settings);
+        Assert.Equal(ButtonHints.None, settings.ButtonHints);
+        Assert.Equal("[none]", FleetMenus.Value(FleetAction.EditButtonHints, settings));
+
+        settings = FleetMenus.Flip(FleetAction.EditButtonHints, settings);
+        Assert.Equal(ButtonHints.Text, settings.ButtonHints);
+        Assert.Equal("[text]", FleetMenus.Value(FleetAction.EditButtonHints, settings));
+
+        settings = FleetMenus.Flip(FleetAction.EditButtonHints, settings);
+        Assert.Equal(ButtonHints.Tooltips, settings.ButtonHints);
+        Assert.NotEqual(SettingsConfig.Default.WithButtonHints(ButtonHints.None).Signature, SettingsConfig.Default.Signature);
+        Assert.Equal(ButtonHints.None, SettingsConfig.Default.WithButtonHints(ButtonHints.None).MergedOverDefaults().ButtonHints);
     }
 
     [Fact]

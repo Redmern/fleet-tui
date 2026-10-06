@@ -5459,18 +5459,38 @@ conversation):
 
 ## Corner icons on menus and dialogs, 2026-10-06
 
-- `Ui/FleetCorners.Attach` puts two clickable icons on the top row of a window's content:
+- `Ui/FleetCorners.Attach` puts two buttons, drawn as the same pills as the bar chips, on the top row of a window's content:
   info (and the reveal key while keys are hidden) at the left, close at the right. They sit
   inside the content, not on the border, because a float pane draws no border.
-- The left corner keeps its width when the key goes, so a tab bar or caption beside it
-  (`between`) never shifts. Clicking it is `FleetKeyHints.Toggle`; the key it shows is
+- The left corner keeps its width when the key goes. A screen with a tab bar (or a caption)
+  on its top row passes it as `below`: it moves under the corners at full width, and the
+  content under it follows `Pos.Bottom`. Clicking it is `FleetKeyHints.Toggle`; the key it shows is
   `FleetKeyHints.RevealKey`, read from the keymap with the setting, so it follows a rebind.
 - The corner replaces the menu's pinned `? keys` chip and every bar's close/cancel/quit chip.
   Select and back stay on the bar as icon chips (`FleetIcons.Select`, `FleetIcons.Back`).
-- Applied to the fleet menu, the pickers, Settings, AI-DLC, logs, notifications, remotes,
-  secrets, the agent list, keybinds and the project picker. A rebind of the reveal key
-  raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits. The dashboard (its menu mode keeps a close chip) and the
-  small prompts/dialogs without a bar are left as they were.
+- Every fleet screen gets the corners: the fleet menu, the pickers, Settings, AI-DLC, logs,
+  notifications, remotes, secrets, the agent list, keybinds, the project picker, New agent,
+  Add repository, New project, the `FleetDialog` dialogs, the prompts, key capture, the text
+  viewer and the dashboard in menu mode (the main dashboard has none: it is not closed).
+- A rebind of the reveal key raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits.
+  The close button shows `esc` while keys are shown and pads on the left while they are
+  hidden, so it keeps its width too.
+- No screen has a plain hint line any more; `FleetHints` and `FleetTheme.HintBar` are gone.
+  Screens with actions got a `FleetActionBar` of icon chips (select, back, rebind, new window,
+  and connect/answer/rename/forget/disconnect on remotes); key capture and the text viewer
+  get only the corners. The keys the old hint lines listed all still work.
+- Chips that only took room were dropped: Switch project's `h/l machine` (h/l, the arrows and
+  a tab click still switch) and the dashboard's `editor` (the Open editor key still works).
+- Every window with corners has the same margins: `FleetCorners.Attach` gives it a one-row
+  `Padding` top and bottom (`FleetCorners.Margin`), so there is a blank row over the corner
+  buttons and under the bottom bar, and fitted floats and modals are `FleetCorners.Rows`
+  taller. The fleet menu adds its list padding inside that. A later branch is to draw the
+  corner and bar buttons in fleetd's float border instead. The bars of Switch project, the agent list, notifications and the dashboard sit
+  bottom right like the menu's.
+- The dashboard's bars are icons too: add (the action's own icon), open (`Select`), manage,
+  show/hide (eye), menu, dismiss, dismiss all and refresh.
+- The notifications screen's bar is icons as well: open, dismiss (x in a circle), dismiss all
+  (eraser), bell on/off (bell / crossed bell) and toasts on/off (filled / outlined speech bubble).
 
 ## Still to verify
 ## Still to verify
