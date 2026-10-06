@@ -270,6 +270,9 @@ The remote project a window shows here also counts as one of that window's proje
 notifications: its open notices add to the pill's `+N`, a new one rings the bell and shows
 a toast (with this machine's settings), and the notification center gets a tab for it,
 `homelab @machine`, where `d` dismisses on the remote and `enter` shows the project here.
+Notifications always opens this machine's center, whether from the remote's menu (`n`) or a
+click on the remote's notice pill, the same way Switch project and the head stay here; only
+fleet used directly on the remote machine opens the remote's own center.
 
 ### Sessions
 

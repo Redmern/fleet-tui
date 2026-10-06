@@ -93,12 +93,21 @@ public static class MenuCommand
             : FleetAction.None;
 
 
-        if (project is null && requested == FleetAction.SwitchProject
+        if (project is null && requested is FleetAction.SwitchProject or FleetAction.Notifications
             && invocation.Project is { } shown && shown.StartsWith(RemoteMark, StringComparison.Ordinal))
         {
             using IApplication remoteApp = FleetUi.Start();
-            await SwitchAcrossMachines(remoteApp, new Keymap(Adapters.Keymaps().Load()), projects.List(), null, shown[RemoteMark.Length..])
-                .ConfigureAwait(false);
+            var remoteKeymap = new Keymap(Adapters.Keymaps().Load());
+            if (requested == FleetAction.Notifications)
+            {
+                await ShowNotices(remoteApp, remoteKeymap, projects, null).ConfigureAwait(false);
+            }
+            else
+            {
+                await SwitchAcrossMachines(remoteApp, remoteKeymap, projects.List(), null, shown[RemoteMark.Length..])
+                    .ConfigureAwait(false);
+            }
+
             return 0;
         }
 
@@ -465,32 +474,12 @@ public static class MenuCommand
                 ManageRemotesView.Show(app, keymap, Adapters.Remotes(), Adapters.KnownRemotes());
                 break;
 
+            case FleetAction.Notifications when EmbeddedWiring.HandBack(FleetActionIds.For(FleetAction.Notifications)):
+                break;
+
             case FleetAction.Notifications:
-                {
-                    var noticeMux = Adapters.Mux(Adapters.Log()).Driver;
-                    var notices = Adapters.Notices();
-                    var inWindow = SwitchProjectHandler.Applies(noticeMux)
-                        ? (await ProjectsInWindow(noticeMux, projects.List()).ConfigureAwait(false)).Select(p => p.Name).Append(project.Name).ToList()
-                        : null;
-                    var remoteNotices = inWindow is null ? null : EmbeddedWiring.WindowRemoteNotices();
-                    ShowNoticesView.Show(
-                        app,
-                        keymap,
-                        notices,
-                        (project, keys) =>
-                        {
-                            if (remoteNotices?.Dismiss(project, keys) != true)
-                            {
-                                notices.Save(project, NoticeSync.Dismiss(notices.Load(project), keys, DateTime.UtcNow));
-                            }
-                        },
-                        notice => remoteNotices?.Locate(notice) is var (host, remoteProject)
-                            ? ShowRemoteNotice(host, remoteProject)
-                            : OpenNotice(noticeMux, projects.List(), notice),
-                        inWindow,
-                        remoteNotices?.Source);
-                    break;
-                }
+                await ShowNotices(app, keymap, projects, project).ConfigureAwait(false);
+                break;
 
             case FleetAction.EditClaudeProfile:
                 {
@@ -667,6 +656,33 @@ public static class MenuCommand
         return 0;
     }
 
+
+    private static async Task ShowNotices(IApplication app, Keymap keymap, IProjectStore projects, Project? current)
+    {
+        var noticeMux = Adapters.Mux(Adapters.Log()).Driver;
+        var notices = Adapters.Notices();
+        var inWindow = SwitchProjectHandler.Applies(noticeMux)
+            ? (await ProjectsInWindow(noticeMux, projects.List()).ConfigureAwait(false)).Select(p => p.Name)
+                .Concat(current is null ? [] : [current.Name]).ToList()
+            : null;
+        var remoteNotices = inWindow is null ? null : EmbeddedWiring.WindowRemoteNotices();
+        ShowNoticesView.Show(
+            app,
+            keymap,
+            notices,
+            (project, keys) =>
+            {
+                if (remoteNotices?.Dismiss(project, keys) != true)
+                {
+                    notices.Save(project, NoticeSync.Dismiss(notices.Load(project), keys, DateTime.UtcNow));
+                }
+            },
+            notice => remoteNotices?.Locate(notice) is var (host, remoteProject)
+                ? ShowRemoteNotice(host, remoteProject)
+                : OpenNotice(noticeMux, projects.List(), notice),
+            inWindow,
+            remoteNotices?.Source);
+    }
 
     private static async Task<string?> ShowRemoteNotice(string host, string project)
     {

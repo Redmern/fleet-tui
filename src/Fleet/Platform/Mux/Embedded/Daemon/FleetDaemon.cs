@@ -1236,6 +1236,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string HandedBack = "switch-project";
 
+    public static bool HandsBack(string? action) => action is HandedBack or NoticesMenu;
+
 
     private List<WindowEntryDto> Window(string? client)
     {
@@ -1304,7 +1306,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private bool HandBack(string? client, string? action)
     {
-        if (action != HandedBack || client is null || _model.Client(client)?.Label is null
+        if (!HandsBack(action) || client is null || _model.Client(client)?.Label is null
             || !_sessions.TryGetValue(client, out var viewer))
         {
             return false;
@@ -1403,9 +1405,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 if (effect.Kind == HostEffects.HandBack)
                 {
-                    if (effect.Value == HandedBack)
+                    if (HandsBack(effect.Value))
                     {
-                        OpenMenu(session.Client, HandedBack);
+                        OpenMenu(session.Client, effect.Value);
                     }
 
                     continue;

@@ -4174,6 +4174,26 @@ its own projects, and the remote project `@<machine>` is showing is one of them.
   only the remote's projects. The menu now asks with just its pane; fleetd finds the
   client that opened that menu (`ClientState.Menu`) and hands the switcher back to the
   viewing machine.
+## The notification center opens where you sit, 2026-10-06
+
+In `@<machine>` the fleet menu is the remote's, so its Notifications (and a click on the
+remote's notice pill, which the remote handles as `OpenMenu(client, notifications)`) opened
+the remote's own center, which knew only that instance. It now follows the instance you sit
+at, like the head chord (a `LocalCommands` entry) and Switch project:
+
+- **`notifications` is handed back** with the same detection as `switch-project`
+  (`FleetDaemon.HandsBack`): the remote's menu, in a labelled client or as a warm menu whose
+  `ClientState.Menu` a link opened, asks `hand-back notifications`; the viewing fleetd opens
+  `menu --project @<machine> --action notifications` for the windows showing it.
+- **The center over `@<machine>`** runs without a local project and lists what it lists
+  anywhere in that window: the window's local projects plus the shown remote project as
+  `project @machine` (`remote-notices`, `remote-dismiss`), so `d` and `enter` work as before.
+- **Unchanged** when nothing views the remote: an unlabelled client gets `Pending = false`
+  and the remote opens its own center, and a local project's menu never hands back.
+- **Tested** with two in-process fleetds: hand-back from a labelled client, from a warm
+  menu and after a click on the remote's pill opens the center at home; a client attached
+  to the remote directly and a local window are not handed back. The `fleet menu` process
+  itself (the `MenuCommand` side) is not exercised by the tests.
 ## Known remote machines, 2026-10-02
 
 fleetd keeps remote links in memory only, so a restart forgot every machine. The client
