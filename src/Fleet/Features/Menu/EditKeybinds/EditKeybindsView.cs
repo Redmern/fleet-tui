@@ -93,7 +93,7 @@ public static class EditKeybindsView
 
             if (row.Action is { } action && new Keymap(candidate).ClashFor(action) is var clash and not FleetAction.None)
             {
-                status.Text = $"Unchanged. {FleetKeyText.Display(captured)} is {KeymapDefaults.Describe(clash)} in the fleet menus.";
+                status.Text = $"Unchanged. {FleetKeyText.Display(captured)} is already {KeymapDefaults.Describe(clash)}.";
                 return;
             }
 

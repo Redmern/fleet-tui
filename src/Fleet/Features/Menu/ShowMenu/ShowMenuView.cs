@@ -143,7 +143,6 @@ public static class ShowMenuView
                     return;
                 }
             }
-
         }
 
         app.Keyboard.KeyDown += Keys;

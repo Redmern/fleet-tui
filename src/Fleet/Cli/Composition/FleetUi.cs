@@ -13,7 +13,7 @@ public static class FleetUi
     {
         var app = Application.Create().Init();
         FleetTheme.Register();
-        FleetKeyHints.Attach(app, new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
+        FleetKeyHints.Attach(app, () => new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
 
         if (FloatPane.Inside)
         {

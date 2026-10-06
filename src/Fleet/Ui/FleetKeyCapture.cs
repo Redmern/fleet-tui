@@ -37,6 +37,7 @@ public static class FleetKeyCapture
         };
 
         FleetModal.Enter();
+        FleetKeyHints.Capturing = true;
 
         try
         {
@@ -44,6 +45,7 @@ public static class FleetKeyCapture
         }
         finally
         {
+            FleetKeyHints.Capturing = false;
             FleetModal.Leave();
             window.Dispose();
         }

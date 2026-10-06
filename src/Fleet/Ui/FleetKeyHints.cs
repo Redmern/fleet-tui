@@ -29,6 +29,8 @@ public static class FleetKeyHints
 
     public static event Action? Changed;
 
+    public static bool Capturing { get; set; }
+
     public static bool Shown => setting || toggled || held;
 
     public static bool Setting => setting;
@@ -81,11 +83,13 @@ public static class FleetKeyHints
     public static void Reset()
     {
         (setting, toggled, held, heldAt, interval, releases) = (true, false, false, 0, 0, false);
+        Capturing = false;
         Changed = null;
     }
 
-    public static void Attach(IApplication app, Keymap keymap, Func<bool> load)
+    public static void Attach(IApplication app, Func<Keymap> keys, Func<bool> load)
     {
+        var keymap = keys();
         Apply(load());
 
         app.Keyboard.KeyDown += (_, key) =>
@@ -129,6 +133,7 @@ public static class FleetKeyHints
 
         app.AddTimeout(Recheck, () =>
         {
+            keymap = keys();
             Apply(load());
             return true;
         });
@@ -138,7 +143,7 @@ public static class FleetKeyHints
         bound.IsValid && (pressed == bound || (bound.AsRune.Value != 0 && pressed.AsRune == bound.AsRune));
 
     private static bool Typing(IApplication app) =>
-        app.Navigation?.GetFocused() is TextField;
+        Capturing || app.Navigation?.GetFocused() is TextField;
 
     private static void Raise(bool before)
     {
