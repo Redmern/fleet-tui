@@ -5480,6 +5480,10 @@ conversation):
   get only the corners. The keys the old hint lines listed all still work.
 - Chips that only took room were dropped: Switch project's `h/l machine` (h/l, the arrows and
   a tab click still switch) and the dashboard's `editor` (the Open editor key still works).
+- The fleet menu mirrors its footer at the top: a blank row, the corner buttons
+  (`ShowMenuView.CornerRow`), then the padding before the list, so the float is two rows
+  taller. The bars of Switch project, the agent list, notifications and the dashboard sit
+  bottom right like the menu's.
 
 ## Still to verify
 ## Still to verify

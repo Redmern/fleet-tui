@@ -103,7 +103,8 @@ public class ShowMenuTests
     }
 
     // Inside a float the window is exactly the fitted size; the bar and the blank
-    // line under it sit below the bottom padding.
+    // line under it sit below the bottom padding, and the corner buttons with a blank
+    // line over them mirror that above the top padding.
     [Theory]
     [InlineData(3)]
     [InlineData(8)]
@@ -119,9 +120,11 @@ public class ShowMenuTests
         var above = list.Frame.Y;
         var below = bar.Root.Frame.Y - list.Frame.Bottom;
 
-        Assert.Equal(ShowMenuHandler.Padding, above);
-        Assert.Equal(above, below);
+        Assert.Equal(ShowMenuView.Header + ShowMenuHandler.Padding, above);
+        Assert.Equal(ShowMenuHandler.Padding, below);
         Assert.Equal(window.Frame.Height - 2, bar.Root.Frame.Y);
+        Assert.Equal(ShowMenuView.CornerRow, window.Frame.Height - 1 - bar.Root.Frame.Y);
+        Assert.Equal(ShowMenuView.CornerRow + 1 + ShowMenuHandler.Padding, above);
     }
 
     [Fact]

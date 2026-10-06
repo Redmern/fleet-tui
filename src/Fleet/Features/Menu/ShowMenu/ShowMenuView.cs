@@ -13,11 +13,15 @@ public static class ShowMenuView
 {
     public const int Footer = 2;
 
-    public static int FitRows(int height) => height + (2 * ShowMenuHandler.Padding) + Footer;
+    public const int Header = Footer;
+
+    public const int CornerRow = Header - 1;
+
+    public static int FitRows(int height) => height + (2 * ShowMenuHandler.Padding) + Header + Footer;
 
     public static (ListView List, FleetActionBar Bar) Place(int width, int height)
     {
-        var list = FleetTheme.CenteredRows(width, height, Footer);
+        var list = FleetTheme.CenteredRows(width, height);
 
         return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding, alignRight: true));
     }
@@ -146,7 +150,7 @@ public static class ShowMenuView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, bar.Root);
-        FleetCorners.Attach(window, () => app.RequestStop(window));
+        FleetCorners.Attach(window, () => app.RequestStop(window), top: CornerRow);
 
         try
         {
