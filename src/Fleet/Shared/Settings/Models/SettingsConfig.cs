@@ -30,6 +30,8 @@ public sealed record SettingsConfig(
 
     public bool ShowMenuKeys { get; init; } = SettingsDefaults.ShowMenuKeys;
 
+    public ButtonHints ButtonHints { get; init; } = SettingsDefaults.ButtonHints;
+
     public RoleModels Models { get; init; } = SettingsDefaults.Models;
 
     public ToolRule RuleFor(HarnessTool tool) =>
@@ -74,6 +76,8 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithShowMenuKeys(bool on) => this with { ShowMenuKeys = on };
 
+    public SettingsConfig WithButtonHints(ButtonHints hints) => this with { ButtonHints = hints };
+
     public SettingsConfig WithModels(RoleModels models) => this with { Models = models };
 
     public SettingsConfig MergedOverDefaults()
@@ -103,6 +107,7 @@ public sealed record SettingsConfig(
             StatusHooks = StatusHooks,
             SubagentGuidance = SubagentGuidance,
             ShowMenuKeys = ShowMenuKeys,
+            ButtonHints = ButtonHints,
             Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
         };
     }
@@ -124,5 +129,6 @@ public sealed record SettingsConfig(
                 .Append($"hooks={StatusHooks}")
                 .Append($"subagents={SubagentGuidance}")
                 .Append($"menu-keys={ShowMenuKeys}")
+                .Append($"button-hints={ButtonHints}")
                 .Append(Models.Signature));
 }
