@@ -25,6 +25,9 @@ public sealed class FleetActionBar
 
     public View Root => _strip;
 
+    public static int Measure(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
+        items.Sum(i => (i.Key.Length == 0 ? $" {i.Label} " : $" {i.Key} {i.Label} ").Length + 3) - Math.Min(1, items.Count);
+
     public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
         _strip.Show(items);
 

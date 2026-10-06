@@ -1,5 +1,6 @@
 using System.Globalization;
 using Fleet.Features.Menu.ShowMenu.Models;
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
@@ -27,7 +28,7 @@ public static class FleetMenus
     public static IReadOnlyList<MenuSection> Settings { get; } =
     [
         new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
-        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds], FleetIcons.Configure),
+        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys], FleetIcons.Configure),
         new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs], FleetIcons.Maintenance),
     ];
 
@@ -67,6 +68,7 @@ public static class FleetMenus
     [
         FleetAction.EditMainOrchestratorInNvim,
         FleetAction.EditSubOrchestratorsInNvim,
+        FleetAction.EditShowMenuKeys,
     ];
 
     public static bool IsSubmenu(FleetAction action) => Tree.Any(n => n.Submenu == action);
@@ -94,12 +96,26 @@ public static class FleetMenus
 
     public static bool IsToggle(FleetAction action) => Toggles.Contains(action);
 
+    public static string Label(FleetAction action) => action switch
+    {
+        FleetAction.QuitFleet => "Quit",
+        FleetAction.FocusMain => "Dashboard",
+        FleetAction.SwitchProject => "Switch",
+        FleetAction.BrowseFiles => "Files",
+        FleetAction.SaveSession => "Save session",
+        FleetAction.RebuildDashboard => "Rebuild dashboard",
+        FleetAction.CleanupProject => "Clean up agents",
+        FleetAction.EditShowMenuKeys => "Show keybinds",
+        _ => KeymapDefaults.Describe(action),
+    };
+
     public static string? Value(FleetAction action, SettingsConfig settings, RoleModel? head = null) => action switch
     {
         _ when ModelRows.IsModelRow(action) =>
             ModelRows.Value(ModelRows.Current(action, settings, head ?? SettingsDefaults.HeadModel)),
         FleetAction.EditMainOrchestratorInNvim => OnOff(settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => OnOff(settings.SubOrchestratorsInNvim),
+        FleetAction.EditShowMenuKeys => OnOff(settings.ShowMenuKeys),
         FleetAction.EditAutoClose => settings.AutoClose
             ? $"[{settings.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture)}m]"
             : OnOff(false),
@@ -110,6 +126,7 @@ public static class FleetMenus
     {
         FleetAction.EditMainOrchestratorInNvim => settings.WithMainOrchestratorInNvim(!settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => settings.WithSubOrchestratorsInNvim(!settings.SubOrchestratorsInNvim),
+        FleetAction.EditShowMenuKeys => settings.WithShowMenuKeys(!settings.ShowMenuKeys),
         _ => settings,
     };
 

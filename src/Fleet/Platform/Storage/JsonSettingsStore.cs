@@ -12,7 +12,9 @@ namespace Fleet.Platform.Storage;
 
 public sealed class JsonSettingsStore : ISettingsStore
 {
-    public SettingsConfig Load(string project)
+    public SettingsConfig Load(string project) => LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys() };
+
+    private static SettingsConfig LoadProject(string project)
     {
         var file = FileFor(project);
 
@@ -162,6 +164,42 @@ public sealed class JsonSettingsStore : ISettingsStore
             FleetPaths.EnsureDirs();
             File.WriteAllText(
                 FleetPaths.HeadSettingsFile, JsonSerializer.Serialize(stored, FleetJsonContext.Default.HeadSettingsFile));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    public bool LoadShowMenuKeys()
+    {
+        try
+        {
+            if (File.Exists(FleetPaths.MenuSettingsFile)
+                && JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.MenuSettingsFile), FleetJsonContext.Default.MenuSettingsFile) is { ShowKeys: { } shown })
+            {
+                return shown;
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+        }
+
+        return SettingsDefaults.ShowMenuKeys;
+    }
+
+    public void SaveShowMenuKeys(bool shown)
+    {
+        var stored = new MenuSettingsFile
+        {
+            ShowKeys = shown == SettingsDefaults.ShowMenuKeys ? null : shown,
+        };
+
+        try
+        {
+            FleetPaths.EnsureDirs();
+            File.WriteAllText(
+                FleetPaths.MenuSettingsFile, JsonSerializer.Serialize(stored, FleetJsonContext.Default.MenuSettingsFile));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

@@ -3,6 +3,7 @@ using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
+using Terminal.Gui.ViewBase;
 
 namespace Fleet.Tests.Features.Menu;
 
@@ -98,7 +99,39 @@ public class ShowMenuTests
         var rows = ShowMenuHandler.Rows(items);
 
         Assert.Equal(rows[0].Spans[1].Text.Length, rows[1].Spans[1].Text.Length);
-        Assert.Equal("  ", rows[1].Spans[1].Text);
+        Assert.Equal("   ", rows[1].Spans[1].Text);
+    }
+
+    // Inside a float the window is exactly the fitted size; the bar and the blank
+    // line under it sit below the bottom padding.
+    [Theory]
+    [InlineData(3)]
+    [InlineData(8)]
+    [InlineData(13)]
+    public void The_space_above_the_first_row_equals_the_space_below_the_last(int height)
+    {
+        var (list, bar) = ShowMenuView.Place(30, height);
+        using var window = new View { Width = 60, Height = ShowMenuView.FitRows(height) };
+        window.Add(list, bar.Root);
+
+        window.Layout();
+
+        var above = list.Frame.Y;
+        var below = bar.Root.Frame.Y - list.Frame.Bottom;
+
+        Assert.Equal(ShowMenuHandler.Padding, above);
+        Assert.Equal(above, below);
+        Assert.Equal(window.Frame.Height - 2, bar.Root.Frame.Y);
+    }
+
+    [Fact]
+    public void The_action_bar_measures_its_chips_and_the_gaps_between_them()
+    {
+        Assert.Equal(" enter select ".Length + 2, FleetActionBar.Measure([("enter", "select", () => { })]));
+        Assert.Equal(
+            " enter select ".Length + 2 + 1 + " ? keys ".Length + 2,
+            FleetActionBar.Measure([("enter", "select", () => { }), ("?", "keys", () => { })]));
+        Assert.Equal(0, FleetActionBar.Measure([]));
     }
 
     [Fact]

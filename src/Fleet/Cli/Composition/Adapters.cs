@@ -75,6 +75,10 @@ public static class Adapters
 
     public static void SaveHeadModel(RoleModel model) => new JsonSettingsStore().SaveHead(model);
 
+    public static bool ShowMenuKeys() => new JsonSettingsStore().LoadShowMenuKeys();
+
+    public static void SaveShowMenuKeys(bool shown) => new JsonSettingsStore().SaveShowMenuKeys(shown);
+
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
     public static IHarnessConfig HarnessConfig() => new ClaudeHarnessConfig();

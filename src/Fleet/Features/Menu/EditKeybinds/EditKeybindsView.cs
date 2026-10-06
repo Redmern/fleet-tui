@@ -87,10 +87,17 @@ public static class EditKeybindsView
                 return;
             }
 
-            config = row.Action is null
+            var candidate = row.Action is null
                 ? config.WithPrefix(captured)
                 : config.With(row.Action.Value, captured);
 
+            if (row.Action is { } action && new Keymap(candidate).ClashFor(action) is var clash and not FleetAction.None)
+            {
+                status.Text = $"Unchanged. {FleetKeyText.Display(captured)} is {KeymapDefaults.Describe(clash)} in the fleet menus.";
+                return;
+            }
+
+            config = candidate;
             store.Save(config);
             Fill();
             status.Text = $"Saved. {target} is now {FleetKeyText.Display(captured)}. Reopen panes to apply.";

@@ -276,6 +276,38 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Menu_keys_default_to_shown()
+    {
+        Assert.True(Store.LoadShowMenuKeys());
+        Assert.True(Store.Load("never-saved").ShowMenuKeys);
+    }
+
+    [Fact]
+    public void Hiding_menu_keys_is_one_setting_for_every_project()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+        Store.SaveShowMenuKeys(false);
+
+        Assert.False(Store.LoadShowMenuKeys());
+        Assert.False(Store.Load("techweb").ShowMenuKeys);
+        Assert.False(Store.Load("never-saved").ShowMenuKeys);
+
+        Store.SaveShowMenuKeys(true);
+
+        Assert.True(Store.Load("techweb").ShowMenuKeys);
+        Assert.DoesNotContain("showKeys", File.ReadAllText(FleetPaths.MenuSettingsFile));
+    }
+
+    [Fact]
+    public void A_project_save_does_not_carry_the_menu_keys_setting()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithShowMenuKeys(false));
+
+        Assert.True(Store.Load("techweb").ShowMenuKeys);
+        Assert.DoesNotContain("enuKeys", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));

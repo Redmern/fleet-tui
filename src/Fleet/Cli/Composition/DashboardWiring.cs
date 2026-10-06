@@ -787,7 +787,7 @@ public static class DashboardWiring
                 mux.Caps.HasFlag(MuxCaps.Popup) && !mux.CurrentPane.IsNone
                 && EmbeddedWiring.OpenMenu(null)
                     ? FleetAction.None
-                    : FleetUi.Menu(app, keymap, MenuActions),
+                    : FleetUi.Menu(app, keymap, MenuActions, settings.Load(project.Name).ShowMenuKeys),
 
             EditKeybinds: () => new Keymap(EditKeybindsView.Show(app, keymaps, keymap)),
 

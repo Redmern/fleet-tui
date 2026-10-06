@@ -355,7 +355,7 @@ public static class PickProjectCommand
 
                     return dropped.Succeeded ? dropped.Value : dropped.Error;
                 },
-                ShowMenu: () => FleetUi.Menu(app, keymap, MenuActions),
+                ShowMenu: () => FleetUi.Menu(app, keymap, MenuActions, Adapters.ShowMenuKeys()),
                 EditKeybinds: () => EditKeybindsView.Show(app, keymaps, keymap),
                 Sessions: SwitchProjectHandler.Applies(driver) && !EmbeddedWiring.InsideClient ? sessions.List : null,
                 RemoveSession: session =>

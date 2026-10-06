@@ -60,6 +60,14 @@ public sealed class HeadSettingsFile
     public string Effort { get; set; } = string.Empty;
 }
 
+public sealed class MenuSettingsFile
+{
+    public int Version { get; set; } = 1;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ShowKeys { get; set; }
+}
+
 public sealed class ToolRuleEntry
 {
     public string Policy { get; set; } = string.Empty;

@@ -51,6 +51,8 @@ public static class SettingsDefaults
 
     public const bool SubagentGuidance = true;
 
+    public const bool ShowMenuKeys = true;
+
     public static IReadOnlyDictionary<HarnessTool, ToolRule> Rules { get; } =
         HarnessToolIds.All.ToDictionary(t => t, RuleFor);
 

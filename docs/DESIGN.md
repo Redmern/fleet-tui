@@ -5385,6 +5385,41 @@ conversation):
 - The session-name variant Claude picks when the name is taken (see the session-names
   section). The brief falls back to `ListAgents`.
 
+## Menu polish and hidden keybinds, 2026-10-06
+
+- **Shorter labels** live in `FleetMenus.Label`, used only by menu rows; the keybinds
+  editor and dialogs keep `KeymapDefaults.Describe`. Quit, Dashboard, Switch, Files;
+  Save session, Rebuild dashboard, Clean up agents.
+- **Rows** are key, icon, two spaces, label. Section headers are a muted caption in line
+  with the icons (no `── … ──` rules), with a blank row above every section but the first.
+- **Padding:** the list sits two rows below the top of the float and the action bar two
+  rows below the last item, then one blank line (`ShowMenuView.Place`, `FitRows`). It
+  was three above and one below.
+- **Show keybinds** (`ShowMenuKeys`, default on, `K` in Settings) is machine-wide, stored in
+  `menu.json` next to `head.json`, so the project picker (which has no project) follows it
+  too. `JsonSettingsStore.Load` lays it over every project's settings; a project save does not
+  write it, and the toggle saves it on its own. Off hides the key column in every fleet menu. `RevealMenuKeys` (`?`)
+  flips the column on for the menu on screen until `?` again or the menu closes; the bar
+  shows a `? keys` chip while the setting is off. `i` was asked for but is Auto-close in
+  Fleet config, and `?` is bound nowhere else. The float is fitted to the keyed width, so
+  revealing never resizes it; the list re-centres.
+- **Rebinding never hides an entry behind `?`.** `RevealKey.Guarded` is every action in the
+  fleet menu keybind groups, Open editor, the motions and Close; `Keymap.ClashFor` finds a
+  guarded action sharing the reveal key. The keybinds editor refuses such a rebind in either
+  direction and says what the key already is. A hand-edited keymap can still clash, so the
+  menu checks entry keys before the reveal key: the entry wins and only the reveal is lost.
+- **Opening was already one frame.** A frame-recording attach client (the
+  `scripts\e2e\windows.ps1` pipe protocol, isolated fleetd) against a build of `main`
+  showed the warm open, a fresh open and Settings each as one frame, with nothing redrawn
+  after. `IsRunningChanged` fires before Terminal.Gui's first layout, so `FitOwnFloat`
+  and `SetScreenSize` already run before the first draw, and the ListView settles its
+  selection before layout (no scroll after it).
+- **The visible jank was the selection jump.** Pressing an entry's key moved the
+  highlight to that row and redrew the menu *before* it closed; fleetd only holds the
+  float when the screen stops, so that frame (about 150 ms before the next screen) was
+  shown. The key handler no longer moves the selection, except for toggles, which stay
+  on screen. Measured again: menu → Settings is one frame.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

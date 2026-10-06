@@ -2,6 +2,7 @@ using Fleet.Features.Menu.ShowMenu;
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Keymap.Models;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -114,9 +115,29 @@ public class FleetMenusTests
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
         var headers = ShowMenuHandler.Headers(items);
 
-        Assert.Equal([0, 2, 4], headers.Keys.Order());
-        Assert.Equal($"── {FleetIcons.Configure} configure ──", headers[2].Text);
+        Assert.Equal([0, 2, 5], headers.Keys.Order());
         Assert.Equal(FleetMenus.Actions(FleetMenus.Settings), items.Select(i => i.Action));
+    }
+
+    // Headers are a quiet caption in line with the icons, without the old ── rules.
+    [Fact]
+    public void A_header_is_a_muted_caption_lined_up_with_the_icon_column()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
+        var rows = ShowMenuHandler.Rows(items);
+        var header = ShowMenuHandler.Headers(items)[2];
+
+        Assert.Equal(FleetTones.Muted, Assert.Single(header.Spans).Tone);
+        Assert.DoesNotContain("─", header.Text);
+        Assert.Equal($"{new string(' ', rows[2].Spans[0].Text.Length)}{FleetIcons.Configure}  configure", header.Text);
+    }
+
+    [Fact]
+    public void Without_keys_a_header_starts_at_the_left_edge_like_the_rows()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
+
+        Assert.Equal($"{FleetIcons.Session}  session", ShowMenuHandler.Headers(items, keys: false)[0].Text);
     }
 
     [Fact]
@@ -124,7 +145,120 @@ public class FleetMenusTests
     {
         var items = new ShowMenuHandler(Keymap.Default).Items([new MenuSection("plain", [FleetAction.ViewLogs])], _ => null);
 
-        Assert.Equal("── plain ──", ShowMenuHandler.Headers(items)[0].Text);
+        Assert.Equal("plain", ShowMenuHandler.Headers(items, keys: false)[0].Text);
+    }
+
+    [Fact]
+    public void A_blank_row_separates_each_section_from_the_one_above()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
+        var gaps = ShowMenuHandler.Gaps(items);
+        var source = new FleetRowSource(
+            ShowMenuHandler.Rows(items), gaps, headersBefore: ShowMenuHandler.Headers(items));
+
+        Assert.Equal([1, 4], gaps);
+        Assert.Equal(items.Count + 3 + 2, source.Count);
+        Assert.Equal(
+            ShowMenuHandler.Height(ShowMenuHandler.Rows(items), 3, gaps.Count),
+            source.Count);
+        Assert.Equal(string.Empty, source.ToList()[3]);
+        Assert.Equal(string.Empty, source.ToList()[8]);
+    }
+
+    [Fact]
+    public void A_menu_with_one_section_has_no_blank_rows()
+        => Assert.Empty(ShowMenuHandler.Gaps(new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Main, _ => null)));
+
+    [Theory]
+    [InlineData(FleetAction.QuitFleet, "Quit")]
+    [InlineData(FleetAction.BrowseFiles, "Files")]
+    [InlineData(FleetAction.SwitchProject, "Switch")]
+    [InlineData(FleetAction.FocusMain, "Dashboard")]
+    [InlineData(FleetAction.SaveSession, "Save session")]
+    [InlineData(FleetAction.RebuildDashboard, "Rebuild dashboard")]
+    [InlineData(FleetAction.CleanupProject, "Clean up agents")]
+    [InlineData(FleetAction.EditShowMenuKeys, "Show keybinds")]
+    [InlineData(FleetAction.ListAgents, "List agents")]
+    public void Menu_rows_use_the_short_labels(FleetAction action, string label)
+    {
+        var sections = FleetMenus.Main.Concat(FleetMenus.Settings).ToList();
+        var items = new ShowMenuHandler(Keymap.Default).Items(sections, _ => null);
+
+        Assert.Equal(label, items.Single(i => i.Action == action).Label);
+    }
+
+    [Fact]
+    public void Show_keybinds_is_a_toggle_in_settings_that_defaults_to_on()
+    {
+        Assert.Contains(FleetAction.EditShowMenuKeys, FleetMenus.Actions(FleetMenus.Settings));
+        Assert.True(FleetMenus.IsToggle(FleetAction.EditShowMenuKeys));
+        Assert.True(SettingsConfig.Default.ShowMenuKeys);
+        Assert.Equal("[on]", FleetMenus.Value(FleetAction.EditShowMenuKeys, SettingsConfig.Default));
+
+        var off = FleetMenus.Flip(FleetAction.EditShowMenuKeys, SettingsConfig.Default);
+
+        Assert.False(off.ShowMenuKeys);
+        Assert.Equal("[off]", FleetMenus.Value(FleetAction.EditShowMenuKeys, off));
+        Assert.NotEqual(SettingsConfig.Default.Signature, off.Signature);
+        Assert.False(off.MergedOverDefaults().ShowMenuKeys);
+    }
+
+    [Fact]
+    public void Without_keys_a_row_starts_with_its_icon()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Main, _ => null);
+        var rows = ShowMenuHandler.Rows(items, keys: false);
+
+        Assert.All(rows, r => Assert.NotEqual(FleetTones.Key, r.Spans[0].Tone));
+        Assert.Equal($"{FleetIcons.For(FleetAction.QuitFleet)}  Quit", rows[0].Text);
+        Assert.True(ShowMenuHandler.Width(rows) < ShowMenuHandler.Width(ShowMenuHandler.Rows(items)));
+    }
+
+    [Fact]
+    public void Every_fleet_menu_entry_is_guarded_against_the_reveal_key()
+        => Assert.All(
+            FleetMenus.Actions([.. FleetMenus.Main, .. FleetMenus.Settings, .. FleetMenus.FleetConfig]),
+            a => Assert.Contains(a, RevealKey.Guarded));
+
+    [Theory]
+    [InlineData(FleetAction.OpenSettings, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.EditAutoClose, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.MoveDown, "?", FleetAction.RevealMenuKeys)]
+    [InlineData(FleetAction.RevealMenuKeys, "s", FleetAction.OpenSettings)]
+    [InlineData(FleetAction.RevealMenuKeys, "j", FleetAction.MoveDown)]
+    [InlineData(FleetAction.RevealMenuKeys, "F5", FleetAction.None)]
+    [InlineData(FleetAction.Refresh, "?", FleetAction.None)]
+    [InlineData(FleetAction.OpenSettings, "F5", FleetAction.None)]
+    public void A_rebind_that_puts_reveal_and_a_menu_key_together_clashes(
+        FleetAction action, string key, FleetAction clash)
+    {
+        var keymap = new Keymap(KeymapConfig.Default.With(action, key));
+
+        Assert.Equal(clash, keymap.ClashFor(action));
+    }
+
+    [Fact]
+    public void The_default_keymap_has_no_reveal_clash()
+        => Assert.All(RevealKey.Guarded.Append(FleetAction.RevealMenuKeys),
+            a => Assert.Equal(FleetAction.None, Keymap.Default.ClashFor(a)));
+
+    // The reveal key works in every menu, so it may not be any menu row's key or a motion.
+    [Fact]
+    public void The_reveal_key_is_question_mark_and_collides_with_no_menu_or_motion_key()
+    {
+        var reveal = KeymapDefaults.Bindings[FleetAction.RevealMenuKeys];
+        FleetAction[] motions =
+        [
+            FleetAction.MoveDown, FleetAction.MoveUp, FleetAction.MoveFirst, FleetAction.MoveLast,
+            FleetAction.PageDown, FleetAction.PageUp, FleetAction.Close,
+        ];
+        var used = FleetMenus.Actions([.. FleetMenus.Main, .. FleetMenus.Settings, .. FleetMenus.FleetConfig])
+            .Concat(motions)
+            .Select(a => KeymapDefaults.Bindings[a]);
+
+        Assert.Equal("?", reveal);
+        Assert.DoesNotContain(reveal, used);
+        Assert.Equal(new Terminal.Gui.Input.Key('?'), Keymap.Default.KeyFor(FleetAction.RevealMenuKeys));
     }
 
     [Fact]
@@ -142,13 +276,13 @@ public class FleetMenusTests
     }
 
     [Fact]
-    public void A_row_shows_the_icon_between_the_key_and_the_label()
+    public void A_row_shows_the_icon_then_a_gap_then_the_label()
     {
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Main, _ => null);
         var rows = ShowMenuHandler.Rows(items);
         var settings = rows[items.ToList().FindIndex(i => i.Action == FleetAction.OpenSettings)];
 
-        Assert.Equal($"{FleetIcons.For(FleetAction.OpenSettings)} ", settings.Spans[1].Text);
+        Assert.Equal($"{FleetIcons.For(FleetAction.OpenSettings)}  ", settings.Spans[1].Text);
         Assert.Equal(items.Single(i => i.Action == FleetAction.OpenSettings).Label, settings.Spans[2].Text);
     }
 
