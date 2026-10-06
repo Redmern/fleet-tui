@@ -98,8 +98,24 @@ public static class McpTools
         Spec(HarnessTool.DistributeSecrets, "Copy secret files into a repository's worktrees.", Repository),
         Spec(
             HarnessTool.Dispatch,
-            "Dispatch a sub-orchestrator to carry out a task described in a message.",
-            new ToolParam(ToolArguments.Message, "string", "The task for the sub-orchestrator.", true),
+            "Dispatch a task. Without a repository, a sub-orchestrator carries it out. With a repository, "
+            + "fleet starts a repository agent with the task directly, unless AIDLC applies or it is research.",
+            new ToolParam(ToolArguments.Message, "string", "The task.", true),
+            new ToolParam(
+                ToolArguments.Repository,
+                "string",
+                "Optional: the one repository the task touches. Also needs new_agent to be allowed.",
+                false),
+            new ToolParam(
+                ToolArguments.Branch,
+                "string",
+                "Optional, with repository: the branch to create or reuse; otherwise named from the task.",
+                false),
+            new ToolParam(
+                ToolArguments.Research,
+                "boolean",
+                "Optional: true for research; the sub-orchestrator does it itself without repository agents.",
+                false),
             new ToolParam(
                 ToolArguments.Profile,
                 "string",

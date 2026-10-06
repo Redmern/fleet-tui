@@ -11,6 +11,12 @@ public static class ApprovalPrompt
         var who = caller.Trim().Length == 0 ? "the main orchestrator" : SafeText.Clean(caller, 60);
 
         var target = Target(request);
+        var message = SafeText.Clean(request.Value(ToolArguments.Message));
+
+        if (tool == HarnessTool.Dispatch && message.Length > 0 && target != message)
+        {
+            target = $"{target}: {message}";
+        }
 
         var action = SettingsDefaults.Describe(tool);
 

@@ -7,6 +7,7 @@ using Fleet.Shared;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Features.Mcp.ServeMcp;
 
@@ -31,36 +32,13 @@ public sealed class McpDispatcher(
 
         Log(McpAudit.Requested(caller.Caller, tool));
 
-        var decision = McpGate.Decide(
-            tool, settings.Load(caller.Project).MergedOverDefaults(), caller.IsSub);
+        var config = settings.Load(caller.Project).MergedOverDefaults();
 
-        if (decision.Forbidden)
+        foreach (var gated in McpGate.Gated(tool, request))
         {
-            Log(McpAudit.Forbidden(caller.Caller, tool));
-
-            return McpResult.Error(
-                $"This project does not allow {HarnessToolIds.For(tool)}.");
-        }
-
-        if (decision.AsksFleet)
-        {
-            notifier?.Notify(
-                $"approval needed: {HarnessToolIds.For(tool)} by {caller.Caller}");
-
-            var outcome = await approvals
-                .AskAsync(
-                    new ApprovalRequest(
-                        caller.Project,
-                        HarnessToolIds.For(tool),
-                        ApprovalPrompt.For(tool, request, caller.Caller)),
-                    ct)
-                .ConfigureAwait(false);
-
-            if (!outcome.Allowed)
+            if (await PassAsync(gated, request, config, ct).ConfigureAwait(false) is { } refused)
             {
-                Log(McpAudit.Denied(caller.Caller, tool, outcome.Reason));
-
-                return McpResult.Error(outcome.Reason);
+                return refused;
             }
         }
 
@@ -80,6 +58,46 @@ public sealed class McpDispatcher(
         {
             _gate.Release();
         }
+    }
+
+    private async Task<McpResult?> PassAsync(
+        HarnessTool tool, McpRequest request, SettingsConfig config, CancellationToken ct)
+    {
+        var decision = McpGate.Decide(tool, config, caller.IsSub);
+
+        if (decision.Forbidden)
+        {
+            Log(McpAudit.Forbidden(caller.Caller, tool));
+
+            return McpResult.Error(
+                $"This project does not allow {HarnessToolIds.For(tool)}.");
+        }
+
+        if (!decision.AsksFleet)
+        {
+            return null;
+        }
+
+        notifier?.Notify(
+            $"approval needed: {HarnessToolIds.For(tool)} by {caller.Caller}");
+
+        var outcome = await approvals
+            .AskAsync(
+                new ApprovalRequest(
+                    caller.Project,
+                    HarnessToolIds.For(tool),
+                    ApprovalPrompt.For(tool, request, caller.Caller)),
+                ct)
+            .ConfigureAwait(false);
+
+        if (outcome.Allowed)
+        {
+            return null;
+        }
+
+        Log(McpAudit.Denied(caller.Caller, tool, outcome.Reason));
+
+        return McpResult.Error(outcome.Reason);
     }
 
     private void Log(string message) => log.Write(LogTag.For(caller.Project, message));
