@@ -30,10 +30,31 @@ public sealed class SettingsFile
 
     public int AutoCloseMinutes { get; set; }
 
+    public string MainModel { get; set; } = string.Empty;
+
+    public string MainEffort { get; set; } = string.Empty;
+
+    public string SubModel { get; set; } = string.Empty;
+
+    public string SubEffort { get; set; } = string.Empty;
+
+    public string AgentModel { get; set; } = string.Empty;
+
+    public string AgentEffort { get; set; } = string.Empty;
+
     public Dictionary<string, ToolRuleEntry> Tools { get; set; } = [];
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? StatusHooks { get; set; }
+}
+
+public sealed class HeadSettingsFile
+{
+    public int Version { get; set; } = 1;
+
+    public string Model { get; set; } = string.Empty;
+
+    public string Effort { get; set; } = string.Empty;
 }
 
 public sealed class ToolRuleEntry

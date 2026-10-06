@@ -161,7 +161,11 @@ public sealed class RestoreSessionTests : IDisposable
 
         var options = RestoreSessionHandler.Options("techweb", sub, "w7");
 
-        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), options.Args);
+        Assert.Equal(
+            AgentHarness.OrchestratorCommand(
+                resume: true,
+                launch: new ClaudeLaunch("techweb-sub-sub", new("sonnet", "medium"))),
+            options.Args);
     }
 
     [Fact]
@@ -174,7 +178,9 @@ public sealed class RestoreSessionTests : IDisposable
 
         var options = RestoreSessionHandler.Options("techweb", sub, "w7", subOrchestratorsInNvim: false);
 
-        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], options.Args);
+        Assert.Equal(
+            [AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-sub", "--model", "sonnet", "--effort", "medium"],
+            options.Args);
         Assert.Equal(AgentHarness.SessionPersistence, options.Env);
         Assert.Equal(worktree, options.Cwd);
     }
@@ -417,7 +423,9 @@ public sealed class RestoreSessionTests : IDisposable
         await new RestoreSessionHandler(mux, subOrchestratorsInNvim: false).HandleAsync("techweb", ProjectRoot, [sub]);
 
         var pane = Assert.Single(await mux.ListPanesAsync());
-        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], mux.ArgsFor(pane.Id));
+        Assert.Equal(
+            [AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-sub2", "--model", "sonnet", "--effort", "medium"],
+            mux.ArgsFor(pane.Id));
         Assert.Equal(AgentHarness.SessionPersistence, mux.EnvFor(pane.Id));
     }
 }

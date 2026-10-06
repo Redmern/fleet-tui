@@ -7,6 +7,7 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Agents;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Settings;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -33,6 +34,10 @@ public sealed class OpenAgentTests : IDisposable
         {
         }
     }
+
+    private static IReadOnlyList<string> Sub(bool resume = true) =>
+        AgentHarness.OrchestratorCommand(
+            resume, launch: ClaudeLaunch.ForAgent("techweb", "backend", "feature/login", true, SettingsDefaults.Models));
 
     private AgentRecord Agent(string branch = "feature/login")
     {
@@ -143,7 +148,9 @@ public sealed class OpenAgentTests : IDisposable
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
         Assert.Equal(agent.Worktree, pane.Cwd);
-        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], _mux.ArgsFor(pane.Id));
+        Assert.Equal(
+            [AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-backend-feature-login"],
+            _mux.ArgsFor(pane.Id));
         Assert.Equal("backend/feature_login", _mux.TitleOf(pane.Id));
     }
 
@@ -210,7 +217,7 @@ public sealed class OpenAgentTests : IDisposable
 
         var claude = Assert.Single(await _mux.ListPanesAsync());
 
-        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), _mux.ArgsFor(claude.Id));
+        Assert.Equal(Sub(), _mux.ArgsFor(claude.Id));
         Assert.Equal("backend/feature_login", _mux.TitleOf(claude.Id));
     }
 
@@ -291,7 +298,7 @@ public sealed class OpenAgentTests : IDisposable
 
         Assert.DoesNotContain(panes, p => p.Id == browser);
         var claude = Assert.Single(panes, p => PathKey.Same(p.Cwd, agent.Worktree));
-        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), _mux.ArgsFor(claude.Id));
+        Assert.Equal(Sub(), _mux.ArgsFor(claude.Id));
     }
 
     [Fact]
@@ -383,7 +390,12 @@ public sealed class OpenAgentTests : IDisposable
 
         var claude = Assert.Single(await _mux.ListPanesAsync());
 
-        Assert.Equal([AgentHarness.Claude, AgentHarness.ResumeArgument], _mux.ArgsFor(claude.Id));
+        Assert.Equal(
+            [
+                AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-feature-login",
+                "--model", "sonnet", "--effort", "medium",
+            ],
+            _mux.ArgsFor(claude.Id));
         Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(claude.Id));
         Assert.Equal(agent.Worktree, claude.Cwd);
     }
@@ -397,7 +409,7 @@ public sealed class OpenAgentTests : IDisposable
 
         var claude = Assert.Single(await _mux.ListPanesAsync());
 
-        Assert.Equal(AgentHarness.OrchestratorCommand(resume: true), _mux.ArgsFor(claude.Id));
+        Assert.Equal(Sub(), _mux.ArgsFor(claude.Id));
         Assert.Empty(_mux.EnvFor(claude.Id));
     }
 

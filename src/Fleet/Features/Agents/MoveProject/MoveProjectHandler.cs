@@ -6,10 +6,13 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Features.Agents.MoveProject;
 
-public sealed class MoveProjectHandler(IMuxDriver mux, bool mainOrchestratorInNvim = true)
+public sealed class MoveProjectHandler(
+    IMuxDriver mux, bool mainOrchestratorInNvim = true, RoleModels? models = null)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -64,7 +67,10 @@ public sealed class MoveProjectHandler(IMuxDriver mux, bool mainOrchestratorInNv
                     SessionName = project,
                     WindowId = destWindow,
                     NewWindow = destWindow is null,
-                    Args = AgentHarness.OrchestratorCommand(resume: true, inNvim: mainOrchestratorInNvim),
+                    Args = AgentHarness.OrchestratorCommand(
+                        resume: true,
+                        inNvim: mainOrchestratorInNvim,
+                        ClaudeLaunch.MainOrchestrator(project, models ?? SettingsDefaults.Models)),
                     Env = AgentHarness.SpawnEnv(AgentHarness.Orchestrator, mainOrchestratorInNvim),
                 },
                 ct).ConfigureAwait(false);

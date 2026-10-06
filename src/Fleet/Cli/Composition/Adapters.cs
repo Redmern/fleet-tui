@@ -35,6 +35,7 @@ using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Platform.Releases;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 
 namespace Fleet.Cli.Composition;
@@ -65,6 +66,8 @@ public static class Adapters
     public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorInNvim;
 
     public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsInNvim;
+
+    public static RoleModels Models(string project) => Settings().Load(project).Models;
 
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 

@@ -12,6 +12,7 @@ namespace Fleet.Platform.Storage;
 [JsonSerializable(typeof(KnownRemotesFile))]
 [JsonSerializable(typeof(SessionFile))]
 [JsonSerializable(typeof(SettingsFile))]
+[JsonSerializable(typeof(HeadSettingsFile))]
 [JsonSerializable(typeof(AskFile))]
 [JsonSerializable(typeof(NoticeFile))]
 [JsonSerializable(typeof(NoticeSettingsFile))]

@@ -10,6 +10,8 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -89,6 +91,24 @@ public sealed class NewAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task A_repo_agent_starts_with_the_projects_agent_model_and_effort()
+    {
+        var directory = await RepositoryAsync();
+        var asked = new List<string>();
+        var models = SettingsDefaults.Models with { Agent = new RoleModel("opus", "xhigh") };
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, project => { asked.Add(project); return models; })
+            .HandleAsync(Command(directory, "feat/x"));
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-backend-feat-x", "--model", "opus", "--effort", "xhigh"],
+            _mux.ArgsFor(pane.Id));
+        Assert.Equal(["techweb"], asked);
+    }
+
+    [Fact]
     public async Task The_harness_is_spawned_in_the_worktree_not_the_repository()
     {
         var directory = await RepositoryAsync();
@@ -98,7 +118,7 @@ public sealed class NewAgentTests : IDisposable
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
         Assert.Equal(Path.Combine(directory, "feature_login"), pane.Cwd);
-        Assert.Equal([AgentHarness.Claude], _mux.ArgsFor(pane.Id));
+        Assert.Equal([AgentHarness.Claude, "--name", "techweb-backend-feature-login"], _mux.ArgsFor(pane.Id));
     }
 
     [Fact]

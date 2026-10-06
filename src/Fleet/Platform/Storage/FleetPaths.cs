@@ -22,6 +22,8 @@ public static class FleetPaths
 
     public static string Settings => Path.Combine(Config, "settings");
 
+    public static string HeadSettingsFile => Path.Combine(Config, "head.json");
+
     public static string Approvals => Path.Combine(Config, "approvals");
 
     public static string Notices => Path.Combine(Config, "notices");

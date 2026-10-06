@@ -5,11 +5,17 @@ using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Features.Agents.OpenAgent;
 
 public sealed class OpenAgentHandler(
-    IMuxDriver mux, IAgentStore store, bool subOrchestratorsInNvim = true, bool preferCaller = true)
+    IMuxDriver mux,
+    IAgentStore store,
+    bool subOrchestratorsInNvim = true,
+    bool preferCaller = true,
+    RoleModels? models = null)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -103,6 +109,8 @@ public sealed class OpenAgentHandler(
         }
 
         var orchestrator = Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness);
+        var launch = Shared.Constants.ClaudeLaunch.ForAgent(
+            project, agent.Repository, agent.Branch, orchestrator, models ?? SettingsDefaults.Models);
 
         var pane = await mux.SpawnAsync(
             new SpawnOptions
@@ -111,9 +119,9 @@ public sealed class OpenAgentHandler(
                 SessionName = project,
                 WindowId = window,
                 Args = orchestrator
-                    ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim)
+                    ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
                     : Shared.Constants.AgentHarness.Resumed(Shared.Constants.AgentHarness.CommandFor(
-                        agent.Harness, withClaude: agent.RunsClaude)),
+                        agent.Harness, withClaude: agent.RunsClaude, launch: launch)),
                 Env = Shared.Constants.AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim),
             },
             ct).ConfigureAwait(false);

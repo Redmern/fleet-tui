@@ -911,7 +911,7 @@ public static class MenuCommand
             .Where(p => !string.Equals(p.Name, target.Name, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        var mover = new MoveProjectHandler(mux, Adapters.MainOrchestratorInNvim(target.Name));
+        var mover = new MoveProjectHandler(mux, Adapters.MainOrchestratorInNvim(target.Name), Adapters.Models(target.Name));
 
         foreach (var park in toPark)
         {
@@ -968,7 +968,7 @@ public static class MenuCommand
     {
         var result = await new OpenProjectHandler(mux)
             .HandleAsync(new OpenProjectCommand(
-                project, AgentHarness.Orchestrator, Adapters.Executable, windowId, Adapters.MainOrchestratorInNvim(project.Name)))
+                project, AgentHarness.Orchestrator, Adapters.Executable, windowId, Adapters.MainOrchestratorInNvim(project.Name), Adapters.Models(project.Name)))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -983,7 +983,7 @@ public static class MenuCommand
                 AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(project.Name))[0]))
             .ToList();
 
-        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(project.Name), Adapters.Agents())
+        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(project.Name), Adapters.Agents(), Adapters.Models(project.Name))
             .HandleAsync(project.Name, project.Root, runnable)
             .ConfigureAwait(false);
 

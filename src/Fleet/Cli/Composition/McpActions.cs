@@ -55,7 +55,7 @@ public sealed class McpActions(
 
     private readonly ListBranchesHandler _branches = new(git);
 
-    private readonly NewAgentHandler _spawner = new(git, mux, store);
+    private readonly NewAgentHandler _spawner = new(git, mux, store, Adapters.Models);
 
     private readonly HideAgentHandler _hider = new(mux, store);
 
@@ -312,7 +312,7 @@ public sealed class McpActions(
 
         ClaudeWiring.TrustFolder(agent.Worktree);
 
-        var outcome = await new OpenAgentHandler(mux, store, SubOrchestratorsInNvim())
+        var outcome = await new OpenAgentHandler(mux, store, SubOrchestratorsInNvim(), models: Adapters.Models(project))
             .HandleAsync(project, agent, root, ct)
             .ConfigureAwait(false);
 

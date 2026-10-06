@@ -7,10 +7,13 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Features.Agents.NewAgent;
 
-public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore store)
+public sealed class NewAgentHandler(
+    IGitRunner git, IMuxDriver mux, IAgentStore store, Func<string, RoleModels>? models = null)
 {
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
@@ -87,7 +90,14 @@ public sealed class NewAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore 
                 {
                     Cwd = plan.TargetDirectory,
                     Args = AgentHarness.CommandFor(
-                        command.Harness, withClaude: agent.RunsClaude),
+                        command.Harness,
+                        withClaude: agent.RunsClaude,
+                        launch: ClaudeLaunch.ForAgent(
+                            command.ProjectName,
+                            agent.Repository,
+                            agent.Branch,
+                            orchestrator: false,
+                            models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models)),
                     Env = AgentHarness.SpawnEnv(command.Harness),
                 }),
             ct).ConfigureAwait(false);
