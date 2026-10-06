@@ -31,6 +31,10 @@ public static class FleetKeyHints
 
     public static bool Capturing { get; set; }
 
+    public static string RevealKey { get; private set; } = DefaultRevealKey;
+
+    private const string DefaultRevealKey = "?";
+
     public static bool Shown => setting || toggled || held;
 
     public static bool Setting => setting;
@@ -84,12 +88,14 @@ public static class FleetKeyHints
     {
         (setting, toggled, held, heldAt, interval, releases) = (true, false, false, 0, 0, false);
         Capturing = false;
+        RevealKey = DefaultRevealKey;
         Changed = null;
     }
 
     public static void Attach(IApplication app, Func<Keymap> keys, Func<bool> load)
     {
         var keymap = keys();
+        Rebind(keymap.DisplayFor(FleetAction.RevealMenuKeys));
         Apply(load());
 
         app.Keyboard.KeyDown += (_, key) =>
@@ -134,9 +140,21 @@ public static class FleetKeyHints
         app.AddTimeout(Recheck, () =>
         {
             keymap = keys();
+            Rebind(keymap.DisplayFor(FleetAction.RevealMenuKeys));
             Apply(load());
             return true;
         });
+    }
+
+    public static void Rebind(string revealKey)
+    {
+        if (revealKey == RevealKey)
+        {
+            return;
+        }
+
+        RevealKey = revealKey;
+        Changed?.Invoke();
     }
 
     private static bool Same(Key pressed, Key bound) =>

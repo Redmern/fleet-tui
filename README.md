@@ -241,7 +241,10 @@ While it is off, anywhere outside a text field:
   you let go, and a quick tap shows them for about a second;
 - **`?`** shows them until you press `?` again.
 
-The menu's bar keeps a `? keys` chip as a reminder. A change to the setting reaches open screens,
+The fleet menu, the pickers and the settings, log, notification, remote, secrets, agent-list and
+keybinds screens have an info icon in the top-left corner with the reveal key (`?`)
+beside it while the keys are hidden; clicking it does the same as `?`. The top-right corner is a
+close icon, and the select and back buttons on the bar are icons too. A change to the setting reaches open screens,
 such as the dashboard, within a second. Both keys can be rebound under **navigation** in Keybinds;
 the editor refuses a key that another fleet action already uses, in either direction.
 

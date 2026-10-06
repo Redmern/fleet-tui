@@ -5457,6 +5457,21 @@ conversation):
   it). A head started that way is restarted in voice mode by the chord, the same restart
   the second chord used to do.
 
+## Corner icons on menus and dialogs, 2026-10-06
+
+- `Ui/FleetCorners.Attach` puts two clickable icons on the top row of a window's content:
+  info (and the reveal key while keys are hidden) at the left, close at the right. They sit
+  inside the content, not on the border, because a float pane draws no border.
+- The left corner keeps its width when the key goes, so a tab bar or caption beside it
+  (`between`) never shifts. Clicking it is `FleetKeyHints.Toggle`; the key it shows is
+  `FleetKeyHints.RevealKey`, read from the keymap with the setting, so it follows a rebind.
+- The corner replaces the menu's pinned `? keys` chip and every bar's close/cancel/quit chip.
+  Select and back stay on the bar as icon chips (`FleetIcons.Select`, `FleetIcons.Back`).
+- Applied to the fleet menu, the pickers, Settings, AI-DLC, logs, notifications, remotes,
+  secrets, the agent list, keybinds and the project picker. A rebind of the reveal key
+  raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits. The dashboard (its menu mode keeps a close chip) and the
+  small prompts/dialogs without a bar are left as they were.
+
 ## Still to verify
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

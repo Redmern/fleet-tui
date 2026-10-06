@@ -14,6 +14,14 @@ public static class FleetIcons
 
     public const string Permissions = "";
 
+    public const string Info = "";
+
+    public const string Select = "";
+
+    public const string Back = "";
+
+    public const string Close = "";
+
     public static string? For(FleetAction action) => action switch
     {
         FleetAction.QuitFleet => "",
@@ -54,7 +62,7 @@ public static class FleetIcons
         FleetAction.AddRepository => "",
         FleetAction.RemoveRepository => "",
         FleetAction.Refresh => "",
-        FleetAction.Close => "",
+        FleetAction.Close => Close,
         _ => null,
     };
 }

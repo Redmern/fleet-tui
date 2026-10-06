@@ -1,4 +1,5 @@
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -77,11 +78,10 @@ public static class FleetTabbedPicker
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
         bar.Show(
         [
-            ("enter", "select", () => Take(FleetRows.Selected(list), newWindow: false)),
+            ("enter", FleetIcons.Select, () => Take(FleetRows.Selected(list), newWindow: false)),
             ("SHIFT", "new window", () => Take(FleetRows.Selected(list), newWindow: true)),
             ("h/l", "machine", () => Show((current + 1) % tabs.Count, 0)),
-            ("esc", "cancel", () => app.RequestStop(window)),
-            ("bksp", "back", () =>
+            ("bksp", FleetIcons.Back, () =>
             {
                 FleetModal.Back();
                 app.RequestStop(window);
@@ -132,6 +132,7 @@ public static class FleetTabbedPicker
 
         app.Keyboard.KeyDown += Keys;
         window.Add(tabBar.Root, list, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
         Show(current, selected);
 
         try

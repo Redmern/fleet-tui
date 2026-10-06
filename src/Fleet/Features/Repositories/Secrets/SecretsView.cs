@@ -1,5 +1,6 @@
 using Fleet.Features.Repositories.Secrets.Models;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -37,7 +38,7 @@ public static class SecretsView
         [
             ("o", SecretsRows.Open, () => Act(SecretsRows.Open)),
             ("c", SecretsRows.Copy, () => Act(SecretsRows.Copy)),
-            ("esc", "back", () => app.RequestStop(window)),
+            ("esc", FleetIcons.Back, () => app.RequestStop(window)),
         ]);
 
         var claim = FleetModal.Enter();
@@ -80,7 +81,10 @@ public static class SecretsView
 
         app.Keyboard.KeyDown += Keys;
 
-        window.Add(FleetTheme.Caption(1, 0, plan.Root), list, bar.Root);
+        var caption = FleetTheme.Caption(1, 0, plan.Root);
+
+        window.Add(caption, list, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window), caption);
 
         try
         {

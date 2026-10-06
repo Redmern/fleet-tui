@@ -193,7 +193,6 @@ public static class ManageRemotesView
             ("e", "rename", Rename),
             ("x", "forget", Forget),
             ("d", "disconnect", Disconnect),
-            ("q/esc", "close", () => app.RequestStop(window)),
         ]);
 
         var claim = FleetModal.Enter();
@@ -249,6 +248,7 @@ public static class ManageRemotesView
         });
 
         window.Add(list, status, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
         Fill([]);
         Reload();
 

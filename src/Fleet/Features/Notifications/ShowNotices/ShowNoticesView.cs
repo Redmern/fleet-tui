@@ -71,7 +71,6 @@ public static class ShowNoticesView
                 (keymap.DisplayFor(FleetAction.DismissAllNotices), "dismiss all", () => Dismiss(one: false)),
                 ("b", settings.Bell ? "bell on" : "bell off", () => Toggle(bell: true)),
                 ("t", settings.Toast ? "toasts on" : "toasts off", () => Toggle(bell: false)),
-                ("q/esc", "close", () => app.RequestStop(window)),
             ]);
         }
 
@@ -204,6 +203,7 @@ public static class ShowNoticesView
         });
 
         window.Add(tabBar.Root, list, status, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
         Reload();
 
         try

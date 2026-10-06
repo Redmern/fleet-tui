@@ -3,6 +3,7 @@ using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -118,8 +119,7 @@ public static class EditAidlcView
         [
             ("enter", "change", Change),
             ("r", "default", Reset),
-            ("esc", "close", () => app.RequestStop(window)),
-            ("bksp", "back", () =>
+            ("bksp", FleetIcons.Back, () =>
             {
                 FleetModal.Back();
                 app.RequestStop(window);
@@ -160,6 +160,7 @@ public static class EditAidlcView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, status, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
         {
