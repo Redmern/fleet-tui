@@ -8,6 +8,10 @@ public static class FleetTones
 
     public const string Key = "key";
 
+    public const string Edge = "edge";
+
+    public const string Title = "title";
+
     public const string ChipEdge = "chip.edge";
 
     public const string ChipKey = "chip.key";

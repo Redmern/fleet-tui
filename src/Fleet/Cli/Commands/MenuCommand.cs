@@ -12,6 +12,7 @@ using Fleet.Features.Menu.EditAidlc;
 using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
+using Fleet.Features.Menu.ShowMenu;
 using Fleet.Features.Notifications.ShowNotices;
 using Fleet.Features.Notifications.SyncNotices;
 using Fleet.Features.Projects.CreateProject;
@@ -50,35 +51,6 @@ namespace Fleet.Cli.Commands;
 public static class MenuCommand
 {
     private const int LogTail = 400;
-
-    private static readonly FleetAction[] MenuActions =
-    [
-        FleetAction.QuitFleet,
-        FleetAction.FocusMain,
-        FleetAction.SwitchProject,
-        FleetAction.ListAgents,
-        FleetAction.OpenEditor,
-        FleetAction.BrowseFiles,
-        FleetAction.Notifications,
-        FleetAction.Remotes,
-        FleetAction.SaveSession,
-        FleetAction.OpenSettings,
-    ];
-
-    private static readonly FleetAction[] SettingsActions =
-    [
-        FleetAction.RebuildDashboard,
-        FleetAction.EditSettings,
-        FleetAction.EditFleetConfig,
-        FleetAction.EditKeybinds,
-        FleetAction.ViewLogs,
-        FleetAction.CleanupProject,
-        FleetAction.EditAidlcMode,
-        FleetAction.EditAutoClose,
-        FleetAction.EditClaudeProfile,
-        FleetAction.EditMainOrchestratorInNvim,
-        FleetAction.EditSubOrchestratorsInNvim,
-    ];
 
     public static async Task<int> RunAsync(Invocation invocation)
     {
@@ -127,24 +99,24 @@ public static class MenuCommand
 
         while (true)
         {
-            if (chosen == FleetAction.None)
+            if (chosen == FleetAction.None || FleetMenus.IsSubmenu(chosen))
             {
-                chosen = FleetUi.Menu(app, keymap, MenuActions);
-            }
+                var submenu = chosen;
 
-            if (chosen == FleetAction.OpenSettings)
-            {
-                chosen = FleetUi.Menu(app, keymap, SettingsActions);
+                chosen = await ShowMenu(app, keymap, project, submenu).ConfigureAwait(false);
 
-                if (chosen == FleetAction.None && FleetModal.WentBack())
+                if (chosen == FleetAction.None && submenu != FleetAction.None && FleetModal.WentBack())
                 {
+                    chosen = FleetMenus.Parent(submenu);
                     continue;
                 }
-            }
 
-            if (chosen == FleetAction.None)
-            {
-                return 0;
+                if (chosen == FleetAction.None)
+                {
+                    return 0;
+                }
+
+                continue;
             }
 
             var code = await Perform(app, keymap, keymaps, adder, projects, project, chosen).ConfigureAwait(false);
@@ -159,8 +131,45 @@ public static class MenuCommand
         }
     }
 
-    public static FleetAction Parent(FleetAction action) =>
-        SettingsActions.Contains(action) ? FleetAction.OpenSettings : FleetAction.None;
+    public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
+
+    private static async Task<FleetAction> ShowMenu(
+        IApplication app, Keymap keymap, Project project, FleetAction submenu)
+    {
+        var sections = FleetMenus.For(submenu);
+
+        if (submenu == FleetAction.None && !await CanOpenEditor(project).ConfigureAwait(false))
+        {
+            sections = FleetMenus.Without(sections, FleetAction.OpenEditor);
+        }
+
+        var settings = Adapters.Settings();
+        var current = settings.Load(project.Name);
+
+        return FleetUi.Menu(
+            app,
+            keymap,
+            submenu,
+            sections,
+            action => FleetMenus.Value(action, current),
+            action =>
+            {
+                current = FleetMenus.Flip(action, current);
+                settings.Save(project.Name, current);
+                return FleetMenus.Value(action, current);
+            });
+    }
+
+    private static async Task<bool> CanOpenEditor(Project project)
+    {
+        var mux = Adapters.Mux(Adapters.Log());
+
+        return await OpenEditorHandler.CanOpenEditorAsync(
+                mux.Unsupported is null ? mux.Driver : null,
+                Environment.CurrentDirectory,
+                new ListAgentsHandler(Adapters.Agents()).Handle(project.Name))
+            .ConfigureAwait(false);
+    }
 
     private static async Task<int> Perform(
         IApplication app,
@@ -348,48 +357,11 @@ public static class MenuCommand
                 }
 
             case FleetAction.EditMainOrchestratorInNvim:
-                {
-                    var hostSettings = Adapters.Settings();
-                    var current = hostSettings.Load(project.Name);
-
-                    var picked = FleetPicker.Choose(
-                        app,
-                        $"{SettingsDefaults.MainOrchestratorInNvimLabel} — {project.Name}",
-                        [
-                            new PickerEntry("on", "the main orchestrator runs claude inside nvim", "n"),
-                            new PickerEntry("off", "the main orchestrator runs bare claude", "f"),
-                        ],
-                        keymap,
-                        current.MainOrchestratorInNvim ? 0 : 1);
-
-                    if (picked is not null)
-                    {
-                        hostSettings.Save(project.Name, current.WithMainOrchestratorInNvim(picked.Value == 0));
-                    }
-
-                    break;
-                }
-
             case FleetAction.EditSubOrchestratorsInNvim:
                 {
                     var hostSettings = Adapters.Settings();
-                    var current = hostSettings.Load(project.Name);
 
-                    var picked = FleetPicker.Choose(
-                        app,
-                        $"{SettingsDefaults.SubOrchestratorsInNvimLabel} — {project.Name}",
-                        [
-                            new PickerEntry("on", "dispatched sub-orchestrators run claude inside nvim", "n"),
-                            new PickerEntry("off", "dispatched sub-orchestrators run bare claude", "f"),
-                        ],
-                        keymap,
-                        current.SubOrchestratorsInNvim ? 0 : 1);
-
-                    if (picked is not null)
-                    {
-                        hostSettings.Save(project.Name, current.WithSubOrchestratorsInNvim(picked.Value == 0));
-                    }
-
+                    hostSettings.Save(project.Name, FleetMenus.Flip(chosen, hostSettings.Load(project.Name)));
                     break;
                 }
 
@@ -559,12 +531,11 @@ public static class MenuCommand
                     }
 
                     var driver = editorMux.Driver;
-                    var agent = OpenEditorHandler.Caller(
-                        await driver.ListPanesAsync().ConfigureAwait(false),
-                        driver.CurrentPane,
-                        driver.Caps.HasFlag(MuxCaps.Popup),
-                        Environment.CurrentDirectory,
-                        new ListAgentsHandler(Adapters.Agents()).Handle(project.Name));
+                    var agent = await OpenEditorHandler.CallerAsync(
+                            driver,
+                            Environment.CurrentDirectory,
+                            new ListAgentsHandler(Adapters.Agents()).Handle(project.Name))
+                        .ConfigureAwait(false);
 
                     if (agent is null)
                     {

@@ -347,6 +347,30 @@ public sealed class OpenEditorTests : IDisposable
     }
 
     [Fact]
+    public async Task The_editor_can_open_from_an_agent_pane()
+    {
+        var agent = Agent();
+
+        Assert.True(await OpenEditorHandler.CanOpenEditorAsync(_mux, agent.Worktree, [agent]));
+    }
+
+    [Fact]
+    public async Task The_editor_cannot_open_from_a_pane_that_is_no_agent()
+    {
+        var agent = Agent();
+
+        Assert.False(await OpenEditorHandler.CanOpenEditorAsync(_mux, ProjectRoot, [agent]));
+    }
+
+    [Fact]
+    public async Task The_editor_cannot_open_without_a_usable_multiplexer()
+    {
+        var agent = Agent();
+
+        Assert.False(await OpenEditorHandler.CanOpenEditorAsync(null, agent.Worktree, [agent]));
+    }
+
+    [Fact]
     public void The_default_key_is_e_and_only_the_settings_submenu_shares_it()
     {
         Assert.Equal("e", KeymapDefaults.Bindings[FleetAction.OpenEditor]);
