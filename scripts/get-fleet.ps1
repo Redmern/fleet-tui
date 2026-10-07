@@ -11,12 +11,13 @@
     install from a fork instead.
 
 .PARAMETER WithDeps
-    Install WezTerm, Neovim, yazi and git through winget when missing, and clone a
-    Neovim config into %LOCALAPPDATA%\nvim. The dependency script is downloaded
+    Install WezTerm, Neovim, yazi and git through winget when missing. fleet's own
+    Neovim config ships inside the binary. The dependency script is downloaded
     from the same repository, so this works through 'irm | iex' too.
 
 .PARAMETER NvimConfig
-    Git URL of the Neovim config to clone with -WithDeps.
+    Optional: git URL of a Neovim config to clone into %LOCALAPPDATA%\nvim with
+    -WithDeps, for the 'user' nvim config setting.
 
 .EXAMPLE
     .\get-fleet.ps1

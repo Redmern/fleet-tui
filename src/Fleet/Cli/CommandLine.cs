@@ -79,6 +79,7 @@ public static class CommandLine
         "approve" => FleetVerb.Approve,
         "cli" => FleetVerb.Cli,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
+        Shared.Constants.AgentHarness.WithEnvVerb => FleetVerb.WithEnv,
         "help" or "--help" or "-h" => FleetVerb.Help,
         _ => FleetVerb.Unknown,
     };

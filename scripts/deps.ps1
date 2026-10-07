@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Install what fleet needs on Windows: WezTerm, Neovim, yazi and a Neovim config.
+    Install what fleet needs on Windows: WezTerm, Neovim, git and yazi.
 
 .DESCRIPTION
     Dot-source this and call Install-FleetDeps. Both installers use it, which is
@@ -8,14 +8,14 @@
 
     Everything is skipped when it is already there, so re-running is harmless.
 
+    fleet ships its own Neovim config (nvim\ in the repo, embedded in the binary) and
+    'fleet setup' writes it to %LOCALAPPDATA%\fleet-nvim, so no config is cloned here
+    unless you ask for one with -NvimConfig or FLEET_NVIM_CONFIG.
+
 .NOTES
     Package installs go through winget. Without winget the function reports what
     is missing and leaves the machine alone.
 #>
-
-# The config cloned when -NvimConfig is not given. Override per machine with
-# FLEET_NVIM_CONFIG, or pass -NvimConfig <url>.
-$script:DefaultNvimConfig = 'https://github.com/Redmern/nvim_0.12.git'
 
 function Install-FleetDeps {
     [CmdletBinding()]
@@ -79,11 +79,14 @@ function Install-FleetDeps {
         return
     }
 
-    $url = if ($NvimConfig) { $NvimConfig }
-           elseif ($env:FLEET_NVIM_CONFIG) { $env:FLEET_NVIM_CONFIG }
-           else { $script:DefaultNvimConfig }
+    $url = if ($NvimConfig) { $NvimConfig } else { $env:FLEET_NVIM_CONFIG }
 
     Step 'Neovim config'
+
+    if (-not $url) {
+        Ok "fleet's own config ships with fleet; 'fleet setup' writes it to $(Join-Path $env:LOCALAPPDATA 'fleet-nvim')"
+        return
+    }
 
     $target = Join-Path $env:LOCALAPPDATA 'nvim'
 

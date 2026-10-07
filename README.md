@@ -24,10 +24,12 @@ To run fleet:
 
 - [WezTerm](https://wezterm.org) on `PATH` — fleet has nothing to drive without it
 - git
-- [Neovim](https://neovim.io) with `neo-tree` and `claudecode.nvim`. The main
-  orchestrator and every sub-orchestrator run Claude inside nvim through
-  `claudecode.nvim`, with no file tree and no file open, so only Claude shows. Agents
-  use nvim by default and can also open Claude Code alone
+- [Neovim](https://neovim.io) 0.9 or later. The main orchestrator and every
+  sub-orchestrator run Claude inside nvim through `claudecode.nvim`, with no file tree
+  and no file open, so only Claude shows. Agents use nvim by default and can also open
+  Claude Code alone. fleet brings its own nvim config with `neo-tree` and
+  `claudecode.nvim` (see [Fleet's nvim config](#fleets-nvim-config)), so your own
+  config does not need them
 - [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
 - Claude Code, which nvim starts in the pane fleet opens on the left
 - a Nerd Font in WezTerm, or the branch pills and icons render as boxes
@@ -88,8 +90,8 @@ From source:
 
 Add `-WithDeps` (or `--with-deps`) and the installer sets up the machine first:
 WezTerm, Neovim, yazi and git through winget on Windows or the package manager it
-finds on Linux, then a Neovim config cloned into `%LOCALAPPDATA%\nvim` /
-`~/.config/nvim`:
+finds on Linux. No Neovim config is needed: fleet ships its own (see
+[Fleet's nvim config](#fleets-nvim-config)):
 
 ```powershell
 .\install.ps1 -WithDeps
@@ -101,9 +103,10 @@ finds on Linux, then a Neovim config cloned into `%LOCALAPPDATA%\nvim` /
 sh scripts/get-fleet.sh --with-deps
 ```
 
-Which config it clones: `-NvimConfig <git-url>`, else `FLEET_NVIM_CONFIG`, else the
-default at the top of `scripts/deps.ps1` and `install.sh`. Anything already present
-is left alone — an existing tool is skipped, a config directory holding a different
+To also clone a Neovim config of your own into `%LOCALAPPDATA%\nvim` / `~/.config/nvim`
+(for the `user` nvim config setting), pass `-NvimConfig <git-url>` or set
+`FLEET_NVIM_CONFIG`; without either nothing is cloned. Anything already present is
+left alone — an existing tool is skipped, a config directory holding a different
 remote is not touched, and a matching one is fast-forwarded. A config that ships its
 own `bootstrap.sh` is reported rather than run.
 
@@ -121,6 +124,7 @@ fleet setup
   --  nvim           missing - agents cannot open it
   ok  fleet.lua      C:\Users\you\.wezterm\fleet.lua
   ok  wezterm config wired C:\Users\you\.wezterm.lua
+  ok  nvim config    fleet's own, in C:\Users\you\AppData\Local\fleet-nvim (nvim 0.11.4)
   glyph check     develop ↑1 ●
 still to do:
   nvim           winget install Neovim.Neovim
@@ -464,8 +468,30 @@ The base list shows local branches first, then remote-tracking ones marked
 `m` on the dashboard changes this for an agent that already exists; it applies the
 next time that agent starts.
 
-The nvim option runs the commands from your own config, so it depends on
-`neo-tree` and `claudecode.nvim` being installed.
+The nvim option uses fleet's own nvim config by default, which brings `neo-tree` and
+`claudecode.nvim`; with the `user` setting it runs the commands from your own config,
+which then needs both plugins. See [Fleet's nvim config](#fleets-nvim-config).
+
+### Fleet's nvim config
+
+fleet ships a small Neovim config (`nvim/` in this repository, embedded in the binary):
+lazy.nvim with `neo-tree`, `claudecode.nvim` and their dependencies (`plenary`, `nui`,
+`nvim-web-devicons`). `fleet setup` writes it to `%LOCALAPPDATA%\fleet-nvim` on Windows
+or `~/.config/fleet-nvim` elsewhere (`$XDG_CONFIG_HOME/fleet-nvim` when that is set),
+and fleet refreshes it whenever it starts an nvim pane, so hand edits there are
+overwritten.
+
+Every nvim fleet starts gets `NVIM_APPNAME=fleet-nvim`, so nvim reads that config and
+keeps its plugins, state and shada in separate `fleet-nvim` folders. Your own nvim
+config and plugin folders are never read or touched. `fleet setup` also installs the
+plugins (headless, once; it needs git and network), so nvim panes start straight away. `NVIM_APPNAME`
+needs Neovim 0.9 or later; `fleet setup` and `fleet doctor` check the version.
+
+**Nvim config** (fleet menu > settings > fleet config, `N`) switches between `fleet`
+(the default) and `user`. `user` starts nvim exactly as before, with your own config, for
+when you already have `neo-tree` and `claudecode.nvim` set up the way you like. It is
+one setting for the whole machine (`nvim.json` in the fleet config folder) and applies
+to nvim panes started after the change.
 
 fleet creates the worktree beside its siblings, starts the harness in it, and
 lists it under Agents.

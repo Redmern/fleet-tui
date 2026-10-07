@@ -14,6 +14,7 @@ using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Enums;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Platform.Mux.WezTerm;
+using Fleet.Platform.Nvim;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Hooks;
 using Fleet.Platform.Storage;
@@ -34,7 +35,9 @@ using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Platform.Releases;
+using Fleet.Shared;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 
@@ -78,6 +81,10 @@ public static class Adapters
     public static bool ShowMenuKeys() => new JsonSettingsStore().LoadShowMenuKeys();
 
     public static void SaveShowMenuKeys(bool shown) => new JsonSettingsStore().SaveShowMenuKeys(shown);
+
+    public static NvimConfig LoadNvimConfig() => new JsonSettingsStore().LoadNvim();
+
+    public static void SaveNvimConfig(NvimConfig nvim) => new JsonSettingsStore().SaveNvim(nvim);
 
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
@@ -153,8 +160,25 @@ public static class Adapters
 
         IMuxDriver inner = embedded ? EmbeddedWiring.Driver() : new WezTermDriver();
 
-        return new MuxSelection(new FailSilentDriver(inner, log.Swallowed), chosen, unsupported);
+        return new MuxSelection(
+            new FailSilentDriver(new NvimConfigDriver(inner, UseFleetNvimConfig), log.Swallowed), chosen, unsupported);
     }
+
+    public static NvimSetup InspectNvim(bool install)
+    {
+        var fleetConfig = LoadNvimConfig() == NvimConfig.Fleet;
+        var version = NvimVersion.Parse(FleetNvimConfig.NvimVersionOutput());
+        var written = fleetConfig && (install ? FleetNvimConfig.Install() : Directory.Exists(FleetNvimConfig.Directory));
+
+        return new NvimSetup(
+            fleetConfig,
+            written && (!install || version is null || !NvimVersion.SupportsAppName(version) || FleetNvimConfig.InstallPlugins()),
+            FleetNvimConfig.Directory,
+            version);
+    }
+
+    private static bool UseFleetNvimConfig() =>
+        LoadNvimConfig() == NvimConfig.Fleet && FleetNvimConfig.EnsureInstalled();
 
     public static string ConfigDirectory => FleetPaths.Config;
 

@@ -25,6 +25,7 @@ public static class Runner
         FleetVerb.Version => await VersionCommand.RunAsync().ConfigureAwait(false),
         FleetVerb.Update => await UpdateCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Titled => TitledCommand.Run(invocation),
+        FleetVerb.WithEnv => WithEnvCommand.Run(invocation),
         FleetVerb.Daemon => await EmbeddedCommands.DaemonAsync(invocation).ConfigureAwait(false),
         FleetVerb.Attach => await EmbeddedCommands.AttachAsync(invocation).ConfigureAwait(false),
         FleetVerb.Bridge => await EmbeddedCommands.BridgeAsync().ConfigureAwait(false),

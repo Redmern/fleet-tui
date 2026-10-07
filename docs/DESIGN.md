@@ -301,8 +301,43 @@ over by hand —
   with "Permission denied". Wait for the panes to actually disappear, then wait
   a little longer.
 
-`wezterm/fleet.lua` and `nvim/fleet.lua` are the only files that port across
-directly, being Lua. Both need review against the current Neovim config.
+`wezterm/fleet.lua` is the only file that ports across directly, being Lua.
+
+### Fleet's own nvim config
+
+fleet needs two things from Neovim: `:Neotree` and `:ClaudeCode`. Relying on the
+user's config for them broke for anyone with a different setup, so fleet ships its own
+config in `nvim/` (lazy.nvim, `neo-tree`, `claudecode.nvim`, `plenary`, `nui`,
+`nvim-web-devicons`). `Fleet.csproj` embeds the files, so every way of getting fleet
+(install scripts, release binaries, `fleet update`) carries them, and
+`Platform/Nvim/FleetNvimConfig` writes them to `<config home>/fleet-nvim`: from
+`fleet setup`, and before fleet starts an nvim pane when the folder is missing or this
+process has not written it yet. `fleet setup` also runs `nvim --headless "+Lazy! install"`
+so a fresh machine does not have several panes racing to clone the same plugins.
+
+On the WezTerm backend fleet's nvim runs under `fleet with-env` (below), so the pane's
+process name is fleet's; `nvim/lua/fleet/wezterm.lua` sets the `IS_NVIM` user var that
+the generated WezTerm config already falls back to for Ctrl+h/j/k/l.
+
+Isolation comes from `NVIM_APPNAME=fleet-nvim` (Neovim 0.9+): nvim then reads that
+config folder and uses its own data, state and plugin folders. `-u <init.lua>` alone
+was not enough, because it still loads the user's `plugin/` and `after/` folders and
+shares their plugin directory.
+
+The variable is added at one choke point, `NvimConfigDriver`, a mux decorator under
+`FailSilentDriver` that puts it in the spawn env of any pane whose command starts nvim
+(directly or through `fleet titled`). It reads the machine-wide **Nvim config** setting
+(`fleet` | `user`, `nvim.json`) at spawn time, so the command strings built in
+`AgentHarness` stay the same for both settings and the `user` setting is exactly the old
+behaviour. That is also why the startup Lua (`:FleetTell`, the instruction pump, the
+Neotree/ClaudeCode layout) stays inline in `AgentHarness` rather than moving into
+`nvim/lua/fleet`: with `user` it has to work in a config fleet does not control.
+
+WezTerm's `cli spawn` takes no environment, so `EnvLaunch` wraps env in `cmd /c set` or
+`sh -c export`. Those join the argv unquoted, which the nvim startup Lua does not
+survive, so a command that needs quoting is wrapped in `fleet with-env K=V -- <argv>`
+instead: a hidden verb that sets the variables and starts the command with an argument
+list, like `fleet titled`. The embedded mux passes env natively.
 
 ## Projects, repos, and agents
 

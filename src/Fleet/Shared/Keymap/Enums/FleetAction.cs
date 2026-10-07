@@ -42,6 +42,7 @@ public enum FleetAction
     EditClaudeProfile,
     EditMainOrchestratorInNvim,
     EditSubOrchestratorsInNvim,
+    EditNvimConfig,
     Notifications,
     Remotes,
     SaveSession,

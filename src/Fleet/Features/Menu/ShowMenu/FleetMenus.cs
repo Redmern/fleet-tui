@@ -1,8 +1,10 @@
 using System.Globalization;
 using Fleet.Features.Menu.ShowMenu.Models;
+using Fleet.Shared.Aidlc;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui.Constants;
 
@@ -38,6 +40,7 @@ public static class FleetMenus
         [
             FleetAction.EditMainOrchestratorInNvim,
             FleetAction.EditSubOrchestratorsInNvim,
+            FleetAction.EditNvimConfig,
             FleetAction.EditAutoClose,
             FleetAction.EditAidlcMode,
             FleetAction.EditClaudeProfile,
@@ -68,6 +71,7 @@ public static class FleetMenus
     [
         FleetAction.EditMainOrchestratorInNvim,
         FleetAction.EditSubOrchestratorsInNvim,
+        FleetAction.EditNvimConfig,
         FleetAction.EditShowMenuKeys,
     ];
 
@@ -116,6 +120,7 @@ public static class FleetMenus
         FleetAction.EditMainOrchestratorInNvim => OnOff(settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => OnOff(settings.SubOrchestratorsInNvim),
         FleetAction.EditShowMenuKeys => OnOff(settings.ShowMenuKeys),
+        FleetAction.EditNvimConfig => $"[{Words.Of(settings.Nvim)}]",
         FleetAction.EditAutoClose => settings.AutoClose
             ? $"[{settings.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture)}m]"
             : OnOff(false),
@@ -127,6 +132,8 @@ public static class FleetMenus
         FleetAction.EditMainOrchestratorInNvim => settings.WithMainOrchestratorInNvim(!settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => settings.WithSubOrchestratorsInNvim(!settings.SubOrchestratorsInNvim),
         FleetAction.EditShowMenuKeys => settings.WithShowMenuKeys(!settings.ShowMenuKeys),
+        FleetAction.EditNvimConfig => settings.WithNvim(
+            settings.Nvim == NvimConfig.Fleet ? NvimConfig.User : NvimConfig.Fleet),
         _ => settings,
     };
 

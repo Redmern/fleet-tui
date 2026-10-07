@@ -3,6 +3,7 @@ using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -201,6 +202,21 @@ public class FleetMenusTests
         Assert.Equal("[off]", FleetMenus.Value(FleetAction.EditShowMenuKeys, off));
         Assert.NotEqual(SettingsConfig.Default.Signature, off.Signature);
         Assert.False(off.MergedOverDefaults().ShowMenuKeys);
+    }
+
+    [Fact]
+    public void Nvim_config_is_a_toggle_in_fleet_config_between_fleet_and_user()
+    {
+        Assert.Contains(FleetAction.EditNvimConfig, FleetMenus.Actions(FleetMenus.FleetConfig));
+        Assert.True(FleetMenus.IsToggle(FleetAction.EditNvimConfig));
+        Assert.Equal("[fleet]", FleetMenus.Value(FleetAction.EditNvimConfig, SettingsConfig.Default));
+
+        var user = FleetMenus.Flip(FleetAction.EditNvimConfig, SettingsConfig.Default);
+
+        Assert.Equal(NvimConfig.User, user.Nvim);
+        Assert.Equal("[user]", FleetMenus.Value(FleetAction.EditNvimConfig, user));
+        Assert.NotEqual(SettingsConfig.Default.Signature, user.Signature);
+        Assert.Equal(NvimConfig.Fleet, FleetMenus.Flip(FleetAction.EditNvimConfig, user).Nvim);
     }
 
     [Fact]

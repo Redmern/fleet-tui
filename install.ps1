@@ -17,12 +17,14 @@
     With -Uninstall, also delete %APPDATA%\fleet.
 
 .PARAMETER WithDeps
-    Install WezTerm, Neovim, yazi and git through winget when they are missing, and
-    clone a Neovim config into %LOCALAPPDATA%\nvim.
+    Install WezTerm, Neovim, yazi and git through winget when they are missing.
+    fleet's own Neovim config ships inside the binary; 'fleet setup' (run at the end)
+    writes it to %LOCALAPPDATA%\fleet-nvim.
 
 .PARAMETER NvimConfig
-    Git URL of the Neovim config to clone with -WithDeps. Defaults to
-    FLEET_NVIM_CONFIG, then to the one in scripts\deps.ps1.
+    Optional: git URL of a Neovim config to clone into %LOCALAPPDATA%\nvim with
+    -WithDeps, for the 'user' nvim config setting. Defaults to FLEET_NVIM_CONFIG;
+    without either nothing is cloned.
 
 .EXAMPLE
     .\install.ps1

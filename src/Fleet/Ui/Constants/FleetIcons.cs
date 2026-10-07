@@ -42,6 +42,7 @@ public static class FleetIcons
         FleetAction.ViewLogs => "",
         FleetAction.EditMainOrchestratorInNvim => "",
         FleetAction.EditSubOrchestratorsInNvim => "",
+        FleetAction.EditNvimConfig => "",
         FleetAction.EditAutoClose => "",
         FleetAction.EditAidlcMode => "",
         FleetAction.EditClaudeProfile => "",
