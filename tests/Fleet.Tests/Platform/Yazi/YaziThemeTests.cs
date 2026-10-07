@@ -1,6 +1,8 @@
 using Fleet.Platform.Yazi;
 using Fleet.Ports.Themes.Enums;
+using Fleet.Ports.Themes.Models;
 using Fleet.Shared.Themes;
+using Fleet.Tests.Platform.Storage;
 
 namespace Fleet.Tests.Platform.Yazi;
 
@@ -79,6 +81,31 @@ public sealed class YaziThemeTests : IDisposable
 
         Assert.Equal(ThemeOutcome.Applied, target.Apply(BuiltInThemes.Find("dracula")!).Outcome);
         Assert.Equal(ThemeOutcome.Unchanged, target.Apply(BuiltInThemes.Find("dracula")!).Outcome);
+        Assert.Contains("'dracula'", File.ReadAllText(ThemeFile));
+    }
+
+    // Defender or the search indexer opens a freshly written file to scan it; replacing it in that window
+    // used to throw out of Apply.
+    [Fact]
+    public void A_theme_file_briefly_held_by_another_process_is_waited_for()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(_config);
+        var target = new YaziThemeTarget(_config);
+        target.Apply(BuiltInThemes.CatppuccinMocha);
+
+        ThemeApplied applied;
+
+        using (HeldShut.For(ThemeFile, TimeSpan.FromMilliseconds(300)))
+        {
+            applied = target.Apply(BuiltInThemes.Find("dracula")!);
+        }
+
+        Assert.Equal(ThemeOutcome.Applied, applied.Outcome);
         Assert.Contains("'dracula'", File.ReadAllText(ThemeFile));
     }
 

@@ -1,3 +1,4 @@
+using Fleet.Platform.Storage;
 using Fleet.Ports.Themes;
 using Fleet.Shared.Themes;
 
@@ -76,6 +77,22 @@ public sealed class FileThemeStore(string config) : IThemeStore
         var temp = $"{file}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
 
         File.WriteAllText(temp, text);
-        File.Move(temp, file, overwrite: true);
+
+        var moved = BusyFiles.Retry(() =>
+        {
+            File.Move(temp, file, overwrite: true);
+            return file;
+        }, BusyFiles.Patience);
+
+        if (moved is null)
+        {
+            BusyFiles.Retry(() =>
+            {
+                File.Delete(temp);
+                return temp;
+            }, TimeSpan.Zero);
+
+            throw new IOException($"{file} could not be replaced (another program may have it open); it was left as it was");
+        }
     }
 }

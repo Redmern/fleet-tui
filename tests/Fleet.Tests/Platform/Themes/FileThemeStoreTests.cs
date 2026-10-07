@@ -1,5 +1,6 @@
 using Fleet.Platform.Themes;
 using Fleet.Shared.Themes;
+using Fleet.Tests.Platform.Storage;
 
 namespace Fleet.Tests.Platform.Themes;
 
@@ -65,5 +66,27 @@ public sealed class FileThemeStoreTests : IDisposable
 
         Assert.Equal(Path.Combine(store.ThemesDirectory, "omarchy.toml"), file);
         Assert.Equal(nord.Base, Assert.Single(store.Custom()).Base);
+    }
+
+    // Windows refuses to replace a file another process (Defender, the indexer) has open; the write waits it out.
+    [Fact]
+    public void An_atomic_write_waits_out_a_target_briefly_held_by_another_process()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var file = Path.Combine(_config, "held.txt");
+        Directory.CreateDirectory(_config);
+        File.WriteAllText(file, "old");
+
+        using (HeldShut.For(file, TimeSpan.FromMilliseconds(300)))
+        {
+            FileThemeStore.WriteAtomically(file, "new");
+        }
+
+        Assert.Equal("new", File.ReadAllText(file));
+        Assert.Equal([file], Directory.GetFiles(_config));
     }
 }
