@@ -33,7 +33,8 @@ public static class DashboardSkeleton
             SubRows.For(listing, _ => BranchState.Unknown, trigger),
             listing.Flat.Count(e => !e.IsChild),
             [.. listing.Flat.Select(e => e.Agent.Hidden)],
-            SubRows.GapsAfter(listing));
+            SubRows.GapsAfter(listing),
+            SubRows.Statuses(listing));
     }
 
     public static NoticeBoard Notices(IReadOnlyList<Notice> all, DateTime now) =>

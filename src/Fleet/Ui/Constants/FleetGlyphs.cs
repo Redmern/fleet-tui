@@ -27,6 +27,18 @@ public static class FleetGlyphs
 
     public const string Child = "└─";
 
+    public const string Working = "";
+
+    public const string Waiting = "";
+
+    public const string Idle = "";
+
+    public const string Stalled = "";
+
+    public const string Done = "";
+
+    public const string Failed = "";
+
     public static readonly string[] Spinner =
         ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 

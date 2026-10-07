@@ -129,6 +129,41 @@ public static class ShowDashboardView
 
         agentList.MouseLeave += (_, _) => HideTip();
 
+        subList.MousePositionTracking = true;
+
+        subList.MouseEvent += (_, m) =>
+        {
+            if (busy || !FleetModal.Owns(claim))
+            {
+                HideTip();
+                return;
+            }
+
+            if (m.Position is not { } at)
+            {
+                return;
+            }
+
+            var row = subList.Viewport.Y + at.Y;
+            var text = subList.Source is FleetRowSource source && source.Holds(row)
+                ? subs.StatusAt(source.ItemAt(row))
+                : string.Empty;
+
+            if (text.Length == 0)
+            {
+                HideTip();
+                return;
+            }
+
+            tip.Text = $" {text} ";
+            tip.X = subList.Frame.X + Math.Max(0, at.X - 2);
+            tip.Y = subList.Frame.Y + at.Y + 1;
+            tip.Visible = true;
+            window.SetNeedsDraw();
+        };
+
+        subList.MouseLeave += (_, _) => HideTip();
+
         HashSet<int>[] marks = [[], [], [], []];
 
         FleetRow Decorate(FleetRow row, int tab, int index) =>

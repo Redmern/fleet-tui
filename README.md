@@ -671,8 +671,11 @@ working under `<project>/.fleet/orchestrations/<slug>/`, with a file browser spl
 alongside. A sub-orchestrator uses the same MCP tools under the same permissions,
 creates repo agents that are stamped as its own, and reports back with
 `fleet report`. The **Subs** tab (between Agents and Repositories) groups each
-sub-orchestrator with the agents it created and shows its status — working, done, or
-failed — until you remove it.
+sub-orchestrator with the agents it created and shows its status as an icon — working,
+waiting for input, idle, stalled, done or failed; hover it for the name — until you
+remove it. Agent rows on the Agents tab use the same icons. A sub's report is not sent to
+the main orchestrator; its questions, stalls and done/failed show up in the
+notification center like an agent's.
 
 **Dispatch to one repository.** When the orchestrator calls the `dispatch` tool with a
 `repository` (and optionally a `branch`), fleet skips the sub-orchestrator and starts a

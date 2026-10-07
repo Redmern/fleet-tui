@@ -1,5 +1,7 @@
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -36,5 +38,37 @@ public class AgentRowsTests
                 StringComparison.Ordinal));
 
         Assert.Single(repoColumns.Distinct());
+    }
+
+    [Theory]
+    [InlineData(AgentActivity.Working, FleetGlyphs.Working, FleetTones.Warn)]
+    [InlineData(AgentActivity.Waiting, FleetGlyphs.Waiting, FleetTones.Bad)]
+    [InlineData(AgentActivity.Stalled, FleetGlyphs.Stalled, FleetTones.Bad)]
+    [InlineData(AgentActivity.Idle, FleetGlyphs.Idle, FleetTones.Good)]
+    [InlineData("done", FleetGlyphs.Done, FleetTones.Good)]
+    [InlineData("failed", FleetGlyphs.Failed, FleetTones.Bad)]
+    public void Each_status_shows_its_own_coloured_icon(string status, string glyph, string tone)
+    {
+        var rows = AgentRows.For([Agent("backend", "login") with { Status = status }]);
+
+        var icon = rows[0].Trailing![0];
+        Assert.Equal($"{glyph}  ", icon.Text);
+        Assert.Equal(tone, icon.Tone);
+    }
+
+    [Fact]
+    public void An_unknown_status_falls_back_to_a_muted_dot()
+    {
+        var rows = AgentRows.For([Agent("backend", "login") with { Status = "odd" }]);
+
+        Assert.Equal(new FleetSpan($"{FleetGlyphs.Dirty}  ", FleetTones.Muted), rows[0].Trailing![0]);
+    }
+
+    [Fact]
+    public void No_status_shows_no_icon()
+    {
+        var rows = AgentRows.For([Agent("backend", "login")]);
+
+        Assert.Null(rows[0].Trailing);
     }
 }
