@@ -158,6 +158,10 @@ fleet dispatch "<task>" --project <name>
 fleet report --caller <slug> --status <s> --project <name> -- <summary>
                             a sub-orchestrator reports its own status
 fleet doctor                check the environment
+fleet theme list|get        the themes, and the active one
+fleet theme set <name>      switch theme; running fleet windows follow live
+fleet theme sync            follow omarchy's current theme
+fleet theme install omarchy hook omarchy so fleet follows every theme switch
 fleet version               show the version, and check for an update
 fleet update                download and install the latest release
 fleet attach                attach this terminal to fleetd, starting it if needed
@@ -811,10 +815,103 @@ keybinds.json           the prefix and every action binding
 settings/<name>.json    the per-project tool permissions, dispatch trigger and AIDLC settings
 head/                   the head orchestrator's folder: CLAUDE.md, .mcp.json, voice settings
 approvals/<name>/       in-flight MCP approval requests (transient)
+current-theme           the active theme's name (see Themes)
+themes/<name>.toml      your own themes
 fleet.log               failures fleet degraded past, shown by doctor
 ```
 
 `FLEET_CONFIG_HOME` relocates all of it. `FLEET_MUX` forces a driver.
+
+## Themes
+
+fleet's screens, its fleetd chrome and the WezTerm tab and status pills
+(`fleet-theme.lua`) all draw from one palette. Fifteen themes ship with it:
+
+```
+catppuccin-mocha (default)  catppuccin-latte  tokyo-night     gruvbox-dark
+gruvbox-light               nord              dracula         solarized-dark
+solarized-light             rose-pine         everforest      kanagawa
+one-dark                    ayu-dark          github-dark
+```
+
+```powershell
+fleet theme list            # * marks the active one; custom themes say (custom)
+fleet theme set tokyo-night # names are loose: "Tokyo Night" works too
+fleet theme get
+```
+
+Every running dashboard, menu and picker, and fleetd, watches the theme and
+redraws within a moment of a switch. The first of them to notice also rewrites
+`fleet-theme.lua` (only if `fleet setup` installed it) so WezTerm reloads its
+colors. `fleet theme set` does that itself, so it works with nothing running.
+
+### The current-theme file
+
+The active theme is the file `current-theme` in the config directory
+(`%APPDATA%\fleet\current-theme`, `~/.config/fleet/current-theme`). It is plain
+UTF-8 text: the first line that is neither blank nor a `#` comment is the theme's
+name, a built-in name or the file name of a custom theme. Surrounding spaces and
+case don't matter. No file, or a name fleet doesn't know, means Catppuccin Mocha.
+
+Another app can switch fleet's theme either by running `fleet theme set <name>`
+or by writing that file; write it whole (to a temporary file, then rename) so a
+watcher never reads half of it.
+
+```
+# written by my-theme-switcher
+gruvbox-dark
+```
+
+### Custom themes
+
+Drop a TOML file in `themes/` in the config directory; its file name is its theme
+name. Every key is optional: whatever it leaves out comes from `inherits` (Catppuccin
+Mocha when that is missing too). Colors are `#rrggbb` (or `0xrrggbb`).
+
+```toml
+# %APPDATA%\fleet\themes\midnight.toml  ->  fleet theme set midnight
+title    = "Midnight"
+inherits = "tokyo-night"
+light    = false
+
+crust    = "#0b0c10"   # deepest background; also the text on accent buttons
+mantle   = "#101118"
+base     = "#14151f"   # the screen background
+surface0 = "#20222f"   # chips, pills, input fields
+surface1 = "#2c2f40"   # the focused row
+overlay0 = "#5a5f7a"   # hints, borders, dimmed text
+subtext0 = "#a0a6c0"   # muted text
+text     = "#d0d6f0"
+blue     = "#7aa2f7"   # keys, section headers, buttons
+lavender = "#bb9af7"   # titles and the active tab pill
+green    = "#9ece6a"
+yellow   = "#e0af68"
+red      = "#f7768e"
+cursor   = "#c0caf5"
+
+color0  = "#15161e"    # color0..color7 are the ANSI colors WezTerm uses,
+color9  = "#ff7a93"    # color8..color15 the bright ones
+```
+
+Editing a custom theme that is active recolors running windows as well.
+
+### Omarchy
+
+```bash
+fleet theme install omarchy
+```
+
+That one command adds a line running `fleet theme sync` to
+`~/.config/omarchy/hooks/theme-set` (creating it, or appending to an existing hook
+without touching what is there, ahead of a trailing `exit`), and syncs right away.
+From then on every Omarchy theme switch switches fleet too.
+
+`fleet theme sync` reads `~/.config/omarchy/current/theme`: its name (from
+`current/theme.name`, or the folder the link points at), `colors.toml` or
+`alacritty.toml`, and `light.mode`. A name that matches a built-in theme of the
+same lightness (`catppuccin` is Mocha, `gruvbox` is Gruvbox Dark) uses that theme.
+Anything else gets a palette derived from Omarchy's own colors, saved as
+`themes/omarchy.toml` and made active.
 
 ## Architecture
 
