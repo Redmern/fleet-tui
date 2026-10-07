@@ -51,6 +51,7 @@ public static class FleetActionIds
         FleetAction.DismissAllNotices => "dismiss-all-notices",
         FleetAction.OpenEditor => "open-editor",
         FleetAction.OpenHeadVoice => "head-voice",
+        FleetAction.EditTheme => "theme",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -101,6 +102,7 @@ public static class FleetActionIds
         "open-editor" => FleetAction.OpenEditor,
         "head" => FleetAction.OpenHeadVoice,
         "head-voice" => FleetAction.OpenHeadVoice,
+        "theme" => FleetAction.EditTheme,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };

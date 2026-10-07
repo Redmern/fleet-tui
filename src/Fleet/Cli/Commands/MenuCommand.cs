@@ -35,6 +35,7 @@ using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Themes.Enums;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
@@ -328,6 +329,47 @@ public static class MenuCommand
             case FleetAction.EditKeybinds:
                 EditKeybindsView.Show(app, keymaps, keymap);
                 break;
+
+            case FleetAction.EditTheme:
+                {
+                    var themes = Adapters.Themes();
+                    var all = themes.List();
+                    var active = themes.Active().Name;
+
+                    var pickedTheme = FleetPicker.Choose(
+                        app,
+                        "Theme — fleet, wezterm, nvim, claude and yazi",
+                        [.. all.Select(t => new PickerEntry(
+                            t.Title,
+                            t.Name == active ? $"{t.Name}  (active)" : t.Name))],
+                        keymap,
+                        Math.Max(0, all.ToList().FindIndex(t => t.Name == active)));
+
+                    if (pickedTheme is not { } themeIndex || all[themeIndex].Name == active)
+                    {
+                        break;
+                    }
+
+                    var set = themes.Set(all[themeIndex].Name);
+
+                    if (!set.Succeeded)
+                    {
+                        FleetDialog.Error(app, "Theme", set.Error!);
+                        break;
+                    }
+
+                    var problems = ThemeWiring.Apply(set.Value, project.Root)
+                        .Where(a => a.Outcome == ThemeOutcome.Failed)
+                        .Select(a => a.Line)
+                        .ToList();
+
+                    if (problems.Count > 0)
+                    {
+                        FleetDialog.Error(app, "Theme", string.Join("\n", problems));
+                    }
+
+                    break;
+                }
 
             case FleetAction.EditSettings:
                 var settings = Adapters.Settings();
