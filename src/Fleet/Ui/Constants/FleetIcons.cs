@@ -26,8 +26,6 @@ public static class FleetIcons
 
     public const string Rebind = "";
 
-    public const string Manage = "";
-
     public const string Show = "";
 
     public const string Hide = "";
@@ -64,7 +62,7 @@ public static class FleetIcons
         [Close] = "close",
         [NewWindow] = "new window",
         [Rebind] = "rebind",
-        [Manage] = "manage",
+        [Configure] = "config",
         [Show] = "show",
         [Hide] = "hide",
         [Menu] = "menu",
@@ -120,7 +118,7 @@ public static class FleetIcons
         FleetAction.NewProject => "",
         FleetAction.OpenProject => "",
         FleetAction.RemoveProject => "",
-        FleetAction.NewAgent => "",
+        FleetAction.NewAgent => "",
         FleetAction.ChangeHarness => "",
         FleetAction.ToggleHidden => "",
         FleetAction.StopAgent => "",

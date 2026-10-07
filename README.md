@@ -400,7 +400,7 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `l` or `enter` | open the selection (picker) |
 | `n` | new project (picker, switcher) / new agent / add repository |
 | `enter` | open the selection / open an agent, restarting it if needed |
-| `m` | manage an agent / manage a repository |
+| `m` | configure an agent / configure a repository |
 | `e` | open nvim (neo-tree) in the selected agent's or sub's folder, beside its pane; focuses it if already open |
 | `p` | pull the highlighted repository |
 | `d` | remove a repository |
