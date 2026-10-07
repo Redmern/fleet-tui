@@ -24,6 +24,10 @@
     Git URL of the Neovim config to clone with -WithDeps. Defaults to
     FLEET_NVIM_CONFIG, then to the one in scripts\deps.ps1.
 
+.PARAMETER NoShortcut
+    Skip the Start Menu shortcut and the Windows Terminal "Fleet" profile that
+    scripts\windows\Install-FleetShortcut.ps1 creates. Alias: -SkipShortcut.
+
 .EXAMPLE
     .\install.ps1
 
@@ -35,7 +39,9 @@ param(
     [switch]$Uninstall,
     [switch]$Purge,
     [switch]$WithDeps,
-    [string]$NvimConfig
+    [string]$NvimConfig,
+    [Alias('SkipShortcut')]
+    [switch]$NoShortcut
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,13 +50,14 @@ $RepoRoot   = $PSScriptRoot
 $InstallDir = Join-Path $env:LOCALAPPDATA 'Programs\fleet'
 $BinPath    = Join-Path $InstallDir 'fleet.exe'
 $ConfigDir  = Join-Path $env:APPDATA 'fleet'
+$ShortcutScript = Join-Path $RepoRoot 'scripts\windows\Install-FleetShortcut.ps1'
 
 # Progress bar and spinner only on an interactive console; anywhere else (redirected,
 # CI, TERM=dumb, NO_COLOR, FLEET_NO_ANIMATION) the plain '==> step' lines are printed.
 $script:Fancy = -not ($env:FLEET_NO_ANIMATION -or $env:NO_COLOR -or $env:CI -or $env:TERM -eq 'dumb' -or
     $Host.Name -ne 'ConsoleHost' -or [Console]::IsOutputRedirected)
 $script:StepCount = 0
-$script:StepTotal = 4
+$script:StepTotal = if ($NoShortcut) { 4 } else { 5 }
 
 function Format-Bar([double]$fraction, [int]$width = 24) {
     $filled = [int][Math]::Floor([Math]::Max(0.0, [Math]::Min(1.0, $fraction)) * $width)
@@ -162,6 +169,8 @@ if ($Uninstall) {
     }
 
     Remove-FromUserPath $InstallDir
+
+    if (-not $NoShortcut) { & $ShortcutScript -InstallDir $InstallDir -Uninstall }
 
     if ($Purge) {
         if (Test-Path $ConfigDir) {
@@ -281,6 +290,16 @@ Write-Step 'Setting up'
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host '    something fleet needs is missing - see the list above' -ForegroundColor Yellow
+}
+
+if (-not $NoShortcut) {
+    Write-Step 'Creating the Fleet shortcut'
+    try {
+        & $ShortcutScript -InstallDir $InstallDir
+    }
+    catch {
+        Write-Warn2 "shortcut not created: $($_.Exception.Message)"
+    }
 }
 
 Complete-Steps

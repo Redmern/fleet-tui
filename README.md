@@ -128,6 +128,15 @@ still to do:
 
 It is safe to run again: an already-wired config is left alone.
 
+On Windows, `install.ps1` also creates a Fleet launcher
+(`scripts\windows\Install-FleetShortcut.ps1`): a Start Menu `Fleet.lnk` and a
+Windows Terminal profile named "Fleet" (a fragment under
+`%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments`; skipped when your
+`settings.json` already has one). Windows doesn't let scripts pin to the taskbar,
+so pin it yourself: right-click Fleet in Start, "Pin to taskbar". Fleet windows
+then group under that button. A `Fleet.lnk` you made yourself is kept (`-Force`
+on the script replaces it); `-NoShortcut` skips the launcher altogether.
+
 `.\install.ps1 -Uninstall` reverses a Windows install. Add `-Purge` to delete
 `%APPDATA%\fleet` as well. On Linux, `./install.sh --uninstall`
 removes the binary and the marked `PATH` line.
