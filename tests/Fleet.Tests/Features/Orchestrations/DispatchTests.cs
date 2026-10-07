@@ -411,7 +411,10 @@ public sealed class DispatchTests : IDisposable
     {
         var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
 
-        Assert.Contains("{h='Left',j='Down',k='Up',l='Right'}", boot);
+        Assert.Contains(
+            "{{'<C-h>','h','Left',{'n','t'}},{'<C-j>','j','Down',{'n','t'}},"
+            + "{'<C-k>','k','Up',{'n','t'}},{'<C-l>','l','Right',{'n','t'}}}",
+            boot);
         Assert.Contains("'cli','activate-pane-direction',d", boot);
         Assert.Contains("{buffer=tb}", boot);
     }

@@ -1,3 +1,5 @@
+using Fleet.Shared.Keybinds;
+
 namespace Fleet.Shared.Constants;
 
 public static class AgentHarness
@@ -75,8 +77,8 @@ public static class AgentHarness
         + "pcall(vim.api.nvim_buf_delete, b, {force=true}) end end "
         + "local tb=vim.api.nvim_win_get_buf(term) "
         + "vim.defer_fn(function() if not vim.api.nvim_buf_is_valid(tb) then return end "
-        + "for k,d in pairs({h='Left',j='Down',k='Up',l='Right'}) do "
-        + "vim.keymap.set({'t','n'},'<C-'..k..'>',function() "
+        + "for _,f in ipairs(" + NvimFocusMaps.LuaTable(KeybindDefaults.Set) + ") do local k,d=f[2],f[3] "
+        + "vim.keymap.set(f[4],f[1],function() "
         + "if vim.fn.winnr(k)~=vim.fn.winnr() then vim.cmd('stopinsert') vim.cmd('wincmd '..k) "
         + "else vim.fn.jobstart({vim.env.WEZTERM_EXECUTABLE or 'wezterm','cli','activate-pane-direction',d}) end "
         + "end,{buffer=tb}) end end, 400) "
