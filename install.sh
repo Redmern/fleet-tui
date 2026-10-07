@@ -3,7 +3,7 @@
 # install.ps1; for a machine without the .NET SDK use scripts/get-fleet.sh.
 #
 #   ./install.sh                build, install, run 'fleet setup'
-#   ./install.sh --with-deps    install wezterm, neovim, yazi and a neovim config first
+#   ./install.sh --with-deps    install wezterm, neovim and yazi first
 #   ./install.sh --deps-only    install only those dependencies
 #   ./install.sh --uninstall    remove the binary and the PATH line (configuration is kept)
 #   ./install.sh --no-path      don't add the bin folder to PATH in a shell startup file
@@ -13,12 +13,13 @@
 # 'ssh host fleet bridge' finds it), ~/.zshenv, fish's conf.d or ~/.profile.
 # FLEET_NO_PATH=1 does the same as --no-path.
 #
-# --with-deps uses the package manager it can find. FLEET_NVIM_CONFIG picks the
-# neovim config to clone; DEFAULT_NVIM_CONFIG below is used when it is unset.
+# --with-deps uses the package manager it can find. fleet's own neovim config ships
+# inside the binary and 'fleet setup' writes it to ~/.config/fleet-nvim; set
+# FLEET_NVIM_CONFIG to a git URL to also clone a config into ~/.config/nvim
+# (for the 'user' nvim config setting).
 
 set -eu
 
-DEFAULT_NVIM_CONFIG="https://github.com/Redmern/nvim_0.12.git"
 WITH_DEPS=0
 DEPS_ONLY=0
 NO_PATH=0
@@ -208,12 +209,14 @@ install_deps() {
         ok 'no known package manager - install git, neovim, wezterm and yazi yourself'
     fi
 
-    url="${FLEET_NVIM_CONFIG:-$DEFAULT_NVIM_CONFIG}"
+    url="${FLEET_NVIM_CONFIG:-}"
     target="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
 
     step 'Neovim config'
 
-    if [ -d "$target/.git" ]; then
+    if [ -z "$url" ]; then
+        ok "fleet's own config ships with fleet; 'fleet setup' writes it to ${XDG_CONFIG_HOME:-$HOME/.config}/fleet-nvim"
+    elif [ -d "$target/.git" ]; then
         remote="$(git -C "$target" remote get-url origin 2>/dev/null || true)"
 
         if [ "$remote" = "$url" ]; then

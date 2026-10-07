@@ -56,6 +56,16 @@ public class CommandLineTests
     }
 
     [Fact]
+    public void With_env_keeps_its_pairs_and_the_command_after_the_separator()
+    {
+        var invocation = CommandLine.Parse(["with-env", "NVIM_APPNAME=fleet-nvim", "--", "nvim", "-c", "lua print('a b')"]);
+
+        Assert.Equal(FleetVerb.WithEnv, invocation.Verb);
+        Assert.Equal("NVIM_APPNAME=fleet-nvim", invocation.Arguments![0]);
+        Assert.Equal(["nvim", "-c", "lua print('a b')"], invocation.Tail);
+    }
+
+    [Fact]
     public void An_unknown_verb_keeps_its_text_so_the_error_can_name_it()
     {
         var invocation = CommandLine.Parse(["wibble"]);

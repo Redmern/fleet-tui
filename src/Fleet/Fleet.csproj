@@ -48,4 +48,13 @@
     <PackageReference Include="Terminal.Gui" Version="2.4.17" />
   </ItemGroup>
 
+  <!--
+    fleet's own Neovim config (nvim/ at the repo root), embedded so every way of getting
+    fleet ships it. FleetNvimConfig writes it to the fleet-nvim config folder.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)../../nvim/**/*.lua"
+                      LogicalName="nvim/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

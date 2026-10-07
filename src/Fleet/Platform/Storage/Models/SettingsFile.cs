@@ -71,6 +71,13 @@ public sealed class MenuSettingsFile
     public string? ButtonHints { get; set; }
 }
 
+public sealed class NvimSettingsFile
+{
+    public int Version { get; set; } = 1;
+
+    public string Config { get; set; } = string.Empty;
+}
+
 public sealed class ToolRuleEntry
 {
     public string Policy { get; set; } = string.Empty;

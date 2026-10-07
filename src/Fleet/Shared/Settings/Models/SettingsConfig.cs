@@ -30,6 +30,7 @@ public sealed record SettingsConfig(
 
     public bool ShowMenuKeys { get; init; } = SettingsDefaults.ShowMenuKeys;
 
+    public NvimConfig Nvim { get; init; } = SettingsDefaults.Nvim;
     public ButtonHints ButtonHints { get; init; } = SettingsDefaults.ButtonHints;
 
     public RoleModels Models { get; init; } = SettingsDefaults.Models;
@@ -76,6 +77,7 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithShowMenuKeys(bool on) => this with { ShowMenuKeys = on };
 
+    public SettingsConfig WithNvim(NvimConfig nvim) => this with { Nvim = nvim };
     public SettingsConfig WithButtonHints(ButtonHints hints) => this with { ButtonHints = hints };
 
     public SettingsConfig WithModels(RoleModels models) => this with { Models = models };
@@ -107,6 +109,7 @@ public sealed record SettingsConfig(
             StatusHooks = StatusHooks,
             SubagentGuidance = SubagentGuidance,
             ShowMenuKeys = ShowMenuKeys,
+            Nvim = Nvim,
             ButtonHints = ButtonHints,
             Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
         };
@@ -129,6 +132,7 @@ public sealed record SettingsConfig(
                 .Append($"hooks={StatusHooks}")
                 .Append($"subagents={SubagentGuidance}")
                 .Append($"menu-keys={ShowMenuKeys}")
+                .Append($"nvim-config={Nvim}")
                 .Append($"button-hints={ButtonHints}")
                 .Append(Models.Signature));
 }

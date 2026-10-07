@@ -12,7 +12,8 @@ namespace Fleet.Platform.Storage;
 
 public sealed class JsonSettingsStore : ISettingsStore
 {
-    public SettingsConfig Load(string project) => LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints() };
+    public SettingsConfig Load(string project) =>
+        LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints(), Nvim = LoadNvim() };
 
     private static SettingsConfig LoadProject(string project)
     {
@@ -218,6 +219,41 @@ public sealed class JsonSettingsStore : ISettingsStore
             var temporary = FleetPaths.MenuSettingsFile + ".tmp";
             File.WriteAllText(temporary, JsonSerializer.Serialize(stored, FleetJsonContext.Default.MenuSettingsFile));
             File.Move(temporary, FleetPaths.MenuSettingsFile, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    public NvimConfig LoadNvim()
+    {
+        try
+        {
+            if (File.Exists(FleetPaths.NvimSettingsFile)
+                && JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.NvimSettingsFile), FleetJsonContext.Default.NvimSettingsFile) is { } stored
+                && Words.Parse<NvimConfig>(stored.Config) is { } parsed)
+            {
+                return parsed;
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+        }
+
+        return SettingsDefaults.Nvim;
+    }
+
+    public void SaveNvim(NvimConfig nvim)
+    {
+        var stored = new NvimSettingsFile { Config = WordAgainstDefault(nvim, SettingsDefaults.Nvim) };
+
+        try
+        {
+            FleetPaths.EnsureDirs();
+            var temporary = FleetPaths.NvimSettingsFile + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(stored, FleetJsonContext.Default.NvimSettingsFile));
+            File.Move(temporary, FleetPaths.NvimSettingsFile, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

@@ -59,6 +59,8 @@ public static class DoctorCommand
         {
             Console.WriteLine($"  {tool,-13} {(Adapters.OnPath(tool) ? "on PATH" : "NOT FOUND")}");
         }
+        var nvim = SetupHandler.Nvim(Adapters.InspectNvim(install: false));
+        Console.WriteLine($"  nvim config   {(nvim.Ok ? string.Empty : "! ")}{nvim.Detail}");
         Console.WriteLine($"  projects      {report.Projects.Count}");
 
         foreach (var project in report.Projects)

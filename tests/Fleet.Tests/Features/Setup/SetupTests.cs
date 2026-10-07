@@ -99,4 +99,38 @@ public class SetupTests
 
         Assert.Empty(report.Missing);
     }
+
+    [Fact]
+    public void Fleets_nvim_config_on_a_new_enough_nvim_is_ok()
+    {
+        var step = SetupHandler.Nvim(new NvimSetup(true, true, "C:/x/fleet-nvim", new Version(0, 10, 2)));
+
+        Assert.True(step.Ok);
+        Assert.Contains("C:/x/fleet-nvim", step.Detail);
+    }
+
+    [Fact]
+    public void An_nvim_older_than_0_9_is_told_to_upgrade_or_switch_to_user()
+    {
+        var step = SetupHandler.Nvim(new NvimSetup(true, true, "C:/x/fleet-nvim", new Version(0, 8, 3)));
+
+        Assert.False(step.Ok);
+        Assert.False(step.Required);
+        Assert.Contains("user", step.Fix);
+    }
+
+    [Fact]
+    public void The_user_setting_skips_the_version_check()
+    {
+        Assert.True(SetupHandler.Nvim(new NvimSetup(false, false, "C:/x/fleet-nvim", new Version(0, 8, 0))).Ok);
+    }
+
+    [Fact]
+    public void The_nvim_step_shows_up_in_the_report_when_given()
+    {
+        var report = new SetupHandler(_ => true).Inspect(
+            "m", Wired, "c", new NvimSetup(true, true, "C:/x/fleet-nvim", new Version(0, 11, 0)));
+
+        Assert.Contains(report.Steps, s => s.Name == "nvim config" && s.Ok);
+    }
 }

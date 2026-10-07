@@ -140,6 +140,20 @@ public static class AgentHarness
             ? SessionPersistence
             : new Dictionary<string, string>();
 
+    public const string NvimAppNameVariable = "NVIM_APPNAME";
+
+    public const string FleetNvimAppName = "fleet-nvim";
+
+    public static bool LaunchesNvim(IReadOnlyList<string> command) =>
+        command.Count > 0
+        && (command[0] == Nvim || (TitledPaneTitle(command) is not null && command.Count > 5 && command[5] == Nvim));
+
+    public static IReadOnlyDictionary<string, string> WithFleetNvimConfig(
+        IReadOnlyList<string> command, IReadOnlyDictionary<string, string> env) =>
+        !LaunchesNvim(command) || env.ContainsKey(NvimAppNameVariable)
+            ? env
+            : new Dictionary<string, string>(env) { [NvimAppNameVariable] = FleetNvimAppName };
+
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
 
     public static IReadOnlyList<string> Known { get; } = [Nvim, Claude, Orchestrator];
@@ -153,6 +167,8 @@ public static class AgentHarness
     public const string TitledVerb = "titled";
 
     public const string TitleFlag = "--title";
+
+    public const string WithEnvVerb = "with-env";
 
     public static IReadOnlyList<string> BrowseCommandFor(string paneTitle) =>
         [Environment.ProcessPath ?? "fleet", TitledVerb, TitleFlag, paneTitle, "--", .. BrowseCommand];

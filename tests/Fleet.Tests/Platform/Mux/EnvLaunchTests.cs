@@ -1,4 +1,5 @@
 using Fleet.Platform.Mux.WezTerm;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Platform.Mux;
 
@@ -42,5 +43,22 @@ public sealed class EnvLaunchTests
         Assert.Contains("export CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1", argv[2]);
         Assert.Contains("unset CLAUDE_CODE_CHILD_SESSION", argv[2]);
         Assert.EndsWith("exec claude --continue", argv[2]);
+    }
+
+    [Fact]
+    public void A_command_that_needs_quoting_runs_through_fleet_with_env_on_both_platforms()
+    {
+        var nvim = AgentHarness.CommandFor(AgentHarness.Nvim);
+        var env = new Dictionary<string, string> { [AgentHarness.NvimAppNameVariable] = AgentHarness.FleetNvimAppName };
+
+        foreach (var windows in new[] { true, false })
+        {
+            var argv = EnvLaunch.Wrap(windows, env, nvim);
+
+            Assert.Equal(AgentHarness.WithEnvVerb, argv[1]);
+            Assert.Equal("NVIM_APPNAME=fleet-nvim", argv[2]);
+            Assert.Equal("--", argv[3]);
+            Assert.Equal(nvim, argv.Skip(4));
+        }
     }
 }

@@ -363,6 +363,22 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_nvim_config_defaults_to_fleets_and_is_one_setting_for_every_project()
+    {
+        Assert.Equal(NvimConfig.Fleet, Store.Load("never-saved").Nvim);
+
+        Store.SaveNvim(NvimConfig.User);
+
+        Assert.Equal(NvimConfig.User, Store.LoadNvim());
+        Assert.Equal(NvimConfig.User, Store.Load("techweb").Nvim);
+
+        Store.SaveNvim(NvimConfig.Fleet);
+
+        Assert.Equal(NvimConfig.Fleet, Store.Load("techweb").Nvim);
+        Assert.DoesNotContain("fleet\"", File.ReadAllText(FleetPaths.NvimSettingsFile));
+    }
+
+    [Fact]
     public void Two_projects_keep_separate_files()
     {
         Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Fleet.Features.Menu.ShowMenu.Models;
+using Fleet.Shared.Aidlc;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings;
@@ -39,6 +40,7 @@ public static class FleetMenus
         [
             FleetAction.EditMainOrchestratorInNvim,
             FleetAction.EditSubOrchestratorsInNvim,
+            FleetAction.EditNvimConfig,
             FleetAction.EditAutoClose,
             FleetAction.EditAidlcMode,
             FleetAction.EditClaudeProfile,
@@ -69,6 +71,7 @@ public static class FleetMenus
     [
         FleetAction.EditMainOrchestratorInNvim,
         FleetAction.EditSubOrchestratorsInNvim,
+        FleetAction.EditNvimConfig,
         FleetAction.EditShowMenuKeys,
         FleetAction.EditButtonHints,
     ];
@@ -119,6 +122,7 @@ public static class FleetMenus
         FleetAction.EditMainOrchestratorInNvim => OnOff(settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => OnOff(settings.SubOrchestratorsInNvim),
         FleetAction.EditShowMenuKeys => OnOff(settings.ShowMenuKeys),
+        FleetAction.EditNvimConfig => $"[{Words.Of(settings.Nvim)}]",
         FleetAction.EditButtonHints => $"[{settings.ButtonHints.ToString().ToLowerInvariant()}]",
         FleetAction.EditAutoClose => settings.AutoClose
             ? $"[{settings.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture)}m]"
@@ -131,6 +135,8 @@ public static class FleetMenus
         FleetAction.EditMainOrchestratorInNvim => settings.WithMainOrchestratorInNvim(!settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => settings.WithSubOrchestratorsInNvim(!settings.SubOrchestratorsInNvim),
         FleetAction.EditShowMenuKeys => settings.WithShowMenuKeys(!settings.ShowMenuKeys),
+        FleetAction.EditNvimConfig => settings.WithNvim(
+            settings.Nvim == NvimConfig.Fleet ? NvimConfig.User : NvimConfig.Fleet),
         FleetAction.EditButtonHints => settings.WithButtonHints(NextHints(settings.ButtonHints)),
         _ => settings,
     };

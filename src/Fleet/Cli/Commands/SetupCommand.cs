@@ -16,7 +16,7 @@ public static class SetupCommand
         var wiring = Adapters.WireWezTermConfig();
 
         var report = new SetupHandler(Adapters.OnPath)
-            .Inspect(module, wiring, Adapters.ConfigDirectory);
+            .Inspect(module, wiring, Adapters.ConfigDirectory, Adapters.InspectNvim(install: true));
 
         Print(report, keymap);
 

@@ -239,6 +239,21 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void Nvim_config_is_a_toggle_in_fleet_config_between_fleet_and_user()
+    {
+        Assert.Contains(FleetAction.EditNvimConfig, FleetMenus.Actions(FleetMenus.FleetConfig));
+        Assert.True(FleetMenus.IsToggle(FleetAction.EditNvimConfig));
+        Assert.Equal("[fleet]", FleetMenus.Value(FleetAction.EditNvimConfig, SettingsConfig.Default));
+
+        var user = FleetMenus.Flip(FleetAction.EditNvimConfig, SettingsConfig.Default);
+
+        Assert.Equal(NvimConfig.User, user.Nvim);
+        Assert.Equal("[user]", FleetMenus.Value(FleetAction.EditNvimConfig, user));
+        Assert.NotEqual(SettingsConfig.Default.Signature, user.Signature);
+        Assert.Equal(NvimConfig.Fleet, FleetMenus.Flip(FleetAction.EditNvimConfig, user).Nvim);
+    }
+
+    [Fact]
     public void Without_keys_a_row_starts_with_its_icon()
     {
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Main, _ => null);
