@@ -70,9 +70,9 @@ public static class ThemeCommand
     {
         Console.WriteLine($"theme: {theme.Name} ({theme.Title})");
 
-        if (Adapters.ApplyWezTermTheme(theme) is { } lua)
+        foreach (var applied in ThemeWiring.Apply(theme, Environment.CurrentDirectory))
         {
-            Console.WriteLine($"  wezterm  wrote {lua}; {Adapters.TouchWezTermConfig()}");
+            Console.WriteLine($"  {applied.Line}");
         }
 
         return 0;
