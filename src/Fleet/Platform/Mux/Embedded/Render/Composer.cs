@@ -1,5 +1,6 @@
 using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Shared.Themes;
 
 namespace Fleet.Platform.Mux.Embedded.Render;
 
@@ -13,14 +14,18 @@ public static class Composer
     public static readonly uint ActiveFg = Cell.Palette(15);
     public static readonly uint BadgeBg = Cell.Palette(11);
     public static readonly uint BadgeFg = Cell.Palette(0);
-    public static readonly uint Crust = Cell.Rgb(0x11, 0x11, 0x1b);
-    public static readonly uint Lavender = Cell.Rgb(0xb4, 0xbe, 0xfe);
-    public static readonly uint Overlay0 = Cell.Rgb(0x6c, 0x70, 0x86);
-    public static readonly uint Text = Cell.Rgb(0xcd, 0xd6, 0xf4);
-    public static readonly uint Surface0 = Cell.Rgb(0x31, 0x32, 0x44);
-    public static readonly uint Yellow = Cell.Rgb(0xf9, 0xe2, 0xaf);
-    public static readonly uint Flamingo = Cell.Rgb(0xf2, 0xcd, 0xcd);
-    public static readonly uint Blue = Cell.Rgb(0x89, 0xb4, 0xfa);
+    private static volatile ChromeColors _chrome = ChromeColors.From(BuiltInThemes.CatppuccinMocha);
+
+    public static uint Crust => _chrome.Crust;
+    public static uint Lavender => _chrome.Lavender;
+    public static uint Overlay0 => _chrome.Overlay0;
+    public static uint Text => _chrome.Text;
+    public static uint Surface0 => _chrome.Surface0;
+    public static uint Yellow => _chrome.Yellow;
+    public static uint Flamingo => _chrome.Flamingo;
+    public static uint Blue => _chrome.Blue;
+
+    public static void Use(ThemePalette theme) => _chrome = ChromeColors.From(theme);
     public const char WhichKeySeparator = '➜';
     public const string WhichKeyFooter = "esc close";
     public const string WhichKeyNestedFooter = "esc close · bksp back";

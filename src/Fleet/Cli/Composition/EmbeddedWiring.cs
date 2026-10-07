@@ -10,6 +10,7 @@ using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
+using Fleet.Platform.Mux.Embedded.Render;
 using Fleet.Platform.Profiles;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
@@ -62,6 +63,9 @@ public static class EmbeddedWiring
         {
             log.Write($"fleetd: panes use the {ConPtyApi.Current.Name} ConPTY");
         }
+
+        Composer.Use(Adapters.Themes().Active());
+        using var themeWatch = ThemeWiring.Follow(Composer.Use);
 
         var daemon = new FleetDaemon(new DaemonOptions
         {
