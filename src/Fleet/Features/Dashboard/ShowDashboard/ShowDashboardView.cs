@@ -1231,10 +1231,7 @@ public static class ShowDashboardView
             hints.Root,
             tip);
 
-        if (menu)
-        {
-            FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
-        }
+        FleetCorners.Attach(window, menu ? () => app.RequestStop(window) : null, tabBar.Root, framed: !menu);
 
         BindSkeleton();
         ShowTab(DashboardTabs.AgentsTab);

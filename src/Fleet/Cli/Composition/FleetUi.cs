@@ -24,6 +24,10 @@ public static class FleetUi
             FloatScreens.Hold = EmbeddedWiring.HoldOwnFloat;
             FloatBorder.Enable(app, EmbeddedWiring.PublishOwnFloatButtons);
         }
+        else if (FramedPane.Inside)
+        {
+            FloatBorder.Enable(app, EmbeddedWiring.PublishOwnFloatButtons, framed: true);
+        }
 
         return app;
     }

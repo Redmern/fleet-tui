@@ -48,9 +48,9 @@ public static class FleetCorners
 
     public static int Rows => FloatBorder.Enabled ? 0 : 2 * Margin;
 
-    public static void Attach(View window, Action close, View? below = null)
+    public static void Attach(View window, Action? close, View? below = null, bool framed = false)
     {
-        if (FloatBorder.Enabled)
+        if (FloatBorder.Enabled || (framed && FloatBorder.Framing))
         {
             FloatBorder.Corners(window, close);
 
@@ -76,12 +76,15 @@ public static class FleetCorners
             Y = 0,
         };
 
-        var shut = new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, anchorEnd: true)
-        {
-            Y = 0,
-        };
+        window.Add(help);
 
-        window.Add(help, shut);
+        if (close is not null)
+        {
+            window.Add(new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, anchorEnd: true)
+            {
+                Y = 0,
+            });
+        }
 
         if (below is not null)
         {

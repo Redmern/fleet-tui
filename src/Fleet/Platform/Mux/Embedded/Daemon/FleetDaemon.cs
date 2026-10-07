@@ -644,6 +644,25 @@ public sealed class FleetDaemon(DaemonOptions options)
         target.Send(Encoding.UTF8.GetBytes(PasteBytes(text, target.Modes.BracketedPaste)));
     }
 
+    private (string Pane, FloatButton Button)? FrameButton(string client, int x, int y)
+    {
+        if (_model.View(client) is not { Overlay: null } view
+            || view.FloatingPanes.Any(f => f.Area.Contains(x, y)))
+        {
+            return null;
+        }
+
+        foreach (var placed in view.Panes)
+        {
+            if (BorderButtons.At(ClientView.Around(placed.Area), view.FrameButtonsOf(placed.Pane), x, y) is { } button)
+            {
+                return (placed.Pane, button);
+            }
+        }
+
+        return null;
+    }
+
     private void Mouse(AttachSession session, MouseMessage mouse)
     {
         PaneRuntime? target = null;
@@ -690,6 +709,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                     target = _runtimes.GetValueOrDefault(capture.Pane!);
                     (x, y) = relative;
                 }
+            }
+            else if (press && mouse.Button == MouseButtons.Left && FrameButton(session.Client, mouse.X, mouse.Y) is var (owner, pill))
+            {
+                _model.Focus(owner);
+                clicked = _runtimes.GetValueOrDefault(owner) is { } runtime ? (runtime, pill.Send) : null;
+                session.Capture = new MouseCapture(owner, -1, MouseHitKind.None);
+                redraw = true;
             }
             else
             {
