@@ -31,14 +31,22 @@ public sealed class FileThemeStore(string config) : IThemeStore
 
     public IReadOnlyList<ThemePalette> Custom()
     {
-        if (!Directory.Exists(ThemesDirectory))
+        string[] files;
+
+        try
+        {
+            files = Directory.Exists(ThemesDirectory)
+                ? [.. Directory.EnumerateFiles(ThemesDirectory, "*" + CustomTheme.Extension).Order()]
+                : [];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return [];
         }
 
         var themes = new List<ThemePalette>();
 
-        foreach (var file in Directory.EnumerateFiles(ThemesDirectory, "*" + CustomTheme.Extension).Order())
+        foreach (var file in files)
         {
             try
             {
@@ -61,11 +69,11 @@ public sealed class FileThemeStore(string config) : IThemeStore
         return file;
     }
 
-    private static void WriteAtomically(string file, string text)
+    public static void WriteAtomically(string file, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
-        var temp = file + ".tmp";
+        var temp = $"{file}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
 
         File.WriteAllText(temp, text);
         File.Move(temp, file, overwrite: true);

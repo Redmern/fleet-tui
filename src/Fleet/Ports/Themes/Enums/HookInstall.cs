@@ -4,5 +4,6 @@ public enum HookInstall
 {
     Created,
     Appended,
+    Updated,
     Already,
 }

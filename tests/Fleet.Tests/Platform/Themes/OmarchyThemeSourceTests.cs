@@ -62,6 +62,31 @@ public sealed class OmarchyThemeSourceTests : IDisposable
     }
 
     [Fact]
+    public void A_hook_pointing_at_an_old_fleet_is_repointed_in_place()
+    {
+        var source = new OmarchyThemeSource(_home);
+        const string tail = " theme sync >/dev/null 2>&1 || true";
+
+        Directory.CreateDirectory(Path.GetDirectoryName(source.HookFile)!);
+        File.WriteAllText(source.HookFile, $"#!/bin/bash\n'/old/fleet'{tail}\necho done\n");
+
+        Assert.Equal(HookInstall.Updated, source.InstallHook($"'/new/fleet'{tail}", tail));
+        Assert.Equal($"#!/bin/bash\n'/new/fleet'{tail}\necho done\n", File.ReadAllText(source.HookFile));
+    }
+
+    [Fact]
+    public void A_hook_that_only_mentions_theme_sync_still_gains_fleet()
+    {
+        var source = new OmarchyThemeSource(_home);
+        const string tail = " theme sync >/dev/null 2>&1 || true";
+
+        Directory.CreateDirectory(Path.GetDirectoryName(source.HookFile)!);
+        File.WriteAllText(source.HookFile, "#!/bin/bash\n# todo: fleet theme sync\n");
+
+        Assert.Equal(HookInstall.Appended, source.InstallHook($"'/usr/bin/fleet'{tail}", tail));
+    }
+
+    [Fact]
     public void Chaining_goes_before_a_trailing_exit()
     {
         var chained = OmarchyThemeSource.Chain("#!/bin/bash\nfoo\nexit 0\n\n", "fleet theme sync");

@@ -47,14 +47,26 @@ public sealed class OmarchyThemeSource(string home) : IOmarchy
         if (File.Exists(HookFile))
         {
             var text = File.ReadAllText(HookFile);
+            var lines = text.ReplaceLineEndings("\n").Split('\n');
 
-            if (text.Contains(marker, StringComparison.Ordinal))
+            if (lines.Contains(line))
             {
                 return HookInstall.Already;
             }
 
-            File.WriteAllText(HookFile, Chain(text, line));
-            result = HookInstall.Appended;
+            var stale = Array.FindIndex(lines, l => l.TrimEnd().EndsWith(marker, StringComparison.Ordinal));
+
+            if (stale >= 0)
+            {
+                lines[stale] = line;
+                File.WriteAllText(HookFile, string.Join('\n', lines));
+                result = HookInstall.Updated;
+            }
+            else
+            {
+                File.WriteAllText(HookFile, Chain(text, line));
+                result = HookInstall.Appended;
+            }
         }
         else
         {

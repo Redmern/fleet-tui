@@ -15,24 +15,31 @@ public static class ThemeWiring
         {
             return new ThemeWatcher(FleetPaths.Config, () =>
             {
-                var theme = Adapters.Themes().Active();
-                var text = ThemeToml.Write(theme);
-
-                lock (gate)
+                try
                 {
-                    if (text == last)
+                    var theme = Adapters.Themes().Active();
+                    var text = ThemeToml.Write(theme);
+
+                    lock (gate)
                     {
-                        return;
+                        if (text == last)
+                        {
+                            return;
+                        }
+
+                        last = text;
                     }
 
-                    last = text;
+                    apply(theme);
+
+                    if (Adapters.ApplyWezTermTheme(theme) is not null)
+                    {
+                        Adapters.TouchWezTermConfig();
+                    }
                 }
-
-                apply(theme);
-
-                if (Adapters.ApplyWezTermTheme(theme) is not null)
+                catch (Exception e)
                 {
-                    Adapters.TouchWezTermConfig();
+                    Adapters.Log().Swallowed(e);
                 }
             });
         }

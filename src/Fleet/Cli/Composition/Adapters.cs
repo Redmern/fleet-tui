@@ -448,7 +448,7 @@ public static class Adapters
                 return null;
             }
 
-            File.WriteAllText(target, wanted);
+            FileThemeStore.WriteAtomically(target, wanted);
 
             return target;
         }

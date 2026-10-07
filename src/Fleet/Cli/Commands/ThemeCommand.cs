@@ -49,6 +49,7 @@ public static class ThemeCommand
                 {
                     HookInstall.Created => $"created {setup.HookFile}",
                     HookInstall.Appended => $"added fleet to {setup.HookFile}",
+                    HookInstall.Updated => $"pointed {setup.HookFile} at this fleet",
                     _ => $"{setup.HookFile} already runs fleet",
                 });
 

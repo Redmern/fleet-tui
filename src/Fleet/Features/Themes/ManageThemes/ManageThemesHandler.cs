@@ -9,6 +9,8 @@ public sealed class ManageThemesHandler(IThemeStore store, IOmarchy omarchy)
 {
     public const string SyncVerb = "theme sync";
 
+    public const string HookTail = $" {SyncVerb} >/dev/null 2>&1 || true";
+
     public IReadOnlyList<ThemePalette> List()
     {
         var custom = store.Custom();
@@ -64,7 +66,7 @@ public sealed class ManageThemesHandler(IThemeStore store, IOmarchy omarchy)
 
     public OmarchySetup InstallOmarchy(string executable)
     {
-        var hook = omarchy.InstallHook(HookLine(executable), SyncVerb);
+        var hook = omarchy.InstallHook(HookLine(executable), HookTail);
         var synced = SyncOmarchy();
 
         return new OmarchySetup(
@@ -75,7 +77,7 @@ public sealed class ManageThemesHandler(IThemeStore store, IOmarchy omarchy)
     }
 
     public static string HookLine(string executable) =>
-        $"'{executable.Replace("'", "'\\''", StringComparison.Ordinal)}' {SyncVerb} >/dev/null 2>&1 || true";
+        $"'{executable.Replace("'", "'\\''", StringComparison.Ordinal)}'{HookTail}";
 
     private ThemePalette? Find(string name)
     {
