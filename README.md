@@ -501,6 +501,11 @@ config and plugin folders are never read or touched. `fleet setup` also installs
 plugins (headless, once; it needs git and network), so nvim panes start straight away. `NVIM_APPNAME`
 needs Neovim 0.9 or later; `fleet setup` and `fleet doctor` check the version.
 
+Its keys come from fleet's keybinds (written to `lua/fleet/keybinds.generated.lua`):
+Ctrl+h/j/k/l moves between windows, Alt+h/j/k/l resizes the current window (also in a
+terminal; through smart-splits when you have it), and Alt+n leaves Claude's terminal for
+normal mode.
+
 **Nvim config** (fleet menu > settings > fleet config, `N`) switches between `fleet`
 (the default) and `user`. `user` starts nvim exactly as before, with your own config, for
 when you already have `neo-tree` and `claudecode.nvim` set up the way you like. It is

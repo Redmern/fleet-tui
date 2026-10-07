@@ -319,6 +319,31 @@ On the WezTerm backend fleet's nvim runs under `fleet with-env` (below), so the 
 process name is fleet's; `nvim/lua/fleet/wezterm.lua` sets the `IS_NVIM` user var that
 the generated WezTerm config already falls back to for Ctrl+h/j/k/l.
 
+**Keybinds from the model (phase 2 of the unified keybinds).** fleet's nvim keys are not in
+the shipped Lua any more: `Platform/Nvim/NvimKeybinds` renders the `nvim` entries of the
+keybind model (`Shared/Keybinds`) into `lua/fleet/keybinds.generated.lua`, and
+`FleetNvimConfig.Install` writes it next to the embedded files (through `NvimKeybindFiles`,
+behind the `INvimKeybinds` port) with the user's layers applied. `keymaps.lua` loads it with
+`loadfile` and falls back to plain Ctrl+h/j/k/l window moves when it is missing. It is not
+embedded, so Install never clobbers it with a stale copy. `NvimChord` translates portable
+chords (`Alt+h` to `<A-h>`, `Shift+Enter` to `<S-CR>`, `<` to `<lt>`).
+
+- The file holds the rows (`id`, `action`, `lhs`, `modes`) plus a small runtime. `setup()`
+  maps `focus-*` in normal mode to `<C-w>h/j/k/l` (as before), `resize-*` in the listed
+  modes (`n` and `t`: smart-splits' `resize_<dir>` when it is installed, otherwise plain
+  `:resize`/`:vertical resize` by 3 that moves the border the way the arrow points), and
+  adds a `TermOpen` autocmd that maps `claude-normal-mode` (Alt+n to `<C-\><C-n>`)
+  buffer-locally in terminals whose command is `claude`.
+- Terminal-mode Ctrl+h/j/k/l with the WezTerm/fleet-cli handoff at nvim's edges stays where it
+  was: buffer-local on the orchestrator's Claude buffer from `NvimStartupClaudeOnly`. Its chord
+  table now comes from `NvimFocusMaps` over the shipped defaults (the startup string is built
+  in `Shared`, which cannot read the user's files), so it is the same Lua as before.
+  Mapping it in every Claude terminal would change the nvim+Claude layout, so it was not.
+- `NvimKeybinds.GenerateUserModule` (and `INvimKeybinds.WriteUserModule`) renders the same
+  module as `fleet-keys.lua` for a user's own config (`dofile(...).setup()`, with
+  `setup({ ['<id>'] = false })` to skip one). fleet never writes into the user's config;
+  where the file goes and when it is refreshed is phase 5 (`apply-keybinds`, `doctor`, `setup`).
+
 Isolation comes from `NVIM_APPNAME=fleet-nvim` (Neovim 0.9+): nvim then reads that
 config folder and uses its own data, state and plugin folders. `-u <init.lua>` alone
 was not enough, because it still loads the user's `plugin/` and `after/` folders and
