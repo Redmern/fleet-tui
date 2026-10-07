@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Fleet.Platform.Storage;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keybinds;
@@ -85,7 +86,19 @@ public static class FleetNvimConfig
         }
     }
 
-    public static bool Install() => Install(Directory, new JsonKeybindStore().Load());
+    public static bool Install() => Install(Directory, UserKeybinds());
+
+    private static KeybindSet UserKeybinds()
+    {
+        try
+        {
+            return new JsonKeybindStore().Load();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or NotSupportedException or InvalidOperationException)
+        {
+            return KeybindDefaults.Set;
+        }
+    }
 
     public static bool Install(string target) => Install(target, KeybindDefaults.Set);
 
@@ -126,7 +139,8 @@ public static class FleetNvimConfig
                 File.WriteAllText(path, content);
             }
 
-            return new NvimKeybindFiles(target).WriteGenerated(keybinds);
+            new NvimKeybindFiles(target).WriteGenerated(keybinds);
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {

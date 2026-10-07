@@ -95,6 +95,28 @@ public sealed class NvimKeybindsTests : IDisposable
     }
 
     [Fact]
+    public void Control_characters_in_a_context_cannot_break_the_lua()
+    {
+        var binding = new KeybindBinding("id", "resize-left", "Alt+h", ["n\r\nx"]);
+
+        Assert.Contains("modes = { \"n\\013\\010x\" }", NvimKeybinds.Generate([binding]));
+    }
+
+    [Fact]
+    public void A_bad_mode_cannot_stop_the_other_keybinds() =>
+        Assert.Contains("pcall(vim.keymap.set, modes, lhs, rhs, opts)", NvimKeybinds.Generate(Shipped));
+
+    [Fact]
+    public void Install_still_succeeds_when_the_generated_keybinds_cannot_be_written()
+    {
+        Directory.CreateDirectory(Path.Combine(_config, "lua", "fleet", NvimKeybinds.GeneratedFile));
+
+        Assert.True(FleetNvimConfig.Install(_config));
+
+        Assert.True(File.Exists(Path.Combine(_config, "init.lua")));
+    }
+
+    [Fact]
     public void The_user_module_has_the_same_bindings_under_its_own_header()
     {
         var generated = NvimKeybinds.Generate(Shipped);

@@ -337,8 +337,14 @@ chords (`Alt+h` to `<A-h>`, `Shift+Enter` to `<S-CR>`, `<` to `<lt>`).
 - Terminal-mode Ctrl+h/j/k/l with the WezTerm/fleet-cli handoff at nvim's edges stays where it
   was: buffer-local on the orchestrator's Claude buffer from `NvimStartupClaudeOnly`. Its chord
   table now comes from `NvimFocusMaps` over the shipped defaults (the startup string is built
-  in `Shared`, which cannot read the user's files), so it is the same Lua as before.
+  in `Shared`, which cannot read the user's files), so it is the same Lua as before. A user
+  rebind of `focus-*` therefore reaches the generated file but not this buffer yet.
   Mapping it in every Claude terminal would change the nvim+Claude layout, so it was not.
+- Install writes the file at most once per fleet process (`EnsureInstalled` caches), so a
+  keybind edit reaches nvim after fleet restarts, until phase 5 rewrites it on edit. A user
+  file that will not load, or a write that fails, never fails Install: nvim then keeps the
+  previous file or the fallback. Each map is set under `pcall`, so one bad mode in
+  `keybinds.json` does not stop the others.
 - `NvimKeybinds.GenerateUserModule` (and `INvimKeybinds.WriteUserModule`) renders the same
   module as `fleet-keys.lua` for a user's own config (`dofile(...).setup()`, with
   `setup({ ['<id>'] = false })` to skip one). fleet never writes into the user's config;

@@ -17,6 +17,8 @@ public sealed class NvimChordTests
     [InlineData("Escape", "<Esc>")]
     [InlineData("F5", "<F5>")]
     [InlineData("q", "q")]
+    [InlineData("Shift+h", "H")]
+    [InlineData("Ctrl+Shift+h", "<C-S-h>")]
     [InlineData("<", "<lt>")]
     [InlineData("Ctrl+\\", "<C-Bslash>")]
     [InlineData("Ctrl++", "<C-+>")]

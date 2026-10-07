@@ -33,6 +33,11 @@ public static class NvimChord
             : step.Split('+');
         var key = parts[^1];
         var modifiers = parts[..^1].Select(m => Modifiers[m]).ToArray();
+
+        if (modifiers is ["S"] && key.Length == 1 && char.IsAsciiLetter(key[0]))
+        {
+            return key.ToUpperInvariant();
+        }
         var named = NamedKeys.TryGetValue(key, out var name) ? name : key.Length > 1 ? key : null;
 
         if (modifiers.Length == 0)

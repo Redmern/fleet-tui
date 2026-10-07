@@ -43,6 +43,10 @@ public static class NvimKeybinds
     private const string Runtime = """
         local directions = { left = 'h', down = 'j', up = 'k', right = 'l' }
 
+        local function map(modes, lhs, rhs, opts)
+          pcall(vim.keymap.set, modes, lhs, rhs, opts)
+        end
+
         local function claude_terminal(buf)
           local command = vim.api.nvim_buf_get_name(buf):match('^term://.-//%d+:(.*)$')
           return command ~= nil and command:lower():find('claude', 1, true) ~= nil
@@ -66,7 +70,7 @@ public static class NvimKeybinds
           skip = skip or {}
           for _, b in ipairs(M.bindings) do
             if b.action == 'claude-normal-mode' and skip[b.id] ~= false then
-              vim.keymap.set(b.modes, b.lhs, '<C-\\><C-n>', { buffer = buf, desc = 'Leave terminal mode' })
+              map(b.modes, b.lhs, '<C-\\><C-n>', { buffer = buf, desc = 'Leave terminal mode' })
             end
           end
         end
@@ -78,9 +82,9 @@ public static class NvimKeybinds
             local size = b.action:match('^resize%-(%a+)$')
             if skip[b.id] == false then
             elseif focus and directions[focus] and vim.tbl_contains(b.modes, 'n') then
-              vim.keymap.set('n', b.lhs, '<C-w>' .. directions[focus], { desc = 'Window ' .. directions[focus] })
+              map('n', b.lhs, '<C-w>' .. directions[focus], { desc = 'Window ' .. directions[focus] })
             elseif size and directions[size] then
-              vim.keymap.set(b.modes, b.lhs, function() resize(size) end, { desc = 'Resize ' .. size })
+              map(b.modes, b.lhs, function() resize(size) end, { desc = 'Resize ' .. size })
             end
           end
 
@@ -98,6 +102,13 @@ public static class NvimKeybinds
 
         """;
 
-    private static string Quote(string text) =>
-        "\"" + text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    private static string Quote(string text) => "\"" + string.Concat(text.Select(Escape)) + "\"";
+
+    private static string Escape(char c) => c switch
+    {
+        '\\' => "\\\\",
+        '"' => "\\\"",
+        _ when char.IsControl(c) => $"\\{(int)c:D3}",
+        _ => c.ToString(),
+    };
 }
