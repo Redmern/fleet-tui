@@ -44,6 +44,8 @@ public static class FleetCorners
             new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
         ];
 
+    public static string Tip(string icon, string key) => FleetToolTip.Label(FleetIcons.Name(icon), key);
+
     public const int Margin = 1;
 
     public static int Rows => FloatBorder.Enabled ? 0 : 2 * Margin;
@@ -73,6 +75,7 @@ public static class FleetCorners
             () => Help(FleetKeyHints.Shown, FleetKeyHints.RevealKey, FleetButtonHints.Mode),
             FleetIcons.Info,
             FleetKeyHints.Toggle,
+            () => FleetKeyHints.RevealKey,
             anchorEnd: infoRight,
             trailing: () => close is null ? 0 : Width(Close(FleetKeyHints.Shown, FleetButtonHints.Mode)) + 1)
         {
@@ -88,7 +91,7 @@ public static class FleetCorners
 
         if (close is not null)
         {
-            window.Add(new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, anchorEnd: true)
+            window.Add(new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, () => string.Empty, anchorEnd: true)
             {
                 Y = 0,
             });
@@ -114,12 +117,16 @@ public static class FleetCorners
 
         private readonly string _icon;
 
+        private readonly Func<string> _key;
+
         private readonly bool _anchorEnd;
 
         private bool _hovered;
 
-        public Corner(Func<IReadOnlyList<FleetSpan>> spans, string icon, Action run, bool anchorEnd = false, Func<int>? trailing = null)
+        public Corner(
+            Func<IReadOnlyList<FleetSpan>> spans, string icon, Action run, Func<string> key, bool anchorEnd = false, Func<int>? trailing = null)
         {
+            _key = key;
             _spans = spans;
             _trailing = trailing;
             _icon = icon;
@@ -160,7 +167,7 @@ public static class FleetCorners
             {
                 var at = ViewportToScreen(new Rectangle(0, 0, 1, 1)).Location;
 
-                FleetToolTip.Show(this, new Point(at.X, at.Y + 1), FleetIcons.Name(_icon));
+                FleetToolTip.Show(this, new Point(at.X, at.Y + 1), Tip(_icon, _key()));
             }
             else
             {

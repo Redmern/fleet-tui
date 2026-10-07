@@ -31,6 +31,9 @@ public static class FleetToolTip
         host.MakeVisible(screen);
     }
 
+    public static string Label(string name, string key) =>
+        name.Length == 0 || key.Length == 0 ? name : $"{name} ({key})";
+
     public static void Hide()
     {
         if (host is { Visible: true })
