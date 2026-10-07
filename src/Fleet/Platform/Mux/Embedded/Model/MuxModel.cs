@@ -1521,7 +1521,7 @@ public sealed class FloatState(string pane, Rect bounds)
     public Rect Drawn => Held ?? Bounds;
 }
 
-public sealed record FloatButton(bool Bottom, bool Right, string Key, string Label, string Send);
+public sealed record FloatButton(bool Bottom, bool Right, string Key, string Label, string Send, string Tip = "");
 
 public sealed class ClientState(string id)
 {

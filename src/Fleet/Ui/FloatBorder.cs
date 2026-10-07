@@ -203,24 +203,39 @@ public static class FloatBorder
 
         if (corners)
         {
-            buttons.Add(new FloatBorderButton(false, false, keysShown ? string.Empty : revealKey, FleetButtonHints.Face(FleetIcons.Info, hints), Send(0)));
+            buttons.Add(new FloatBorderButton(
+                false,
+                false,
+                keysShown ? string.Empty : revealKey,
+                FleetButtonHints.Face(FleetIcons.Info, hints),
+                Send(0),
+                Tip(FleetIcons.Info, hints)));
         }
 
         if (corners && closable)
         {
             buttons.Add(new FloatBorderButton(
-                false, true, keysShown ? FleetCorners.CloseKey : string.Empty, FleetButtonHints.Face(FleetIcons.Close, hints), Send(1)));
+                false,
+                true,
+                keysShown ? FleetCorners.CloseKey : string.Empty,
+                FleetButtonHints.Face(FleetIcons.Close, hints),
+                Send(1),
+                Tip(FleetIcons.Close, hints)));
         }
 
         var shown = FleetActionBar.Visible(bar, keysShown, pinned);
 
         foreach (var chip in shown)
         {
-            buttons.Add(new FloatBorderButton(true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count)));
+            buttons.Add(new FloatBorderButton(
+                true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count), Tip(chip.Label, hints)));
         }
 
         return buttons;
     }
+
+    private static string Tip(string icon, ButtonHints hints) =>
+        hints == ButtonHints.Tooltips ? FleetIcons.Name(icon) : string.Empty;
 
     private static string Send(int index) => index < Sends.Count ? Sends[index] : string.Empty;
 

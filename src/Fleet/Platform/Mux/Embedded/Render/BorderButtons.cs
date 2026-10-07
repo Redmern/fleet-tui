@@ -69,7 +69,8 @@ public static class BorderButtons
         dto.Align == "right",
         dto.Key,
         dto.Label,
-        dto.Send);
+        dto.Send,
+        dto.Tip ?? string.Empty);
 
     private static List<FloatButton> Fitting(IEnumerable<FloatButton> buttons, int room)
     {
