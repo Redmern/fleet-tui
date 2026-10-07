@@ -1,3 +1,4 @@
+using Fleet.Platform.Storage;
 using Fleet.Platform.Themes;
 using Fleet.Ports.Themes;
 using Fleet.Ports.Themes.Models;
@@ -22,7 +23,10 @@ public sealed class YaziThemeTarget(string configDirectory) : IThemeTarget
 
         if (File.Exists(ThemeFile))
         {
-            var existing = File.ReadAllText(ThemeFile);
+            if (BusyFiles.Retry(() => File.ReadAllText(ThemeFile), BusyFiles.Patience) is not { } existing)
+            {
+                return ThemeApplied.Failed(Tool, $"{ThemeFile} could not be read (another program may have it open); fleet left it alone");
+            }
 
             if (!YaziTheme.IsFleets(existing))
             {
