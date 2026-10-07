@@ -159,9 +159,11 @@ public static class MenuCommand
                 current = FleetMenus.Flip(action, current);
                 settings.Save(project.Name, current);
                 Adapters.SaveShowMenuKeys(current.ShowMenuKeys);
+                Adapters.SaveButtonHints(current.ButtonHints);
                 return FleetMenus.Value(action, current, head);
             },
-            () => current.ShowMenuKeys);
+            () => current.ShowMenuKeys,
+            () => current.ButtonHints);
     }
 
     private static async Task<bool> CanOpenEditor(Project project)

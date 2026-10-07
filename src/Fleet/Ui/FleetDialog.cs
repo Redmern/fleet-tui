@@ -2,6 +2,7 @@ using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
 
 namespace Fleet.Ui;
 
@@ -64,7 +65,24 @@ public static class FleetDialog
             }
         };
 
-        window.Add(primary, secondary, FleetTheme.HintBar(FleetHints.Choose));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, () =>
+            {
+                choice = primary.HasFocus ? DialogChoice.Primary : DialogChoice.Secondary;
+                app.RequestStop(window);
+            }),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(primary, secondary, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         primary.SetFocus();
 
@@ -138,7 +156,24 @@ public static class FleetDialog
             }
         };
 
-        window.Add(yes, no, FleetTheme.HintBar(FleetHints.Confirm));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("y", FleetIcons.Select, () =>
+            {
+                confirmed = true;
+                app.RequestStop(window);
+            }),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(yes, no, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         yes.SetFocus();
 
@@ -200,7 +235,24 @@ public static class FleetDialog
             }
         };
 
-        window.Add(field, FleetTheme.HintBar(FleetHints.Ask));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, () =>
+            {
+                answer = field.Text;
+                app.RequestStop(window);
+            }),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(field, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
         field.SetFocus();
 
         FleetModal.Enter();
@@ -248,7 +300,20 @@ public static class FleetDialog
             }
         };
 
-        window.Add(dismiss, FleetTheme.HintBar(FleetHints.Dismiss));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, () => app.RequestStop(window)),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(dismiss, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         FleetModal.Enter();
 
@@ -268,7 +333,7 @@ public static class FleetDialog
     {
         var longest = lines.Count == 0 ? 0 : lines.Max(l => l.Length);
         var width = Math.Clamp(Math.Max(longest, title.Length) + 8, 44, 92);
-        var height = lines.Count + extraRows + 2;
+        var height = lines.Count + extraRows + 2 + FleetCorners.Rows;
 
         return FleetTheme.Modal(title, width, height);
     }

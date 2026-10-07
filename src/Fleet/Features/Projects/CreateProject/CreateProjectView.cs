@@ -4,6 +4,7 @@ using Fleet.Ports.Projects.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Terminal.Gui.App;
+using Terminal.Gui.ViewBase;
 
 namespace Fleet.Features.Projects.CreateProject;
 
@@ -119,6 +120,13 @@ public static class CreateProjectView
             }
         };
 
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, Submit),
+        ]);
+
         window.Add(
             FleetTheme.Caption(1, 1, "Name:"),
             nameField,
@@ -126,7 +134,8 @@ public static class CreateProjectView
             rootField,
             browse,
             error,
-            FleetTheme.HintBar(FleetHints.Form));
+            bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         FleetModal.Enter();
 

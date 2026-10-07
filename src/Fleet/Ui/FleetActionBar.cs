@@ -1,3 +1,5 @@
+using System.Drawing;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.Input;
@@ -19,19 +21,86 @@ public sealed class FleetActionBar
             Width = Dim.Fill(1),
             Height = 1,
             CanFocus = false,
+            Visible = !FloatBorder.Enabled,
             SchemeName = FleetSchemes.Screen,
         };
+        FloatBorder.Track(this);
     }
 
     public View Root => _strip;
 
+    public IReadOnlyList<(string Key, string Label, Action Run)> Items => _strip.Items;
+
+    public bool AlignRight => _strip.AlignRight;
+
+    public string? Pinned => _strip.Pinned;
+
     public static int Measure(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
-        items.Sum(i => (i.Key.Length == 0 ? $" {i.Label} " : $" {i.Key} {i.Label} ").Length + 3) - Math.Min(1, items.Count);
+        Measure(items, FleetButtonHints.Mode);
 
-    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
+    public static int Measure(IReadOnlyList<(string Key, string Label, Action Run)> items, ButtonHints hints) =>
+        Width(Chips(items, true, null, hints));
+
+    public static int Width(IReadOnlyList<FleetChip> chips) => chips.Count == 0 ? 0 : chips[^1].To + 1;
+
+    public static IReadOnlyList<FleetChip> Chips(
+        IReadOnlyList<(string Key, string Label, Action Run)> items, bool keys, string? pinned, ButtonHints hints)
+    {
+        var chips = new List<FleetChip>();
+        var offset = 0;
+
+        foreach (var (key, label, run) in Visible(items, keys, pinned))
+        {
+            var face = FleetButtonHints.Face(label, hints);
+            var spans = new List<FleetSpan> { new(FleetGlyphs.PillLeft, FleetTones.ChipEdge) };
+
+            if (key.Length > 0)
+            {
+                spans.Add(new FleetSpan($" {key} ", FleetTones.ChipKey));
+                spans.Add(new FleetSpan($"{face} ", FleetTones.ChipLabel));
+            }
+            else
+            {
+                spans.Add(new FleetSpan($" {face} ", FleetTones.ChipLabel));
+            }
+
+            spans.Add(new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge));
+            spans.Add(FleetSpan.Plain(" "));
+
+            var width = spans.Sum(s => s.Text.Length) - 1;
+
+            chips.Add(new FleetChip(offset, offset + width - 1, FleetIcons.Name(label), run, spans));
+
+            offset += width + 1;
+        }
+
+        return chips;
+    }
+
+    public static int Hovered(IReadOnlyList<FleetChip> chips, int x)
+    {
+        for (var i = 0; i < chips.Count; i++)
+        {
+            if (x >= chips[i].From && x <= chips[i].To)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
+    {
         _strip.Show(items);
+        FloatBorder.Refresh();
+    }
 
-    public void Pin(string key) => _strip.Pinned = key;
+    public void Pin(string key)
+    {
+        _strip.Pinned = key;
+        FloatBorder.Refresh();
+    }
 
     public static IReadOnlyList<(string Key, string Label, Action Run)> Visible(
         IReadOnlyList<(string Key, string Label, Action Run)> items, bool keys, string? pinned = null) =>
@@ -39,21 +108,27 @@ public sealed class FleetActionBar
 
     private sealed class ChipStrip : View
     {
-        private readonly List<(int From, int To, Action Run)> _hits = [];
-
         private IReadOnlyList<(string Key, string Label, Action Run)> _items = [];
 
-        public ChipStrip() => FleetKeyHints.Changed += Rebuild;
+        private IReadOnlyList<FleetChip> _chips = [];
+
+        private int _hovered = -1;
+
+        public ChipStrip()
+        {
+            MousePositionTracking = true;
+            FleetKeyHints.Changed += Rebuild;
+            FleetButtonHints.Changed += Rebuild;
+            MouseLeave += (_, _) => Hover(-1);
+        }
 
         public string? Pinned { get; set; }
 
-        private IReadOnlyList<FleetSpan> _spans = [];
-
-        private int _total;
+        public IReadOnlyList<(string Key, string Label, Action Run)> Items => _items;
 
         public bool AlignRight { get; init; }
 
-        private int Start => AlignRight ? Math.Max(0, Viewport.Width - _total) : 0;
+        private int Start => AlignRight ? Math.Max(0, Viewport.Width - FleetActionBar.Width(_chips)) : 0;
 
         public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
         {
@@ -64,47 +139,39 @@ public sealed class FleetActionBar
         protected override void Dispose(bool disposing)
         {
             FleetKeyHints.Changed -= Rebuild;
+            FleetButtonHints.Changed -= Rebuild;
+            FloatBorder.Forget(this);
+            Hover(-1);
             base.Dispose(disposing);
         }
 
         private void Rebuild()
         {
-            var spans = new List<FleetSpan>();
+            _chips = Chips(_items, FleetKeyHints.Shown, Pinned, FleetButtonHints.Mode);
 
-            _hits.Clear();
-
-            var offset = 0;
-
-            foreach (var (key, label, run) in Visible(_items, FleetKeyHints.Shown, Pinned))
-            {
-                var text = key.Length == 0 ? $" {label} " : $" {key} {label} ";
-                var chip = text.Length + 2;
-
-                spans.Add(new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge));
-
-                if (key.Length > 0)
-                {
-                    spans.Add(new FleetSpan($" {key} ", FleetTones.ChipKey));
-                    spans.Add(new FleetSpan($"{label} ", FleetTones.ChipLabel));
-                }
-                else
-                {
-                    spans.Add(new FleetSpan($" {label} ", FleetTones.ChipLabel));
-                }
-
-                spans.Add(new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge));
-                spans.Add(FleetSpan.Plain(" "));
-
-                _hits.Add((offset, offset + chip - 1, run));
-
-                offset += chip + 1;
-            }
-
-            _spans = spans;
-            _total = Math.Max(0, offset - 1);
-
+            Hover(-1);
             SetNeedsLayout();
             SetNeedsDraw();
+        }
+
+        private void Hover(int index)
+        {
+            if (index == _hovered)
+            {
+                return;
+            }
+
+            _hovered = index;
+
+            if (index < 0 || index >= _chips.Count)
+            {
+                FleetToolTip.Hide();
+                return;
+            }
+
+            var at = ViewportToScreen(new Rectangle(Start + _chips[index].From, 0, 1, 1)).Location;
+
+            FleetToolTip.Show(this, new Point(at.X, at.Y + 1), _chips[index].Name);
         }
 
         protected override bool OnDrawingContent(DrawContext? context)
@@ -115,7 +182,7 @@ public sealed class FleetActionBar
 
             Move(drawn, 0);
 
-            foreach (var span in _spans)
+            foreach (var span in _chips.SelectMany(c => c.Spans))
             {
                 SetAttribute(FleetInk.For(span.Tone, basis));
 
@@ -136,23 +203,26 @@ public sealed class FleetActionBar
 
         protected override bool OnMouseEvent(Mouse mouse)
         {
-            if (!mouse.Flags.HasFlag(MouseFlags.LeftButtonClicked))
-            {
-                return false;
-            }
-
             if (mouse.Position is not { } at)
             {
                 return false;
             }
 
-            foreach (var (from, to, run) in _hits)
+            if (mouse.Flags.HasFlag(MouseFlags.PositionReport))
             {
-                if (at.X - Start >= from && at.X - Start <= to)
-                {
-                    run();
-                    return true;
-                }
+                Hover(Hovered(_chips, at.X - Start));
+                return false;
+            }
+
+            if (!mouse.Flags.HasFlag(MouseFlags.LeftButtonClicked))
+            {
+                return false;
+            }
+
+            if (Hovered(_chips, at.X - Start) is var index and >= 0)
+            {
+                _chips[index].Run();
+                return true;
             }
 
             return false;

@@ -2,6 +2,7 @@ using Fleet.Ports.Notifications;
 using Fleet.Ports.Notifications.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -26,11 +27,11 @@ public static class ShowNoticesView
             : [.. store.Projects().Where(p => only.Contains(p, StringComparer.OrdinalIgnoreCase))];
         var names = NoticeTabs.Names([.. projects, .. elsewhere?.Projects ?? []]);
 
-        var window = FleetTheme.Overlay("notifications", 100, 24);
+        var window = FleetTheme.Overlay("notifications", 100, 24 + FleetCorners.Rows);
         var tabBar = FleetTheme.TabBar(1, 0, [.. names.Select(n => $"{n} (0)")]);
         var list = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
 
         FleetKeys.ApplyMotions(list, keymap);
 
@@ -66,11 +67,11 @@ public static class ShowNoticesView
             var settings = store.Settings();
             bar.Show(
             [
-                ("enter", "open", Open),
-                (keymap.DisplayFor(FleetAction.DismissNotice), "dismiss", () => Dismiss(one: true)),
-                (keymap.DisplayFor(FleetAction.DismissAllNotices), "dismiss all", () => Dismiss(one: false)),
-                ("b", settings.Bell ? "bell on" : "bell off", () => Toggle(bell: true)),
-                ("t", settings.Toast ? "toasts on" : "toasts off", () => Toggle(bell: false)),
+                ("enter", FleetIcons.Select, Open),
+                (keymap.DisplayFor(FleetAction.DismissNotice), FleetIcons.Dismiss, () => Dismiss(one: true)),
+                (keymap.DisplayFor(FleetAction.DismissAllNotices), FleetIcons.DismissAll, () => Dismiss(one: false)),
+                ("b", settings.Bell ? FleetIcons.BellOn : FleetIcons.BellOff, () => Toggle(bell: true)),
+                ("t", settings.Toast ? FleetIcons.ToastsOn : FleetIcons.ToastsOff, () => Toggle(bell: false)),
             ]);
         }
 

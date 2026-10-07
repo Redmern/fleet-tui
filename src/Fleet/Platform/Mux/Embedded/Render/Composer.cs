@@ -84,7 +84,7 @@ public static class Composer
         {
             var isFocused = box.Pane == view.Focused;
             var inner = ClientView.Inner(box.Area);
-            Box(frame, box.Area, isFocused ? FocusFg : DividerFg, view.FloatLabel(box.Pane));
+            Bordered(frame, box.Area, isFocused ? FocusFg : DividerFg, view.FloatLabel(box.Pane), view.ButtonsOf(box.Pane));
             Clear(frame, inner);
 
             if (screens(box.Pane) is { } screen)
@@ -346,6 +346,74 @@ public static class Composer
                 frame.Cells[lastRow * frame.Cols + start + i] = Cell.Of(label[i], fg);
             }
         }
+    }
+
+    private static void Bordered(ClientFrame frame, Rect area, uint fg, string? title, IReadOnlyList<FloatButton> buttons)
+    {
+        if (buttons.Count == 0)
+        {
+            Box(frame, area, fg, title);
+            return;
+        }
+
+        Box(frame, area, fg, null);
+
+        var placed = BorderButtons.Place(area, buttons);
+        var (from, to) = BorderButtons.TitleRoom(area, placed);
+
+        if (title is { Length: > 0 } && area.Y < frame.Rows && to - from >= 3)
+        {
+            var label = $" {title} ";
+            label = label.Length > to - from ? label[..(to - from)] : label;
+
+            for (var i = 0; i < label.Length && from + i < frame.Cols; i++)
+            {
+                frame.Cells[area.Y * frame.Cols + from + i] = Cell.Of(label[i], fg);
+            }
+        }
+
+        foreach (var button in placed)
+        {
+            Pill(frame, button);
+        }
+    }
+
+    private static void Pill(ClientFrame frame, PlacedButton placed)
+    {
+        if (placed.Y < 0 || placed.Y >= frame.Rows)
+        {
+            return;
+        }
+
+        var x = placed.X;
+
+        void Put(string text, uint fg, uint bg)
+        {
+            foreach (var rune in text.EnumerateRunes())
+            {
+                if (x >= 0 && x < frame.Cols)
+                {
+                    frame.Cells[placed.Y * frame.Cols + x] = new Cell(rune.ToString(), fg, bg, CellAttr.None, 0, false);
+                }
+
+                x++;
+            }
+        }
+
+        var button = placed.Button;
+        Put(LeftCap.ToString(), Surface0, Cell.Default);
+
+        if (button.Key.Length > 0)
+        {
+            Put($" {button.Key} ", Blue, Surface0);
+            Put($"{button.Label} ", Text, Surface0);
+        }
+        else
+        {
+            Put($" {button.Label} ", Text, Surface0);
+        }
+
+        Put(RightCap.ToString(), Surface0, Cell.Default);
     }
 
     private static void Framed(ClientFrame frame, Rect box, string? title, IReadOnlyList<Divider> dividers, Rect focused)

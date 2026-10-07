@@ -32,7 +32,7 @@ public static class PickProjectView
 
         var tabBar = tabbed ? FleetTheme.TabBar(1, 0, [ProjectsTab, SessionsTab]) : null;
         View header = tabBar is not null ? tabBar.Root : FleetTheme.SectionHeader(1, 0, ProjectsTab);
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
+        var list = FleetTheme.Rows(1, Pos.Bottom(header), Dim.Fill(3));
 
         void Refill(int selected)
         {
@@ -281,7 +281,7 @@ public static class PickProjectView
         bar.Show(
         [
             ($"{keymap.DisplayFor(FleetAction.OpenProject)}/enter/A-Z", "open", () => Accept()),
-            ("SHIFT", "new window", () => Accept(newWindow: true)),
+            ("SHIFT", FleetIcons.NewWindow, () => Accept(newWindow: true)),
             (keymap.DisplayFor(FleetAction.NewProject), "new", NewProject),
             (keymap.DisplayFor(FleetAction.RemoveProject), "remove", DropProject),
         ]);

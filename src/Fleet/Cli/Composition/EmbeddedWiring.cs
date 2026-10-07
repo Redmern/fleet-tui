@@ -393,6 +393,30 @@ public static class EmbeddedWiring
         }
     }
 
+    public static bool PublishOwnFloatButtons(IReadOnlyList<FloatBorderButton> buttons)
+    {
+        try
+        {
+            _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
+            _ownFloat.FloatButtonsAsync(
+                    [.. buttons.Select(b => new FloatButtonDto
+                    {
+                        Edge = b.Bottom ? "bottom" : "top",
+                        Align = b.Right ? "right" : "left",
+                        Key = b.Key,
+                        Label = b.Label,
+                        Send = b.Send,
+                    })])
+                .GetAwaiter()
+                .GetResult();
+            return true;
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return false;
+        }
+    }
+
     private static void Furnish(Hello hello, Ports.Sessions.Models.WindowSession session)
     {
         hello.Window = [.. session.Projects.Select(p => new WindowEntryDto { Name = p.Name, Host = p.Host })];

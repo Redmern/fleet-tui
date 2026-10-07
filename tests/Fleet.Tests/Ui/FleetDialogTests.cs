@@ -1,5 +1,4 @@
 using System.Reflection;
-using Fleet.Ui.Constants;
 
 namespace Fleet.Tests.Ui;
 
@@ -29,11 +28,11 @@ public class FleetDialogTests
     }
 
     [Fact]
-    public void The_hint_says_how_to_move_and_that_y_and_n_still_work()
+    public void The_confirm_bar_is_icon_buttons_with_y_and_back_and_a_close_corner()
     {
-        Assert.Contains("h/l move", FleetHints.Confirm);
-        Assert.Contains("enter select", FleetHints.Confirm);
-        Assert.Contains("y yes", FleetHints.Confirm);
-        Assert.Contains("n/esc no", FleetHints.Confirm);
+        Assert.Contains("(\"y\", FleetIcons.Select,", Source);
+        Assert.Contains("(\"bksp\", FleetIcons.Back,", Source);
+        Assert.Contains("FleetCorners.Attach(window,", Source);
+        Assert.DoesNotContain("HintBar(", Source);
     }
 }
