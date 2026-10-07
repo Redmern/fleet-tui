@@ -9,4 +9,5 @@ namespace Fleet.Shared.Keybinds;
     ReadCommentHandling = JsonCommentHandling.Skip,
     AllowTrailingCommas = true)]
 [JsonSerializable(typeof(KeybindsFile))]
+[JsonSerializable(typeof(Dictionary<string, KeybindEntryJson>))]
 public sealed partial class KeybindsJsonContext : JsonSerializerContext;

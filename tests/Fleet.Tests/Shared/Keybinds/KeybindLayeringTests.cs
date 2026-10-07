@@ -99,6 +99,18 @@ public class KeybindLayeringTests
         Assert.Single(_log);
     }
 
+    [Theory]
+    [InlineData("""{ "keybinds": { "focus-left": { "chord": "" } } }""")]
+    [InlineData("""{ "keybinds": { "focus-left": { "targets": {} } } }""")]
+    [InlineData("""{ "keybinds": { "focus-left": { "targets": { "wezterm": [] } } } }""")]
+    public void An_empty_chord_or_no_known_target_is_rejected_not_taken_as_unbind(string json)
+    {
+        var set = Apply(json);
+
+        Assert.Equal(KeybindDefaults.Set.Find("focus-left"), set.Find("focus-left"));
+        Assert.NotEmpty(_log);
+    }
+
     [Fact]
     public void Parse_rejects_broken_json()
     {

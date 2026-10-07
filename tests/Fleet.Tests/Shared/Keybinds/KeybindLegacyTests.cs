@@ -84,6 +84,20 @@ public class KeybindLegacyTests
     }
 
     [Fact]
+    public void Mux_keys_match_letters_under_modifiers_in_any_case_and_a_literal_space()
+    {
+        var set = KeybindLegacy.Mux(
+            Defaults,
+            null,
+            new Dictionary<string, string> { [" "] = "zoom" },
+            new Dictionary<string, string> { ["ctrl+H"] = "none" });
+
+        var mux = set.For(KeybindTarget.Mux, KeybindOs.Windows);
+        Assert.DoesNotContain(mux, b => b.Chord is "Ctrl+h" or "Ctrl+H");
+        Assert.Equal("zoom", set.Find("mux.menu")!.Action);
+    }
+
+    [Fact]
     public void Mux_commands_with_arguments_keep_their_argument()
     {
         Assert.Equal("focus-left", KeybindActions.FromMux("smart-focus left"));

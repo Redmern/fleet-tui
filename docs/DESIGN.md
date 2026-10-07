@@ -5643,6 +5643,15 @@ Phase 1 of the unified keybind distribution: a model only, nothing renders from 
 - **Mux action names:** `smart-focus <dir>` and `resize <dir>` map to `focus-<dir>` and
   `resize-<dir>`. The mux prefix keys h/j/k/l are plain `focus-<dir>` too; context tells
   them apart (direct is smart focus), which the phase 3 renderer has to respect.
+- **`targets` replaces, never merges:** an override that names `targets` sets the whole
+  map; one that leaves no known target is rejected (unbind with `"chord": "none"`), as is
+  an empty chord. The `keybinds` section is kept as raw JSON in `KeymapFile`, so a typo
+  in it never costs the fleet UI its old bindings and survives a keymap save.
+- **Open for later phases:** key names differ per source (Terminal.Gui writes `CursorUp`,
+  `Esc`; the mux `up`, `escape`), so pick canonical names before a renderer compares them.
+  The mux rule that a single key beats a longer sequence (`MuxKeys.Beats`) is not in the
+  model; phase 3 has to resolve it. Legacy mux keys match letters under a modifier in any
+  case (`ctrl+H` is `Ctrl+h`), as the mux does.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

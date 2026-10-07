@@ -77,6 +77,22 @@ public sealed class JsonKeybindStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_malformed_keybinds_section_never_costs_the_fleet_ui_its_bindings_and_survives_a_save()
+    {
+        File.WriteAllText(
+            FleetPaths.KeymapFile,
+            """{ "version": 1, "prefix": "", "bindings": { "Refresh": "F5" }, "keybinds": { "x": { "targets": ["mux"] } } }""");
+
+        Assert.Equal("F5", new JsonKeymapStore().Load().Bindings[FleetAction.Refresh]);
+        Assert.Equal("F5", Load().Find(KeybindLegacy.FleetUiId(FleetAction.Refresh))!.Chord);
+        Assert.Single(_log);
+
+        new JsonKeymapStore().Save(KeymapConfig.Default.With(FleetAction.Close, "x"));
+
+        Assert.Contains("\"targets\": [", File.ReadAllText(FleetPaths.KeymapFile), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Saving_without_a_keybinds_section_does_not_write_one()
     {
         new JsonKeymapStore().Save(KeymapConfig.Default);

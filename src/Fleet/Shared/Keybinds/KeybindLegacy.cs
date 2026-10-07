@@ -74,7 +74,7 @@ public static class KeybindLegacy
 
     private static KeybindSet Remap(KeybindSet set, string spec, string? command, string context, Action<string> log)
     {
-        if (!KeybindChord.TryNormalize(spec, out var chord) || KeybindChord.IsUnbound(chord))
+        if (!TryMuxChord(spec, out var chord))
         {
             log($"keybinds: mux key \"{spec}\" not migrated, it is not a chord");
             return set;
@@ -118,6 +118,26 @@ public static class KeybindLegacy
         }
 
         return set;
+    }
+
+    private static bool TryMuxChord(string spec, out string chord)
+    {
+        if (!KeybindChord.TryNormalize(spec == " " ? "Space" : spec, out chord) || KeybindChord.IsUnbound(chord))
+        {
+            return false;
+        }
+
+        chord = string.Join(' ', chord.Split(' ').Select(LowerModifiedLetter));
+        return true;
+    }
+
+    private static string LowerModifiedLetter(string step)
+    {
+        var plus = step.LastIndexOf('+');
+
+        return plus > 0 && plus == step.Length - 2 && char.IsAsciiLetter(step[^1])
+            ? step[..^1] + char.ToLowerInvariant(step[^1])
+            : step;
     }
 
     private static Dictionary<KeybindTarget, IReadOnlyList<string>> Without(

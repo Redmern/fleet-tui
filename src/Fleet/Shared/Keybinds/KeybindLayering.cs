@@ -42,7 +42,7 @@ public static class KeybindLayering
         string? chord = existing?.Chord;
         if (layer.Chord is not null)
         {
-            if (!KeybindChord.TryNormalize(layer.Chord, out var normalized))
+            if (string.IsNullOrWhiteSpace(layer.Chord) || !KeybindChord.TryNormalize(layer.Chord, out var normalized))
             {
                 log($"keybinds: \"{id}\" ignored, \"{layer.Chord}\" is not a chord");
                 return null;
@@ -54,7 +54,13 @@ public static class KeybindLayering
         var action = string.IsNullOrWhiteSpace(layer.Action) ? existing?.Action : layer.Action.Trim();
         var targets = layer.Targets is null ? existing?.Targets : Targets(id, layer.Targets, log);
 
-        if (action is null || chord is null || targets is null || (existing is null && targets.Count == 0))
+        if (layer.Targets is not null && targets is { Count: 0 })
+        {
+            log($"keybinds: \"{id}\" ignored, its targets name no known target; use \"chord\": \"none\" to unbind");
+            return null;
+        }
+
+        if (action is null || chord is null || targets is null)
         {
             log($"keybinds: \"{id}\" ignored, a new keybind needs an action, a chord and targets");
             return null;

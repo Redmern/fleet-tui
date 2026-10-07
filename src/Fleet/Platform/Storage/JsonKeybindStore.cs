@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Shared.Keybinds;
+using Fleet.Shared.Keybinds.Models;
 
 namespace Fleet.Platform.Storage;
 
@@ -25,7 +26,20 @@ public sealed class JsonKeybindStore(Action<string>? log = null)
             set = KeybindLegacy.Mux(set, mux.Prefix, mux.PrefixKeys, mux.Keys, _log);
         }
 
-        return KeybindLayering.Apply(set, keymap?.Keybinds, _log);
+        return KeybindLayering.Apply(set, Section(keymap?.Keybinds), _log);
+    }
+
+    private Dictionary<string, KeybindEntryJson>? Section(JsonElement? keybinds)
+    {
+        try
+        {
+            return keybinds?.Deserialize(KeybindsJsonContext.Default.DictionaryStringKeybindEntryJson);
+        }
+        catch (JsonException e)
+        {
+            _log($"keybinds: the keybinds section of {FleetPaths.KeymapFile} not used ({e.Message})");
+            return null;
+        }
     }
 
     private MuxKeysFile? ReadMux()
