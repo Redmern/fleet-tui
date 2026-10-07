@@ -5613,6 +5613,37 @@ in fleetd's frame.
   (the symlink target is the fallback) and that light themes carry `light.mode`.
 - Live recolor of a running Terminal.Gui window and of WezTerm's chrome is covered by unit
   tests of the pieces, not yet watched on a real screen.
+
+## One keybind model, 2026-10-07
+
+Phase 1 of the unified keybind distribution: a model only, nothing renders from it yet.
+
+- **Where:** `Shared/Keybinds`. An entry is an id, a semantic action (`resize-left`,
+  `focus-left`, `claude-normal-mode`, `newline`, or a mux command such as `tab 3`), a
+  portable chord (`Alt+h`, sequences space-separated like `f f`), targets with a per-target
+  context list (nvim modes `n`/`t`, Claude context `Chat`, mux `direct`/`prefix`/`leader`)
+  and optional per-OS chords (`windows`, `linux`, `macos`). Targets are `fleet-ui`, `mux`,
+  `nvim` and `claude`; there is no WezTerm target, since fleet runs its own multiplexer.
+- **Defaults** ship as the embedded `keybinds.default.json`, read through the
+  source-generated `KeybindsJsonContext`. It mirrors `KeymapDefaults` and the `MuxKeys`
+  defaults (tests keep them in step), with one deliberate difference: Alt+h/j/k/l is
+  resize in the mux and nvim, Ctrl+h/j/k/l stays focus. Alt+n leaves a Claude terminal for
+  normal mode in nvim.
+- **Layers**, last wins (`JsonKeybindStore`): defaults, then the old `keybinds.json`
+  bindings and prefix, then `embedded-keys.json` (`keys`, `prefixKeys`, `prefix`), then
+  the new `keybinds` section of `keybinds.json`. That section holds diffs keyed by id;
+  a field it leaves out keeps its value, `"chord": "none"` unbinds everywhere, and a new id
+  needs an action, a chord and targets. A mux remap of a chord shared with nvim splits it
+  off for the mux only, so `"ctrl+h": "none"` in `embedded-keys.json` leaves nvim's Ctrl+h
+  alone. `JsonKeymapStore.Save` carries the `keybinds` section over.
+- **Not changed:** the fleet UI and the mux still read their own files exactly as before;
+  the mux still binds Alt+h/j/k/l to smart focus until phase 3 derives `MuxKeys` from the
+  model. Mux `groups`, `icons` and `showIcons` are presentation and stay in
+  `embedded-keys.json`.
+- **Mux action names:** `smart-focus <dir>` and `resize <dir>` map to `focus-<dir>` and
+  `resize-<dir>`. The mux prefix keys h/j/k/l are plain `focus-<dir>` too; context tells
+  them apart (direct is smart focus), which the phase 3 renderer has to respect.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

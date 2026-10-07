@@ -49,10 +49,25 @@ public sealed class JsonKeymapStore : IKeymapStore
             Prefix = KeymapDiff.PrefixAgainstDefault(config.Prefix),
             Bindings = KeymapDiff.AgainstDefaults(config.Bindings)
                 .ToDictionary(b => b.Key.ToString(), b => b.Value),
+            Keybinds = Read()?.Keybinds,
         };
 
         File.WriteAllText(
             FleetPaths.KeymapFile,
             JsonSerializer.Serialize(file, FleetJsonContext.Default.KeymapFile));
+    }
+
+    public static KeymapFile? Read()
+    {
+        try
+        {
+            return File.Exists(FleetPaths.KeymapFile)
+                ? JsonSerializer.Deserialize(File.ReadAllText(FleetPaths.KeymapFile), FleetJsonContext.Default.KeymapFile)
+                : null;
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }
