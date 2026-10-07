@@ -5578,7 +5578,9 @@ in fleetd's frame.
 - **Button hints.** The labels the pane sends go through `FleetButtonHints.Face`, so in
   text mode the border pills carry the icon's name like the in-content ones, and a change of
   the setting republishes them. In tooltips mode each button also carries a `tip`
-  (`FleetIcons.Name` of its icon, the text the in-content tooltips use); in text and none
+  (`FleetToolTip.Label` of its icon's name and its key, e.g. `close (esc)`, the text the
+  in-content tooltips use: info names the reveal key, close `esc`, a chip its own key even
+  while the keys are hidden; a button without a key gets the plain name); in text and none
   modes it is left out. An older fleetd ignores the field and an older sender omits it, which
   reads as no tooltip.
 - **Tooltips in the frame.** fleetd keeps a hover per attached client: a motion with no

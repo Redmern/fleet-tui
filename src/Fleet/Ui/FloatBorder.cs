@@ -223,7 +223,7 @@ public static class FloatBorder
                 keysShown ? string.Empty : revealKey,
                 FleetButtonHints.Face(FleetIcons.Info, hints),
                 Send(0),
-                Tip(FleetIcons.Info, hints)));
+                Tip(FleetIcons.Info, revealKey, hints)));
         }
 
         if (corners && closable)
@@ -234,22 +234,23 @@ public static class FloatBorder
                 keysShown ? FleetCorners.CloseKey : string.Empty,
                 FleetButtonHints.Face(FleetIcons.Close, hints),
                 Send(1),
-                Tip(FleetIcons.Close, hints)));
+                Tip(FleetIcons.Close, FleetCorners.CloseKey, hints)));
         }
 
         var shown = FleetActionBar.Visible(bar, keysShown, pinned);
 
-        foreach (var chip in shown)
+        for (var i = 0; i < shown.Count; i++)
         {
+            var chip = shown[i];
             buttons.Add(new FloatBorderButton(
-                true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count), Tip(chip.Label, hints)));
+                true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count), Tip(chip.Label, bar[i].Key, hints)));
         }
 
         return buttons;
     }
 
-    private static string Tip(string icon, ButtonHints hints) =>
-        hints == ButtonHints.Tooltips ? FleetIcons.Name(icon) : string.Empty;
+    private static string Tip(string icon, string key, ButtonHints hints) =>
+        hints == ButtonHints.Tooltips ? FleetToolTip.Label(FleetIcons.Name(icon), key) : string.Empty;
 
     private static string Send(int index) => index < Sends.Count ? Sends[index] : string.Empty;
 

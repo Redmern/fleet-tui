@@ -17,6 +17,10 @@ public sealed class FloatBorderTests : IDisposable
 {
     private readonly List<IReadOnlyList<FloatBorderButton>> _published = [];
 
+    private static readonly string InfoTip = FleetToolTip.Label(FleetIcons.Name(FleetIcons.Info), "?");
+
+    private static readonly string CloseTip = FleetToolTip.Label(FleetIcons.Name(FleetIcons.Close), FleetCorners.CloseKey);
+
     public FloatBorderTests()
     {
         FleetKeyHints.Reset();
@@ -45,14 +49,14 @@ public sealed class FloatBorderTests : IDisposable
 
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", FleetIcons.Name(FleetIcons.Info)),
-                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2", FleetIcons.Name(FleetIcons.Close)),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", InfoTip),
+                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2", CloseTip),
             ],
             shown);
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, "?", FleetIcons.Info, "f1", FleetIcons.Name(FleetIcons.Info)),
-                new FloatBorderButton(false, true, string.Empty, FleetIcons.Close, "f2", FleetIcons.Name(FleetIcons.Close)),
+                new FloatBorderButton(false, false, "?", FleetIcons.Info, "f1", InfoTip),
+                new FloatBorderButton(false, true, string.Empty, FleetIcons.Close, "f2", CloseTip),
             ],
             hidden);
     }
@@ -96,10 +100,10 @@ public sealed class FloatBorderTests : IDisposable
     }
 
     [Fact]
-    public void In_tooltips_mode_each_button_carries_its_icon_name_as_tip_and_in_text_and_none_modes_none()
+    public void In_tooltips_mode_each_button_carries_its_name_and_key_as_tip_and_in_text_and_none_modes_none()
     {
         var bar = new List<(string Key, string Label, Action Run)> { ("enter", FleetIcons.Select, () => { }) };
-        var names = new[] { FleetIcons.Name(FleetIcons.Info), FleetIcons.Name(FleetIcons.Close), FleetIcons.Name(FleetIcons.Select) };
+        var names = new[] { $"{FleetIcons.Name(FleetIcons.Info)} (?)", $"{FleetIcons.Name(FleetIcons.Close)} (esc)", $"{FleetIcons.Name(FleetIcons.Select)} (enter)" };
 
         var tips = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Tooltips);
         var text = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Text);
@@ -108,6 +112,17 @@ public sealed class FloatBorderTests : IDisposable
         Assert.All(names, n => Assert.NotEmpty(n));
         Assert.Equal(names, tips.Select(b => b.Tip));
         Assert.All(text.Concat(none), b => Assert.Empty(b.Tip));
+    }
+
+    [Fact]
+    public void A_border_chip_names_its_key_in_the_tip_even_while_the_keys_are_hidden()
+    {
+        var bar = new List<(string Key, string Label, Action Run)> { ("n", FleetIcons.Select, () => { }) };
+
+        var buttons = FloatBorder.For(false, bar, true, null, keysShown: false, "?");
+
+        Assert.Equal(string.Empty, buttons[0].Key);
+        Assert.Equal($"{FleetIcons.Name(FleetIcons.Select)} (n)", buttons[0].Tip);
     }
 
     [Fact]
@@ -230,8 +245,8 @@ public sealed class FloatBorderTests : IDisposable
 
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", FleetIcons.Name(FleetIcons.Info)),
-                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2", FleetIcons.Name(FleetIcons.Close)),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", InfoTip),
+                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2", CloseTip),
                 new FloatBorderButton(true, true, "enter", "open", "f3"),
             ],
             _published[^1]);
@@ -341,7 +356,7 @@ public sealed class FloatBorderTests : IDisposable
         Assert.True(dialogBar.Root.Visible);
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", FleetIcons.Name(FleetIcons.Info)),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", InfoTip),
                 new FloatBorderButton(true, false, "n", "new", "f2"),
             ],
             _published[^1]);

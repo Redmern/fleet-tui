@@ -91,7 +91,7 @@ public static class FleetCorners
 
         if (close is not null)
         {
-            window.Add(new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, () => string.Empty, anchorEnd: true)
+            window.Add(new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, () => CloseKey, anchorEnd: true)
             {
                 Y = 0,
             });
