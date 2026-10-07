@@ -5578,7 +5578,41 @@ in fleetd's frame.
 - **Not done.** The bar row stays reserved (now blank) in fitted floats; the two corner
   margins do go.
 
+## Themes, 2026-10-07
+
+- The palette is a `Shared/Themes/ThemePalette` record: Catppuccin's role names (crust ..
+  red, plus cursor) because the UI was written against them, and the 16 ANSI colors for
+  WezTerm. `BuiltInThemes` holds 15; Catppuccin Mocha stays the default and its generated
+  Lua is byte-for-byte what it was.
+- `Ui/FleetPalette` became a facade over `FleetPalette.Current`; `FleetTheme.Use` sets it and
+  re-registers the schemes (`SchemeManager.AddScheme` replaces by name). Views look their
+  scheme up at draw time, so a redraw (`LayoutAndDraw(true)`) is enough to recolor.
+  fleetd's `Composer` keeps its color names but reads them from a swapped `ChromeColors`;
+  its render loop wakes at least every 250 ms and sends only changed frames. Which-key keys
+  were Mocha's flamingo; they now use the theme's cursor color (Mocha's rosewater).
+- The hook for other apps is the `current-theme` file, not IPC: one line, the theme's name.
+  The CLI writes it atomically (temp + rename). Every TUI process and fleetd watch it and
+  `themes/*.toml` (`Platform/Themes/ThemeWatcher`, 150 ms settle) and compare the resolved
+  palette before acting, so a rewrite with the same theme does nothing.
+- WezTerm chrome: `fleet-theme.lua` is regenerated with the palette. The CLI and the first
+  watcher to see a change write it, only when it exists and differs, then touch the
+  WezTerm config. Several watchers racing write the same bytes.
+- Custom themes are flat TOML read by a small hand-rolled reader (`ThemeToml`); no TOML
+  package, since AOT-cleanliness of Tomlyn is still unverified (below). The same reader
+  takes Omarchy's `colors.toml` and `alacritty.toml`.
+- Omarchy: the name maps to a built-in only when the lightness agrees (from the colors, or
+  `light.mode`), because Omarchy's `rose-pine` is, as far as I know, the light Dawn variant. Otherwise the
+  palette is derived from background/foreground (surfaces are mixes between them) and the
+  ANSI colors, and stored as the custom theme `omarchy`. The `theme-set` hook gets one line
+  calling fleet by absolute path (`|| true`, so a missing fleet never breaks Omarchy's
+  switch); an existing hook is appended to, ahead of a trailing `exit`, never replaced.
+
 ## Still to verify
+- Omarchy specifics were written from memory of Omarchy 3.x, not checked on a machine:
+  that hooks live at `~/.config/omarchy/hooks/theme-set`, that `current/theme.name` exists
+  (the symlink target is the fallback) and that light themes carry `light.mode`.
+- Live recolor of a running Terminal.Gui window and of WezTerm's chrome is covered by unit
+  tests of the pieces, not yet watched on a real screen.
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

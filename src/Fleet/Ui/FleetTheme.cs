@@ -1,4 +1,5 @@
 using Fleet.Shared.Constants;
+using Fleet.Shared.Themes;
 using Fleet.Ui.Constants;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
@@ -13,6 +14,12 @@ public static class FleetTheme
     private static readonly System.Text.Rune NoHotKey = (System.Text.Rune)'￿';
 
     public static void Register() => FleetSchemeRegistry.Register();
+
+    public static void Use(ThemePalette palette)
+    {
+        FleetPalette.Current = palette;
+        FleetSchemeRegistry.Register();
+    }
 
     public static Window Screen(string title) => Floating(new Window
     {

@@ -13,11 +13,13 @@ using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Enums;
 using Fleet.Features.Setup.RunSetup.Models;
+using Fleet.Features.Themes.ManageThemes;
 using Fleet.Platform.Mux.WezTerm;
 using Fleet.Platform.Nvim;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Hooks;
 using Fleet.Platform.Storage;
+using Fleet.Platform.Themes;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Aidlc;
@@ -39,6 +41,7 @@ using Fleet.Shared;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Themes;
 using Fleet.Ui;
 
 namespace Fleet.Cli.Composition;
@@ -446,9 +449,35 @@ public static class Adapters
 
         File.WriteAllText(
             Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermTheme.Module),
-            WezTermTheme.Generate());
+            WezTermTheme.Generate(Themes().Active()));
 
         return target;
+    }
+
+    public static ManageThemesHandler Themes() =>
+        new(new FileThemeStore(FleetPaths.Config), new OmarchyThemeSource(Home));
+
+    public static string? ApplyWezTermTheme(ThemePalette theme)
+    {
+        var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermTheme.Module);
+
+        try
+        {
+            var wanted = WezTermTheme.Generate(theme);
+
+            if (!File.Exists(target) || File.ReadAllText(target) == wanted)
+            {
+                return null;
+            }
+
+            FileThemeStore.WriteAtomically(target, wanted);
+
+            return target;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     public static string TouchWezTermConfig()

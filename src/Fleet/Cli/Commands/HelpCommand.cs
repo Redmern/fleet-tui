@@ -22,6 +22,11 @@ public static class HelpCommand
               fleet head [--voice]        the head orchestrator's Claude (alt+o opens it in voice mode)
               fleet mcp --head            the head's cross-project MCP tools over stdio
               fleet doctor                check the environment
+              fleet theme list            the themes (built-in and <fleet config>\themes\*.toml)
+              fleet theme get             the active theme
+              fleet theme set <name>      switch theme; running fleet windows follow live
+              fleet theme sync            follow omarchy's current theme
+              fleet theme install omarchy hook omarchy's theme-set so fleet follows every switch
               fleet version               show the version, and check for an update
               fleet update                download and install the latest release
               fleet update <v>            install a specific release instead of latest

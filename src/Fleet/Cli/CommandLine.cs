@@ -78,6 +78,7 @@ public static class CommandLine
         "bridge" => FleetVerb.Bridge,
         "approve" => FleetVerb.Approve,
         "cli" => FleetVerb.Cli,
+        "theme" => FleetVerb.Theme,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         Shared.Constants.AgentHarness.WithEnvVerb => FleetVerb.WithEnv,
         "help" or "--help" or "-h" => FleetVerb.Help,

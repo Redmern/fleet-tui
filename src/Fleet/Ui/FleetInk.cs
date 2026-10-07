@@ -7,7 +7,7 @@ namespace Fleet.Ui;
 
 public static class FleetInk
 {
-    private static readonly Color Pill = new(FleetPalette.Surface0);
+    private static Color Pill => new(FleetPalette.Surface0);
 
     public static Attribute For(string tone, Attribute basis) => tone switch
     {

@@ -31,7 +31,7 @@ public static class WezTermWiring
             "local wezterm = require 'wezterm'",
             "local config = wezterm.config_builder()",
             string.Empty,
-            "-- Catppuccin visuals, pill bars and tmux-parity keys (prefix ctrl+s).",
+            "-- Themed visuals (fleet theme set <name>), pill bars and tmux-parity keys (prefix ctrl+s).",
             "-- Generated as fleet-theme.lua; drop this block to bring your own look.",
             "local ok_theme, theme = pcall(require, 'fleet-theme')",
             "if ok_theme then",

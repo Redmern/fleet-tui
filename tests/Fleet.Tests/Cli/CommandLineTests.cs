@@ -17,6 +17,7 @@ public class CommandLineTests
     [InlineData("request", FleetVerb.Request)]
     [InlineData("apply-keybinds", FleetVerb.ApplyKeybinds)]
     [InlineData("doctor", FleetVerb.Doctor)]
+    [InlineData("theme", FleetVerb.Theme)]
     [InlineData("help", FleetVerb.Help)]
     [InlineData("--help", FleetVerb.Help)]
     [InlineData("-h", FleetVerb.Help)]
@@ -32,6 +33,15 @@ public class CommandLineTests
     public void The_embedded_verbs_are_recognised(string arg, FleetVerb expected)
     {
         Assert.Equal(expected, CommandLine.Parse([arg]).Verb);
+    }
+
+    [Fact]
+    public void Theme_keeps_its_subcommand_and_name_as_arguments()
+    {
+        var invocation = CommandLine.Parse(["theme", "set", "tokyo-night"]);
+
+        Assert.Equal(FleetVerb.Theme, invocation.Verb);
+        Assert.Equal(["set", "tokyo-night"], invocation.Arguments);
     }
 
     [Fact]

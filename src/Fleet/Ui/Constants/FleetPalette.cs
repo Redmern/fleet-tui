@@ -1,18 +1,22 @@
+using Fleet.Shared.Themes;
+
 namespace Fleet.Ui.Constants;
 
 public static class FleetPalette
 {
-    public const string Crust = "#11111b";
-    public const string Mantle = "#181825";
-    public const string Base = "#1e1e2e";
-    public const string Surface0 = "#313244";
-    public const string Surface1 = "#45475a";
-    public const string Overlay0 = "#6c7086";
-    public const string Subtext0 = "#a6adc8";
-    public const string Text = "#cdd6f4";
-    public const string Blue = "#89b4fa";
-    public const string Lavender = "#b4befe";
-    public const string Green = "#a6e3a1";
-    public const string Yellow = "#f9e2af";
-    public const string Red = "#f38ba8";
+    public static ThemePalette Current { get; set; } = BuiltInThemes.CatppuccinMocha;
+
+    public static string Crust => Current.Crust;
+    public static string Mantle => Current.Mantle;
+    public static string Base => Current.Base;
+    public static string Surface0 => Current.Surface0;
+    public static string Surface1 => Current.Surface1;
+    public static string Overlay0 => Current.Overlay0;
+    public static string Subtext0 => Current.Subtext0;
+    public static string Text => Current.Text;
+    public static string Blue => Current.Blue;
+    public static string Lavender => Current.Lavender;
+    public static string Green => Current.Green;
+    public static string Yellow => Current.Yellow;
+    public static string Red => Current.Red;
 }

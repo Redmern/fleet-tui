@@ -13,7 +13,8 @@ public static class FleetUi
     public static IApplication Start()
     {
         var app = Application.Create().Init();
-        FleetTheme.Register();
+        FleetTheme.Use(Adapters.Themes().Active());
+        Follow(app);
         FleetKeyHints.Attach(app, () => new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
         FleetButtonHints.Attach(app, Adapters.ButtonHints);
 
@@ -25,6 +26,29 @@ public static class FleetUi
         }
 
         return app;
+    }
+
+    private static IApplication? _themed;
+
+    private static IDisposable? _themeWatch;
+
+    private static void Follow(IApplication app)
+    {
+        _themed = app;
+        _themeWatch ??= ThemeWiring.Follow(theme =>
+        {
+            try
+            {
+                _themed?.Invoke(() =>
+                {
+                    FleetTheme.Use(theme);
+                    _themed?.LayoutAndDraw(true);
+                });
+            }
+            catch (Exception e) when (e is ObjectDisposedException or InvalidOperationException)
+            {
+            }
+        });
     }
 
     public static FleetAction Menu(
