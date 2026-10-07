@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Fleet.Platform.Mux.Embedded.Native;
+using Fleet.Shared.Keybinds;
 
 namespace Fleet.Platform.Mux.Embedded.Input;
 
@@ -10,49 +11,8 @@ public sealed class MuxKeys
 
     public const string Unbound = "none";
 
-    public static readonly IReadOnlyDictionary<string, string> DefaultPrefixKeys = new Dictionary<string, string>
-    {
-        ["h"] = "focus-left",
-        ["j"] = "focus-down",
-        ["k"] = "focus-up",
-        ["l"] = "focus-right",
-        ["left"] = "resize left",
-        ["right"] = "resize right",
-        ["up"] = "resize up",
-        ["down"] = "resize down",
-        ["%"] = "split-right",
-        ["\""] = "split-down",
-        ["c"] = "new-tab",
-        ["n"] = "next-tab",
-        ["p"] = "prev-tab",
-        ["1"] = "tab 1",
-        ["2"] = "tab 2",
-        ["3"] = "tab 3",
-        ["4"] = "tab 4",
-        ["5"] = "tab 5",
-        ["6"] = "tab 6",
-        ["7"] = "tab 7",
-        ["8"] = "tab 8",
-        ["9"] = "tab 9",
-        ["x"] = "kill-pane",
-        ["&"] = "kill-tab",
-        ["z"] = "zoom",
-        ["o"] = "next-pane",
-        ["s"] = "switch-project",
-        ["space"] = "menu",
-        ["["] = "copy-mode",
-        ["]"] = "paste",
-        ["d"] = "detach",
-        ["f f"] = "float-new",
-        ["f t"] = "float-toggle",
-        ["f e"] = "float-embed",
-        ["f g"] = "float-mode",
-        ["w w"] = "next-workspace",
-        ["w s"] = "switch-project",
-        ["q d"] = "detach",
-        ["q q"] = "detach",
-        ["q r"] = "reload",
-    };
+    public static readonly IReadOnlyDictionary<string, string> DefaultPrefixKeys =
+        MuxKeybinds.Keys(KeybindDefaults.Set, KeybindNames.CurrentOs, KeybindLegacy.MuxPrefixed);
 
     public static readonly IReadOnlyDictionary<string, string> DefaultGroups = new Dictionary<string, string>
     {
@@ -68,25 +28,10 @@ public sealed class MuxKeys
         ["q"] = "",
     };
 
-    public static readonly IReadOnlyDictionary<string, string> DefaultDirectKeys = new Dictionary<string, string>
-    {
-        ["ctrl+h"] = "smart-focus left",
-        ["ctrl+j"] = "smart-focus down",
-        ["ctrl+k"] = "smart-focus up",
-        ["ctrl+l"] = "smart-focus right",
-        ["alt+h"] = "smart-focus left",
-        ["alt+j"] = "smart-focus down",
-        ["alt+k"] = "smart-focus up",
-        ["alt+l"] = "smart-focus right",
-        ["alt+left"] = "prev-tab",
-        ["alt+right"] = "next-tab",
-        ["ctrl+tab"] = "next-tab",
-        ["ctrl+shift+tab"] = "prev-tab",
-        ["ctrl+enter"] = "menu",
-        ["shift+enter"] = "newline",
-    };
+    public static readonly IReadOnlyDictionary<string, string> DefaultDirectKeys =
+        MuxKeybinds.Keys(KeybindDefaults.Set, KeybindNames.CurrentOs, KeybindLegacy.MuxDirect);
 
-    public const string DefaultPrefix = "ctrl+s";
+    public static readonly string DefaultPrefix = MuxKeybinds.Prefix(KeybindDefaults.Set, KeybindNames.CurrentOs);
 
     private MuxKeys(KeyChord prefix, string prefixSpec, KeyNode root, List<Binding> directKeys, bool showIcons)
     {

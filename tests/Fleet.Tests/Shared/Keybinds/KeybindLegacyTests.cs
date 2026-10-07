@@ -102,6 +102,7 @@ public class KeybindLegacyTests
     {
         Assert.Equal("focus-left", KeybindActions.FromMux("smart-focus left"));
         Assert.Equal("resize-up", KeybindActions.FromMux(" resize up "));
+        Assert.Equal("resize-left", KeybindActions.FromMux("smart-resize left"));
         Assert.Equal("tab 3", KeybindActions.FromMux("tab 3"));
         Assert.Equal("zoom", KeybindActions.FromMux("zoom"));
     }

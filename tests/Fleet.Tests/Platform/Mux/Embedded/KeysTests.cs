@@ -1,6 +1,9 @@
 using System.Text;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
+using Fleet.Shared.Keybinds;
+using Fleet.Shared.Keybinds.Enums;
+using Fleet.Shared.Keybinds.Models;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
@@ -103,12 +106,133 @@ public class KeysTests
     }
 
     [Fact]
+    public void The_defaults_come_from_the_keybind_model_and_only_alt_hjkl_changed_to_resize()
+    {
+        var prefix = new Dictionary<string, string>
+        {
+            ["h"] = "focus-left",
+            ["j"] = "focus-down",
+            ["k"] = "focus-up",
+            ["l"] = "focus-right",
+            ["left"] = "resize left",
+            ["right"] = "resize right",
+            ["up"] = "resize up",
+            ["down"] = "resize down",
+            ["%"] = "split-right",
+            ["\""] = "split-down",
+            ["c"] = "new-tab",
+            ["n"] = "next-tab",
+            ["p"] = "prev-tab",
+            ["1"] = "tab 1",
+            ["2"] = "tab 2",
+            ["3"] = "tab 3",
+            ["4"] = "tab 4",
+            ["5"] = "tab 5",
+            ["6"] = "tab 6",
+            ["7"] = "tab 7",
+            ["8"] = "tab 8",
+            ["9"] = "tab 9",
+            ["x"] = "kill-pane",
+            ["&"] = "kill-tab",
+            ["z"] = "zoom",
+            ["o"] = "next-pane",
+            ["s"] = "switch-project",
+            ["space"] = "menu",
+            ["["] = "copy-mode",
+            ["]"] = "paste",
+            ["d"] = "detach",
+            ["f f"] = "float-new",
+            ["f t"] = "float-toggle",
+            ["f e"] = "float-embed",
+            ["f g"] = "float-mode",
+            ["w w"] = "next-workspace",
+            ["w s"] = "switch-project",
+            ["q d"] = "detach",
+            ["q q"] = "detach",
+            ["q r"] = "reload",
+        };
+        var direct = new Dictionary<string, string>
+        {
+            ["ctrl+h"] = "smart-focus left",
+            ["ctrl+j"] = "smart-focus down",
+            ["ctrl+k"] = "smart-focus up",
+            ["ctrl+l"] = "smart-focus right",
+            ["alt+h"] = "smart-resize left",
+            ["alt+j"] = "smart-resize down",
+            ["alt+k"] = "smart-resize up",
+            ["alt+l"] = "smart-resize right",
+            ["alt+left"] = "prev-tab",
+            ["alt+right"] = "next-tab",
+            ["ctrl+tab"] = "next-tab",
+            ["ctrl+shift+tab"] = "prev-tab",
+            ["ctrl+enter"] = "menu",
+            ["shift+enter"] = "newline",
+        };
+
+        Assert.Equal("ctrl+s", MuxKeys.DefaultPrefix);
+        Assert.Equal(prefix.OrderBy(k => k.Key, StringComparer.Ordinal), MuxKeys.DefaultPrefixKeys.OrderBy(k => k.Key, StringComparer.Ordinal));
+        Assert.Equal(direct.OrderBy(k => k.Key, StringComparer.Ordinal), MuxKeys.DefaultDirectKeys.OrderBy(k => k.Key, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void A_model_rebind_moves_the_mux_default_and_none_unbinds_it()
+    {
+        var set = KeybindLayering.Apply(
+            KeybindDefaults.Set,
+            new Dictionary<string, KeybindEntryJson>
+            {
+                ["resize-left"] = new() { Chord = "Alt+y" },
+                ["focus-down"] = new() { Chord = "none" },
+                ["mux.zoom"] = new() { Chord = "Z" },
+                ["mux.kill-pane"] = new() { Chord = "F20" },
+            });
+
+        var direct = MuxKeybinds.Keys(set, KeybindOs.Linux, KeybindLegacy.MuxDirect);
+        var prefixed = MuxKeybinds.Keys(set, KeybindOs.Linux, KeybindLegacy.MuxPrefixed);
+
+        Assert.Equal("smart-resize left", direct["alt+y"]);
+        Assert.False(direct.ContainsKey("alt+h"));
+        Assert.False(direct.ContainsKey("ctrl+j"));
+        Assert.Equal("zoom", prefixed["Z"]);
+        Assert.False(prefixed.ContainsKey("z"));
+        Assert.DoesNotContain("kill-pane", prefixed.Values);
+    }
+
+    [Theory]
+    [InlineData("Ctrl+Shift+Tab", "ctrl+shift+tab")]
+    [InlineData("Space", "space")]
+    [InlineData("Alt+Left", "alt+left")]
+    [InlineData("Ctrl++", "ctrl++")]
+    [InlineData("Alt+H", "alt+h")]
+    [InlineData("Ctrl+Shift+G", "ctrl+shift+g")]
+    [InlineData("G", "G")]
+    [InlineData("f f", "f f")]
+    public void A_model_chord_becomes_the_spec_embedded_keys_json_uses(string chord, string spec)
+    {
+        Assert.Equal(spec, MuxKeybinds.Spec(chord));
+    }
+
+    [Fact]
+    public void A_keys_file_still_overrides_the_model_defaults_for_alt_hjkl()
+    {
+        var keys = MuxKeys.From(new MuxKeysFile { Keys = new() { ["alt+h"] = "smart-focus left", ["alt+j"] = "none" } }, null);
+
+        Assert.Equal("smart-focus left", keys.DirectCommand(Key.H, Mods.Alt, null));
+        Assert.Null(keys.DirectCommand(Key.J, Mods.Alt, null));
+        Assert.Equal("smart-resize up", keys.DirectCommand(Key.K, Mods.Alt, null));
+    }
+
+    [Fact]
     public void Unix_bytes_find_the_longest_binding()
     {
         var keys = MuxKeys.Defaults;
 
         Assert.Equal(("resize left", 3), keys.PrefixBytes("\e[D"u8));
-        Assert.Equal(("smart-focus left", 2), keys.DirectBytes("\eh"u8));
+        Assert.Equal(("smart-focus left", 1), keys.DirectBytes("\b"u8));
+        Assert.Equal(("smart-resize left", 2), keys.DirectBytes("\eh"u8));
+        Assert.Equal(("smart-resize down", 2), keys.DirectBytes("\ej"u8));
+        Assert.Equal(("smart-resize up", 2), keys.DirectBytes("\ek"u8));
+        Assert.Equal(("smart-resize right", 2), keys.DirectBytes("\el"u8));
         Assert.Equal(("prev-tab", 6), keys.DirectBytes("\e[1;3D"u8));
         Assert.Equal((null, 0), keys.DirectBytes("x"u8));
     }

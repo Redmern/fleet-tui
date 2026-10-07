@@ -3571,7 +3571,8 @@ folds as plain rows too.
 
 | Key without the prefix | Does |
 |---|---|
-| `ctrl`/`alt` + `h j k l` | move focus; when the pane runs nvim the key goes to nvim (the `is_nvim` rule) |
+| `ctrl` + `h j k l` | move focus; when the pane runs nvim the key goes to nvim (the `is_nvim` rule) |
+| `alt` + `h j k l` | resize the focused pane by 5 cells; when the pane runs nvim the key goes to nvim |
 | `alt+←/→`, `ctrl+tab`, `ctrl+shift+tab` | previous / next tab |
 | `ctrl+enter` | the menu: the dashboard's over a dashboard, fleet's elsewhere |
 | `alt+o` | show or hide the head orchestrator's float, in voice mode (from the fleet keymap; see "The head orchestrator" and "One head chord") |
@@ -5641,7 +5642,7 @@ Phase 1 of the unified keybind distribution: a model only, nothing renders from 
   alone. `JsonKeymapStore.Save` carries the `keybinds` section over.
 - **Not changed:** the fleet UI and the mux still read their own files exactly as before;
   the mux still binds Alt+h/j/k/l to smart focus until phase 3 derives `MuxKeys` from the
-  model. Mux `groups`, `icons` and `showIcons` are presentation and stay in
+  model (done: see "Mux keys from the model" below). Mux `groups`, `icons` and `showIcons` are presentation and stay in
   `embedded-keys.json`.
 - **Mux action names:** `smart-focus <dir>` and `resize <dir>` map to `focus-<dir>` and
   `resize-<dir>`. The mux prefix keys h/j/k/l are plain `focus-<dir>` too; context tells
@@ -5655,6 +5656,31 @@ Phase 1 of the unified keybind distribution: a model only, nothing renders from 
   The mux rule that a single key beats a longer sequence (`MuxKeys.Beats`) is not in the
   model; phase 3 has to resolve it. Legacy mux keys match letters under a modifier in any
   case (`ctrl+H` is `Ctrl+h`), as the mux does.
+
+## Mux keys from the model, 2026-10-07
+
+Phase 3 of the unified keybind distribution: the embedded mux reads its defaults from the
+keybind model.
+
+- **Where:** `MuxKeys.DefaultPrefix`, `DefaultPrefixKeys` and `DefaultDirectKeys` are built by
+  `MuxKeybinds` from the shipped `KeybindDefaults.Set`: the mux entries for the current OS,
+  `leader` for the prefix, `prefix` and `direct` for the two key sets. Model chords become the
+  lower-case specs `embedded-keys.json` uses (`Ctrl+Shift+Tab` → `ctrl+shift+tab`, `Alt+H` →
+  `alt+h`; an unmodified character keeps its case, so `G` stays `G`). A chord the mux cannot
+  parse (`F13`–`F24`, `Ctrl++`) is left out rather than failing the defaults.
+- **Actions:** in `prefix`, `resize-<dir>` becomes `resize <dir>` and `focus-<dir>` stays;
+  in `direct`, `focus-<dir>` becomes `smart-focus <dir>` and `resize-<dir>` becomes
+  `smart-resize <dir>`. Anything else is the mux command as written (`tab 3`, `zoom`).
+- **Alt+h/j/k/l resize.** `smart-resize` resizes the focused pane by `ResizeCells`, or forwards
+  the chord to nvim when the focused pane runs nvim, the same check `smart-focus` makes.
+  Ctrl+h/j/k/l stays focus. Both client paths reach it: Windows console records
+  (`DirectCommand`) and the Unix ESC prefix (`DirectBytes`, `\eh`).
+- **Layers unchanged:** `embedded-keys.json` overrides the derived defaults exactly as it
+  overrode the literal tables (`"none"` unbinds, `prefix q r` reloads), and `FLEET_PREFIX`
+  still wins for the prefix. `"alt+h": "smart-focus left"` brings the old Alt behaviour back.
+  The user layer of the model (`keybinds` in `keybinds.json`) does not reach the mux yet;
+  that is phase 5's wiring. `KeybindActions.FromMux` reads `smart-resize <dir>` as
+  `resize-<dir>`, so migrating such a key keeps its meaning.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

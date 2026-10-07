@@ -803,6 +803,31 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Smart_resize_resizes_the_focused_pane_but_leaves_the_key_to_nvim()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "nvim");
+        await control.RequestAsync(new ControlRequest { Op = "split", Pane = left, Direction = "right", Args = ["shell"] });
+        var client = await AttachAsync(cols: 41, rows: 11, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var nvim = _panes.ByProgram("nvim")!;
+        await Eventually(() => nvim.Size.Cols > 0);
+        var before = nvim.Size;
+        var altH = new KeyMessage { Key = (int)Fleet.Platform.Mux.Embedded.Native.Key.H, Mods = 4, Action = 1, Text = "<alt+h>" };
+
+        await client.SendCommandAsync(new CommandMessage { Name = "smart-resize", Arg = "left", Key = altH });
+        await Eventually(() => nvim.Size.Cols == before.Cols - FleetDaemon.ResizeCells);
+        var resized = nvim.Size;
+
+        await client.SendCommandAsync("focus-left");
+        await client.SendCommandAsync(new CommandMessage { Name = "smart-resize", Arg = "right", Key = altH });
+
+        await Eventually(() => nvim.Written == "<alt+h>");
+        Assert.Equal(resized, nvim.Size);
+        Assert.Equal(string.Empty, _panes.ByProgram("shell")!.Written);
+    }
+
+    [Fact]
     public async Task Shift_enter_becomes_a_newline_for_claude_and_alt_enter_for_claude_inside_nvim()
     {
         var control = await ControlAsync();

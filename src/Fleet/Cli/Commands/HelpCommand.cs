@@ -43,7 +43,7 @@ public static class HelpCommand
               the keys: h/j/k/l focus, arrows resize, % " split, c new tab, n/p/1-9 tabs, z zoom,
               x/& close pane/tab, o next pane, s switch project, space menu, [ copy, ] paste,
               f/t/e/g floats, r reload keys, d detach; ctrl+s again sends ctrl+s
-              without prefix: ctrl/alt+h/j/k/l move focus (nvim gets them), alt+left/right tabs,
+              without prefix: ctrl+h/j/k/l move focus, alt+h/j/k/l resize (nvim gets both), alt+left/right tabs,
               ctrl+enter menu, shift+enter newline for claude, alt+o the head (voice)
             """);
 
