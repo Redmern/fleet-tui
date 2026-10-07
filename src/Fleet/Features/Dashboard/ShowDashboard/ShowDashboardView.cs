@@ -61,7 +61,7 @@ public static class ShowDashboardView
         FleetKeys.ApplyMotions(repoList, keys);
         FleetKeys.ApplyMotions(noticeList, keys);
 
-        IReadOnlyList<(string, string, Action)> BarFor(int index) => index switch
+        IReadOnlyList<(string, string, Action, FleetAction)> BarFor(int index) => index switch
         {
             DashboardTabs.NotificationsTab => NoticeBar(),
             DashboardTabs.RepositoriesTab => RepositoryBar(),
@@ -983,40 +983,40 @@ public static class ShowDashboardView
             }
         }
 
-        IReadOnlyList<(string, string, Action)> AgentBar() =>
+        IReadOnlyList<(string, string, Action, FleetAction)> AgentBar() =>
             [
-                (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent)),
-                ("enter", FleetIcons.Select, () => Start(OpenAsync)),
+                (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent), FleetAction.NewAgent),
+                ("enter", FleetIcons.Select, () => Start(OpenAsync), FleetAction.None),
                 (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Configure,
-                    () => FromKey(FleetAction.RemoveAgent)),
+                    () => FromKey(FleetAction.RemoveAgent), FleetAction.RemoveAgent),
                 (keys.DisplayFor(FleetAction.ToggleHidden),
                     board.IsHidden(FleetRows.Selected(agentList))
                         ? FleetIcons.Show
                         : FleetIcons.Hide,
-                    () => FromKey(FleetAction.ToggleHidden)),
-                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+                    () => FromKey(FleetAction.ToggleHidden), FleetAction.ToggleHidden),
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 
-        IReadOnlyList<(string, string, Action)> SubBar() =>
+        IReadOnlyList<(string, string, Action, FleetAction)> SubBar() =>
             [
-                (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent)),
-                ("enter", FleetIcons.Select, () => Start(OpenAsync)),
+                (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent), FleetAction.NewAgent),
+                ("enter", FleetIcons.Select, () => Start(OpenAsync), FleetAction.None),
                 (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Configure,
-                    () => FromKey(FleetAction.RemoveAgent)),
+                    () => FromKey(FleetAction.RemoveAgent), FleetAction.RemoveAgent),
                 (keys.DisplayFor(FleetAction.ToggleHidden),
                     subs.IsHidden(FleetRows.Selected(subList))
                         ? FleetIcons.Show
                         : FleetIcons.Hide,
-                    () => FromKey(FleetAction.ToggleHidden)),
-                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+                    () => FromKey(FleetAction.ToggleHidden), FleetAction.ToggleHidden),
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 
-        IReadOnlyList<(string, string, Action)> NoticeBar() =>
+        IReadOnlyList<(string, string, Action, FleetAction)> NoticeBar() =>
             [
-                ("enter", FleetIcons.Select, () => Start(OpenNoticeAsync)),
-                (keys.DisplayFor(FleetAction.DismissNotice), FleetIcons.Dismiss, () => FromKey(FleetAction.DismissNotice)),
-                (keys.DisplayFor(FleetAction.DismissAllNotices), FleetIcons.DismissAll, () => FromKey(FleetAction.DismissAllNotices)),
-                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+                ("enter", FleetIcons.Select, () => Start(OpenNoticeAsync), FleetAction.None),
+                (keys.DisplayFor(FleetAction.DismissNotice), FleetIcons.Dismiss, () => FromKey(FleetAction.DismissNotice), FleetAction.DismissNotice),
+                (keys.DisplayFor(FleetAction.DismissAllNotices), FleetIcons.DismissAll, () => FromKey(FleetAction.DismissAllNotices), FleetAction.DismissAllNotices),
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 
         void Dismiss(IReadOnlyList<string> which)
@@ -1051,15 +1051,15 @@ public static class ShowDashboardView
             });
         }
 
-        IReadOnlyList<(string, string, Action)> RepositoryBar() =>
+        IReadOnlyList<(string, string, Action, FleetAction)> RepositoryBar() =>
             [
                 (keys.DisplayFor(FleetAction.AddRepository), FleetIcons.For(FleetAction.AddRepository)!,
-                    () => FromKey(FleetAction.AddRepository)),
-                ("enter", FleetIcons.Select, () => Start(OpenRepositoryAsync)),
+                    () => FromKey(FleetAction.AddRepository), FleetAction.AddRepository),
+                ("enter", FleetIcons.Select, () => Start(OpenRepositoryAsync), FleetAction.None),
                 (keys.DisplayFor(FleetAction.ManageRepository), FleetIcons.Configure,
-                    () => FromKey(FleetAction.ManageRepository)),
-                (keys.DisplayFor(FleetAction.Refresh), FleetIcons.For(FleetAction.Refresh)!, () => Start(RefreshAsync)),
-                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
+                    () => FromKey(FleetAction.ManageRepository), FleetAction.ManageRepository),
+                (keys.DisplayFor(FleetAction.Refresh), FleetIcons.For(FleetAction.Refresh)!, () => Start(RefreshAsync), FleetAction.Refresh),
+                (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 
         void FromKey(FleetAction action)

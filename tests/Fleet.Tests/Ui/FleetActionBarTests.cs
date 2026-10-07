@@ -141,7 +141,7 @@ public sealed class FleetActionBarTests : IDisposable
     }
 
     [Fact]
-    public void A_tooltip_names_the_chip_and_its_key_even_while_the_keys_are_hidden()
+    public void A_tooltip_names_the_key_of_a_fleet_action_chip_even_while_the_keys_are_hidden()
     {
         var keymap = new Keymap(KeymapConfig.Default with
         {
@@ -152,13 +152,21 @@ public sealed class FleetActionBarTests : IDisposable
                 (keymap.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => { }),
                 ("enter", FleetIcons.Select, () => { }),
                 (string.Empty, FleetIcons.Menu, () => { }),
-                ("x", "plain", () => { }),
             ],
             keys: false,
             pinned: null,
-            ButtonHints.Tooltips);
+            ButtonHints.Tooltips,
+            tips: [keymap.DisplayFor(FleetAction.NewAgent), string.Empty, string.Empty]);
 
-        Assert.Equal(["new agent (ctrl+n)", "select (enter)", "menu", ""], chips.Select(c => c.Tip));
+        Assert.Equal(["new agent (ctrl+n)", "select", "menu"], chips.Select(c => c.Tip));
+    }
+
+    [Fact]
+    public void A_chip_without_a_fleet_action_keeps_a_plain_tooltip()
+    {
+        var chips = FleetActionBar.Chips(Bar(), keys: true, pinned: null, ButtonHints.Tooltips);
+
+        Assert.Equal(["select", "back"], chips.Select(c => c.Tip));
     }
 
     [Fact]
