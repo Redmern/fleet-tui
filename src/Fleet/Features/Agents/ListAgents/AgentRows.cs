@@ -47,11 +47,8 @@ public static class AgentRows
             trailing.Add(icon with { Text = $"{icon.Text}  " });
         }
 
-        if (agent.Hidden)
-        {
-            trailing.Add(FleetSpan.Muted($"{FleetGlyphs.Hidden} "));
-        }
+        trailing.Add(FleetHiddenMark.For(agent.Hidden));
 
-        return new FleetRow(spans, trailing.Count == 0 ? null : trailing);
+        return new FleetRow(spans, trailing);
     }
 }

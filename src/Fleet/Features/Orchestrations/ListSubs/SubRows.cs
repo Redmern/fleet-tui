@@ -40,12 +40,7 @@ public static class SubRows
     {
         var icon = StatusIcon.For(StatusOf(agent))!;
 
-        List<FleetSpan> trailing = [icon with { Text = $"{icon.Text}  " }];
-
-        if (agent.Hidden)
-        {
-            trailing.Add(FleetSpan.Muted($"{FleetGlyphs.Hidden} "));
-        }
+        List<FleetSpan> trailing = [icon with { Text = $"{icon.Text}  " }, FleetHiddenMark.For(agent.Hidden)];
 
         return new FleetRow(
             [new FleetSpan($"{FleetGlyphs.Orchestrator}  ", FleetTones.Normal), FleetSpan.Plain(agent.Branch)],
@@ -68,7 +63,7 @@ public static class SubRows
 
         return new FleetRow(
             spans,
-            agent.Hidden ? [FleetSpan.Muted($"{FleetGlyphs.Hidden} ")] : null);
+            [FleetHiddenMark.For(agent.Hidden)]);
     }
 
     public static IReadOnlyList<string> Statuses(SubListing listing) =>

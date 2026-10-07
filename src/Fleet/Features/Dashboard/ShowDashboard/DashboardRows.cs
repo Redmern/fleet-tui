@@ -12,16 +12,9 @@ public static class DashboardRows
 
     public static FleetRow WithHidden(FleetRow row, bool hidden)
     {
-        var kept = (row.Trailing ?? [])
-            .Where(s => !s.Text.Contains(FleetGlyphs.Hidden, StringComparison.Ordinal))
-            .ToList();
+        List<FleetSpan> kept = [.. (row.Trailing ?? []).Where(s => !FleetHiddenMark.Is(s)), FleetHiddenMark.For(hidden)];
 
-        if (hidden)
-        {
-            kept.Add(FleetSpan.Muted($"{FleetGlyphs.Hidden} "));
-        }
-
-        return row with { Trailing = kept.Count == 0 ? null : kept };
+        return row with { Trailing = kept };
     }
 
     public static IReadOnlyList<FleetRow> ForRepositories(

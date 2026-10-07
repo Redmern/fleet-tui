@@ -134,6 +134,34 @@ public sealed class SubRowsTests
     }
 
     [Fact]
+    public void A_visible_orchestrator_keeps_its_status_in_the_column_of_a_hidden_one()
+    {
+        var rows = SubRows.For(
+            Listing(Orchestrator("upgrade", "working", hidden: true), Orchestrator("research", "working", hidden: false)),
+            Clean,
+            ",");
+
+        var hidden = rows.Single(r => r.Text.Contains("upgrade", StringComparison.Ordinal));
+        var visible = rows.Single(r => r.Text.Contains("research", StringComparison.Ordinal));
+
+        Assert.Contains(FleetGlyphs.Hidden, hidden.Text);
+        Assert.DoesNotContain(FleetGlyphs.Hidden, visible.Text);
+        Assert.Equal(hidden.Trailing![0], visible.Trailing![0]);
+        Assert.Equal(Width(hidden.Trailing!), Width(visible.Trailing!));
+    }
+
+    [Fact]
+    public void Hidden_and_visible_children_reserve_the_same_trailing_width()
+    {
+        var hidden = Agent("backend", "story", "upgrade") with { Hidden = true };
+        var rows = SubRows.For(Listing(Orchestrator("upgrade"), hidden, Agent("backend", "other", "upgrade")), Clean, ",");
+
+        Assert.Equal(Width(rows[1].Trailing!), Width(rows[2].Trailing!));
+    }
+
+    private static int Width(IEnumerable<Fleet.Ui.Models.FleetSpan> spans) => spans.Sum(s => s.Text.EnumerateRunes().Count());
+
+    [Fact]
     public void A_hidden_orchestrator_shows_the_hidden_glyph()
     {
         var rows = SubRows.For(Listing(Orchestrator("upgrade", hidden: true)), Clean, ",");
