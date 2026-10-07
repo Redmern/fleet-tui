@@ -23,7 +23,7 @@ public static class ShowMenuView
     {
         var list = FleetTheme.CenteredRows(width, height);
 
-        return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding, alignRight: true));
+        return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding));
     }
 
     public static FleetAction Show(

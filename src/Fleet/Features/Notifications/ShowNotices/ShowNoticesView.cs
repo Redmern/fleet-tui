@@ -31,7 +31,7 @@ public static class ShowNoticesView
         var tabBar = FleetTheme.TabBar(1, 0, [.. names.Select(n => $"{n} (0)")]);
         var list = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
-        var bar = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
         FleetKeys.ApplyMotions(list, keymap);
 

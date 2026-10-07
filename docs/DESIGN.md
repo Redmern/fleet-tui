@@ -5599,7 +5599,7 @@ in fleetd's frame.
 - **Which buttons.** `FloatBorder` follows the running window (the `FloatScreens` stack,
   pushed and popped by `FleetTheme`'s floating windows). The window's buttons are its
   corners (`FleetCorners.Attach`: info/reveal top left, close top right) and its
-  `FleetActionBar` (bottom, left or right as the bar aligns). It republishes when the
+  `FleetActionBar` (bottom right, like every bar). It republishes when the
   running window changes, a bar is re-shown and `FleetKeyHints.Changed` fires.
 - **What the pane stops drawing.** With `FloatBorder.Enabled`, `Attach` adds no corner views
   and no padding (`FleetCorners.Rows` is 0, so fitted floats shrink by two rows and the

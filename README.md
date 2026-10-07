@@ -263,7 +263,8 @@ The fleet menu, the pickers and the settings, log, notification, remote, secrets
 keybinds screens have an info icon in the top-left corner with the reveal key (`?`)
 beside it while the keys are hidden; clicking it does the same as `?`. The top-right corner is a
 close button (with `esc` beside it while the keys are shown), and the select and back buttons on the
-bar are icons too, as are all the buttons on the remote machines screen. A change to the setting reaches open screens,
+bar are icons too, as are all the buttons on the remote machines screen. Every screen's button bar
+sits at the bottom right. A change to the setting reaches open screens,
 such as the dashboard, within a second. Both keys can be rebound under **navigation** in Keybinds;
 the editor refuses a key that another fleet action already uses, in either direction.
 The dashboard keeps its info icon in the top-right corner instead, next to the close button when it

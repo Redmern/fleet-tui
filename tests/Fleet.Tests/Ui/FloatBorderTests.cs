@@ -1,6 +1,7 @@
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -44,8 +45,8 @@ public sealed class FloatBorderTests : IDisposable
     [Fact]
     public void Corners_are_info_top_left_and_close_top_right_typing_the_first_two_reserved_keys()
     {
-        var shown = FloatBorder.For(true, [], false, null, keysShown: true, "?");
-        var hidden = FloatBorder.For(true, [], false, null, keysShown: false, "?");
+        var shown = FloatBorder.For(true, [], null, keysShown: true, "?");
+        var hidden = FloatBorder.For(true, [], null, keysShown: false, "?");
 
         Assert.Equal(
             [
@@ -62,7 +63,7 @@ public sealed class FloatBorderTests : IDisposable
     }
 
     [Fact]
-    public void Bar_chips_go_on_the_bottom_edge_each_with_its_own_reserved_key_while_the_key_is_hidden()
+    public void Bar_chips_go_on_the_bottom_edge_aligned_right_each_with_its_own_reserved_key_while_the_key_is_hidden()
     {
         var bar = new List<(string Key, string Label, Action Run)>
         {
@@ -70,7 +71,7 @@ public sealed class FloatBorderTests : IDisposable
             ("bksp", "back", () => { }),
         };
 
-        var buttons = FloatBorder.For(false, bar, alignRight: true, null, keysShown: false, "?");
+        var buttons = FloatBorder.For(false, bar, null, keysShown: false, "?");
 
         Assert.Equal(
             [
@@ -81,12 +82,38 @@ public sealed class FloatBorderTests : IDisposable
     }
 
     [Fact]
+    public void An_in_content_bar_sits_against_the_right_edge_and_a_click_lands_on_the_chip_drawn_there()
+    {
+        using var host = new View { Width = 40, Height = 1 };
+        var bar = new FleetActionBar(0);
+        var clicked = new List<string>();
+        host.Add(bar.Root);
+        bar.Show([("enter", "open", () => clicked.Add("open")), ("bksp", "back", () => clicked.Add("back"))]);
+        host.Layout();
+
+        var end = bar.Root.Viewport.Width;
+        var start = end - FleetActionBar.Measure(bar.Items);
+
+        void Click(int x) =>
+            bar.Root.NewMouseEvent(new Mouse { Flags = MouseFlags.LeftButtonClicked, Position = new(x, 0) });
+
+        Assert.True(start > 0);
+        Click(0);
+        Click(start - 1);
+        Assert.Empty(clicked);
+
+        Click(start);
+        Click(end - 1);
+        Assert.Equal(["open", "back"], clicked);
+    }
+
+    [Fact]
     public void In_text_mode_the_border_buttons_carry_the_icon_name_like_the_in_content_ones()
     {
         var bar = new List<(string Key, string Label, Action Run)> { ("enter", FleetIcons.Select, () => { }) };
 
-        var text = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Text);
-        var none = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.None);
+        var text = FloatBorder.For(true, bar, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Text);
+        var none = FloatBorder.For(true, bar, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.None);
 
         Assert.Equal(
             [
@@ -105,9 +132,9 @@ public sealed class FloatBorderTests : IDisposable
         var bar = new List<(string Key, string Label, Action Run)> { ("enter", FleetIcons.Select, () => { }) };
         var names = new[] { $"{FleetIcons.Name(FleetIcons.Info)} (?)", $"{FleetIcons.Name(FleetIcons.Close)} (esc)", $"{FleetIcons.Name(FleetIcons.Select)} (enter)" };
 
-        var tips = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Tooltips);
-        var text = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Text);
-        var none = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.None);
+        var tips = FloatBorder.For(true, bar, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Tooltips);
+        var text = FloatBorder.For(true, bar, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Text);
+        var none = FloatBorder.For(true, bar, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.None);
 
         Assert.All(names, n => Assert.NotEmpty(n));
         Assert.Equal(names, tips.Select(b => b.Tip));
@@ -119,7 +146,7 @@ public sealed class FloatBorderTests : IDisposable
     {
         var bar = new List<(string Key, string Label, Action Run)> { ("n", FleetIcons.Select, () => { }) };
 
-        var buttons = FloatBorder.For(false, bar, true, null, keysShown: false, "?");
+        var buttons = FloatBorder.For(false, bar, null, keysShown: false, "?");
 
         Assert.Equal(string.Empty, buttons[0].Key);
         Assert.Equal($"{FleetIcons.Name(FleetIcons.Select)} (n)", buttons[0].Tip);
@@ -128,8 +155,8 @@ public sealed class FloatBorderTests : IDisposable
     [Fact]
     public void The_dashboard_puts_info_top_right_beside_close_and_keeps_f1_for_info_and_f2_for_close()
     {
-        var buttons = FloatBorder.For(true, [], false, null, keysShown: true, "?", infoRight: true);
-        var alone = FloatBorder.For(true, [], false, null, keysShown: true, "?", closable: false, infoRight: true);
+        var buttons = FloatBorder.For(true, [], null, keysShown: true, "?", infoRight: true);
+        var alone = FloatBorder.For(true, [], null, keysShown: true, "?", closable: false, infoRight: true);
 
         Assert.Equal([(false, true, "f1"), (false, true, "f2")], buttons.Select(b => (b.Bottom, b.Right, b.Send)));
         Assert.Equal([FleetIcons.Info, FleetIcons.Close], buttons.Select(b => b.Label));
@@ -198,7 +225,7 @@ public sealed class FloatBorderTests : IDisposable
     {
         var bar = Enumerable.Range(0, 12).Select(i => ($"{i}", $"chip {i}", (Action)(() => { }))).ToList();
 
-        var buttons = FloatBorder.For(true, bar, false, null, keysShown: true, "?");
+        var buttons = FloatBorder.For(true, bar, null, keysShown: true, "?");
 
         Assert.Equal("f12", buttons[11].Send);
         Assert.Equal(string.Empty, buttons[12].Send);
@@ -236,7 +263,7 @@ public sealed class FloatBorderTests : IDisposable
     {
         Enable();
         using var window = new Window();
-        var bar = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
         window.Add(bar.Root);
         bar.Show([("enter", "open", () => { })]);
         FleetCorners.Attach(window, () => { });
@@ -357,7 +384,7 @@ public sealed class FloatBorderTests : IDisposable
         Assert.Equal(
             [
                 new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", InfoTip),
-                new FloatBorderButton(true, false, "n", "new", "f2"),
+                new FloatBorderButton(true, true, "n", "new", "f2"),
             ],
             _published[^1]);
 
