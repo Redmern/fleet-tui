@@ -121,9 +121,14 @@ public static class ClaudeKeybindings
         Render(set, KeybindNames.CurrentOs, log);
 
     public static bool SameKey(string left, string right) =>
-        KeybindChord.TryNormalize(left, out var l) && KeybindChord.TryNormalize(right, out var r)
+        KeybindChord.TryNormalize(Aliased(left), out var l) && KeybindChord.TryNormalize(Aliased(right), out var r)
             ? Folded(l) == Folded(r)
             : string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static string Aliased(string keystroke) =>
+        string.Join(' ', keystroke.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(step =>
+            string.Join('+', step.Split('+').Select(part =>
+                part.Equals("command", StringComparison.OrdinalIgnoreCase) ? "cmd" : part))));
 
     private static string Folded(string normalized) =>
         string.Join(' ', normalized.Split(' ').Select(step => step.ToLowerInvariant()));

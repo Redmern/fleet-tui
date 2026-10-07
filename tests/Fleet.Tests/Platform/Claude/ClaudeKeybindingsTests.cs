@@ -275,6 +275,78 @@ public sealed class ClaudeKeybindingsTests : IDisposable
         Assert.False(File.Exists(OwnershipFile));
     }
 
+    [Theory]
+    [InlineData("""{ "bindings": null }""")]
+    [InlineData("""{ "bindings": [ null ] }""")]
+    [InlineData("""{ "bindings": [ { "context": "Chat", "bindings": null } ] }""")]
+    public void A_file_with_nulls_where_structure_belongs_is_left_untouched(string json)
+    {
+        Directory.CreateDirectory(_config);
+        File.WriteAllText(KeybindingsFile, json);
+
+        var result = new ClaudeKeybindingsWriter(_config).Write(Render(Entry("x", "newline", "Shift+Enter", "Chat")));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(json, File.ReadAllText(KeybindingsFile));
+    }
+
+    [Theory]
+    [InlineData("{ not json")]
+    [InlineData("""{ "owned": [ null ] }""")]
+    [InlineData("""{ "owned": [ { "context": "Chat" } ] }""")]
+    public void A_broken_ownership_record_fails_instead_of_forgetting_what_fleet_owns(string sidecar)
+    {
+        var writer = new ClaudeKeybindingsWriter(_config);
+        writer.Write(Render(Entry("x", "newline", "Shift+Enter", "Chat")));
+        var before = File.ReadAllText(KeybindingsFile);
+        File.WriteAllText(OwnershipFile, sidecar);
+
+        var result = writer.Write([]);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(before, File.ReadAllText(KeybindingsFile));
+        Assert.Equal(sidecar, File.ReadAllText(OwnershipFile));
+    }
+
+    [Fact]
+    public void A_user_binding_in_a_second_block_of_the_same_context_is_a_conflict()
+    {
+        Directory.CreateDirectory(_config);
+        var before = """
+            { "bindings": [
+              { "context": "Chat", "bindings": { "ctrl+e": "chat:externalEditor" } },
+              { "context": "Chat", "bindings": { "shift+enter": null } }
+            ] }
+            """;
+        File.WriteAllText(KeybindingsFile, before);
+
+        var result = new ClaudeKeybindingsWriter(_config).Write(Render(Entry("x", "newline", "Shift+Enter", "Chat")));
+
+        Assert.Single(result.Value!.Conflicts);
+        Assert.Equal(before, File.ReadAllText(KeybindingsFile));
+    }
+
+    [Fact]
+    public void A_users_file_is_not_reformatted_when_fleet_changes_nothing()
+    {
+        Directory.CreateDirectory(_config);
+        var before = """{"bindings":[{"context":"Chat","bindings":{"ctrl+e":"chat:externalEditor"}}]}""";
+        File.WriteAllText(KeybindingsFile, before);
+
+        var result = new ClaudeKeybindingsWriter(_config).Write([]);
+
+        Assert.False(result.Value!.Changed);
+        Assert.Equal(before, File.ReadAllText(KeybindingsFile));
+    }
+
+    [Theory]
+    [InlineData("command+k", "Super+k")]
+    [InlineData("Shift+Enter", "shift+enter")]
+    [InlineData("meta+p", "alt+p")]
+    [InlineData("ctrl+x ctrl+e", "Ctrl+x Ctrl+e")]
+    public void Keys_compare_the_way_claude_reads_them(string left, string right) =>
+        Assert.True(ClaudeKeybindings.SameKey(left, right));
+
     [Fact]
     public void A_file_that_is_not_json_is_left_untouched()
     {
