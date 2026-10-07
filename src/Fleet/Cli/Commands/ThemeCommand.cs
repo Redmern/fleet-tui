@@ -70,12 +70,14 @@ public static class ThemeCommand
     {
         Console.WriteLine($"theme: {theme.Name} ({theme.Title})");
 
-        if (Adapters.ApplyWezTermTheme(theme) is { } lua)
+        var results = ThemeWiring.Apply(theme, Environment.CurrentDirectory);
+
+        foreach (var applied in results)
         {
-            Console.WriteLine($"  wezterm  wrote {lua}; {Adapters.TouchWezTermConfig()}");
+            Console.WriteLine($"  {applied.Line}");
         }
 
-        return 0;
+        return results.Any(a => a.Outcome == ThemeOutcome.Failed) ? 1 : 0;
     }
 
     private static int Failed(string error)

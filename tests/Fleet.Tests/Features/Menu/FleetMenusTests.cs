@@ -116,7 +116,7 @@ public class FleetMenusTests
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
         var headers = ShowMenuHandler.Headers(items);
 
-        Assert.Equal([0, 2, 6], headers.Keys.Order());
+        Assert.Equal([0, 2, 7], headers.Keys.Order());
         Assert.Equal(FleetMenus.Actions(FleetMenus.Settings), items.Select(i => i.Action));
     }
 
@@ -157,13 +157,13 @@ public class FleetMenusTests
         var source = new FleetRowSource(
             ShowMenuHandler.Rows(items), gaps, headersBefore: ShowMenuHandler.Headers(items));
 
-        Assert.Equal([1, 5], gaps);
+        Assert.Equal([1, 6], gaps);
         Assert.Equal(items.Count + 3 + 2, source.Count);
         Assert.Equal(
             ShowMenuHandler.Height(ShowMenuHandler.Rows(items), 3, gaps.Count),
             source.Count);
         Assert.Equal(string.Empty, source.ToList()[3]);
-        Assert.Equal(string.Empty, source.ToList()[9]);
+        Assert.Equal(string.Empty, source.ToList()[10]);
     }
 
     [Fact]

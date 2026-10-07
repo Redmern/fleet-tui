@@ -64,6 +64,7 @@ public static class KeymapDefaults
             [FleetAction.DismissAllNotices] = "D",
             [FleetAction.OpenEditor] = "e",
             [FleetAction.OpenHeadVoice] = "Alt+o",
+            [FleetAction.EditTheme] = "T",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -118,6 +119,7 @@ public static class KeymapDefaults
             FleetAction.DismissAllNotices => "dismiss all",
             FleetAction.OpenEditor => "editor",
             FleetAction.OpenHeadVoice => "head",
+            FleetAction.EditTheme => "theme",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -181,6 +183,7 @@ public static class KeymapDefaults
             FleetAction.DismissAllNotices => "Dismiss all shown notifications",
             FleetAction.OpenEditor => "Open editor here",
             FleetAction.OpenHeadVoice => "Show or hide the head, in voice mode",
+            FleetAction.EditTheme => "Theme",
             _ => action.ToString(),
         };
 }

@@ -30,7 +30,7 @@ public static class FleetMenus
     public static IReadOnlyList<MenuSection> Settings { get; } =
     [
         new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
-        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints], FleetIcons.Configure),
+        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints, FleetAction.EditTheme], FleetIcons.Configure),
         new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs], FleetIcons.Maintenance),
     ];
 
@@ -65,6 +65,7 @@ public static class FleetMenus
         FleetAction.EditAidlcMode,
         FleetAction.EditClaudeProfile,
         FleetAction.EditSettings,
+        FleetAction.EditTheme,
     ];
 
     private static readonly FleetAction[] Toggles =

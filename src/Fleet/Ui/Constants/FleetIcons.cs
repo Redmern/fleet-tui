@@ -102,6 +102,7 @@ public static class FleetIcons
         FleetAction.EditKeybinds => "",
         FleetAction.EditShowMenuKeys => "",
         FleetAction.EditButtonHints => "",
+        FleetAction.EditTheme => "",
         FleetAction.RebuildDashboard => "",
         FleetAction.CleanupProject => "",
         FleetAction.ViewLogs => "",
