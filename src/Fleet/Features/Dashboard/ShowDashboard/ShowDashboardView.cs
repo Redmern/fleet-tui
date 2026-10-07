@@ -987,7 +987,7 @@ public static class ShowDashboardView
             [
                 (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent)),
                 ("enter", FleetIcons.Select, () => Start(OpenAsync)),
-                (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Manage,
+                (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Configure,
                     () => FromKey(FleetAction.RemoveAgent)),
                 (keys.DisplayFor(FleetAction.ToggleHidden),
                     board.IsHidden(FleetRows.Selected(agentList))
@@ -1001,7 +1001,7 @@ public static class ShowDashboardView
             [
                 (keys.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => FromKey(FleetAction.NewAgent)),
                 ("enter", FleetIcons.Select, () => Start(OpenAsync)),
-                (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Manage,
+                (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Configure,
                     () => FromKey(FleetAction.RemoveAgent)),
                 (keys.DisplayFor(FleetAction.ToggleHidden),
                     subs.IsHidden(FleetRows.Selected(subList))
@@ -1056,7 +1056,7 @@ public static class ShowDashboardView
                 (keys.DisplayFor(FleetAction.AddRepository), FleetIcons.For(FleetAction.AddRepository)!,
                     () => FromKey(FleetAction.AddRepository)),
                 ("enter", FleetIcons.Select, () => Start(OpenRepositoryAsync)),
-                (keys.DisplayFor(FleetAction.ManageRepository), FleetIcons.Manage,
+                (keys.DisplayFor(FleetAction.ManageRepository), FleetIcons.Configure,
                     () => FromKey(FleetAction.ManageRepository)),
                 (keys.DisplayFor(FleetAction.Refresh), FleetIcons.For(FleetAction.Refresh)!, () => Start(RefreshAsync)),
                 (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu)),
@@ -1266,10 +1266,7 @@ public static class ShowDashboardView
             hints.Root,
             tip);
 
-        if (menu)
-        {
-            FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
-        }
+        FleetCorners.Attach(window, menu ? () => app.RequestStop(window) : null, tabBar.Root, framed: !menu);
 
         BindSkeleton();
         ShowTab(DashboardTabs.AgentsTab);

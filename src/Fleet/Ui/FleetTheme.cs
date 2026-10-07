@@ -54,6 +54,11 @@ public static class FleetTheme
     {
         if (!FloatPane.Inside)
         {
+            if (FramedPane.Inside)
+            {
+                window.IsRunningChanged += (_, running) => FloatBorder.Run(window, running.Value);
+            }
+
             return window;
         }
 

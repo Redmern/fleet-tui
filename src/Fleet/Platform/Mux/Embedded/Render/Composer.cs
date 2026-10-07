@@ -72,7 +72,16 @@ public static class Composer
 
         if (view.Frame is { } around)
         {
-            Framed(frame, around, view.FrameTitle, view.Dividers, focused);
+            var pills = view.Panes
+                .SelectMany(p => BorderButtons.Place(ClientView.Around(p.Area), view.FrameButtonsOf(p.Pane)))
+                .ToList();
+
+            Framed(frame, around, view.FrameTitle, view.Dividers, focused, pills);
+
+            foreach (var pill in pills)
+            {
+                Pill(frame, pill);
+            }
         }
 
         foreach (var placed in view.Panes)
@@ -416,7 +425,8 @@ public static class Composer
         Put(RightCap.ToString(), Surface0, Cell.Default);
     }
 
-    private static void Framed(ClientFrame frame, Rect box, string? title, IReadOnlyList<Divider> dividers, Rect focused)
+    private static void Framed(
+        ClientFrame frame, Rect box, string? title, IReadOnlyList<Divider> dividers, Rect focused, IReadOnlyList<PlacedButton> pills)
     {
         var right = box.X + box.Width - 1;
         var bottom = box.Y + box.Height - 1;
@@ -474,14 +484,30 @@ public static class Composer
             }
         }
 
-        if (title is { Length: > 0 } && box.Width > 6)
+        var from = box.X + BorderButtons.Inset;
+
+        foreach (var pill in pills.Where(p => p.Y == box.Y).OrderBy(p => p.X))
+        {
+            if (pill.X <= from)
+            {
+                from = Math.Max(from, pill.X + pill.Width + BorderButtons.Gap);
+            }
+        }
+
+        var to = pills
+            .Where(p => p.Y == box.Y && p.X >= from)
+            .Select(p => p.X - BorderButtons.Gap)
+            .DefaultIfEmpty(right - BorderButtons.Inset + 1)
+            .Min();
+
+        if (title is { Length: > 0 } && to - from >= 3)
         {
             var label = $" {title} ";
-            label = label.Length > box.Width - 4 ? label[..(box.Width - 4)] : label;
+            label = label.Length > to - from ? label[..(to - from)] : label;
 
             for (var i = 0; i < label.Length; i++)
             {
-                Put(box.X + 2 + i, box.Y, label[i]);
+                Put(from + i, box.Y, label[i]);
             }
         }
     }

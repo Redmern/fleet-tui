@@ -242,4 +242,67 @@ public sealed class FloatBorderTests : IDisposable
 
         Assert.Equal(3, _published[^1].Count);
     }
+
+    [Fact]
+    public void Framed_mode_borders_only_the_window_attached_as_framed_and_leaves_dialogs_their_own_bars()
+    {
+        Assert.True(FloatBorder.Enable(
+            buttons =>
+            {
+                _published.Add(buttons);
+                return true;
+            },
+            framed: true));
+        using var dashboard = new Window();
+        using var dialog = new Window();
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        var dialogBar = new FleetActionBar(Pos.AnchorEnd(1));
+        dashboard.Add(bar.Root);
+        dialog.Add(dialogBar.Root);
+        bar.Show([("n", "new", () => { })]);
+        dialogBar.Show([("enter", "open", () => { })]);
+        FleetCorners.Attach(dashboard, null, framed: true);
+        FleetCorners.Attach(dialog, () => { });
+
+        FloatBorder.Run(dashboard, true);
+
+        Assert.False(FloatBorder.Enabled);
+        Assert.False(bar.Root.Visible);
+        Assert.True(dialogBar.Root.Visible);
+        Assert.Equal(
+            [
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1"),
+                new FloatBorderButton(true, false, "n", "new", "f2"),
+            ],
+            _published[^1]);
+
+        FloatBorder.Run(dialog, true);
+
+        Assert.Empty(_published[^1]);
+
+        FloatBorder.Run(dialog, false);
+
+        Assert.Equal(2, _published[^1].Count);
+    }
+
+    [Fact]
+    public void A_framed_window_without_close_maps_the_reserved_keys_to_help_then_its_bar()
+    {
+        Assert.True(FloatBorder.Enable(_ => true, framed: true));
+        using var window = new Window();
+        var news = 0;
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        window.Add(bar.Root);
+        bar.Show([("n", "new", () => news++)]);
+        FleetCorners.Attach(window, null, framed: true);
+        FloatBorder.Run(window, true);
+        FleetKeyHints.Apply(false);
+
+        Assert.True(FloatBorder.Press(Terminal.Gui.Input.Key.F2));
+        Assert.True(FloatBorder.Press(Terminal.Gui.Input.Key.F1));
+        Assert.False(FloatBorder.Press(Terminal.Gui.Input.Key.F3));
+
+        Assert.Equal(1, news);
+        Assert.True(FleetKeyHints.Shown);
+    }
 }

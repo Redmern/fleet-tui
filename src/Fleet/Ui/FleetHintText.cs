@@ -24,7 +24,7 @@ public static class FleetHintText
             "   ",
             $"{keymap.DisplayFor(FleetAction.NewAgent)} new",
             "enter open",
-            $"{keymap.DisplayFor(FleetAction.RemoveAgent)} manage",
+            $"{keymap.DisplayFor(FleetAction.RemoveAgent)} config",
             Menu(keymap));
 
     public static string Repositories(Keymap keymap) =>
@@ -33,7 +33,7 @@ public static class FleetHintText
             $"{keymap.DisplayFor(FleetAction.AddRepository)} add",
             "enter open",
             $"{keymap.DisplayFor(FleetAction.PullRepository)} pull",
-            $"{keymap.DisplayFor(FleetAction.ManageRepository)} manage",
+            $"{keymap.DisplayFor(FleetAction.ManageRepository)} config",
             $"{keymap.DisplayFor(FleetAction.RemoveRepository)} remove",
             Menu(keymap));
 

@@ -71,6 +71,6 @@ public class MenuKeysTests
     {
         var entry = Assert.Single(MenuKeys.Assign([FleetAction.RemoveAgent], Bindings));
 
-        Assert.Equal("manage", entry.Label);
+        Assert.Equal("config", entry.Label);
     }
 }

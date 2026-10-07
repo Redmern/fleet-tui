@@ -17,7 +17,7 @@ public static class FloatBorder
 
     private static readonly List<View> Running = [];
 
-    private static readonly Dictionary<View, Action> Cornered = [];
+    private static readonly Dictionary<View, Action?> Cornered = [];
 
     private static readonly List<FleetActionBar> Bars = [];
 
@@ -25,11 +25,15 @@ public static class FloatBorder
 
     private static IReadOnlyList<FloatBorderButton> published = [];
 
-    public static bool Enabled => publish is not null;
+    private static bool framedOnly;
 
-    public static bool Enable(IApplication app, Func<IReadOnlyList<FloatBorderButton>, bool> sink)
+    public static bool Enabled => publish is not null && !framedOnly;
+
+    public static bool Framing => publish is not null && framedOnly;
+
+    public static bool Enable(IApplication app, Func<IReadOnlyList<FloatBorderButton>, bool> sink, bool framed = false)
     {
-        if (!Enable(sink))
+        if (!Enable(sink, framed))
         {
             return false;
         }
@@ -45,7 +49,7 @@ public static class FloatBorder
         return true;
     }
 
-    public static bool Enable(Func<IReadOnlyList<FloatBorderButton>, bool> sink)
+    public static bool Enable(Func<IReadOnlyList<FloatBorderButton>, bool> sink, bool framed = false)
     {
         if (publish is not null)
         {
@@ -58,6 +62,7 @@ public static class FloatBorder
         }
 
         publish = sink;
+        framedOnly = framed;
         FleetKeyHints.Changed += Refresh;
         FleetButtonHints.Changed += Refresh;
         return true;
@@ -69,6 +74,7 @@ public static class FloatBorder
         FleetButtonHints.Changed -= Refresh;
         publish = null;
         published = [];
+        framedOnly = false;
         Running.Clear();
         Cornered.Clear();
         Bars.Clear();
@@ -88,9 +94,15 @@ public static class FloatBorder
         Refresh();
     }
 
-    public static void Corners(View window, Action close)
+    public static void Corners(View window, Action? close)
     {
         Cornered[window] = close;
+
+        foreach (var bar in Bars.Where(b => Inside(b.Root, window)))
+        {
+            bar.Root.Visible = false;
+        }
+
         Refresh();
     }
 
@@ -141,24 +153,35 @@ public static class FloatBorder
         }
 
         var window = Running[^1];
+
+        if (framedOnly && !Cornered.ContainsKey(window))
+        {
+            return ([], []);
+        }
+
         var bar = Bars.LastOrDefault(b => b.Items.Count > 0 && Inside(b.Root, window));
         var items = bar?.Items ?? [];
-        var close = Cornered.GetValueOrDefault(window);
+        var cornered = Cornered.TryGetValue(window, out var close);
 
         var buttons = For(
-            close is not null,
+            cornered,
             items,
             bar?.AlignRight ?? false,
             bar?.Pinned,
             FleetKeyHints.Shown,
             FleetKeyHints.RevealKey,
-            FleetButtonHints.Mode);
+            FleetButtonHints.Mode,
+            close is not null);
 
         var actions = new List<Action>();
 
-        if (close is not null)
+        if (cornered)
         {
             actions.Add(FleetKeyHints.Toggle);
+        }
+
+        if (close is not null)
+        {
             actions.Add(close);
         }
 
@@ -173,13 +196,18 @@ public static class FloatBorder
         string? pinned,
         bool keysShown,
         string revealKey,
-        ButtonHints hints = ButtonHints.Tooltips)
+        ButtonHints hints = ButtonHints.Tooltips,
+        bool closable = true)
     {
         var buttons = new List<FloatBorderButton>();
 
         if (corners)
         {
             buttons.Add(new FloatBorderButton(false, false, keysShown ? string.Empty : revealKey, FleetButtonHints.Face(FleetIcons.Info, hints), Send(0)));
+        }
+
+        if (corners && closable)
+        {
             buttons.Add(new FloatBorderButton(
                 false, true, keysShown ? FleetCorners.CloseKey : string.Empty, FleetButtonHints.Face(FleetIcons.Close, hints), Send(1)));
         }
