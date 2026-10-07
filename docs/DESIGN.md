@@ -2989,7 +2989,8 @@ tmux-style mouse support for `embedded`.
   wheel. Motion is sent only when the cell changes, and coordinates are made
   relative to the visible window. This also covers WezTerm and Windows
   Terminal: their ConPTY turns the terminal's SGR reports into those records.
-- **Unix client:** asks the host for `?1002h?1006h` and takes the SGR reports
+- **Unix client:** asks the host for `?1003h?1006h` (any-event, so motion without a
+  button arrives as on Windows and fleetd can track hover) and takes the SGR reports
   out of stdin (`SgrMouse`). Everything else passes on untouched, and a lone
   Esc is never held back.
 - **Wire:** a `Mouse` message (x, y, button, action, mods, whether a button is
@@ -5538,7 +5539,7 @@ in fleetd's frame.
 
 - **The pane tells fleetd.** The same way it asks for its size (`fit`), the fleet process in a
   float sends a control request `float-buttons` with its own pane as caller and a list of
-  `FloatButtonDto { edge: top|bottom, align: left|right, key, label, send }`. `key` and
+  `FloatButtonDto { edge: top|bottom, align: left|right, key, label, send, tip? }`. `key` and
   `label` are what to draw (key empty while key hints are hidden), `send` is the key to type
   when it is clicked, as a `KeyChord` spec (see Clicking). An empty list clears them. fleetd keeps the list
   on the pane's `FloatState`; a pane that is not a float gets an error.
@@ -5576,8 +5577,24 @@ in fleetd's frame.
   with the window's new size.
 - **Button hints.** The labels the pane sends go through `FleetButtonHints.Face`, so in
   text mode the border pills carry the icon's name like the in-content ones, and a change of
-  the setting republishes them. Tooltips do not follow: fleetd has no hover tracking or popup
-  for the frame, so in tooltips mode the border pills show the icon only, as in `none`.
+  the setting republishes them. In tooltips mode each button also carries a `tip`
+  (`FleetToolTip.Label` of its icon's name and its key, e.g. `close (esc)`, the text the
+  in-content tooltips use: info names the reveal key, close `esc`, a chip its own key even
+  while the keys are hidden; a button without a key gets the plain name); in text and none
+  modes it is left out. An older fleetd ignores the field and an older sender omits it, which
+  reads as no tooltip.
+- **Tooltips in the frame.** fleetd keeps a hover per attached client: a motion with no
+  button held over a border button with a `tip` (`BorderTips.At`, the float on top first,
+  then the dashboard frame) records the pointer, and `Composer` draws a one-line popup in
+  the chip look (Text on Surface0): below a top-edge button, above a bottom-edge one, moved
+  left to stay on screen. Any other mouse event, a motion off the pill, a key, and a new
+  `float-buttons` list for that pane clear it. The tip is re-hit-tested on every frame, so a
+  float that moves under a still pointer drops it. A pointer that leaves the window entirely
+  sends nothing, so the tip stays until the next event.
+- **Dashboard info top right.** The dashboard attaches its corners with `infoRight`, so
+  its info button sits in the top-right corner next to close (in the frame and in the
+  in-content layout). Other screens keep info top left; the reserved keys stay F1 info,
+  F2 close.
 - **Not done.** The bar row stays reserved (now blank) in fitted floats; the two corner
   margins do go.
 

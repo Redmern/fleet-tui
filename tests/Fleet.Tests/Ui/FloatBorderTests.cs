@@ -17,6 +17,10 @@ public sealed class FloatBorderTests : IDisposable
 {
     private readonly List<IReadOnlyList<FloatBorderButton>> _published = [];
 
+    private static readonly string InfoTip = FleetToolTip.Label(FleetIcons.Name(FleetIcons.Info), "?");
+
+    private static readonly string CloseTip = FleetToolTip.Label(FleetIcons.Name(FleetIcons.Close), FleetCorners.CloseKey);
+
     public FloatBorderTests()
     {
         FleetKeyHints.Reset();
@@ -45,14 +49,14 @@ public sealed class FloatBorderTests : IDisposable
 
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1"),
-                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2"),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", InfoTip),
+                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2", CloseTip),
             ],
             shown);
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, "?", FleetIcons.Info, "f1"),
-                new FloatBorderButton(false, true, string.Empty, FleetIcons.Close, "f2"),
+                new FloatBorderButton(false, false, "?", FleetIcons.Info, "f1", InfoTip),
+                new FloatBorderButton(false, true, string.Empty, FleetIcons.Close, "f2", CloseTip),
             ],
             hidden);
     }
@@ -93,6 +97,87 @@ public sealed class FloatBorderTests : IDisposable
             text.Select(b => b.Label));
         Assert.Contains(FleetIcons.Name(FleetIcons.Select), text[2].Label);
         Assert.Equal([FleetIcons.Info, FleetIcons.Close, FleetIcons.Select], none.Select(b => b.Label));
+    }
+
+    [Fact]
+    public void In_tooltips_mode_each_button_carries_its_name_and_key_as_tip_and_in_text_and_none_modes_none()
+    {
+        var bar = new List<(string Key, string Label, Action Run)> { ("enter", FleetIcons.Select, () => { }) };
+        var names = new[] { $"{FleetIcons.Name(FleetIcons.Info)} (?)", $"{FleetIcons.Name(FleetIcons.Close)} (esc)", $"{FleetIcons.Name(FleetIcons.Select)} (enter)" };
+
+        var tips = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Tooltips);
+        var text = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Text);
+        var none = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.None);
+
+        Assert.All(names, n => Assert.NotEmpty(n));
+        Assert.Equal(names, tips.Select(b => b.Tip));
+        Assert.All(text.Concat(none), b => Assert.Empty(b.Tip));
+    }
+
+    [Fact]
+    public void A_border_chip_names_its_key_in_the_tip_even_while_the_keys_are_hidden()
+    {
+        var bar = new List<(string Key, string Label, Action Run)> { ("n", FleetIcons.Select, () => { }) };
+
+        var buttons = FloatBorder.For(false, bar, true, null, keysShown: false, "?");
+
+        Assert.Equal(string.Empty, buttons[0].Key);
+        Assert.Equal($"{FleetIcons.Name(FleetIcons.Select)} (n)", buttons[0].Tip);
+    }
+
+    [Fact]
+    public void The_dashboard_puts_info_top_right_beside_close_and_keeps_f1_for_info_and_f2_for_close()
+    {
+        var buttons = FloatBorder.For(true, [], false, null, keysShown: true, "?", infoRight: true);
+        var alone = FloatBorder.For(true, [], false, null, keysShown: true, "?", closable: false, infoRight: true);
+
+        Assert.Equal([(false, true, "f1"), (false, true, "f2")], buttons.Select(b => (b.Bottom, b.Right, b.Send)));
+        Assert.Equal([FleetIcons.Info, FleetIcons.Close], buttons.Select(b => b.Label));
+        Assert.Equal([(true, "f1")], alone.Select(b => (b.Right, b.Send)));
+    }
+
+    [Fact]
+    public void A_window_attached_with_info_right_publishes_info_on_the_right_and_others_keep_it_left()
+    {
+        Enable();
+        using var dashboard = new Window();
+        using var menu = new Window();
+        FleetCorners.Attach(dashboard, () => { }, infoRight: true);
+        FleetCorners.Attach(menu, () => { });
+
+        FloatBorder.Run(dashboard, true);
+        var right = _published[^1];
+        FloatBorder.Run(menu, true);
+
+        Assert.True(right[0].Right);
+        Assert.Equal("f1", right[0].Send);
+        Assert.False(_published[^1][0].Right);
+    }
+
+    [Fact]
+    public void Outside_fleetd_the_dashboards_info_corner_sits_just_left_of_its_close_corner()
+    {
+        using var window = new Window { Width = 60, Height = 12, BorderStyle = Terminal.Gui.Drawing.LineStyle.None };
+        FleetCorners.Attach(window, () => { }, infoRight: true);
+        window.Layout();
+
+        var (help, close) = (window.SubViews.ElementAt(0), window.SubViews.ElementAt(1));
+
+        Assert.Equal(close.Frame.X, help.Frame.X + help.Frame.Width + 1);
+        Assert.Equal(window.Viewport.Width - FleetCorners.Margin, close.Frame.X + close.Frame.Width);
+        Assert.Equal(0, help.Frame.Y);
+    }
+
+    [Fact]
+    public void Outside_fleetd_a_dashboard_without_close_has_info_in_the_top_right_corner()
+    {
+        using var window = new Window { Width = 60, Height = 12, BorderStyle = Terminal.Gui.Drawing.LineStyle.None };
+        FleetCorners.Attach(window, null, infoRight: true);
+        window.Layout();
+
+        var help = window.SubViews.Single();
+
+        Assert.Equal(window.Viewport.Width - FleetCorners.Margin, help.Frame.X + help.Frame.Width);
     }
 
     [Fact]
@@ -160,8 +245,8 @@ public sealed class FloatBorderTests : IDisposable
 
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1"),
-                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2"),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", InfoTip),
+                new FloatBorderButton(false, true, "esc", FleetIcons.Close, "f2", CloseTip),
                 new FloatBorderButton(true, true, "enter", "open", "f3"),
             ],
             _published[^1]);
@@ -271,7 +356,7 @@ public sealed class FloatBorderTests : IDisposable
         Assert.True(dialogBar.Root.Visible);
         Assert.Equal(
             [
-                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1"),
+                new FloatBorderButton(false, false, string.Empty, FleetIcons.Info, "f1", InfoTip),
                 new FloatBorderButton(true, false, "n", "new", "f2"),
             ],
             _published[^1]);

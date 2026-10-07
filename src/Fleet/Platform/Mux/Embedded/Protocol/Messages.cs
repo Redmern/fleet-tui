@@ -351,6 +351,9 @@ public sealed class FloatButtonDto
 
     [JsonPropertyName("send")]
     public string Send { get; set; } = string.Empty;
+
+    [JsonPropertyName("tip")]
+    public string? Tip { get; set; }
 }
 
 public sealed class PaneDto

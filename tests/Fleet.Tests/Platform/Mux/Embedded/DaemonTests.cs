@@ -577,6 +577,64 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Hovering_a_border_button_shows_its_tip_until_a_key_a_press_or_a_new_button_list()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var spawned = await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["box"] });
+        var buttons = new List<FloatButtonDto>
+        {
+            new() { Edge = "top", Align = "left", Key = string.Empty, Label = "i", Send = "?", Tip = "open help" },
+        };
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "float-buttons", Pane = spawned.Pane, Buttons = buttons })).Ok);
+
+        var mirror = new MuxModel();
+        mirror.Spawn("techweb", "C:/x", ["tile"]);
+        var mirrored = mirror.Connect(60, 12, "techweb");
+        mirror.SpawnFloat("techweb", "C:/x", ["box"]);
+        var area = mirror.View(mirrored.Id)!.FloatingPanes.Single().Area;
+        var (x, y) = (area.X + BorderButtons.Inset + 1, area.Y);
+
+        int Shown() => client.Frames.Count(f => f.Contains("open help", StringComparison.Ordinal));
+
+        async Task HoverAsync(int times)
+        {
+            await client.SendMouseAsync(x, y, MouseButtons.None, MouseActions.Motion);
+            await Eventually(() => Shown() == times);
+        }
+
+        async Task HiddenByAsync(Func<Task> act)
+        {
+            var before = client.FrameCount;
+            await act();
+            await Eventually(() => client.FrameCount > before);
+        }
+
+        await HoverAsync(1);
+        await HiddenByAsync(() => client.SendKeyAsync("z"));
+        await Eventually(() => _panes.ByProgram("box")!.Written == "z");
+
+        await HoverAsync(2);
+        await HiddenByAsync(() => control.RequestAsync(new ControlRequest { Op = "float-buttons", Pane = spawned.Pane, Buttons = buttons }));
+
+        await HoverAsync(3);
+        await HiddenByAsync(async () =>
+        {
+            await client.SendMouseAsync(x, y, MouseButtons.Left, MouseActions.Press, held: true);
+            await client.SendMouseAsync(x, y, MouseButtons.Left, MouseActions.Release);
+        });
+        await Eventually(() => _panes.ByProgram("box")!.Written == "z?");
+
+        await HoverAsync(4);
+        await HiddenByAsync(() => client.SendMouseAsync(area.X + area.Width / 2, area.Y, MouseButtons.None, MouseActions.Motion));
+
+        await HoverAsync(5);
+        Assert.Equal(5, Shown());
+    }
+
+    [Fact]
     public async Task Clicking_a_button_on_the_dash_frame_types_its_key_into_the_dash()
     {
         var control = await ControlAsync();

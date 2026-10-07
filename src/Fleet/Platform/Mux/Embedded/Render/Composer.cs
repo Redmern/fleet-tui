@@ -41,7 +41,8 @@ public static class Composer
         Func<string, ScreenBuffer?> screens,
         string? badge,
         CopyOverlay? copy = null,
-        IReadOnlyList<WhichKeyEntry>? whichKey = null)
+        IReadOnlyList<WhichKeyEntry>? whichKey = null,
+        BorderTip? tip = null)
     {
         var frame = new ClientFrame(view.Client.Cols, view.Client.Rows);
 
@@ -129,6 +130,11 @@ public static class Composer
             }
         }
 
+        if (tip is { } shown)
+        {
+            Tip(frame, shown);
+        }
+
         if (badge is not null && whichKey is { Count: > 0 })
         {
             WhichKeyBox(frame, badge, whichKey);
@@ -136,6 +142,26 @@ public static class Composer
 
         StatusBar(frame, view, badge);
         return frame;
+    }
+
+    private static void Tip(ClientFrame frame, BorderTip tip)
+    {
+        if (tip.Y < 0 || tip.Y >= frame.Rows)
+        {
+            return;
+        }
+
+        var x = tip.X;
+
+        foreach (var rune in tip.Text.EnumerateRunes())
+        {
+            if (x >= 0 && x < frame.Cols)
+            {
+                frame.Cells[tip.Y * frame.Cols + x] = new Cell(rune.ToString(), Text, Surface0, CellAttr.None, 0, false);
+            }
+
+            x++;
+        }
     }
 
     private static void Blit(ClientFrame frame, ScreenBuffer screen, Rect area)

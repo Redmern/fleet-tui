@@ -40,12 +40,7 @@ public static class SubRows
     {
         var icon = StatusIcon.For(StatusOf(agent))!;
 
-        List<FleetSpan> trailing = [icon with { Text = $"{icon.Text}  " }];
-
-        if (agent.Hidden)
-        {
-            trailing.Add(FleetSpan.Muted($"{FleetGlyphs.Hidden} "));
-        }
+        List<FleetSpan> trailing = [icon with { Text = $"{icon.Text}  " }, FleetHiddenMark.For(agent.Hidden)];
 
         return new FleetRow(
             [new FleetSpan($"{FleetGlyphs.Orchestrator}  ", FleetTones.Normal), FleetSpan.Plain(agent.Branch)],
@@ -66,13 +61,21 @@ public static class SubRows
             FleetSpan.Muted(agent.Repository),
         ];
 
-        return new FleetRow(
-            spans,
-            agent.Hidden ? [FleetSpan.Muted($"{FleetGlyphs.Hidden} ")] : null);
+        List<FleetSpan> trailing = [];
+
+        if (agent.Status.Length > 0)
+        {
+            var icon = StatusIcon.For(agent.Status) ?? FleetSpan.Muted(FleetGlyphs.Dirty);
+            trailing.Add(icon with { Text = $"{icon.Text}  " });
+        }
+
+        trailing.Add(FleetHiddenMark.For(agent.Hidden));
+
+        return new FleetRow(spans, trailing);
     }
 
     public static IReadOnlyList<string> Statuses(SubListing listing) =>
-        [.. listing.Flat.Select(e => e.IsChild ? string.Empty : StatusOf(e.Agent))];
+        [.. listing.Flat.Select(e => e.IsChild ? e.Agent.Status : StatusOf(e.Agent))];
 
     private static string StatusOf(AgentRecord agent) =>
         StatusIcon.For(agent.Status) is null

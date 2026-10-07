@@ -48,8 +48,7 @@ public sealed class FleetActionBar
         IReadOnlyList<(string Key, string Label, Action Run)> items,
         bool keys,
         string? pinned,
-        ButtonHints hints,
-        IReadOnlyList<string>? tips = null)
+        ButtonHints hints)
     {
         var chips = new List<FleetChip>();
         var offset = 0;
@@ -77,7 +76,7 @@ public sealed class FleetActionBar
 
             var width = spans.Sum(s => s.Text.Length) - 1;
 
-            chips.Add(new FleetChip(offset, offset + width - 1, FleetIcons.Name(label), run, spans, tips is { } bound && i < bound.Count ? bound[i] : string.Empty));
+            chips.Add(new FleetChip(offset, offset + width - 1, FleetIcons.Name(label), run, spans, items[i].Key));
 
             offset += width + 1;
         }
@@ -98,18 +97,14 @@ public sealed class FleetActionBar
         return -1;
     }
 
-    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items) => Show(items, []);
-
-    public void Show(IReadOnlyList<(string Key, string Label, Action Run, FleetAction Action)> items) =>
-        Show(
-            [.. items.Select(i => (i.Key, i.Label, i.Run))],
-            [.. items.Select(i => i.Action == FleetAction.None ? string.Empty : i.Key)]);
-
-    private void Show(IReadOnlyList<(string Key, string Label, Action Run)> items, IReadOnlyList<string> tips)
+    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
     {
-        _strip.Show(items, tips);
+        _strip.Show(items);
         FloatBorder.Refresh();
     }
+
+    public void Show(IReadOnlyList<(string Key, string Label, Action Run, FleetAction Action)> items) =>
+        Show([.. items.Select(i => (i.Key, i.Label, i.Run))]);
 
     public void Pin(string key)
     {
@@ -124,8 +119,6 @@ public sealed class FleetActionBar
     private sealed class ChipStrip : View
     {
         private IReadOnlyList<(string Key, string Label, Action Run)> _items = [];
-
-        private IReadOnlyList<string> _tips = [];
 
         private IReadOnlyList<FleetChip> _chips = [];
 
@@ -147,10 +140,9 @@ public sealed class FleetActionBar
 
         private int Start => AlignRight ? Math.Max(0, Viewport.Width - FleetActionBar.Width(_chips)) : 0;
 
-        public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items, IReadOnlyList<string> tips)
+        public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
         {
             _items = items;
-            _tips = tips;
             Rebuild();
         }
 
@@ -165,7 +157,7 @@ public sealed class FleetActionBar
 
         private void Rebuild()
         {
-            _chips = Chips(_items, FleetKeyHints.Shown, Pinned, FleetButtonHints.Mode, _tips);
+            _chips = Chips(_items, FleetKeyHints.Shown, Pinned, FleetButtonHints.Mode);
 
             Hover(-1);
             SetNeedsLayout();

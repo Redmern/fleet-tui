@@ -5,7 +5,7 @@ namespace Fleet.Platform.Mux.Embedded.Input;
 
 public sealed class SgrMouse
 {
-    public const string Enable = "\e[?1002h\e[?1006h";
+    public const string Enable = "\e[?1003h\e[?1006h";
 
     private const int MaxSequence = 32;
 

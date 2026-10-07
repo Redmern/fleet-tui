@@ -1,6 +1,7 @@
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Dashboard.ShowDashboard.Models;
 using Fleet.Shared;
+using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 
@@ -81,17 +82,34 @@ public class DashboardRowsTests
 
         var shown = DashboardRows.WithHidden(row, false);
 
-        Assert.Single(shown.Trailing!);
-        Assert.Equal("working   ", shown.Trailing![0].Text);
+        Assert.Equal([FleetSpan.Plain("working   "), FleetHiddenMark.Blank], shown.Trailing!);
     }
 
     [Fact]
-    public void WithHidden_round_trip_restores_an_empty_trailing()
+    public void WithHidden_round_trip_leaves_only_the_blank_hidden_slot()
     {
         var row = new FleetRow([FleetSpan.Plain("branch")]);
 
         var back = DashboardRows.WithHidden(DashboardRows.WithHidden(row, true), false);
 
-        Assert.Null(back.Trailing);
+        Assert.Equal([FleetHiddenMark.Blank], back.Trailing!);
     }
+
+    [Fact]
+    public void Hiding_or_showing_a_row_keeps_its_status_in_the_same_column()
+    {
+        var status = FleetSpan.Plain("✓  ");
+        var row = new FleetRow([FleetSpan.Plain("branch")], [status]);
+
+        var hidden = DashboardRows.WithHidden(row, true);
+        var shown = DashboardRows.WithHidden(hidden, false);
+
+        Assert.Equal(status, hidden.Trailing![0]);
+        Assert.Equal(status, shown.Trailing![0]);
+        Assert.Equal(Width(hidden.Trailing!), Width(shown.Trailing!));
+        Assert.Equal(Width([FleetHiddenMark.Shown]), Width([FleetHiddenMark.Blank]));
+        Assert.Equal(2, shown.Trailing!.Count);
+    }
+
+    private static int Width(IEnumerable<FleetSpan> spans) => spans.Sum(s => s.Text.EnumerateRunes().Count());
 }

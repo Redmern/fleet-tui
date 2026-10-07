@@ -184,12 +184,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                         Hold(request.Pane ?? request.Caller ?? string.Empty);
                         break;
                     case "float-buttons":
-                        Require(
-                            _model.SetFloatButtons(
-                                request.Pane ?? request.Caller ?? string.Empty,
-                                [.. (request.Buttons ?? []).Select(BorderButtons.From)]),
-                            request);
-                        break;
+                        {
+                            var pane = request.Pane ?? request.Caller ?? string.Empty;
+                            Require(_model.SetFloatButtons(pane, [.. (request.Buttons ?? []).Select(BorderButtons.From)]), request);
+                            Unhover(pane);
+                            break;
+                        }
                     case "focus-from":
                         {
                             var (dx, dy) = Direction(request.Direction);
@@ -564,10 +564,18 @@ public sealed class FleetDaemon(DaemonOptions options)
     private void Route(AttachSession session, KeyMessage key)
     {
         PaneRuntime? target;
+        bool unhovered;
         lock (_gate)
         {
             _model.Touch(session.Client);
             target = FocusedRuntime(session.Client);
+            unhovered = session.Hover is not null;
+            session.Hover = null;
+        }
+
+        if (unhovered)
+        {
+            _wake.Release();
         }
 
         if (target is null)
@@ -644,6 +652,17 @@ public sealed class FleetDaemon(DaemonOptions options)
         target.Send(Encoding.UTF8.GetBytes(PasteBytes(text, target.Modes.BracketedPaste)));
     }
 
+    private static BorderTip? HoverTip(AttachSession session, ClientView view) =>
+        session.Hover is var (pane, x, y) && BorderTips.At(view, x, y) is { } tip && tip.Pane == pane ? tip : null;
+
+    private void Unhover(string pane)
+    {
+        foreach (var session in _sessions.Values.Where(s => s.Hover?.Pane == pane))
+        {
+            session.Hover = null;
+        }
+    }
+
     private (string Pane, FloatButton Button)? FrameButton(string client, int x, int y)
     {
         if (_model.View(client) is not { Overlay: null } view
@@ -677,6 +696,17 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             var wheel = mouse.Button >= MouseButtons.WheelUp;
             var press = mouse.Action == MouseActions.Press && !wheel;
+            var hover = mouse.Action == MouseActions.Motion && !mouse.Held && session.Capture is null
+                && _model.View(session.Client) is { } hovered
+                && BorderTips.At(hovered, mouse.X, mouse.Y) is { } tip
+                    ? (tip.Pane, mouse.X, mouse.Y)
+                    : ((string Pane, int X, int Y)?)null;
+
+            if (hover != session.Hover)
+            {
+                session.Hover = hover;
+                redraw = true;
+            }
 
             if (session.Capture is { } capture && !press)
             {
@@ -2254,7 +2284,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         ? copy.Overlay(copied.Screen.Viewport)
                         : null;
                     var frame = Composer.Compose(
-                        view, id => _runtimes.GetValueOrDefault(id)?.Screen, session.Badge, copying, session.WhichKey);
+                        view, id => _runtimes.GetValueOrDefault(id)?.Screen, session.Badge, copying, session.WhichKey, HoverTip(session, view));
                     if (session.Shown is not null && Same(session.Shown, frame))
                     {
                         continue;
@@ -2492,6 +2522,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         public Stopwatch? Switching { get; set; }
 
         public MouseCapture? Capture { get; set; }
+
+        public (string Pane, int X, int Y)? Hover { get; set; }
 
         public string? Title { get; set; }
 

@@ -406,6 +406,7 @@ public static class EmbeddedWiring
                         Key = b.Key,
                         Label = b.Label,
                         Send = b.Send,
+                        Tip = b.Tip.Length > 0 ? b.Tip : null,
                     })])
                 .GetAwaiter()
                 .GetResult();

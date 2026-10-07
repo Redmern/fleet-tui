@@ -50,11 +50,11 @@ public static class FleetCorners
 
     public static int Rows => FloatBorder.Enabled ? 0 : 2 * Margin;
 
-    public static void Attach(View window, Action? close, View? below = null, bool framed = false)
+    public static void Attach(View window, Action? close, View? below = null, bool framed = false, bool infoRight = false)
     {
         if (FloatBorder.Enabled || (framed && FloatBorder.Framing))
         {
-            FloatBorder.Corners(window, close);
+            FloatBorder.Corners(window, close, infoRight);
 
             if (below is not null)
             {
@@ -72,17 +72,26 @@ public static class FleetCorners
         }
 
         var help = new Corner(
-            () => Help(FleetKeyHints.Shown, FleetKeyHints.RevealKey, FleetButtonHints.Mode), FleetIcons.Info, FleetKeyHints.Toggle, () => FleetKeyHints.RevealKey)
+            () => Help(FleetKeyHints.Shown, FleetKeyHints.RevealKey, FleetButtonHints.Mode),
+            FleetIcons.Info,
+            FleetKeyHints.Toggle,
+            () => FleetKeyHints.RevealKey,
+            anchorEnd: infoRight,
+            trailing: () => close is null ? 0 : Width(Close(FleetKeyHints.Shown, FleetButtonHints.Mode)) + 1)
         {
-            X = 1,
             Y = 0,
         };
+
+        if (!infoRight)
+        {
+            help.X = 1;
+        }
 
         window.Add(help);
 
         if (close is not null)
         {
-            window.Add(new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, () => string.Empty, anchorEnd: true)
+            window.Add(new Corner(() => Close(FleetKeyHints.Shown, FleetButtonHints.Mode), FleetIcons.Close, close, () => CloseKey, anchorEnd: true)
             {
                 Y = 0,
             });
@@ -96,9 +105,13 @@ public static class FleetCorners
         }
     }
 
+    public static int Width(IReadOnlyList<FleetSpan> spans) => spans.Sum(s => s.Text.EnumerateRunes().Count());
+
     private sealed class Corner : View
     {
         private readonly Func<IReadOnlyList<FleetSpan>> _spans;
+
+        private readonly Func<int>? _trailing;
 
         private readonly Action _run;
 
@@ -110,10 +123,12 @@ public static class FleetCorners
 
         private bool _hovered;
 
-        public Corner(Func<IReadOnlyList<FleetSpan>> spans, string icon, Action run, Func<string> key, bool anchorEnd = false)
+        public Corner(
+            Func<IReadOnlyList<FleetSpan>> spans, string icon, Action run, Func<string> key, bool anchorEnd = false, Func<int>? trailing = null)
         {
             _key = key;
             _spans = spans;
+            _trailing = trailing;
             _icon = icon;
             _run = run;
             _anchorEnd = anchorEnd;
@@ -129,13 +144,13 @@ public static class FleetCorners
 
         private void Fit()
         {
-            var width = _spans().Sum(s => s.Text.EnumerateRunes().Count());
+            var width = FleetCorners.Width(_spans());
 
             Width = width;
 
             if (_anchorEnd)
             {
-                X = Pos.AnchorEnd(width + FleetCorners.Margin);
+                X = Pos.AnchorEnd(width + FleetCorners.Margin + (_trailing?.Invoke() ?? 0));
             }
         }
 

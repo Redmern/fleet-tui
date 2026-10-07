@@ -19,6 +19,8 @@ public static class FloatBorder
 
     private static readonly Dictionary<View, Action?> Cornered = [];
 
+    private static readonly HashSet<View> InfoRight = [];
+
     private static readonly List<FleetActionBar> Bars = [];
 
     private static Func<IReadOnlyList<FloatBorderButton>, bool>? publish;
@@ -77,6 +79,7 @@ public static class FloatBorder
         framedOnly = false;
         Running.Clear();
         Cornered.Clear();
+        InfoRight.Clear();
         Bars.Clear();
     }
 
@@ -94,9 +97,18 @@ public static class FloatBorder
         Refresh();
     }
 
-    public static void Corners(View window, Action? close)
+    public static void Corners(View window, Action? close, bool infoRight = false)
     {
         Cornered[window] = close;
+
+        if (infoRight)
+        {
+            InfoRight.Add(window);
+        }
+        else
+        {
+            InfoRight.Remove(window);
+        }
 
         foreach (var bar in Bars.Where(b => Inside(b.Root, window)))
         {
@@ -171,7 +183,8 @@ public static class FloatBorder
             FleetKeyHints.Shown,
             FleetKeyHints.RevealKey,
             FleetButtonHints.Mode,
-            close is not null);
+            close is not null,
+            InfoRight.Contains(window));
 
         var actions = new List<Action>();
 
@@ -197,30 +210,47 @@ public static class FloatBorder
         bool keysShown,
         string revealKey,
         ButtonHints hints = ButtonHints.Tooltips,
-        bool closable = true)
+        bool closable = true,
+        bool infoRight = false)
     {
         var buttons = new List<FloatBorderButton>();
 
         if (corners)
         {
-            buttons.Add(new FloatBorderButton(false, false, keysShown ? string.Empty : revealKey, FleetButtonHints.Face(FleetIcons.Info, hints), Send(0)));
+            buttons.Add(new FloatBorderButton(
+                false,
+                infoRight,
+                keysShown ? string.Empty : revealKey,
+                FleetButtonHints.Face(FleetIcons.Info, hints),
+                Send(0),
+                Tip(FleetIcons.Info, revealKey, hints)));
         }
 
         if (corners && closable)
         {
             buttons.Add(new FloatBorderButton(
-                false, true, keysShown ? FleetCorners.CloseKey : string.Empty, FleetButtonHints.Face(FleetIcons.Close, hints), Send(1)));
+                false,
+                true,
+                keysShown ? FleetCorners.CloseKey : string.Empty,
+                FleetButtonHints.Face(FleetIcons.Close, hints),
+                Send(1),
+                Tip(FleetIcons.Close, FleetCorners.CloseKey, hints)));
         }
 
         var shown = FleetActionBar.Visible(bar, keysShown, pinned);
 
-        foreach (var chip in shown)
+        for (var i = 0; i < shown.Count; i++)
         {
-            buttons.Add(new FloatBorderButton(true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count)));
+            var chip = shown[i];
+            buttons.Add(new FloatBorderButton(
+                true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count), Tip(chip.Label, bar[i].Key, hints)));
         }
 
         return buttons;
     }
+
+    private static string Tip(string icon, string key, ButtonHints hints) =>
+        hints == ButtonHints.Tooltips ? FleetToolTip.Label(FleetIcons.Name(icon), key) : string.Empty;
 
     private static string Send(int index) => index < Sends.Count ? Sends[index] : string.Empty;
 

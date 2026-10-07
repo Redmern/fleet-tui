@@ -11,6 +11,20 @@ public class AgentRowsTests
         new($"C:/repos/{repo}/{branch}", repo, branch, "claude", "origin/main", true);
 
     [Fact]
+    public void A_hidden_and_a_visible_agent_put_their_status_in_the_same_column()
+    {
+        var rows = AgentRows.For(
+            [Agent("backend", "a") with { Status = "working", Hidden = true }, Agent("backend", "b") with { Status = "working" }]);
+
+        Assert.Contains(FleetGlyphs.Hidden, rows[0].Text);
+        Assert.DoesNotContain(FleetGlyphs.Hidden, rows[1].Text);
+        Assert.Equal(rows[0].Trailing![0], rows[1].Trailing![0]);
+        Assert.Equal(Width(rows[0].Trailing!), Width(rows[1].Trailing!));
+    }
+
+    private static int Width(IEnumerable<FleetSpan> spans) => spans.Sum(s => s.Text.EnumerateRunes().Count());
+
+    [Fact]
     public void No_agents_shows_how_to_start_one()
     {
         var rows = AgentRows.For([]);
@@ -69,6 +83,6 @@ public class AgentRowsTests
     {
         var rows = AgentRows.For([Agent("backend", "login")]);
 
-        Assert.Null(rows[0].Trailing);
+        Assert.Equal([Fleet.Ui.FleetHiddenMark.Blank], rows[0].Trailing!);
     }
 }
