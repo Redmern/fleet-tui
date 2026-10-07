@@ -11,11 +11,29 @@ public sealed class NvimKeybindFiles(string configDirectory, KeybindOs? os = nul
 
     public string GeneratedFile => Path.Combine(configDirectory, "lua", "fleet", NvimKeybinds.GeneratedFile);
 
-    public bool WriteGenerated(KeybindSet set) =>
-        Write(GeneratedFile, NvimKeybinds.Generate(set.For(KeybindTarget.Nvim, _os)));
+    public bool WriteGenerated(KeybindSet set) => Write(GeneratedFile, Generated(set));
 
-    public bool WriteUserModule(KeybindSet set, string path) =>
-        Write(path, NvimKeybinds.GenerateUserModule(set.For(KeybindTarget.Nvim, _os)));
+    public bool WriteUserModule(KeybindSet set, string path) => Write(path, UserModule(set));
+
+    public bool GeneratedIsCurrent(KeybindSet set) => Holds(GeneratedFile, Generated(set));
+
+    public bool UserModuleIsCurrent(KeybindSet set, string path) => Holds(path, UserModule(set));
+
+    private string Generated(KeybindSet set) => NvimKeybinds.Generate(set.For(KeybindTarget.Nvim, _os));
+
+    private string UserModule(KeybindSet set) => NvimKeybinds.GenerateUserModule(set.For(KeybindTarget.Nvim, _os));
+
+    private static bool Holds(string path, string lua)
+    {
+        try
+        {
+            return File.Exists(path) && File.ReadAllText(path) == lua;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            return false;
+        }
+    }
 
     private static bool Write(string path, string lua)
     {

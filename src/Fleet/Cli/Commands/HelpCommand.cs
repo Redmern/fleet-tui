@@ -18,7 +18,9 @@ public static class HelpCommand
               fleet setup                 first run: wire wezterm, check what is missing
               fleet dispatch --project <p> "<task>"
                                           spin up a hidden sub-orchestrator for a task
-              fleet apply-keybinds        write the wezterm keybinding module
+              fleet apply-keybinds        write the keybinds: wezterm module, nvim and Claude
+                [--target nvim|claude]    only that target (skips the wezterm module)
+                [--dry-run]               show what would change, write nothing
               fleet head [--voice]        the head orchestrator's Claude (alt+o opens it in voice mode)
               fleet mcp --head            the head's cross-project MCP tools over stdio
               fleet doctor                check the environment

@@ -1,4 +1,5 @@
 using Fleet.Platform.Claude;
+using Fleet.Platform.Keybinds;
 
 namespace Fleet.Tests.Platform.Claude;
 
@@ -42,6 +43,24 @@ public sealed class ClaudeConfigHomeTests
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", previous);
+        }
+    }
+
+    [Fact]
+    public void Keybind_targets_get_each_resolved_home_once()
+    {
+        var previous = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
+        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", @"C:\custom\claude\");
+
+        try
+        {
+            Assert.Equal(
+                [@"C:\custom\claude"],
+                KeybindTargetPaths.ClaudeHomes([Path.GetTempPath(), Environment.CurrentDirectory], @"C:\home"));
         }
         finally
         {
