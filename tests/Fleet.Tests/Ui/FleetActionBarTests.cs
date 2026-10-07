@@ -1,5 +1,6 @@
 using System.Reflection;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Keymap.Models;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -137,6 +138,35 @@ public sealed class FleetActionBarTests : IDisposable
         chips[1].Run();
 
         Assert.Equal(1, ran);
+    }
+
+    [Fact]
+    public void A_tooltip_names_the_chip_and_its_key_even_while_the_keys_are_hidden()
+    {
+        var keymap = new Keymap(KeymapConfig.Default with
+        {
+            Bindings = new Dictionary<FleetAction, string> { [FleetAction.NewAgent] = "Ctrl+N" },
+        });
+        var chips = FleetActionBar.Chips(
+            [
+                (keymap.DisplayFor(FleetAction.NewAgent), FleetIcons.For(FleetAction.NewAgent)!, () => { }),
+                ("enter", FleetIcons.Select, () => { }),
+                (string.Empty, FleetIcons.Menu, () => { }),
+                ("x", "plain", () => { }),
+            ],
+            keys: false,
+            pinned: null,
+            ButtonHints.Tooltips);
+
+        Assert.Equal(["new agent (ctrl+n)", "select (enter)", "menu", ""], chips.Select(c => c.Tip));
+    }
+
+    [Fact]
+    public void A_tooltip_label_adds_nothing_without_a_key_or_a_name()
+    {
+        Assert.Equal("theme (T)", FleetToolTip.Label("theme", "T"));
+        Assert.Equal("theme", FleetToolTip.Label("theme", string.Empty));
+        Assert.Equal(string.Empty, FleetToolTip.Label(string.Empty, "T"));
     }
 
     [Fact]

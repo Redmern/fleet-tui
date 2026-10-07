@@ -49,8 +49,11 @@ public sealed class FleetActionBar
         var chips = new List<FleetChip>();
         var offset = 0;
 
-        foreach (var (key, label, run) in Visible(items, keys, pinned))
+        var visible = Visible(items, keys, pinned);
+
+        for (var i = 0; i < visible.Count; i++)
         {
+            var (key, label, run) = visible[i];
             var face = FleetButtonHints.Face(label, hints);
             var spans = new List<FleetSpan> { new(FleetGlyphs.PillLeft, FleetTones.ChipEdge) };
 
@@ -69,7 +72,7 @@ public sealed class FleetActionBar
 
             var width = spans.Sum(s => s.Text.Length) - 1;
 
-            chips.Add(new FleetChip(offset, offset + width - 1, FleetIcons.Name(label), run, spans));
+            chips.Add(new FleetChip(offset, offset + width - 1, FleetIcons.Name(label), run, spans, items[i].Key));
 
             offset += width + 1;
         }
@@ -171,7 +174,7 @@ public sealed class FleetActionBar
 
             var at = ViewportToScreen(new Rectangle(Start + _chips[index].From, 0, 1, 1)).Location;
 
-            FleetToolTip.Show(this, new Point(at.X, at.Y + 1), _chips[index].Name);
+            FleetToolTip.Show(this, new Point(at.X, at.Y + 1), _chips[index].Tip);
         }
 
         protected override bool OnDrawingContent(DrawContext? context)
