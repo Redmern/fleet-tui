@@ -350,6 +350,20 @@ chords (`Alt+h` to `<A-h>`, `Shift+Enter` to `<S-CR>`, `<` to `<lt>`).
   `setup({ ['<id>'] = false })` to skip one). fleet never writes into the user's config;
   where the file goes and when it is refreshed is phase 5 (`apply-keybinds`, `doctor`, `setup`).
 
+**Distribution (phase 5).** `Platform/Keybinds/KeybindDistribution` applies the model to every
+target that has a renderer (nvim and Claude; the mux and fleet UI read the model directly, and
+the WezTerm module is left as it was): `keybinds.generated.lua` in fleet-nvim (skipped when
+fleet-nvim is not installed, so it never creates half a config), `fleet-keys.lua` in the fleet
+config folder, and `keybindings.json` through `ClaudeKeybindingsWriter` in each distinct Claude
+home that `ClaudeConfigHome` resolves for the current folder and every project root
+(`KeybindTargetPaths`). Each target compares content first, so re-applying is a no-op, and the
+writer's `IsCurrent` plans the same merge without writing for `--dry-run` and the drift check.
+It runs from `fleet apply-keybinds [--target nvim|claude] [--dry-run]`, `fleet setup`, and after
+the keybinds menu saves (`ApplyingKeymapStore` in the composition root, failures go to the log);
+`fleet doctor` lists every file that differs from what the model renders, with the fix command.
+Worktree resync (`ClaudeSettingsSync`) does not touch keybindings: Claude reads them from its
+config home, not per folder, so there is nothing per worktree to keep current.
+
 Isolation comes from `NVIM_APPNAME=fleet-nvim` (Neovim 0.9+): nvim then reads that
 config folder and uses its own data, state and plugin folders. `-u <init.lua>` alone
 was not enough, because it still loads the user's `plugin/` and `after/` folders and

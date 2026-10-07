@@ -358,4 +358,61 @@ public sealed class ClaudeKeybindingsTests : IDisposable
         Assert.False(result.Succeeded);
         Assert.Equal("{ not json", File.ReadAllText(KeybindingsFile));
     }
+
+    [Fact]
+    public void A_missing_file_is_not_current_when_fleet_has_bindings_and_checking_writes_nothing()
+    {
+        var current = new ClaudeKeybindingsWriter(_config).IsCurrent(Render(Entry("x", "newline", "Shift+Enter", "Chat")));
+
+        Assert.True(current.Succeeded);
+        Assert.False(current.Value);
+        Assert.False(File.Exists(KeybindingsFile));
+        Assert.False(File.Exists(OwnershipFile));
+    }
+
+    [Fact]
+    public void Nothing_wanted_and_nothing_written_is_current()
+    {
+        var current = new ClaudeKeybindingsWriter(_config).IsCurrent([]);
+
+        Assert.True(current.Succeeded);
+        Assert.True(current.Value);
+    }
+
+    [Fact]
+    public void A_written_file_is_current_until_the_model_or_the_file_changes()
+    {
+        var writer = new ClaudeKeybindingsWriter(_config);
+        var wanted = Render(Entry("x", "newline", "Shift+Enter", "Chat"));
+        writer.Write(wanted);
+
+        Assert.True(writer.IsCurrent(wanted).Value);
+        Assert.False(writer.IsCurrent(Render(Entry("x", "newline", "Alt+Enter", "Chat"))).Value);
+
+        File.WriteAllText(KeybindingsFile, """{ "bindings": [] }""");
+
+        Assert.False(writer.IsCurrent(wanted).Value);
+    }
+
+    [Fact]
+    public void A_users_own_binding_on_the_same_key_is_not_drift()
+    {
+        Directory.CreateDirectory(_config);
+        File.WriteAllText(KeybindingsFile, """
+            { "bindings": [ { "context": "Chat", "bindings": { "shift+enter": "chat:submit" } } ] }
+            """);
+
+        var current = new ClaudeKeybindingsWriter(_config).IsCurrent(Render(Entry("x", "newline", "Shift+Enter", "Chat")));
+
+        Assert.True(current.Value);
+    }
+
+    [Fact]
+    public void Checking_a_file_that_is_not_json_fails()
+    {
+        Directory.CreateDirectory(_config);
+        File.WriteAllText(KeybindingsFile, "{ not json");
+
+        Assert.False(new ClaudeKeybindingsWriter(_config).IsCurrent([]).Succeeded);
+    }
 }

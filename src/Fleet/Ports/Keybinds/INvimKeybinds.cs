@@ -9,4 +9,8 @@ public interface INvimKeybinds
     bool WriteGenerated(KeybindSet set);
 
     bool WriteUserModule(KeybindSet set, string path);
+
+    bool GeneratedIsCurrent(KeybindSet set);
+
+    bool UserModuleIsCurrent(KeybindSet set, string path);
 }

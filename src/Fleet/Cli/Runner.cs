@@ -12,7 +12,7 @@ public static class Runner
         FleetVerb.Dash => DashCommand.Run(invocation),
         FleetVerb.Menu => await MenuCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.Request => RequestCommand.Run(invocation),
-        FleetVerb.ApplyKeybinds => ApplyKeybindsCommand.Run(),
+        FleetVerb.ApplyKeybinds => ApplyKeybindsCommand.Run(invocation),
         FleetVerb.Setup => SetupCommand.Run(),
         FleetVerb.Dispatch => await DispatchCommand.RunAsync(invocation).ConfigureAwait(false),
         FleetVerb.HookDispatch => await HookDispatchCommand.RunAsync(invocation).ConfigureAwait(false),

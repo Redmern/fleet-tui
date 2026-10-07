@@ -20,6 +20,53 @@ public sealed class ClaudeKeybindingsWriter(string configDirectory)
 
     public Result<ClaudeKeybindingsWritten> Write(IReadOnlyList<ClaudeKeybinding> wanted)
     {
+        var planned = Plan(wanted);
+
+        if (!planned.Succeeded)
+        {
+            return Result<ClaudeKeybindingsWritten>.Fail(planned.Error!);
+        }
+
+        var plan = planned.Value;
+
+        if (plan.Text == plan.ExistingText)
+        {
+            return WriteOwnership(plan.Owned, plan.OwnershipText)
+                ? Result<ClaudeKeybindingsWritten>.Ok(new ClaudeKeybindingsWritten(false, plan.Conflicts))
+                : Fail(OwnershipFile, "write");
+        }
+
+        if (!WriteOwnership([.. plan.PreviouslyOwned.Union(plan.Owned)], plan.OwnershipText))
+        {
+            return Fail(OwnershipFile, "write");
+        }
+
+        if (!Replace(KeybindingsFile, plan.Text))
+        {
+            return Fail(KeybindingsFile, "write");
+        }
+
+        return WriteOwnership(plan.Owned, ReadText(OwnershipFile) ?? string.Empty)
+            ? Result<ClaudeKeybindingsWritten>.Ok(new ClaudeKeybindingsWritten(true, plan.Conflicts))
+            : Fail(OwnershipFile, "write");
+    }
+
+    public Result<bool> IsCurrent(IReadOnlyList<ClaudeKeybinding> wanted)
+    {
+        var planned = Plan(wanted);
+
+        if (!planned.Succeeded)
+        {
+            return Result<bool>.Fail(planned.Error!);
+        }
+
+        var plan = planned.Value;
+
+        return Result<bool>.Ok(plan.Text == plan.ExistingText && OwnershipText(plan.Owned) == plan.OwnershipText);
+    }
+
+    private Result<WritePlan> Plan(IReadOnlyList<ClaudeKeybinding> wanted)
+    {
         var existingText = ReadText(KeybindingsFile);
         var file = existingText is null
             ? null
@@ -27,7 +74,7 @@ public sealed class ClaudeKeybindingsWriter(string configDirectory)
 
         if (existingText is null || file is null)
         {
-            return Fail(KeybindingsFile);
+            return Result<WritePlan>.Fail(Unreadable(KeybindingsFile));
         }
 
         var ownershipText = ReadText(OwnershipFile);
@@ -37,7 +84,7 @@ public sealed class ClaudeKeybindingsWriter(string configDirectory)
 
         if (ownershipText is null || ownership is null)
         {
-            return Fail(OwnershipFile);
+            return Result<WritePlan>.Fail(Unreadable(OwnershipFile));
         }
 
         var changed = RemoveOwned(file, ownership.Owned);
@@ -75,30 +122,10 @@ public sealed class ClaudeKeybindingsWriter(string configDirectory)
             ? JsonSerializer.Serialize(file, Readable.ClaudeKeybindingsFile) + Environment.NewLine
             : existingText;
 
-        if (text == existingText)
-        {
-            return WriteOwnership(owned, ownershipText)
-                ? Result<ClaudeKeybindingsWritten>.Ok(new ClaudeKeybindingsWritten(false, conflicts))
-                : Fail(OwnershipFile, "write");
-        }
-
-        if (!WriteOwnership([.. ownership.Owned.Union(owned)], ownershipText))
-        {
-            return Fail(OwnershipFile, "write");
-        }
-
-        if (!Replace(KeybindingsFile, text))
-        {
-            return Fail(KeybindingsFile, "write");
-        }
-
-        return WriteOwnership(owned, ReadText(OwnershipFile) ?? string.Empty)
-            ? Result<ClaudeKeybindingsWritten>.Ok(new ClaudeKeybindingsWritten(true, conflicts))
-            : Fail(OwnershipFile, "write");
+        return Result<WritePlan>.Ok(new WritePlan(existingText, text, ownershipText, ownership.Owned, owned, conflicts));
     }
 
-    private static Result<ClaudeKeybindingsWritten> Fail(string path) =>
-        Result<ClaudeKeybindingsWritten>.Fail($"{path} could not be read as JSON; fleet left it untouched.");
+    private static string Unreadable(string path) => $"{path} could not be read as JSON; fleet left it untouched.";
 
     private static Result<ClaudeKeybindingsWritten> Fail(string path, string verb) =>
         Result<ClaudeKeybindingsWritten>.Fail($"fleet could not {verb} {path}.");
@@ -155,12 +182,17 @@ public sealed class ClaudeKeybindingsWriter(string configDirectory)
             return existingText.Length == 0 || BusyFiles.Retry(() => Delete(OwnershipFile), BusyFiles.Patience) is not null;
         }
 
-        var text = JsonSerializer.Serialize(
-            new ClaudeKeybindingsOwnership { Owned = [.. owned] },
-            Readable.ClaudeKeybindingsOwnership) + Environment.NewLine;
+        var text = OwnershipText(owned);
 
         return text == existingText || Replace(OwnershipFile, text);
     }
+
+    private static string OwnershipText(IReadOnlyList<ClaudeKeybinding> owned) =>
+        owned.Count == 0
+            ? string.Empty
+            : JsonSerializer.Serialize(
+                new ClaudeKeybindingsOwnership { Owned = [.. owned] },
+                Readable.ClaudeKeybindingsOwnership) + Environment.NewLine;
 
     private static string Delete(string path)
     {
@@ -192,4 +224,12 @@ public sealed class ClaudeKeybindingsWriter(string configDirectory)
 
     private static bool Replace(string path, string content) =>
         BusyFiles.Replace(path, temp => File.WriteAllText(temp, content));
+
+    private sealed record WritePlan(
+        string ExistingText,
+        string Text,
+        string OwnershipText,
+        IReadOnlyList<ClaudeKeybinding> PreviouslyOwned,
+        IReadOnlyList<ClaudeKeybinding> Owned,
+        IReadOnlyList<ClaudeKeybinding> Conflicts);
 }

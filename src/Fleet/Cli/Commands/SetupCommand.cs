@@ -1,6 +1,8 @@
 using Fleet.Cli.Composition;
 using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Models;
+using Fleet.Ports.Keybinds.Enums;
+using Fleet.Ports.Keybinds.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 
@@ -18,18 +20,26 @@ public static class SetupCommand
         var report = new SetupHandler(Adapters.OnPath)
             .Inspect(module, wiring, Adapters.ConfigDirectory, Adapters.InspectNvim(install: true));
 
-        Print(report, keymap);
+        var keybinds = KeybindWiring.ApplyAll();
+
+        Print(report, keymap, keybinds);
 
         return report.Blocked ? 1 : 0;
     }
 
-    private static void Print(SetupReport report, Keymap keymap)
+    private static void Print(SetupReport report, Keymap keymap, IReadOnlyList<KeybindApplied> keybinds)
     {
         Console.WriteLine("fleet setup");
 
         foreach (var step in report.Steps)
         {
             Console.WriteLine($"  {(step.Ok ? "ok  " : "--  ")}{step.Name,-15}{step.Detail}");
+        }
+
+        foreach (var applied in keybinds)
+        {
+            var ok = applied.Outcome is not KeybindOutcome.Failed;
+            Console.WriteLine($"  {(ok ? "ok  " : "--  ")}{"keybinds",-15}{applied.Line}");
         }
 
         Console.WriteLine();

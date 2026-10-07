@@ -2,6 +2,8 @@ using Fleet.Cli.Composition;
 using Fleet.Features.Diagnostics.RunDoctor;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
 using Fleet.Features.Setup.RunSetup;
+using Fleet.Ports.Keybinds.Enums;
+using Fleet.Ports.Keybinds.Models;
 
 namespace Fleet.Cli.Commands;
 
@@ -26,9 +28,11 @@ public static class DoctorCommand
         var report = await handler.HandleAsync(new RunDoctorCommand(mux.Name, mux.Unsupported, embedded))
             .ConfigureAwait(false);
 
-        Print(report);
+        var keybinds = KeybindWiring.Drift();
 
-        return report.Healthy ? 0 : 1;
+        Print(report, keybinds);
+
+        return report.Healthy && keybinds.Count == 0 ? 0 : 1;
     }
 
     private static string StatusHooks(string project)
@@ -47,7 +51,12 @@ public static class DoctorCommand
               + (wired < agents.Count ? " — the rest pick them up when fleet next syncs their settings" : string.Empty);
     }
 
-    private static void Print(DoctorReport report)
+    private static IEnumerable<string> KeybindProblems(IReadOnlyList<KeybindApplied> drift) =>
+        drift.Select(d => d.Outcome == KeybindOutcome.Failed
+            ? $"keybinds: {d.Path}: {d.Detail}"
+            : $"keybinds: {d.Path} differs from the keybind model; run '{KeybindWiring.FixCommand}'");
+
+    private static void Print(DoctorReport report, IReadOnlyList<KeybindApplied> keybinds)
     {
         Console.WriteLine("fleet doctor");
         Console.WriteLine($"  config        {Adapters.ConfigDirectory}");
@@ -61,6 +70,8 @@ public static class DoctorCommand
         }
         var nvim = SetupHandler.Nvim(Adapters.InspectNvim(install: false));
         Console.WriteLine($"  nvim config   {(nvim.Ok ? string.Empty : "! ")}{nvim.Detail}");
+        Console.WriteLine(
+            $"  keybinds      {(keybinds.Count == 0 ? "nvim and Claude files match the keybind model" : $"! {keybinds.Count} file(s) out of date")}");
         Console.WriteLine($"  projects      {report.Projects.Count}");
 
         foreach (var project in report.Projects)
@@ -105,12 +116,14 @@ public static class DoctorCommand
             }
         }
 
-        foreach (var problem in report.Problems)
+        var problems = report.Problems.Concat(KeybindProblems(keybinds)).ToList();
+
+        foreach (var problem in problems)
         {
             Console.WriteLine($"  ! {problem}");
         }
 
-        Console.WriteLine(report.Healthy ? "OK" : $"{report.Problems.Count} problem(s)");
+        Console.WriteLine(report.Healthy && keybinds.Count == 0 ? "OK" : $"{problems.Count} problem(s)");
     }
 
     private static void PrintEmbedded(EmbeddedHealth embedded)

@@ -162,7 +162,8 @@ fleet menu                  the fleet menu, or the picker outside a project
 fleet menu --action <id>    jump straight to add-repository or keybinds
 fleet request --action <id> --project <name>
                             hand an action to that project's running dashboard
-fleet apply-keybinds        write the wezterm keybinding module
+fleet apply-keybinds        write the keybinds: wezterm module, nvim and Claude
+                            (--target nvim|claude for one, --dry-run to only show changes)
 fleet mcp --project <name>  serve the MCP tools over stdio (Claude calls this)
 fleet mcp --head            serve the head orchestrator's cross-project tools
 fleet head [--voice]        run the head orchestrator's Claude (the alt+o chord does this)
@@ -510,6 +511,15 @@ Its keys come from fleet's keybinds (written to `lua/fleet/keybinds.generated.lu
 Ctrl+h/j/k/l moves between windows, Alt+h/j/k/l resizes the current window (also in a
 terminal; through smart-splits when you have it), and Alt+n leaves Claude's terminal for
 normal mode.
+
+`fleet apply-keybinds` (also run by `fleet setup` and whenever you save a change in the
+keybinds menu) rewrites that file, writes the same keys as `fleet-keys.lua` in the fleet
+config folder for your own nvim config (`dofile('<path>').setup()`; fleet never edits your
+config), and adds fleet's Claude Code keys (Shift+Enter for a newline) to `keybindings.json`
+in each Claude config folder your projects resolve to (`CLAUDE_CONFIG_DIR` included). Your
+own Claude bindings win: fleet only adds keys that are free and remembers which ones it
+added in `keybindings.fleet.json`. `fleet doctor` reports any of these files that no longer
+match your keybinds.
 
 **Nvim config** (fleet menu > settings > fleet config, `N`) switches between `fleet`
 (the default) and `user`. `user` starts nvim exactly as before, with your own config, for

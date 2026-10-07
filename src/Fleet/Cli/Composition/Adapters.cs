@@ -65,7 +65,7 @@ public static class Adapters
             ? repo
             : DefaultReleaseRepo;
 
-    public static IKeymapStore Keymaps() => new JsonKeymapStore();
+    public static IKeymapStore Keymaps() => new ApplyingKeymapStore(new JsonKeymapStore(), () => _ = Task.Run(KeybindWiring.ApplyQuietly));
 
     public static ISettingsStore Settings() => new JsonSettingsStore();
 
