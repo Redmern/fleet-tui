@@ -19,6 +19,8 @@ public static class FloatBorder
 
     private static readonly Dictionary<View, Action?> Cornered = [];
 
+    private static readonly HashSet<View> InfoRight = [];
+
     private static readonly List<FleetActionBar> Bars = [];
 
     private static Func<IReadOnlyList<FloatBorderButton>, bool>? publish;
@@ -77,6 +79,7 @@ public static class FloatBorder
         framedOnly = false;
         Running.Clear();
         Cornered.Clear();
+        InfoRight.Clear();
         Bars.Clear();
     }
 
@@ -94,9 +97,18 @@ public static class FloatBorder
         Refresh();
     }
 
-    public static void Corners(View window, Action? close)
+    public static void Corners(View window, Action? close, bool infoRight = false)
     {
         Cornered[window] = close;
+
+        if (infoRight)
+        {
+            InfoRight.Add(window);
+        }
+        else
+        {
+            InfoRight.Remove(window);
+        }
 
         foreach (var bar in Bars.Where(b => Inside(b.Root, window)))
         {
@@ -171,7 +183,8 @@ public static class FloatBorder
             FleetKeyHints.Shown,
             FleetKeyHints.RevealKey,
             FleetButtonHints.Mode,
-            close is not null);
+            close is not null,
+            InfoRight.Contains(window));
 
         var actions = new List<Action>();
 
@@ -197,7 +210,8 @@ public static class FloatBorder
         bool keysShown,
         string revealKey,
         ButtonHints hints = ButtonHints.Tooltips,
-        bool closable = true)
+        bool closable = true,
+        bool infoRight = false)
     {
         var buttons = new List<FloatBorderButton>();
 
@@ -205,7 +219,7 @@ public static class FloatBorder
         {
             buttons.Add(new FloatBorderButton(
                 false,
-                false,
+                infoRight,
                 keysShown ? string.Empty : revealKey,
                 FleetButtonHints.Face(FleetIcons.Info, hints),
                 Send(0),

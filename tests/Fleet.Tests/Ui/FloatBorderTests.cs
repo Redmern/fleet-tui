@@ -111,6 +111,61 @@ public sealed class FloatBorderTests : IDisposable
     }
 
     [Fact]
+    public void The_dashboard_puts_info_top_right_beside_close_and_keeps_f1_for_info_and_f2_for_close()
+    {
+        var buttons = FloatBorder.For(true, [], false, null, keysShown: true, "?", infoRight: true);
+        var alone = FloatBorder.For(true, [], false, null, keysShown: true, "?", closable: false, infoRight: true);
+
+        Assert.Equal([(false, true, "f1"), (false, true, "f2")], buttons.Select(b => (b.Bottom, b.Right, b.Send)));
+        Assert.Equal([FleetIcons.Info, FleetIcons.Close], buttons.Select(b => b.Label));
+        Assert.Equal([(true, "f1")], alone.Select(b => (b.Right, b.Send)));
+    }
+
+    [Fact]
+    public void A_window_attached_with_info_right_publishes_info_on_the_right_and_others_keep_it_left()
+    {
+        Enable();
+        using var dashboard = new Window();
+        using var menu = new Window();
+        FleetCorners.Attach(dashboard, () => { }, infoRight: true);
+        FleetCorners.Attach(menu, () => { });
+
+        FloatBorder.Run(dashboard, true);
+        var right = _published[^1];
+        FloatBorder.Run(menu, true);
+
+        Assert.True(right[0].Right);
+        Assert.Equal("f1", right[0].Send);
+        Assert.False(_published[^1][0].Right);
+    }
+
+    [Fact]
+    public void Outside_fleetd_the_dashboards_info_corner_sits_just_left_of_its_close_corner()
+    {
+        using var window = new Window { Width = 60, Height = 12, BorderStyle = Terminal.Gui.Drawing.LineStyle.None };
+        FleetCorners.Attach(window, () => { }, infoRight: true);
+        window.Layout();
+
+        var (help, close) = (window.SubViews.ElementAt(0), window.SubViews.ElementAt(1));
+
+        Assert.Equal(close.Frame.X, help.Frame.X + help.Frame.Width + 1);
+        Assert.Equal(window.Viewport.Width - FleetCorners.Margin, close.Frame.X + close.Frame.Width);
+        Assert.Equal(0, help.Frame.Y);
+    }
+
+    [Fact]
+    public void Outside_fleetd_a_dashboard_without_close_has_info_in_the_top_right_corner()
+    {
+        using var window = new Window { Width = 60, Height = 12, BorderStyle = Terminal.Gui.Drawing.LineStyle.None };
+        FleetCorners.Attach(window, null, infoRight: true);
+        window.Layout();
+
+        var help = window.SubViews.Single();
+
+        Assert.Equal(window.Viewport.Width - FleetCorners.Margin, help.Frame.X + help.Frame.Width);
+    }
+
+    [Fact]
     public void Changing_the_button_hints_setting_republishes_the_border_buttons()
     {
         Enable();

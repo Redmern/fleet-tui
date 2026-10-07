@@ -5589,6 +5589,10 @@ in fleetd's frame.
   `float-buttons` list for that pane clear it. The tip is re-hit-tested on every frame, so a
   float that moves under a still pointer drops it. A pointer that leaves the window entirely
   sends nothing, so the tip stays until the next event.
+- **Dashboard info top right.** The dashboard attaches its corners with `infoRight`, so
+  its info button sits in the top-right corner next to close (in the frame and in the
+  in-content layout). Other screens keep info top left; the reserved keys stay F1 info,
+  F2 close.
 - **Not done.** The bar row stays reserved (now blank) in fitted floats; the two corner
   margins do go.
 
