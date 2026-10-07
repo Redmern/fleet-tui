@@ -69,6 +69,46 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             : Result.Fail($"fleet could not write {userSettingsPath}.");
     }
 
+    public Result<bool> SetTheme(string userSettingsPath, string theme)
+    {
+        var file = Read(
+            userSettingsPath, ClaudeJsonContext.Default.UserSettingsFile, () => new UserSettingsFile());
+
+        if (file is null)
+        {
+            return Result<bool>.Fail($"{userSettingsPath} could not be read as JSON; fleet left it untouched.");
+        }
+
+        if (file.Extra.TryGetValue(ThemeKey, out var current)
+            && current.ValueKind == JsonValueKind.String
+            && current.GetString() == theme)
+        {
+            return Result<bool>.Ok(false);
+        }
+
+        file.Extra[ThemeKey] = JsonSerializer.SerializeToElement(theme, ClaudeJsonContext.Default.String);
+
+        return Write(userSettingsPath, JsonSerializer.Serialize(file, ClaudeJsonContext.Default.UserSettingsFile))
+            ? Result<bool>.Ok(true)
+            : Result<bool>.Fail($"fleet could not write {userSettingsPath}.");
+    }
+
+    public Result<bool> WriteTheme(string themeFilePath, ClaudeThemeFile theme)
+    {
+        var wanted = JsonSerializer.Serialize(theme, ClaudeJsonContext.Default.ClaudeThemeFile);
+
+        if (File.Exists(themeFilePath) && File.ReadAllText(themeFilePath) == wanted)
+        {
+            return Result<bool>.Ok(false);
+        }
+
+        return Write(themeFilePath, wanted)
+            ? Result<bool>.Ok(true)
+            : Result<bool>.Fail($"fleet could not write {themeFilePath}.");
+    }
+
+    private const string ThemeKey = "theme";
+
     public Result SyncWorktree(
         McpServerEntry server,
         string directory,

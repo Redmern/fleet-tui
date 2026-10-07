@@ -10,4 +10,6 @@ namespace Fleet.Platform.Claude;
 [JsonSerializable(typeof(ClaudeSettingsFile))]
 [JsonSerializable(typeof(UserSettingsFile))]
 [JsonSerializable(typeof(ClaudeGlobalFile))]
+[JsonSerializable(typeof(ClaudeThemeFile))]
+[JsonSerializable(typeof(string))]
 public partial class ClaudeJsonContext : JsonSerializerContext;
