@@ -8,7 +8,10 @@
 # in panes, floats, the warm menu and session restore all run for real. The attach client
 # is this script, not `fleet attach`: the Windows console client itself is not covered.
 # Only the fleetd this script starts is ever stopped (its panes go with it), so a fleet
-# session running from the same build is left alone. Exits with the number of failed checks.
+# session running from the same build is left alone. Step 6 runs `fleet apply-keybinds` and
+# `fleet doctor` against a temp fleet-nvim (XDG_CONFIG_HOME) and Claude home (CLAUDE_CONFIG_DIR);
+# it passes --target so the WezTerm module in your real home folder is never written.
+# Exits with the number of failed checks.
 
 param([string]$Fleet)
 
@@ -23,11 +26,12 @@ if (-not $Fleet) {
 $Fleet = (Resolve-Path $Fleet).Path
 
 $work = Join-Path ([IO.Path]::GetTempPath()) "fleet-e2e-$(Get-Random)"
-New-Item -ItemType Directory -Force "$work\config\projects", "$work\alpha" | Out-Null
+New-Item -ItemType Directory -Force "$work\config\projects", "$work\alpha", "$work\xdg\fleet-nvim", "$work\claude" | Out-Null
+Set-Content "$work\xdg\fleet-nvim\init.lua" '-- stands in for an installed fleet-nvim'
 git -C "$work\alpha" init -q
 Set-Content "$work\config\projects\alpha.json" (@{ version = 1; name = 'alpha'; root = "$work\alpha" } | ConvertTo-Json) -NoNewline
 
-$saved = @{ FLEET_MUX = $env:FLEET_MUX; FLEET_CONFIG_HOME = $env:FLEET_CONFIG_HOME; FLEET_ENDPOINT = $env:FLEET_ENDPOINT }
+$saved = @{ FLEET_MUX = $env:FLEET_MUX; FLEET_CONFIG_HOME = $env:FLEET_CONFIG_HOME; FLEET_ENDPOINT = $env:FLEET_ENDPOINT; XDG_CONFIG_HOME = $env:XDG_CONFIG_HOME; CLAUDE_CONFIG_DIR = $env:CLAUDE_CONFIG_DIR }
 $env:FLEET_MUX = 'embedded'
 $env:FLEET_CONFIG_HOME = "$work\config"
 $env:FLEET_ENDPOINT = "fleet-e2e-$(Get-Random)"
@@ -137,6 +141,15 @@ class Client {
     [void] Close() { $this.Pipe.Stream.Dispose() }
 }
 
+function Apply-Keybinds {
+    foreach ($target in 'nvim', 'claude') {
+        & $Fleet apply-keybinds --target $target 2>&1
+        if ($LASTEXITCODE) { "exit $LASTEXITCODE from --target $target" }
+    }
+}
+
+function Hashes([string[]]$Files) { $Files | ForEach-Object { if (Test-Path $_) { (Get-FileHash $_).Hash } else { 'missing' } } }
+
 function Panes([string]$Except) { (Ctl list-panes).panes | Where-Object id -ne $Except | ForEach-Object { "$($_.session)/$($_.tab)" } | Sort-Object }
 
 try {
@@ -192,6 +205,28 @@ try {
     Check ($null -ne $client.WaitFor('E2E-SHELL', 5000)) 'restored shell drawn'
     Check ([bool](Select-String "$work\config\fleet.log" -Pattern 'restored \d+ of \d+ panes' -Quiet)) 'fleetd logged the restore'
     $client.Close()
+
+    Write-Host '== 6. apply-keybinds writes nvim and Claude keys once; doctor sees drift'
+    $env:XDG_CONFIG_HOME = "$work\xdg"
+    $env:CLAUDE_CONFIG_DIR = "$work\claude"
+    $generated = "$work\xdg\fleet-nvim\lua\fleet\keybinds.generated.lua"
+    $files = @($generated, "$work\config\fleet-keys.lua", "$work\claude\keybindings.json")
+    $first = @(Apply-Keybinds)
+    $first | ForEach-Object { Write-Host "     | $_" }
+    Check (-not ($first -match '^exit |FAILED')) 'apply-keybinds succeeds for nvim and claude'
+    foreach ($file in $files) {
+        $name = Split-Path $file -Leaf
+        Check ((Test-Path $file) -and [bool]($first -match "wrote .*$([regex]::Escape($name))")) "wrote $name"
+    }
+    $before = Hashes $files
+    $second = @(Apply-Keybinds)
+    Check (-not ($second -match 'wrote|FAILED|^exit ') -and @($second -match 'up to date').Count -eq $files.Count) 'a second run writes nothing'
+    Check ((Compare-Object $before (Hashes $files)) -eq $null) 'the files are unchanged by the second run'
+    $doctor = (& $Fleet doctor 2>&1) -join "`n"
+    Check ($doctor -match 'keybinds\s+nvim and Claude files match the keybind model') 'doctor reports no keybind drift'
+    Add-Content $generated '-- edited by hand'
+    $doctor = (& $Fleet doctor 2>&1) -join "`n"
+    Check ($doctor -match 'keybinds\s+! 1 file\(s\) out of date' -and $doctor -match 'keybinds\.generated\.lua differs from the keybind model') 'doctor reports drift after an edit'
 }
 catch {
     Bad "script error: $_"

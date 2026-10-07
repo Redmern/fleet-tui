@@ -433,6 +433,65 @@ the prefix. Changes are saved to `%APPDATA%\fleet\keybinds.json`.
 Only keys you actually change are written, so later changes to fleet's shipped
 defaults still reach you.
 
+### One keybind model
+
+The keys above, the built-in multiplexer's, fleet's nvim and Claude Code's all come from
+one model shipped with fleet (`keybinds.default.json`). Each entry has an id, an action, a
+chord and the targets it is shipped for: `fleet-ui` (the dashboard, picker and menu), `mux` (the
+built-in multiplexer), `nvim` (fleet-nvim, and `fleet-keys.lua` for your own config) and
+`claude` (Claude Code's `keybindings.json`). These are the ones that reach more than fleet
+itself; the cell is the mode or context each target binds them in:
+
+<!-- keybinds:begin (generated from keybinds.default.json, see KeybindsReadmeTests) -->
+| Chord | Action | mux | nvim | claude |
+|---|---|---|---|---|
+| `Ctrl+h` | `focus-left` | direct | n, t | - |
+| `Ctrl+j` | `focus-down` | direct | n, t | - |
+| `Ctrl+k` | `focus-up` | direct | n, t | - |
+| `Ctrl+l` | `focus-right` | direct | n, t | - |
+| `Alt+h` | `resize-left` | direct | n, t | - |
+| `Alt+j` | `resize-down` | direct | n, t | - |
+| `Alt+k` | `resize-up` | direct | n, t | - |
+| `Alt+l` | `resize-right` | direct | n, t | - |
+| `Alt+n` | `claude-normal-mode` | - | t | - |
+| `Shift+Enter` | `newline` | direct | - | Chat |
+<!-- keybinds:end -->
+
+So `ctrl+h/j/k/l` moves focus and `alt+h/j/k/l` resizes, the same in the multiplexer and in
+nvim (also in nvim's terminals), and `alt+n` takes a Claude terminal in nvim to normal mode.
+A test fails when this table no longer matches the model.
+
+To change one, add a `keybinds` section to `keybinds.json` in the fleet config folder. It
+holds only your differences, keyed by id; a field you leave out keeps fleet's value, and
+`"chord": "none"` unbinds the entry. This section reaches nvim and Claude only:
+
+```json
+{
+  "keybinds": {
+    "resize-left": { "chord": "Alt+Left" },
+    "claude-normal-mode": { "chord": "none" }
+  }
+}
+```
+
+The multiplexer still takes its keys from the shipped model plus `embedded-keys.json`, and
+the fleet UI from the bindings the **Keybinds** menu saves; to change a key there, use
+those. The example above therefore moves nvim's resize to `Alt+Left` while the multiplexer
+keeps `Alt+h`. Your `embedded-keys.json` and menu bindings are also read into the model
+before your `keybinds` section, so nvim and Claude follow them too.
+
+```powershell
+fleet apply-keybinds                     # write every target (and the WezTerm module)
+fleet apply-keybinds --target nvim       # only fleet-nvim and fleet-keys.lua
+fleet apply-keybinds --target claude     # only Claude's keybindings.json
+fleet apply-keybinds --dry-run           # show what would change, write nothing
+```
+
+`fleet setup` and saving in the keybinds menu run it for you. A second run changes nothing.
+`fleet doctor` compares every nvim and Claude file it writes with the model and lists the ones that differ,
+with `fleet apply-keybinds` as the fix. To have the same nvim keys in your own nvim config,
+add `dofile('<fleet config>/fleet-keys.lua').setup()` to it (see *Fleet's nvim config* below).
+
 On the built-in multiplexer, the `ctrl+s` popup has submenus: `ctrl+s f` › *float*,
 `ctrl+s w` › *project*, `ctrl+s q` › *session* (`ctrl+s f t` shows or hides the floats).
 `esc` closes the popup and `backspace` goes up a level. Prefix keys in
