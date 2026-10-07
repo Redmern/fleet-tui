@@ -20,12 +20,14 @@ public sealed class FloatBorderTests : IDisposable
     public FloatBorderTests()
     {
         FleetKeyHints.Reset();
+        FleetButtonHints.Reset();
         FloatBorder.Reset();
     }
 
     public void Dispose()
     {
         FloatBorder.Reset();
+        FleetButtonHints.Reset();
         FleetKeyHints.Reset();
     }
 
@@ -72,6 +74,38 @@ public sealed class FloatBorderTests : IDisposable
                 new FloatBorderButton(true, true, string.Empty, "back", "f2"),
             ],
             buttons);
+    }
+
+    [Fact]
+    public void In_text_mode_the_border_buttons_carry_the_icon_name_like_the_in_content_ones()
+    {
+        var bar = new List<(string Key, string Label, Action Run)> { ("enter", FleetIcons.Select, () => { }) };
+
+        var text = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.Text);
+        var none = FloatBorder.For(true, bar, true, null, keysShown: true, "?", Fleet.Shared.Settings.Enums.ButtonHints.None);
+
+        Assert.Equal(
+            [
+                FleetButtonHints.Face(FleetIcons.Info, Fleet.Shared.Settings.Enums.ButtonHints.Text),
+                FleetButtonHints.Face(FleetIcons.Close, Fleet.Shared.Settings.Enums.ButtonHints.Text),
+                FleetButtonHints.Face(FleetIcons.Select, Fleet.Shared.Settings.Enums.ButtonHints.Text),
+            ],
+            text.Select(b => b.Label));
+        Assert.Contains(FleetIcons.Name(FleetIcons.Select), text[2].Label);
+        Assert.Equal([FleetIcons.Info, FleetIcons.Close, FleetIcons.Select], none.Select(b => b.Label));
+    }
+
+    [Fact]
+    public void Changing_the_button_hints_setting_republishes_the_border_buttons()
+    {
+        Enable();
+        using var window = new Window();
+        FleetCorners.Attach(window, () => { });
+        FloatBorder.Run(window, true);
+
+        FleetButtonHints.Apply(Fleet.Shared.Settings.Enums.ButtonHints.Text);
+
+        Assert.Equal(FleetButtonHints.Face(FleetIcons.Close, Fleet.Shared.Settings.Enums.ButtonHints.Text), _published[^1][1].Label);
     }
 
     [Fact]

@@ -8,6 +8,7 @@ public class FleetActionIdsTests
     [Theory]
     [InlineData(FleetAction.AddRepository, "add-repository")]
     [InlineData(FleetAction.EditKeybinds, "keybinds")]
+    [InlineData(FleetAction.EditButtonHints, "button-hints")]
     [InlineData(FleetAction.OpenProject, "open-project")]
     [InlineData(FleetAction.NewProject, "new-project")]
     [InlineData(FleetAction.EditFleetConfig, "edit-fleet-config")]

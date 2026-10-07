@@ -56,6 +56,36 @@ public static class FleetIcons
 
     public const string Disconnect = "";
 
+    private static readonly Dictionary<string, string> Names = new()
+    {
+        [Info] = "keybinds",
+        [Select] = "select",
+        [Back] = "back",
+        [Close] = "close",
+        [NewWindow] = "new window",
+        [Rebind] = "rebind",
+        [Manage] = "manage",
+        [Show] = "show",
+        [Hide] = "hide",
+        [Menu] = "menu",
+        [Dismiss] = "dismiss",
+        [DismissAll] = "dismiss all",
+        [BellOn] = "bell on",
+        [BellOff] = "bell off",
+        [ToastsOn] = "toasts on",
+        [ToastsOff] = "toasts off",
+        [Connect] = "connect",
+        [Answer] = "answer",
+        [Rename] = "rename",
+        [Forget] = "forget",
+        [Disconnect] = "disconnect",
+        [For(FleetAction.NewAgent)!] = "new agent",
+        [For(FleetAction.AddRepository)!] = "add repo",
+        [For(FleetAction.Refresh)!] = "refresh",
+    };
+
+    public static string Name(string icon) => Names.GetValueOrDefault(icon, string.Empty);
+
     public static string? For(FleetAction action) => action switch
     {
         FleetAction.QuitFleet => "",
@@ -71,6 +101,7 @@ public static class FleetIcons
         FleetAction.OpenFleetConfigMenu => "",
         FleetAction.EditKeybinds => "",
         FleetAction.EditShowMenuKeys => "",
+        FleetAction.EditButtonHints => "",
         FleetAction.RebuildDashboard => "",
         FleetAction.CleanupProject => "",
         FleetAction.ViewLogs => "",

@@ -35,6 +35,7 @@ using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Platform.Releases;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 
@@ -78,6 +79,10 @@ public static class Adapters
     public static bool ShowMenuKeys() => new JsonSettingsStore().LoadShowMenuKeys();
 
     public static void SaveShowMenuKeys(bool shown) => new JsonSettingsStore().SaveShowMenuKeys(shown);
+
+    public static ButtonHints ButtonHints() => new JsonSettingsStore().LoadButtonHints();
+
+    public static void SaveButtonHints(ButtonHints hints) => new JsonSettingsStore().SaveButtonHints(hints);
 
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 

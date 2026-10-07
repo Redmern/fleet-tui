@@ -3,6 +3,7 @@ using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui.Constants;
 
@@ -28,7 +29,7 @@ public static class FleetMenus
     public static IReadOnlyList<MenuSection> Settings { get; } =
     [
         new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
-        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys], FleetIcons.Configure),
+        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints], FleetIcons.Configure),
         new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs], FleetIcons.Maintenance),
     ];
 
@@ -69,6 +70,7 @@ public static class FleetMenus
         FleetAction.EditMainOrchestratorInNvim,
         FleetAction.EditSubOrchestratorsInNvim,
         FleetAction.EditShowMenuKeys,
+        FleetAction.EditButtonHints,
     ];
 
     public static bool IsSubmenu(FleetAction action) => Tree.Any(n => n.Submenu == action);
@@ -106,6 +108,7 @@ public static class FleetMenus
         FleetAction.RebuildDashboard => "Rebuild dashboard",
         FleetAction.CleanupProject => "Clean up agents",
         FleetAction.EditShowMenuKeys => "Show keybinds",
+        FleetAction.EditButtonHints => "Button hints",
         _ => KeymapDefaults.Describe(action),
     };
 
@@ -116,6 +119,7 @@ public static class FleetMenus
         FleetAction.EditMainOrchestratorInNvim => OnOff(settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => OnOff(settings.SubOrchestratorsInNvim),
         FleetAction.EditShowMenuKeys => OnOff(settings.ShowMenuKeys),
+        FleetAction.EditButtonHints => $"[{settings.ButtonHints.ToString().ToLowerInvariant()}]",
         FleetAction.EditAutoClose => settings.AutoClose
             ? $"[{settings.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture)}m]"
             : OnOff(false),
@@ -127,7 +131,15 @@ public static class FleetMenus
         FleetAction.EditMainOrchestratorInNvim => settings.WithMainOrchestratorInNvim(!settings.MainOrchestratorInNvim),
         FleetAction.EditSubOrchestratorsInNvim => settings.WithSubOrchestratorsInNvim(!settings.SubOrchestratorsInNvim),
         FleetAction.EditShowMenuKeys => settings.WithShowMenuKeys(!settings.ShowMenuKeys),
+        FleetAction.EditButtonHints => settings.WithButtonHints(NextHints(settings.ButtonHints)),
         _ => settings,
+    };
+
+    private static ButtonHints NextHints(ButtonHints hints) => hints switch
+    {
+        ButtonHints.Text => ButtonHints.Tooltips,
+        ButtonHints.Tooltips => ButtonHints.None,
+        _ => ButtonHints.Text,
     };
 
     private static string OnOff(bool on) => on ? "[on]" : "[off]";

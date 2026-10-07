@@ -1,3 +1,4 @@
+using Fleet.Shared.Settings.Enums;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
@@ -58,12 +59,14 @@ public static class FloatBorder
 
         publish = sink;
         FleetKeyHints.Changed += Refresh;
+        FleetButtonHints.Changed += Refresh;
         return true;
     }
 
     public static void Reset()
     {
         FleetKeyHints.Changed -= Refresh;
+        FleetButtonHints.Changed -= Refresh;
         publish = null;
         published = [];
         Running.Clear();
@@ -148,7 +151,8 @@ public static class FloatBorder
             bar?.AlignRight ?? false,
             bar?.Pinned,
             FleetKeyHints.Shown,
-            FleetKeyHints.RevealKey);
+            FleetKeyHints.RevealKey,
+            FleetButtonHints.Mode);
 
         var actions = new List<Action>();
 
@@ -168,22 +172,23 @@ public static class FloatBorder
         bool alignRight,
         string? pinned,
         bool keysShown,
-        string revealKey)
+        string revealKey,
+        ButtonHints hints = ButtonHints.Tooltips)
     {
         var buttons = new List<FloatBorderButton>();
 
         if (corners)
         {
-            buttons.Add(new FloatBorderButton(false, false, keysShown ? string.Empty : revealKey, FleetIcons.Info, Send(0)));
+            buttons.Add(new FloatBorderButton(false, false, keysShown ? string.Empty : revealKey, FleetButtonHints.Face(FleetIcons.Info, hints), Send(0)));
             buttons.Add(new FloatBorderButton(
-                false, true, keysShown ? FleetCorners.CloseKey : string.Empty, FleetIcons.Close, Send(1)));
+                false, true, keysShown ? FleetCorners.CloseKey : string.Empty, FleetButtonHints.Face(FleetIcons.Close, hints), Send(1)));
         }
 
         var shown = FleetActionBar.Visible(bar, keysShown, pinned);
 
         foreach (var chip in shown)
         {
-            buttons.Add(new FloatBorderButton(true, alignRight, chip.Key, chip.Label, Send(buttons.Count)));
+            buttons.Add(new FloatBorderButton(true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count)));
         }
 
         return buttons;

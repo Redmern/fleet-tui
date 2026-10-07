@@ -5536,6 +5536,10 @@ in fleetd's frame.
 - **Publishing.** Only a list fleetd accepted counts as sent, so a refused one is sent
   again on the next change. The buttons are published after the frame is held and fitted,
   with the window's new size.
+- **Button hints.** The labels the pane sends go through `FleetButtonHints.Face`, so in
+  text mode the border pills carry the icon's name like the in-content ones, and a change of
+  the setting republishes them. Tooltips do not follow: fleetd has no hover tracking or popup
+  for the frame, so in tooltips mode the border pills show the icon only, as in `none`.
 - **Not done.** The bar row stays reserved (now blank) in fitted floats; the two corner
   margins do go.
 
