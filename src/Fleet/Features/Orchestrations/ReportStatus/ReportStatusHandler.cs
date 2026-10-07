@@ -24,7 +24,8 @@ public sealed class ReportStatusHandler(
 
         if (!recorded.Succeeded
             || inboxes is null
-            || OrchestrationStatus.Normalize(status) is not (OrchestrationStatus.Done or OrchestrationStatus.Failed))
+            || OrchestrationStatus.Normalize(status) is not (OrchestrationStatus.Done or OrchestrationStatus.Failed)
+            || IsTopLevelSub(reporter!))
         {
             return recorded;
         }
@@ -82,6 +83,9 @@ public sealed class ReportStatusHandler(
             : AgentHarness.IsOrchestrator(a.Harness)
               && string.Equals(a.Branch, id, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool IsTopLevelSub(AgentRecord reporter) =>
+        AgentHarness.IsOrchestrator(reporter.Harness) && reporter.Owner.Trim().Length == 0;
 
     private (string Name, string Folder) OwnerOf(string project, string root, AgentRecord reporter)
     {

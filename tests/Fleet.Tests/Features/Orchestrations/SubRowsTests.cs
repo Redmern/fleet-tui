@@ -88,16 +88,36 @@ public sealed class SubRowsTests
     {
         var rows = SubRows.For(Listing(Orchestrator("upgrade")), Clean, ",");
 
-        Assert.Contains(OrchestrationStatus.Working, rows[0].Text);
+        Assert.Contains(rows[0].Trailing!, s => s.Text.StartsWith(FleetGlyphs.Working, StringComparison.Ordinal) && s.Tone == FleetTones.Warn);
+        Assert.DoesNotContain(OrchestrationStatus.Working, rows[0].Text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("done", FleetGlyphs.Done, FleetTones.Good)]
+    [InlineData("failed", FleetGlyphs.Failed, FleetTones.Bad)]
+    [InlineData("working", FleetGlyphs.Working, FleetTones.Warn)]
+    [InlineData("waiting", FleetGlyphs.Waiting, FleetTones.Bad)]
+    [InlineData("stalled", FleetGlyphs.Stalled, FleetTones.Bad)]
+    [InlineData("idle", FleetGlyphs.Idle, FleetTones.Good)]
+    [InlineData("something else", FleetGlyphs.Working, FleetTones.Warn)]
+    public void The_orchestrator_status_is_an_icon_coloured_by_status(string status, string glyph, string tone)
+    {
+        var rows = SubRows.For(Listing(Orchestrator("upgrade", status: status)), Clean, ",");
+
+        var icon = rows[0].Trailing![0];
+        Assert.Equal($"{glyph}  ", icon.Text);
+        Assert.Equal(tone, icon.Tone);
     }
 
     [Fact]
-    public void A_reported_status_is_shown_verbatim()
+    public void Statuses_name_each_orchestrator_row_and_leave_child_rows_blank()
     {
-        var rows = SubRows.For(
-            Listing(Orchestrator("upgrade", status: OrchestrationStatus.Done)), Clean, ",");
+        var listing = Listing(
+            Orchestrator("upgrade", status: "waiting"),
+            Agent("backend", "story", "upgrade"),
+            Orchestrator("zeta"));
 
-        Assert.Contains(OrchestrationStatus.Done, rows[0].Text);
+        Assert.Equal(["waiting", string.Empty, OrchestrationStatus.Working], SubRows.Statuses(listing));
     }
 
     [Fact]

@@ -27,6 +27,7 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 require('fleet.options')
+require('fleet.theme').setup()
 
 require('lazy').setup({ { import = 'fleet.plugins' } }, {
   lockfile = vim.fn.stdpath('data') .. '/lazy-lock.json',

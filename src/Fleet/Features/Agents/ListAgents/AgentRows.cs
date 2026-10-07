@@ -43,7 +43,8 @@ public static class AgentRows
 
         if (agent.Status.Length > 0)
         {
-            trailing.Add(new FleetSpan($"{FleetGlyphs.Dirty}  ", ToneFor(agent.Status)));
+            var icon = StatusIcon.For(agent.Status) ?? FleetSpan.Muted(FleetGlyphs.Dirty);
+            trailing.Add(icon with { Text = $"{icon.Text}  " });
         }
 
         if (agent.Hidden)
@@ -53,12 +54,4 @@ public static class AgentRows
 
         return new FleetRow(spans, trailing.Count == 0 ? null : trailing);
     }
-
-    private static string ToneFor(string status) => status switch
-    {
-        AgentActivity.Working => FleetTones.Warn,
-        AgentActivity.Waiting or AgentActivity.Stalled => FleetTones.Bad,
-        AgentActivity.Idle => FleetTones.Good,
-        _ => FleetTones.Muted,
-    };
 }

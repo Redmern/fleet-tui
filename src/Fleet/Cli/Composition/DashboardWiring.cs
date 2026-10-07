@@ -858,7 +858,8 @@ public static class DashboardWiring
                     SubRows.For(listing, Peeked(states), trigger),
                     listing.Flat.Count(e => !e.IsChild),
                     [.. listing.Flat.Select(e => e.Agent.Hidden)],
-                    SubRows.GapsAfter(listing));
+                    SubRows.GapsAfter(listing),
+                    SubRows.Statuses(listing));
             },
 
             NewAgent: async (available, selected) =>

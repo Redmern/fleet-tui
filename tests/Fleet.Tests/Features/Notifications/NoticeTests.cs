@@ -51,6 +51,22 @@ public sealed class NoticeTests : ConfigHomeFixture
         Assert.Contains("25 commits behind origin/main", found.Single(n => n.Worktree.EndsWith("behind", StringComparison.Ordinal)).Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_sub_orchestrator_waiting_for_input_raises_a_notice_under_its_slug()
+    {
+        var sub = new AgentRecord(
+            $"{Work}/.fleet/orchestrations/upgrade", string.Empty, "upgrade", "orchestrator", "origin/main", false, Open: true);
+
+        var found = NoticeDetector.Detect("alpha", [
+            Watch(sub, "Which option should I take? (waiting for your input)"),
+            Watch(sub with { Worktree = $"{Work}/.fleet/orchestrations/ask", Branch = "ask" }) with { Hooked = Hook(AgentState.Blocked, HookStatus.InputReason) },
+        ], T0);
+
+        Assert.Equal(
+            [(NoticeKind.NeedsInput, "sub / upgrade"), (NoticeKind.NeedsInput, "sub / ask")],
+            found.Select(n => (n.Kind, n.Agent)));
+    }
+
     private static AgentReport Hook(AgentState state, string reason = "", int minutesAgo = 0) =>
         new($"{Work}/x", "s1", state, T0 - TimeSpan.FromMinutes(minutesAgo), Reason: reason);
 

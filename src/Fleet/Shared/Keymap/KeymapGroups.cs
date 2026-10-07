@@ -29,6 +29,7 @@ public static class KeymapGroups
             FleetAction.EditKeybinds,
             FleetAction.EditShowMenuKeys,
             FleetAction.EditButtonHints,
+            FleetAction.EditTheme,
             FleetAction.RebuildDashboard,
             FleetAction.CleanupProject,
             FleetAction.ViewLogs,
