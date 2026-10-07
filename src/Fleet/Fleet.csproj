@@ -57,4 +57,12 @@
                       LogicalName="nvim/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!--
+    The shipped keybinds for every target (fleet UI, mux, nvim, Claude). The user's
+    keybinds.json and embedded-keys.json are layered over it (KeybindLayering, KeybindLegacy).
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Shared/Keybinds/keybinds.default.json" LogicalName="keybinds.default.json" />
+  </ItemGroup>
+
 </Project>

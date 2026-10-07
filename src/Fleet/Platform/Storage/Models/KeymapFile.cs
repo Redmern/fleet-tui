@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace Fleet.Platform.Storage.Models;
 
 public sealed class KeymapFile
@@ -7,4 +10,7 @@ public sealed class KeymapFile
     public string Prefix { get; set; } = string.Empty;
 
     public Dictionary<string, string> Bindings { get; set; } = [];
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Keybinds { get; set; }
 }
