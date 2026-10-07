@@ -919,6 +919,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             case "smart-focus":
                 SmartFocus(session, command);
                 return;
+            case "smart-resize":
+                SmartResize(session, command);
+                return;
             case "newline":
                 Newline(session, command);
                 return;
@@ -1134,6 +1137,17 @@ public sealed class FleetDaemon(DaemonOptions options)
     private void SmartFocus(AttachSession session, CommandMessage command)
     {
         var (dx, dy) = Direction(command.Arg);
+        UnlessNvim(session, command, () => _model.FocusDirection(session.Client, dx, dy));
+    }
+
+    private void SmartResize(AttachSession session, CommandMessage command) =>
+        UnlessNvim(
+            session,
+            command,
+            () => _model.ResizeFocused(session.Client, command.Arg ?? string.Empty, ResizeCells));
+
+    private void UnlessNvim(AttachSession session, CommandMessage command, Action own)
+    {
         bool nvim;
 
         lock (_gate)
@@ -1143,7 +1157,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             if (!nvim)
             {
-                _model.FocusDirection(session.Client, dx, dy);
+                own();
                 ApplyResizes();
             }
         }

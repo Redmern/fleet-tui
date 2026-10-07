@@ -19,7 +19,7 @@ public static class KeybindActions
         return verb switch
         {
             "smart-focus" => $"focus-{arg}",
-            "resize" => $"resize-{arg}",
+            "resize" or "smart-resize" => $"resize-{arg}",
             _ => trimmed,
         };
     }

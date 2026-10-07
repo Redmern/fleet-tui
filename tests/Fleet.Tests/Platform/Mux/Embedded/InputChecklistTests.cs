@@ -70,6 +70,20 @@ public class InputChecklistTests
         Assert.Equal((Mods.Alt | Mods.Ctrl, (string?)null), (ctrlAlt.Mods, ctrlAlt.Utf8));
     }
 
+    [Theory]
+    [InlineData((ushort)0x48, 'h', "smart-resize left")]
+    [InlineData((ushort)0x4A, 'j', "smart-resize down")]
+    [InlineData((ushort)0x4B, 'k', "smart-resize up")]
+    [InlineData((ushort)0x4C, 'l', "smart-resize right")]
+    public void Alt_hjkl_console_records_resize_by_default(ushort vk, char letter, string command)
+    {
+        var alt = Translate(Record(vk, letter, LeftAlt)).Single();
+        var ctrl = Translate(Record(vk, (char)(letter - 'a' + 1), LeftCtrl)).Single();
+
+        Assert.Equal(command, MuxKeys.Defaults.DirectCommand(alt.Key, alt.Mods, alt.Utf8));
+        Assert.Equal(command.Replace("smart-resize", "smart-focus"), MuxKeys.Defaults.DirectCommand(ctrl.Key, ctrl.Mods, ctrl.Utf8));
+    }
+
     [Fact]
     public void Right_alt_is_altgr_only_with_left_ctrl()
     {

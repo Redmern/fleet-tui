@@ -412,6 +412,8 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `esc` | cancel a dialog — never closes the dashboard |
 | `backspace` | back one level in the fleet menu; in a text field it deletes, and goes back only when the field is empty |
 | `ctrl+enter` | the fleet menu, from any pane |
+| `ctrl+h/j/k/l` | move focus between panes (built-in multiplexer); a pane running nvim gets the key instead |
+| `alt+h/j/k/l` | resize the focused pane by 5 cells (built-in multiplexer); a pane running nvim gets the key instead |
 | `alt+o` | show or hide the head orchestrator in voice mode, from any pane of a fleet window |
 
 Adding a repository has no bare key on purpose — it lives in the menu only, so

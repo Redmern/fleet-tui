@@ -84,25 +84,13 @@ public class KeybindDefaultsTests
     }
 
     [Fact]
-    public void The_mux_entries_match_the_mux_defaults_except_alt_hjkl_which_now_resize()
+    public void The_mux_defaults_map_back_to_the_model_entries_they_came_from()
     {
         var mux = Set.For(KeybindTarget.Mux, KeybindOs.Windows);
 
         Assert.Equal(KeybindChord.Normalize(MuxKeys.DefaultPrefix), Set.Find(KeybindLegacy.MuxPrefixId)!.Chord);
         AssertContext(mux, "prefix", MuxKeys.DefaultPrefixKeys);
-        AssertContext(
-            mux,
-            "direct",
-            MuxKeys.DefaultDirectKeys
-                .Where(k => !k.Key.StartsWith("alt+", StringComparison.Ordinal) || k.Key.Length != 5)
-                .Concat(new Dictionary<string, string>
-                {
-                    ["alt+h"] = "resize left",
-                    ["alt+j"] = "resize down",
-                    ["alt+k"] = "resize up",
-                    ["alt+l"] = "resize right",
-                })
-                .ToDictionary());
+        AssertContext(mux, "direct", MuxKeys.DefaultDirectKeys);
     }
 
     private static void AssertContext(
