@@ -21,11 +21,19 @@ public sealed class FleetActionBar
             Width = Dim.Fill(1),
             Height = 1,
             CanFocus = false,
+            Visible = !FloatBorder.Enabled,
             SchemeName = FleetSchemes.Screen,
         };
+        FloatBorder.Track(this);
     }
 
     public View Root => _strip;
+
+    public IReadOnlyList<(string Key, string Label, Action Run)> Items => _strip.Items;
+
+    public bool AlignRight => _strip.AlignRight;
+
+    public string? Pinned => _strip.Pinned;
 
     public static int Measure(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
         Measure(items, FleetButtonHints.Mode);
@@ -82,10 +90,17 @@ public sealed class FleetActionBar
         return -1;
     }
 
-    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items) =>
+    public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
+    {
         _strip.Show(items);
+        FloatBorder.Refresh();
+    }
 
-    public void Pin(string key) => _strip.Pinned = key;
+    public void Pin(string key)
+    {
+        _strip.Pinned = key;
+        FloatBorder.Refresh();
+    }
 
     public static IReadOnlyList<(string Key, string Label, Action Run)> Visible(
         IReadOnlyList<(string Key, string Label, Action Run)> items, bool keys, string? pinned = null) =>
@@ -109,6 +124,8 @@ public sealed class FleetActionBar
 
         public string? Pinned { get; set; }
 
+        public IReadOnlyList<(string Key, string Label, Action Run)> Items => _items;
+
         public bool AlignRight { get; init; }
 
         private int Start => AlignRight ? Math.Max(0, Viewport.Width - FleetActionBar.Width(_chips)) : 0;
@@ -123,6 +140,7 @@ public sealed class FleetActionBar
         {
             FleetKeyHints.Changed -= Rebuild;
             FleetButtonHints.Changed -= Rebuild;
+            FloatBorder.Forget(this);
             Hover(-1);
             base.Dispose(disposing);
         }

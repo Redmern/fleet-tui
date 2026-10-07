@@ -6,7 +6,9 @@ using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.SwitchProject;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
+using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Platform.Mux.Embedded.Render;
 using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
@@ -529,6 +531,49 @@ public sealed class DaemonTests : IAsyncLifetime
         await Eventually(() => _panes.ByProgram("box")!.Written == "<mouse b1 a0 0,0>");
         var listed = await control.RequestAsync(new ControlRequest { Op = "list-panes" });
         Assert.Equal("float", listed.Panes!.Single(p => p.Id == spawned.Pane).Tab);
+    }
+
+    [Fact]
+    public async Task Clicking_a_button_in_a_floats_border_types_its_key_into_the_pane_instead_of_dragging()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "tile");
+        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var spawned = await control.RequestAsync(new ControlRequest { Op = "spawn-float", Session = "techweb", Args = ["box"] });
+        Assert.True(spawned.Ok, spawned.Error);
+
+        var set = await control.RequestAsync(new ControlRequest
+        {
+            Op = "float-buttons",
+            Pane = spawned.Pane,
+            Buttons = [new FloatButtonDto { Edge = "top", Align = "left", Key = string.Empty, Label = "i", Send = "?" }],
+        });
+        Assert.True(set.Ok, set.Error);
+
+        var mirror = new MuxModel();
+        mirror.Spawn("techweb", "C:/x", ["tile"]);
+        var mirrored = mirror.Connect(60, 12, "techweb");
+        mirror.SpawnFloat("techweb", "C:/x", ["box"]);
+        var area = mirror.View(mirrored.Id)!.FloatingPanes.Single().Area;
+
+        await client.SendMouseAsync(area.X + BorderButtons.Inset + 1, area.Y, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(area.X + BorderButtons.Inset + 6, area.Y + 2, MouseButtons.Left, MouseActions.Motion, held: true);
+        await client.SendMouseAsync(area.X + BorderButtons.Inset + 6, area.Y + 2, MouseButtons.Left, MouseActions.Release);
+
+        await client.SendMouseAsync(area.X + 1, area.Y + 1, MouseButtons.Left, MouseActions.Press, held: true);
+
+        await Eventually(() => _panes.ByProgram("box")!.Written == "?<mouse b1 a0 0,0>");
+
+        var cleared = await control.RequestAsync(new ControlRequest { Op = "float-buttons", Pane = spawned.Pane, Buttons = [] });
+        Assert.True(cleared.Ok, cleared.Error);
+        var tile = await control.RequestAsync(new ControlRequest
+        {
+            Op = "float-buttons",
+            Pane = (await control.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes!.First(p => p.Tab != "float").Id,
+            Buttons = [],
+        });
+        Assert.False(tile.Ok);
     }
 
     [Fact]
