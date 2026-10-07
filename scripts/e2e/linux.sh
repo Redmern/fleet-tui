@@ -6,6 +6,7 @@
 # tmux (its own server, -L fe) is the terminal around `fleet` and `fleet attach`, so the
 # Unix client, the PTYs and Terminal.Gui in panes all run for real. fleetd, its config and
 # its socket are isolated under /tmp/fe; claude and nvim are stand-ins that print one line.
+# Step 13 runs `fleet apply-keybinds` and `fleet doctor` against a temp fleet-nvim and Claude home.
 # Needs bash, tmux, git and python3. Exits with the number of failed checks.
 #
 # From Windows, with the binary CI built for a commit:
@@ -172,6 +173,38 @@ sees 'Agents' 'restored dashboard drawn'
 sees 'nvim-standin in demo1 resumed' 'orchestrator relaunched with resume'
 grep -h 'restored' "$root/cfg/fleet.log" | tail -1
 keys C-s d; sleep 1
+
+echo "== 13. apply-keybinds writes nvim and Claude keys once; doctor sees drift"
+# Its own fleet-nvim (a stub init.lua stands in for the installed config) and Claude home;
+# --target keeps the WezTerm module out of the real home folder.
+mkdir -p "$root/kxdg/fleet-nvim" "$root/claude"
+echo '-- stands in for an installed fleet-nvim' > "$root/kxdg/fleet-nvim/init.lua"
+generated=$root/kxdg/fleet-nvim/lua/fleet/keybinds.generated.lua
+kfiles="$generated $root/cfg/fleet-keys.lua $root/claude/keybindings.json"
+kenv() { XDG_CONFIG_HOME=$root/kxdg CLAUDE_CONFIG_DIR=$root/claude "$@"; }
+apply_keybinds() { for t in nvim claude; do kenv fleet apply-keybinds --target "$t" 2>&1 || echo "exit $? from --target $t"; done; }
+first="$(apply_keybinds)"
+echo "$first" | sed 's/^/     | /'
+echo "$first" | grep -qE '^exit |FAILED' && bad 'apply-keybinds succeeds for nvim and claude' noscreen || ok 'apply-keybinds succeeds for nvim and claude'
+for f in $kfiles; do
+    [ -f "$f" ] && echo "$first" | grep -q "wrote .*$(basename "$f")" && ok "wrote $(basename "$f")" || bad "wrote $(basename "$f")" noscreen
+done
+sums="$(md5sum $kfiles)"
+second="$(apply_keybinds)"
+if ! echo "$second" | grep -qE 'wrote|FAILED|^exit ' && [ "$(echo "$second" | grep -c 'up to date')" -eq 3 ]; then
+    ok 'a second run writes nothing'
+else
+    bad 'a second run writes nothing' noscreen; echo "$second" | sed 's/^/     | /'
+fi
+[ "$sums" = "$(md5sum $kfiles)" ] && ok 'the files are unchanged by the second run' || bad 'the files are unchanged by the second run' noscreen
+kenv fleet doctor 2>&1 | grep -qE 'keybinds +nvim and Claude files match the keybind model' && ok 'doctor reports no keybind drift' || bad 'doctor reports no keybind drift' noscreen
+echo '-- edited by hand' >> "$generated"
+doctor="$(kenv fleet doctor 2>&1)"
+if echo "$doctor" | grep -qE 'keybinds +! 1 file\(s\) out of date' && echo "$doctor" | grep -q 'keybinds.generated.lua differs from the keybind model'; then
+    ok 'doctor reports drift after an edit'
+else
+    bad 'doctor reports drift after an edit' noscreen; echo "$doctor" | sed 's/^/     | /'
+fi
 
 echo "== summary: $fails failure(s)"
 exit $fails
