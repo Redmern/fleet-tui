@@ -62,6 +62,7 @@ public sealed class YaziThemeTests : IDisposable
     [Fact]
     public void A_missing_file_is_written()
     {
+        Directory.CreateDirectory(_config);
         var applied = new YaziThemeTarget(_config).Apply(BuiltInThemes.CatppuccinMocha);
 
         Assert.Equal(ThemeOutcome.Applied, applied.Outcome);
@@ -71,6 +72,7 @@ public sealed class YaziThemeTests : IDisposable
     [Fact]
     public void A_file_fleet_wrote_is_replaced_and_an_unchanged_one_reported()
     {
+        Directory.CreateDirectory(_config);
         var target = new YaziThemeTarget(_config);
 
         target.Apply(BuiltInThemes.CatppuccinMocha);
@@ -78,6 +80,15 @@ public sealed class YaziThemeTests : IDisposable
         Assert.Equal(ThemeOutcome.Applied, target.Apply(BuiltInThemes.Find("dracula")!).Outcome);
         Assert.Equal(ThemeOutcome.Unchanged, target.Apply(BuiltInThemes.Find("dracula")!).Outcome);
         Assert.Contains("'dracula'", File.ReadAllText(ThemeFile));
+    }
+
+    [Fact]
+    public void Without_a_yazi_config_folder_nothing_is_created()
+    {
+        var applied = new YaziThemeTarget(_config).Apply(BuiltInThemes.CatppuccinMocha);
+
+        Assert.Equal(ThemeOutcome.Skipped, applied.Outcome);
+        Assert.False(Directory.Exists(_config));
     }
 
     [Fact]

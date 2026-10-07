@@ -65,14 +65,14 @@ public sealed class NvimThemeTests : IDisposable
             File.ReadAllText(Path.Combine(_config, NvimTheme.PaletteFile)));
     }
 
+    // An empty fleet-nvim folder would make 'fleet doctor' think fleet's nvim config is installed.
     [Fact]
-    public void Without_fleets_nvim_config_the_palette_is_still_written_for_later()
+    public void Without_fleets_nvim_config_nothing_is_created()
     {
         var applied = new NvimThemeTarget(_config).Apply(BuiltInThemes.CatppuccinMocha);
 
-        Assert.Equal(ThemeOutcome.Applied, applied.Outcome);
-        Assert.Contains("not installed yet", applied.Detail);
-        Assert.True(File.Exists(Path.Combine(_config, NvimTheme.PaletteFile)));
+        Assert.Equal(ThemeOutcome.Skipped, applied.Outcome);
+        Assert.False(Directory.Exists(_config));
     }
 
     // Install rewrites only embedded files, so the generated palette must never be one of them.
@@ -90,6 +90,7 @@ public sealed class NvimThemeTests : IDisposable
     [Fact]
     public void Install_keeps_a_palette_fleet_wrote_earlier()
     {
+        Directory.CreateDirectory(_config);
         new NvimThemeTarget(_config).Apply(BuiltInThemes.CatppuccinMocha);
 
         Assert.True(FleetNvimConfig.Install(_config));

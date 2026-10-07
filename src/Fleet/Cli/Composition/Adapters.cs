@@ -174,7 +174,7 @@ public static class Adapters
     {
         var fleetConfig = LoadNvimConfig() == NvimConfig.Fleet;
         var version = NvimVersion.Parse(FleetNvimConfig.NvimVersionOutput());
-        var written = fleetConfig && (install ? FleetNvimConfig.Install() : Directory.Exists(FleetNvimConfig.Directory));
+        var written = fleetConfig && (install ? FleetNvimConfig.Install() && WriteNvimPalette() : Directory.Exists(FleetNvimConfig.Directory));
 
         return new NvimSetup(
             fleetConfig,
@@ -184,7 +184,21 @@ public static class Adapters
     }
 
     private static bool UseFleetNvimConfig() =>
-        LoadNvimConfig() == NvimConfig.Fleet && FleetNvimConfig.EnsureInstalled();
+        LoadNvimConfig() == NvimConfig.Fleet && FleetNvimConfig.EnsureInstalled() && WriteNvimPalette();
+
+    private static bool WriteNvimPalette()
+    {
+        try
+        {
+            new NvimThemeTarget(FleetNvimConfig.Directory).Apply(Themes().Active());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log().Swallowed(e);
+        }
+
+        return true;
+    }
 
     public static string ConfigDirectory => FleetPaths.Config;
 

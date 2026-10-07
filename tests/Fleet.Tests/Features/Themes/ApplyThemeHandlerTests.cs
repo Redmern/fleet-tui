@@ -21,11 +21,14 @@ public sealed class ApplyThemeHandlerTests
         Assert.Equal(BuiltInThemes.DefaultName, first.Seen?.Name);
     }
 
-    // One tool's unwritable config must not stop the others from following the theme.
-    [Fact]
-    public void A_target_that_throws_an_io_error_fails_alone()
+    // One tool's broken config must not stop the others from following the theme.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_target_that_throws_fails_alone(bool io)
     {
-        var broken = new FakeTarget("broken", _ => throw new IOException("disk full"));
+        var broken = new FakeTarget(
+            "broken", _ => throw (io ? new IOException("disk full") : new ArgumentException("disk full")));
         var fine = new FakeTarget("fine", _ => ThemeApplied.Applied("fine", "ok"));
 
         var applied = new ApplyThemeHandler([broken, fine]).Handle(BuiltInThemes.CatppuccinMocha);

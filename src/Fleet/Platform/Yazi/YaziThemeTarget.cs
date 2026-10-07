@@ -13,6 +13,11 @@ public sealed class YaziThemeTarget(string configDirectory) : IThemeTarget
 
     public ThemeApplied Apply(ThemePalette theme)
     {
+        if (!Directory.Exists(configDirectory))
+        {
+            return ThemeApplied.Skipped(Tool, $"no yazi config folder at {configDirectory}; create it to let fleet theme yazi");
+        }
+
         var wanted = YaziTheme.Generate(theme);
 
         if (File.Exists(ThemeFile))

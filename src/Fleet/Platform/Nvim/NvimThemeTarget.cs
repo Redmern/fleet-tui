@@ -13,6 +13,12 @@ public sealed class NvimThemeTarget(string configDirectory) : IThemeTarget
 
     public ThemeApplied Apply(ThemePalette theme)
     {
+        if (!Directory.Exists(configDirectory))
+        {
+            return ThemeApplied.Skipped(
+                Tool, $"fleet's nvim config is not installed in {configDirectory}; fleet writes the palette when it installs it");
+        }
+
         var wanted = NvimTheme.Generate(theme);
 
         if (File.Exists(PaletteFile) && File.ReadAllText(PaletteFile) == wanted)
@@ -22,8 +28,6 @@ public sealed class NvimThemeTarget(string configDirectory) : IThemeTarget
 
         FileThemeStore.WriteAtomically(PaletteFile, wanted);
 
-        return File.Exists(Path.Combine(configDirectory, "init.lua"))
-            ? ThemeApplied.Applied(Tool, $"wrote {PaletteFile}; open fleet nvim panes reload it")
-            : ThemeApplied.Applied(Tool, $"wrote {PaletteFile}; fleet's nvim config is not installed yet");
+        return ThemeApplied.Applied(Tool, $"wrote {PaletteFile}; open fleet nvim panes reload it");
     }
 }

@@ -14,6 +14,11 @@ public sealed class ClaudeThemeTarget(string configDirectory) : IThemeTarget
 
     public ThemeApplied Apply(ThemePalette theme)
     {
+        if (!Directory.Exists(configDirectory))
+        {
+            return ThemeApplied.Skipped(Tool, $"no Claude Code config folder at {configDirectory}");
+        }
+
         var writer = new ClaudeConfigWriter();
         var file = writer.WriteTheme(ThemeFile, ClaudeTheme.Generate(theme));
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Fleet.Platform.Claude.Models;
 using Fleet.Platform.Storage;
 using Fleet.Ports.Claude;
@@ -71,24 +72,36 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
 
     public Result<bool> SetTheme(string userSettingsPath, string theme)
     {
-        var file = Read(
-            userSettingsPath, ClaudeJsonContext.Default.UserSettingsFile, () => new UserSettingsFile());
+        var text = BusyFiles.Retry(
+            () => File.Exists(userSettingsPath) ? File.ReadAllText(userSettingsPath) : string.Empty,
+            BusyFiles.Patience);
 
-        if (file is null)
+        JsonObject? root;
+
+        try
+        {
+            root = string.IsNullOrWhiteSpace(text) ? [] : JsonNode.Parse(text) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            root = null;
+        }
+
+        if (text is null || root is null)
         {
             return Result<bool>.Fail($"{userSettingsPath} could not be read as JSON; fleet left it untouched.");
         }
 
-        if (file.Extra.TryGetValue(ThemeKey, out var current)
-            && current.ValueKind == JsonValueKind.String
-            && current.GetString() == theme)
+        if (root[ThemeKey] is JsonValue current
+            && current.GetValueKind() == JsonValueKind.String
+            && current.GetValue<string>() == theme)
         {
             return Result<bool>.Ok(false);
         }
 
-        file.Extra[ThemeKey] = JsonSerializer.SerializeToElement(theme, ClaudeJsonContext.Default.String);
+        root[ThemeKey] = JsonValue.Create(theme);
 
-        return Write(userSettingsPath, JsonSerializer.Serialize(file, ClaudeJsonContext.Default.UserSettingsFile))
+        return Write(userSettingsPath, root.ToJsonString(KeepAsWritten) + Environment.NewLine)
             ? Result<bool>.Ok(true)
             : Result<bool>.Fail($"fleet could not write {userSettingsPath}.");
     }
@@ -108,6 +121,12 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
     }
 
     private const string ThemeKey = "theme";
+
+    private static readonly JsonSerializerOptions KeepAsWritten = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     public Result SyncWorktree(
         McpServerEntry server,

@@ -345,7 +345,7 @@ public static class MenuCommand
                         keymap,
                         Math.Max(0, all.ToList().FindIndex(t => t.Name == active)));
 
-                    if (pickedTheme is not { } themeIndex || all[themeIndex].Name == active)
+                    if (pickedTheme is not { } themeIndex)
                     {
                         break;
                     }

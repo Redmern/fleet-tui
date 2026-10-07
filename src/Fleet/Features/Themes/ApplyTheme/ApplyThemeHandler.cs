@@ -15,7 +15,7 @@ public sealed class ApplyThemeHandler(IReadOnlyList<IThemeTarget> targets)
         {
             return target.Apply(theme);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
             return ThemeApplied.Failed(target.Tool, e.Message);
         }
