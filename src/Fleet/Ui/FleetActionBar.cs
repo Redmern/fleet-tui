@@ -12,11 +12,10 @@ public sealed class FleetActionBar
 {
     private readonly ChipStrip _strip;
 
-    public FleetActionBar(Pos y, bool alignRight = false)
+    public FleetActionBar(Pos y)
     {
         _strip = new ChipStrip
         {
-            AlignRight = alignRight,
             X = 1,
             Y = y,
             Width = Dim.Fill(1),
@@ -31,8 +30,6 @@ public sealed class FleetActionBar
     public View Root => _strip;
 
     public IReadOnlyList<(string Key, string Label, Action Run)> Items => _strip.Items;
-
-    public bool AlignRight => _strip.AlignRight;
 
     public string? Pinned => _strip.Pinned;
 
@@ -136,9 +133,7 @@ public sealed class FleetActionBar
 
         public IReadOnlyList<(string Key, string Label, Action Run)> Items => _items;
 
-        public bool AlignRight { get; init; }
-
-        private int Start => AlignRight ? Math.Max(0, Viewport.Width - FleetActionBar.Width(_chips)) : 0;
+        private int Start => Math.Max(0, Viewport.Width - FleetActionBar.Width(_chips));
 
         public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
         {

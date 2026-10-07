@@ -178,7 +178,6 @@ public static class FloatBorder
         var buttons = For(
             cornered,
             items,
-            bar?.AlignRight ?? false,
             bar?.Pinned,
             FleetKeyHints.Shown,
             FleetKeyHints.RevealKey,
@@ -205,7 +204,6 @@ public static class FloatBorder
     public static IReadOnlyList<FloatBorderButton> For(
         bool corners,
         IReadOnlyList<(string Key, string Label, Action Run)> bar,
-        bool alignRight,
         string? pinned,
         bool keysShown,
         string revealKey,
@@ -243,7 +241,7 @@ public static class FloatBorder
         {
             var chip = shown[i];
             buttons.Add(new FloatBorderButton(
-                true, alignRight, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count), Tip(chip.Label, bar[i].Key, hints)));
+                true, true, chip.Key, FleetButtonHints.Face(chip.Label, hints), Send(buttons.Count), Tip(chip.Label, bar[i].Key, hints)));
         }
 
         return buttons;

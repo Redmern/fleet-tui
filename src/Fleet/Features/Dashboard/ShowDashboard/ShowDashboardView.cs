@@ -41,7 +41,7 @@ public static class ShowDashboardView
         var lists = new[] { agentList, subList, repoList, noticeList };
 
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
-        var hints = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
+        var hints = new FleetActionBar(Pos.AnchorEnd(1));
 
         var tip = FleetTheme.Caption(0, 0, string.Empty);
         tip.Visible = false;
