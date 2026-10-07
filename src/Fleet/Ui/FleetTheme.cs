@@ -57,7 +57,10 @@ public static class FleetTheme
         window.Height = Dim.Fill();
         window.IsRunningChanged += (_, running) =>
         {
-            if (FloatScreens.Running(screen, running.Value) is var (cols, rows))
+            var fitted = FloatScreens.Running(screen, running.Value);
+            FloatBorder.Run(window, running.Value);
+
+            if (fitted is var (cols, rows))
             {
                 window.App?.Driver?.SetScreenSize(cols, rows);
             }
@@ -197,14 +200,5 @@ public static class FleetTheme
         Width = Dim.Fill(2),
         Text = text,
         SchemeName = FleetSchemes.Error,
-    };
-
-    public static Label HintBar(string text) => new()
-    {
-        X = 1,
-        Y = Pos.AnchorEnd(1),
-        Width = Dim.Fill(1),
-        Text = text,
-        SchemeName = FleetSchemes.Hint,
     };
 }

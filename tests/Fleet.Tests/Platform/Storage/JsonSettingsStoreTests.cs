@@ -299,6 +299,61 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Button_hints_default_to_tooltips()
+    {
+        Assert.Equal(ButtonHints.Tooltips, Store.LoadButtonHints());
+        Assert.Equal(ButtonHints.Tooltips, Store.Load("never-saved").ButtonHints);
+    }
+
+    [Theory]
+    [InlineData(ButtonHints.Text, "text")]
+    [InlineData(ButtonHints.None, "none")]
+    public void Button_hints_are_one_setting_for_every_project_stored_in_lower_case(ButtonHints hints, string stored)
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+        Store.SaveButtonHints(hints);
+
+        Assert.Equal(hints, Store.LoadButtonHints());
+        Assert.Equal(hints, Store.Load("techweb").ButtonHints);
+        Assert.Equal(hints, Store.Load("never-saved").ButtonHints);
+        Assert.Contains($"\"{stored}\"", File.ReadAllText(FleetPaths.MenuSettingsFile));
+    }
+
+    [Fact]
+    public void The_default_button_hints_are_left_out_of_the_file()
+    {
+        Store.SaveButtonHints(ButtonHints.Text);
+        Store.SaveButtonHints(ButtonHints.Tooltips);
+
+        Assert.DoesNotContain("uttonHints", File.ReadAllText(FleetPaths.MenuSettingsFile));
+        Assert.Equal(ButtonHints.Tooltips, Store.LoadButtonHints());
+    }
+
+    [Fact]
+    public void An_unknown_button_hints_value_falls_back_to_the_default()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(FleetPaths.MenuSettingsFile, "{\"version\":1,\"buttonHints\":\"sparkles\"}");
+
+        Assert.Equal(ButtonHints.Tooltips, Store.LoadButtonHints());
+    }
+
+    [Fact]
+    public void Saving_button_hints_keeps_the_menu_keys_setting_and_the_other_way_round()
+    {
+        Store.SaveShowMenuKeys(false);
+        Store.SaveButtonHints(ButtonHints.None);
+        Store.SaveShowMenuKeys(false);
+
+        Assert.False(Store.LoadShowMenuKeys());
+        Assert.Equal(ButtonHints.None, Store.LoadButtonHints());
+
+        Store.SaveButtonHints(ButtonHints.Text);
+
+        Assert.False(Store.LoadShowMenuKeys());
+    }
+
+    [Fact]
     public void A_project_save_does_not_carry_the_menu_keys_setting()
     {
         Store.Save("techweb", SettingsConfig.Default.WithShowMenuKeys(false));

@@ -59,4 +59,5 @@ public enum FleetAction
     EditShowMenuKeys,
     RevealMenuKeys,
     HoldMenuKeys,
+    EditButtonHints,
 }

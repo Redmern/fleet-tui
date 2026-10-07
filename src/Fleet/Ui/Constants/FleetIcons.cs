@@ -22,6 +22,70 @@ public static class FleetIcons
 
     public const string Close = "";
 
+    public const string NewWindow = "";
+
+    public const string Rebind = "";
+
+    public const string Manage = "";
+
+    public const string Show = "";
+
+    public const string Hide = "";
+
+    public const string Menu = "";
+
+    public const string Dismiss = "";
+
+    public const string DismissAll = "";
+
+    public const string BellOn = "";
+
+    public const string BellOff = "";
+
+    public const string ToastsOn = "";
+
+    public const string ToastsOff = "";
+
+    public const string Connect = "";
+
+    public const string Answer = "";
+
+    public const string Rename = "";
+
+    public const string Forget = "";
+
+    public const string Disconnect = "";
+
+    private static readonly Dictionary<string, string> Names = new()
+    {
+        [Info] = "keybinds",
+        [Select] = "select",
+        [Back] = "back",
+        [Close] = "close",
+        [NewWindow] = "new window",
+        [Rebind] = "rebind",
+        [Manage] = "manage",
+        [Show] = "show",
+        [Hide] = "hide",
+        [Menu] = "menu",
+        [Dismiss] = "dismiss",
+        [DismissAll] = "dismiss all",
+        [BellOn] = "bell on",
+        [BellOff] = "bell off",
+        [ToastsOn] = "toasts on",
+        [ToastsOff] = "toasts off",
+        [Connect] = "connect",
+        [Answer] = "answer",
+        [Rename] = "rename",
+        [Forget] = "forget",
+        [Disconnect] = "disconnect",
+        [For(FleetAction.NewAgent)!] = "new agent",
+        [For(FleetAction.AddRepository)!] = "add repo",
+        [For(FleetAction.Refresh)!] = "refresh",
+    };
+
+    public static string Name(string icon) => Names.GetValueOrDefault(icon, string.Empty);
+
     public static string? For(FleetAction action) => action switch
     {
         FleetAction.QuitFleet => "",
@@ -37,6 +101,7 @@ public static class FleetIcons
         FleetAction.OpenFleetConfigMenu => "",
         FleetAction.EditKeybinds => "",
         FleetAction.EditShowMenuKeys => "",
+        FleetAction.EditButtonHints => "",
         FleetAction.RebuildDashboard => "",
         FleetAction.CleanupProject => "",
         FleetAction.ViewLogs => "",

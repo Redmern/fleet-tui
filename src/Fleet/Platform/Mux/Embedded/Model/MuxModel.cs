@@ -360,6 +360,17 @@ public sealed class MuxModel
         return true;
     }
 
+    public bool SetFloatButtons(string id, IReadOnlyList<FloatButton> buttons)
+    {
+        if (FloatOf(id) is not var (_, box))
+        {
+            return false;
+        }
+
+        box.Buttons = buttons;
+        return true;
+    }
+
     public bool SetTitle(string id, string title)
     {
         if (FloatOf(id) is var (_, box))
@@ -1102,6 +1113,7 @@ public sealed class MuxModel
             ?? (tab is not null && tab.Root.Contains(tab.ActivePane) ? tab.ActivePane : null);
 
         var labels = workspace?.Floats.ToDictionary(f => f.Pane, f => f.HeldLabel ?? FloatLabel(f));
+        var buttons = workspace?.Floats.Where(f => f.Buttons.Count > 0).ToDictionary(f => f.Pane, f => f.Buttons);
         var frame = tab is not null && workspace?.RemoteHost is null && Framed(tab) ? FrameFor(area) : null;
 
         return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels)
@@ -1109,6 +1121,7 @@ public sealed class MuxModel
             Frame = frame,
             FrameTitle = frame is null ? null : $"fleet — {workspace!.Name}",
             Notices = Notices(c),
+            FloatButtons = buttons,
         };
     }
 
@@ -1490,8 +1503,12 @@ public sealed class FloatState(string pane, Rect bounds)
 
     public long ReleaseAfterOutput { get; set; } = -1;
 
+    public IReadOnlyList<FloatButton> Buttons { get; set; } = [];
+
     public Rect Drawn => Held ?? Bounds;
 }
+
+public sealed record FloatButton(bool Bottom, bool Right, string Key, string Label, string Send);
 
 public sealed class ClientState(string id)
 {
@@ -1559,7 +1576,11 @@ public sealed record ClientView(
 
     public (int Here, int Elsewhere) Notices { get; init; }
 
+    public IReadOnlyDictionary<string, IReadOnlyList<FloatButton>>? FloatButtons { get; init; }
+
     public string? FloatLabel(string pane) => FloatLabels?.GetValueOrDefault(pane);
+
+    public IReadOnlyList<FloatButton> ButtonsOf(string pane) => FloatButtons?.GetValueOrDefault(pane) ?? [];
 
     public static Rect Inner(Rect box) => new(box.X + 1, box.Y + 1, Math.Max(0, box.Width - 2), Math.Max(0, box.Height - 2));
 }

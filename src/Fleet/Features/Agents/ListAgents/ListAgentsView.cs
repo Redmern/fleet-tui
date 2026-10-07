@@ -123,12 +123,19 @@ public static class ListAgentsView
 
         app.Keyboard.KeyDown += Keys;
 
-        window.Add(
-            tabBar.Root,
-            openList,
-            hiddenList,
-            status,
-            FleetTheme.HintBar(FleetHints.AgentList));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1), alignRight: true);
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, Open),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(tabBar.Root, openList, hiddenList, status, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window), tabBar.Root);
 
         ShowTab(AgentListing.OpenTab);

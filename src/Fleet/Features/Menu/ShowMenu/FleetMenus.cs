@@ -30,7 +30,7 @@ public static class FleetMenus
     public static IReadOnlyList<MenuSection> Settings { get; } =
     [
         new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
-        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys], FleetIcons.Configure),
+        new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints], FleetIcons.Configure),
         new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs], FleetIcons.Maintenance),
     ];
 
@@ -73,6 +73,7 @@ public static class FleetMenus
         FleetAction.EditSubOrchestratorsInNvim,
         FleetAction.EditNvimConfig,
         FleetAction.EditShowMenuKeys,
+        FleetAction.EditButtonHints,
     ];
 
     public static bool IsSubmenu(FleetAction action) => Tree.Any(n => n.Submenu == action);
@@ -110,6 +111,7 @@ public static class FleetMenus
         FleetAction.RebuildDashboard => "Rebuild dashboard",
         FleetAction.CleanupProject => "Clean up agents",
         FleetAction.EditShowMenuKeys => "Show keybinds",
+        FleetAction.EditButtonHints => "Button hints",
         _ => KeymapDefaults.Describe(action),
     };
 
@@ -121,6 +123,7 @@ public static class FleetMenus
         FleetAction.EditSubOrchestratorsInNvim => OnOff(settings.SubOrchestratorsInNvim),
         FleetAction.EditShowMenuKeys => OnOff(settings.ShowMenuKeys),
         FleetAction.EditNvimConfig => $"[{Words.Of(settings.Nvim)}]",
+        FleetAction.EditButtonHints => $"[{settings.ButtonHints.ToString().ToLowerInvariant()}]",
         FleetAction.EditAutoClose => settings.AutoClose
             ? $"[{settings.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture)}m]"
             : OnOff(false),
@@ -134,7 +137,15 @@ public static class FleetMenus
         FleetAction.EditShowMenuKeys => settings.WithShowMenuKeys(!settings.ShowMenuKeys),
         FleetAction.EditNvimConfig => settings.WithNvim(
             settings.Nvim == NvimConfig.Fleet ? NvimConfig.User : NvimConfig.Fleet),
+        FleetAction.EditButtonHints => settings.WithButtonHints(NextHints(settings.ButtonHints)),
         _ => settings,
+    };
+
+    private static ButtonHints NextHints(ButtonHints hints) => hints switch
+    {
+        ButtonHints.Text => ButtonHints.Tooltips,
+        ButtonHints.Tooltips => ButtonHints.None,
+        _ => ButtonHints.Text,
     };
 
     private static string OnOff(bool on) => on ? "[on]" : "[off]";

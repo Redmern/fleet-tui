@@ -66,6 +66,9 @@ public sealed class MenuSettingsFile
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? ShowKeys { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ButtonHints { get; set; }
 }
 
 public sealed class NvimSettingsFile

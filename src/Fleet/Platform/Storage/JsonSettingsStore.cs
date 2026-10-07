@@ -12,7 +12,8 @@ namespace Fleet.Platform.Storage;
 
 public sealed class JsonSettingsStore : ISettingsStore
 {
-    public SettingsConfig Load(string project) => LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys(), Nvim = LoadNvim() };
+    public SettingsConfig Load(string project) =>
+        LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints(), Nvim = LoadNvim() };
 
     private static SettingsConfig LoadProject(string project)
     {
@@ -170,30 +171,47 @@ public sealed class JsonSettingsStore : ISettingsStore
         }
     }
 
-    public bool LoadShowMenuKeys()
+    public bool LoadShowMenuKeys() => LoadMenuSettings() is { ShowKeys: { } shown } ? shown : SettingsDefaults.ShowMenuKeys;
+
+    public void SaveShowMenuKeys(bool shown) =>
+        SaveMenuSettings(LoadMenuSettings(), stored => stored.ShowKeys = shown == SettingsDefaults.ShowMenuKeys ? null : shown);
+
+    public ButtonHints LoadButtonHints() =>
+        LoadMenuSettings()?.ButtonHints?.ToLowerInvariant() switch
+        {
+            "text" => ButtonHints.Text,
+            "tooltips" => ButtonHints.Tooltips,
+            "none" => ButtonHints.None,
+            _ => SettingsDefaults.ButtonHints,
+        };
+
+    public void SaveButtonHints(ButtonHints hints) =>
+        SaveMenuSettings(
+            LoadMenuSettings(),
+            stored => stored.ButtonHints = hints == SettingsDefaults.ButtonHints ? null : hints.ToString().ToLowerInvariant());
+
+    private static MenuSettingsFile? LoadMenuSettings()
     {
         try
         {
-            if (File.Exists(FleetPaths.MenuSettingsFile)
-                && JsonSerializer.Deserialize(
-                    File.ReadAllText(FleetPaths.MenuSettingsFile), FleetJsonContext.Default.MenuSettingsFile) is { ShowKeys: { } shown })
+            if (File.Exists(FleetPaths.MenuSettingsFile))
             {
-                return shown;
+                return JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.MenuSettingsFile), FleetJsonContext.Default.MenuSettingsFile);
             }
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
         }
 
-        return SettingsDefaults.ShowMenuKeys;
+        return null;
     }
 
-    public void SaveShowMenuKeys(bool shown)
+    private static void SaveMenuSettings(MenuSettingsFile? current, Action<MenuSettingsFile> change)
     {
-        var stored = new MenuSettingsFile
-        {
-            ShowKeys = shown == SettingsDefaults.ShowMenuKeys ? null : shown,
-        };
+        var stored = current ?? new MenuSettingsFile();
+
+        change(stored);
 
         try
         {

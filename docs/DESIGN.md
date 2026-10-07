@@ -5494,18 +5494,89 @@ conversation):
 
 ## Corner icons on menus and dialogs, 2026-10-06
 
-- `Ui/FleetCorners.Attach` puts two clickable icons on the top row of a window's content:
+- `Ui/FleetCorners.Attach` puts two buttons, drawn as the same pills as the bar chips, on the top row of a window's content:
   info (and the reveal key while keys are hidden) at the left, close at the right. They sit
   inside the content, not on the border, because a float pane draws no border.
-- The left corner keeps its width when the key goes, so a tab bar or caption beside it
-  (`between`) never shifts. Clicking it is `FleetKeyHints.Toggle`; the key it shows is
+- The left corner keeps its width when the key goes. A screen with a tab bar (or a caption)
+  on its top row passes it as `below`: it moves under the corners at full width, and the
+  content under it follows `Pos.Bottom`. Clicking it is `FleetKeyHints.Toggle`; the key it shows is
   `FleetKeyHints.RevealKey`, read from the keymap with the setting, so it follows a rebind.
 - The corner replaces the menu's pinned `? keys` chip and every bar's close/cancel/quit chip.
   Select and back stay on the bar as icon chips (`FleetIcons.Select`, `FleetIcons.Back`).
-- Applied to the fleet menu, the pickers, Settings, AI-DLC, logs, notifications, remotes,
-  secrets, the agent list, keybinds and the project picker. A rebind of the reveal key
-  raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits. The dashboard (its menu mode keeps a close chip) and the
-  small prompts/dialogs without a bar are left as they were.
+- Every fleet screen gets the corners: the fleet menu, the pickers, Settings, AI-DLC, logs,
+  notifications, remotes, secrets, the agent list, keybinds, the project picker, New agent,
+  Add repository, New project, the `FleetDialog` dialogs, the prompts, key capture, the text
+  viewer and the dashboard in menu mode (the main dashboard has none: it is not closed).
+- A rebind of the reveal key raises `Changed` (`FleetKeyHints.Rebind`) so the corner refits.
+  The close button shows `esc` while keys are shown and pads on the left while they are
+  hidden, so it keeps its width too.
+- No screen has a plain hint line any more; `FleetHints` and `FleetTheme.HintBar` are gone.
+  Screens with actions got a `FleetActionBar` of icon chips (select, back, rebind, new window,
+  and connect/answer/rename/forget/disconnect on remotes); key capture and the text viewer
+  get only the corners. The keys the old hint lines listed all still work.
+- Chips that only took room were dropped: Switch project's `h/l machine` (h/l, the arrows and
+  a tab click still switch) and the dashboard's `editor` (the Open editor key still works).
+- Every window with corners has the same margins: `FleetCorners.Attach` gives it a one-row
+  `Padding` top and bottom (`FleetCorners.Margin`), so there is a blank row over the corner
+  buttons and under the bottom bar, and fitted floats and modals are `FleetCorners.Rows`
+  taller. The fleet menu adds its list padding inside that. A later branch is to draw the
+  corner and bar buttons in fleetd's float border instead. The bars of Switch project, the agent list, notifications and the dashboard sit
+  bottom right like the menu's.
+- The dashboard's bars are icons too: add (the action's own icon), open (`Select`), manage,
+  show/hide (eye), menu, dismiss, dismiss all and refresh.
+- The notifications screen's bar is icons as well: open, dismiss (x in a circle), dismiss all
+  (eraser), bell on/off (bell / crossed bell) and toasts on/off (filled / outlined speech bubble).
+
+## Buttons in the float border, 2026-10-07
+
+In an embedded fleetd float the screen has no border of its own (fleetd draws the frame), so
+the corner buttons and the bar used to take two content rows plus the margins. They now sit
+in fleetd's frame.
+
+- **The pane tells fleetd.** The same way it asks for its size (`fit`), the fleet process in a
+  float sends a control request `float-buttons` with its own pane as caller and a list of
+  `FloatButtonDto { edge: top|bottom, align: left|right, key, label, send }`. `key` and
+  `label` are what to draw (key empty while key hints are hidden), `send` is the key to type
+  when it is clicked, as a `KeyChord` spec (see Clicking). An empty list clears them. fleetd keeps the list
+  on the pane's `FloatState`; a pane that is not a float gets an error.
+- **Only when it works.** `FleetUi.Start` sends an empty list once when `FloatPane.Inside`.
+  If fleetd answers (it is a float and fleetd knows the op), `FloatBorder.Enabled` is on for
+  the life of the process; otherwise (an older fleetd, the overlay) nothing changes.
+- **Which buttons.** `FloatBorder` follows the running window (the `FloatScreens` stack,
+  pushed and popped by `FleetTheme`'s floating windows). The window's buttons are its
+  corners (`FleetCorners.Attach`: info/reveal top left, close top right) and its
+  `FleetActionBar` (bottom, left or right as the bar aligns). It republishes when the
+  running window changes, a bar is re-shown and `FleetKeyHints.Changed` fires.
+- **What the pane stops drawing.** With `FloatBorder.Enabled`, `Attach` adds no corner views
+  and no padding (`FleetCorners.Rows` is 0, so fitted floats shrink by two rows and the
+  `below` view moves to row 0), and the bar's view is hidden. Outside a float (tiled panes,
+  WezTerm, the dashboard) nothing changes.
+- **Drawing.** `BorderButtons.Place` lays out one box: top-left buttons from column 2, the
+  title after them, top-right buttons ending two columns from the right corner, bottom
+  buttons the same way along the bottom; one `─` between pills; a button that does not fit
+  is dropped. `Composer` paints each as the in-content pill (`` `` in Surface0, key in
+  Blue and label in Text on Surface0), and keeps the title clear of them.
+- **Clicking.** A left press on a border button focuses the float, types its `send`
+  (win32-input-mode record when ConPTY asked for it, else the Ghostty encoding) and swallows
+  the rest of the gesture instead of starting a move or resize; elsewhere the border still
+  drags. An empty or unparsable `send` does nothing.
+- **Reserved keys, not the chip's own key.** Typing the chip's shown key was the first plan,
+  but it is not what a click did: `bksp` in a field with text deletes a character instead of
+  going back, and `SHIFT` or `o/enter/A-Z` are not keys at all. So each button sends a
+  reserved function key, F1 for info, F2 for close, F3 to F12 for the bar's chips in order
+  (no corners: F1 onwards), and `FloatBorder.Press`, on the app's `KeyDown`, runs the action
+  the in-content button would have run (`FleetKeyHints.Toggle`, the `close` given to
+  `Attach`, the chip's `Run`). In a bordered float F1 to F12 belong to the border; no fleet
+  screen binds them. A chip past the twelfth key is drawn but not clickable.
+- **Publishing.** Only a list fleetd accepted counts as sent, so a refused one is sent
+  again on the next change. The buttons are published after the frame is held and fitted,
+  with the window's new size.
+- **Button hints.** The labels the pane sends go through `FleetButtonHints.Face`, so in
+  text mode the border pills carry the icon's name like the in-content ones, and a change of
+  the setting republishes them. Tooltips do not follow: fleetd has no hover tracking or popup
+  for the frame, so in tooltips mode the border pills show the icon only, as in `none`.
+- **Not done.** The bar row stays reserved (now blank) in fitted floats; the two corner
+  margins do go.
 
 ## Still to verify
 ## Still to verify

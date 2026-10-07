@@ -1,5 +1,6 @@
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Terminal.Gui.App;
@@ -11,13 +12,16 @@ namespace Fleet.Features.Menu.ShowMenu;
 
 public static class ShowMenuView
 {
-    public const int Footer = 2;
+    public const int Footer = 1;
 
-    public static int FitRows(int height) => height + (2 * ShowMenuHandler.Padding) + Footer;
+    public const int Header = Footer;
+
+    public static int FitRows(int height) =>
+        height + (2 * ShowMenuHandler.Padding) + Header + Footer + FleetCorners.Rows;
 
     public static (ListView List, FleetActionBar Bar) Place(int width, int height)
     {
-        var list = FleetTheme.CenteredRows(width, height, Footer);
+        var list = FleetTheme.CenteredRows(width, height);
 
         return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding, alignRight: true));
     }
@@ -32,7 +36,8 @@ public static class ShowMenuView
         string title,
         IReadOnlyList<FleetMenuItem> items,
         Func<FleetAction, string?>? toggle,
-        Func<bool>? showKeys = null)
+        Func<bool>? showKeys = null,
+        Func<ButtonHints>? buttonHints = null)
     {
         var chosen = FleetAction.None;
         var shown = items.ToList();
@@ -46,7 +51,7 @@ public static class ShowMenuView
 
         var window = FleetTheme.Overlay(
             title,
-            Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(Nothing, Nothing)) + 4),
+            Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(Nothing, Nothing), ButtonHints.Text) + 4),
             FitRows(height));
 
         void Refill(int index)
@@ -78,6 +83,11 @@ public static class ShowMenuView
                 if (showKeys is not null)
                 {
                     FleetKeyHints.Apply(showKeys());
+                }
+
+                if (buttonHints is not null)
+                {
+                    FleetButtonHints.Apply(buttonHints());
                 }
 
                 Refill(index);

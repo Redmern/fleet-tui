@@ -2,6 +2,7 @@ using Fleet.Features.Menu.ShowMenu;
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Ui;
 using Terminal.Gui.App;
 
@@ -14,11 +15,13 @@ public static class FleetUi
         var app = Application.Create().Init();
         FleetTheme.Register();
         FleetKeyHints.Attach(app, () => new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
+        FleetButtonHints.Attach(app, Adapters.ButtonHints);
 
         if (FloatPane.Inside)
         {
             FloatScreens.Fit = EmbeddedWiring.FitOwnFloat;
             FloatScreens.Hold = EmbeddedWiring.HoldOwnFloat;
+            FloatBorder.Enable(app, EmbeddedWiring.PublishOwnFloatButtons);
         }
 
         return app;
@@ -35,12 +38,14 @@ public static class FleetUi
         IReadOnlyList<MenuSection> sections,
         Func<FleetAction, string?> value,
         Func<FleetAction, string?> toggle,
-        Func<bool> showKeys) =>
+        Func<bool> showKeys,
+        Func<ButtonHints> buttonHints) =>
         ShowMenuView.Show(
             app,
             keymap,
             FleetMenus.Title(submenu),
             new ShowMenuHandler(keymap).Items(sections, value),
             toggle,
-            showKeys);
+            showKeys,
+            buttonHints);
 }

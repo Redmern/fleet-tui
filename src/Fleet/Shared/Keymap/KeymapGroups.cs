@@ -28,6 +28,7 @@ public static class KeymapGroups
             FleetAction.OpenFleetConfigMenu,
             FleetAction.EditKeybinds,
             FleetAction.EditShowMenuKeys,
+            FleetAction.EditButtonHints,
             FleetAction.RebuildDashboard,
             FleetAction.CleanupProject,
             FleetAction.ViewLogs,

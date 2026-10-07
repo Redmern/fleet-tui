@@ -85,6 +85,9 @@ public static class Adapters
     public static NvimConfig LoadNvimConfig() => new JsonSettingsStore().LoadNvim();
 
     public static void SaveNvimConfig(NvimConfig nvim) => new JsonSettingsStore().SaveNvim(nvim);
+    public static ButtonHints ButtonHints() => new JsonSettingsStore().LoadButtonHints();
+
+    public static void SaveButtonHints(ButtonHints hints) => new JsonSettingsStore().SaveButtonHints(hints);
 
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 

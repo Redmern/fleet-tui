@@ -140,7 +140,20 @@ public static class AddRepositoryView
             }
         };
 
-        window.Add(list, FleetTheme.HintBar(FleetHints.AddRepository));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        bar.Show(
+        [
+            ("enter", FleetIcons.Select, Activate),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
+        window.Add(list, bar.Root);
+        FleetCorners.Attach(window, () => app.RequestStop(window));
 
         FleetModal.Enter();
 

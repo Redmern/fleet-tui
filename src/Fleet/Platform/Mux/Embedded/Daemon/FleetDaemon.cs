@@ -183,6 +183,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "hold":
                         Hold(request.Pane ?? request.Caller ?? string.Empty);
                         break;
+                    case "float-buttons":
+                        Require(
+                            _model.SetFloatButtons(
+                                request.Pane ?? request.Caller ?? string.Empty,
+                                [.. (request.Buttons ?? []).Select(BorderButtons.From)]),
+                            request);
+                        break;
                     case "focus-from":
                         {
                             var (dx, dy) = Direction(request.Direction);
@@ -640,6 +647,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private void Mouse(AttachSession session, MouseMessage mouse)
     {
         PaneRuntime? target = null;
+        (PaneRuntime Pane, string Send)? clicked = null;
         var x = 0;
         var y = 0;
         var redraw = false;
@@ -658,7 +666,10 @@ public sealed class FleetDaemon(DaemonOptions options)
                     session.Capture = null;
                 }
 
-                if (capture.Kind is MouseHitKind.FloatMove or MouseHitKind.FloatResize)
+                if (capture.Kind == MouseHitKind.None)
+                {
+                }
+                else if (capture.Kind is MouseHitKind.FloatMove or MouseHitKind.FloatResize)
                 {
                     if (mouse.Action == MouseActions.Motion && DragFloat(capture, mouse.X, mouse.Y))
                     {
@@ -709,7 +720,16 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
 
                     case MouseHitKind.FloatMove or MouseHitKind.FloatResize when press && mouse.Button == MouseButtons.Left:
-                        if (_model.View(session.Client)?.FloatingPanes.FirstOrDefault(p => p.Pane == hit.Pane) is { Pane: not null } box)
+                        if (_model.View(session.Client) is { } floating
+                            && floating.FloatingPanes.FirstOrDefault(p => p.Pane == hit.Pane) is { Pane: not null } pressed
+                            && BorderButtons.At(pressed.Area, floating.ButtonsOf(pressed.Pane), mouse.X, mouse.Y) is { } button)
+                        {
+                            _model.Focus(pressed.Pane);
+                            clicked = _runtimes.GetValueOrDefault(pressed.Pane) is { } runtime ? (runtime, button.Send) : null;
+                            session.Capture = new MouseCapture(pressed.Pane, -1, MouseHitKind.None);
+                            redraw = true;
+                        }
+                        else if (_model.View(session.Client)?.FloatingPanes.FirstOrDefault(p => p.Pane == hit.Pane) is { Pane: not null } box)
                         {
                             _model.Focus(hit.Pane!);
                             session.Capture = new MouseCapture(hit.Pane, -1, hit.Kind, box.Area, mouse.X, mouse.Y);
@@ -739,6 +759,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
         }
 
+        if (clicked is var (pane, send))
+        {
+            Press(pane, send);
+        }
+
         if (target is not null)
         {
             byte[] bytes;
@@ -763,6 +788,26 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
     public const int WheelLines = 3;
+
+    private static void Press(PaneRuntime pane, string send)
+    {
+        if (Input.BorderKeys.Chord(send) is not { } chord)
+        {
+            return;
+        }
+
+        byte[] bytes;
+        lock (pane.Gate)
+        {
+            bytes = (pane.Modes.Win32Input ? Input.BorderKeys.Win32(chord) : null)
+                    ?? pane.Terminal.Encode(Input.BorderKeys.Message(chord));
+        }
+
+        if (bytes.Length > 0)
+        {
+            pane.Send(bytes);
+        }
+    }
 
     private static byte[] Wheel(PaneRuntime pane, bool up)
     {

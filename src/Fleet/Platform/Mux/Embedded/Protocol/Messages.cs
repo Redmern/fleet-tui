@@ -330,6 +330,27 @@ public sealed class ControlRequest
 
     [JsonPropertyName("answer")]
     public string? Answer { get; set; }
+
+    [JsonPropertyName("buttons")]
+    public List<FloatButtonDto>? Buttons { get; set; }
+}
+
+public sealed class FloatButtonDto
+{
+    [JsonPropertyName("edge")]
+    public string Edge { get; set; } = string.Empty;
+
+    [JsonPropertyName("align")]
+    public string Align { get; set; } = string.Empty;
+
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = string.Empty;
+
+    [JsonPropertyName("send")]
+    public string Send { get; set; } = string.Empty;
 }
 
 public sealed class PaneDto
