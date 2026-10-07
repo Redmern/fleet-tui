@@ -87,4 +87,13 @@ public sealed class FleetCornersTests : IDisposable
         Assert.Equal("ctrl+k", FleetKeyHints.RevealKey);
         Assert.Equal(1, changes);
     }
+
+    [Fact]
+    public void The_help_tooltip_names_the_live_reveal_key_and_close_names_no_key()
+    {
+        FleetKeyHints.Rebind("ctrl+k");
+
+        Assert.Equal("keybinds (ctrl+k)", FleetCorners.Tip(FleetIcons.Info, FleetKeyHints.RevealKey));
+        Assert.Equal("close", FleetCorners.Tip(FleetIcons.Close, string.Empty));
+    }
 }

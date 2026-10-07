@@ -67,11 +67,11 @@ public static class ShowNoticesView
             var settings = store.Settings();
             bar.Show(
             [
-                ("enter", FleetIcons.Select, Open),
-                (keymap.DisplayFor(FleetAction.DismissNotice), FleetIcons.Dismiss, () => Dismiss(one: true)),
-                (keymap.DisplayFor(FleetAction.DismissAllNotices), FleetIcons.DismissAll, () => Dismiss(one: false)),
-                ("b", settings.Bell ? FleetIcons.BellOn : FleetIcons.BellOff, () => Toggle(bell: true)),
-                ("t", settings.Toast ? FleetIcons.ToastsOn : FleetIcons.ToastsOff, () => Toggle(bell: false)),
+                ("enter", FleetIcons.Select, Open, FleetAction.None),
+                (keymap.DisplayFor(FleetAction.DismissNotice), FleetIcons.Dismiss, () => Dismiss(one: true), FleetAction.DismissNotice),
+                (keymap.DisplayFor(FleetAction.DismissAllNotices), FleetIcons.DismissAll, () => Dismiss(one: false), FleetAction.DismissAllNotices),
+                ("b", settings.Bell ? FleetIcons.BellOn : FleetIcons.BellOff, () => Toggle(bell: true), FleetAction.None),
+                ("t", settings.Toast ? FleetIcons.ToastsOn : FleetIcons.ToastsOff, () => Toggle(bell: false), FleetAction.None),
             ]);
         }
 
