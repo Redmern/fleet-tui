@@ -202,7 +202,7 @@ public sealed class ReportStatusTests
     }
 
     [Fact]
-    public async Task A_sub_orchestrator_messages_the_main_orchestrator_when_it_finishes()
+    public async Task A_sub_orchestrator_does_not_message_the_main_orchestrator_when_it_finishes()
     {
         Seed("upgrade");
         var inboxes = new FakeInboxes { [Root] = "uds:main" };
@@ -210,7 +210,10 @@ public sealed class ReportStatusTests
         var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
             "techweb", Root, "upgrade", OrchestrationStatus.Done, "shipped");
 
-        Assert.Contains("\"uds:main\"", result.Value);
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal("upgrade: done — shipped", result.Value);
+        Assert.Empty(inboxes.Asked);
+        Assert.Equal(OrchestrationStatus.Done, Assert.Single(_store.Written).Status);
     }
 
     [Fact]

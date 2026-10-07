@@ -38,15 +38,13 @@ public static class SubRows
 
     private static FleetRow Orchestrator(AgentRecord agent)
     {
-        List<FleetSpan> trailing =
-        [
-            new FleetSpan(agent.Status.Length == 0 ? OrchestrationStatus.Working : agent.Status,
-                ToneFor(agent.Status)),
-        ];
+        var icon = StatusIcon.For(StatusOf(agent))!;
+
+        List<FleetSpan> trailing = [icon with { Text = $"{icon.Text}  " }];
 
         if (agent.Hidden)
         {
-            trailing.Add(FleetSpan.Muted($"   {FleetGlyphs.Hidden} "));
+            trailing.Add(FleetSpan.Muted($"{FleetGlyphs.Hidden} "));
         }
 
         return new FleetRow(
@@ -73,10 +71,11 @@ public static class SubRows
             agent.Hidden ? [FleetSpan.Muted($"{FleetGlyphs.Hidden} ")] : null);
     }
 
-    private static string ToneFor(string status) => OrchestrationStatus.Normalize(status) switch
-    {
-        OrchestrationStatus.Done => FleetTones.Good,
-        OrchestrationStatus.Failed => FleetTones.Bad,
-        _ => FleetTones.Warn,
-    };
+    public static IReadOnlyList<string> Statuses(SubListing listing) =>
+        [.. listing.Flat.Select(e => e.IsChild ? string.Empty : StatusOf(e.Agent))];
+
+    private static string StatusOf(AgentRecord agent) =>
+        StatusIcon.For(agent.Status) is null
+            ? OrchestrationStatus.Normalize(agent.Status)
+            : agent.Status.Trim().ToLowerInvariant();
 }

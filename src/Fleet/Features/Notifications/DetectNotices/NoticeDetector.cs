@@ -31,7 +31,9 @@ public static class NoticeDetector
         foreach (var watch in agents)
         {
             var agent = watch.Agent;
-            var label = $"{agent.Repository} / {agent.Branch}";
+            var label = AgentHarness.IsOrchestrator(agent.Harness)
+                ? $"sub / {agent.Branch}"
+                : $"{agent.Repository} / {agent.Branch}";
 
             Notice Raise(NoticeKind kind, string message) =>
                 new(project, kind, agent.Worktree, label, message, now);

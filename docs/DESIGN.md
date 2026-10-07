@@ -5364,8 +5364,11 @@ address). Until now a sub-orchestrator learned that an agent had finished by pol
   If `IAgentInboxes` has an address for that folder, the result appends
   `PeerMessage.TellOwner`: call `SendMessage` to that address with the report note
   (`<repo>/<branch>: done — <summary>`) unchanged, once; held or refused is the receiver's
-  choice. No address, no extra text. This applies to a sub-orchestrator's own report too:
-  it reaches the main orchestrator. The reporting Claude sends it, so the receiver sees
+  choice. No address, no extra text. A top-level sub-orchestrator's own report is the
+  exception: it is recorded but not pushed, because the message held the main orchestrator
+  up while it waited on the sub. The dashboard's Subs tab and the notification center
+  (a sub's `done`, `failed`, question or stall raises a notice like an agent's) carry it
+  instead. The reporting Claude sends it, so the receiver sees
   the real sender, name and mode, and Claude's trust rules apply as for any peer message.
 - **A summary can't dispatch.** It arrives wrapped in `<cross-session-message …>`, which
   `HookPrompt.Intercepted` never takes (the #51 guard), whatever the trigger, including `<`
