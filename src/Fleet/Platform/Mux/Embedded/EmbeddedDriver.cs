@@ -173,6 +173,9 @@ public sealed class EmbeddedDriver(
     public Task HoldAsync(CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "hold" }, ct);
 
+    public Task FloatButtonsAsync(IReadOnlyList<FloatButtonDto> buttons, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = "float-buttons", Buttons = [.. buttons] }, ct);
+
     public Task OpenMenuAsync(string? action, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "menu", Text = action }, ct);
 

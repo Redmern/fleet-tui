@@ -21,6 +21,7 @@ public static class FleetUi
         {
             FloatScreens.Fit = EmbeddedWiring.FitOwnFloat;
             FloatScreens.Hold = EmbeddedWiring.HoldOwnFloat;
+            FloatBorder.Enable(app, EmbeddedWiring.PublishOwnFloatButtons);
         }
 
         return app;
