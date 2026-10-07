@@ -3535,7 +3535,8 @@ list as the drawing.
 
 ### Keys (`<fleet config>\embedded-keys.json`)
 
-The defaults started as a copy of `~/.wezterm/tmux-mode.lua`; since the
+Since 2026-10-07 the defaults below come from the one keybind model (see "The keybind
+model, end to end" near the end); `embedded-keys.json` is an override layer over it. The defaults started as a copy of `~/.wezterm/tmux-mode.lua`; since the
 which-key submenus (2026-10-06) the rarely used keys sit in groups, so they no
 longer mirror it one to one. The file only needs overrides; `"none"` unbinds a
 key, comments and trailing commas are allowed, and `FLEET_PREFIX` still wins
@@ -5743,6 +5744,41 @@ keybind model.
   The user layer of the model (`keybinds` in `keybinds.json`) does not reach the mux yet;
   that is phase 5's wiring. `KeybindActions.FromMux` reads `smart-resize <dir>` as
   `resize-<dir>`, so migrating such a key keeps its meaning.
+
+## The keybind model, end to end, 2026-10-07
+
+Phase 6 of the unified keybind distribution closes it out with docs and an end-to-end check.
+What the phases add up to:
+
+- **One source.** `Shared/Keybinds/keybinds.default.json`, embedded, read through
+  `KeybindsJsonContext`. Targets are `fleet-ui`, `mux`, `nvim` and `claude`; there is no
+  WezTerm target (the existing WezTerm module is generated from the fleet UI keymap as before).
+- **Meaning.** Ctrl+h/j/k/l is focus, Alt+h/j/k/l is resize, in the mux (`direct`, forwarded to
+  nvim when the pane runs nvim) and in nvim (`n` and `t`). Alt+n takes a Claude terminal in
+  nvim to normal mode. Shift+Enter is a newline in the mux and Claude's `Chat` context.
+- **User layer.** The `keybinds` section of `keybinds.json` (diffs keyed by id, `"chord":
+  "none"` unbinds) reaches nvim and Claude through `JsonKeybindStore`. The mux still takes the
+  shipped model plus `embedded-keys.json`, not this section; the fleet UI reads its old
+  bindings. Both are documented as such in the README rather than changed here.
+- **Renderers and files.** `keybinds.generated.lua` in fleet-nvim, `fleet-keys.lua` in the fleet
+  config folder (opt-in for a personal config: `dofile(...).setup()`), and `keybindings.json` in
+  each resolved Claude home with `keybindings.fleet.json` remembering fleet's own entries.
+- **Entry point.** `fleet apply-keybinds [--target nvim|claude] [--dry-run]`; without
+  `--target` it also writes the WezTerm module to the real home folder. `fleet setup` and the
+  keybinds menu's save run it; `fleet doctor` lists the files that differ from the model.
+- **README in step.** The README's shared-keys table (entries that reach nvim or Claude) sits
+  between `keybinds:begin`/`keybinds:end` markers and `KeybindsReadmeTests` renders it from
+  `KeybindDefaults.Set` and fails when it drifts; `FLEET_WRITE_README=1 dotnet test` rewrites
+  it. The rest of the README keys table is hand-written: its descriptions are per view, which
+  the model does not carry.
+- **End to end.** `scripts/e2e/windows.ps1` (step 6) and `scripts/e2e/linux.sh` (step 13) run the
+  real binary against a throwaway `FLEET_CONFIG_HOME`, `XDG_CONFIG_HOME` (so fleet-nvim lands in
+  a temp folder on Windows too, with a stub `init.lua` standing in for the installed config) and
+  `CLAUDE_CONFIG_DIR`. They run `apply-keybinds --target nvim` and `--target claude` (never the
+  bare command, which would write the WezTerm module into the real home folder), check that
+  `keybinds.generated.lua`, `fleet-keys.lua` and `keybindings.json` appear, that a second run
+  reports nothing written and leaves the files byte for byte, that `fleet doctor`'s keybinds
+  line says the files match, and that it reports drift once `keybinds.generated.lua` is edited.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
