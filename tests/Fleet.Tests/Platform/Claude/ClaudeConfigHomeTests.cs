@@ -54,13 +54,16 @@ public sealed class ClaudeConfigHomeTests
     public void Keybind_targets_get_each_resolved_home_once()
     {
         var previous = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR");
-        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", @"C:\custom\claude\");
+        var home = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "fleet-tests", "custom-claude"));
+        Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", home + Path.DirectorySeparatorChar);
 
         try
         {
             Assert.Equal(
-                [@"C:\custom\claude"],
-                KeybindTargetPaths.ClaudeHomes([Path.GetTempPath(), Environment.CurrentDirectory], @"C:\home"));
+                [home],
+                KeybindTargetPaths.ClaudeHomes(
+                    [Path.GetTempPath(), Environment.CurrentDirectory],
+                    Path.Combine(Path.GetTempPath(), "fleet-tests", "unused-home")));
         }
         finally
         {
