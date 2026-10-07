@@ -25,6 +25,7 @@ public enum FleetVerb
     Approve,
     Cli,
     AskPass,
+    Theme,
     Help,
     Unknown,
 }
