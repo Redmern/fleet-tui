@@ -58,17 +58,21 @@ function Write-Warn2($m) { Write-Host "    $m" -ForegroundColor Yellow }
 
 function Test-OurShortcut($path) {
     $link = (New-Object -ComObject WScript.Shell).CreateShortcut($path)
-    $link.Arguments -like "*$Launcher*"
+    $link.Arguments.Contains($Launcher)
 }
 
+# settings.json is JSONC; when it doesn't parse, a "name": "Fleet" anywhere in it
+# counts as a hand-made profile, so a parse failure never adds a second one.
 function Get-HandMadeProfile {
-    if (-not (Test-Path $TerminalSettings)) { return $null }
+    if (-not (Test-Path -LiteralPath $TerminalSettings)) { return $null }
+    $text = [IO.File]::ReadAllText($TerminalSettings)
     try {
-        $text = Get-Content $TerminalSettings -Raw
-        $text = [regex]::Replace($text, '(?m)^\s*//.*$', '')
-        $settings = $text | ConvertFrom-Json
+        $json = [regex]::Replace($text, '(?m)^\s*//.*$', '')
+        $json = [regex]::Replace($json, ',(\s*[}\]])', '$1')
+        $settings = $json | ConvertFrom-Json
     }
     catch {
+        if ($text -match "`"name`"\s*:\s*`"$ProfileName`"") { return [pscustomobject]@{ guid = '(unparsed settings.json)' } }
         return $null
     }
     @($settings.profiles.list) | Where-Object { $_.name -eq $ProfileName -and -not $_.source -and $_.guid -ne $ProfileGuid } |
@@ -76,7 +80,7 @@ function Get-HandMadeProfile {
 }
 
 function Set-FileContent($path, [string]$content) {
-    if ((Test-Path $path) -and (Get-Content $path -Raw) -eq $content) { return 'unchanged' }
+    if ((Test-Path -LiteralPath $path) -and [IO.File]::ReadAllText($path) -eq $content) { return 'unchanged' }
     if (-not $PSCmdlet.ShouldProcess($path, 'Write')) { return 'skipped' }
     New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
     [IO.File]::WriteAllText($path, $content)
@@ -84,11 +88,11 @@ function Set-FileContent($path, [string]$content) {
 }
 
 if ($Uninstall) {
-    if ((Test-Path $Shortcut) -and (Test-OurShortcut $Shortcut)) {
-        if ($PSCmdlet.ShouldProcess($Shortcut, 'Remove')) { Remove-Item $Shortcut -Force; Write-Ok "removed $Shortcut" }
+    if ((Test-Path -LiteralPath $Shortcut) -and (Test-OurShortcut $Shortcut)) {
+        if ($PSCmdlet.ShouldProcess($Shortcut, 'Remove')) { Remove-Item -LiteralPath $Shortcut -Force; Write-Ok "removed $Shortcut" }
     }
-    if (Test-Path $FragmentDir) {
-        if ($PSCmdlet.ShouldProcess($FragmentDir, 'Remove')) { Remove-Item $FragmentDir -Recurse -Force; Write-Ok "removed $FragmentDir" }
+    if (Test-Path -LiteralPath $FragmentDir) {
+        if ($PSCmdlet.ShouldProcess($FragmentDir, 'Remove')) { Remove-Item -LiteralPath $FragmentDir -Recurse -Force; Write-Ok "removed $FragmentDir" }
     }
     return
 }
@@ -96,10 +100,10 @@ if ($Uninstall) {
 foreach ($name in $LauncherFiles) {
     $source = Join-Path $PSScriptRoot $name
     $target = Join-Path $InstallDir $name
-    if ((Test-Path $target) -and (Get-FileHash $source).Hash -eq (Get-FileHash $target).Hash) { continue }
+    if ((Test-Path -LiteralPath $target) -and (Get-FileHash -LiteralPath $source).Hash -eq (Get-FileHash -LiteralPath $target).Hash) { continue }
     if ($PSCmdlet.ShouldProcess($target, 'Copy')) {
         New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-        Copy-Item $source $target -Force
+        Copy-Item -LiteralPath $source -Destination $target -Force
     }
 }
 Write-Ok "launcher files in $InstallDir"
@@ -120,7 +124,7 @@ else {
             [ordered]@{
                 guid              = $ProfileGuid
                 name              = $ProfileName
-                commandline       = "`"$pwsh`" -NoExit -Command fleet"
+                commandline       = "`"$pwsh`" -NoExit -Command `"& '$(Join-Path $InstallDir 'fleet.exe')'`""
                 icon              = Join-Path $InstallDir 'fleet-32.png'
                 tabTitle          = $ProfileName
                 startingDirectory = '%USERPROFILE%'
@@ -133,7 +137,7 @@ else {
     }
 }
 
-if ((Test-Path $Shortcut) -and -not (Test-OurShortcut $Shortcut) -and -not $Force) {
+if ((Test-Path -LiteralPath $Shortcut) -and -not (Test-OurShortcut $Shortcut) -and -not $Force) {
     Write-Warn2 "kept the existing $Shortcut (not made by this script; -Force replaces it)"
     return
 }
@@ -142,7 +146,7 @@ $conhost = Join-Path $env:windir 'System32\conhost.exe'
 $arguments = "--headless `"$pwsh`" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Launcher`" -AppId $AppId"
 $icon = "$(Join-Path $InstallDir 'fleet.ico'),0"
 
-$current = if (Test-Path $Shortcut) { (New-Object -ComObject WScript.Shell).CreateShortcut($Shortcut) }
+$current = if (Test-Path -LiteralPath $Shortcut) { (New-Object -ComObject WScript.Shell).CreateShortcut($Shortcut) }
 if ($current -and $current.TargetPath -eq $conhost -and $current.Arguments -eq $arguments -and $current.IconLocation -eq $icon) {
     Write-Ok "Start Menu shortcut up to date: $Shortcut"
 }

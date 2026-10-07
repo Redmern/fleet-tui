@@ -170,7 +170,10 @@ if ($Uninstall) {
 
     Remove-FromUserPath $InstallDir
 
-    if (-not $NoShortcut) { & $ShortcutScript -InstallDir $InstallDir -Uninstall }
+    if (-not $NoShortcut) {
+        try { & $ShortcutScript -InstallDir $InstallDir -Uninstall }
+        catch { Write-Warn2 "shortcut not removed: $($_.Exception.Message)" }
+    }
 
     if ($Purge) {
         if (Test-Path $ConfigDir) {
