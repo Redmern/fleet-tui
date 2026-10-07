@@ -3535,8 +3535,11 @@ list as the drawing.
 
 ### Keys (`<fleet config>\embedded-keys.json`)
 
-Since 2026-10-07 the defaults below come from the one keybind model (see "The keybind
-model, end to end" near the end); `embedded-keys.json` is an override layer over it. The defaults started as a copy of `~/.wezterm/tmux-mode.lua`; since the
+The defaults now come from the one keybind model ("Mux keys from the model" and "The
+keybind model, end to end", near the end); `embedded-keys.json` is an override layer
+over them.
+
+The defaults started as a copy of `~/.wezterm/tmux-mode.lua`; since the
 which-key submenus (2026-10-06) the rarely used keys sit in groups, so they no
 longer mirror it one to one. The file only needs overrides; `"none"` unbinds a
 key, comments and trailing commas are allowed, and `FLEET_PREFIX` still wins

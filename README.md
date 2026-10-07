@@ -437,7 +437,7 @@ defaults still reach you.
 
 The keys above, the built-in multiplexer's, fleet's nvim and Claude Code's all come from
 one model shipped with fleet (`keybinds.default.json`). Each entry has an id, an action, a
-chord and the targets it reaches: `fleet-ui` (the dashboard, picker and menu), `mux` (the
+chord and the targets it is shipped for: `fleet-ui` (the dashboard, picker and menu), `mux` (the
 built-in multiplexer), `nvim` (fleet-nvim, and `fleet-keys.lua` for your own config) and
 `claude` (Claude Code's `keybindings.json`). These are the ones that reach more than fleet
 itself; the cell is the mode or context each target binds them in:
@@ -463,7 +463,7 @@ A test fails when this table no longer matches the model.
 
 To change one, add a `keybinds` section to `keybinds.json` in the fleet config folder. It
 holds only your differences, keyed by id; a field you leave out keeps fleet's value, and
-`"chord": "none"` unbinds the entry everywhere:
+`"chord": "none"` unbinds the entry. This section reaches nvim and Claude only:
 
 ```json
 {
@@ -474,9 +474,11 @@ holds only your differences, keyed by id; a field you leave out keeps fleet's va
 }
 ```
 
-The fleet UI's bindings and `embedded-keys.json` still work as before and sit under that
-section. The section reaches nvim and Claude; the multiplexer takes its keys from the
-shipped model plus `embedded-keys.json`.
+The multiplexer still takes its keys from the shipped model plus `embedded-keys.json`, and
+the fleet UI from the bindings the **Keybinds** menu saves; to change a key there, use
+those. The example above therefore moves nvim's resize to `Alt+Left` while the multiplexer
+keeps `Alt+h`. Your `embedded-keys.json` and menu bindings are also read into the model
+before your `keybinds` section, so nvim and Claude follow them too.
 
 ```powershell
 fleet apply-keybinds                     # write every target (and the WezTerm module)
@@ -486,7 +488,7 @@ fleet apply-keybinds --dry-run           # show what would change, write nothing
 ```
 
 `fleet setup` and saving in the keybinds menu run it for you. A second run changes nothing.
-`fleet doctor` compares every generated file with the model and lists the ones that differ,
+`fleet doctor` compares every nvim and Claude file it writes with the model and lists the ones that differ,
 with `fleet apply-keybinds` as the fix. To have the same nvim keys in your own nvim config,
 add `dofile('<fleet config>/fleet-keys.lua').setup()` to it (see *Fleet's nvim config* below).
 

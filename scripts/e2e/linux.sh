@@ -197,7 +197,8 @@ else
     bad 'a second run writes nothing' noscreen; echo "$second" | sed 's/^/     | /'
 fi
 [ "$sums" = "$(md5sum $kfiles)" ] && ok 'the files are unchanged by the second run' || bad 'the files are unchanged by the second run' noscreen
-kenv fleet doctor 2>&1 | grep -qE 'keybinds +nvim and Claude files match the keybind model' && ok 'doctor reports no keybind drift' || bad 'doctor reports no keybind drift' noscreen
+doctor="$(kenv fleet doctor 2>&1)"
+echo "$doctor" | grep -qE 'keybinds +nvim and Claude files match the keybind model' && ok 'doctor reports no keybind drift' || bad 'doctor reports no keybind drift' noscreen
 echo '-- edited by hand' >> "$generated"
 doctor="$(kenv fleet doctor 2>&1)"
 if echo "$doctor" | grep -qE 'keybinds +! 1 file\(s\) out of date' && echo "$doctor" | grep -q 'keybinds.generated.lua differs from the keybind model'; then
