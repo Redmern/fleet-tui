@@ -110,14 +110,37 @@ public sealed class SubRowsTests
     }
 
     [Fact]
-    public void Statuses_name_each_orchestrator_row_and_leave_child_rows_blank()
+    public void Statuses_name_each_orchestrator_row_and_each_child_its_own_agents_status()
     {
         var listing = Listing(
             Orchestrator("upgrade", status: "waiting"),
-            Agent("backend", "story", "upgrade"),
+            Agent("backend", "a-story", "upgrade") with { Status = "done" },
+            Agent("backend", "b-quiet", "upgrade"),
             Orchestrator("zeta"));
 
-        Assert.Equal(["waiting", string.Empty, OrchestrationStatus.Working], SubRows.Statuses(listing));
+        Assert.Equal(["waiting", "done", string.Empty, OrchestrationStatus.Working], SubRows.Statuses(listing));
+    }
+
+    [Fact]
+    public void Child_rows_carry_their_agents_status_icon_in_the_orchestrators_column_hidden_or_not()
+    {
+        var rows = SubRows.For(
+            Listing(
+                Orchestrator("upgrade", status: "failed", hidden: false),
+                Agent("backend", "story", "upgrade") with { Status = "working" },
+                Agent("backend", "other", "upgrade") with { Status = "working", Hidden = true }),
+            Clean,
+            ",");
+
+        var sub = rows.Single(r => r.Text.Contains("upgrade", StringComparison.Ordinal));
+        var visible = rows.Single(r => r.Text.Contains("story", StringComparison.Ordinal));
+        var hidden = rows.Single(r => r.Text.Contains("other", StringComparison.Ordinal));
+
+        Assert.Equal(StatusIcon.For("working")!.Text + "  ", visible.Trailing![0].Text);
+        Assert.Equal(StatusIcon.For("failed")!.Text + "  ", sub.Trailing![0].Text);
+        Assert.Equal(visible.Trailing![0], hidden.Trailing![0]);
+        Assert.Equal(Width(sub.Trailing!), Width(visible.Trailing!));
+        Assert.Equal(Width(sub.Trailing!), Width(hidden.Trailing!));
     }
 
     [Fact]
