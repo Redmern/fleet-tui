@@ -362,12 +362,18 @@ public sealed class MuxModel
 
     public bool SetFloatButtons(string id, IReadOnlyList<FloatButton> buttons)
     {
-        if (FloatOf(id) is not var (_, box))
+        if (FloatOf(id) is var (_, box))
+        {
+            box.Buttons = buttons;
+            return true;
+        }
+
+        if (!_panes.TryGetValue(id, out var pane) || !IsDashboard(pane))
         {
             return false;
         }
 
-        box.Buttons = buttons;
+        pane.Buttons = buttons;
         return true;
     }
 
@@ -1122,6 +1128,11 @@ public sealed class MuxModel
             FrameTitle = frame is null ? null : $"fleet — {workspace!.Name}",
             Notices = Notices(c),
             FloatButtons = buttons,
+            FrameButtons = frame is null
+                ? null
+                : placed
+                    .Where(p => _panes.TryGetValue(p.Pane, out var pane) && pane.Buttons.Count > 0)
+                    .ToDictionary(p => p.Pane, p => _panes[p.Pane].Buttons),
         };
     }
 
@@ -1439,6 +1450,8 @@ public sealed class PaneState(string id, string cwd, IReadOnlyList<string> args)
     public int Cols { get; set; }
 
     public int Rows { get; set; }
+
+    public IReadOnlyList<FloatButton> Buttons { get; set; } = [];
 }
 
 public sealed class TabState(string id, Layout root)
@@ -1581,6 +1594,12 @@ public sealed record ClientView(
     public string? FloatLabel(string pane) => FloatLabels?.GetValueOrDefault(pane);
 
     public IReadOnlyList<FloatButton> ButtonsOf(string pane) => FloatButtons?.GetValueOrDefault(pane) ?? [];
+
+    public IReadOnlyDictionary<string, IReadOnlyList<FloatButton>>? FrameButtons { get; init; }
+
+    public IReadOnlyList<FloatButton> FrameButtonsOf(string pane) => FrameButtons?.GetValueOrDefault(pane) ?? [];
+
+    public static Rect Around(Rect area) => new(area.X - 1, area.Y - 1, area.Width + 2, area.Height + 2);
 
     public static Rect Inner(Rect box) => new(box.X + 1, box.Y + 1, Math.Max(0, box.Width - 2), Math.Max(0, box.Height - 2));
 }

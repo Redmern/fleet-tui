@@ -577,6 +577,36 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Clicking_a_button_on_the_dash_frame_types_its_key_into_the_dash()
+    {
+        var control = await ControlAsync();
+        var spawned = await control.RequestAsync(new ControlRequest
+        {
+            Op = "spawn",
+            Session = "techweb",
+            NewWindow = true,
+            Cwd = ".",
+            Args = ["fleet", "dash"],
+        });
+        Assert.True(spawned.Ok, spawned.Error);
+        var client = await AttachAsync(cols: 60, rows: 12, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        var set = await control.RequestAsync(new ControlRequest
+        {
+            Op = "float-buttons",
+            Pane = spawned.Pane,
+            Buttons = [new FloatButtonDto { Edge = "top", Align = "left", Key = string.Empty, Label = "i", Send = "?" }],
+        });
+        Assert.True(set.Ok, set.Error);
+
+        var frame = MuxModel.Content(60, 12);
+        await client.SendMouseAsync(frame.X + BorderButtons.Inset + 1, frame.Y, MouseButtons.Left, MouseActions.Press);
+
+        await Eventually(() => _panes.ByProgram("fleet")!.Written == "?");
+    }
+
+    [Fact]
     public async Task Float_move_and_size_commands_nudge_the_focused_float()
     {
         var control = await ControlAsync();

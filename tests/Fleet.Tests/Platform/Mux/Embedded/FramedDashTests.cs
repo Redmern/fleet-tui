@@ -101,4 +101,50 @@ public sealed class FramedDashTests
         Assert.Equal(MouseHitKind.StatusBar, _model.Hit(client.Id, 3, 0).Kind);
         Assert.Equal(MuxModel.StatusRows, _model.View(client.Id)!.Frame!.Value.Y);
     }
+
+    [Fact]
+    public void The_dash_pane_takes_border_buttons_and_other_tiled_panes_do_not()
+    {
+        var (claude, dash, client) = Dash();
+        FloatButton[] buttons = [new(false, false, "?", "i", "f1"), new(true, true, "n", "+", "f2")];
+
+        Assert.True(_model.SetFloatButtons(dash.Id, buttons));
+        Assert.False(_model.SetFloatButtons(claude.Id, buttons));
+
+        var view = _model.View(client.Id)!;
+        Assert.Equal(buttons, view.FrameButtonsOf(dash.Id));
+        Assert.Empty(view.FrameButtonsOf(claude.Id));
+    }
+
+    [Fact]
+    public void The_dash_buttons_sit_on_its_own_edges_and_the_title_keeps_its_place()
+    {
+        var (_, dash, client) = Dash();
+        _model.SetFloatButtons(dash.Id, [new(false, false, "?", "i", "f1"), new(true, true, "n", "+", "f2")]);
+        var view = _model.View(client.Id)!;
+        var box = view.Frame!.Value;
+        var around = ClientView.Around(view.Panes.Single(p => p.Pane == dash.Id).Area);
+
+        var frame = Composer.Compose(view, _ => null, null);
+
+        var top = frame.RowText(box.Y);
+        Assert.Contains("fleet — alpha", top, StringComparison.Ordinal);
+        Assert.Equal(" ", frame.At(around.X + BorderButtons.Inset + 1, box.Y).Text);
+        Assert.Equal("?", frame.At(around.X + BorderButtons.Inset + 2, box.Y).Text);
+        Assert.Contains(" n + ", frame.RowText(box.Y + box.Height - 1), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_dash_alone_in_its_tab_moves_the_title_past_its_top_left_button()
+    {
+        var dash = _model.Spawn("alpha", "C:/repos/alpha", ["C:/tools/fleet.exe", "dash", "--project", "alpha"]);
+        var client = _model.Connect(60, 20, "alpha");
+        _model.SetFloatButtons(dash.Id, [new(false, false, "?", "i", "f1")]);
+        var view = _model.View(client.Id)!;
+        var box = view.Frame!.Value;
+
+        var top = Composer.Compose(view, _ => null, null).RowText(box.Y);
+
+        Assert.True(top.IndexOf(" ? i ", StringComparison.Ordinal) < top.IndexOf("fleet — alpha", StringComparison.Ordinal));
+    }
 }
