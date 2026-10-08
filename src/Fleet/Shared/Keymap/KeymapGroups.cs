@@ -32,6 +32,7 @@ public static class KeymapGroups
             FleetAction.EditTheme,
             FleetAction.RebuildDashboard,
             FleetAction.CleanupProject,
+            FleetAction.HideAllAgents,
             FleetAction.ViewLogs,
             FleetAction.UpdateFleet,
             FleetAction.ShowVersion,

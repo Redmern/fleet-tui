@@ -31,7 +31,7 @@ public static class FleetMenus
     [
         new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
         new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints, FleetAction.EditTheme], FleetIcons.Configure),
-        new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs, FleetAction.UpdateFleet, FleetAction.ShowVersion, FleetAction.WhatsNew], FleetIcons.Maintenance),
+        new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.HideAllAgents, FleetAction.ViewLogs, FleetAction.UpdateFleet, FleetAction.ShowVersion, FleetAction.WhatsNew], FleetIcons.Maintenance),
     ];
 
     public static IReadOnlyList<MenuSection> FleetConfig { get; } =

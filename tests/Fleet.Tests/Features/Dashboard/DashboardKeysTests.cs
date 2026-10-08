@@ -94,6 +94,17 @@ public class DashboardKeysTests
     }
 
     [Fact]
+    public void Shift_x_hides_every_agent_on_the_agents_and_subs_tabs_only()
+    {
+        var hideAll = Key.X.WithShift;
+
+        Assert.Equal(FleetAction.HideAllAgents, DashboardKeys.For(hideAll, Map, Agents).Action);
+        Assert.Equal(FleetAction.HideAllAgents, DashboardKeys.For(hideAll, Map, Subs).Action);
+        Assert.False(DashboardKeys.For(hideAll, Map, Repositories).Consume);
+        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.X, Map, Agents).Action);
+    }
+
+    [Fact]
     public void Stopping_has_no_bare_key_because_it_lives_in_the_manage_menu()
     {
         Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.StopAgent));

@@ -55,6 +55,7 @@ public static class FleetActionIds
         FleetAction.UpdateFleet => "update",
         FleetAction.ShowVersion => "version",
         FleetAction.WhatsNew => "whats-new",
+        FleetAction.HideAllAgents => "hide-all",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -107,6 +108,7 @@ public static class FleetActionIds
         "head-voice" => FleetAction.OpenHeadVoice,
         "theme" => FleetAction.EditTheme,
         "whats-new" => FleetAction.WhatsNew,
+        "hide-all" => FleetAction.HideAllAgents,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };

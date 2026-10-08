@@ -2,6 +2,7 @@ using System.Globalization;
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
 using Fleet.Features.Agents.CleanupAgents;
+using Fleet.Features.Agents.HideAgent;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.MoveProject;
 using Fleet.Features.Agents.OpenEditor;
@@ -137,6 +138,15 @@ public static class MenuCommand
     }
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
+
+    public static Pane? DashboardPane(IReadOnlyList<Pane> panes, string root, string? dashPane)
+    {
+        var shown = panes
+            .Where(p => PathKey.Same(p.Cwd, root) && !FleetWorkspaces.IsHidden(p.SessionName))
+            .ToList();
+
+        return shown.FirstOrDefault(p => p.Id.Value == dashPane) ?? shown.FirstOrDefault();
+    }
 
     private static async Task<FleetAction> ShowMenu(
         IApplication app, Keymap keymap, Project project, FleetAction submenu)
@@ -688,6 +698,24 @@ public static class MenuCommand
                 Adapters.Requests().Submit(project.Name, FleetAction.RebuildDashboard);
                 break;
 
+            case FleetAction.HideAllAgents:
+                {
+                    var hideMux = Adapters.Mux(Adapters.Log());
+
+                    if (hideMux.Unsupported is not null)
+                    {
+                        FleetDialog.Error(app, "Hide all agents", hideMux.Unsupported);
+                        break;
+                    }
+
+                    var hidden = await new HideAllAgentsHandler(hideMux.Driver, Adapters.Agents())
+                        .HandleAsync(project.Name)
+                        .ConfigureAwait(false);
+
+                    Adapters.Log().Write(LogTag.For(project.Name, HideAllAgentsHandler.Summary(hidden)));
+                    break;
+                }
+
             case FleetAction.UpdateFleet:
                 UpdateWiring.Install(app, FreshBuild.ThisProcess);
                 break;
@@ -1121,8 +1149,7 @@ public static class MenuCommand
 
         var panes = await mux.ListPanesAsync().ConfigureAwait(false);
 
-        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root)
-            && !FleetWorkspaces.IsHidden(p.SessionName));
+        var dashboard = DashboardPane(panes, project.Root, Adapters.DashPane(project.Name));
 
         if (dashboard is not null)
         {

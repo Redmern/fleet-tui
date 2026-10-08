@@ -1464,6 +1464,17 @@ public static class DashboardWiring
             LoadSubsFast: () => DashboardSkeleton.Subs(
                 lister.Handle(project.Name), settings.Load(project.Name).Trigger),
 
-            LoadNoticesFast: () => DashboardSkeleton.Notices(noticeStore.Load(project.Name), DateTime.UtcNow));
+            LoadNoticesFast: () => DashboardSkeleton.Notices(noticeStore.Load(project.Name), DateTime.UtcNow),
+
+            HideAllAgents: async () =>
+            {
+                var hidden = await new HideAllAgentsHandler(mux, agents)
+                    .HandleAsync(project.Name)
+                    .ConfigureAwait(false);
+
+                barPanes = null;
+
+                return Noted(log, project.Name, HideAllAgentsHandler.Summary(hidden));
+            });
     }
 }

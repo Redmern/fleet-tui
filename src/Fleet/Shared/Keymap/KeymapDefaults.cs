@@ -68,6 +68,7 @@ public static class KeymapDefaults
             [FleetAction.UpdateFleet] = "u",
             [FleetAction.ShowVersion] = "v",
             [FleetAction.WhatsNew] = "W",
+            [FleetAction.HideAllAgents] = "X",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -126,6 +127,7 @@ public static class KeymapDefaults
             FleetAction.UpdateFleet => "update",
             FleetAction.ShowVersion => "version",
             FleetAction.WhatsNew => "what's new",
+            FleetAction.HideAllAgents => "hide all",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -193,6 +195,7 @@ public static class KeymapDefaults
             FleetAction.UpdateFleet => "Update fleet",
             FleetAction.ShowVersion => "Version",
             FleetAction.WhatsNew => "What's new",
+            FleetAction.HideAllAgents => "Hide all agents",
             _ => action.ToString(),
         };
 }

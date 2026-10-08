@@ -30,6 +30,8 @@ public static class FleetIcons
 
     public const string Hide = "";
 
+    public const string HideAll = "";
+
     public const string Menu = "";
 
     public const string Dismiss = "";
@@ -65,6 +67,7 @@ public static class FleetIcons
         [Configure] = "config",
         [Show] = "show",
         [Hide] = "hide",
+        [HideAll] = "hide all",
         [Menu] = "menu",
         [Dismiss] = "dismiss",
         [DismissAll] = "dismiss all",
@@ -125,6 +128,7 @@ public static class FleetIcons
         FleetAction.NewAgent => "",
         FleetAction.ChangeHarness => "",
         FleetAction.ToggleHidden => "",
+        FleetAction.HideAllAgents => HideAll,
         FleetAction.StopAgent => "",
         FleetAction.RemoveAgent => "",
         FleetAction.AddRepository => "",

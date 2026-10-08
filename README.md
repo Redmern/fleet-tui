@@ -634,6 +634,10 @@ dashboard itself.
 
 A hidden agent moves to the `fleet-hidden` workspace, which fleetd never shows.
 
+**Hide all agents** (`X` on the dashboard's Agents and Subs tabs, or under *maintenance*
+in the settings menu) hides every agent and sub-orchestrator that has a pane showing,
+in one go. The main orchestrator stays put.
+
 `enter` on an agent **focuses its pane, or restarts it** if the pane is gone. A
 hidden agent is **unhidden first**, so it comes back into the project window rather
 than opening a window of its own —
