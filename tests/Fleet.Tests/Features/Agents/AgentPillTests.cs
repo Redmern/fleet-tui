@@ -106,6 +106,15 @@ public class AgentPillTests
     }
 
     [Fact]
+    public void A_visible_agent_is_marked_with_the_plain_eye()
+    {
+        var row = AgentRows.For([Agent()], _ => BranchState.Unknown)[0].Text;
+
+        Assert.Contains(FleetIcons.Show, row);
+        Assert.DoesNotContain(FleetGlyphs.Hidden, row);
+    }
+
+    [Fact]
     public void The_pill_glyphs_are_the_nerd_font_codepoints()
     {
         Assert.Equal("\ue0a0", FleetGlyphs.Branch);
