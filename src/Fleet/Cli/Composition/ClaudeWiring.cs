@@ -14,11 +14,17 @@ public static class ClaudeWiring
     public static Result SyncRoot(string project, string root) =>
         Sync(project, root, string.Empty, Adapters.Settings().Load(project).MergedOverDefaults());
 
-    public static Result SyncFolder(string project, string folder, string caller)
-    {
-        FleetSkills.WriteTo(folder);
+    public static Result SyncFolder(string project, string folder, string caller) =>
+        WithSkills(folder, Sync(project, folder, caller, Adapters.Settings().Load(project).MergedOverDefaults()));
 
-        return Sync(project, folder, caller, Adapters.Settings().Load(project).MergedOverDefaults());
+    private static Result WithSkills(string folder, Result synced)
+    {
+        if (synced.Succeeded)
+        {
+            FleetSkills.WriteTo(folder);
+        }
+
+        return synced;
     }
 
     private static readonly Lock ConfigGate = new();
@@ -57,7 +63,7 @@ public static class ClaudeWiring
 
     public static Result ApproveFolder(string project, string folder, string repository, string branch)
     {
-        var result = ResyncWorktree(project, folder, repository, branch);
+        var result = SyncWorktreeConfig(project, folder, repository, branch);
 
         if (result.Succeeded)
         {
@@ -69,18 +75,19 @@ public static class ClaudeWiring
 
         TrustFolder(folder);
 
-        return result;
+        return WithSkills(folder, result);
     }
 
-    public static Result ResyncWorktree(string project, string folder, string repository, string branch)
+    public static Result ResyncWorktree(string project, string folder, string repository, string branch) =>
+        WithSkills(folder, SyncWorktreeConfig(project, folder, repository, branch));
+
+    private static Result SyncWorktreeConfig(string project, string folder, string repository, string branch)
     {
         var settings = Adapters.Settings().Load(project).MergedOverDefaults();
         var permissions = ClaudePermissionPlanner.Plan(settings);
 
         var server = McpRegistration.For(
             Adapters.Executable, project, McpCaller.ForAgent(repository, branch));
-
-        FleetSkills.WriteTo(folder);
 
         return new ClaudeConfigWriter()
             .SyncWorktree(server, folder, permissions.Allow, permissions.Deny, permissions.Ask, StatusHook(settings));
