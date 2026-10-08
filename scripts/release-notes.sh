@@ -5,8 +5,7 @@
 #
 # A prerelease (0.7.0-rc.1) uses its own entry when there is one, else the entry
 # of the version it leads to (0.7.0). Exits 1 when neither has an entry, so a
-# release without notes fails. Entries under "# Earlier builds" (the old version
-# numbers, from before the restart at 0.1.0) never match.
+# release without notes fails.
 set -eu
 
 file="${RELEASE_NOTES:-$(dirname "$0")/../RELEASE_NOTES.md}"
@@ -15,7 +14,6 @@ version="${1#v}"
 entry() {
   awk -v want="$1" '
     { sub(/\r$/, "") }
-    /^# Earlier builds/ { exit }
     /^## / { v = $2; inside = (v == want); next }
     inside && /^- / { print; found = 1 }
     inside && /^  / && found { print }
