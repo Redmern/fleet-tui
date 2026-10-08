@@ -13,6 +13,7 @@ using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Menu.ShowMenu;
+using Fleet.Features.Menu.ShowReleaseNotes;
 using Fleet.Features.Notifications.ShowNotices;
 using Fleet.Features.Notifications.SyncNotices;
 using Fleet.Features.Projects.CreateProject;
@@ -724,6 +725,14 @@ public static class MenuCommand
                     keymap,
                     project.Name,
                     LogParser.For(project.Name, LogParser.Parse(log.Tail(LogTail))));
+
+                break;
+
+            case FleetAction.WhatsNew:
+                ReleaseNotesView.Show(
+                    app,
+                    keymap,
+                    ReleaseNotes.Group(ReleaseNotes.Parse(ReleaseNotes.Embedded())));
 
                 break;
 

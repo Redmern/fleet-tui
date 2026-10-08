@@ -63,4 +63,5 @@ public enum FleetAction
     EditTheme,
     UpdateFleet,
     ShowVersion,
+    WhatsNew,
 }

@@ -67,6 +67,7 @@ public static class KeymapDefaults
             [FleetAction.EditTheme] = "T",
             [FleetAction.UpdateFleet] = "u",
             [FleetAction.ShowVersion] = "v",
+            [FleetAction.WhatsNew] = "W",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -124,6 +125,7 @@ public static class KeymapDefaults
             FleetAction.EditTheme => "theme",
             FleetAction.UpdateFleet => "update",
             FleetAction.ShowVersion => "version",
+            FleetAction.WhatsNew => "what's new",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -190,6 +192,7 @@ public static class KeymapDefaults
             FleetAction.EditTheme => "Theme",
             FleetAction.UpdateFleet => "Update fleet",
             FleetAction.ShowVersion => "Version",
+            FleetAction.WhatsNew => "What's new",
             _ => action.ToString(),
         };
 }

@@ -106,6 +106,7 @@ public static class FleetIcons
         FleetAction.UpdateFleet => "",
         FleetAction.ShowVersion => "",
         FleetAction.ViewLogs => "",
+        FleetAction.WhatsNew => "",
         FleetAction.EditMainOrchestratorInNvim => "",
         FleetAction.EditSubOrchestratorsInNvim => "",
         FleetAction.EditNvimConfig => "",

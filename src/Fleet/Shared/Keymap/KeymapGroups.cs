@@ -35,6 +35,7 @@ public static class KeymapGroups
             FleetAction.ViewLogs,
             FleetAction.UpdateFleet,
             FleetAction.ShowVersion,
+            FleetAction.WhatsNew,
         ]),
         ("fleet menu › settings › fleet config",
         [
