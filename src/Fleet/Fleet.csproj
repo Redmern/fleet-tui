@@ -73,4 +73,13 @@
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)../../RELEASE_NOTES.md" LogicalName="RELEASE_NOTES.md" />
   </ItemGroup>
 
+  <!--
+    The fl-* skills at the repo root (skills/<name>/SKILL.md). FleetSkills writes them to
+    <folder>/.claude/skills/ whenever fleet wires a Claude folder.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)../../skills/**/SKILL.md"
+                      LogicalName="skills/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

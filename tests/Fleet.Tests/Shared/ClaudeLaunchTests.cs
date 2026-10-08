@@ -183,4 +183,13 @@ public sealed class ClaudeLaunchTests
         Assert.Contains("Explore", SubagentGuidance.ForRepoAgents, StringComparison.Ordinal);
         Assert.Contains("isolation: worktree", SubagentGuidance.ForRepoAgents, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void The_repo_agent_guidance_points_at_the_fleet_skills()
+    {
+        Assert.Contains(
+            "fl-tdd, fl-review and fl-pr skills in `.claude/skills`",
+            SubagentGuidance.ForRepoAgents,
+            StringComparison.Ordinal);
+    }
 }

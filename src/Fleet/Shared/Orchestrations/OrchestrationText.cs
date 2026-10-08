@@ -88,6 +88,8 @@ public static class OrchestrationText
 
             ## Your task
             Read TASK.md. It holds the request verbatim. Do not edit it.
+            If the effort is too big for one session, or the request starts with "map:",
+            use the fl-map skill first.
             """;
 
         var waiting = research ? string.Empty : $"\n## Waiting for agents\n{WaitingForAgents}\n";

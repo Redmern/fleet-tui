@@ -29,6 +29,11 @@ public static class ProcessText
             number++;
             var gate = stage.HumanGate ? $" Gate: **{ApprovalMark}**." : string.Empty;
             text.AppendLine($"{number}. **{Title(stage.Stage)}** — {What(stage.Stage, plan)}{gate}");
+
+            if (Skill(stage.Stage, plan.Profile) is { } skill)
+            {
+                text.AppendLine($"   {skill}");
+            }
         }
 
         if (plan.Skipped.Any())
@@ -100,6 +105,20 @@ public static class ProcessText
             "write learnings.md: the corrections, surprises and rules worth keeping from this task, as a list. "
             + "Ask the user which ones to keep.",
         _ => string.Empty,
+    };
+
+    public static string? Skill(Stage stage, Profile profile) => stage switch
+    {
+        Stage.Specify when profile == Profile.Feature =>
+            "Skill: fl-discuss. Interview the user with it before you write spec.md.",
+        Stage.Specify => "Skill: fl-discuss, only if the task is vague.",
+        Stage.Plan when profile == Profile.Refactor =>
+            "Skill: fl-discuss. Interview the user with it before you write design.md.",
+        Stage.Build => "Skill: fl-tdd. Tell each agent to use it.",
+        Stage.Review => "Skill: fl-review.",
+        Stage.Deliver when profile != Profile.Research => "Skill: fl-pr. Tell each agent to write its PR with it.",
+        Stage.Learn => "Skill: fl-pr's retro. Fold each agent's retro into learnings.md.",
+        _ => null,
     };
 
     private static string Specify(Profile profile) => profile switch

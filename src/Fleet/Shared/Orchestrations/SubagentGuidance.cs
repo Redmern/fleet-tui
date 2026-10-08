@@ -27,6 +27,7 @@ public static class SubagentGuidance
           and not edit anything) on your branch's diff and deal with what it finds.
         - For throwaway parallel attempts, use subagents with `isolation: worktree` instead of
           asking for more fleet agents. A fleet agent is for work that needs its own branch.
+        - fleet puts the fl-tdd, fl-review and fl-pr skills in `.claude/skills`: use them to build, review and open the PR.
         """;
 
     public static bool IsIn(string worktree) =>
