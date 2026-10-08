@@ -27,22 +27,12 @@ public static class NewWindow
                 return new WindowLaunch("wt", ["-w", "new", .. profile, .. command]);
             }
 
-            if (WezTerm(variable, onPath) is { } wezterm)
-            {
-                return new WindowLaunch(wezterm, [.. WezTermConfig(variable), "start", "--", .. command]);
-            }
-
             return new WindowLaunch(command[0], command[1..], ShellExecute: true);
         }
 
         IReadOnlyList<string> unix = env.Count == 0
             ? [executable, .. args]
             : ["env", .. env.Select(e => $"{e.Key}={e.Value}"), executable, .. args];
-
-        if (WezTerm(variable, onPath) is { } unixWezTerm)
-        {
-            return new WindowLaunch(unixWezTerm, [.. WezTermConfig(variable), "start", "--", .. unix]);
-        }
 
         if (variable("TERMINAL") is { Length: > 0 } terminal && onPath(terminal))
         {
@@ -72,25 +62,6 @@ public static class NewWindow
             return false;
         }
     }
-
-    private static string? WezTerm(Func<string, string?> variable, Func<string, bool> onPath)
-    {
-        if (!string.Equals(variable("TERM_PROGRAM"), "WezTerm", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        if (variable("WEZTERM_EXECUTABLE") is { Length: > 0 } own
-            && Path.GetFileNameWithoutExtension(own.Replace('\\', '/')).StartsWith("wezterm", StringComparison.OrdinalIgnoreCase))
-        {
-            return own;
-        }
-
-        return onPath("wezterm") ? "wezterm" : null;
-    }
-
-    private static string[] WezTermConfig(Func<string, string?> variable) =>
-        variable("WEZTERM_CONFIG_FILE") is { Length: > 0 } config ? ["--config-file", config] : [];
 
     private static string[] WithEnv(string executable, IReadOnlyList<string> args, IReadOnlyDictionary<string, string> env) =>
     [

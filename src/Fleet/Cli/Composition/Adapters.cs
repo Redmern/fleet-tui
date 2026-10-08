@@ -11,10 +11,8 @@ using Fleet.Platform.Mux.Constants;
 using Fleet.Platform.Mux.Models;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Setup.RunSetup;
-using Fleet.Features.Setup.RunSetup.Enums;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Features.Themes.ManageThemes;
-using Fleet.Platform.Mux.WezTerm;
 using Fleet.Platform.Nvim;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Hooks;
@@ -161,10 +159,9 @@ public static class Adapters
         var chosen = DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath));
 
         var embedded = chosen == DriverNames.Embedded;
-        var unsupported = MuxTrouble.With(
-            chosen, OnPath(DriverNames.WezTerm), embeddedReady: embedded && EmbeddedWiring.Ready);
+        var unsupported = MuxTrouble.With(chosen, embeddedReady: embedded && EmbeddedWiring.Ready);
 
-        IMuxDriver inner = embedded ? EmbeddedWiring.Driver() : new WezTermDriver();
+        IMuxDriver inner = EmbeddedWiring.Driver();
 
         return new MuxSelection(
             new FailSilentDriver(new NvimConfigDriver(inner, UseFleetNvimConfig), log.Swallowed), chosen, unsupported);
@@ -204,20 +201,11 @@ public static class Adapters
 
     public static string Executable => Environment.ProcessPath ?? "fleet";
 
-    public static void MarkDashboardPane(string project)
-    {
-        WezTermUserVars.MarkDashboard(project);
-        DashPaneMarker.Write(project, Environment.GetEnvironmentVariable("WEZTERM_PANE"));
-    }
-
     public static string? DashPane(string project) => DashPaneMarker.Read(project);
 
     public static string NotifyFile => FileNotifyStore.File;
 
     public static string WorkspaceFile => FileWorkspaceRequestStore.File;
-
-    public static void EmitUserVar(string name, string value) =>
-        WezTermUserVars.Mark(name, value);
 
     public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
 
@@ -364,54 +352,6 @@ public static class Adapters
         return panes.FirstOrDefault(p => p.IsActive)?.WindowId;
     }
 
-    public static ConfigWiring WireWezTermConfig()
-    {
-        var home = Home;
-
-        var config = WezTermWiring.ConfigCandidates(home).FirstOrDefault(File.Exists);
-
-        if (config is null)
-        {
-            var starter = WezTermWiring.DefaultConfig(home);
-
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(starter)!);
-                File.WriteAllText(starter, WezTermWiring.Starter());
-
-                return new ConfigWiring(WiringState.Added, starter, "created a new config");
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return new ConfigWiring(WiringState.Failed, starter, e.Message);
-            }
-        }
-
-        try
-        {
-            var text = File.ReadAllText(config);
-
-            if (WezTermWiring.AlreadyWired(text))
-            {
-                return new ConfigWiring(WiringState.Already, config);
-            }
-
-            var wired = WezTermWiring.Wire(text);
-
-            File.Copy(config, config + ".bak-fleet", overwrite: true);
-            File.WriteAllText(config, wired.Text);
-
-            return new ConfigWiring(
-                WiringState.Added,
-                config,
-                wired.BeforeReturn ? string.Empty : "appended at the end of the file");
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new ConfigWiring(WiringState.Failed, config, e.Message);
-        }
-    }
-
     public static string HomeDirectory => Home;
 
     private static string Home =>
@@ -426,102 +366,9 @@ public static class Adapters
             return $"setup: {string.Join(", ", missing)} not on PATH — run 'fleet setup'.";
         }
 
-        if (DriverSelector.Choose(MuxEnvironment.Current(MuxEnvironment.OnPath)) != DriverNames.WezTerm)
-        {
-            return null;
-        }
-
-        var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermWiring.Module);
-
-        try
-        {
-            var wanted = WezTermKeybinds.Generate(
-                keymap, Executable, FileWorkspaceRequestStore.File, FileNotifyStore.File);
-
-            if (!File.Exists(target) || File.ReadAllText(target) != wanted)
-            {
-                return "setup: wezterm keybinds are outdated — run 'fleet setup' "
-                    + "and reload wezterm.";
-            }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
-
         return null;
-    }
-
-    public static string WriteKeybindModule(Keymap keymap)
-    {
-        var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermWiring.Module);
-
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        File.WriteAllText(
-            target,
-            WezTermKeybinds.Generate(
-                keymap, Executable, FileWorkspaceRequestStore.File, FileNotifyStore.File));
-
-        File.WriteAllText(
-            Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermTheme.Module),
-            WezTermTheme.Generate(Themes().Active()));
-
-        return target;
     }
 
     public static ManageThemesHandler Themes() =>
         new(new FileThemeStore(FleetPaths.Config), new OmarchyThemeSource(Home));
-
-    public static string? ApplyWezTermTheme(ThemePalette theme)
-    {
-        var target = Path.Combine(WezTermWiring.ModuleDirectory(Home), WezTermTheme.Module);
-
-        try
-        {
-            var wanted = WezTermTheme.Generate(theme);
-
-            if (!File.Exists(target) || File.ReadAllText(target) == wanted)
-            {
-                return null;
-            }
-
-            FileThemeStore.WriteAtomically(target, wanted);
-
-            return target;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    public static string TouchWezTermConfig()
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        string[] candidates =
-        [
-            Path.Combine(home, ".wezterm.lua"),
-            Path.Combine(home, ".config", "wezterm", "wezterm.lua"),
-        ];
-
-        foreach (var candidate in candidates)
-        {
-            if (!File.Exists(candidate))
-            {
-                continue;
-            }
-
-            try
-            {
-                File.SetLastWriteTimeUtc(candidate, DateTime.UtcNow);
-                return $"nudged {candidate}";
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return $"could not nudge {candidate}: {e.Message}";
-            }
-        }
-
-        return "no wezterm config found; reload wezterm yourself";
-    }
 }

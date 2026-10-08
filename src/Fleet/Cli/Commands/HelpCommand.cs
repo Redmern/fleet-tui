@@ -15,11 +15,11 @@ public static class HelpCommand
               fleet request --action <id> --project <name>
                                           hand an action to that project's dashboard
               fleet quit --project <name> close everything for that project
-              fleet setup                 first run: wire wezterm, check what is missing
+              fleet setup                 first run: check what is missing
               fleet dispatch --project <p> "<task>"
                                           spin up a hidden sub-orchestrator for a task
-              fleet apply-keybinds        write the keybinds: wezterm module, nvim and Claude
-                [--target nvim|claude]    only that target (skips the wezterm module)
+              fleet apply-keybinds        write the keybinds: nvim and Claude
+                [--target nvim|claude]    only that target
                 [--dry-run]               show what would change, write nothing
               fleet head [--voice]        the head orchestrator's Claude (alt+o opens it in voice mode)
               fleet mcp --head            the head's cross-project MCP tools over stdio
@@ -35,7 +35,7 @@ public static class HelpCommand
               fleet update --version <v>  the same, as a flag (-v)
               fleet update --list         list every published release (-l)
 
-            embedded multiplexer (the default outside wezterm and tmux; FLEET_MUX=wezterm opts out):
+            embedded multiplexer:
               fleet attach [--project <p>] attach this terminal to fleetd (a picker when it runs several projects)
               fleet attach --ssh <host>   attach to fleetd on another machine over ssh
               fleet daemon                run fleetd in the foreground

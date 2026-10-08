@@ -7,11 +7,10 @@ public static class SetupHints
         : Linux(tool);
 
     public const string Glyphs =
-        "if the pills above look like boxes, point wezterm at a Nerd Font";
+        "if the pills above look like boxes, point your terminal at a Nerd Font";
 
     private static string Windows(string tool) => tool switch
     {
-        "wezterm" => "winget install wez.wezterm",
         "git" => "winget install Git.Git",
         "nvim" => "winget install Neovim.Neovim",
         "claude" => "npm install -g @anthropic-ai/claude-code",

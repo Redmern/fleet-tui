@@ -59,6 +59,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 {
     public const string ClientVariable = "FLEET_CLIENT";
     public const string PaneVariable = "FLEET_PANE";
+    public const string ExecutableVariable = "FLEET_EXECUTABLE";
 
     private readonly Lock _gate = new();
     private readonly MuxModel _model = new();
@@ -2052,7 +2053,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             [PaneVariable] = pane.Id,
             [Endpoint.Variable] = options.Endpoint.Address,
             ["WEZTERM_PANE"] = string.Empty,
-            ["WEZTERM_EXECUTABLE"] = options.FleetExecutable,
+            [ExecutableVariable] = options.FleetExecutable,
             [FloatPane.Variable] = _model.FloatBounds(pane.Id) is not null || _model.IsOverlay(pane.Id) ? "1" : string.Empty,
             [FramedPane.Variable] = MuxModel.IsDashboard(pane) ? "1" : string.Empty,
             ["WEZTERM_UNIX_SOCKET"] = string.Empty,
