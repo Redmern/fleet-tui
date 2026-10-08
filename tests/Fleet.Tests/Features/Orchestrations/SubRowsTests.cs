@@ -98,7 +98,7 @@ public sealed class SubRowsTests
     [InlineData("working", FleetGlyphs.Working, FleetTones.Warn)]
     [InlineData("waiting", FleetGlyphs.Waiting, FleetTones.Bad)]
     [InlineData("stalled", FleetGlyphs.Stalled, FleetTones.Bad)]
-    [InlineData("idle", FleetGlyphs.Idle, FleetTones.Good)]
+    [InlineData("idle", FleetGlyphs.Idle, FleetTones.Warn)]
     [InlineData("something else", FleetGlyphs.Working, FleetTones.Warn)]
     public void The_orchestrator_status_is_an_icon_coloured_by_status(string status, string glyph, string tone)
     {
@@ -137,10 +137,37 @@ public sealed class SubRowsTests
         var hidden = rows.Single(r => r.Text.Contains("other", StringComparison.Ordinal));
 
         Assert.Equal(StatusIcon.For("working")!.Text + "  ", visible.Trailing![0].Text);
-        Assert.Equal(StatusIcon.For("failed")!.Text + "  ", sub.Trailing![0].Text);
+        Assert.Equal(StatusIcon.For("idle")!.Text + "  ", sub.Trailing![0].Text);
         Assert.Equal(visible.Trailing![0], hidden.Trailing![0]);
         Assert.Equal(Width(sub.Trailing!), Width(visible.Trailing!));
         Assert.Equal(Width(sub.Trailing!), Width(hidden.Trailing!));
+    }
+
+    [Fact]
+    public void A_done_sub_with_an_unfinished_child_shows_idle_in_its_row_and_its_status()
+    {
+        var listing = Listing(
+            Orchestrator("upgrade", status: "done"),
+            Agent("backend", "story", "upgrade") with { Status = "done" },
+            Agent("backend", "other", "upgrade") with { Status = "working" });
+
+        var rows = SubRows.For(listing, Clean, ",");
+
+        Assert.Equal($"{FleetGlyphs.Idle}  ", rows[0].Trailing![0].Text);
+        Assert.Equal(FleetTones.Warn, rows[0].Trailing![0].Tone);
+        Assert.Equal("idle", SubRows.Statuses(listing)[0]);
+    }
+
+    [Fact]
+    public void A_done_sub_whose_children_all_finished_with_a_failure_shows_failed()
+    {
+        var listing = Listing(
+            Orchestrator("upgrade", status: "done"),
+            Agent("backend", "story", "upgrade") with { Status = "done" },
+            Agent("backend", "other", "upgrade") with { Status = "failed" });
+
+        Assert.Equal("failed", SubRows.Statuses(listing)[0]);
+        Assert.Equal($"{FleetGlyphs.Failed}  ", SubRows.For(listing, Clean, ",")[0].Trailing![0].Text);
     }
 
     [Fact]

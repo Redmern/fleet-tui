@@ -41,6 +41,21 @@ public sealed class SubSummaryTests
     }
 
     [Fact]
+    public void A_done_sub_shows_idle_until_its_agents_finish_and_failed_if_one_failed()
+    {
+        var waiting = Text([Sub("upgrade", OrchestrationStatus.Done), Agent("backend", "story", "upgrade")]);
+        var failed = Text(
+        [
+            Sub("upgrade", OrchestrationStatus.Done),
+            Agent("backend", "story", "upgrade", OrchestrationStatus.Done),
+            Agent("frontend", "form", "upgrade", OrchestrationStatus.Failed),
+        ]);
+
+        Assert.StartsWith("upgrade — idle, pane closed", waiting, StringComparison.Ordinal);
+        Assert.StartsWith("upgrade — failed, pane closed", failed, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_last_report_shows_its_time_and_summary()
     {
         var text = Text([Sub("upgrade", OrchestrationStatus.Failed, "tests red", "2026-10-03T10:00:00.0000000+00:00")]);

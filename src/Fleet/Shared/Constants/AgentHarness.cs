@@ -125,6 +125,10 @@ public static class AgentHarness
     public const string AgentInstructionPrompt =
         "Read .fleet/instruction.md in this folder and do what it says.";
 
+    public const string AgentReportRule =
+        "Call the fleet report tool with status working when you start this task or follow-up. "
+        + "Report done only when it is fully implemented and verified, or failed if you cannot finish it.";
+
     public const string OrchestratorKickoff =
         "Read CLAUDE.md and TASK.md in your working directory, then begin.";
 

@@ -279,7 +279,7 @@ public sealed class NewAgentTests : IDisposable
 
         Assert.Equal([AgentHarness.AgentInstructionPrompt, "\r"], mux.SentTo(pane.Id));
         Assert.Equal(
-            "add a login page",
+            $"add a login page\n\n{AgentHarness.AgentReportRule}",
             File.ReadAllText(Path.Combine(pane.Cwd, ".fleet", AgentHarness.AgentInstructionFile)));
     }
 
@@ -315,7 +315,7 @@ public sealed class NewAgentTests : IDisposable
         await new TellAgentHandler(mux, TimeSpan.Zero).DeliverAsync(result.Value, pane.Id, "add a health check");
 
         Assert.Equal(
-            "add a health check",
+            $"add a health check\n\n{AgentHarness.AgentReportRule}",
             File.ReadAllText(Path.Combine(pane.Cwd, ".fleet", AgentHarness.AgentInstructionFile)));
     }
 

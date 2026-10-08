@@ -57,13 +57,23 @@ public sealed class PaneActivity(IMuxDriver mux)
                 ? await mux.GetTextAsync(pane.Id, ct).ConfigureAwait(false)
                 : string.Empty;
             _texts[agent.Worktree] = seen;
-            return agent with { Status = AgentActivity.For(AgentActivity.Confirmed(report.State, seen, report.Reason)) };
+            return WithLive(agent, AgentActivity.For(AgentActivity.Confirmed(report.State, seen, report.Reason)), orchestrator);
         }
 
         var text = await mux.GetTextAsync(pane.Id, ct).ConfigureAwait(false);
         _texts[agent.Worktree] = text;
         var live = AgentActivity.Classify(text);
 
-        return live.Length == 0 && orchestrator ? agent : agent with { Status = live };
+        return WithLive(agent, live, orchestrator);
     }
+
+    private static AgentRecord WithLive(AgentRecord agent, string live, bool orchestrator) =>
+        KeepsStored(agent, live, orchestrator) ? agent : agent with { Status = live };
+
+    private static bool KeepsStored(AgentRecord agent, string live, bool orchestrator) =>
+        (live.Length == 0 && orchestrator)
+        || (live is "" or AgentActivity.Idle && Finished(agent));
+
+    private static bool Finished(AgentRecord agent) =>
+        agent.Status.Trim().ToLowerInvariant() is OrchestrationStatus.Done or OrchestrationStatus.Failed;
 }

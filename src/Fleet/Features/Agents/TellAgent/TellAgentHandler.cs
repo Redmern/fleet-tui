@@ -35,7 +35,7 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
         var dir = Path.Combine(agent.Worktree, ".fleet");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(
-            Path.Combine(dir, AgentHarness.AgentInstructionFile), message, ct).ConfigureAwait(false);
+            Path.Combine(dir, AgentHarness.AgentInstructionFile), InstructionFor(agent, message), ct).ConfigureAwait(false);
 
         if (PumpedByNvim(agent))
         {
@@ -46,4 +46,7 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
         await Task.Delay(_enterDelay, ct).ConfigureAwait(false);
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
+
+    private static string InstructionFor(AgentRecord agent, string message) =>
+        AgentHarness.IsOrchestrator(agent.Harness) ? message : $"{message}\n\n{AgentHarness.AgentReportRule}";
 }

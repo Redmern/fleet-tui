@@ -31,7 +31,7 @@ public static class SubSummary
             if (!entry.IsChild)
             {
                 group = entry.Group;
-                lines.AddRange(Sub(entry.Agent, paneOpen(entry.Agent)));
+                lines.AddRange(Sub(entry.Agent, SubStatus.ChildrenOf(listing, entry.Agent), paneOpen(entry.Agent)));
                 continue;
             }
 
@@ -59,12 +59,13 @@ public static class SubSummary
             : string.Join('\n', board.SelectMany(a => Child(a, paneOpen(a), string.Empty)));
     }
 
-    private static IEnumerable<string> Sub(AgentRecord sub, bool open)
+    private static IEnumerable<string> Sub(AgentRecord sub, IEnumerable<AgentRecord> children, bool open)
     {
+        var status = SubStatus.Derive(sub, children) ?? OrchestrationStatus.Normalize(sub.Status);
         var where = open ? "pane open" : "pane closed";
         var hidden = sub.Hidden ? ", hidden" : string.Empty;
 
-        yield return $"{sub.Branch} — {OrchestrationStatus.Normalize(sub.Status)}, {where}{hidden}";
+        yield return $"{sub.Branch} — {status}, {where}{hidden}";
 
         if (LastReport(sub) is { } report)
         {

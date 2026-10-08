@@ -29,16 +29,16 @@ public static class SubRows
 
         return [.. listing.Flat.Select(e => e.IsChild
             ? Child(e.Agent, state, pillWidth)
-            : Orchestrator(e.Agent))];
+            : Orchestrator(e.Agent, StatusOf(e.Agent, listing)))];
     }
 
     public static IReadOnlyList<int> GapsAfter(SubListing listing) =>
         [.. Enumerable.Range(0, Math.Max(0, listing.Flat.Count - 1))
             .Where(i => !listing.Flat[i + 1].IsChild)];
 
-    private static FleetRow Orchestrator(AgentRecord agent)
+    private static FleetRow Orchestrator(AgentRecord agent, string status)
     {
-        var icon = StatusIcon.For(StatusOf(agent))!;
+        var icon = StatusIcon.For(status)!;
 
         List<FleetSpan> trailing = [icon with { Text = $"{icon.Text}  " }, FleetHiddenMark.For(agent.Hidden)];
 
@@ -75,9 +75,12 @@ public static class SubRows
     }
 
     public static IReadOnlyList<string> Statuses(SubListing listing) =>
-        [.. listing.Flat.Select(e => e.IsChild ? e.Agent.Status : StatusOf(e.Agent))];
+        [.. listing.Flat.Select(e => e.IsChild ? e.Agent.Status : StatusOf(e.Agent, listing))];
 
-    private static string StatusOf(AgentRecord agent) =>
+    private static string StatusOf(AgentRecord agent, SubListing listing) =>
+        SubStatus.Derive(agent, SubStatus.ChildrenOf(listing, agent)) ?? LiveStatusOf(agent);
+
+    private static string LiveStatusOf(AgentRecord agent) =>
         StatusIcon.For(agent.Status) is null
             ? OrchestrationStatus.Normalize(agent.Status)
             : agent.Status.Trim().ToLowerInvariant();

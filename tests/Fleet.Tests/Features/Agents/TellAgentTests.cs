@@ -177,7 +177,7 @@ public sealed class TellAgentTests : IDisposable
         Assert.Null(await Teller.RouteAsync(agent, pane, "z", typed: false));
 
         Assert.Equal(3, Prompts(pane));
-        Assert.Equal("z", Inbox(agent));
+        Assert.Equal($"z\n\n{AgentHarness.AgentReportRule}", Inbox(agent));
     }
 
     private sealed class FixedInboxes(string folder, string address) : IAgentInboxes
