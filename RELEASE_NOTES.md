@@ -4,6 +4,13 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.1 (2026-10-08)
+
+- Hide all agents (`X`) in Settings and on the dashboard's Agents and Subs tabs. It hides sub-orchestrators too.
+- Dashboard (`m`) in the fleet menu now focuses the dashboard, not the Claude pane.
+- Agents and sub-orchestrators show done or failed from their reports. A sub-orchestrator stays idle until all its agents are finished. The idle icon is now yellow.
+- fleet writes five skills (fl-discuss, fl-tdd, fl-review, fl-pr, fl-map) to every Claude folder it sets up. A skill of your own with one of these names is overwritten.
+
 ## 0.7.0 (2026-10-08)
 
 - Update fleet from inside the app. The project picker says when a new version is out, and Settings has Update fleet (`u`) and Version (`v`). Open dashboards restart on the new build.
