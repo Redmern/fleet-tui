@@ -6,8 +6,6 @@ public static class ReleaseNotes
 {
     public const string ResourceName = "RELEASE_NOTES.md";
 
-    public const string LegacyHeading = "# Earlier builds";
-
     private const string Heading = "## ";
 
     private const string Bullet = "- ";
@@ -25,14 +23,13 @@ public static class ReleaseNotes
         var entries = new List<ReleaseEntry>();
         string? version = null;
         string? date = null;
-        var legacy = false;
         var bullets = new List<string>();
 
         void Flush()
         {
             if (version is not null)
             {
-                entries.Add(new ReleaseEntry(version, date, [.. bullets], legacy));
+                entries.Add(new ReleaseEntry(version, date, [.. bullets]));
             }
 
             bullets.Clear();
@@ -42,13 +39,7 @@ public static class ReleaseNotes
         {
             var line = raw.TrimEnd('\r', ' ');
 
-            if (line.StartsWith(LegacyHeading, StringComparison.Ordinal))
-            {
-                Flush();
-                version = null;
-                legacy = true;
-            }
-            else if (line.StartsWith(Heading, StringComparison.Ordinal))
+            if (line.StartsWith(Heading, StringComparison.Ordinal))
             {
                 Flush();
                 (version, date) = Title(line[Heading.Length..]);
@@ -71,8 +62,8 @@ public static class ReleaseNotes
     public static IReadOnlyList<ReleaseGroup> Group(IReadOnlyList<ReleaseEntry> entries) =>
         [
             .. entries
-                .GroupBy(e => (Minor: Minor(e.Version), e.Legacy))
-                .Select(g => new ReleaseGroup(g.Key.Minor, [.. g], g.Key.Legacy)),
+                .GroupBy(e => Minor(e.Version))
+                .Select(g => new ReleaseGroup(g.Key, [.. g])),
         ];
 
     public static string Minor(string version)
