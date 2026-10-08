@@ -191,7 +191,7 @@ public sealed class DispatchHandler(
 
     private static string? AidlcOverride(string projectRoot)
     {
-        var path = ProjectConfigPaths.AidlcFile(projectRoot);
+        var path = ProjectConfigPaths.ProcessFile(projectRoot);
 
         try
         {

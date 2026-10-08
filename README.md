@@ -761,7 +761,7 @@ notification center like an agent's.
 `repository` (and optionally a `branch`), fleet skips the sub-orchestrator and starts a
 repo agent on that repository with the task, as `new_agent` would; the call must pass both
 the `dispatch` and the `new_agent` permission. Without a branch, the branch is named from
-the task the way a sub's slug is. A sub-orchestrator is still used when AIDLC applies to
+the task the way a sub's slug is. A sub-orchestrator is still used when Ai-DLC applies to
 the task, or when it is research (`research: true`, or the `research` profile); a research
 sub is told to do the work itself with subagents instead of starting repo agents. A typed
 dispatch (`,task`) always starts a sub-orchestrator.
@@ -785,7 +785,7 @@ named in the result. Removing a sub from the Subs tab without throwing away its 
 moves them to the Agents tab the same way. The approval prompt says when a `remove_sub`
 would delete the folder or the agents.
 
-**AIDLC.** A sub-orchestrator can run a structured process instead of free-form. Press
+**Ai-DLC.** A sub-orchestrator can run a structured process instead of free-form. Press
 `A` in the menu's Settings > Fleet config submenu to set it per project:
 
 - **Mode** — `off` (default), `on` (every dispatch), or `manual` (only when the task
@@ -803,8 +803,8 @@ would delete the folder or the agents.
 
 fleet writes the process into the sub-orchestrator's CLAUDE.md, keeps the task's record
 next to it (`state.json`, and `audit.jsonl` for what happened), and tells it to stop and
-ask you at each approval point. `.fleet/config/aidlc.md` adds your own notes to that
-process.
+ask you at each approval point. `.fleet/config/ai-dlc.md` adds your own notes to that
+process (the older name `aidlc.md` still works; if both exist, `ai-dlc.md` wins).
 
 ## The head orchestrator
 
@@ -931,7 +931,7 @@ Everything lives under `%APPDATA%\fleet`:
 ```
 projects/<name>.json    a name and a root, with ~ for the home directory
 keybinds.json           the prefix and every action binding
-settings/<name>.json    the per-project tool permissions, dispatch trigger and AIDLC settings
+settings/<name>.json    the per-project tool permissions, dispatch trigger and Ai-DLC settings
 head/                   the head orchestrator's folder: CLAUDE.md, .mcp.json, voice settings
 approvals/<name>/       in-flight MCP approval requests (transient)
 current-theme           the active theme's name (see Themes)
