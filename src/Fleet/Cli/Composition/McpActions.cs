@@ -324,7 +324,7 @@ public sealed class McpActions(
             return Ok(PeerMessage.SendYourself(
                 $"{Repo(request)}/{Branch(request)}",
                 address,
-                message,
+                TellAgentHandler.InstructionFor(agent, message),
                 $"If SendMessage can't reach that address, call {HarnessToolIds.For(HarnessTool.TellAgent)} again "
                 + $"with {ToolArguments.Typed}: true."));
         }

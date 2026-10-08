@@ -77,6 +77,38 @@ public class PaneActivityTests
         Assert.Equal(0, mux.TotalReads);
     }
 
+    [Theory]
+    [InlineData("done", "idle", "done")]
+    [InlineData("failed", "idle", "failed")]
+    [InlineData("done", "", "done")]
+    [InlineData("done", "thinking... esc to interrupt", AgentActivity.Working)]
+    [InlineData("", "idle", AgentActivity.Idle)]
+    public void A_reported_done_or_failed_stays_while_the_session_is_idle_but_live_work_wins(
+        string stored, string pane, string expected)
+    {
+        var agent = Agent("a", status: stored);
+
+        var live = new PaneActivity(new TextMux { Text = pane }).For([agent], [PaneOf(agent)], NoHook);
+
+        Assert.Equal(expected, Assert.Single(live).Status);
+    }
+
+    [Theory]
+    [InlineData(AgentState.Idle, "done")]
+    [InlineData(AgentState.Working, AgentActivity.Working)]
+    [InlineData(AgentState.Blocked, AgentActivity.Waiting)]
+    public void A_hooked_agent_that_reported_done_keeps_it_only_while_idle(AgentState state, string expected)
+    {
+        var agent = Agent("a", status: "done");
+
+        var live = new PaneActivity(new TextMux { Text = "do you want to proceed?" }).For(
+            [agent],
+            [PaneOf(agent)],
+            a => new AgentReport(a.Worktree, "s", state, DateTime.UtcNow));
+
+        Assert.Equal(expected, Assert.Single(live).Status);
+    }
+
     [Fact]
     public void The_agents_tab_and_the_subs_tab_never_share_an_agent_so_no_pane_is_read_for_both()
     {

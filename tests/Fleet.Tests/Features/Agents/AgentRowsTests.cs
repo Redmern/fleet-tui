@@ -58,7 +58,7 @@ public class AgentRowsTests
     [InlineData(AgentActivity.Working, FleetGlyphs.Working, FleetTones.Warn)]
     [InlineData(AgentActivity.Waiting, FleetGlyphs.Waiting, FleetTones.Bad)]
     [InlineData(AgentActivity.Stalled, FleetGlyphs.Stalled, FleetTones.Bad)]
-    [InlineData(AgentActivity.Idle, FleetGlyphs.Idle, FleetTones.Good)]
+    [InlineData(AgentActivity.Idle, FleetGlyphs.Idle, FleetTones.Warn)]
     [InlineData("done", FleetGlyphs.Done, FleetTones.Good)]
     [InlineData("failed", FleetGlyphs.Failed, FleetTones.Bad)]
     public void Each_status_shows_its_own_coloured_icon(string status, string glyph, string tone)

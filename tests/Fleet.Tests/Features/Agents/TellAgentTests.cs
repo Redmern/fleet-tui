@@ -177,7 +177,17 @@ public sealed class TellAgentTests : IDisposable
         Assert.Null(await Teller.RouteAsync(agent, pane, "z", typed: false));
 
         Assert.Equal(3, Prompts(pane));
-        Assert.Equal("z", Inbox(agent));
+        Assert.Equal($"z\n\n{AgentHarness.AgentReportRule}", Inbox(agent));
+    }
+
+    [Fact]
+    public void A_repo_agent_is_told_to_report_with_every_instruction_and_a_sub_is_not()
+    {
+        var repo = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false);
+        var sub = repo with { Harness = AgentHarness.Orchestrator };
+
+        Assert.Equal($"fix it\n\n{AgentHarness.AgentReportRule}", TellAgentHandler.InstructionFor(repo, "fix it"));
+        Assert.Equal("fix it", TellAgentHandler.InstructionFor(sub, "fix it"));
     }
 
     private sealed class FixedInboxes(string folder, string address) : IAgentInboxes

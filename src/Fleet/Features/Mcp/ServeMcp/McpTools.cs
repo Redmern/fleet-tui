@@ -146,7 +146,8 @@ public static class McpTools
                 false)),
         Spec(
             HarnessTool.Report,
-            "Report your own status back to fleet (working, done, failed).",
+            "Report your own status back to fleet (working, done, failed). Report working when you start "
+            + "a new task or follow-up, done only when it is fully implemented and verified, failed if you cannot finish it.",
             new ToolParam(ToolArguments.Status, "string", "working, done, or failed.", true),
             new ToolParam(ToolArguments.Summary, "string", "A one-line summary.", false)),
     ];
