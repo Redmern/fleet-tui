@@ -20,6 +20,7 @@ public class MenuBackTests
     [InlineData(FleetAction.Remotes)]
     [InlineData(FleetAction.EditKeybinds)]
     [InlineData(FleetAction.ViewLogs)]
+    [InlineData(FleetAction.WhatsNew)]
     [InlineData(FleetAction.CleanupProject)]
     [InlineData(FleetAction.RebuildDashboard)]
     [InlineData(FleetAction.OpenFleetConfigMenu)]
@@ -72,6 +73,7 @@ public class MenuBackTests
         new[] { "Features", "Menu", "EditAidlc", "EditAidlcView.cs" },
         new[] { "Features", "Menu", "EditKeybinds", "EditKeybindsView.cs" },
         new[] { "Features", "Diagnostics", "ViewLogs", "ViewLogsView.cs" },
+        new[] { "Features", "Menu", "ShowReleaseNotes", "ReleaseNotesView.cs" },
         new[] { "Features", "Remotes", "ManageRemotes", "ManageRemotesView.cs" },
         new[] { "Features", "Notifications", "ShowNotices", "ShowNoticesView.cs" },
         new[] { "Features", "Dashboard", "ShowDashboard", "ShowDashboardView.cs" },

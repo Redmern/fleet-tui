@@ -9,7 +9,7 @@ public static class ReleaseNotesRows
 {
     public const string EmptyHint = "(no release notes in this build)";
 
-    public const int WrapWidth = 76;
+    public const int WrapWidth = 68;
 
     private const string BulletMark = "  • ";
 
