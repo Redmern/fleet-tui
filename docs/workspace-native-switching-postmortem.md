@@ -273,12 +273,10 @@ otherwise - only `WEZTERM_UNIX_SOCKET` pinning actually works).
 Nothing described above was deleted - `main` was moved back to the v0.3.0
 tree (now tagged `v0.5.1`, since `fleet update` requires a strictly greater
 version number to offer an update at all; the number does not imply new
-functionality over `v0.5.0`). Those tags were later deleted when release
-versioning restarted at v0.1.0, so the commits are listed here. The prior work
-is reachable at:
+functionality over `v0.5.0`). The prior work is reachable at:
 
-- `b2b77e5` / `2aa2bf8` (were `v0.4.0` / `v0.4.1`) - the workspace-native redesign.
-- `b1c3d35` (was `v0.5.0`) - the dedicated-instance redesign, as shipped.
+- `v0.4.0` / `v0.4.1` - the workspace-native redesign.
+- `v0.5.0` - the dedicated-instance redesign, as shipped.
 - `feat/dedicated-wezterm-instance` - the dedicated-instance work's own
   branch history.
 - `feat/workspace-native-projects` - the workspace-native work's own branch
