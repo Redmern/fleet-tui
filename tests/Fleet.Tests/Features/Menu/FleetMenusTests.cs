@@ -41,10 +41,10 @@ public class FleetMenusTests
     }
 
     [Fact]
-    public void Settings_is_split_into_session_configure_and_maintenance()
+    public void Settings_is_split_into_session_configure_maintenance_and_about()
     {
         Assert.Equal(
-            ["session", "configure", "maintenance"],
+            ["session", "configure", "maintenance", "about"],
             FleetMenus.Settings.Select(s => s.Header));
         Assert.Equal("x", KeymapDefaults.Bindings[FleetAction.CleanupProject]);
         Assert.Equal("c", KeymapDefaults.Bindings[FleetAction.OpenFleetConfigMenu]);
@@ -116,7 +116,7 @@ public class FleetMenusTests
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
         var headers = ShowMenuHandler.Headers(items);
 
-        Assert.Equal([0, 2, 7], headers.Keys.Order());
+        Assert.Equal([0, 2, 7, 10], headers.Keys.Order());
         Assert.Equal(FleetMenus.Actions(FleetMenus.Settings), items.Select(i => i.Action));
     }
 
@@ -157,10 +157,10 @@ public class FleetMenusTests
         var source = new FleetRowSource(
             ShowMenuHandler.Rows(items), gaps, headersBefore: ShowMenuHandler.Headers(items));
 
-        Assert.Equal([1, 6], gaps);
-        Assert.Equal(items.Count + 3 + 2, source.Count);
+        Assert.Equal([1, 6, 9], gaps);
+        Assert.Equal(items.Count + 4 + 3, source.Count);
         Assert.Equal(
-            ShowMenuHandler.Height(ShowMenuHandler.Rows(items), 3, gaps.Count),
+            ShowMenuHandler.Height(ShowMenuHandler.Rows(items), 4, gaps.Count),
             source.Count);
         Assert.Equal(string.Empty, source.ToList()[3]);
         Assert.Equal(string.Empty, source.ToList()[10]);

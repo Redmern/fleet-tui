@@ -65,4 +65,12 @@
     <EmbeddedResource Include="Shared/Keybinds/keybinds.default.json" LogicalName="keybinds.default.json" />
   </ItemGroup>
 
+  <!--
+    RELEASE_NOTES.md at the repo root, shown under Settings > What's new. Embedded so it
+    works offline and needs no file next to the exe (ReleaseNotes).
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)../../RELEASE_NOTES.md" LogicalName="RELEASE_NOTES.md" />
+  </ItemGroup>
+
 </Project>

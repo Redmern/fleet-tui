@@ -33,6 +33,7 @@ public static class KeymapGroups
             FleetAction.RebuildDashboard,
             FleetAction.CleanupProject,
             FleetAction.ViewLogs,
+            FleetAction.WhatsNew,
         ]),
         ("fleet menu › settings › fleet config",
         [

@@ -188,6 +188,10 @@ in the middle of a task is interrupted, and forgets which projects were open: th
 start opens only the project you open. (A crash or restart without `stop` still restores
 everything.)
 
+**Settings › What's new** (`W`) in the fleet menu lists what changed in each release,
+newest first and grouped by minor version. The notes (`RELEASE_NOTES.md`) are built into
+fleet, so it works offline.
+
 `fleet doctor` is the end-to-end smoke test: it reports the config directory, the
 selected multiplexer driver and whether it responds, the git version, every saved
 project, and any failures fleet swallowed.
