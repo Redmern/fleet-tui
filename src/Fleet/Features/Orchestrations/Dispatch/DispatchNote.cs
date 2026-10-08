@@ -9,7 +9,7 @@ public static class DispatchNote
 
     public static string Dispatched(string slug, Profile? profile = null) =>
         $"fleet: dispatched sub-orchestrator '{slug}' (hidden"
-        + (profile is { } p ? $", AIDLC {Words.Of(p)}" : string.Empty)
+        + (profile is { } p ? $", Ai-DLC {Words.Of(p)}" : string.Empty)
         + "). It has the fleet MCP tools and this project's permission settings. Open it from the dashboard's Subs tab.";
 
     public const string NoDirect =
@@ -22,10 +22,10 @@ public static class DispatchNote
     public static string RepositoryLeftToSub(bool research) =>
         research
             ? " The repository was not used: research stays with the sub-orchestrator."
-            : " The repository was not used: AIDLC applies, so the sub-orchestrator starts the agents.";
+            : " The repository was not used: Ai-DLC applies, so the sub-orchestrator starts the agents.";
 
     public static string UnknownProfile(string given) =>
-        $"fleet: '{given.Trim()}' is not an AIDLC profile. Use one of: "
+        $"fleet: '{given.Trim()}' is not an Ai-DLC profile. Use one of: "
         + string.Join(", ", ProfileCatalog.All.Select(p => Words.Of(p)))
         + ".";
 }

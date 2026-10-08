@@ -20,4 +20,5 @@ namespace Fleet.Platform.Storage;
 [JsonSerializable(typeof(NoticeSettingsFile))]
 [JsonSerializable(typeof(WindowSessionFile))]
 [JsonSerializable(typeof(AgentStateFile))]
+[JsonSerializable(typeof(UpdateCheckFile))]
 public partial class FleetJsonContext : JsonSerializerContext;

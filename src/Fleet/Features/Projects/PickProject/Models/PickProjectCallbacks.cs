@@ -10,4 +10,7 @@ public sealed record PickProjectCallbacks(
     Func<FleetAction> ShowMenu,
     Action EditKeybinds,
     Func<IReadOnlyList<WindowSession>>? Sessions = null,
-    Func<WindowSession, string?>? RemoveSession = null);
+    Func<WindowSession, string?>? RemoveSession = null,
+    Func<string?>? UpdateNotice = null,
+    Func<Task<string?>>? CheckUpdate = null,
+    Func<bool>? Update = null);

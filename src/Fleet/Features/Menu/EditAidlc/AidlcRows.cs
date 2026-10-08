@@ -9,7 +9,7 @@ namespace Fleet.Features.Menu.EditAidlc;
 
 public static class AidlcRows
 {
-    public const string ModeLabel = "AIDLC mode";
+    public const string ModeLabel = "Ai-DLC mode";
 
     public const string ProfileLabel = "Default profile";
 
@@ -30,7 +30,7 @@ public static class AidlcRows
     public static AidlcPart PartAt(int index) =>
         index >= Fixed && index < Count ? Parts[index - Fixed] : AidlcPart.None;
 
-    public static string Title(string project) => $"{project} — AIDLC";
+    public static string Title(string project) => $"{project} — Ai-DLC";
 
     public static string Describe(AidlcPart part) => part switch
     {
@@ -70,8 +70,8 @@ public static class AidlcRows
 
     public static IReadOnlyList<PickerEntry> ModeEntries() =>
     [
-        new("off", "sub-orchestrators never run the AIDLC process", "o"),
-        new("on", "every dispatch runs the AIDLC process", "n"),
+        new("off", "sub-orchestrators never run the Ai-DLC process", "o"),
+        new("on", "every dispatch runs the Ai-DLC process", "n"),
         new("manual", "only when the task starts with a profile, e.g. feature: ...", "m"),
     ];
 

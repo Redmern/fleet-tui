@@ -5,6 +5,31 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 
 public class WireTests
 {
+    [Theory]
+    [InlineData(1, null, 1)]
+    [InlineData(1, 1, 1)]
+    [InlineData(1, 9, 1)]
+    public void Peers_agree_on_the_highest_protocol_both_speak(int oldest, int? highest, int agreed) =>
+        Assert.Equal(agreed, Wire.Agree(oldest, highest));
+
+    [Theory]
+    [InlineData(2, null)]
+    [InlineData(2, 9)]
+    [InlineData(999, null)]
+    public void A_peer_whose_oldest_protocol_is_newer_than_ours_is_refused(int oldest, int? highest) =>
+        Assert.Null(Wire.Agree(oldest, highest));
+
+    [Fact]
+    public void A_welcome_on_a_protocol_this_build_does_not_speak_is_refused_with_a_restart_hint()
+    {
+        var refused = Wire.Refusal(new Welcome { Version = 999, Build = "9.9.9" });
+
+        Assert.NotNull(refused);
+        Assert.Contains("9.9.9", refused);
+        Assert.Contains("fleet daemon stop", refused);
+        Assert.Null(Wire.Refusal(new Welcome { Version = Wire.Version }));
+    }
+
     [Fact]
     public async Task A_json_message_survives_the_round_trip()
     {

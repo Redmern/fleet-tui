@@ -133,6 +133,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                             Clients = _sessions.Count,
                             SessionFile = options.SessionFile,
                             Host = Environment.MachineName,
+                            Build = FleetVersion.Current,
                         };
                         break;
                     case "list-panes":
@@ -375,11 +376,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
 
             var hello = Wire.Read(first.Payload, WireJsonContext.Default.Hello);
-            if (hello.Version != Wire.Version)
+            if (Wire.Agree(hello.Version, hello.Highest) is not { } agreed)
             {
                 await wire.SendAsync(
                     MessageType.Error,
-                    new ErrorMessage { Message = $"fleetd speaks protocol {Wire.Version}, this client speaks {hello.Version}" },
+                    new ErrorMessage { Message = Wire.Mismatch(hello.Version, hello.Highest, hello.Build) },
                     WireJsonContext.Default.ErrorMessage,
                     ct).ConfigureAwait(false);
                 return;
@@ -404,7 +405,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             await wire.SendAsync(
                 MessageType.Welcome,
-                new Welcome { Version = Wire.Version, Client = clientId },
+                new Welcome { Version = agreed, Client = clientId, Build = FleetVersion.Current },
                 WireJsonContext.Default.Welcome,
                 ct).ConfigureAwait(false);
 
@@ -1742,6 +1743,20 @@ public sealed class FleetDaemon(DaemonOptions options)
     private bool HasMenu(string workspace) =>
         _model.PanesIn(workspace).Any(id => _model.Pane(id)?.Args is [_, "menu", ..]);
 
+    private bool WarmedBeforeUpdate(string workspace)
+    {
+        try
+        {
+            return _warmedAt.TryGetValue(workspace, out var at)
+                && File.Exists(options.FleetExecutable)
+                && File.GetLastWriteTimeUtc(options.FleetExecutable) > at;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private void WarmMenus()
     {
         foreach (var stranded in _model.StrandedParked())
@@ -1820,6 +1835,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 _model.Focus(open);
                 return;
+            }
+
+            if (_model.Parked(shown) is { } outdated && WarmedBeforeUpdate(shown))
+            {
+                Kill(outdated.Pane);
+                options.Log($"{client}: warm menu {outdated.Pane} predates the installed fleet; opening a fresh one");
             }
 
             if (action is null && _model.Parked(shown) is { } warm && _model.Unpark(warm.Pane))

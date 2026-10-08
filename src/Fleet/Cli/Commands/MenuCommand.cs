@@ -26,6 +26,7 @@ using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.SwitchProject;
 using Fleet.Features.Remotes.ManageRemotes;
 using Fleet.Features.Sessions.SaveSession;
+using Fleet.Features.Updates.ShowVersion;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
@@ -56,6 +57,7 @@ public static class MenuCommand
 
     public static async Task<int> RunAsync(Invocation invocation)
     {
+        _ = FreshBuild.ThisProcess;
         var projects = Adapters.Projects();
 
         var project = invocation.Project is { } named
@@ -684,6 +686,26 @@ public static class MenuCommand
             case FleetAction.RebuildDashboard:
                 Adapters.Requests().Submit(project.Name, FleetAction.RebuildDashboard);
                 break;
+
+            case FleetAction.UpdateFleet:
+                UpdateWiring.Install(app, FreshBuild.ThisProcess);
+                break;
+
+            case FleetAction.ShowVersion:
+                {
+                    var screen = FleetDialog.Wait(
+                        app,
+                        "fleet version",
+                        ["Checking github.com for releases..."],
+                        UpdateWiring.VersionScreenAsync);
+
+                    if (ShowVersionView.Show(app, keymap, screen) is { } release)
+                    {
+                        UpdateWiring.Install(app, FreshBuild.ThisProcess, release == ShowVersionView.Latest ? null : release);
+                    }
+
+                    break;
+                }
 
             case FleetAction.CleanupProject:
                 {

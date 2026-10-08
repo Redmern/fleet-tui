@@ -122,7 +122,7 @@ public sealed class DispatchTests : IDisposable
         Assert.Equal("2026-10-02T10:00:00Z", state.Created);
         Assert.Equal(StageState.Done, state.Stages[0].State);
         Assert.Equal(ProfileCatalog.StagesOf(Profile.Express), state.Stages.Select(s => s.Stage));
-        Assert.Contains("AIDLC express", reply.Note);
+        Assert.Contains("Ai-DLC express", reply.Note);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed class DispatchTests : IDisposable
         var reply = await Aidlc(AidlcMode.On).HandleAsync(Command("do it") with { Profile = "epic" }, "t");
 
         Assert.False(reply.Succeeded);
-        Assert.Contains("'epic' is not an AIDLC profile", reply.Error);
+        Assert.Contains("'epic' is not an Ai-DLC profile", reply.Error);
         Assert.Contains("express, bugfix, feature, refactor, research", reply.Error);
         Assert.False(Directory.Exists(OrchestrationPaths.Root(_root)));
     }
@@ -269,6 +269,35 @@ public sealed class DispatchTests : IDisposable
         Assert.True(
             instructions.IndexOf("**Deliver**", StringComparison.Ordinal)
             < instructions.IndexOf("Always run the e2e suite too.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_project_ai_dlc_file_is_appended_to_the_rendered_process()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(ProjectConfigPaths.AiDlcFile(_root), "Run the smoke tests first.");
+
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "t")).Value!;
+
+        var instructions = InstructionsOf(reply);
+
+        Assert.Contains("### Project guidance", instructions);
+        Assert.Contains("Run the smoke tests first.", instructions);
+    }
+
+    [Fact]
+    public async Task An_ai_dlc_file_wins_over_an_aidlc_file()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(ProjectConfigPaths.AiDlcFile(_root), "Run the smoke tests first.");
+        File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), "Always run the e2e suite too.");
+
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "t")).Value!;
+
+        var instructions = InstructionsOf(reply);
+
+        Assert.Contains("Run the smoke tests first.", instructions);
+        Assert.DoesNotContain("Always run the e2e suite too.", instructions);
     }
 
     [Fact]

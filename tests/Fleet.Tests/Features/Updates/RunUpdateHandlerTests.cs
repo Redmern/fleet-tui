@@ -58,7 +58,8 @@ public class RunUpdateHandlerTests : IDisposable
         var result = await new RunUpdateHandler(client, new SelfInstall()).HandleAsync(Command());
 
         Assert.True(result.Succeeded);
-        Assert.Contains("already on the latest version", result.Value);
+        Assert.Contains("already on the latest version", result.Value.Message);
+        Assert.False(result.Value.Installed);
         Assert.Equal("old"u8.ToArray(), File.ReadAllBytes(_executablePath));
     }
 
@@ -90,8 +91,28 @@ public class RunUpdateHandlerTests : IDisposable
         var result = await new RunUpdateHandler(client, new SelfInstall()).HandleAsync(Command());
 
         Assert.True(result.Succeeded);
-        Assert.Contains("v0.2.0", result.Value);
+        Assert.Contains("v0.2.0", result.Value.Message);
+        Assert.True(result.Value.Installed);
+        Assert.Equal("v0.2.0", result.Value.Version);
         Assert.Equal(newBytes, File.ReadAllBytes(_executablePath));
+    }
+
+    [Fact]
+    public async Task A_cancelled_update_never_replaces_the_binary()
+    {
+        var client = new FakeReleaseClient
+        {
+            Release = new ReleaseInfo(
+                "v0.2.0", [new ReleaseAsset("fleet-win-x64.exe", "https://x/asset")]),
+        };
+        client.Downloads["https://x/asset"] = "new"u8.ToArray();
+
+        var result = await new RunUpdateHandler(client, new SelfInstall())
+            .HandleAsync(Command(), new CancellationToken(canceled: true));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("cancelled", result.Error);
+        Assert.Equal("old"u8.ToArray(), File.ReadAllBytes(_executablePath));
     }
 
     [Fact]
@@ -157,7 +178,7 @@ public class RunUpdateHandlerTests : IDisposable
             .HandleAsync(Command(currentVersion: "0.1.0", requestedVersion: "0.2.0"));
 
         Assert.True(result.Succeeded);
-        Assert.Contains("v0.2.0", result.Value);
+        Assert.Contains("v0.2.0", result.Value.Message);
         Assert.Equal(newBytes, File.ReadAllBytes(_executablePath));
     }
 
@@ -174,7 +195,7 @@ public class RunUpdateHandlerTests : IDisposable
             .HandleAsync(Command(currentVersion: "0.5.1", requestedVersion: "0.3.0"));
 
         Assert.True(result.Succeeded);
-        Assert.Contains("v0.3.0", result.Value);
+        Assert.Contains("v0.3.0", result.Value.Message);
         Assert.Equal(oldBytes, File.ReadAllBytes(_executablePath));
     }
 
@@ -189,7 +210,7 @@ public class RunUpdateHandlerTests : IDisposable
             .HandleAsync(Command(currentVersion: "0.1.0", requestedVersion: "0.1.0"));
 
         Assert.True(result.Succeeded);
-        Assert.Contains("already on", result.Value);
+        Assert.Contains("already on", result.Value.Message);
         Assert.Equal("old"u8.ToArray(), File.ReadAllBytes(_executablePath));
     }
 

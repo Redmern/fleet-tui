@@ -31,6 +31,12 @@ public sealed class Hello
     [JsonPropertyName("version")]
     public int Version { get; set; }
 
+    [JsonPropertyName("highest")]
+    public int? Highest { get; set; }
+
+    [JsonPropertyName("build")]
+    public string? Build { get; set; }
+
     [JsonPropertyName("role")]
     public string Role { get; set; } = ClientRoles.Control;
 
@@ -78,6 +84,9 @@ public sealed class Welcome
 
     [JsonPropertyName("client")]
     public string Client { get; set; } = string.Empty;
+
+    [JsonPropertyName("build")]
+    public string? Build { get; set; }
 }
 
 public sealed class ErrorMessage
@@ -543,4 +552,7 @@ public sealed class DaemonStatusDto
 
     [JsonPropertyName("host")]
     public string? Host { get; set; }
+
+    [JsonPropertyName("build")]
+    public string? Build { get; set; }
 }
