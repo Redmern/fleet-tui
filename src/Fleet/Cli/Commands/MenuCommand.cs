@@ -340,7 +340,7 @@ public static class MenuCommand
 
                     var pickedTheme = FleetPicker.Choose(
                         app,
-                        "Theme — fleet, wezterm, nvim, claude and yazi",
+                        "Theme — fleet, nvim, claude and yazi",
                         [.. all.Select(t => new PickerEntry(
                             t.Title,
                             t.Name == active ? $"{t.Name}  (active)" : t.Name))],

@@ -4,14 +4,13 @@
 
 .DESCRIPTION
     Downloads the native binary, puts it on the user PATH and runs 'fleet setup',
-    which writes the WezTerm module, wires the WezTerm config and reports whatever
-    is still missing.
+    which reports whatever is still missing.
 
     Defaults to the upstream release repository. Pass -Repo, or set FLEET_REPO, to
     install from a fork instead.
 
 .PARAMETER WithDeps
-    Install WezTerm, Neovim, yazi and git through winget when missing. fleet's own
+    Install Neovim, yazi and git through winget when missing. fleet's own
     Neovim config ships inside the binary. The dependency script is downloaded
     from the same repository, so this works through 'irm | iex' too.
 

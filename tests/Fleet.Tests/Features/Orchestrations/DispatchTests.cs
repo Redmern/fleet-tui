@@ -436,7 +436,7 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
-    public void Ctrl_hjkl_in_the_claude_only_nvim_moves_between_wezterm_panes()
+    public void Ctrl_hjkl_in_the_claude_only_nvim_moves_between_fleet_panes()
     {
         var boot = AgentHarness.OrchestratorCommand(resume: false)[2];
 
@@ -444,7 +444,7 @@ public sealed class DispatchTests : IDisposable
             "{{'<C-h>','h','Left',{'n','t'}},{'<C-j>','j','Down',{'n','t'}},"
             + "{'<C-k>','k','Up',{'n','t'}},{'<C-l>','l','Right',{'n','t'}}}",
             boot);
-        Assert.Contains("'cli','activate-pane-direction',d", boot);
+        Assert.Contains("{vim.env.FLEET_EXECUTABLE or 'fleet','cli','activate-pane-direction',d}", boot);
         Assert.Contains("{buffer=tb}", boot);
     }
 

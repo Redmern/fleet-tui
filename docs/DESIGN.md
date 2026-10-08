@@ -71,6 +71,18 @@ sub-orchestrator browsers), and a client shows one workspace at a time. The
 emulator per pane is what makes that affordable: the daemon composites several
 pane grids into one frame. See *Instant project switching on `embedded`*.
 
+**Revised 2026-10-08: the `wezterm` driver is removed.** `embedded` is the only
+driver that ships; fleet runs in any terminal and needs nothing from WezTerm. The
+driver, its Lua module (`fleet.lua`, `fleet-theme.lua`), the WezTerm config wiring
+in `fleet setup`, the WezTerm theme target and the `wezterm` checks in `fleet setup`
+and `fleet doctor` are gone. `FLEET_MUX=wezterm` now reports that the driver is not
+implemented. What is left of it: fleetd still blanks an inherited `WEZTERM_PANE` and
+`WEZTERM_UNIX_SOCKET` in its panes (as it blanks `TMUX`), and a `"wezterm"` target in
+a user's `keybinds.json` is still accepted, logged and ignored. Panes get
+`FLEET_EXECUTABLE` (was `WEZTERM_EXECUTABLE`) for the nvim `fleet cli
+activate-pane-direction` call. The rest of this document records the WezTerm era as
+it happened.
+
 **Build order:** `fake`, then `wezterm`, then `tmux`, then `embedded`. WezTerm
 first because it is the daily driver and `fleet-win` supplies a debugged
 reference, so it is the shortest path to a fleet worth using. tmux second, early
@@ -167,13 +179,17 @@ spawns WezTerm tabs. This is correctness, not taste.
 ```
 FLEET_MUX set          -> that                     (override)
 TMUX set               -> tmux                     (adopt)
-WEZTERM_PANE set       -> wezterm                  (adopt)
 otherwise:                                         (launch)
     this build has libghostty-vt       -> embedded (base, since 0.6.0)
-    wezterm present AND GUI reachable  -> wezterm
     tmux present                       -> tmux     (fallback)
     otherwise                          -> embedded (last resort)
 ```
+
+**2026-10-08:** the `WEZTERM_PANE` adopt rule and the *wezterm present and GUI
+reachable* launch rule are gone with the `wezterm` driver. Only `embedded` is
+implemented, so a choice of `tmux` (or any `FLEET_MUX` other than `embedded`) is
+reported as not implemented, with a hint to set `FLEET_MUX=embedded`, by `fleet doctor`,
+`dispatch` and the menu. The notes below describe the order as it was before.
 
 **2026-09-29: embedded became the base for a plain terminal.** Running `fleet`
 in a plain PowerShell or shell now opens the project right there, under
@@ -315,10 +331,6 @@ config in `nvim/` (lazy.nvim, `neo-tree`, `claudecode.nvim`, `plenary`, `nui`,
 process has not written it yet. `fleet setup` also runs `nvim --headless "+Lazy! install"`
 so a fresh machine does not have several panes racing to clone the same plugins.
 
-On the WezTerm backend fleet's nvim runs under `fleet with-env` (below), so the pane's
-process name is fleet's; `nvim/lua/fleet/wezterm.lua` sets the `IS_NVIM` user var that
-the generated WezTerm config already falls back to for Ctrl+h/j/k/l.
-
 **Keybinds from the model (phase 2 of the unified keybinds).** fleet's nvim keys are not in
 the shipped Lua any more: `Platform/Nvim/NvimKeybinds` renders the `nvim` entries of the
 keybind model (`Shared/Keybinds`) into `lua/fleet/keybinds.generated.lua`, and
@@ -334,7 +346,7 @@ chords (`Alt+h` to `<A-h>`, `Shift+Enter` to `<S-CR>`, `<` to `<lt>`).
   `:resize`/`:vertical resize` by 3 that moves the border the way the arrow points), and
   adds a `TermOpen` autocmd that maps `claude-normal-mode` (Alt+n to `<C-\><C-n>`)
   buffer-locally in terminals whose command is `claude`.
-- Terminal-mode Ctrl+h/j/k/l with the WezTerm/fleet-cli handoff at nvim's edges stays where it
+- Terminal-mode Ctrl+h/j/k/l with the `fleet cli` handoff at nvim's edges stays where it
   was: buffer-local on the orchestrator's Claude buffer from `NvimStartupClaudeOnly`. Its chord
   table now comes from `NvimFocusMaps` over the shipped defaults (the startup string is built
   in `Shared`, which cannot read the user's files), so it is the same Lua as before. A user
@@ -731,7 +743,7 @@ src/Fleet/                            one project, AOT-published as `fleet`
   Ports/                              interfaces and the types crossing them
     IFleetLog, Git/IGitRunner, Projects/IProjectStore, Mux/IMuxDriver
   Platform/                           every implementation that touches the outside world
-    Logging/, Storage/, Git/, Mux/{DriverSelector, FailSilentDriver, Fake/, WezTerm/}
+    Logging/, Storage/, Git/, Mux/{DriverSelector, FailSilentDriver, Fake/, Embedded/}
   Features/
     Projects/{PickProject, CreateProject, OpenProject}/
     Repositories/{BranchSlug.cs, AddRepository, ListRepositories}/

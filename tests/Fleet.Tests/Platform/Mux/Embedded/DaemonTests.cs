@@ -967,7 +967,7 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_pane_can_move_focus_from_itself_like_wezterm_cli()
+    public async Task A_pane_can_move_focus_from_itself_through_fleet_cli()
     {
         var control = await ControlAsync();
         var left = await SpawnAsync(control, "techweb", "left");
@@ -981,7 +981,7 @@ public sealed class DaemonTests : IAsyncLifetime
         await client.SendKeyAsync("x");
 
         await Eventually(() => _panes.ByProgram("left")!.Written == "x");
-        Assert.Equal("fleet", _panes.ByProgram("left")!.Env["WEZTERM_EXECUTABLE"]);
+        Assert.Equal("fleet", _panes.ByProgram("left")!.Env[FleetDaemon.ExecutableVariable]);
     }
     [Fact]
     public async Task The_menu_key_over_a_dashboard_opens_the_same_fleet_menu_as_anywhere_else()

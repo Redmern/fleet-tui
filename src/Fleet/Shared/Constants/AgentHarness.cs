@@ -80,7 +80,7 @@ public static class AgentHarness
         + "for _,f in ipairs(" + NvimFocusMaps.LuaTable(KeybindDefaults.Set) + ") do local k,d=f[2],f[3] "
         + "vim.keymap.set(f[4],f[1],function() "
         + "if vim.fn.winnr(k)~=vim.fn.winnr() then vim.cmd('stopinsert') vim.cmd('wincmd '..k) "
-        + "else vim.fn.jobstart({vim.env.WEZTERM_EXECUTABLE or 'wezterm','cli','activate-pane-direction',d}) end "
+        + "else vim.fn.jobstart({vim.env.FLEET_EXECUTABLE or 'fleet','cli','activate-pane-direction',d}) end "
         + "end,{buffer=tb}) end end, 400) "
         + "vim.api.nvim_set_current_win(term) vim.cmd('startinsert') end, 150) end)";
 

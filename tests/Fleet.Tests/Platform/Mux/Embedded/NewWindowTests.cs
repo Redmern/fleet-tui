@@ -26,42 +26,11 @@ public sealed class NewWindowTests
     }
 
     [Fact]
-    public void Wezterm_starts_a_window_in_the_running_gui()
-    {
-        var plan = Plan(true, new() { ["TERM_PROGRAM"] = "WezTerm" }, ["wezterm"])!;
-
-        Assert.Equal("wezterm", plan.Program);
-        Assert.Equal(["start", "--", "fleet", "attach", "--project", "techweb"], plan.Args);
-    }
-
-    [Fact]
     public void Windows_terminal_opens_the_same_profile_the_window_came_from()
     {
         var plan = Plan(true, new() { ["WT_SESSION"] = "abc", ["WT_PROFILE_ID"] = "{771d8af3-bc33-41e8-a761-e0875d661369}" }, ["wt"])!;
 
         Assert.Equal(["-w", "new", "-p", "{771d8af3-bc33-41e8-a761-e0875d661369}", "fleet", "attach", "--project", "techweb"], plan.Args);
-    }
-
-    [Fact]
-    public void Wezterm_uses_its_own_executable_and_the_same_config_file()
-    {
-        var plan = Plan(true, new()
-        {
-            ["TERM_PROGRAM"] = "WezTerm",
-            ["WEZTERM_EXECUTABLE"] = @"C:\Program Files\WezTerm\wezterm.exe",
-            ["WEZTERM_CONFIG_FILE"] = @"C:\Users\me\.wezterm-rib.lua",
-        })!;
-
-        Assert.Equal(@"C:\Program Files\WezTerm\wezterm.exe", plan.Program);
-        Assert.Equal(["--config-file", @"C:\Users\me\.wezterm-rib.lua", "start", "--", "fleet", "attach", "--project", "techweb"], plan.Args);
-    }
-
-    [Fact]
-    public void An_executable_variable_that_is_not_wezterm_is_ignored()
-    {
-        var plan = Plan(true, new() { ["TERM_PROGRAM"] = "WezTerm", ["WEZTERM_EXECUTABLE"] = @"C:\tools\fleet.exe" }, ["wezterm"])!;
-
-        Assert.Equal("wezterm", plan.Program);
     }
 
     [Fact]

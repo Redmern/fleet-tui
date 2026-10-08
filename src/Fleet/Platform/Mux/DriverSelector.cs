@@ -17,19 +17,9 @@ public static class DriverSelector
             return DriverNames.Tmux;
         }
 
-        if (env.InsideWezTerm)
-        {
-            return DriverNames.WezTerm;
-        }
-
         if (env.EmbeddedReady)
         {
             return DriverNames.Embedded;
-        }
-
-        if (env.GuiReachable && env.Installed.Contains(DriverNames.WezTerm))
-        {
-            return DriverNames.WezTerm;
         }
 
         return env.Installed.Contains(DriverNames.Tmux) ? DriverNames.Tmux : DriverNames.Embedded;
