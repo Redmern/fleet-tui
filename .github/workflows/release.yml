@@ -13,8 +13,21 @@ permissions:
   contents: write
 
 jobs:
+  # Stops the release before anything is built when RELEASE_NOTES.md has no
+  # entry for the tag; publish uses that entry as the GitHub release text.
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Check the release notes
+        run: sh scripts/release-notes.sh "${{ github.event.inputs.tag || github.ref_name }}"
+
   build:
     name: ${{ matrix.rid }}
+    needs: notes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -94,6 +107,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -111,8 +126,16 @@ jobs:
         run: |
           kind=()
           case "$TAG" in *-*) kind=(--prerelease) ;; esac
-          gh release view "$TAG" >/dev/null 2>&1 \
-            && gh release upload "$TAG" dist/* --clobber \
-            || gh release create "$TAG" dist/* "${kind[@]}" \
-                 --title "fleet $TAG" \
-                 --notes "Native binaries for Windows and Linux. Install with scripts/get-fleet.ps1 or scripts/get-fleet.sh, then run 'fleet setup'."
+          {
+            sh scripts/release-notes.sh "$TAG"
+            echo
+            echo "Native binaries for Windows and Linux. Install with scripts/get-fleet.ps1 or scripts/get-fleet.sh, then run 'fleet setup'."
+          } > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" dist/* "${kind[@]}" \
+              --title "fleet $TAG" \
+              --notes-file notes.md
+          fi

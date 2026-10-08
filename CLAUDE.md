@@ -59,6 +59,8 @@ Breaking one fails `dotnet test`, so check these before you write code:
 - Conventional commits, lower case: `feat:`, `fix:`, `docs:`, `chore:`, `perf:`, `refactor:` (in that order of
   frequency). One change per commit.
 - Releases: bump `<Version>` in `src/Fleet/Fleet.csproj` in its own `chore: bump version to X.Y.Z` commit, then
-  push a `vX.Y.Z` tag; `release.yml` builds and publishes both platforms.
+  push a `vX.Y.Z` tag; `release.yml` builds and publishes both platforms. The same commit adds a
+  `## X.Y.Z (yyyy-mm-dd)` entry with 2-6 plain bullets to the top of `RELEASE_NOTES.md`: it becomes the
+  GitHub release text and Settings › What's new, and both `dotnet test` and `release.yml` fail without it.
 - A project hook (`.claude/settings.json`) whitespace-formats every `.cs` file Claude edits
   (`dotnet format whitespace --folder`, ~2 s). It needs `pwsh` on `PATH`.
