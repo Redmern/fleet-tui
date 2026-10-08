@@ -23,7 +23,9 @@ jobs:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Check the release notes
-        run: sh scripts/release-notes.sh "${{ github.event.inputs.tag || github.ref_name }}"
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: sh scripts/release-notes.sh "$TAG"
 
   build:
     name: ${{ matrix.rid }}
@@ -42,6 +44,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - uses: actions/setup-dotnet@v4
         with:
