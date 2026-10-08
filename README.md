@@ -803,8 +803,8 @@ would delete the folder or the agents.
 
 fleet writes the process into the sub-orchestrator's CLAUDE.md, keeps the task's record
 next to it (`state.json`, and `audit.jsonl` for what happened), and tells it to stop and
-ask you at each approval point. `.fleet/config/aidlc.md` adds your own notes to that
-process.
+ask you at each approval point. `.fleet/config/ai-dlc.md` adds your own notes to that
+process (the older name `aidlc.md` still works; if both exist, `ai-dlc.md` wins).
 
 ## The head orchestrator
 

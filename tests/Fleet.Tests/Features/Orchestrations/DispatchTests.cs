@@ -272,6 +272,35 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_project_ai_dlc_file_is_appended_to_the_rendered_process()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(ProjectConfigPaths.AiDlcFile(_root), "Run the smoke tests first.");
+
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "t")).Value!;
+
+        var instructions = InstructionsOf(reply);
+
+        Assert.Contains("### Project guidance", instructions);
+        Assert.Contains("Run the smoke tests first.", instructions);
+    }
+
+    [Fact]
+    public async Task An_ai_dlc_file_wins_over_an_aidlc_file()
+    {
+        Directory.CreateDirectory(ProjectConfigPaths.Root(_root));
+        File.WriteAllText(ProjectConfigPaths.AiDlcFile(_root), "Run the smoke tests first.");
+        File.WriteAllText(ProjectConfigPaths.AidlcFile(_root), "Always run the e2e suite too.");
+
+        var reply = (await Aidlc(AidlcMode.On).HandleAsync(Command("do the thing"), "t")).Value!;
+
+        var instructions = InstructionsOf(reply);
+
+        Assert.Contains("Run the smoke tests first.", instructions);
+        Assert.DoesNotContain("Always run the e2e suite too.", instructions);
+    }
+
+    [Fact]
     public async Task An_aidlc_file_still_holding_the_old_built_in_text_is_ignored()
     {
         Directory.CreateDirectory(ProjectConfigPaths.Root(_root));

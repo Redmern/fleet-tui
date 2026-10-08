@@ -4471,7 +4471,8 @@ away the stage list and the gates, so the file now lands under `### Project guid
 at the end of the process. Opening the fleet config used to seed `aidlc.md` with the old
 built-in text; such a file would now append a contradicting second process, so a file
 whose text is exactly the old default (`OrchestrationText.ClassicAidlc`) is ignored, and
-the config folder no longer seeds one.
+the config folder no longer seeds one. The file may also be named `ai-dlc.md`, after the
+Ai-DLC spelling; when both exist `ai-dlc.md` wins (`ProjectConfigPaths.ProcessFile`).
 
 **Deferred.** M2: hook-based agent status (a sibling branch). M3: `aidlc_status` and
 `aidlc_submit`, gates through the approval channel, the `GateWaiting` notice, refusing
