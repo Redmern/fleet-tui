@@ -25,6 +25,14 @@ public partial class ReleaseNotesTests
         ## 0.5.24
 
         - `fleet update 1.2.3` works.
+
+        # Earlier builds (before the restart)
+
+        Old numbers.
+
+        ## 0.6.0 (2026-09-01)
+
+        - An old build with the same number.
         """;
 
     private static string RepoRoot { get; } =
@@ -37,7 +45,8 @@ public partial class ReleaseNotesTests
     {
         var entries = ReleaseNotes.Parse(Sample);
 
-        Assert.Equal(["0.6.0.2", "0.6.0", "0.5.24"], entries.Select(e => e.Version));
+        Assert.Equal(["0.6.0.2", "0.6.0", "0.5.24", "0.6.0"], entries.Select(e => e.Version));
+        Assert.Equal([false, false, false, true], entries.Select(e => e.Legacy));
         Assert.Equal("2026-10-02", entries[0].Date);
         Assert.Null(entries[2].Date);
         Assert.Equal(["Remotes have nicknames.", "A bullet that goes on over two lines."], entries[0].Bullets);
@@ -67,8 +76,10 @@ public partial class ReleaseNotesTests
     {
         var groups = ReleaseNotes.Group(ReleaseNotes.Parse(Sample));
 
-        Assert.Equal(["0.6", "0.5"], groups.Select(g => g.Minor));
+        Assert.Equal(["0.6", "0.5", "0.6"], groups.Select(g => g.Minor));
+        Assert.Equal([false, false, true], groups.Select(g => g.Legacy));
         Assert.Equal(["0.6.0.2", "0.6.0"], groups[0].Entries.Select(e => e.Version));
+        Assert.Equal(["0.6.0"], groups[2].Entries.Select(e => e.Version));
     }
 
     [Fact]
@@ -83,6 +94,7 @@ public partial class ReleaseNotesTests
         Assert.Equal("  • Remotes have nicknames.", rows[3]);
         Assert.Contains("v0.5", rows);
         Assert.Contains("0.5.24", rows);
+        Assert.Equal("v0.6" + ReleaseNotesRows.LegacyLabel, rows[^4]);
     }
 
     [Fact]
@@ -104,7 +116,9 @@ public partial class ReleaseNotesTests
         var entries = ReleaseNotes.Parse(ReleaseNotes.Embedded());
 
         Assert.NotEmpty(entries);
-        Assert.Equal(entries.Count, entries.Select(e => e.Version).Distinct().Count());
+        Assert.Equal(entries.Count, entries.Select(e => (e.Version, e.Legacy)).Distinct().Count());
+        Assert.Contains(entries, e => !e.Legacy);
+        Assert.Contains(entries, e => e.Legacy);
         Assert.All(entries, e =>
         {
             Assert.Matches(VersionPattern(), e.Version);
@@ -123,15 +137,19 @@ public partial class ReleaseNotesTests
             ReleaseNotes.Parse(ReleaseNotes.Embedded()).Select(e => e.Version));
     }
 
+    // Until the version restart lands, Fleet.csproj still holds the last old build,
+    // which only has an entry under the earlier builds.
     [Fact]
     public void The_version_in_the_project_file_has_an_entry()
     {
         var csproj = File.ReadAllText(Path.Combine(RepoRoot, "src", "Fleet", "Fleet.csproj"));
         var version = ProjectVersion().Match(csproj).Groups[1].Value;
+        var entries = ReleaseNotes.Parse(ReleaseNotes.Embedded());
 
-        Assert.Contains(
-            version,
-            ReleaseNotes.Parse(ReleaseNotes.Embedded()).Select(e => e.Version));
+        Assert.True(
+            entries.Any(e => !e.Legacy && e.Version == version)
+                || entries.First(e => e.Legacy).Version == version,
+            $"RELEASE_NOTES.md has no entry for {version}");
     }
 
     [GeneratedRegex(@"^\d+\.\d+\.\d+(\.\d+)?$")]

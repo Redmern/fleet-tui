@@ -1,8 +1,17 @@
 # Release notes
 
 What changed in each fleet release, newest first. fleet shows this file under Settings > What's new, and the
-release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
-`## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
+release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here, above
+the earlier builds: `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
+
+## 0.1.0 (2026-10-08)
+
+- Version numbers start again at 0.1.0. Builds from before the restart are listed under "before the restart".
+- New Settings › What's new screen. It shows what changed in each release, and works offline.
+
+# Earlier builds (before the restart)
+
+These builds used the old version numbers. Their tags are kept as `legacy/v<version>`.
 
 ## 0.6.0.26 (2026-10-07)
 

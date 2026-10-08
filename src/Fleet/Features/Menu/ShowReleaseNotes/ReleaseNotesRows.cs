@@ -11,6 +11,8 @@ public static class ReleaseNotesRows
 
     public const int WrapWidth = 68;
 
+    public const string LegacyLabel = "   before the restart";
+
     private const string BulletMark = "  • ";
 
     private const string Continued = "    ";
@@ -31,7 +33,11 @@ public static class ReleaseNotesRows
                 rows.Add(FleetRow.Plain(string.Empty));
             }
 
-            rows.Add(new FleetRow([new FleetSpan($"v{group.Minor}", FleetTones.Title)]));
+            rows.Add(new FleetRow(
+            [
+                new FleetSpan($"v{group.Minor}", FleetTones.Title),
+                .. group.Legacy ? [FleetSpan.Muted(LegacyLabel)] : Array.Empty<FleetSpan>(),
+            ]));
 
             foreach (var entry in group.Entries)
             {
