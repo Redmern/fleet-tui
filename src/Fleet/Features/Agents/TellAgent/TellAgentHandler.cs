@@ -47,6 +47,6 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 
-    private static string InstructionFor(AgentRecord agent, string message) =>
+    public static string InstructionFor(AgentRecord agent, string message) =>
         AgentHarness.IsOrchestrator(agent.Harness) ? message : $"{message}\n\n{AgentHarness.AgentReportRule}";
 }
