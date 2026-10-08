@@ -20,6 +20,8 @@ public static class FleetPaths
 
     public static string KnownRemotesFile => Path.Combine(Config, "remotes.json");
 
+    public static string UpdateCheckFile => Path.Combine(Config, "update-check.json");
+
     public static string Settings => Path.Combine(Config, "settings");
 
     public static string HeadSettingsFile => Path.Combine(Config, "head.json");

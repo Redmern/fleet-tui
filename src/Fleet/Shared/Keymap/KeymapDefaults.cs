@@ -65,6 +65,8 @@ public static class KeymapDefaults
             [FleetAction.OpenEditor] = "e",
             [FleetAction.OpenHeadVoice] = "Alt+o",
             [FleetAction.EditTheme] = "T",
+            [FleetAction.UpdateFleet] = "u",
+            [FleetAction.ShowVersion] = "v",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -120,6 +122,8 @@ public static class KeymapDefaults
             FleetAction.OpenEditor => "editor",
             FleetAction.OpenHeadVoice => "head",
             FleetAction.EditTheme => "theme",
+            FleetAction.UpdateFleet => "update",
+            FleetAction.ShowVersion => "version",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -184,6 +188,8 @@ public static class KeymapDefaults
             FleetAction.OpenEditor => "Open editor here",
             FleetAction.OpenHeadVoice => "Show or hide the head, in voice mode",
             FleetAction.EditTheme => "Theme",
+            FleetAction.UpdateFleet => "Update fleet",
+            FleetAction.ShowVersion => "Version",
             _ => action.ToString(),
         };
 }

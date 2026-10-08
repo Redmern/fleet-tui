@@ -3,6 +3,7 @@ using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded.Client;
 
@@ -76,7 +77,9 @@ public sealed class AttachClient(
     {
         var hello = new Hello
         {
-            Version = Wire.Version,
+            Version = Wire.OldestVersion,
+            Highest = Wire.Version,
+            Build = FleetVersion.Current,
             Role = ClientRoles.Attach,
             Os = OperatingSystem.IsWindows() ? "windows" : "unix",
             Cols = cols,
@@ -115,7 +118,14 @@ public sealed class AttachClient(
             return null;
         }
 
-        return Wire.Read(reply.Payload, WireJsonContext.Default.Welcome).Client;
+        var welcomed = Wire.Read(reply.Payload, WireJsonContext.Default.Welcome);
+        if (Wire.Refusal(welcomed) is { } refused)
+        {
+            await Console.Error.WriteLineAsync($"fleet: {refused}").ConfigureAwait(false);
+            return null;
+        }
+
+        return welcomed.Client;
     }
 
     private async Task<byte[]> StrayTextAsync()

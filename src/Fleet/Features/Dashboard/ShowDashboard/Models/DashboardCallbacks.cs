@@ -44,4 +44,5 @@ public sealed record DashboardCallbacks(
     Func<IReadOnlyList<RepositoryChoice>>? LoadRepositoriesFast = null,
     Func<AgentBoard>? LoadAgentsFast = null,
     Func<SubBoard>? LoadSubsFast = null,
-    Func<NoticeBoard>? LoadNoticesFast = null);
+    Func<NoticeBoard>? LoadNoticesFast = null,
+    Func<bool>? Outdated = null);

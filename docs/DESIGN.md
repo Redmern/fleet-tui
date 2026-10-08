@@ -5784,6 +5784,28 @@ What the phases add up to:
   reports nothing written and leaves the files byte for byte, that `fleet doctor`'s keybinds
   line says the files match, and that it reports drift once `keybinds.generated.lua` is edited.
 
+## In-app updates, 2026-10-08
+
+- **Binary now, daemon later.** Updating replaces `fleet.exe` (as `fleet update` always did)
+  and leaves fleetd alone: it owns every PTY, and those cannot move to a new process. Sessions
+  are never lost; fleetd runs the old build until the user restarts it. The update dialog and
+  `fleet doctor` say so; `status` now reports fleetd's `build`, so doctor compares versions,
+  not only the executable path (which an in-place update leaves the same).
+- **Cached check.** `CheckUpdateHandler.HandleCachedAsync` asks GitHub at most once an hour
+  (`<config>/update-check.json`) and falls back to the last answer offline. The picker draws
+  the cached notice at once and refreshes it in the background.
+- **What restarts.** A dashboard compares its executable's write time with the one it started
+  with (`FreshBuild`); once it changes and no dialog is open, it stops and runs
+  `fleet dash --project <name>` again in the same pane, waiting on the child. fleetd drops a
+  warm menu that was warmed before the executable changed and opens a fresh one. Other
+  windows (picker, menu) are short-lived and pick up the new build when reopened. `fleet mcp`
+  children keep the old code until Claude restarts them.
+- **Protocol range.** `Hello.version` is now the oldest protocol the sender speaks and
+  `Hello.highest` the newest; fleetd welcomes on the highest both speak (`Wire.Agree`) and
+  sends its `build`. A client keeps `version` at `Wire.OldestVersion`, so an older fleetd,
+  which demands an exact match, still accepts it while the oldest stays 1. A refusal, either
+  way, names both builds and says how to restart fleetd.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
