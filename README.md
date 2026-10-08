@@ -200,6 +200,15 @@ binary in place; a fleet already running keeps its old code until it is reopened
 Only Windows and Linux x64 have published binaries — build from source with
 `install.sh`/`install.ps1` elsewhere.
 
+You can also update from inside fleet. The project picker shows "You are on vX. vY is
+available" with an **update** button (`u`) when a newer release exists; it checks at most
+once an hour and uses the last answer when offline. Settings › maintenance has **Update
+fleet** (`u`) and **Version** (`v`), which shows the installed and latest version and
+installs any release you pick. After an update, open dashboards restart on the new build
+by themselves. fleetd keeps your panes on the old build until you restart it
+(`fleet daemon stop`, then `fleet attach`); fleet says so after the update, and
+`fleet doctor` shows which build fleetd runs.
+
 fleet works from any terminal, not just a wezterm pane. Inside a pane it talks to
 the mux named by `WEZTERM_UNIX_SOCKET`; outside one it finds a live wezterm socket
 itself. If several wezterm windows are running as separate GUI processes, it targets

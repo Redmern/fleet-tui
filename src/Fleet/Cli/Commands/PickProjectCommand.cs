@@ -361,7 +361,10 @@ public static class PickProjectCommand
                 RemoveSession: session =>
                     FleetDialog.Confirm(app, $"Remove session {session.Name}?", ["Its projects stay; only the saved set is forgotten."], "Remove")
                         ? (sessions.Remove(session.Name) ? $"removed session {session.Name}" : null)
-                        : null));
+                        : null,
+                UpdateNotice: () => UpdateWiring.Cached()?.Notice(FleetVersion.Current),
+                CheckUpdate: async () => (await UpdateWiring.CheckAsync().ConfigureAwait(false)).Notice(FleetVersion.Current),
+                Update: () => UpdateWiring.Install(app)));
 
         return (browse is null ? picked : null, browse);
     }

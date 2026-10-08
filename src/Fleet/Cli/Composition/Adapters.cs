@@ -58,6 +58,8 @@ public static class Adapters
 
     public static IBinaryInstaller Installer() => new SelfInstall();
 
+    public static IUpdateCheckCache UpdateChecks() => new JsonUpdateCheckCache();
+
     private const string DefaultReleaseRepo = "Redmern/fleet-tui";
 
     public static string ReleaseRepo =>

@@ -190,6 +190,21 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void Maintenance_offers_updating_fleet_and_the_version_screen()
+    {
+        var maintenance = FleetMenus.Settings.Single(s => s.Header == "maintenance").Actions;
+
+        Assert.Contains(FleetAction.UpdateFleet, maintenance);
+        Assert.Contains(FleetAction.ShowVersion, maintenance);
+        Assert.True(FleetMenus.OpensMore(FleetAction.ShowVersion));
+        Assert.False(FleetMenus.OpensMore(FleetAction.UpdateFleet));
+        Assert.Equal("Update fleet", FleetMenus.Label(FleetAction.UpdateFleet));
+        Assert.Equal("Version", FleetMenus.Label(FleetAction.ShowVersion));
+        Assert.Equal("u", KeymapDefaults.Bindings[FleetAction.UpdateFleet]);
+        Assert.Equal("v", KeymapDefaults.Bindings[FleetAction.ShowVersion]);
+    }
+
+    [Fact]
     public void Button_hints_sit_directly_under_show_keybinds_in_configure()
     {
         var configure = FleetMenus.Settings.Single(s => s.Header == "configure").Actions;

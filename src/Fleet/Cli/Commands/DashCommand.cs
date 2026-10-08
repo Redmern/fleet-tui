@@ -1,6 +1,7 @@
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
 using Fleet.Features.Dashboard.ShowDashboard;
+using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Ui;
 using Terminal.Gui.App;
@@ -25,6 +26,20 @@ public static class DashCommand
             return 1;
         }
 
+        var build = new FreshBuild(Adapters.Executable);
+
+        if (!Show(project, build))
+        {
+            return 0;
+        }
+
+        Adapters.Log().Write(LogTag.For(project.Name, "fleet was updated; the dashboard restarts on the new build"));
+        return build.RunAgain(["dash", "--project", project.Name]);
+    }
+
+    private static bool Show(Project project, FreshBuild build)
+    {
+        var restart = false;
         var keymaps = Adapters.Keymaps();
         var git = Adapters.Git();
         var log = Adapters.Log();
@@ -82,7 +97,10 @@ public static class DashCommand
                     Adapters.Settings(),
                     Adapters.SettingsSync(),
                     approvals,
-                    log));
+                    log) with
+                {
+                    Outdated = () => restart = build.Replaced,
+                });
         }
         finally
         {
@@ -90,6 +108,6 @@ public static class DashCommand
             syncing.GetAwaiter().GetResult();
         }
 
-        return 0;
+        return restart;
     }
 }

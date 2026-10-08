@@ -257,7 +257,9 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 MessageType.Hello,
                 new Hello
                 {
-                    Version = Wire.Version,
+                    Version = Wire.OldestVersion,
+                    Highest = Wire.Version,
+                    Build = FleetVersion.Current,
                     Role = ClientRoles.Attach,
                     Os = OperatingSystem.IsWindows() ? "windows" : "unix",
                     Cols = cols,
@@ -275,6 +277,11 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
             if (welcome.Type == MessageType.Error)
             {
                 throw new IOException(Wire.Read(welcome.Payload, WireJsonContext.Default.ErrorMessage).Message);
+            }
+
+            if (Wire.Refusal(Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome)) is { } refused)
+            {
+                throw new IOException(refused);
             }
 
             _wire = wire;

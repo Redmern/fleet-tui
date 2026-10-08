@@ -31,7 +31,7 @@ public static class FleetMenus
     [
         new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
         new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints, FleetAction.EditTheme], FleetIcons.Configure),
-        new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs], FleetIcons.Maintenance),
+        new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.ViewLogs, FleetAction.UpdateFleet, FleetAction.ShowVersion], FleetIcons.Maintenance),
     ];
 
     public static IReadOnlyList<MenuSection> FleetConfig { get; } =
@@ -66,6 +66,7 @@ public static class FleetMenus
         FleetAction.EditClaudeProfile,
         FleetAction.EditSettings,
         FleetAction.EditTheme,
+        FleetAction.ShowVersion,
     ];
 
     private static readonly FleetAction[] Toggles =

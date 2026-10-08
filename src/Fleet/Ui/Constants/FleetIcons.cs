@@ -103,6 +103,8 @@ public static class FleetIcons
         FleetAction.EditTheme => "",
         FleetAction.RebuildDashboard => "",
         FleetAction.CleanupProject => "",
+        FleetAction.UpdateFleet => "",
+        FleetAction.ShowVersion => "",
         FleetAction.ViewLogs => "",
         FleetAction.EditMainOrchestratorInNvim => "",
         FleetAction.EditSubOrchestratorsInNvim => "",

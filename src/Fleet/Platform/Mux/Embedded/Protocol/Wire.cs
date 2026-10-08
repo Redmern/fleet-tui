@@ -2,12 +2,32 @@ using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded.Protocol;
 
 public sealed class Wire(Stream stream) : IDisposable
 {
     public const int Version = 1;
+
+    public const int OldestVersion = 1;
+
+    public static int? Agree(int peerOldest, int? peerHighest)
+    {
+        var agreed = Math.Min(peerHighest ?? peerOldest, Version);
+
+        return agreed >= Math.Max(peerOldest, OldestVersion) ? agreed : null;
+    }
+
+    public static string? Refusal(Welcome welcome) =>
+        Agree(welcome.Version, welcome.Version) is null ? Mismatch(welcome.Version, null, welcome.Build) : null;
+
+    public static string Mismatch(int theirOldest, int? theirHighest, string? theirBuild) =>
+        $"fleetd and this fleet cannot talk: one speaks protocol {Range(OldestVersion, Version)} (build {FleetVersion.Current}), "
+        + $"the other {Range(theirOldest, theirHighest ?? theirOldest)} (build {theirBuild ?? "older"}). "
+        + "Restart fleetd onto this build when convenient: fleet daemon stop, then fleet attach.";
+
+    private static string Range(int oldest, int highest) => oldest == highest ? $"{oldest}" : $"{oldest}-{highest}";
 
     public const int MaxMessage = 16 * 1024 * 1024;
 

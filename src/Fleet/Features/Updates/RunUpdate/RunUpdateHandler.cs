@@ -9,12 +9,12 @@ namespace Fleet.Features.Updates.RunUpdate;
 
 public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller installer)
 {
-    public async Task<Result<string>> HandleAsync(
+    public async Task<Result<UpdateOutcome>> HandleAsync(
         RunUpdateCommand command, CancellationToken ct = default)
     {
         if (command.PlatformAsset is null)
         {
-            return Result<string>.Fail(
+            return Result<UpdateOutcome>.Fail(
                 "no published binary for this platform. Build from source with "
                 + "./install.sh (or install.ps1 on Windows).");
         }
@@ -28,7 +28,7 @@ public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller i
 
         if (latest is null)
         {
-            return Result<string>.Fail(pinned
+            return Result<UpdateOutcome>.Fail(pinned
                 ? $"no release {command.RequestedVersion} found at "
                     + $"github.com/{command.Repo}/releases."
                 : $"no release found at github.com/{command.Repo}/releases (check FLEET_REPO, "
@@ -39,15 +39,16 @@ public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller i
             ? VersionCompare.AreEqual(latest.Tag, command.CurrentVersion)
             : !VersionCompare.IsNewer(latest.Tag, command.CurrentVersion))
         {
-            return Result<string>.Ok($"already on {(pinned ? latest.Tag : "the latest version")} "
-                + $"({command.CurrentVersion}).");
+            return Result<UpdateOutcome>.Ok(new UpdateOutcome(
+                false,
+                $"already on {(pinned ? latest.Tag : "the latest version")} ({command.CurrentVersion})."));
         }
 
         var binary = latest.Assets.FirstOrDefault(a => a.Name == command.PlatformAsset);
 
         if (binary is null)
         {
-            return Result<string>.Fail(
+            return Result<UpdateOutcome>.Fail(
                 $"release {latest.Tag} has no asset named {command.PlatformAsset}.");
         }
 
@@ -55,7 +56,7 @@ public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller i
 
         if (bytes is null)
         {
-            return Result<string>.Fail($"could not download {command.PlatformAsset}.");
+            return Result<UpdateOutcome>.Fail($"could not download {command.PlatformAsset}.");
         }
 
         var checksum = latest.Assets.FirstOrDefault(a => a.Name == $"{command.PlatformAsset}.sha256");
@@ -66,7 +67,7 @@ public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller i
 
             if (!verified)
             {
-                return Result<string>.Fail(
+                return Result<UpdateOutcome>.Fail(
                     "downloaded binary failed checksum verification. Aborting.");
             }
         }
@@ -77,11 +78,13 @@ public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller i
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Result<string>.Fail($"could not replace {command.ExecutablePath}: {e.Message}");
+            return Result<UpdateOutcome>.Fail($"could not replace {command.ExecutablePath}: {e.Message}");
         }
 
-        return Result<string>.Ok(
-            $"updated to {latest.Tag}. Already-running fleets keep the old code until reopened.");
+        return Result<UpdateOutcome>.Ok(new UpdateOutcome(
+            true,
+            $"updated to {latest.Tag}. Already-running fleets keep the old code until reopened.",
+            latest.Tag));
     }
 
     private async Task<bool> VerifyAsync(byte[] content, string checksumUrl, CancellationToken ct)

@@ -178,6 +178,30 @@ public static class EmbeddedWiring
                 [.. profiles.All.Select(p => (p.Name, AccountProfiles.ConfigDir(p) ?? "Claude's default folder"))])
             : null;
 
+    public static bool SameBuild(DaemonStatusDto status) =>
+        PathKey.Same(status.Executable, Adapters.Executable) && status.Build == FleetVersion.Current;
+
+    public static async Task<string?> StaleDaemonAsync()
+    {
+        try
+        {
+            using var probe = new EmbeddedDriver(Endpoint.Default());
+            return await probe.StatusAsync().ConfigureAwait(false) is { } status && !SameBuild(status)
+                ? $"fleetd is still on {(status.Build is { } build ? $"v{build}" : "an older build")}; your panes keep running on it. "
+                    + "Restart it when convenient: fleet daemon stop, then fleet attach (this closes every pane)."
+                : null;
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException e) when (e.Message.Contains("unknown operation", StringComparison.Ordinal))
+        {
+            return "fleetd is still on an older build; your panes keep running on it. "
+                + "Restart it when convenient: fleet daemon stop, then fleet attach (this closes every pane).";
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return null;
+        }
+    }
+
     public static async Task<EmbeddedHealth> HealthAsync()
     {
         FleetdStatus? fleetd = null;
@@ -190,11 +214,12 @@ public static class EmbeddedWiring
                 fleetd = new FleetdStatus(
                     status.Pid,
                     status.Executable,
-                    PathKey.Same(status.Executable, Adapters.Executable),
+                    SameBuild(status),
                     status.Workspaces,
                     status.Panes,
                     status.WarmMenus,
-                    status.Clients);
+                    status.Clients,
+                    status.Build);
             }
         }
         catch (Ports.Mux.Exceptions.MuxUnavailableException e)

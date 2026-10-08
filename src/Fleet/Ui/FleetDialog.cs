@@ -270,15 +270,52 @@ public static class FleetDialog
         return answer;
     }
 
-    public static void Error(IApplication app, string title, string message)
+    public static void Error(IApplication app, string title, string message) =>
+        Notice(app, title, Wrap(message), FleetTheme.ErrorLine);
+
+    public static void Inform(IApplication app, string title, IReadOnlyList<string> lines) =>
+        Notice(app, title, [.. lines.SelectMany(line => Wrap(line))], FleetTheme.Caption);
+
+    public static T Wait<T>(IApplication app, string title, IReadOnlyList<string> lines, Func<Task<T>> work)
     {
-        var lines = Wrap(message);
+        var window = Sized(title, lines, extraRows: 3);
+
+        var y = 1;
+        foreach (var text in lines)
+        {
+            window.Add(FleetTheme.Caption(2, y, text));
+            y++;
+        }
+
+        var running = Task.Run(work);
+        _ = running.ContinueWith(_ => app.Invoke(() => app.RequestStop(window)), TaskScheduler.Default);
+
+        window.KeyDown += (_, key) => key.Handled = true;
+
+        FleetModal.Enter();
+
+        try
+        {
+            app.Run(window);
+        }
+        finally
+        {
+            FleetModal.Leave();
+            window.Dispose();
+        }
+
+        return running.GetAwaiter().GetResult();
+    }
+
+    private static void Notice(
+        IApplication app, string title, IReadOnlyList<string> lines, Func<Pos, Pos, string, View> line)
+    {
         var window = Sized(title, lines, extraRows: 5);
 
         var y = 1;
-        foreach (var line in lines)
+        foreach (var text in lines)
         {
-            window.Add(FleetTheme.ErrorLine(2, y, line));
+            window.Add(line(2, y, text));
             y++;
         }
 
