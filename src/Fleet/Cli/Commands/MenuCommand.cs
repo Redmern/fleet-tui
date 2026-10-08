@@ -139,6 +139,15 @@ public static class MenuCommand
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
 
+    public static Pane? DashboardPane(IReadOnlyList<Pane> panes, string root, string? dashPane)
+    {
+        var shown = panes
+            .Where(p => PathKey.Same(p.Cwd, root) && !FleetWorkspaces.IsHidden(p.SessionName))
+            .ToList();
+
+        return shown.FirstOrDefault(p => p.Id.Value == dashPane) ?? shown.FirstOrDefault();
+    }
+
     private static async Task<FleetAction> ShowMenu(
         IApplication app, Keymap keymap, Project project, FleetAction submenu)
     {
@@ -1140,8 +1149,7 @@ public static class MenuCommand
 
         var panes = await mux.ListPanesAsync().ConfigureAwait(false);
 
-        var dashboard = panes.FirstOrDefault(p => PathKey.Same(p.Cwd, project.Root)
-            && !FleetWorkspaces.IsHidden(p.SessionName));
+        var dashboard = DashboardPane(panes, project.Root, Adapters.DashPane(project.Name));
 
         if (dashboard is not null)
         {
