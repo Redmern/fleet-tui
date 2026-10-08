@@ -175,8 +175,7 @@ grep -h 'restored' "$root/cfg/fleet.log" | tail -1
 keys C-s d; sleep 1
 
 echo "== 13. apply-keybinds writes nvim and Claude keys once; doctor sees drift"
-# Its own fleet-nvim (a stub init.lua stands in for the installed config) and Claude home;
-# --target keeps the WezTerm module out of the real home folder.
+# Its own fleet-nvim (a stub init.lua stands in for the installed config) and Claude home.
 mkdir -p "$root/kxdg/fleet-nvim" "$root/claude"
 echo '-- stands in for an installed fleet-nvim' > "$root/kxdg/fleet-nvim/init.lua"
 generated=$root/kxdg/fleet-nvim/lua/fleet/keybinds.generated.lua
