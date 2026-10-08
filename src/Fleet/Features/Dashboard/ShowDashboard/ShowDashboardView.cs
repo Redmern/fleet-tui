@@ -611,33 +611,6 @@ public static class ShowDashboardView
             });
         }
 
-        void HideAll()
-        {
-            if (callbacks.HideAllAgents is null)
-            {
-                return;
-            }
-
-            status.Text = "hiding all...";
-            busy = true;
-
-            Start(async () =>
-            {
-                try
-                {
-                    var message = await Task.Run(callbacks.HideAllAgents).ConfigureAwait(false);
-
-                    app.Invoke(() => status.Text = message ?? string.Empty);
-
-                    await RefreshAsync().ConfigureAwait(false);
-                }
-                finally
-                {
-                    busy = false;
-                }
-            });
-        }
-
         void ManageAgent()
         {
             var tab = ActiveTab();
@@ -948,10 +921,6 @@ public static class ShowDashboardView
                     HideAgent();
                     break;
 
-                case FleetAction.HideAllAgents:
-                    HideAll();
-                    break;
-
                 case FleetAction.OpenEditor:
                     Start(OpenEditorAsync);
                     break;
@@ -1020,13 +989,11 @@ public static class ShowDashboardView
                 ("enter", FleetIcons.Select, () => Start(OpenAsync), FleetAction.None),
                 (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Configure,
                     () => FromKey(FleetAction.RemoveAgent), FleetAction.RemoveAgent),
-                (keys.DisplayFor(FleetAction.ToggleHidden),
+                (DashboardKeys.HideHint(keys),
                     board.IsHidden(FleetRows.Selected(agentList))
                         ? FleetIcons.Show
                         : FleetIcons.Hide,
                     () => FromKey(FleetAction.ToggleHidden), FleetAction.ToggleHidden),
-                (keys.DisplayFor(FleetAction.HideAllAgents), FleetIcons.HideAll,
-                    () => FromKey(FleetAction.HideAllAgents), FleetAction.HideAllAgents),
                 (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 
@@ -1036,13 +1003,11 @@ public static class ShowDashboardView
                 ("enter", FleetIcons.Select, () => Start(OpenAsync), FleetAction.None),
                 (keys.DisplayFor(FleetAction.RemoveAgent), FleetIcons.Configure,
                     () => FromKey(FleetAction.RemoveAgent), FleetAction.RemoveAgent),
-                (keys.DisplayFor(FleetAction.ToggleHidden),
+                (DashboardKeys.HideHint(keys),
                     subs.IsHidden(FleetRows.Selected(subList))
                         ? FleetIcons.Show
                         : FleetIcons.Hide,
                     () => FromKey(FleetAction.ToggleHidden), FleetAction.ToggleHidden),
-                (keys.DisplayFor(FleetAction.HideAllAgents), FleetIcons.HideAll,
-                    () => FromKey(FleetAction.HideAllAgents), FleetAction.HideAllAgents),
                 (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 

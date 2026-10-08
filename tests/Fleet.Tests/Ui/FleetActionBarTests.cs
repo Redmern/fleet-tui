@@ -1,4 +1,5 @@
 using System.Reflection;
+using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
 using Fleet.Shared.Settings.Enums;
@@ -69,18 +70,23 @@ public sealed class FleetActionBarTests : IDisposable
     }
 
     [Fact]
-    public void The_hide_all_button_names_itself_and_its_key_in_the_tooltip()
+    public void The_hide_button_names_both_of_its_keys_in_the_tooltip()
     {
         var keymap = new Keymap(KeymapConfig.Default);
         var chips = FleetActionBar.Chips(
-            [(keymap.DisplayFor(FleetAction.HideAllAgents), FleetIcons.HideAll, () => { })],
+            [(DashboardKeys.HideHint(keymap), FleetIcons.Hide, () => { })],
             keys: false,
             pinned: null,
             ButtonHints.Tooltips);
 
+        Assert.Equal("hide (x/X)", Assert.Single(chips).Tip);
+    }
+
+    [Fact]
+    public void Hide_all_keeps_its_own_icon_for_the_settings_menu()
+    {
         Assert.Equal(FleetIcons.HideAll, FleetIcons.For(FleetAction.HideAllAgents));
         Assert.NotEqual(FleetIcons.Hide, FleetIcons.HideAll);
-        Assert.Equal("hide all (X)", Assert.Single(chips).Tip);
     }
 
     [Fact]

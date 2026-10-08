@@ -626,16 +626,16 @@ Every agent and sub-orchestrator fleet starts, from the dashboard, the MCP tools
 messages in the background without opening a pane or taking focus. Open it yourself
 when you want to watch it.
 
-**Hide or show it**, from the `m` menu, hides an agent from the tab bar
-without stopping it. It stays listed
-under Agents marked `(hidden)`, and `enter` brings it back — hiding is a terminal
+**Hide or show it**, with `x` or `X` on the dashboard's Agents and Subs tabs or from
+the `m` menu, hides an agent from the tab bar without stopping it. It stays listed
+under Agents marked with a struck-through eye (a visible agent shows the plain eye),
+and `enter` brings it back — hiding is a terminal
 concern, never a fleet-listing one, so an agent can never be hidden from the
 dashboard itself.
 
 A hidden agent moves to the `fleet-hidden` workspace, which fleetd never shows.
 
-**Hide all agents** (`X` on the dashboard's Agents and Subs tabs, or under *maintenance*
-in the settings menu) hides every agent and sub-orchestrator that has a pane showing,
+**Hide all agents** (under *maintenance* in the settings menu) hides every agent and sub-orchestrator that has a pane showing,
 in one go. The main orchestrator stays put.
 
 `enter` on an agent **focuses its pane, or restarts it** if the pane is gone. A
