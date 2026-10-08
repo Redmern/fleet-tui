@@ -625,7 +625,7 @@ public static class ShowDashboardView
             {
                 try
                 {
-                    var message = await callbacks.HideAllAgents().ConfigureAwait(false);
+                    var message = await Task.Run(callbacks.HideAllAgents).ConfigureAwait(false);
 
                     app.Invoke(() => status.Text = message ?? string.Empty);
 

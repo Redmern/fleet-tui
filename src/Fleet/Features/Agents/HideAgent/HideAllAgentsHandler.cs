@@ -19,14 +19,11 @@ public sealed class HideAllAgentsHandler(IMuxDriver mux, IAgentStore store)
                 continue;
             }
 
-            var outcome = await hider
+            await hider
                 .HandleAsync(project, agent with { Hidden = false }, dashboardWindow: null, panes, ct)
                 .ConfigureAwait(false);
 
-            if (outcome.Succeeded)
-            {
-                hidden++;
-            }
+            hidden++;
         }
 
         return hidden;
