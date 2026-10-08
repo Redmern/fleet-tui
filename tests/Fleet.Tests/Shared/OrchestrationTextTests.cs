@@ -117,4 +117,14 @@ public class OrchestrationTextTests
         Assert.Contains("\n\n## Reporting", text.ReplaceLineEndings("\n"));
         Assert.DoesNotContain("\n\n\n", text.ReplaceLineEndings("\n"));
     }
+
+    [Fact]
+    public void The_instructions_name_fl_map_for_big_or_map_prefixed_tasks()
+    {
+        var text = OrchestrationText.Instructions(Brief);
+
+        Assert.Contains("too big for one session", text);
+        Assert.Contains("\"map:\"", text);
+        Assert.Contains("use the fl-map skill first.", text);
+    }
 }
