@@ -38,4 +38,3 @@ require('lazy').setup({ { import = 'fleet.plugins' } }, {
 })
 
 require('fleet.keymaps')
-require('fleet.wezterm')

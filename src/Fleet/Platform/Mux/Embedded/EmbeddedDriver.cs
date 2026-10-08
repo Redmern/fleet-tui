@@ -6,6 +6,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded;
 
@@ -314,7 +315,14 @@ public sealed class EmbeddedDriver(
             var wire = new Wire(stream);
             await wire.SendAsync(
                 MessageType.Hello,
-                new Hello { Version = Wire.Version, Role = ClientRoles.Control, Os = Environment.OSVersion.Platform.ToString() },
+                new Hello
+                {
+                    Version = Wire.OldestVersion,
+                    Highest = Wire.Version,
+                    Build = FleetVersion.Current,
+                    Role = ClientRoles.Control,
+                    Os = Environment.OSVersion.Platform.ToString(),
+                },
                 WireJsonContext.Default.Hello,
                 ct).ConfigureAwait(false);
 
@@ -326,6 +334,11 @@ public sealed class EmbeddedDriver(
             if (welcome.Type == MessageType.Error)
             {
                 throw new MuxUnavailableException(Wire.Read(welcome.Payload, WireJsonContext.Default.ErrorMessage).Message);
+            }
+
+            if (Wire.Refusal(Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome)) is { } refused)
+            {
+                throw new MuxUnavailableException(refused);
             }
 
             _ = Task.Run(() => ReadLoopAsync(wire), CancellationToken.None);

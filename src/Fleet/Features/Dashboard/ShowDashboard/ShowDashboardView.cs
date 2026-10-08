@@ -1207,6 +1207,14 @@ public static class ShowDashboardView
                 statusSeen = string.Empty;
             }
 
+            if (!busy && !pulling && !refreshing && queued == FleetAction.None
+                && FleetModal.Owns(claim) && callbacks.Outdated?.Invoke() == true)
+            {
+                status.Text = "fleet was updated; restarting the dashboard...";
+                app.RequestStop(window);
+                return false;
+            }
+
             if (!busy && !pulling && !refreshing && queued == FleetAction.None)
             {
                 UseKeymap(callbacks.ReloadKeymap());

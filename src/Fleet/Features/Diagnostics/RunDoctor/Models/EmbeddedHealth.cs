@@ -14,6 +14,7 @@ public sealed record FleetdStatus(
     int Workspaces,
     int Panes,
     int WarmMenus,
-    int Clients);
+    int Clients,
+    string? Build = null);
 
 public sealed record SavedSession(string Path, DateTime SavedAt, int Workspaces, int Panes);

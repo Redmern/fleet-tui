@@ -5,37 +5,32 @@ namespace Fleet.Tests.Features.Setup;
 public class TroubleTests
 {
     [Fact]
-    public void Wezterm_chosen_means_there_is_nothing_to_report()
-    {
-        Assert.Null(MuxTrouble.With("wezterm", wezTermOnPath: true));
-        Assert.Null(MuxTrouble.With("wezterm", wezTermOnPath: false));
-    }
-
-    [Fact]
-    public void A_machine_without_wezterm_is_told_to_install_it_not_that_a_driver_is_missing()
-    {
-        var trouble = MuxTrouble.With("embedded", wezTermOnPath: false);
-
-        Assert.NotNull(trouble);
-        Assert.Contains("wezterm is not installed", trouble);
-        Assert.Contains("fleet setup", trouble);
-        Assert.DoesNotContain("embedded", trouble);
-    }
-
-    [Fact]
     public void Embedded_chosen_in_a_build_that_carries_the_emulator_is_fine()
     {
-        Assert.Null(MuxTrouble.With("embedded", wezTermOnPath: false, embeddedReady: true));
+        Assert.Null(MuxTrouble.With("embedded", embeddedReady: true));
     }
 
     [Fact]
-    public void Inside_tmux_with_wezterm_present_the_driver_is_the_real_gap()
+    public void Embedded_chosen_in_a_build_without_the_emulator_says_so()
     {
-        var trouble = MuxTrouble.With("tmux", wezTermOnPath: true);
+        var trouble = MuxTrouble.With("embedded", embeddedReady: false);
 
         Assert.NotNull(trouble);
-        Assert.Contains("tmux", trouble);
+        Assert.Contains("libghostty-vt", trouble);
+        Assert.DoesNotContain("wezterm", trouble);
+    }
+
+    [Theory]
+    [InlineData("tmux")]
+    [InlineData("wezterm")]
+    public void Any_other_driver_is_the_real_gap(string chosen)
+    {
+        var trouble = MuxTrouble.With(chosen);
+
+        Assert.NotNull(trouble);
+        Assert.Contains(chosen, trouble);
         Assert.Contains("not implemented", trouble);
+        Assert.Contains("FLEET_MUX", trouble);
     }
 
     [Fact]

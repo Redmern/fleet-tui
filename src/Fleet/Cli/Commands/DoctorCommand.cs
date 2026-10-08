@@ -137,7 +137,7 @@ public static class DoctorCommand
                 $"  fleetd        pid {fleetd.Pid}: {fleetd.Workspaces} workspace(s), {fleetd.Panes} pane(s), "
                 + $"{fleetd.WarmMenus} warm menu(s), {fleetd.Clients} client(s) attached");
             Console.WriteLine(
-                $"                {fleetd.Executable} ({(fleetd.SameBuild ? "this build" : "another build than this fleet; restart fleetd to switch")})");
+                $"                {fleetd.Executable} ({(fleetd.SameBuild ? "this build" : $"{(fleetd.Build is { } build ? $"v{build}" : "an older build")}, not this fleet's; restart fleetd to switch")})");
         }
         else if (embedded.FleetdTooOld)
         {

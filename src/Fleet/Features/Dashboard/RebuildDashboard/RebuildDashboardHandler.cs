@@ -24,7 +24,7 @@ public sealed class RebuildDashboardHandler(
         if (self is null)
         {
             return Result<string>.Fail(
-                "fleet cannot find its own pane; the dashboard has to run inside wezterm.");
+                "fleet cannot find its own pane; the dashboard has to run inside a fleet pane.");
         }
 
         var mates = panes.Where(p => p.TabId == self.TabId && p.Id != self.Id).ToList();

@@ -65,6 +65,8 @@ public static class KeymapDefaults
             [FleetAction.OpenEditor] = "e",
             [FleetAction.OpenHeadVoice] = "Alt+o",
             [FleetAction.EditTheme] = "T",
+            [FleetAction.UpdateFleet] = "u",
+            [FleetAction.ShowVersion] = "v",
             [FleetAction.WhatsNew] = "W",
         };
 
@@ -121,6 +123,8 @@ public static class KeymapDefaults
             FleetAction.OpenEditor => "editor",
             FleetAction.OpenHeadVoice => "head",
             FleetAction.EditTheme => "theme",
+            FleetAction.UpdateFleet => "update",
+            FleetAction.ShowVersion => "version",
             FleetAction.WhatsNew => "what's new",
             _ => Describe(action).ToLowerInvariant(),
         };
@@ -168,7 +172,7 @@ public static class KeymapDefaults
             FleetAction.EditFleetConfig => "Edit fleet config file",
             FleetAction.OpenSettings => "Settings",
             FleetAction.OpenFleetConfigMenu => "Fleet config",
-            FleetAction.EditAidlcMode => "AIDLC settings",
+            FleetAction.EditAidlcMode => "Ai-DLC settings",
             FleetAction.EditAutoClose => "Auto-close idle agents",
             FleetAction.EditClaudeProfile => "Claude profile",
             FleetAction.EditMainOrchestratorInNvim => "Main orchestrator in nvim",
@@ -186,6 +190,8 @@ public static class KeymapDefaults
             FleetAction.OpenEditor => "Open editor here",
             FleetAction.OpenHeadVoice => "Show or hide the head, in voice mode",
             FleetAction.EditTheme => "Theme",
+            FleetAction.UpdateFleet => "Update fleet",
+            FleetAction.ShowVersion => "Version",
             FleetAction.WhatsNew => "What's new",
             _ => action.ToString(),
         };

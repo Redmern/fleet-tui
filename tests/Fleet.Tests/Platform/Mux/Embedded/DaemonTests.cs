@@ -318,6 +318,37 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.Contains("999", Wire.Read(reply.Value.Payload, WireJsonContext.Default.ErrorMessage).Message);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(7)]
+    public async Task A_client_from_an_older_or_newer_build_is_welcomed_on_the_protocol_both_speak(int? highest)
+    {
+        await using var stream = await _endpoint.ConnectAsync(TimeSpan.FromSeconds(5));
+        using var wire = new Wire(stream);
+        await wire.SendAsync(
+            MessageType.Hello,
+            new Hello { Version = Wire.OldestVersion, Highest = highest, Role = ClientRoles.Control },
+            WireJsonContext.Default.Hello);
+
+        var reply = await wire.ReceiveAsync();
+
+        Assert.Equal(MessageType.Welcome, reply!.Value.Type);
+        var welcome = Wire.Read(reply.Value.Payload, WireJsonContext.Default.Welcome);
+        Assert.Equal(Wire.Version, welcome.Version);
+        Assert.Equal(FleetVersion.Current, welcome.Build);
+        Assert.Null(Wire.Refusal(welcome));
+    }
+
+    [Fact]
+    public async Task Status_reports_the_build_fleetd_runs()
+    {
+        var control = await ControlAsync();
+
+        var status = await control.RequestAsync(new ControlRequest { Op = "status" });
+
+        Assert.Equal(FleetVersion.Current, status.Status!.Build);
+    }
+
     [Fact]
     public async Task A_click_focuses_the_pane_under_it_and_reaches_it_in_its_own_coordinates()
     {
@@ -936,7 +967,7 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_pane_can_move_focus_from_itself_like_wezterm_cli()
+    public async Task A_pane_can_move_focus_from_itself_through_fleet_cli()
     {
         var control = await ControlAsync();
         var left = await SpawnAsync(control, "techweb", "left");
@@ -950,7 +981,7 @@ public sealed class DaemonTests : IAsyncLifetime
         await client.SendKeyAsync("x");
 
         await Eventually(() => _panes.ByProgram("left")!.Written == "x");
-        Assert.Equal("fleet", _panes.ByProgram("left")!.Env["WEZTERM_EXECUTABLE"]);
+        Assert.Equal("fleet", _panes.ByProgram("left")!.Env[FleetDaemon.ExecutableVariable]);
     }
     [Fact]
     public async Task The_menu_key_over_a_dashboard_opens_the_same_fleet_menu_as_anywhere_else()

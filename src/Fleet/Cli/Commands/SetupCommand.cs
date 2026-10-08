@@ -14,11 +14,8 @@ public static class SetupCommand
     {
         var keymap = new Keymap(Adapters.Keymaps().Load());
 
-        var module = Adapters.WriteKeybindModule(keymap);
-        var wiring = Adapters.WireWezTermConfig();
-
         var report = new SetupHandler(Adapters.OnPath)
-            .Inspect(module, wiring, Adapters.ConfigDirectory, Adapters.InspectNvim(install: true));
+            .Inspect(Adapters.ConfigDirectory, Adapters.InspectNvim(install: true));
 
         var keybinds = KeybindWiring.ApplyAll();
 
@@ -53,7 +50,7 @@ public static class SetupCommand
         if (report.Missing.Count == 0)
         {
             Console.WriteLine();
-            Console.WriteLine("Reload wezterm, then run 'fleet' to open a project.");
+            Console.WriteLine("Run 'fleet' to open a project.");
 
             return;
         }
@@ -69,7 +66,7 @@ public static class SetupCommand
         if (!report.Blocked)
         {
             Console.WriteLine();
-            Console.WriteLine("Nothing above blocks fleet. Reload wezterm and run 'fleet'.");
+            Console.WriteLine("Nothing above blocks fleet. Run 'fleet'.");
         }
     }
 }

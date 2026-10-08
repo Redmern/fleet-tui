@@ -99,7 +99,7 @@ public static class McpTools
         Spec(
             HarnessTool.Dispatch,
             "Dispatch a task. Without a repository, a sub-orchestrator carries it out. With a repository, "
-            + "fleet starts a repository agent with the task directly, unless AIDLC applies or it is research.",
+            + "fleet starts a repository agent with the task directly, unless Ai-DLC applies or it is research.",
             new ToolParam(ToolArguments.Message, "string", "The task.", true),
             new ToolParam(
                 ToolArguments.Repository,
@@ -119,7 +119,7 @@ public static class McpTools
             new ToolParam(
                 ToolArguments.Profile,
                 "string",
-                "Optional AIDLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this. Used only when AIDLC mode is on; in manual mode only a prefix applies AIDLC.",
+                "Optional Ai-DLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this. Used only when Ai-DLC mode is on; in manual mode only a prefix applies Ai-DLC.",
                 false)),
         Spec(
             HarnessTool.ListSubs,

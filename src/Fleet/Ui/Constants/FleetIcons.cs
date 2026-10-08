@@ -10,8 +10,6 @@ public static class FleetIcons
 
     public const string Maintenance = "";
 
-    public const string About = "";
-
     public const string Models = "";
 
     public const string Permissions = "";
@@ -105,6 +103,8 @@ public static class FleetIcons
         FleetAction.EditTheme => "",
         FleetAction.RebuildDashboard => "",
         FleetAction.CleanupProject => "",
+        FleetAction.UpdateFleet => "",
+        FleetAction.ShowVersion => "",
         FleetAction.ViewLogs => "",
         FleetAction.WhatsNew => "",
         FleetAction.EditMainOrchestratorInNvim => "",

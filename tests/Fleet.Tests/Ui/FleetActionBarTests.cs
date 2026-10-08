@@ -15,7 +15,6 @@ public sealed class FleetActionBarTests : IDisposable
         FleetIcons.Session,
         FleetIcons.Configure,
         FleetIcons.Maintenance,
-        FleetIcons.About,
         FleetIcons.Models,
         FleetIcons.Permissions,
     ];

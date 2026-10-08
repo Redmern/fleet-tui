@@ -14,7 +14,6 @@ public static class ThemeWiring
     public static IReadOnlyList<ThemeApplied> Apply(ThemePalette theme, string folder) =>
         new ApplyThemeHandler(
         [
-            new WezTermThemeTarget(),
             new NvimThemeTarget(FleetNvimConfig.Directory),
             new ClaudeThemeTarget(ClaudeConfigHome.ForFolder(folder, Path.Combine(Adapters.HomeDirectory, ".claude"))),
             new YaziThemeTarget(YaziConfigHome.Resolve()),
@@ -45,11 +44,6 @@ public static class ThemeWiring
                     }
 
                     apply(theme);
-
-                    if (Adapters.ApplyWezTermTheme(theme) is not null)
-                    {
-                        Adapters.TouchWezTermConfig();
-                    }
                 }
                 catch (Exception e)
                 {

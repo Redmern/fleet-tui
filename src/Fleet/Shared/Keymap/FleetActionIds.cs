@@ -52,6 +52,8 @@ public static class FleetActionIds
         FleetAction.OpenEditor => "open-editor",
         FleetAction.OpenHeadVoice => "head-voice",
         FleetAction.EditTheme => "theme",
+        FleetAction.UpdateFleet => "update",
+        FleetAction.ShowVersion => "version",
         FleetAction.WhatsNew => "whats-new",
         _ => action.ToString().ToLowerInvariant(),
     };

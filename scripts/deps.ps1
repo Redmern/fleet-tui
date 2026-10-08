@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Install what fleet needs on Windows: WezTerm, Neovim, git and yazi.
+    Install what fleet needs on Windows: Neovim, git and yazi.
 
 .DESCRIPTION
     Dot-source this and call Install-FleetDeps. Both installers use it, which is
@@ -31,7 +31,6 @@ function Install-FleetDeps {
     $winget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
 
     $tools = @(
-        @{ Name = 'wezterm'; Id = 'wez.wezterm' },
         @{ Name = 'nvim'; Id = 'Neovim.Neovim' },
         @{ Name = 'git'; Id = 'Git.Git' },
         @{ Name = 'yazi'; Id = 'sxyazi.yazi' }
@@ -66,7 +65,6 @@ function Install-FleetDeps {
     # winget puts new tools on the machine PATH, which this process does not see
     # until it restarts. Add the usual locations so 'fleet setup' can find them.
     foreach ($dir in @(
-            (Join-Path $env:ProgramFiles 'WezTerm'),
             (Join-Path $env:ProgramFiles 'Neovim\bin'),
             (Join-Path $env:ProgramFiles 'Git\cmd'),
             (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'))) {

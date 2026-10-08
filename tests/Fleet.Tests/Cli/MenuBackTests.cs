@@ -23,6 +23,8 @@ public class MenuBackTests
     [InlineData(FleetAction.WhatsNew)]
     [InlineData(FleetAction.CleanupProject)]
     [InlineData(FleetAction.RebuildDashboard)]
+    [InlineData(FleetAction.UpdateFleet)]
+    [InlineData(FleetAction.ShowVersion)]
     [InlineData(FleetAction.OpenFleetConfigMenu)]
     public void A_settings_screen_goes_back_to_the_settings_menu(FleetAction action) =>
         Assert.Equal(FleetAction.OpenSettings, MenuCommand.Parent(action));

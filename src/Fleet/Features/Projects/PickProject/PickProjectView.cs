@@ -22,7 +22,7 @@ public static class PickProjectView
         IReadOnlyList<WindowSession> sessions = callbacks.Sessions?.Invoke() ?? [];
         var tabbed = callbacks.Sessions is not null && sessions.Count > 0;
         var onSessions = false;
-        var reserved = Reserved(keymap, tabbed);
+        var reserved = Reserved(keymap, tabbed, callbacks.Update is not null);
         var accelerators = Accelerators(entries, reserved);
         var sessionKeys = PickerKeys.For([.. sessions.Select(s => s.Name)], reserved);
         var prefix = new PrefixRecognizer(keymap);
@@ -70,6 +70,9 @@ public static class PickProjectView
         Refill(0);
 
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        var updateLine = FleetTheme.Caption(1, Pos.AnchorEnd(3), string.Empty);
+        var updateNotice = callbacks.Update is null ? null : callbacks.UpdateNotice?.Invoke();
 
         FleetKeys.ApplyMotions(list, keymap);
         FleetKeys.ApplyOpen(list, keymap);
@@ -130,6 +133,19 @@ public static class PickProjectView
             app.RequestStop(window);
         }
 
+        void RunUpdate()
+        {
+            if (updateNotice is null || callbacks.Update is not { } update)
+            {
+                return;
+            }
+
+            if (update())
+            {
+                ShowUpdate(null);
+            }
+        }
+
         void Accept(bool newWindow = false)
         {
             if (onSessions)
@@ -167,6 +183,10 @@ public static class PickProjectView
 
                 case FleetAction.OpenMenu:
                     Dispatch(callbacks.ShowMenu());
+                    break;
+
+                case FleetAction.UpdateFleet:
+                    RunUpdate();
                     break;
             }
         }
@@ -267,7 +287,8 @@ public static class PickProjectView
 
             if (direct is FleetAction.Close
                 or FleetAction.NewProject
-                or FleetAction.RemoveProject)
+                or FleetAction.RemoveProject
+                || (direct is FleetAction.UpdateFleet && updateNotice is not null))
             {
                 Dispatch(direct);
                 key.Handled = true;
@@ -276,22 +297,57 @@ public static class PickProjectView
 
         app.Keyboard.KeyDown += Keys;
 
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+        void ShowUpdate(string? notice)
+        {
+            updateNotice = notice;
+            updateLine.Text = notice ?? string.Empty;
+            list.Height = Dim.Fill(notice is null ? 3 : 4);
 
-        bar.Show(
-        [
-            ($"{keymap.DisplayFor(FleetAction.OpenProject)}/enter/A-Z", "open", () => Accept()),
-            ("SHIFT", FleetIcons.NewWindow, () => Accept(newWindow: true)),
-            (keymap.DisplayFor(FleetAction.NewProject), "new", NewProject),
-            (keymap.DisplayFor(FleetAction.RemoveProject), "remove", DropProject),
-        ]);
+            bar.Show(
+            [
+                ($"{keymap.DisplayFor(FleetAction.OpenProject)}/enter/A-Z", "open", () => Accept()),
+                ("SHIFT", FleetIcons.NewWindow, () => Accept(newWindow: true)),
+                (keymap.DisplayFor(FleetAction.NewProject), "new", NewProject),
+                (keymap.DisplayFor(FleetAction.RemoveProject), "remove", DropProject),
+                .. notice is null
+                    ? Array.Empty<(string, string, Action)>()
+                    : [(keymap.DisplayFor(FleetAction.UpdateFleet), "update", RunUpdate)],
+            ]);
+        }
+
+        ShowUpdate(updateNotice);
+
+        var closed = false;
+
+        if (callbacks.Update is not null && callbacks.CheckUpdate is { } check)
+        {
+            _ = Task.Run(async () =>
+            {
+                var fresh = await check().ConfigureAwait(false);
+
+                if (closed)
+                {
+                    return;
+                }
+
+                await FleetAsync.OnUi(app, () =>
+                {
+                    if (!closed && fresh != updateNotice)
+                    {
+                        ShowUpdate(fresh);
+                    }
+
+                    return true;
+                }).ConfigureAwait(false);
+            });
+        }
 
         if (tabBar is not null)
         {
             tabBar.Chosen += index => ShowTab(index == 1);
         }
 
-        window.Add(header, list, status, bar.Root);
+        window.Add(header, list, updateLine, status, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window), header);
 
         try
@@ -300,6 +356,7 @@ public static class PickProjectView
         }
         finally
         {
+            closed = true;
             FleetModal.Leave();
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();
@@ -327,11 +384,12 @@ public static class PickProjectView
         ];
     }
 
-    private static IReadOnlySet<char> Reserved(Keymap keymap, bool tabbed)
+    private static IReadOnlySet<char> Reserved(Keymap keymap, bool tabbed, bool updates)
     {
         var reserved = new HashSet<char>();
 
         foreach (var action in (FleetAction[])[.. tabbed ? [FleetAction.PrevTab, FleetAction.NextTab] : Array.Empty<FleetAction>(),
+        .. updates ? [FleetAction.UpdateFleet] : Array.Empty<FleetAction>(),
         ..new[]
         {
             FleetAction.MoveDown,
