@@ -8,7 +8,10 @@ the earlier builds: `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bul
 
 - Version numbers start again at 0.1.0. Builds from before the restart are listed under "before the restart".
 - On a 0.6.0.x build, run `fleet update v0.1.0` once. Plain `fleet update` sees 0.1.0 as older and stays put.
-- New Settings › What's new screen. It shows what changed in each release, and works offline.
+- Update fleet from inside the app. The project picker says when a new version is out, and Settings has Update fleet (`u`) and Version (`v`). Open dashboards restart on the new build.
+- New Settings › What's new (`W`). It shows what changed in each release, and works offline.
+- fleet now runs only on its own multiplexer. WezTerm support is gone, and `FLEET_MUX=wezterm` no longer works.
+- AIDLC is now called Ai-DLC. A project can name its process file `.fleet/config/ai-dlc.md`; `aidlc.md` still works.
 
 # Earlier builds (before the restart)
 
@@ -176,7 +179,7 @@ These builds used the old version numbers. Their tags are kept as `legacy/v<vers
 
 ## 0.6.0 (2026-10-01)
 
-- Fleet can now run its own built-in terminal multiplexer, so you no longer need WezTerm panes. It has tabs, splits, floating windows, mouse support, scrollback, copy mode and a tab bar at the top.
+- Fleet can now run on its own built-in terminal multiplexer, as well as in WezTerm. It has tabs, splits, floating windows, mouse support, scrollback, copy mode and a tab bar at the top.
 - Projects keep running in the background. Attach or switch between them with a picker, and your session comes back after a restart. `fleet daemon stop` saves it and stops it.
 - You can connect to remote machines from the fleet menu. A remote project shows in your window, and you can switch back to it any time.
 - New notification center. It tells you when an agent needs you, on every dashboard. It has a history tab for notices you resolved or dismissed, and the project pill shows your open notices.
