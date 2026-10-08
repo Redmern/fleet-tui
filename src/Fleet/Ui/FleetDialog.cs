@@ -276,7 +276,8 @@ public static class FleetDialog
     public static void Inform(IApplication app, string title, IReadOnlyList<string> lines) =>
         Notice(app, title, [.. lines.SelectMany(line => Wrap(line))], FleetTheme.Caption);
 
-    public static T Wait<T>(IApplication app, string title, IReadOnlyList<string> lines, Func<Task<T>> work)
+    public static T Wait<T>(
+        IApplication app, string title, IReadOnlyList<string> lines, Func<CancellationToken, Task<T>> work)
     {
         var window = Sized(title, lines, extraRows: 3);
 
@@ -287,10 +288,23 @@ public static class FleetDialog
             y++;
         }
 
-        var running = Task.Run(work);
+        var cancelling = FleetTheme.Caption(2, y, string.Empty);
+        window.Add(cancelling);
+
+        using var cancel = new CancellationTokenSource();
+        var running = Task.Run(() => work(cancel.Token));
         _ = running.ContinueWith(_ => app.Invoke(() => app.RequestStop(window)), TaskScheduler.Default);
 
-        window.KeyDown += (_, key) => key.Handled = true;
+        window.KeyDown += (_, key) =>
+        {
+            if (key == FleetKeys.Cancel && !cancel.IsCancellationRequested)
+            {
+                cancel.Cancel();
+                cancelling.Text = "Cancelling...";
+            }
+
+            key.Handled = true;
+        };
 
         FleetModal.Enter();
 

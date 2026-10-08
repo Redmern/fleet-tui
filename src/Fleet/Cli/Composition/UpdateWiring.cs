@@ -1,5 +1,4 @@
 using Fleet.Features.Updates.CheckUpdate;
-using Fleet.Features.Updates.CheckUpdate.Models;
 using Fleet.Features.Updates.ListReleases;
 using Fleet.Features.Updates.RunUpdate;
 using Fleet.Features.Updates.RunUpdate.Models;
@@ -17,26 +16,58 @@ public static class UpdateWiring
     public const string ReloadNote =
         "Open dashboards restart on the new build by themselves; other open fleet windows pick it up when reopened.";
 
+    public const string UpdatedElsewhere =
+        "fleet was already updated from another window. Reopen this window to use the new build.";
+
     public static CheckUpdateHandler Checker() => new(Adapters.Releases(), Adapters.UpdateChecks());
 
-    public static UpdateCheck? Cached() => Checker().Cached(FleetVersion.Current);
+    public static string? CachedNotice(FreshBuild build) =>
+        build.Replaced ? null : Checker().Cached(Adapters.ReleaseRepo, FleetVersion.Current)?.Notice(FleetVersion.Current);
 
-    public static Task<UpdateCheck> CheckAsync(CancellationToken ct = default) =>
-        Checker().HandleCachedAsync(Adapters.ReleaseRepo, FleetVersion.Current, ct);
-
-    public static Task<IReadOnlyList<ReleaseInfo>> ReleasesAsync(CancellationToken ct = default) =>
-        new ListReleasesHandler(Adapters.Releases()).HandleAsync(Adapters.ReleaseRepo, ct);
-
-    public static async Task<VersionScreen> VersionScreenAsync()
+    public static async Task<string?> CheckNoticeAsync(FreshBuild build)
     {
-        var check = await CheckAsync().ConfigureAwait(false);
-        var releases = await ReleasesAsync().ConfigureAwait(false);
+        var check = await Checker()
+            .HandleCachedAsync(Adapters.ReleaseRepo, FleetVersion.Current)
+            .ConfigureAwait(false);
 
-        return new VersionScreen(FleetVersion.Current, check.Latest, check.UpdateAvailable, releases);
+        return build.Replaced ? null : check.Notice(FleetVersion.Current);
     }
 
-    public static bool Install(IApplication app, string? version = null)
+    public static async Task<VersionScreen> VersionScreenAsync(CancellationToken ct)
     {
+        try
+        {
+            var check = await Checker()
+                .HandleCachedAsync(Adapters.ReleaseRepo, FleetVersion.Current, ct)
+                .ConfigureAwait(false);
+            var releases = await new ListReleasesHandler(Adapters.Releases())
+                .HandleAsync(Adapters.ReleaseRepo, ct)
+                .ConfigureAwait(false);
+
+            return Screen(FleetVersion.Current, check.Latest, releases);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return Screen(FleetVersion.Current, null, []);
+        }
+    }
+
+    public static VersionScreen Screen(string current, string? checkedLatest, IReadOnlyList<ReleaseInfo> releases)
+    {
+        var latest = releases.FirstOrDefault(r => !r.Prerelease)?.Tag ?? checkedLatest;
+
+        return new VersionScreen(
+            current, latest, latest is not null && VersionCompare.IsNewer(latest, current), releases);
+    }
+
+    public static bool Install(IApplication app, FreshBuild build, string? version = null)
+    {
+        if (build.Replaced)
+        {
+            FleetDialog.Inform(app, "Update fleet", [UpdatedElsewhere]);
+            return false;
+        }
+
         var target = version ?? "the latest release";
 
         if (!FleetDialog.Confirm(
@@ -44,7 +75,7 @@ public static class UpdateWiring
                 "Update fleet?",
                 [
                     $"Download {target} and install it over v{FleetVersion.Current}.",
-                    "Running agents and panes keep running.",
+                    "Running agents and panes keep running. Esc cancels the download.",
                 ],
                 "Update"))
         {
@@ -52,7 +83,7 @@ public static class UpdateWiring
         }
 
         var (installed, lines) = FleetDialog.Wait(
-            app, "Updating fleet", [$"Downloading {target}..."], () => InstallAsync(version));
+            app, "Updating fleet", [$"Downloading {target}..."], ct => InstallAsync(version, ct));
 
         FleetDialog.Inform(app, installed ? "fleet updated" : "Update fleet", lines);
 
@@ -62,25 +93,37 @@ public static class UpdateWiring
     public static async Task<(bool Installed, IReadOnlyList<string> Lines)> InstallAsync(
         string? version, CancellationToken ct = default)
     {
-        var result = await new RunUpdateHandler(Adapters.Releases(), Adapters.Installer())
-            .HandleAsync(
-                new RunUpdateCommand(
-                    Adapters.ReleaseRepo,
-                    FleetVersion.Current,
-                    ReleaseAssetNames.ForCurrentPlatform(),
-                    Adapters.Executable,
-                    version),
-                ct)
-            .ConfigureAwait(false);
-
-        if (!result.Succeeded)
+        try
         {
-            return (false, [$"Update failed: {result.Error}"]);
-        }
+            var result = await new RunUpdateHandler(Adapters.Releases(), Adapters.Installer())
+                .HandleAsync(
+                    new RunUpdateCommand(
+                        Adapters.ReleaseRepo,
+                        FleetVersion.Current,
+                        ReleaseAssetNames.ForCurrentPlatform(),
+                        Adapters.Executable,
+                        version),
+                    ct)
+                .ConfigureAwait(false);
 
-        return result.Value.Installed
-            ? (true, [.. AfterInstall(result.Value, await EmbeddedWiring.StaleDaemonAsync().ConfigureAwait(false))])
-            : (false, [Sentence(result.Value.Message)]);
+            if (!result.Succeeded)
+            {
+                return (false, [$"Update failed: {result.Error}"]);
+            }
+
+            if (!result.Value.Installed)
+            {
+                return (false, [Sentence(result.Value.Message)]);
+            }
+
+            var installed = result.Value.Version!.TrimStart('v', 'V');
+
+            return (true, [.. AfterInstall(result.Value, await EmbeddedWiring.StaleDaemonAsync(installed).ConfigureAwait(false))]);
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return (false, [$"Update failed: {e.Message}"]);
+        }
     }
 
     public static IEnumerable<string> AfterInstall(UpdateOutcome outcome, string? staleDaemon)

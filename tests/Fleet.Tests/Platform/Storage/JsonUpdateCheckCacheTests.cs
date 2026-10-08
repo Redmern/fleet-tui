@@ -15,9 +15,9 @@ public sealed class JsonUpdateCheckCacheTests : ConfigHomeFixture
     {
         var checkedAt = new DateTimeOffset(2026, 10, 8, 12, 30, 0, TimeSpan.Zero);
 
-        new JsonUpdateCheckCache().Save(new CachedUpdateCheck("v0.6.0.27", checkedAt));
+        new JsonUpdateCheckCache().Save(new CachedUpdateCheck("v0.6.0.27", checkedAt, "owner/repo"));
 
-        Assert.Equal(new CachedUpdateCheck("v0.6.0.27", checkedAt), new JsonUpdateCheckCache().Load());
+        Assert.Equal(new CachedUpdateCheck("v0.6.0.27", checkedAt, "owner/repo"), new JsonUpdateCheckCache().Load());
     }
 
     [Fact]

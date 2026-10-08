@@ -15,7 +15,7 @@ public sealed class JsonUpdateCheckCache : IUpdateCheckCache
                 File.ReadAllText(FleetPaths.UpdateCheckFile),
                 FleetJsonContext.Default.UpdateCheckFile);
 
-            return file is { Latest.Length: > 0 } ? new CachedUpdateCheck(file.Latest, file.CheckedAt) : null;
+            return file is { Latest.Length: > 0 } ? new CachedUpdateCheck(file.Latest, file.CheckedAt, file.Repo) : null;
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -31,7 +31,7 @@ public sealed class JsonUpdateCheckCache : IUpdateCheckCache
             File.WriteAllText(
                 FleetPaths.UpdateCheckFile,
                 JsonSerializer.Serialize(
-                    new UpdateCheckFile { Latest = check.Latest, CheckedAt = check.CheckedAt },
+                    new UpdateCheckFile { Repo = check.Repo, Latest = check.Latest, CheckedAt = check.CheckedAt },
                     FleetJsonContext.Default.UpdateCheckFile));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

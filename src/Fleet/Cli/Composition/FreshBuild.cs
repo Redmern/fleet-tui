@@ -4,9 +4,16 @@ namespace Fleet.Cli.Composition;
 
 public sealed class FreshBuild(string executable)
 {
+    public static readonly TimeSpan SettleFor = TimeSpan.FromSeconds(2);
+
+    public static FreshBuild ThisProcess { get; } = new(Adapters.Executable);
+
     private readonly DateTime _startedWith = Stamp(executable);
 
     public bool Replaced => Stamp(executable) > _startedWith;
+
+    public bool ReplacedAndSettled =>
+        Stamp(executable) is var stamp && stamp > _startedWith && DateTime.UtcNow - stamp >= SettleFor;
 
     public int RunAgain(IReadOnlyList<string> args)
     {
@@ -17,15 +24,25 @@ public sealed class FreshBuild(string executable)
             start.ArgumentList.Add(arg);
         }
 
-        using var next = Process.Start(start);
-
-        if (next is null)
+        for (var attempt = 1; ; attempt++)
         {
-            return 1;
-        }
+            try
+            {
+                using var next = Process.Start(start);
 
-        next.WaitForExit();
-        return next.ExitCode;
+                if (next is null)
+                {
+                    return 1;
+                }
+
+                next.WaitForExit();
+                return next.ExitCode;
+            }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException && attempt < 5)
+            {
+                Thread.Sleep(SettleFor);
+            }
+        }
     }
 
     private static DateTime Stamp(string path)

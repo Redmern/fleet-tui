@@ -317,14 +317,22 @@ public static class PickProjectView
 
         ShowUpdate(updateNotice);
 
+        var closed = false;
+
         if (callbacks.Update is not null && callbacks.CheckUpdate is { } check)
         {
             _ = Task.Run(async () =>
             {
                 var fresh = await check().ConfigureAwait(false);
+
+                if (closed)
+                {
+                    return;
+                }
+
                 await FleetAsync.OnUi(app, () =>
                 {
-                    if (fresh != updateNotice)
+                    if (!closed && fresh != updateNotice)
                     {
                         ShowUpdate(fresh);
                     }
@@ -348,6 +356,7 @@ public static class PickProjectView
         }
         finally
         {
+            closed = true;
             FleetModal.Leave();
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();

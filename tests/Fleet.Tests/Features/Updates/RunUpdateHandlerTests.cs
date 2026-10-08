@@ -98,6 +98,24 @@ public class RunUpdateHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_cancelled_update_never_replaces_the_binary()
+    {
+        var client = new FakeReleaseClient
+        {
+            Release = new ReleaseInfo(
+                "v0.2.0", [new ReleaseAsset("fleet-win-x64.exe", "https://x/asset")]),
+        };
+        client.Downloads["https://x/asset"] = "new"u8.ToArray();
+
+        var result = await new RunUpdateHandler(client, new SelfInstall())
+            .HandleAsync(Command(), new CancellationToken(canceled: true));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("cancelled", result.Error);
+        Assert.Equal("old"u8.ToArray(), File.ReadAllBytes(_executablePath));
+    }
+
+    [Fact]
     public async Task Verifies_the_checksum_when_a_sidecar_asset_is_published()
     {
         var newBytes = "new"u8.ToArray();

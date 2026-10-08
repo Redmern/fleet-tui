@@ -26,7 +26,7 @@ public sealed class CheckUpdateHandler(
                 + "and that a release has been published)");
         }
 
-        cache?.Save(new CachedUpdateCheck(latest.Tag, Now));
+        cache?.Save(new CachedUpdateCheck(latest.Tag, Now, repo));
 
         return From(latest.Tag, currentVersion);
     }
@@ -34,7 +34,7 @@ public sealed class CheckUpdateHandler(
     public async Task<UpdateCheck> HandleCachedAsync(
         string repo, string currentVersion, CancellationToken ct = default)
     {
-        var saved = cache?.Load();
+        var saved = Saved(repo);
 
         if (saved is not null && Fresh(saved))
         {
@@ -48,8 +48,11 @@ public sealed class CheckUpdateHandler(
             : check;
     }
 
-    public UpdateCheck? Cached(string currentVersion) =>
-        cache?.Load() is { } saved ? From(saved.Latest, currentVersion) : null;
+    public UpdateCheck? Cached(string repo, string currentVersion) =>
+        Saved(repo) is { } saved ? From(saved.Latest, currentVersion) : null;
+
+    private CachedUpdateCheck? Saved(string repo) =>
+        cache?.Load() is { } saved && string.Equals(saved.Repo, repo, StringComparison.OrdinalIgnoreCase) ? saved : null;
 
     private bool Fresh(CachedUpdateCheck saved)
     {

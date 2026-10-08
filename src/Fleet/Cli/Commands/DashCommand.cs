@@ -99,7 +99,7 @@ public static class DashCommand
                     approvals,
                     log) with
                 {
-                    Outdated = () => restart = build.Replaced,
+                    Outdated = () => restart = build.ReplacedAndSettled,
                 });
         }
         finally

@@ -72,6 +72,11 @@ public sealed class RunUpdateHandler(IReleaseClient releases, IBinaryInstaller i
             }
         }
 
+        if (ct.IsCancellationRequested)
+        {
+            return Result<UpdateOutcome>.Fail("update cancelled; nothing was installed.");
+        }
+
         try
         {
             installer.Replace(command.ExecutablePath, bytes);

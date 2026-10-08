@@ -57,6 +57,7 @@ public static class MenuCommand
 
     public static async Task<int> RunAsync(Invocation invocation)
     {
+        _ = FreshBuild.ThisProcess;
         var projects = Adapters.Projects();
 
         var project = invocation.Project is { } named
@@ -687,7 +688,7 @@ public static class MenuCommand
                 break;
 
             case FleetAction.UpdateFleet:
-                UpdateWiring.Install(app);
+                UpdateWiring.Install(app, FreshBuild.ThisProcess);
                 break;
 
             case FleetAction.ShowVersion:
@@ -700,7 +701,7 @@ public static class MenuCommand
 
                     if (ShowVersionView.Show(app, keymap, screen) is { } release)
                     {
-                        UpdateWiring.Install(app, release == ShowVersionView.Latest ? null : release);
+                        UpdateWiring.Install(app, FreshBuild.ThisProcess, release == ShowVersionView.Latest ? null : release);
                     }
 
                     break;

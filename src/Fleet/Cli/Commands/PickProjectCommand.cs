@@ -39,6 +39,7 @@ public static class PickProjectCommand
 
     public static async Task<int> RunAsync(bool startNew = false)
     {
+        _ = FreshBuild.ThisProcess;
         var log = Adapters.Log();
         var mux = Adapters.Mux(log);
 
@@ -301,6 +302,7 @@ public static class PickProjectCommand
         var creator = new CreateProjectHandler(projects);
         var remover = new RemoveProjectHandler(projects);
         var sessions = Adapters.Sessions();
+        var build = FreshBuild.ThisProcess;
 
         ProjectDraft? browse = null;
         Action<ProjectDraft>? leaveToBrowse = browseInTerminal ? left => browse = left : null;
@@ -362,9 +364,9 @@ public static class PickProjectCommand
                     FleetDialog.Confirm(app, $"Remove session {session.Name}?", ["Its projects stay; only the saved set is forgotten."], "Remove")
                         ? (sessions.Remove(session.Name) ? $"removed session {session.Name}" : null)
                         : null,
-                UpdateNotice: () => UpdateWiring.Cached()?.Notice(FleetVersion.Current),
-                CheckUpdate: async () => (await UpdateWiring.CheckAsync().ConfigureAwait(false)).Notice(FleetVersion.Current),
-                Update: () => UpdateWiring.Install(app)));
+                UpdateNotice: () => UpdateWiring.CachedNotice(build),
+                CheckUpdate: () => UpdateWiring.CheckNoticeAsync(build),
+                Update: () => UpdateWiring.Install(app, build)));
 
         return (browse is null ? picked : null, browse);
     }

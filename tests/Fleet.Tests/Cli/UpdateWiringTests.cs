@@ -1,5 +1,6 @@
 using Fleet.Cli.Composition;
 using Fleet.Features.Updates.RunUpdate.Models;
+using Fleet.Ports.Releases.Models;
 
 namespace Fleet.Tests.Cli;
 
@@ -42,6 +43,42 @@ public sealed class UpdateWiringTests : IDisposable
         File.SetLastWriteTimeUtc(_executable, DateTime.UtcNow);
 
         Assert.True(build.Replaced);
+    }
+
+    [Fact]
+    public void A_dashboard_waits_until_the_new_executable_has_stopped_changing()
+    {
+        var build = new FreshBuild(_executable);
+
+        File.WriteAllText(_executable, "new build");
+        File.SetLastWriteTimeUtc(_executable, DateTime.UtcNow);
+
+        Assert.False(build.ReplacedAndSettled);
+
+        File.SetLastWriteTimeUtc(_executable, DateTime.UtcNow - FreshBuild.SettleFor - TimeSpan.FromSeconds(1));
+
+        Assert.True(build.ReplacedAndSettled);
+    }
+
+    [Fact]
+    public void The_version_screen_takes_latest_from_the_live_list_over_an_older_cached_check()
+    {
+        var screen = UpdateWiring.Screen(
+            "0.6.0.26",
+            "v0.6.0.26",
+            [new ReleaseInfo("v0.7.0-rc.1", [], Prerelease: true), new ReleaseInfo("v0.6.0.27", [])]);
+
+        Assert.Equal("v0.6.0.27", screen.Latest);
+        Assert.True(screen.UpdateAvailable);
+    }
+
+    [Fact]
+    public void Offline_the_version_screen_falls_back_to_the_cached_check()
+    {
+        var screen = UpdateWiring.Screen("0.6.0.26", "v0.6.0.27", []);
+
+        Assert.Equal("v0.6.0.27", screen.Latest);
+        Assert.True(screen.UpdateAvailable);
     }
 
     [Fact]
