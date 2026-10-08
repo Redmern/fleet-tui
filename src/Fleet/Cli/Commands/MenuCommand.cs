@@ -2,6 +2,7 @@ using System.Globalization;
 using Fleet.Cli.Composition;
 using Fleet.Cli.Models;
 using Fleet.Features.Agents.CleanupAgents;
+using Fleet.Features.Agents.HideAgent;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.MoveProject;
 using Fleet.Features.Agents.OpenEditor;
@@ -687,6 +688,24 @@ public static class MenuCommand
             case FleetAction.RebuildDashboard:
                 Adapters.Requests().Submit(project.Name, FleetAction.RebuildDashboard);
                 break;
+
+            case FleetAction.HideAllAgents:
+                {
+                    var hideMux = Adapters.Mux(Adapters.Log());
+
+                    if (hideMux.Unsupported is not null)
+                    {
+                        FleetDialog.Error(app, "Hide all agents", hideMux.Unsupported);
+                        break;
+                    }
+
+                    var hidden = await new HideAllAgentsHandler(hideMux.Driver, Adapters.Agents())
+                        .HandleAsync(project.Name)
+                        .ConfigureAwait(false);
+
+                    Adapters.Log().Write(LogTag.For(project.Name, HideAllAgentsHandler.Summary(hidden)));
+                    break;
+                }
 
             case FleetAction.UpdateFleet:
                 UpdateWiring.Install(app, FreshBuild.ThisProcess);

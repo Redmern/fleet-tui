@@ -611,6 +611,33 @@ public static class ShowDashboardView
             });
         }
 
+        void HideAll()
+        {
+            if (callbacks.HideAllAgents is null)
+            {
+                return;
+            }
+
+            status.Text = "hiding all...";
+            busy = true;
+
+            Start(async () =>
+            {
+                try
+                {
+                    var message = await callbacks.HideAllAgents().ConfigureAwait(false);
+
+                    app.Invoke(() => status.Text = message ?? string.Empty);
+
+                    await RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    busy = false;
+                }
+            });
+        }
+
         void ManageAgent()
         {
             var tab = ActiveTab();
@@ -921,6 +948,10 @@ public static class ShowDashboardView
                     HideAgent();
                     break;
 
+                case FleetAction.HideAllAgents:
+                    HideAll();
+                    break;
+
                 case FleetAction.OpenEditor:
                     Start(OpenEditorAsync);
                     break;
@@ -994,6 +1025,8 @@ public static class ShowDashboardView
                         ? FleetIcons.Show
                         : FleetIcons.Hide,
                     () => FromKey(FleetAction.ToggleHidden), FleetAction.ToggleHidden),
+                (keys.DisplayFor(FleetAction.HideAllAgents), FleetIcons.HideAll,
+                    () => FromKey(FleetAction.HideAllAgents), FleetAction.HideAllAgents),
                 (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 
@@ -1008,6 +1041,8 @@ public static class ShowDashboardView
                         ? FleetIcons.Show
                         : FleetIcons.Hide,
                     () => FromKey(FleetAction.ToggleHidden), FleetAction.ToggleHidden),
+                (keys.DisplayFor(FleetAction.HideAllAgents), FleetIcons.HideAll,
+                    () => FromKey(FleetAction.HideAllAgents), FleetAction.HideAllAgents),
                 (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
 

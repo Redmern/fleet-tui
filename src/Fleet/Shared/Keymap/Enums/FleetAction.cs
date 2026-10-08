@@ -64,4 +64,5 @@ public enum FleetAction
     UpdateFleet,
     ShowVersion,
     WhatsNew,
+    HideAllAgents,
 }

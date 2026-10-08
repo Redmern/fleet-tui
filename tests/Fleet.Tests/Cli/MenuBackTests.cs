@@ -22,6 +22,7 @@ public class MenuBackTests
     [InlineData(FleetAction.ViewLogs)]
     [InlineData(FleetAction.WhatsNew)]
     [InlineData(FleetAction.CleanupProject)]
+    [InlineData(FleetAction.HideAllAgents)]
     [InlineData(FleetAction.RebuildDashboard)]
     [InlineData(FleetAction.UpdateFleet)]
     [InlineData(FleetAction.ShowVersion)]

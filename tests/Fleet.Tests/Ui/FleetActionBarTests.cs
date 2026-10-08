@@ -69,6 +69,21 @@ public sealed class FleetActionBarTests : IDisposable
     }
 
     [Fact]
+    public void The_hide_all_button_names_itself_and_its_key_in_the_tooltip()
+    {
+        var keymap = new Keymap(KeymapConfig.Default);
+        var chips = FleetActionBar.Chips(
+            [(keymap.DisplayFor(FleetAction.HideAllAgents), FleetIcons.HideAll, () => { })],
+            keys: false,
+            pinned: null,
+            ButtonHints.Tooltips);
+
+        Assert.Equal(FleetIcons.HideAll, FleetIcons.For(FleetAction.HideAllAgents));
+        Assert.NotEqual(FleetIcons.Hide, FleetIcons.HideAll);
+        Assert.Equal("hide all (X)", Assert.Single(chips).Tip);
+    }
+
+    [Fact]
     public void Nothing_that_is_not_an_icon_has_a_name()
         => Assert.Equal(string.Empty, FleetIcons.Name("select"));
 

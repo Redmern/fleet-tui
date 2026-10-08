@@ -205,6 +205,19 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void Hide_all_agents_sits_under_clean_up_agents_in_maintenance_on_shift_x()
+    {
+        var maintenance = FleetMenus.Settings.Single(s => s.Header == "maintenance").Actions.ToList();
+
+        Assert.Equal(FleetAction.HideAllAgents, maintenance[maintenance.IndexOf(FleetAction.CleanupProject) + 1]);
+        Assert.Equal("X", KeymapDefaults.Bindings[FleetAction.HideAllAgents]);
+        Assert.Equal("Hide all agents", FleetMenus.Label(FleetAction.HideAllAgents));
+        Assert.False(FleetMenus.OpensMore(FleetAction.HideAllAgents));
+        Assert.False(FleetMenus.IsToggle(FleetAction.HideAllAgents));
+        Assert.Equal(FleetAction.HideAllAgents, FleetActionIds.Parse(FleetActionIds.For(FleetAction.HideAllAgents)));
+    }
+
+    [Fact]
     public void Button_hints_sit_directly_under_show_keybinds_in_configure()
     {
         var configure = FleetMenus.Settings.Single(s => s.Header == "configure").Actions;
