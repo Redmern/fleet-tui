@@ -122,7 +122,7 @@ public sealed class DispatchTests : IDisposable
         Assert.Equal("2026-10-02T10:00:00Z", state.Created);
         Assert.Equal(StageState.Done, state.Stages[0].State);
         Assert.Equal(ProfileCatalog.StagesOf(Profile.Express), state.Stages.Select(s => s.Stage));
-        Assert.Contains("AIDLC express", reply.Note);
+        Assert.Contains("Ai-DLC express", reply.Note);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed class DispatchTests : IDisposable
         var reply = await Aidlc(AidlcMode.On).HandleAsync(Command("do it") with { Profile = "epic" }, "t");
 
         Assert.False(reply.Succeeded);
-        Assert.Contains("'epic' is not an AIDLC profile", reply.Error);
+        Assert.Contains("'epic' is not an Ai-DLC profile", reply.Error);
         Assert.Contains("express, bugfix, feature, refactor, research", reply.Error);
         Assert.False(Directory.Exists(OrchestrationPaths.Root(_root)));
     }

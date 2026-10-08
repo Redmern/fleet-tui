@@ -14,9 +14,9 @@ public static class EditFleetConfigHandler
         - instructions.md — replaces the "How you work" section fleet writes into
           CLAUDE.md when it dispatches a sub-orchestrator for this project. Add
           project-specific conventions here.
-        - aidlc.md — extra guidance for the AIDLC process. fleet writes the
+        - aidlc.md — extra guidance for the Ai-DLC process. fleet writes the
           "## Process" section of CLAUDE.md itself from the task's profile and
-          this project's AIDLC settings (the AIDLC item in the fleet menu's
+          this project's Ai-DLC settings (the Ai-DLC item in the fleet menu's
           Settings submenu); create this file to append your own notes to it.
         """;
 

@@ -166,7 +166,7 @@ public static class KeymapDefaults
             FleetAction.EditFleetConfig => "Edit fleet config file",
             FleetAction.OpenSettings => "Settings",
             FleetAction.OpenFleetConfigMenu => "Fleet config",
-            FleetAction.EditAidlcMode => "AIDLC settings",
+            FleetAction.EditAidlcMode => "Ai-DLC settings",
             FleetAction.EditAutoClose => "Auto-close idle agents",
             FleetAction.EditClaudeProfile => "Claude profile",
             FleetAction.EditMainOrchestratorInNvim => "Main orchestrator in nvim",
