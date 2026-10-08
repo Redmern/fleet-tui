@@ -7,6 +7,7 @@ the earlier builds: `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bul
 ## 0.1.0 (2026-10-08)
 
 - Version numbers start again at 0.1.0. Builds from before the restart are listed under "before the restart".
+- On a 0.6.0.x build, run `fleet update v0.1.0` once. Plain `fleet update` sees 0.1.0 as older and stays put.
 - New Settings › What's new screen. It shows what changed in each release, and works offline.
 
 # Earlier builds (before the restart)
