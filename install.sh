@@ -3,7 +3,7 @@
 # install.ps1; for a machine without the .NET SDK use scripts/get-fleet.sh.
 #
 #   ./install.sh                build, install, run 'fleet setup'
-#   ./install.sh --with-deps    install wezterm, neovim and yazi first
+#   ./install.sh --with-deps    install neovim and yazi first
 #   ./install.sh --deps-only    install only those dependencies
 #   ./install.sh --uninstall    remove the binary and the PATH line (configuration is kept)
 #   ./install.sh --no-path      don't add the bin folder to PATH in a shell startup file
@@ -194,19 +194,16 @@ install_deps() {
     step 'Installing dependencies'
 
     if command -v pacman >/dev/null 2>&1; then
-        sudo pacman -S --needed --noconfirm git neovim wezterm yazi || ok 'pacman could not install everything'
+        sudo pacman -S --needed --noconfirm git neovim yazi || ok 'pacman could not install everything'
     elif command -v dnf >/dev/null 2>&1; then
         sudo dnf install -y git neovim yazi || ok 'dnf could not install everything'
-        command -v wezterm >/dev/null 2>&1 || ok 'wezterm: see https://wezterm.org/installation'
     elif command -v apt-get >/dev/null 2>&1; then
         sudo apt-get update
         sudo apt-get install -y git neovim || ok 'apt could not install everything'
         # yazi is not packaged for Debian or Ubuntu either.
         command -v yazi >/dev/null 2>&1 || ok 'yazi: see https://yazi-rs.github.io/docs/installation'
-        # Debian and Ubuntu carry no wezterm package; it ships its own .deb.
-        command -v wezterm >/dev/null 2>&1 || ok 'wezterm: see https://wezterm.org/installation'
     else
-        ok 'no known package manager - install git, neovim, wezterm and yazi yourself'
+        ok 'no known package manager - install git, neovim and yazi yourself'
     fi
 
     url="${FLEET_NVIM_CONFIG:-}"

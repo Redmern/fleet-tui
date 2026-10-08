@@ -59,6 +59,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 {
     public const string ClientVariable = "FLEET_CLIENT";
     public const string PaneVariable = "FLEET_PANE";
+    public const string ExecutableVariable = "FLEET_EXECUTABLE";
 
     private readonly Lock _gate = new();
     private readonly MuxModel _model = new();
@@ -132,6 +133,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                             Clients = _sessions.Count,
                             SessionFile = options.SessionFile,
                             Host = Environment.MachineName,
+                            Build = FleetVersion.Current,
                         };
                         break;
                     case "list-panes":
@@ -374,11 +376,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
 
             var hello = Wire.Read(first.Payload, WireJsonContext.Default.Hello);
-            if (hello.Version != Wire.Version)
+            if (Wire.Agree(hello.Version, hello.Highest) is not { } agreed)
             {
                 await wire.SendAsync(
                     MessageType.Error,
-                    new ErrorMessage { Message = $"fleetd speaks protocol {Wire.Version}, this client speaks {hello.Version}" },
+                    new ErrorMessage { Message = Wire.Mismatch(hello.Version, hello.Highest, hello.Build) },
                     WireJsonContext.Default.ErrorMessage,
                     ct).ConfigureAwait(false);
                 return;
@@ -403,7 +405,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             await wire.SendAsync(
                 MessageType.Welcome,
-                new Welcome { Version = Wire.Version, Client = clientId },
+                new Welcome { Version = agreed, Client = clientId, Build = FleetVersion.Current },
                 WireJsonContext.Default.Welcome,
                 ct).ConfigureAwait(false);
 
@@ -1741,6 +1743,20 @@ public sealed class FleetDaemon(DaemonOptions options)
     private bool HasMenu(string workspace) =>
         _model.PanesIn(workspace).Any(id => _model.Pane(id)?.Args is [_, "menu", ..]);
 
+    private bool WarmedBeforeUpdate(string workspace)
+    {
+        try
+        {
+            return _warmedAt.TryGetValue(workspace, out var at)
+                && File.Exists(options.FleetExecutable)
+                && File.GetLastWriteTimeUtc(options.FleetExecutable) > at;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private void WarmMenus()
     {
         foreach (var stranded in _model.StrandedParked())
@@ -1819,6 +1835,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 _model.Focus(open);
                 return;
+            }
+
+            if (_model.Parked(shown) is { } outdated && WarmedBeforeUpdate(shown))
+            {
+                Kill(outdated.Pane);
+                options.Log($"{client}: warm menu {outdated.Pane} predates the installed fleet; opening a fresh one");
             }
 
             if (action is null && _model.Parked(shown) is { } warm && _model.Unpark(warm.Pane))
@@ -2052,7 +2074,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             [PaneVariable] = pane.Id,
             [Endpoint.Variable] = options.Endpoint.Address,
             ["WEZTERM_PANE"] = string.Empty,
-            ["WEZTERM_EXECUTABLE"] = options.FleetExecutable,
+            [ExecutableVariable] = options.FleetExecutable,
             [FloatPane.Variable] = _model.FloatBounds(pane.Id) is not null || _model.IsOverlay(pane.Id) ? "1" : string.Empty,
             [FramedPane.Variable] = MuxModel.IsDashboard(pane) ? "1" : string.Empty,
             ["WEZTERM_UNIX_SOCKET"] = string.Empty,

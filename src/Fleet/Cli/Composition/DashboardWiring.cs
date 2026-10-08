@@ -505,24 +505,13 @@ public static class DashboardWiring
         var branches0 = branches;
         var states = new BranchStates(git);
 
-        var signalCounter = 0L;
-
-        void DrainFile(string file, string name)
+        void DrainFile(string file)
         {
             try
             {
-                if (!File.Exists(file))
+                if (File.Exists(file))
                 {
-                    return;
-                }
-
-                var text = File.ReadAllText(file);
-
-                File.Delete(file);
-
-                if (text.Trim().Length > 0)
-                {
-                    Adapters.EmitUserVar(name, $"{++signalCounter}\n{text}");
+                    File.Delete(file);
                 }
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -532,8 +521,8 @@ public static class DashboardWiring
 
         void DrainSignals()
         {
-            DrainFile(Adapters.NotifyFile, "fleet-notify");
-            DrainFile(Adapters.WorkspaceFile, "fleet-workspace");
+            DrainFile(Adapters.NotifyFile);
+            DrainFile(Adapters.WorkspaceFile);
         }
 
         async Task<string?> OpenFlow(AgentRecord agent)

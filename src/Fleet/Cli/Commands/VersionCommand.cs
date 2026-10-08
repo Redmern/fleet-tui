@@ -1,5 +1,4 @@
 using Fleet.Cli.Composition;
-using Fleet.Features.Updates.CheckUpdate;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Cli.Commands;
@@ -10,7 +9,7 @@ public static class VersionCommand
     {
         Console.WriteLine($"fleet {FleetVersion.Current}");
 
-        var check = await new CheckUpdateHandler(Adapters.Releases())
+        var check = await UpdateWiring.Checker()
             .HandleAsync(Adapters.ReleaseRepo, FleetVersion.Current)
             .ConfigureAwait(false);
 

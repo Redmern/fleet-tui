@@ -38,7 +38,7 @@ public static class UpdateCommand
             return 1;
         }
 
-        Console.WriteLine($"fleet: {result.Value}");
+        Console.WriteLine($"fleet: {result.Value.Message}");
         return 0;
     }
 

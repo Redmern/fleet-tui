@@ -36,6 +36,17 @@ public sealed class EditFleetConfigHandlerTests : IDisposable
     }
 
     [Fact]
+    public void The_seeded_readme_names_ai_dlc_md_as_the_process_file()
+    {
+        EditFleetConfigHandler.Ensure(_root);
+
+        var readme = File.ReadAllText(ProjectConfigPaths.ReadmeFile(_root));
+
+        Assert.Contains("ai-dlc.md", readme);
+        Assert.Contains("Ai-DLC", readme);
+    }
+
+    [Fact]
     public void It_no_longer_seeds_an_aidlc_file_because_fleet_renders_the_process_itself()
     {
         EditFleetConfigHandler.Ensure(_root);

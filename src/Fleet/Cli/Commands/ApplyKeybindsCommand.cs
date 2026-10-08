@@ -3,7 +3,6 @@ using Fleet.Cli.Models;
 using Fleet.Ports.Keybinds.Enums;
 using Fleet.Shared.Keybinds;
 using Fleet.Shared.Keybinds.Enums;
-using Fleet.Ui;
 
 namespace Fleet.Cli.Commands;
 
@@ -41,12 +40,6 @@ public static class ApplyKeybindsCommand
             only = [target];
         }
 
-        if (at < 0 && !dryRun)
-        {
-            WriteWezTerm();
-            Console.WriteLine();
-        }
-
         Console.WriteLine(dryRun ? "keybinds (dry run, nothing written)" : "keybinds");
 
         var applied = KeybindWiring.Apply(only, dryRun);
@@ -57,24 +50,5 @@ public static class ApplyKeybindsCommand
         }
 
         return applied.Any(a => a.Outcome == KeybindOutcome.Failed) ? 1 : 0;
-    }
-
-    private static void WriteWezTerm()
-    {
-        var keymap = new Keymap(Adapters.Keymaps().Load());
-
-        var target = Adapters.WriteKeybindModule(keymap);
-
-        Console.WriteLine($"wrote {target}");
-        Console.WriteLine($"  prefix chord  {keymap.PrefixDisplay}");
-        Console.WriteLine($"  reload        {Adapters.TouchWezTermConfig()}");
-        Console.WriteLine();
-        Console.WriteLine("add these two lines to your .wezterm.lua, then reload wezterm:");
-        Console.WriteLine();
-        Console.WriteLine("  local fleet = require 'fleet'");
-        Console.WriteLine("  fleet.apply(config)");
-        Console.WriteLine();
-        Console.WriteLine("wezterm must be able to find fleet.lua, so ensure ~/.wezterm is on");
-        Console.WriteLine("package.path, or copy fleet.lua next to your .wezterm.lua.");
     }
 }

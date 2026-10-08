@@ -9,8 +9,7 @@
 # is this script, not `fleet attach`: the Windows console client itself is not covered.
 # Only the fleetd this script starts is ever stopped (its panes go with it), so a fleet
 # session running from the same build is left alone. Step 6 runs `fleet apply-keybinds` and
-# `fleet doctor` against a temp fleet-nvim (XDG_CONFIG_HOME) and Claude home (CLAUDE_CONFIG_DIR);
-# it passes --target so the WezTerm module in your real home folder is never written.
+# `fleet doctor` against a temp fleet-nvim (XDG_CONFIG_HOME) and Claude home (CLAUDE_CONFIG_DIR).
 # Exits with the number of failed checks.
 
 param([string]$Fleet)

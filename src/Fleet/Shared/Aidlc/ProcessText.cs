@@ -13,7 +13,7 @@ public static class ProcessText
         var text = new StringBuilder();
 
         text.AppendLine(
-            $"This task runs under fleet's AIDLC process with the **{Words.Of(plan.Profile)}** profile "
+            $"This task runs under fleet's Ai-DLC process with the **{Words.Of(plan.Profile)}** profile "
             + $"({ProfileCatalog.Describe(plan.Profile)}).");
         text.AppendLine(
             "fleet keeps the record in this folder: state.json holds the stages and their states, and "

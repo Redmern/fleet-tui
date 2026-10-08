@@ -13,6 +13,7 @@ using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Menu.ShowMenu;
+using Fleet.Features.Menu.ShowReleaseNotes;
 using Fleet.Features.Notifications.ShowNotices;
 using Fleet.Features.Notifications.SyncNotices;
 using Fleet.Features.Projects.CreateProject;
@@ -26,6 +27,7 @@ using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.SwitchProject;
 using Fleet.Features.Remotes.ManageRemotes;
 using Fleet.Features.Sessions.SaveSession;
+using Fleet.Features.Updates.ShowVersion;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
@@ -56,6 +58,7 @@ public static class MenuCommand
 
     public static async Task<int> RunAsync(Invocation invocation)
     {
+        _ = FreshBuild.ThisProcess;
         var projects = Adapters.Projects();
 
         var project = invocation.Project is { } named
@@ -338,7 +341,7 @@ public static class MenuCommand
 
                     var pickedTheme = FleetPicker.Choose(
                         app,
-                        "Theme — fleet, wezterm, nvim, claude and yazi",
+                        "Theme — fleet, nvim, claude and yazi",
                         [.. all.Select(t => new PickerEntry(
                             t.Title,
                             t.Name == active ? $"{t.Name}  (active)" : t.Name))],
@@ -685,6 +688,26 @@ public static class MenuCommand
                 Adapters.Requests().Submit(project.Name, FleetAction.RebuildDashboard);
                 break;
 
+            case FleetAction.UpdateFleet:
+                UpdateWiring.Install(app, FreshBuild.ThisProcess);
+                break;
+
+            case FleetAction.ShowVersion:
+                {
+                    var screen = FleetDialog.Wait(
+                        app,
+                        "fleet version",
+                        ["Checking github.com for releases..."],
+                        UpdateWiring.VersionScreenAsync);
+
+                    if (ShowVersionView.Show(app, keymap, screen) is { } release)
+                    {
+                        UpdateWiring.Install(app, FreshBuild.ThisProcess, release == ShowVersionView.Latest ? null : release);
+                    }
+
+                    break;
+                }
+
             case FleetAction.CleanupProject:
                 {
                     var summary = new CleanupHandler(Adapters.Agents()).Handle(project.Name);
@@ -702,6 +725,14 @@ public static class MenuCommand
                     keymap,
                     project.Name,
                     LogParser.For(project.Name, LogParser.Parse(log.Tail(LogTail))));
+
+                break;
+
+            case FleetAction.WhatsNew:
+                ReleaseNotesView.Show(
+                    app,
+                    keymap,
+                    ReleaseNotes.Group(ReleaseNotes.Parse(ReleaseNotes.Embedded())));
 
                 break;
 

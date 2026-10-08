@@ -1,6 +1,6 @@
 # fleet
 
-A TUI that orchestrates Claude Code agents across repositories: WezTerm panes, Neovim, one git worktree per
+A TUI that orchestrates Claude Code agents across repositories: its own multiplexer (fleetd), Neovim, one git worktree per
 agent, and an MCP server Claude uses to drive it. .NET 10, Terminal.Gui 2.4, published with NativeAOT for
 win-x64 and linux-x64. Design and rationale: `docs/DESIGN.md`; user-facing behaviour: `README.md`.
 
@@ -25,7 +25,7 @@ fleet doctor                                           # end-to-end smoke test o
 | `Cli/Composition` | The composition root: the only place that knows `Platform` implementations |
 | `Features/<Slice>` | Vertical slices (Agents, Dashboard, Mcp, Menu, Projects, Repositories, ...) |
 | `Ports` | Interfaces the features depend on |
-| `Platform` | Implementations of the ports (git, WezTerm mux, Claude, MCP, storage, ...) |
+| `Platform` | Implementations of the ports (git, embedded mux, Claude, MCP, storage, ...) |
 | `Shared` | Plain types used everywhere; depends on nothing else in Fleet |
 | `Ui` | Shared Terminal.Gui helpers and styling (`FleetAsync`, schemes) |
 
@@ -59,6 +59,8 @@ Breaking one fails `dotnet test`, so check these before you write code:
 - Conventional commits, lower case: `feat:`, `fix:`, `docs:`, `chore:`, `perf:`, `refactor:` (in that order of
   frequency). One change per commit.
 - Releases: bump `<Version>` in `src/Fleet/Fleet.csproj` in its own `chore: bump version to X.Y.Z` commit, then
-  push a `vX.Y.Z` tag; `release.yml` builds and publishes both platforms.
+  push a `vX.Y.Z` tag; `release.yml` builds and publishes both platforms. The same commit adds a
+  `## X.Y.Z (yyyy-mm-dd)` entry with 2-6 plain bullets to the top of `RELEASE_NOTES.md`: it becomes the
+  GitHub release text and Settings › What's new, and both `dotnet test` and `release.yml` fail without it.
 - A project hook (`.claude/settings.json`) whitespace-formats every `.cs` file Claude edits
   (`dotnet format whitespace --folder`, ~2 s). It needs `pwsh` on `PATH`.

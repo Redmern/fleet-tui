@@ -71,6 +71,18 @@ sub-orchestrator browsers), and a client shows one workspace at a time. The
 emulator per pane is what makes that affordable: the daemon composites several
 pane grids into one frame. See *Instant project switching on `embedded`*.
 
+**Revised 2026-10-08: the `wezterm` driver is removed.** `embedded` is the only
+driver that ships; fleet runs in any terminal and needs nothing from WezTerm. The
+driver, its Lua module (`fleet.lua`, `fleet-theme.lua`), the WezTerm config wiring
+in `fleet setup`, the WezTerm theme target and the `wezterm` checks in `fleet setup`
+and `fleet doctor` are gone. `FLEET_MUX=wezterm` now reports that the driver is not
+implemented. What is left of it: fleetd still blanks an inherited `WEZTERM_PANE` and
+`WEZTERM_UNIX_SOCKET` in its panes (as it blanks `TMUX`), and a `"wezterm"` target in
+a user's `keybinds.json` is still accepted, logged and ignored. Panes get
+`FLEET_EXECUTABLE` (was `WEZTERM_EXECUTABLE`) for the nvim `fleet cli
+activate-pane-direction` call. The rest of this document records the WezTerm era as
+it happened.
+
 **Build order:** `fake`, then `wezterm`, then `tmux`, then `embedded`. WezTerm
 first because it is the daily driver and `fleet-win` supplies a debugged
 reference, so it is the shortest path to a fleet worth using. tmux second, early
@@ -167,13 +179,17 @@ spawns WezTerm tabs. This is correctness, not taste.
 ```
 FLEET_MUX set          -> that                     (override)
 TMUX set               -> tmux                     (adopt)
-WEZTERM_PANE set       -> wezterm                  (adopt)
 otherwise:                                         (launch)
     this build has libghostty-vt       -> embedded (base, since 0.6.0)
-    wezterm present AND GUI reachable  -> wezterm
     tmux present                       -> tmux     (fallback)
     otherwise                          -> embedded (last resort)
 ```
+
+**2026-10-08:** the `WEZTERM_PANE` adopt rule and the *wezterm present and GUI
+reachable* launch rule are gone with the `wezterm` driver. Only `embedded` is
+implemented, so a choice of `tmux` (or any `FLEET_MUX` other than `embedded`) is
+reported as not implemented, with a hint to set `FLEET_MUX=embedded`, by `fleet doctor`,
+`dispatch` and the menu. The notes below describe the order as it was before.
 
 **2026-09-29: embedded became the base for a plain terminal.** Running `fleet`
 in a plain PowerShell or shell now opens the project right there, under
@@ -315,10 +331,6 @@ config in `nvim/` (lazy.nvim, `neo-tree`, `claudecode.nvim`, `plenary`, `nui`,
 process has not written it yet. `fleet setup` also runs `nvim --headless "+Lazy! install"`
 so a fresh machine does not have several panes racing to clone the same plugins.
 
-On the WezTerm backend fleet's nvim runs under `fleet with-env` (below), so the pane's
-process name is fleet's; `nvim/lua/fleet/wezterm.lua` sets the `IS_NVIM` user var that
-the generated WezTerm config already falls back to for Ctrl+h/j/k/l.
-
 **Keybinds from the model (phase 2 of the unified keybinds).** fleet's nvim keys are not in
 the shipped Lua any more: `Platform/Nvim/NvimKeybinds` renders the `nvim` entries of the
 keybind model (`Shared/Keybinds`) into `lua/fleet/keybinds.generated.lua`, and
@@ -334,7 +346,7 @@ chords (`Alt+h` to `<A-h>`, `Shift+Enter` to `<S-CR>`, `<` to `<lt>`).
   `:resize`/`:vertical resize` by 3 that moves the border the way the arrow points), and
   adds a `TermOpen` autocmd that maps `claude-normal-mode` (Alt+n to `<C-\><C-n>`)
   buffer-locally in terminals whose command is `claude`.
-- Terminal-mode Ctrl+h/j/k/l with the WezTerm/fleet-cli handoff at nvim's edges stays where it
+- Terminal-mode Ctrl+h/j/k/l with the `fleet cli` handoff at nvim's edges stays where it
   was: buffer-local on the orchestrator's Claude buffer from `NvimStartupClaudeOnly`. Its chord
   table now comes from `NvimFocusMaps` over the shipped defaults (the startup string is built
   in `Shared`, which cannot read the user's files), so it is the same Lua as before. A user
@@ -731,7 +743,7 @@ src/Fleet/                            one project, AOT-published as `fleet`
   Ports/                              interfaces and the types crossing them
     IFleetLog, Git/IGitRunner, Projects/IProjectStore, Mux/IMuxDriver
   Platform/                           every implementation that touches the outside world
-    Logging/, Storage/, Git/, Mux/{DriverSelector, FailSilentDriver, Fake/, WezTerm/}
+    Logging/, Storage/, Git/, Mux/{DriverSelector, FailSilentDriver, Fake/, Embedded/}
   Features/
     Projects/{PickProject, CreateProject, OpenProject}/
     Repositories/{BranchSlug.cs, AddRepository, ListRepositories}/
@@ -4399,9 +4411,9 @@ The trade-off is accepted knowingly: `k` is also move-up, and a menu matches its
 keys before the list's motions, so in a menu that lists Keybinds `k` opens it instead
 of moving up — the collision the move to `e` once fixed. The arrow keys still move.
 
-## AIDLC engine, 2026-10
+## Ai-DLC engine, 2026-10
 
-AIDLC used to be prose: with AIDLC on, dispatch pasted a five-step Plan/Implement/Test/
+Ai-DLC used to be prose: with Ai-DLC on, dispatch pasted a five-step Plan/Implement/Test/
 Review/Report text into the sub-orchestrator's CLAUDE.md, and nothing knew where a task
 stood. Milestone 1 of the plan in `.fleet/orchestrations/ai-sdlc-research-plan` gives
 it an engine core: fleet decides the process and keeps a record; the model carries it out.
@@ -4445,10 +4457,10 @@ field means its default, so older files load unchanged):
   `ProcessPlan.Resolve(profile, autonomy, off)`, turns this into the effective plan, so
   the record, the rendered text and the tests cannot disagree.
 
-The settings are edited from the AIDLC item (`A`) in the menu's Settings submenu, which
+The settings are edited from the Ai-DLC item (`A`) in the menu's Settings submenu, which
 now opens a screen with all of them instead of a three-way mode picker.
 
-**Intake on dispatch.** When AIDLC applies, dispatch picks the profile (the prefix; with
+**Intake on dispatch.** When Ai-DLC applies, dispatch picks the profile (the prefix; with
 the mode `on` and no prefix, the `profile` argument, then the project default), writes `state.json` (profile, autonomy,
 stages with their states, units, created/updated) and starts `audit.jsonl` with
 `IntentCreated`, `ProfileSet` (with where the profile came from) and one `StageSkipped`
@@ -4471,7 +4483,8 @@ away the stage list and the gates, so the file now lands under `### Project guid
 at the end of the process. Opening the fleet config used to seed `aidlc.md` with the old
 built-in text; such a file would now append a contradicting second process, so a file
 whose text is exactly the old default (`OrchestrationText.ClassicAidlc`) is ignored, and
-the config folder no longer seeds one.
+the config folder no longer seeds one. The file may also be named `ai-dlc.md`, after the
+Ai-DLC spelling; when both exist `ai-dlc.md` wins (`ProjectConfigPaths.ProcessFile`).
 
 **Deferred.** M2: hook-based agent status (a sibling branch). M3: `aidlc_status` and
 `aidlc_submit`, gates through the approval channel, the `GateWaiting` notice, refusing
@@ -4574,7 +4587,7 @@ conhosts), and most of them sit finished. A per-project setting (`autoClose`,
 
 ## Live agent status through hooks, 2026-10-02
 
-Milestone M2 of the AIDLC plan: the hook contract in "Agent status and data flow" is
+Milestone M2 of the Ai-DLC plan: the hook contract in "Agent status and data flow" is
 built, and notices no longer depend on reading pane text when an agent reports.
 
 ### Storage: daemonless files
@@ -5004,7 +5017,7 @@ fleet menu                     settings                          settings › fl
 Q  Quit fleet                  ── session ──                     v  Main orchestrator in nvim  [on]
 m  Go to dashboard             w  Save window as session         V  Sub-orchestrators in nvim  [off]
 p  Switch project              r  Remote machines                i  Auto-close idle agents     [30m]
-l  List agents                 ── configure ──                   A  AIDLC settings              ›
+l  List agents                 ── configure ──                   A  Ai-DLC settings             ›
 e  Open editor here            c  Fleet config               ›   C  Claude profile              ›
 f  File navigator              k  Keybinds                   ›   e  Edit fleet config file
 n  Notifications               ── maintenance ──                 ── permissions ──
@@ -5027,7 +5040,7 @@ s  Settings                ›   b  Rebuild the dashboard          p  Permission
   float they opened before is gone. Auto-close shows `[off]` or `[30m]` but keeps its dialog,
   because turning it on also asks for minutes.
 - **`›`** marks the entries that lead to another menu or screen (Settings, Fleet config,
-  Keybinds, Show log, AIDLC, Claude profile, Permissions).
+  Keybinds, Show log, Ai-DLC, Claude profile, Permissions).
 - **Keys are unique within a menu**, checked by a test over every menu. Clean up moved from `c`
   to `x` to free `c` for Fleet config; overrides in the keymap file keep working because no
   action id changed.
@@ -5252,12 +5265,12 @@ dispatcher can skip it, but only when it says so.
   agents and its branches (local and `origin/`, through `IAgentStarter.BranchesAsync`), so a
   derived name never lands on an old branch that `git worktree add` would reuse. Without a repository nothing changes. The reply's `Slug` is the branch and its
   `Folder` is empty.
-- **One pure rule** (`Shared/Orchestrations/DispatchRouting.Decide`): resolve AIDLC as before
+- **One pure rule** (`Shared/Orchestrations/DispatchRouting.Decide`): resolve Ai-DLC as before
   (the prefix, then with mode `on` the argument, then the project default; this moved out of
   `DispatchHandler` unchanged); research is the `research` flag or the `research` profile; a
-  repo agent is started only when a repository is given, AIDLC doesn't apply and it isn't
-  research. Otherwise it is a sub-orchestrator, so the AIDLC record and gates keep living in
-  its orchestration folder, and the reply says the repository was not used and why. With AIDLC off a `feature:` prefix is ordinary text, so it stays in
+  repo agent is started only when a repository is given, Ai-DLC doesn't apply and it isn't
+  research. Otherwise it is a sub-orchestrator, so the Ai-DLC record and gates keep living in
+  its orchestration folder, and the reply says the repository was not used and why. With Ai-DLC off a `feature:` prefix is ordinary text, so it stays in
   the direct agent's task.
 - **Research.** A research sub gets a `## Research` section after the process:
   `OrchestrationText.Research`, its own constant, telling it not to start repo agents and to use
@@ -5266,9 +5279,9 @@ dispatcher can skip it, but only when it says so.
 - **Permissions.** A `dispatch` call that names a repository is gated as `dispatch` and then
   `new_agent` (`McpGate.Gated`; `McpDispatcher` runs the same forbid/ask check for each, in that
   order, and stops at the first refusal). A project that forbids `new_agent` can't start an
-  agent through `dispatch`. It is gated on the arguments, not on the route, so with AIDLC on
+  agent through `dispatch`. It is gated on the arguments, not on the route, so with Ai-DLC on
   (where a sub is started after all) `new_agent` is still checked: the gate can't know the
-  route without loading AIDLC settings, and erring towards one more check is the safe side.
+  route without loading Ai-DLC settings, and erring towards one more check is the safe side.
   The dispatch approval text now shows `<repository>: <task>` instead of the repository alone.
 - **Typed trigger and `fleet dispatch` unchanged.** They always start a sub-orchestrator.
   `DispatchHandler` without a starter refuses a repository instead of ignoring it.
@@ -5278,12 +5291,12 @@ dispatcher can skip it, but only when it says so.
 - **Inferring the shape from the prompt** (one repository named in the prose means direct).
   Wrong guesses would bypass the sub silently; the task says explicit.
 - **A typed form for the hook path**, such as `,repo:backend fix …` or `,backend/fix-x: …`.
-  The `word:` prefix already means an AIDLC profile, so a repository named like a profile, or
+  The `word:` prefix already means an Ai-DLC profile, so a repository named like a profile, or
   a sentence that starts with a repository name and a colon, would be read the wrong way; and a
   typed dispatch has no place for the branch. The main orchestrator's Claude can call the tool
   with a repository when that's what the user asked for.
 - **Gating only on the route** (check `new_agent` only when a repo agent is really started).
-  The route depends on the project's AIDLC settings, which the gate would have to resolve a
+  The route depends on the project's Ai-DLC settings, which the gate would have to resolve a
   second time; the extra check is harmless.
 - **Calling `NewAgentHandler` from `DispatchHandler`.** A slice may not reference another slice.
 
@@ -5782,6 +5795,28 @@ What the phases add up to:
   `keybinds.generated.lua`, `fleet-keys.lua` and `keybindings.json` appear, that a second run
   reports nothing written and leaves the files byte for byte, that `fleet doctor`'s keybinds
   line says the files match, and that it reports drift once `keybinds.generated.lua` is edited.
+
+## In-app updates, 2026-10-08
+
+- **Binary now, daemon later.** Updating replaces `fleet.exe` (as `fleet update` always did)
+  and leaves fleetd alone: it owns every PTY, and those cannot move to a new process. Sessions
+  are never lost; fleetd runs the old build until the user restarts it. The update dialog and
+  `fleet doctor` say so; `status` now reports fleetd's `build`, so doctor compares versions,
+  not only the executable path (which an in-place update leaves the same).
+- **Cached check.** `CheckUpdateHandler.HandleCachedAsync` asks GitHub at most once an hour
+  (`<config>/update-check.json`) and falls back to the last answer offline. The picker draws
+  the cached notice at once and refreshes it in the background.
+- **What restarts.** A dashboard compares its executable's write time with the one it started
+  with (`FreshBuild`); once it changes and no dialog is open, it stops and runs
+  `fleet dash --project <name>` again in the same pane, waiting on the child. fleetd drops a
+  warm menu that was warmed before the executable changed and opens a fresh one. Other
+  windows (picker, menu) are short-lived and pick up the new build when reopened. `fleet mcp`
+  children keep the old code until Claude restarts them.
+- **Protocol range.** `Hello.version` is now the oldest protocol the sender speaks and
+  `Hello.highest` the newest; fleetd welcomes on the highest both speak (`Wire.Agree`) and
+  sends its `build`. A client keeps `version` at `Wire.OldestVersion`, so an older fleetd,
+  which demands an exact match, still accepts it while the oldest stays 1. A refusal, either
+  way, names both builds and says how to restart fleetd.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
