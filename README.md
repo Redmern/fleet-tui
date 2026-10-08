@@ -14,15 +14,15 @@ the fleet menu from **any** pane, including one running nothing but Claude.
 > remove it together with its worktree. The orchestrator works too: Claude drives
 > fleet over an MCP server under per-project permissions, and a `,`-prefixed
 > prompt dispatches a sub-orchestrator that appears on its own tab. Agents report
-> their status live through Claude Code hooks. Only the WezTerm driver ships; tmux and the
-> embedded driver are designed but unwritten. Linux is built and tested by CI but
-> has not been used in anger.
+> their status live through Claude Code hooks. fleet brings its own multiplexer
+> (fleetd), so it runs in any terminal; a tmux driver is designed but unwritten. Linux
+> is built and tested by CI but has not been used in anger.
 
 ## Requirements
 
 To run fleet:
 
-- [WezTerm](https://wezterm.org) on `PATH` — fleet has nothing to drive without it
+- any terminal: fleet runs its own multiplexer (fleetd) inside it
 - git
 - [Neovim](https://neovim.io) 0.9 or later. The main orchestrator and every
   sub-orchestrator run Claude inside nvim through `claudecode.nvim`, with no file tree
@@ -32,7 +32,7 @@ To run fleet:
   config does not need them
 - [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
 - Claude Code, which nvim starts in the pane fleet opens on the left
-- a Nerd Font in WezTerm, or the branch pills and icons render as boxes
+- a Nerd Font in your terminal, or the branch pills and icons render as boxes
 
 To build it yourself, additionally:
 
@@ -89,7 +89,7 @@ From source:
 ### Bringing the dependencies with it
 
 Add `-WithDeps` (or `--with-deps`) and the installer sets up the machine first:
-WezTerm, Neovim, yazi and git through winget on Windows or the package manager it
+Neovim, yazi and git through winget on Windows or the package manager it
 finds on Linux. No Neovim config is needed: fleet ships its own (see
 [Fleet's nvim config](#fleets-nvim-config)):
 
@@ -110,27 +110,20 @@ left alone — an existing tool is skipped, a config directory holding a differe
 remote is not touched, and a matching one is fast-forwarded. A config that ships its
 own `bootstrap.sh` is reported rather than run.
 
-Debian and Ubuntu carry no WezTerm package, so there `--with-deps` installs the rest
-and points at [wezterm.org/installation](https://wezterm.org/installation).
-
-Either route ends by running `fleet setup`, which writes the WezTerm module, wires
-your WezTerm config, and lists anything still missing with the command that fixes
-it:
+Either route ends by running `fleet setup`, which installs fleet's nvim config, writes
+the keybinds and lists anything still missing with the command that fixes it:
 
 ```
 fleet setup
-  ok  wezterm        found on PATH
   ok  git            found on PATH
   --  nvim           missing - agents cannot open it
-  ok  fleet.lua      C:\Users\you\.wezterm\fleet.lua
-  ok  wezterm config wired C:\Users\you\.wezterm.lua
   ok  nvim config    fleet's own, in C:\Users\you\AppData\Local\fleet-nvim (nvim 0.11.4)
   glyph check     develop ↑1 ●
 still to do:
   nvim           winget install Neovim.Neovim
 ```
 
-It is safe to run again: an already-wired config is left alone.
+It is safe to run again.
 
 On Windows, `install.ps1` also creates a Fleet launcher
 (`scripts\windows\Install-FleetShortcut.ps1`): a Start Menu `Fleet.lnk` and a
@@ -162,7 +155,7 @@ fleet menu                  the fleet menu, or the picker outside a project
 fleet menu --action <id>    jump straight to add-repository or keybinds
 fleet request --action <id> --project <name>
                             hand an action to that project's running dashboard
-fleet apply-keybinds        write the keybinds: wezterm module, nvim and Claude
+fleet apply-keybinds        write the keybinds: nvim and Claude
                             (--target nvim|claude for one, --dry-run to only show changes)
 fleet mcp --project <name>  serve the MCP tools over stdio (Claude calls this)
 fleet mcp --head            serve the head orchestrator's cross-project tools
@@ -200,27 +193,9 @@ binary in place; a fleet already running keeps its old code until it is reopened
 Only Windows and Linux x64 have published binaries — build from source with
 `install.sh`/`install.ps1` elsewhere.
 
-fleet works from any terminal, not just a wezterm pane. Inside a pane it talks to
-the mux named by `WEZTERM_UNIX_SOCKET`; outside one it finds a live wezterm socket
-itself. If several wezterm windows are running as separate GUI processes, it targets
-the most recently used one that answers.
-
 ## The menu
 
-```powershell
-fleet apply-keybinds
-```
-
-writes the Lua module from your current keymap — `~/.wezterm/fleet.lua` on Windows,
-`~/.config/wezterm/fleet.lua` elsewhere. `fleet setup` adds these lines to your
-WezTerm config for you; by hand it is:
-
-```lua
-local fleet = require 'fleet'
-fleet.apply(config)
-```
-
-`ctrl+enter` then opens **fleet's own menu** — drawn by fleet, styled like the rest
+`ctrl+enter` (or `ctrl+s` then `space`) opens **fleet's own menu** — drawn by fleet, styled like the rest
 of it, one key per entry. It opens as a tab, so no pane is resized, and closes
 itself when done. Each entry and section header has a Nerd Font icon, like the
 `ctrl+s` popup (the status bar already assumes a Nerd Font).
@@ -382,16 +357,6 @@ dashboard picks it up on its next poll, and the form fills the pane it belongs
 to. Actions the dashboard cannot draw, such as opening another project, still get
 a split of their own.
 
-This is why the menu is scoped to windows containing a fleet pane: the dashboard
-marks its pane with a WezTerm user var holding the project name, which is both
-the "is fleet here?" test and the address the request is sent to. Elsewhere the
-chord is forwarded to the pane untouched.
-
-The binding is a single chord inserted into `config.keys`, not a WezTerm
-`leader` — WezTerm allows only one leader and you may already use it. The module
-is generated: rebind inside fleet and re-run `apply-keybinds` rather than editing
-the Lua.
-
 ## Keys
 
 Navigation is Neovim-flavoured, and arrow keys work everywhere too.
@@ -482,7 +447,7 @@ keeps `Alt+h`. Your `embedded-keys.json` and menu bindings are also read into th
 before your `keybinds` section, so nvim and Claude follow them too.
 
 ```powershell
-fleet apply-keybinds                     # write every target (and the WezTerm module)
+fleet apply-keybinds                     # write every target
 fleet apply-keybinds --target nvim       # only fleet-nvim and fleet-keys.lua
 fleet apply-keybinds --target claude     # only Claude's keybindings.json
 fleet apply-keybinds --dry-run           # show what would change, write nothing
@@ -648,17 +613,13 @@ Every agent and sub-orchestrator fleet starts, from the dashboard, the MCP tools
 messages in the background without opening a pane or taking focus. Open it yourself
 when you want to watch it.
 
-**Hide or show it**, from the `m` menu, hides an agent from the WezTerm tab bar
+**Hide or show it**, from the `m` menu, hides an agent from the tab bar
 without stopping it. It stays listed
 under Agents marked `(hidden)`, and `enter` brings it back — hiding is a terminal
 concern, never a fleet-listing one, so an agent can never be hidden from the
 dashboard itself.
 
-WezTerm has no API to hide a tab, so a hidden agent moves to the `fleet-hidden`
-workspace. The CLI cannot switch workspaces, so fleet writes the wanted workspace
-to `requests/workspace.request` and the generated Lua switches to it from an
-`update-status` handler. Re-run `fleet apply-keybinds` after upgrading, or hidden
-agents will not come back.
+A hidden agent moves to the `fleet-hidden` workspace, which fleetd never shows.
 
 `enter` on an agent **focuses its pane, or restarts it** if the pane is gone. A
 hidden agent is **unhidden first**, so it comes back into the project window rather
@@ -816,7 +777,7 @@ as if you had.
 - **`alt+o`** shows the head from any pane of a fleet window; pressing it again hides it.
   Hiding never stops it: it is one Claude session that lives across projects and
   windows, and comes back with the conversation where you left it. After a restart of
-  WezTerm it resumes the last conversation (`claude --continue`).
+  fleetd it resumes the last conversation (`claude --continue`).
 - The head always opens in **voice mode**: Claude Code's voice dictation is on (hold space
   to talk). A head started in text mode with `fleet head` (no `--voice`) is restarted in
   voice mode by the chord; the restart resumes the conversation (`claude --continue`), but
@@ -828,15 +789,12 @@ as if you had.
   `--settings` file outranks, so don't use `/voice` in the head. Voice needs a claude.ai
   login, as it does anywhere in Claude Code.
 - The chord is direct, with no prefix, and rebindable under **Keybinds** in the
-  *anywhere, no prefix* group. On WezTerm, re-run `fleet apply-keybinds` after changing
-  it; the built-in multiplexer picks them up on its next attach or `prefix q r`.
+  *anywhere, no prefix* group. The built-in multiplexer picks a change up on its next
+  attach or `prefix q r`.
 - **On the built-in multiplexer** the head is a real float: 80% of the screen, over
   whichever project the window shows. Hiding moves it out of sight without stopping it,
   and showing it from another project brings the same head along. `embedded-keys.json`
   can still rebind or unbind the chord (`"keys": { "alt+o": "none" }`).
-- **WezTerm has no floating panes**, so there the head lives in a workspace of its own,
-  `fleet-head`: the chord switches the window into it and back to the workspace you came
-  from. Your project windows stay exactly as they were.
 
 The head runs in `%APPDATA%\fleet\head`, where fleet writes its `CLAUDE.md` (its role and
 tools) and registers `fleet mcp --head` as its MCP server every time it starts. Its tools:
@@ -943,8 +901,7 @@ fleet.log               failures fleet degraded past, shown by doctor
 
 ## Themes
 
-fleet's screens, its fleetd chrome and the WezTerm tab and status pills
-(`fleet-theme.lua`) all draw from one palette. Fifteen themes ship with it:
+fleet's screens and its fleetd chrome all draw from one palette. Fifteen themes ship with it:
 
 ```
 catppuccin-mocha (default)  catppuccin-latte  tokyo-night     gruvbox-dark
@@ -960,9 +917,7 @@ fleet theme get
 ```
 
 Every running dashboard, menu and picker, and fleetd, watches the theme and
-redraws within a moment of a switch. The first of them to notice also rewrites
-`fleet-theme.lua` (only if `fleet setup` installed it) so WezTerm reloads its
-colors. `fleet theme set` does that itself, so it works with nothing running.
+redraws within a moment of a switch.
 
 You can also pick a theme from the fleet menu: **Settings › Theme** (`T`) lists the
 themes with the active one marked.
@@ -972,7 +927,6 @@ opens, and `fleet theme set` prints one line per tool saying what it did:
 
 | Tool | What fleet writes | When it shows |
 |---|---|---|
-| WezTerm | `fleet-theme.lua`, if `fleet setup` installed it | at once (config reload) |
 | nvim | `palette.lua` in fleet's own nvim config (`fleet-nvim`); `lua/fleet/theme.lua` turns it into highlights. Your own nvim config is never touched | at once in open fleet nvim panes |
 | Claude Code | a custom theme `themes/fleet.json` (dark or light base, palette overrides) in the Claude config folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`), and `"theme": "custom:fleet"` in its `settings.json`; the rest of the file is left as it was | at once in running sessions |
 | yazi | `theme.toml` in the yazi config folder (`YAZI_CONFIG_HOME`, else `%APPDATA%\yazi\config` / `~/.config/yazi`) | next time yazi starts |
@@ -1028,7 +982,7 @@ yellow   = "#e0af68"
 red      = "#f7768e"
 cursor   = "#c0caf5"
 
-color0  = "#15161e"    # color0..color7 are the ANSI colors WezTerm uses,
+color0  = "#15161e"    # color0..color7 are the ANSI colors,
 color9  = "#ff7a93"    # color8..color15 the bright ones
 ```
 
@@ -1113,7 +1067,7 @@ libraries survive NativeAOT and what owning a pane would actually cost. See
 | `docs/PHASE1-PLAN.md` | the implementation plan it was built from |
 
 `DESIGN.md` also carries a **Non-obvious behaviour** section: the Terminal.Gui
-v2 traps, the WezTerm quirks, and the git plumbing this project had to discover.
+v2 traps, the multiplexer quirks, and the git plumbing this project had to discover.
 The code carries no comments by project convention, so that is where the
 reasoning lives.
 
