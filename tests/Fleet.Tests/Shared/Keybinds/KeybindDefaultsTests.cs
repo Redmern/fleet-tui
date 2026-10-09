@@ -1,7 +1,9 @@
+using Fleet.Features.Menu.ShowMenu;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Shared.Keybinds;
 using Fleet.Shared.Keybinds.Enums;
 using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 
 namespace Fleet.Tests.Shared.Keybinds;
 
@@ -91,6 +93,77 @@ public class KeybindDefaultsTests
         Assert.Equal(KeybindChord.Normalize(MuxKeys.DefaultPrefix), Set.Find(KeybindLegacy.MuxPrefixId)!.Chord);
         AssertContext(mux, "prefix", MuxKeys.DefaultPrefixKeys);
         AssertContext(mux, "direct", MuxKeys.DefaultDirectKeys);
+    }
+
+    // Fleet-menu actions that do not have a ctrl+s binding yet. Each later unit
+    // binds its group and deletes its rows here; the list should end up empty.
+    private static readonly FleetAction[] NotYetOnCtrlS =
+    [
+        // quit and session
+        FleetAction.QuitFleet,
+        FleetAction.SwitchProject,
+        FleetAction.SaveSession,
+        FleetAction.Remotes,
+
+        // settings › configure
+        FleetAction.EditKeybinds,
+        FleetAction.EditShowMenuKeys,
+        FleetAction.EditButtonHints,
+        FleetAction.EditTheme,
+
+        // settings › maintenance
+        FleetAction.RebuildDashboard,
+        FleetAction.CleanupProject,
+        FleetAction.HideAllAgents,
+        FleetAction.ViewLogs,
+        FleetAction.UpdateFleet,
+        FleetAction.ShowVersion,
+        FleetAction.WhatsNew,
+
+        // settings › fleet config
+        FleetAction.EditMainOrchestratorInNvim,
+        FleetAction.EditSubOrchestratorsInNvim,
+        FleetAction.EditNvimConfig,
+        FleetAction.EditAutoClose,
+        FleetAction.EditAidlcMode,
+        FleetAction.EditClaudeProfile,
+        FleetAction.EditFleetConfig,
+        FleetAction.EditHeadModel,
+        FleetAction.EditMainModel,
+        FleetAction.EditSubModel,
+        FleetAction.EditAgentModel,
+        FleetAction.EditSettings,
+    ];
+
+    private static IEnumerable<FleetAction> MenuLeaves =>
+        new[] { FleetMenus.Main, FleetMenus.Settings, FleetMenus.FleetConfig }
+            .SelectMany(FleetMenus.Actions)
+            .Where(a => !FleetMenus.IsSubmenu(a))
+            .Distinct();
+
+    [Fact]
+    public void Every_fleet_menu_action_opens_from_ctrl_s_or_is_listed_as_not_yet_bound()
+    {
+        var commands = MuxKeys.DefaultPrefixKeys.Values.ToHashSet(StringComparer.Ordinal);
+
+        var missing = MenuLeaves
+            .Except(NotYetOnCtrlS)
+            .Where(a => !commands.Contains("menu " + FleetActionIds.For(a)))
+            .ToList();
+
+        Assert.True(missing.Count == 0, $"no ctrl+s binding for: {string.Join(", ", missing)}");
+    }
+
+    [Fact]
+    public void The_not_yet_bound_list_holds_only_unbound_menu_actions()
+    {
+        var commands = MuxKeys.DefaultPrefixKeys.Values.ToHashSet(StringComparer.Ordinal);
+
+        Assert.All(NotYetOnCtrlS, a =>
+        {
+            Assert.Contains(a, MenuLeaves);
+            Assert.DoesNotContain("menu " + FleetActionIds.For(a), commands);
+        });
     }
 
     private static void AssertContext(

@@ -16,6 +16,7 @@ public sealed class MuxKeys
 
     public static readonly IReadOnlyDictionary<string, string> DefaultGroups = new Dictionary<string, string>
     {
+        ["a"] = "agents",
         ["f"] = "float",
         ["w"] = "project",
         ["q"] = "session",
@@ -23,6 +24,7 @@ public sealed class MuxKeys
 
     public static readonly IReadOnlyDictionary<string, string> DefaultIcons = new Dictionary<string, string>
     {
+        ["a"] = "",
         ["f"] = "",
         ["w"] = "",
         ["q"] = "",

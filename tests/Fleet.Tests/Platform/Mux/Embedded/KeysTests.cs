@@ -150,6 +150,11 @@ public class KeysTests
             ["q d"] = "detach",
             ["q q"] = "detach",
             ["q r"] = "reload",
+            ["a m"] = "menu main-pane",
+            ["a l"] = "menu list-agents",
+            ["a e"] = "menu open-editor",
+            ["a f"] = "menu browsefiles",
+            ["a n"] = "menu notifications",
         };
         var direct = new Dictionary<string, string>
         {
@@ -322,6 +327,7 @@ public class KeysTests
         Assert.Equal("", entries.Single(e => e.Label == "float").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "project").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "session").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "agents").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "focus").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "resize").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "go to tab").Icon);
@@ -368,7 +374,7 @@ public class KeysTests
         var root = WhichKey.For(keys);
 
         Assert.Equal(
-            [("f", "float"), ("q", "session"), ("w", "project")],
+            [("a", "agents"), ("f", "float"), ("q", "session"), ("w", "project")],
             root.Where(e => e.Group).Select(e => (e.Key, e.Label)).Order());
 
         var floats = WhichKey.For(Group(keys, "f"), keys.Prefix);
@@ -397,7 +403,7 @@ public class KeysTests
         var groups = entries.TakeWhile(e => e.Group || e.Fold).ToList();
         var singles = entries.Skip(groups.Count).ToList();
 
-        Assert.Equal(["float", "focus", "go to tab", "project", "resize", "session"], groups.Select(g => g.Label).Order());
+        Assert.Equal(["agents", "float", "focus", "go to tab", "project", "resize", "session"], groups.Select(g => g.Label).Order());
         Assert.All(singles, e => Assert.False(e.Group || e.Fold));
         Assert.Equal(
             singles.Select(e => e.Key).OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ThenBy(k => k, StringComparer.Ordinal),
@@ -647,6 +653,49 @@ public class KeysTests
         Check(keys.Root);
         Assert.Equal(MuxKeys.DefaultPrefixKeys.Count, keys.PrefixKeys.Count);
         Assert.Equal(MuxKeys.DefaultGroups.Keys.Order(), keys.Root.Groups.Select(g => g.Spec).Order());
+    }
+
+    [Fact]
+    public void The_agents_group_opens_each_menu_action_with_a_readable_label()
+    {
+        var keys = MuxKeys.Defaults;
+        var agents = WhichKey.For(Group(keys, "a"), keys.Prefix);
+
+        Assert.Equal(
+            [
+                ("e", "open editor here"),
+                ("f", "file navigator"),
+                ("l", "list agents"),
+                ("m", "go to dashboard"),
+                ("n", "notifications"),
+            ],
+            agents.Select(e => (e.Key, e.Label)));
+        Assert.Equal(
+            ["menu browsefiles", "menu list-agents", "menu main-pane", "menu notifications", "menu open-editor"],
+            Group(keys, "a").Leaves.Select(b => b.Command).Order());
+    }
+
+    [Theory]
+    [InlineData("menu", "fleet menu")]
+    [InlineData("menu main-pane", "go to dashboard")]
+    [InlineData("menu browsefiles", "file navigator")]
+    [InlineData("menu no-such-action", "menu no such action")]
+    public void Which_key_labels_a_menu_action_by_its_description(string command, string label)
+    {
+        Assert.Equal(label, WhichKey.Label(command));
+    }
+
+    [Fact]
+    public void Embedded_keys_can_rebind_and_unbind_a_menu_action()
+    {
+        var keys = MuxKeys.From(
+            new MuxKeysFile { PrefixKeys = new() { ["a m"] = "none", ["a d"] = "menu main-pane" } },
+            null);
+
+        Assert.Equal(
+            ["d", "e", "f", "l", "n"],
+            Group(keys, "a").Leaves.Select(b => b.Chord.Label).Order());
+        Assert.Equal("menu main-pane", Group(keys, "a").Leaves.Single(b => b.Chord.Label == "d").Command);
     }
 
     [Fact]

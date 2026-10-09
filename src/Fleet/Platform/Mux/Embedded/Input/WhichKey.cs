@@ -1,4 +1,6 @@
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 
 namespace Fleet.Platform.Mux.Embedded.Input;
 
@@ -61,8 +63,15 @@ public static class WhichKey
         "float-embed" => "float ↔ tile",
         "float-mode" => "move/resize float",
         "reload" => "reload keys",
+        _ when MenuAction(command) is { } action => KeymapDefaults.Describe(action).ToLowerInvariant(),
         _ => command.Replace('-', ' '),
     };
+
+    private static FleetAction? MenuAction(string command) =>
+        command.StartsWith("menu ", StringComparison.Ordinal)
+        && FleetActionIds.Parse(command["menu ".Length..]) is var action and not FleetAction.None
+            ? action
+            : null;
 
     private static void Fold(
         List<MuxKeys.Binding> bindings,
