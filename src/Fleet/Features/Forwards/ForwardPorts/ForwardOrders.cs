@@ -31,7 +31,7 @@ public static class ForwardOrders
 
         return words switch
         {
-            [] or ["ls" or "list"] => Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.List)),
+        [] or ["ls" or "list"] => Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.List)),
             ["rm" or "remove", var host, var port] when Port(port) is { } remote =>
                 Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.Remove, host, remote)),
             ["start", var host, var project] => Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.Start, host, Project: project, Open: open)),
