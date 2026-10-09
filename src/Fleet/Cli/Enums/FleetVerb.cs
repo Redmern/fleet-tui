@@ -28,5 +28,6 @@ public enum FleetVerb
     AskPass,
     Theme,
     Help,
+    Forward,
     Unknown,
 }

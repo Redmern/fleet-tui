@@ -34,6 +34,7 @@ public static class Runner
         FleetVerb.AskPass => await EmbeddedCommands.AskPassAsync(invocation).ConfigureAwait(false),
         FleetVerb.Theme => ThemeCommand.Run(invocation),
         FleetVerb.Help => HelpCommand.Run(),
+        FleetVerb.Forward => await ForwardCommand.RunAsync(invocation).ConfigureAwait(false),
         _ => HelpCommand.Unknown(invocation.Raw),
     };
 }
