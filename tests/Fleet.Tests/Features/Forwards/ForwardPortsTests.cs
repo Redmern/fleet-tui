@@ -78,6 +78,17 @@ public sealed class ForwardPortsTests
     }
 
     [Fact]
+    public async Task Open_finds_the_forward_by_remote_or_local_port()
+    {
+        _forwards.Rows.Add(new PortForward("box", 5173, 15173, ForwardState.Forwarded, "web"));
+
+        Assert.True((await Handler.HandleAsync(ForwardOrders.Parse(["open", "5173"]).Value)).Succeeded);
+        Assert.True((await Handler.HandleAsync(ForwardOrders.Parse(["open", "15173"]).Value)).Succeeded);
+        Assert.False((await Handler.HandleAsync(ForwardOrders.Parse(["open", "5173", "other"]).Value)).Succeeded);
+        Assert.Equal(["http://localhost:15173", "http://localhost:15173"], _browser.Opened);
+    }
+
+    [Fact]
     public async Task The_list_describes_every_row()
     {
         _forwards.Rows.Add(new PortForward("box", 5173, 5173, ForwardState.Forwarded, "web"));

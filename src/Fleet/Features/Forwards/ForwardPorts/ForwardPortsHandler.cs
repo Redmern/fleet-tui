@@ -43,6 +43,9 @@ public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher
                         await forwards.StartStackAsync(host, order.Project!, ct).ConfigureAwait(false), order.Open, ct)
                         .ConfigureAwait(false);
 
+                case ForwardVerb.Open:
+                    return await OpenPortAsync(order.Port, order.Host is null ? null : host, ct).ConfigureAwait(false);
+
                 case ForwardVerb.Stop:
                     await forwards.StopStackAsync(host, order.Project!, ct).ConfigureAwait(false);
                     return Result<string>.Ok($"stopped {order.Project} on {host}");
@@ -71,6 +74,18 @@ public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher
         }
 
         return Result<string>.Ok($"{forward.Describe()}\n{forward.Url}");
+    }
+
+    public async Task<Result<string>> OpenPortAsync(int port, string? host, CancellationToken ct)
+    {
+        var rows = await forwards.ListAsync(ct).ConfigureAwait(false);
+        var row = rows.FirstOrDefault(r => r.RemotePort == port && r.Url is not null
+                                           && (host is null || string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase)))
+            ?? rows.FirstOrDefault(r => host is null && r.LocalPort == port && r.Url is not null);
+
+        return row is null
+            ? Result<string>.Fail($"port {port} is not forwarded{(host is null ? string.Empty : $" from {host}")}")
+            : await OpenedAsync(row, open: true, ct).ConfigureAwait(false);
     }
 
     public string Resolve(string host) =>

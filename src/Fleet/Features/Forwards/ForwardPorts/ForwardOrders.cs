@@ -15,6 +15,7 @@ public static class ForwardOrders
         "usage: fleet forward <host> <remotePort> [--local <port>] [--open]\n"
         + "       fleet forward ls\n"
         + "       fleet forward rm <host> <remotePort>\n"
+        + "       fleet forward open <port> [<host>]\n"
         + "       fleet forward start <host> <project> [--open]\n"
         + "       fleet forward stop <host> <project>";
 
@@ -34,6 +35,9 @@ public static class ForwardOrders
         [] or ["ls" or "list"] => Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.List)),
             ["rm" or "remove", var host, var port] when Port(port) is { } remote =>
                 Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.Remove, host, remote)),
+            ["open", var port] when Port(port) is { } remote => Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.Open, Port: remote)),
+            ["open", var port, var host] when Port(port) is { } remote =>
+                Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.Open, host, remote)),
             ["start", var host, var project] => Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.Start, host, Project: project, Open: open)),
             ["stop", var host, var project] => Result<ForwardOrder>.Ok(new ForwardOrder(ForwardVerb.Stop, host, Project: project)),
             [var host, var port] when Port(port) is { } remote =>

@@ -7,4 +7,5 @@ public enum ForwardVerb
     Remove,
     Start,
     Stop,
+    Open,
 }
