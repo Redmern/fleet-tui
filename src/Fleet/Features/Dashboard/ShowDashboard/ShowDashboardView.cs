@@ -611,6 +611,33 @@ public static class ShowDashboardView
             });
         }
 
+        void HideAll()
+        {
+            if (callbacks.HideAllAgents is null)
+            {
+                return;
+            }
+
+            status.Text = "hiding all...";
+            busy = true;
+
+            Start(async () =>
+            {
+                try
+                {
+                    var message = await Task.Run(callbacks.HideAllAgents).ConfigureAwait(false);
+
+                    app.Invoke(() => status.Text = message ?? string.Empty);
+
+                    await RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    busy = false;
+                }
+            });
+        }
+
         void ManageAgent()
         {
             var tab = ActiveTab();
@@ -919,6 +946,10 @@ public static class ShowDashboardView
                     }
 
                     HideAgent();
+                    break;
+
+                case FleetAction.HideAllAgents:
+                    HideAll();
                     break;
 
                 case FleetAction.OpenEditor:

@@ -5825,12 +5825,10 @@ What the phases add up to:
   plus a space, so the status column does not move when a row toggles, and
   `FleetHiddenMark.Is` recognises either glyph so `DashboardRows.WithHidden` swaps one for the
   other on the live patch.
-- **No hide-all button.** The dashboard's hide-all chip and its `X` binding there are gone; the
-  settings menu entry (and `HideAllAgentsHandler`) stays.
-- **`x/X` hides one.** With `X` free on the dashboard, `DashboardKeys.For` answers the other
-  case of the hide key's letter with `ToggleHidden` too, unless something in the tab's scope is
-  bound to it; `DashboardKeys.HideHint` labels the chip `x/X` (or whatever letter it is rebound
-  to; a non-letter binding shows just itself).
+- **One hide button, two keys.** The separate hide-all chip is gone, but `X` still hides every
+  agent from the Agents and Subs tabs. The hide chip carries both keys, `x/X`
+  (`DashboardKeys.HideHint`, from the keymap, so it follows rebinding): one chip, fewer
+  buttons, no lost key.
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

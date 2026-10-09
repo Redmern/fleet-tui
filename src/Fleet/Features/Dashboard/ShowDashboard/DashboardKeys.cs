@@ -12,6 +12,7 @@ public static class DashboardKeys
         FleetAction.NewAgent,
         FleetAction.RemoveAgent,
         FleetAction.ToggleHidden,
+        FleetAction.HideAllAgents,
         FleetAction.OpenEditor,
         FleetAction.Refresh,
         FleetAction.PrevTab,
@@ -23,6 +24,7 @@ public static class DashboardKeys
         FleetAction.NewAgent,
         FleetAction.RemoveAgent,
         FleetAction.ToggleHidden,
+        FleetAction.HideAllAgents,
         FleetAction.OpenEditor,
         FleetAction.Refresh,
         FleetAction.PrevTab,
@@ -84,16 +86,7 @@ public static class DashboardKeys
             return DashboardKey.Act(FleetAction.NextTab);
         }
 
-        var scope = ScopeFor(tab);
-        var action = keymap.ActionFor(key, scope);
-
-        if (action == FleetAction.None
-            && scope.Contains(FleetAction.ToggleHidden)
-            && OtherCaseOfHide(keymap) is { IsValid: true } other
-            && key == other)
-        {
-            action = FleetAction.ToggleHidden;
-        }
+        var action = keymap.ActionFor(key, ScopeFor(tab));
 
         return action == FleetAction.None
             ? DashboardKey.Ignore
@@ -101,15 +94,5 @@ public static class DashboardKeys
     }
 
     public static string HideHint(Keymap keymap) =>
-        HideLetter(keymap) is { } letter
-            ? $"{char.ToLowerInvariant(letter)}/{char.ToUpperInvariant(letter)}"
-            : keymap.DisplayFor(FleetAction.ToggleHidden);
-
-    private static Key OtherCaseOfHide(Keymap keymap) =>
-        HideLetter(keymap) is { } letter
-            ? new Key(char.IsAsciiLetterLower(letter) ? char.ToUpperInvariant(letter) : char.ToLowerInvariant(letter))
-            : Key.Empty;
-
-    private static char? HideLetter(Keymap keymap) =>
-        keymap.TextFor(FleetAction.ToggleHidden) is [var letter] && char.IsAsciiLetter(letter) ? letter : null;
+        $"{keymap.DisplayFor(FleetAction.ToggleHidden)}/{keymap.DisplayFor(FleetAction.HideAllAgents)}";
 }

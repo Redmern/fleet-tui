@@ -94,71 +94,30 @@ public class DashboardKeysTests
     }
 
     [Fact]
-    public void Shift_x_hides_the_selected_agent_too_on_the_agents_and_subs_tabs_only()
+    public void Shift_x_hides_every_agent_on_the_agents_and_subs_tabs_only()
     {
-        var shiftX = Key.X.WithShift;
+        var hideAll = Key.X.WithShift;
 
-        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(shiftX, Map, Agents).Action);
-        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(shiftX, Map, Subs).Action);
-        Assert.False(DashboardKeys.For(shiftX, Map, Repositories).Consume);
+        Assert.Equal(FleetAction.HideAllAgents, DashboardKeys.For(hideAll, Map, Agents).Action);
+        Assert.Equal(FleetAction.HideAllAgents, DashboardKeys.For(hideAll, Map, Subs).Action);
+        Assert.False(DashboardKeys.For(hideAll, Map, Repositories).Consume);
         Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.X, Map, Agents).Action);
     }
 
     [Fact]
-    public void Hiding_every_agent_is_not_a_dashboard_key_any_more()
-    {
-        Assert.DoesNotContain(FleetAction.HideAllAgents, DashboardKeys.ScopeFor(Agents));
-        Assert.DoesNotContain(FleetAction.HideAllAgents, DashboardKeys.ScopeFor(Subs));
-        Assert.DoesNotContain(FleetAction.HideAllAgents, DashboardKeys.ScopeFor(Repositories));
-    }
-
-    [Fact]
-    public void The_hide_hint_names_both_cases_of_its_key()
+    public void The_hide_hint_names_the_hide_key_then_the_hide_all_key()
     {
         Assert.Equal("x/X", DashboardKeys.HideHint(Map));
     }
 
     [Fact]
-    public void A_rebound_hide_letter_answers_in_both_cases_and_says_so()
+    public void The_hide_hint_follows_rebound_keys()
     {
-        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.ToggleHidden, "Z"));
+        var keymap = new Keymap(KeymapConfig.Default
+            .With(FleetAction.ToggleHidden, "z")
+            .With(FleetAction.HideAllAgents, "Ctrl+Z"));
 
-        Assert.Equal("z/Z", DashboardKeys.HideHint(keymap));
-        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.Z, keymap, Agents).Action);
-        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.Z.WithShift, keymap, Agents).Action);
-        Assert.False(DashboardKeys.For(Key.X, keymap, Agents).Consume);
-    }
-
-    [Fact]
-    public void A_hide_key_that_is_not_a_letter_has_no_second_case()
-    {
-        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.ToggleHidden, "Ctrl+H"));
-
-        Assert.Equal(keymap.DisplayFor(FleetAction.ToggleHidden), DashboardKeys.HideHint(keymap));
-        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.H.WithCtrl, keymap, Agents).Action);
-        Assert.False(DashboardKeys.For(Key.H.WithShift, keymap, Agents).Consume);
-    }
-
-    [Fact]
-    public void A_scope_binding_on_the_other_case_wins_over_the_hide_alternate()
-    {
-        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.Refresh, "X"));
-
-        Assert.Equal(FleetAction.Refresh, DashboardKeys.For(Key.X.WithShift, keymap, Agents).Action);
-        Assert.Equal(FleetAction.ToggleHidden, DashboardKeys.For(Key.X, keymap, Agents).Action);
-    }
-
-    [Fact]
-    public void Shift_x_clashes_with_nothing_on_the_dashboard_by_default()
-    {
-        foreach (var tab in new[] { Agents, Subs })
-        {
-            Assert.DoesNotContain(
-                DashboardKeys.ScopeFor(tab),
-                a => a != FleetAction.ToggleHidden && Map.KeyFor(a) == Key.X.WithShift);
-        }
-
-        Assert.Equal(FleetAction.None, Map.ClashFor(FleetAction.ToggleHidden));
+        Assert.Equal("z/ctrl+z", DashboardKeys.HideHint(keymap));
     }
 
     [Fact]
