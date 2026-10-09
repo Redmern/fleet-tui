@@ -12,6 +12,5 @@ public static class FleetHiddenMark
     public static FleetSpan For(bool hidden) => hidden ? Shown : Visible;
 
     public static bool Is(FleetSpan span) =>
-        span.Text.Contains(FleetGlyphs.Hidden, StringComparison.Ordinal)
-        || span.Text.Contains(FleetIcons.Show, StringComparison.Ordinal);
+        span == Visible || span.Text.Contains(FleetGlyphs.Hidden, StringComparison.Ordinal);
 }

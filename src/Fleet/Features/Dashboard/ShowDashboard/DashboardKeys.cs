@@ -87,7 +87,10 @@ public static class DashboardKeys
         var scope = ScopeFor(tab);
         var action = keymap.ActionFor(key, scope);
 
-        if (action == FleetAction.None && scope.Contains(FleetAction.ToggleHidden) && key == OtherCaseOfHide(keymap))
+        if (action == FleetAction.None
+            && scope.Contains(FleetAction.ToggleHidden)
+            && OtherCaseOfHide(keymap) is { IsValid: true } other
+            && key == other)
         {
             action = FleetAction.ToggleHidden;
         }
@@ -98,12 +101,15 @@ public static class DashboardKeys
     }
 
     public static string HideHint(Keymap keymap) =>
-        keymap.TextFor(FleetAction.ToggleHidden) is [var letter] && char.IsAsciiLetter(letter)
+        HideLetter(keymap) is { } letter
             ? $"{char.ToLowerInvariant(letter)}/{char.ToUpperInvariant(letter)}"
             : keymap.DisplayFor(FleetAction.ToggleHidden);
 
     private static Key OtherCaseOfHide(Keymap keymap) =>
-        keymap.TextFor(FleetAction.ToggleHidden) is [var letter] && char.IsAsciiLetter(letter)
-            ? new Key((char.IsAsciiLetterLower(letter) ? char.ToUpperInvariant(letter) : char.ToLowerInvariant(letter)).ToString())
+        HideLetter(keymap) is { } letter
+            ? new Key(char.IsAsciiLetterLower(letter) ? char.ToUpperInvariant(letter) : char.ToLowerInvariant(letter))
             : Key.Empty;
+
+    private static char? HideLetter(Keymap keymap) =>
+        keymap.TextFor(FleetAction.ToggleHidden) is [var letter] && char.IsAsciiLetter(letter) ? letter : null;
 }
