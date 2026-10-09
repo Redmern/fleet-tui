@@ -189,6 +189,32 @@ public sealed class EmbeddedDriver(
     public Task CloseWorkspaceAsync(string name, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = "close-workspace", Workspace = name }, ct);
 
+    public static readonly TimeSpan StackWithin = TimeSpan.FromMinutes(4);
+
+    public async Task<IReadOnlyList<ForwardDto>> ForwardsAsync(CancellationToken ct = default) =>
+        (await RequestAsync(new ControlRequest { Op = ForwardHub.ListOp }, ct).ConfigureAwait(false)).Forwards ?? [];
+
+    public async Task<ForwardDto?> AddForwardAsync(string host, int remotePort, int? localPort, CancellationToken ct = default) =>
+        (await RequestAsync(
+            new ControlRequest { Op = ForwardHub.AddOp, Host = host, Port = remotePort, LocalPort = localPort ?? 0 },
+            ct,
+            TimeSpan.FromMinutes(1)).ConfigureAwait(false)).Forwards?.FirstOrDefault();
+
+    public Task RemoveForwardAsync(string host, int remotePort, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = ForwardHub.RemoveOp, Host = host, Port = remotePort }, ct);
+
+    public async Task<ForwardDto?> StartStackAsync(string host, string project, CancellationToken ct = default) =>
+        (await RequestAsync(
+            new ControlRequest { Op = ForwardHub.StackStartOp, Host = host, Workspace = project },
+            ct,
+            StackWithin).ConfigureAwait(false)).Forwards?.FirstOrDefault();
+
+    public Task StopStackAsync(string host, string project, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = ForwardHub.StackStopOp, Host = host, Workspace = project }, ct);
+
+    public Task ViewerOpenAsync(int remotePort, CancellationToken ct = default) =>
+        RequestAsync(new ControlRequest { Op = ForwardHub.ViewerOpenOp, Port = remotePort }, ct);
+
     public async Task<IReadOnlyList<RemoteDto>> RemotesAsync(CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "list-remotes" }, ct).ConfigureAwait(false)).Remotes ?? [];
 
