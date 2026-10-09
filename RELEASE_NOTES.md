@@ -4,6 +4,11 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.11 (2026-10-09)
+
+- Visible agents and sub-orchestrators now show an eye on their dashboard row. Hidden ones keep the struck-through eye.
+- The dashboard no longer has a separate hide-all button. The hide button shows both keys, `x/X`: `x` hides the selected agent, `X` hides all.
+
 ## 0.7.1 (2026-10-08)
 
 - Hide all agents (`X`) in Settings and on the dashboard's Agents and Subs tabs. It hides sub-orchestrators too.
