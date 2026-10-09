@@ -105,6 +105,22 @@ public class DashboardKeysTests
     }
 
     [Fact]
+    public void The_hide_hint_names_the_hide_key_then_the_hide_all_key()
+    {
+        Assert.Equal("x/X", DashboardKeys.HideHint(Map));
+    }
+
+    [Fact]
+    public void The_hide_hint_follows_rebound_keys()
+    {
+        var keymap = new Keymap(KeymapConfig.Default
+            .With(FleetAction.ToggleHidden, "z")
+            .With(FleetAction.HideAllAgents, "Ctrl+Z"));
+
+        Assert.Equal("z/ctrl+z", DashboardKeys.HideHint(keymap));
+    }
+
+    [Fact]
     public void Stopping_has_no_bare_key_because_it_lives_in_the_manage_menu()
     {
         Assert.Equal(Key.Empty, Map.KeyFor(FleetAction.StopAgent));

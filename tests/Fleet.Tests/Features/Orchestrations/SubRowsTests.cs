@@ -196,6 +196,7 @@ public sealed class SubRowsTests
 
         Assert.Contains(FleetGlyphs.Hidden, hidden.Text);
         Assert.DoesNotContain(FleetGlyphs.Hidden, visible.Text);
+        Assert.Contains(FleetIcons.Show, visible.Text);
         Assert.Equal(hidden.Trailing![0], visible.Trailing![0]);
         Assert.Equal(Width(hidden.Trailing!), Width(visible.Trailing!));
     }
@@ -207,6 +208,8 @@ public sealed class SubRowsTests
         var rows = SubRows.For(Listing(Orchestrator("upgrade"), hidden, Agent("backend", "other", "upgrade")), Clean, ",");
 
         Assert.Equal(Width(rows[1].Trailing!), Width(rows[2].Trailing!));
+        Assert.Contains(FleetGlyphs.Hidden, rows.Single(r => r.Text.Contains("story", StringComparison.Ordinal)).Text);
+        Assert.Contains(FleetIcons.Show, rows.Single(r => r.Text.Contains("other", StringComparison.Ordinal)).Text);
     }
 
     private static int Width(IEnumerable<Fleet.Ui.Models.FleetSpan> spans) => spans.Sum(s => s.Text.EnumerateRunes().Count());

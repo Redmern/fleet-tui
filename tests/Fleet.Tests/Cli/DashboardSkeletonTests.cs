@@ -68,6 +68,7 @@ public sealed partial class DashboardSkeletonTests : IDisposable
         Assert.Equal([false, true], board.Hidden);
         Assert.Equal(AgentActivity.Working, board.StatusAt(0));
         Assert.Contains(FleetGlyphs.Hidden, Text(board.Rows[1].Trailing ?? []), StringComparison.Ordinal);
+        Assert.Contains(FleetIcons.Show, Text(board.Rows[0].Trailing ?? []), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -88,6 +89,8 @@ public sealed partial class DashboardSkeletonTests : IDisposable
         Assert.Contains(Text(BranchStatus.Pill("alpha", BranchState.Unknown)), Text(subs.Rows[1].Spans), StringComparison.Ordinal);
         Assert.Contains(Text(BranchStatus.Pill("zeta", BranchState.Unknown)), Text(subs.Rows[2].Spans), StringComparison.Ordinal);
         Assert.Equal([false, true, false], subs.Hidden);
+        Assert.Contains(FleetGlyphs.Hidden, Text(subs.Rows[1].Trailing ?? []), StringComparison.Ordinal);
+        Assert.Contains(FleetIcons.Show, Text(subs.Rows[2].Trailing ?? []), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -5818,6 +5818,18 @@ What the phases add up to:
   which demands an exact match, still accepts it while the oldest stays 1. A refusal, either
   way, names both builds and says how to restart fleetd.
 
+## Hide marks and keys on the dashboard, 2026-10-08
+
+- **Both states show an eye.** A visible agent's row ends in the plain eye (`FleetIcons.Show`)
+  where it used to have a blank spacer; a hidden one keeps the struck eye. Both are one cell
+  plus a space, so the status column does not move when a row toggles, and
+  `FleetHiddenMark.Is` recognises either glyph so `DashboardRows.WithHidden` swaps one for the
+  other on the live patch.
+- **One hide button, two keys.** The separate hide-all chip is gone, but `X` still hides every
+  agent from the Agents and Subs tabs. The hide chip carries both keys, `x/X`
+  (`DashboardKeys.HideHint`, from the keymap, so it follows rebinding): one chip, fewer
+  buttons, no lost key.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

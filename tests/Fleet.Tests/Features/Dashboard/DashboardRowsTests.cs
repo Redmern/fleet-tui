@@ -82,17 +82,38 @@ public class DashboardRowsTests
 
         var shown = DashboardRows.WithHidden(row, false);
 
-        Assert.Equal([FleetSpan.Plain("working   "), FleetHiddenMark.Blank], shown.Trailing!);
+        Assert.Equal([FleetSpan.Plain("working   "), FleetHiddenMark.Visible], shown.Trailing!);
     }
 
     [Fact]
-    public void WithHidden_round_trip_leaves_only_the_blank_hidden_slot()
+    public void WithHidden_round_trip_leaves_only_the_plain_eye()
     {
         var row = new FleetRow([FleetSpan.Plain("branch")]);
 
         var back = DashboardRows.WithHidden(DashboardRows.WithHidden(row, true), false);
 
-        Assert.Equal([FleetHiddenMark.Blank], back.Trailing!);
+        Assert.Equal([FleetHiddenMark.Visible], back.Trailing!);
+    }
+
+    [Fact]
+    public void WithHidden_true_swaps_the_plain_eye_for_the_struck_eye()
+    {
+        var row = new FleetRow([FleetSpan.Plain("branch")], [FleetSpan.Plain("working   "), FleetHiddenMark.Visible]);
+
+        var hidden = DashboardRows.WithHidden(row, true);
+
+        Assert.Equal([FleetSpan.Plain("working   "), FleetHiddenMark.Shown], hidden.Trailing!);
+        Assert.DoesNotContain(hidden.Trailing!, s => s.Text.Contains(FleetIcons.Show, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_visible_mark_is_the_same_eye_without_the_strike()
+    {
+        Assert.Equal(FleetIcons.Show, FleetHiddenMark.Visible.Text.TrimEnd());
+        Assert.Equal(FleetGlyphs.Hidden, FleetHiddenMark.Shown.Text.TrimEnd());
+        Assert.True(FleetHiddenMark.Is(FleetHiddenMark.Visible));
+        Assert.True(FleetHiddenMark.Is(FleetHiddenMark.Shown));
+        Assert.False(FleetHiddenMark.Is(FleetSpan.Muted("  ")));
     }
 
     [Fact]
@@ -107,7 +128,7 @@ public class DashboardRowsTests
         Assert.Equal(status, hidden.Trailing![0]);
         Assert.Equal(status, shown.Trailing![0]);
         Assert.Equal(Width(hidden.Trailing!), Width(shown.Trailing!));
-        Assert.Equal(Width([FleetHiddenMark.Shown]), Width([FleetHiddenMark.Blank]));
+        Assert.Equal(Width([FleetHiddenMark.Shown]), Width([FleetHiddenMark.Visible]));
         Assert.Equal(2, shown.Trailing!.Count);
     }
 

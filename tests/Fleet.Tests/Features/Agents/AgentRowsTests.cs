@@ -18,6 +18,8 @@ public class AgentRowsTests
 
         Assert.Contains(FleetGlyphs.Hidden, rows[0].Text);
         Assert.DoesNotContain(FleetGlyphs.Hidden, rows[1].Text);
+        Assert.Contains(FleetIcons.Show, rows[1].Text);
+        Assert.DoesNotContain(FleetIcons.Show, rows[0].Text);
         Assert.Equal(rows[0].Trailing![0], rows[1].Trailing![0]);
         Assert.Equal(Width(rows[0].Trailing!), Width(rows[1].Trailing!));
     }
@@ -83,6 +85,6 @@ public class AgentRowsTests
     {
         var rows = AgentRows.For([Agent("backend", "login")]);
 
-        Assert.Equal([Fleet.Ui.FleetHiddenMark.Blank], rows[0].Trailing!);
+        Assert.Equal([Fleet.Ui.FleetHiddenMark.Visible], rows[0].Trailing!);
     }
 }

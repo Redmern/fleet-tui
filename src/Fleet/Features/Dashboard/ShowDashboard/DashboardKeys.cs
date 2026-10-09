@@ -92,4 +92,7 @@ public static class DashboardKeys
             ? DashboardKey.Ignore
             : DashboardKey.Act(action);
     }
+
+    public static string HideHint(Keymap keymap) =>
+        $"{keymap.DisplayFor(FleetAction.ToggleHidden)}/{keymap.DisplayFor(FleetAction.HideAllAgents)}";
 }
