@@ -97,7 +97,7 @@ public sealed class WarmMenuLinkedTests : IAsyncLifetime
         Assert.True((await far.RequestAsync(new ControlRequest { Op = "fit", Caller = warm.Env[FleetDaemon.PaneVariable], Cols = 40, Rows = 8 })).Ok);
         warm.Emit("FAR-MENU\nitems\n");
         var waiting = far.RequestAsync(new ControlRequest { Op = FleetDaemon.MenuWaitOp, Caller = warm.Env[FleetDaemon.PaneVariable] });
-        await Task.Delay(100);
+        await Eventually(() => Task.FromResult(_farLog.Contains($"{warm.Env[FleetDaemon.PaneVariable]} waits to open")));
 
         await window.SendCommandAsync("menu", "switch-project");
 
