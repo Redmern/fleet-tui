@@ -48,12 +48,35 @@ public sealed class SimulatedLinkStream : Stream
 
     private long Due => _clock.GetTimestamp() + (long)(OneWay.TotalSeconds * _clock.TimestampFrequency);
 
+    // A real timer only fires on the OS tick: ~15.6 ms on Windows, so a 50 ms delay lands
+    // anywhere up to ~65 ms and each hop of the link gets longer than its nominal latency.
+    // On wall time, sleep to within one tick of the due time and yield-spin the rest so the
+    // link adds its one-way latency and nothing more. Virtual clocks keep the plain delay.
+    private static readonly TimeSpan TimerTick = TimeSpan.FromMilliseconds(20);
+
     private async Task UntilAsync(long due, CancellationToken ct)
     {
         var wait = _clock.GetElapsedTime(_clock.GetTimestamp(), due);
-        if (wait > TimeSpan.Zero)
+        if (wait <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        if (_clock != TimeProvider.System)
         {
             await Task.Delay(wait, _clock, ct);
+            return;
+        }
+
+        if (wait > TimerTick)
+        {
+            await Task.Delay(wait - TimerTick, ct);
+        }
+
+        while (_clock.GetTimestamp() < due)
+        {
+            ct.ThrowIfCancellationRequested();
+            await Task.Yield();
         }
     }
 
