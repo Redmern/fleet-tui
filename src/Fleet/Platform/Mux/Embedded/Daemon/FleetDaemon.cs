@@ -36,6 +36,8 @@ public sealed class DaemonOptions
 
     public bool WarmMenus { get; init; }
 
+    public TimeProvider Clock { get; init; } = TimeProvider.System;
+
     public bool TimeMenus { get; init; } = MenuTiming.On(Environment.GetEnvironmentVariable(MenuTiming.Variable));
 
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
@@ -2032,10 +2034,17 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private readonly Dictionary<string, DateTime> _warmedAt = new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly Dictionary<string, DateTimeOffset> _warmAgainFrom = new(StringComparer.OrdinalIgnoreCase);
+
     private static readonly TimeSpan WarmAgainAfter = TimeSpan.FromSeconds(2);
 
     private List<string> MenuArgs(string? project) =>
         project is null ? [options.FleetExecutable, "menu"] : [options.FleetExecutable, "menu", "--project", project];
+
+    private string? ShownMenuWorkspace(string? pane) =>
+        pane is not null && _model.Pane(pane)?.Args is [_, "menu", ..] && _model.Float(pane) is { Parked: false }
+            ? CallerWorkspace(pane)
+            : null;
 
     private bool HasMenu(string workspace) =>
         _model.PanesIn(workspace).Any(id => _model.Pane(id)?.Args is [_, "menu", ..]);
@@ -2076,12 +2085,13 @@ public sealed class FleetDaemon(DaemonOptions options)
         foreach (var workspace in shown)
         {
             if (HasMenu(workspace)
-                || (_warmedAt.TryGetValue(workspace, out var at) && DateTime.UtcNow - at < WarmAgainAfter))
+                || (_warmAgainFrom.TryGetValue(workspace, out var at) && options.Clock.GetUtcNow() - at < WarmAgainAfter))
             {
                 continue;
             }
 
             _warmedAt[workspace] = DateTime.UtcNow;
+            _warmAgainFrom[workspace] = options.Clock.GetUtcNow();
             var (cols, rows) = _model.Clients
                 .Where(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
                 .Select(c => (c.Cols, c.Rows))
@@ -2470,9 +2480,16 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private bool Kill(string? id)
     {
+        var closedMenuIn = ShownMenuWorkspace(id);
+
         if (id is null || !_model.Kill(id))
         {
             return false;
+        }
+
+        if (closedMenuIn is not null)
+        {
+            _warmAgainFrom.Remove(closedMenuIn);
         }
 
         if (_runtimes.Remove(id, out var runtime))
