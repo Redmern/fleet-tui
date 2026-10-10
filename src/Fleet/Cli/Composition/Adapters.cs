@@ -10,6 +10,7 @@ using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Constants;
 using Fleet.Platform.Mux.Models;
 using Fleet.Features.Files.BrowseFiles;
+using Fleet.Features.Menu.ShowMenu;
 using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Features.Themes.ManageThemes;
@@ -93,6 +94,17 @@ public static class Adapters
     public static ButtonHints ButtonHints() => new JsonSettingsStore().LoadButtonHints();
 
     public static void SaveButtonHints(ButtonHints hints) => new JsonSettingsStore().SaveButtonHints(hints);
+
+    public static ToggleSettingHandler Toggles() =>
+        new(
+            Settings(),
+            shared =>
+            {
+                SaveShowMenuKeys(shared.ShowMenuKeys);
+                SaveNvimConfig(shared.Nvim);
+                SaveButtonHints(shared.ButtonHints);
+            },
+            (title, body) => Platform.Notifications.DesktopToast.Show(title, body));
 
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 
