@@ -49,7 +49,7 @@ public sealed class ClaudeSlugNamer(string executable = AgentHarness.Claude, Tim
             var stderr = process.StandardError.ReadToEndAsync(linked.Token);
             await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
 
-            return process.ExitCode == 0 ? FirstLine(await stdout.ConfigureAwait(false)) : null;
+            return process.ExitCode == 0 ? PickSlug(await stdout.ConfigureAwait(false)) : null;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -72,13 +72,26 @@ public sealed class ClaudeSlugNamer(string executable = AgentHarness.Claude, Tim
         }
     }
 
-    private static string? FirstLine(string stdout)
-    {
-        var line = stdout
+    public static string? PickSlug(string stdout) =>
+        stdout
             .Split('\n')
             .Select(l => l.Trim())
-            .FirstOrDefault(l => l.Length > 0);
+            .LastOrDefault(IsSlug);
 
-        return string.IsNullOrEmpty(line) ? null : line;
+    private const int MaxSlugLength = 60;
+    private const int MinSlugWords = 2;
+    private const int MaxSlugWords = 6;
+
+    private static bool IsSlug(string line)
+    {
+        if (line.Length == 0 || line.Length > MaxSlugLength)
+        {
+            return false;
+        }
+
+        var words = line.Split('-');
+
+        return words.Length is >= MinSlugWords and <= MaxSlugWords
+            && words.All(w => w.Length > 0 && w.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c)));
     }
 }
