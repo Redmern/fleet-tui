@@ -5866,7 +5866,7 @@ What the phases add up to:
 
 ## Open port: this machine's port in the viewer's browser, 2026-10-10
 
-- **The action.** `FleetAction.OpenPort` (Settings › session, `ctrl+s s o`) asks for one
+- **The action.** `FleetAction.OpenPort` (menu section Session, `ctrl+s s o`) asks for one
   port, `OpenPortHandler.Parse` takes 1-65535 only, and `OpenPortHandler` decides where it
   goes. It probes `127.0.0.1:<port>` first (`IListenerProbe`, `TcpListenerProbe`); nothing
   listening is a note, never a stop.

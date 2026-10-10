@@ -356,7 +356,7 @@ docker `-p` port binds `0.0.0.0` on the remote, so it is reachable there by othe
 
 #### Open a port of this machine
 
-**Open port** in the fleet menu (Settings › session) or `ctrl+s s o` asks for one port number
+**Open port** in the fleet menu (Session section) or `ctrl+s s o` asks for one port number
 (1-65535) of the machine fleet runs on, such as the `5272` of `127.0.0.1:5272`, and makes it
 reachable in the browser of the machine you are looking from:
 
