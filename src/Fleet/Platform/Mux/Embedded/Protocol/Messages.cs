@@ -63,6 +63,12 @@ public sealed class Hello
 
     [JsonPropertyName("showing")]
     public WindowEntryDto? Showing { get; set; }
+
+    [JsonPropertyName("bridged")]
+    public bool Bridged { get; set; }
+
+    [JsonPropertyName("origin")]
+    public string? Origin { get; set; }
 }
 
 public sealed class WindowEntryDto

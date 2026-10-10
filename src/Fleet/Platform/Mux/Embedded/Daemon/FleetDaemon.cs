@@ -7,6 +7,8 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Mux.Embedded.Render;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Iso;
+using Fleet.Shared.Iso.Models;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -53,6 +55,10 @@ public sealed class DaemonOptions
     public Action<string, string> Toast { get; init; } = (_, _) => { };
 
     public Func<string, IReadOnlyDictionary<string, string>, CancellationToken, Task<(string Text, bool Failed)>>? Head { get; init; }
+
+    public Func<IsoConfig> Iso { get; init; } = () => IsoConfig.Off;
+
+    public Func<string, IEnumerable<string>> Worktrees { get; init; } = _ => [];
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -387,7 +393,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
 
             var clientId = string.Empty;
-            if (hello.Role == ClientRoles.Attach)
+            if (hello.Role == ClientRoles.Attach && !MayView(hello))
+            {
+                options.Log($"iso mode: {hello.Origin ?? "an unknown host"} connects without a view; attach is not allowed from there");
+            }
+            else if (hello.Role == ClientRoles.Attach)
             {
                 lock (_gate)
                 {
@@ -424,7 +434,14 @@ public sealed class FleetDaemon(DaemonOptions options)
                     break;
                 }
 
-                await HandleAsync(wire, session, message.Type, message.Payload, ct).ConfigureAwait(false);
+                if (session is not null && !MayView(hello))
+                {
+                    options.Log($"iso mode: {hello.Origin ?? "an unknown host"} lost its view; attach is not allowed from there");
+                    Detach(session);
+                    session = null;
+                }
+
+                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, ct).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException
@@ -442,22 +459,30 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private bool MayView(Hello hello) =>
+        !hello.Bridged || options.Iso() is not { On: true } iso || iso.MayAttachFrom(hello.Origin);
+
     private async Task HandleAsync(
-        Wire wire, AttachSession? session, MessageType type, byte[] payload, CancellationToken ct)
+        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken ct)
     {
         switch (type)
         {
             case MessageType.Request:
                 {
                     var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
+                    var iso = options.Iso();
 
-                    if (request.Op is RemoteLink.HeadOp or RemoteHeadOp)
+                    if (request.Op == RemoteLink.HeadOp || (request.Op == RemoteHeadOp && !iso.On))
                     {
                         _ = Task.Run(() => AnswerHeadAsync(wire, request, ct), CancellationToken.None);
                         break;
                     }
 
-                    var response = Execute(request, session?.Client);
+                    var response = request.Op == RemoteHeadOp && iso.On
+                        ? new ControlResponse { Id = request.Id, Ok = false, Error = IsoProjection.Refused }
+                        : bridged && iso.On
+                            ? ExecuteIso(request, session?.Client, iso)
+                            : Execute(request, session?.Client);
                     await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
                         .ConfigureAwait(false);
                     break;
@@ -509,6 +534,26 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
     public const string RemoteHeadOp = "remote-head";
+
+    private ControlResponse ExecuteIso(ControlRequest request, string? attachedClient, IsoConfig iso)
+    {
+        List<string> running;
+        lock (_gate)
+        {
+            running = [.. _model.ListWorkspaces(null).Select(w => w.Name)];
+        }
+
+        var codes = IsoCodes.Assign(iso, options.SavedProjects().Concat(running), options.Worktrees);
+
+        if (IsoFilter.Inbound(request, codes) is { } refused)
+        {
+            return new ControlResponse { Id = request.Id, Ok = false, Error = refused };
+        }
+
+        var response = Execute(request, attachedClient);
+        IsoFilter.Outbound(response, codes);
+        return response;
+    }
 
     private async Task AnswerHeadAsync(Wire wire, ControlRequest request, CancellationToken ct)
     {

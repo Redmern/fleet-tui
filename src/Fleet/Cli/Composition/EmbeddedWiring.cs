@@ -96,6 +96,8 @@ public static class EmbeddedWiring
             AlertSettings = () => Adapters.Notices().Settings() is var s ? (s.Bell, s.Toast) : (false, false),
             Toast = (title, body) => Platform.Notifications.DesktopToast.Show(title, body),
             Head = HeadWiring.ServeOrigin(Driver, log),
+            Iso = () => Adapters.Iso().Load(),
+            Worktrees = project => Adapters.Agents().List(project).Select(a => a.Worktree),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
@@ -661,6 +663,23 @@ public static class EmbeddedWiring
         {
             var stdin = Console.OpenStandardInput();
             var stdout = Console.OpenStandardOutput();
+
+            try
+            {
+                if (!await BridgedHello.ForwardAsync(
+                        stdin,
+                        local,
+                        Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable),
+                        Environment.GetEnvironmentVariable(BridgedHello.SshClientVariable)).ConfigureAwait(false))
+                {
+                    return 0;
+                }
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or JsonException)
+            {
+                await Console.Error.WriteLineAsync($"fleet: bridge: {e.Message}").ConfigureAwait(false);
+                return 1;
+            }
 
             var up = stdin.CopyToAsync(local);
             var down = local.CopyToAsync(stdout);
