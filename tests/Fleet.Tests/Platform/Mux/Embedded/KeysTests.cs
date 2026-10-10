@@ -1,9 +1,12 @@
 using System.Text;
+using Fleet.Features.Menu.ShowMenu;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Shared.Keybinds;
 using Fleet.Shared.Keybinds.Enums;
 using Fleet.Shared.Keybinds.Models;
+using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
@@ -98,7 +101,6 @@ public class KeysTests
         Assert.Equal("split-right", keys.PrefixCommand(Key.Digit5, Mods.Shift, "%"));
         Assert.Equal("split-down", keys.PrefixCommand(Key.Quote, Mods.Shift, "\""));
         Assert.Equal("resize left", keys.PrefixCommand(Key.ArrowLeft, Mods.None, null));
-        Assert.Equal("tab 3", keys.PrefixCommand(Key.Digit3, Mods.None, "3"));
         Assert.Equal("menu", keys.DirectCommand(Key.Enter, Mods.Ctrl, null));
         Assert.Equal("smart-focus left", keys.DirectCommand(Key.H, Mods.Ctrl, null));
         Assert.Equal("prev-tab", keys.DirectCommand(Key.ArrowLeft, Mods.Alt, null));
@@ -120,41 +122,67 @@ public class KeysTests
             ["down"] = "resize down",
             ["%"] = "split-right",
             ["\""] = "split-down",
-            ["c"] = "new-tab",
-            ["n"] = "next-tab",
-            ["p"] = "prev-tab",
-            ["1"] = "tab 1",
-            ["2"] = "tab 2",
-            ["3"] = "tab 3",
-            ["4"] = "tab 4",
-            ["5"] = "tab 5",
-            ["6"] = "tab 6",
-            ["7"] = "tab 7",
-            ["8"] = "tab 8",
-            ["9"] = "tab 9",
             ["x"] = "kill-pane",
-            ["&"] = "kill-tab",
             ["z"] = "zoom",
             ["o"] = "next-pane",
-            ["s"] = "switch-project",
             ["space"] = "menu",
             ["["] = "copy-mode",
             ["]"] = "paste",
             ["d"] = "detach",
+            ["Q"] = "menu quit",
             ["f f"] = "float-new",
             ["f t"] = "float-toggle",
             ["f e"] = "float-embed",
             ["f g"] = "float-mode",
             ["w w"] = "next-workspace",
             ["w s"] = "switch-project",
-            ["q d"] = "detach",
-            ["q q"] = "detach",
-            ["q r"] = "reload",
+            ["t c"] = "new-tab",
+            ["t n"] = "next-tab",
+            ["t p"] = "prev-tab",
+            ["t 1"] = "tab 1",
+            ["t 2"] = "tab 2",
+            ["t 3"] = "tab 3",
+            ["t 4"] = "tab 4",
+            ["t 5"] = "tab 5",
+            ["t 6"] = "tab 6",
+            ["t 7"] = "tab 7",
+            ["t 8"] = "tab 8",
+            ["t 9"] = "tab 9",
+            ["t x"] = "kill-tab",
+            ["s p"] = "menu switch-project",
+            ["s w"] = "menu save-session",
+            ["s R"] = "menu remotes",
+            ["s d"] = "detach",
+            ["s q"] = "detach",
+            ["s r"] = "reload",
             ["a m"] = "menu main-pane",
             ["a l"] = "menu list-agents",
             ["a e"] = "menu open-editor",
             ["a f"] = "menu browsefiles",
             ["a n"] = "menu notifications",
+            ["g k"] = "menu keybinds",
+            ["g K"] = "menu show-menu-keys",
+            ["g t"] = "menu button-hints",
+            ["g T"] = "menu theme",
+            ["g c v"] = "menu main-orchestrator-nvim",
+            ["g c V"] = "menu sub-orchestrators-nvim",
+            ["g c N"] = "menu nvim-config",
+            ["g c i"] = "menu auto-close",
+            ["g c A"] = "menu aidlc-mode",
+            ["g c C"] = "menu claude-profile",
+            ["g c e"] = "menu edit-fleet-config",
+            ["g c H"] = "menu head-model",
+            ["g c M"] = "menu main-model",
+            ["g c S"] = "menu sub-model",
+            ["g c R"] = "menu agent-model",
+            ["g c p"] = "menu settings",
+            ["m b"] = "menu rebuild-dashboard",
+            ["m x"] = "menu cleanup",
+            ["m X"] = "menu hide-all",
+            ["m l"] = "menu viewlogs",
+            ["m u"] = "menu update",
+            ["m v"] = "menu version",
+            ["m W"] = "menu whats-new",
         };
         var direct = new Dictionary<string, string>
         {
@@ -307,33 +335,45 @@ public class KeysTests
     }
 
     [Fact]
-    public void Which_key_groups_directions_arrows_and_tab_numbers()
+    public void Which_key_folds_directions_and_arrows_at_the_root_and_tab_numbers_in_the_tabs_group()
     {
-        var entries = WhichKey.For(MuxKeys.Defaults);
+        var keys = MuxKeys.Defaults;
+        var entries = WhichKey.For(keys);
+        var tabs = WhichKey.For(Group(keys, "t"), keys.Prefix);
 
         Assert.Contains(entries, e => e.Key == "h j k l" && e.Label == "focus" && e.Fold && !e.Group);
         Assert.Contains(entries, e => e.Key == "← → ↑ ↓" && e.Label == "resize" && e.Fold && !e.Group);
-        Assert.Contains(entries, e => e.Key == "1-9" && e.Label == "go to tab" && e.Fold && !e.Group);
         Assert.Contains(entries, e => e.Key == "%" && e.Label == "split right");
         Assert.Contains(entries, e => e.Key == "ctrl+s" && e.Label == "send ctrl+s");
-        Assert.DoesNotContain(entries, e => e.Label == "tab 1");
+        Assert.DoesNotContain(entries, e => e.Label == "go to tab");
+        Assert.Equal(
+            [("1-9", "go to tab"), ("c", "new tab"), ("n", "next tab"), ("p", "prev tab"), ("x", "close tab")],
+            tabs.Select(e => (e.Key, e.Label)));
+        Assert.True(tabs[0].Fold);
     }
 
     [Fact]
     public void Default_groups_and_folds_carry_their_nerd_font_icons()
     {
-        var entries = WhichKey.For(MuxKeys.Defaults);
+        var keys = MuxKeys.Defaults;
+        var entries = WhichKey.For(keys);
+        var configure = WhichKey.For(Group(keys, "g"), keys.Prefix);
+        var tabs = WhichKey.For(Group(keys, "t"), keys.Prefix);
 
         Assert.Equal("", entries.Single(e => e.Label == "float").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "project").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "session").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "agents").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "tabs").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "configure").Icon);
+        Assert.Equal("", entries.Single(e => e.Label == "maintenance").Icon);
+        Assert.Equal("", configure.Single(e => e.Label == "fleet config").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "focus").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "resize").Icon);
-        Assert.Equal("", entries.Single(e => e.Label == "go to tab").Icon);
-        Assert.All(entries.Where(e => !(e.Group || e.Fold)), e => Assert.Null(e.Icon));
+        Assert.Equal("", tabs.Single(e => e.Label == "go to tab").Icon);
+        Assert.All(entries.Concat(configure).Where(e => !(e.Group || e.Fold)), e => Assert.Null(e.Icon));
         Assert.All(
-            entries.Where(e => e.Icon is not null),
+            entries.Concat(configure).Concat(tabs).Where(e => e.Icon is not null),
             e => Assert.InRange(e.Icon![0], '', ''));
     }
 
@@ -353,8 +393,8 @@ public class KeysTests
         var keys = MuxKeys.From(
             new MuxKeysFile
             {
-                PrefixKeys = new() { ["g s"] = "split-down" },
-                Icons = new() { ["f"] = "", ["q"] = "none", ["g"] = "", ["w"] = "\U0001F4C1" },
+                PrefixKeys = new() { ["y s"] = "split-down" },
+                Icons = new() { ["f"] = "", ["s"] = "none", ["y"] = "", ["w"] = "\U0001F4C1" },
             },
             null,
             log: lines.Add);
@@ -362,7 +402,7 @@ public class KeysTests
 
         Assert.Equal("", entries.Single(e => e.Label == "float").Icon);
         Assert.Null(entries.Single(e => e.Label == "session").Icon);
-        Assert.Equal("", entries.Single(e => e.Key == "g").Icon);
+        Assert.Equal("", entries.Single(e => e.Key == "y").Icon);
         Assert.Equal("", entries.Single(e => e.Label == "project").Icon);
         Assert.Contains(lines, l => l.Contains("icon for \"w\" ignored", StringComparison.Ordinal));
     }
@@ -374,7 +414,15 @@ public class KeysTests
         var root = WhichKey.For(keys);
 
         Assert.Equal(
-            [("a", "agents"), ("f", "float"), ("q", "session"), ("w", "project")],
+            [
+                ("a", "agents"),
+                ("f", "float"),
+                ("g", "configure"),
+                ("m", "maintenance"),
+                ("s", "session"),
+                ("t", "tabs"),
+                ("w", "project"),
+            ],
             root.Where(e => e.Group).Select(e => (e.Key, e.Label)).Order());
 
         var floats = WhichKey.For(Group(keys, "f"), keys.Prefix);
@@ -403,7 +451,7 @@ public class KeysTests
         var groups = entries.TakeWhile(e => e.Group || e.Fold).ToList();
         var singles = entries.Skip(groups.Count).ToList();
 
-        Assert.Equal(["agents", "float", "focus", "go to tab", "project", "resize", "session"], groups.Select(g => g.Label).Order());
+        Assert.Equal(["agents", "configure", "float", "focus", "maintenance", "project", "resize", "session", "tabs"], groups.Select(g => g.Label).Order());
         Assert.All(singles, e => Assert.False(e.Group || e.Fold));
         Assert.Equal(
             singles.Select(e => e.Key).OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ThenBy(k => k, StringComparer.Ordinal),
@@ -450,7 +498,7 @@ public class KeysTests
         var prefix = new Prefix(KeyChord.Parse("ctrl+s")!.Value);
 
         prefix.OnKey(root, Key.S, Mods.Ctrl);
-        prefix.OnKey(root, Key.Q, Mods.None, "q");
+        prefix.OnKey(root, Key.S, Mods.None, "s");
         Assert.Equal(PrefixCommand.Back, prefix.OnKey(root, Key.Backspace, Mods.None));
         Assert.Same(root, prefix.Node);
         Assert.Equal(PrefixCommand.Cancel, prefix.OnKey(root, Key.Backspace, Mods.None));
@@ -513,7 +561,7 @@ public class KeysTests
         var root = MuxKeys.Defaults.Root;
 
         prefix.Arm(root);
-        Assert.Equal(PrefixCommand.Descend, prefix.OnBytes(root, "q"u8, out _));
+        Assert.Equal(PrefixCommand.Descend, prefix.OnBytes(root, "s"u8, out _));
         Assert.Equal(PrefixCommand.Back, prefix.OnBytes(root, "\x7f"u8, out var back));
         Assert.Equal(1, back);
         Assert.Equal(PrefixCommand.SendPrefix, prefix.OnBytes(root, "\u0013"u8, out var sent));
@@ -556,15 +604,15 @@ public class KeysTests
         var keys = MuxKeys.From(
             new MuxKeysFile
             {
-                PrefixKeys = new() { ["g s"] = "split-down", ["g v"] = "split-right" },
-                Groups = new() { ["g"] = "git-ish stuff" },
+                PrefixKeys = new() { ["y s"] = "split-down", ["y v"] = "split-right" },
+                Groups = new() { ["y"] = "git-ish stuff" },
             },
             null);
 
-        var group = Group(keys, "g");
+        var group = Group(keys, "y");
         Assert.Equal("git-ish stuff", group.Label);
         Assert.Equal(["split-down", "split-right"], group.Leaves.Select(b => b.Command).Order());
-        Assert.Equal(new KeyStep.Enter(group), keys.Root.Match(Key.G, Mods.None, "g"));
+        Assert.Equal(new KeyStep.Enter(group), keys.Root.Match(Key.Y, Mods.None, "y"));
     }
 
     [Fact]
@@ -578,9 +626,9 @@ public class KeysTests
     [Fact]
     public void Unbinding_a_group_drops_it_and_its_children()
     {
-        var keys = MuxKeys.From(new MuxKeysFile { Groups = new() { ["q"] = "none" } }, null);
+        var keys = MuxKeys.From(new MuxKeysFile { Groups = new() { ["s"] = "none" } }, null);
 
-        Assert.DoesNotContain(keys.Root.Groups, g => g.Spec == "q");
+        Assert.DoesNotContain(keys.Root.Groups, g => g.Spec == "s");
         Assert.DoesNotContain(keys.PrefixKeys, b => b.Command == "reload");
         Assert.Equal("detach", keys.PrefixCommand(Key.D, Mods.None, "d"));
     }
@@ -617,11 +665,11 @@ public class KeysTests
     {
         var lines = new List<string>();
         var keys = MuxKeys.From(
-            new MuxKeysFile { PrefixKeys = new() { ["t"] = "float-toggle", ["t x"] = "zoom" } }, null, log: lines.Add);
+            new MuxKeysFile { PrefixKeys = new() { ["y"] = "float-toggle", ["y x"] = "zoom" } }, null, log: lines.Add);
 
-        Assert.Equal("float-toggle", keys.PrefixCommand(Key.T, Mods.None, "t"));
-        Assert.DoesNotContain(keys.Root.Groups, g => g.Spec == "t");
-        Assert.Contains("keys: \"t x\" ignored, \"t\" is already bound", lines);
+        Assert.Equal("float-toggle", keys.PrefixCommand(Key.Y, Mods.None, "y"));
+        Assert.DoesNotContain(keys.Root.Groups, g => g.Spec == "y");
+        Assert.Contains("keys: \"y x\" ignored, \"y\" is already bound", lines);
     }
 
     [Fact]
@@ -652,7 +700,10 @@ public class KeysTests
 
         Check(keys.Root);
         Assert.Equal(MuxKeys.DefaultPrefixKeys.Count, keys.PrefixKeys.Count);
-        Assert.Equal(MuxKeys.DefaultGroups.Keys.Order(), keys.Root.Groups.Select(g => g.Spec).Order());
+        Assert.Equal(
+            MuxKeys.DefaultGroups.Keys.Where(k => !k.Contains(' ')).Order(),
+            keys.Root.Groups.Select(g => g.Spec).Order());
+        Assert.Equal(["c"], Group(keys, "g").Groups.Select(g => g.Spec));
     }
 
     [Fact]
@@ -707,10 +758,141 @@ public class KeysTests
             ["float-embed", "float-mode", "float-new", "float-toggle"],
             Group(keys, "f").Leaves.Select(b => b.Command).Order());
         Assert.Equal(["next-workspace", "switch-project"], Group(keys, "w").Leaves.Select(b => b.Command).Order());
-        Assert.Equal(["detach", "detach", "reload"], Group(keys, "q").Leaves.Select(b => b.Command).Order());
-        Assert.Null(keys.PrefixCommand(Key.T, Mods.None, "t"));
+        Assert.Equal(
+            ["detach", "detach", "menu remotes", "menu save-session", "menu switch-project", "reload"],
+            Group(keys, "s").Leaves.Select(b => b.Command).Order());
+        Assert.Equal(
+            ["kill-tab", "new-tab", "next-tab", "prev-tab", "tab 1", "tab 2", "tab 3", "tab 4", "tab 5", "tab 6", "tab 7", "tab 8", "tab 9"],
+            Group(keys, "t").Leaves.Select(b => b.Command).Order());
         Assert.Null(keys.PrefixCommand(Key.R, Mods.None, "r"));
-        Assert.Equal("switch-project", keys.PrefixCommand(Key.S, Mods.None, "s"));
+        Assert.Equal("detach", keys.PrefixCommand(Key.D, Mods.None, "d"));
+        Assert.Equal("kill-pane", keys.PrefixCommand(Key.X, Mods.None, "x"));
+    }
+
+    [Theory]
+    [InlineData("s")]
+    [InlineData("q")]
+    [InlineData("c")]
+    [InlineData("n")]
+    [InlineData("p")]
+    [InlineData("&")]
+    [InlineData("1")]
+    [InlineData("9")]
+    public void The_old_top_level_session_and_tab_keys_no_longer_run_anything(string key)
+    {
+        var keys = MuxKeys.Defaults;
+
+        Assert.DoesNotContain(keys.Root.Leaves, b => b.Spec == key);
+        Assert.DoesNotContain(MuxKeys.DefaultPrefixKeys.Keys, k => k.StartsWith("q ", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("tc", "new-tab")]
+    [InlineData("tn", "next-tab")]
+    [InlineData("tp", "prev-tab")]
+    [InlineData("t3", "tab 3")]
+    [InlineData("tx", "kill-tab")]
+    [InlineData("sp", "menu switch-project")]
+    [InlineData("sw", "menu save-session")]
+    [InlineData("sR", "menu remotes")]
+    [InlineData("sd", "detach")]
+    [InlineData("sq", "detach")]
+    [InlineData("sr", "reload")]
+    [InlineData("gk", "menu keybinds")]
+    [InlineData("gcH", "menu head-model")]
+    [InlineData("gcp", "menu settings")]
+    [InlineData("mW", "menu whats-new")]
+    [InlineData("ml", "menu viewlogs")]
+    [InlineData("Q", "menu quit")]
+    public void A_group_key_then_an_action_key_runs_the_action(string typed, string command)
+    {
+        var prefix = new Prefix(KeyChord.Parse("ctrl+s")!.Value);
+        var root = MuxKeys.Defaults.Root;
+
+        Assert.Equal([command], Drive(prefix, root, Encoding.ASCII.GetBytes("\u0013" + typed)));
+        Assert.False(prefix.Armed);
+    }
+
+    [Fact]
+    public void Capital_q_quits_fleet_from_the_top_level_and_lower_q_is_free()
+    {
+        var keys = MuxKeys.Defaults;
+
+        Assert.Equal("menu quit", keys.PrefixCommand(Key.Q, Mods.Shift, "Q"));
+        Assert.Null(keys.PrefixCommand(Key.Q, Mods.None, "q"));
+        Assert.DoesNotContain(keys.Root.Groups, g => g.Spec == "q");
+        Assert.Contains(WhichKey.For(keys), e => e.Key == "Q" && e.Label == "quit fleet");
+    }
+
+    [Fact]
+    public void The_fleet_config_group_nests_under_configure_with_its_own_breadcrumb()
+    {
+        var root = MuxKeys.Defaults.Root;
+        var prefix = new Prefix(KeyChord.Parse("ctrl+s")!.Value);
+
+        prefix.Arm(root);
+        Assert.Equal(PrefixCommand.Descend, prefix.OnBytes(root, "g"u8, out _));
+        Assert.Equal(PrefixCommand.Descend, prefix.OnBytes(root, "c"u8, out _));
+        Assert.Equal("ctrl+s › configure › fleet config", prefix.Breadcrumb);
+    }
+
+    [Theory]
+    [InlineData("s", "session")]
+    [InlineData("g", "configure")]
+    [InlineData("m", "maintenance")]
+    public void Each_settings_section_has_a_group_holding_all_its_leaf_actions(string spec, string section)
+    {
+        var keys = MuxKeys.Defaults;
+        var group = Group(keys, spec);
+        var commands = group.Leaves.Select(b => b.Command).ToList();
+        var actions = FleetMenus.Settings.Single(s => s.Header == section).Actions.Where(a => !FleetMenus.IsSubmenu(a));
+
+        Assert.Equal(section, group.Label);
+        Assert.All(actions, a => Assert.Contains("menu " + FleetActionIds.For(a), commands));
+    }
+
+    [Fact]
+    public void The_fleet_config_group_holds_exactly_the_fleet_config_menu_actions()
+    {
+        var keys = MuxKeys.Defaults;
+        var fleetConfig = Group(keys, "c", Group(keys, "g"));
+        var expected = FleetMenus.Actions(FleetMenus.FleetConfig).Select(a => "menu " + FleetActionIds.For(a)).Order();
+
+        Assert.Equal("fleet config", fleetConfig.Label);
+        Assert.Equal(expected, fleetConfig.Leaves.Select(b => b.Command).Order());
+    }
+
+    [Fact]
+    public void Every_default_menu_command_names_a_real_action_and_has_a_short_readable_label()
+    {
+        var menus = MuxKeys.DefaultPrefixKeys.Values.Where(c => c.StartsWith("menu ", StringComparison.Ordinal)).ToList();
+
+        Assert.NotEmpty(menus);
+        Assert.All(menus, c =>
+        {
+            Assert.NotEqual(FleetAction.None, FleetActionIds.Parse(c["menu ".Length..]));
+            var label = WhichKey.Label(c);
+            Assert.False(label.StartsWith("menu ", StringComparison.Ordinal), c);
+            Assert.InRange(label.Length, 1, 30);
+        });
+    }
+
+    [Fact]
+    public void Embedded_keys_can_rebind_unbind_and_relabel_the_new_groups()
+    {
+        var keys = MuxKeys.From(
+            new MuxKeysFile
+            {
+                PrefixKeys = new() { ["m v"] = "none", ["m V"] = "menu version", ["Q"] = "none", ["s Q"] = "menu quit" },
+                Groups = new() { ["g c"] = "fleet" },
+            },
+            null);
+
+        Assert.Equal("menu version", Group(keys, "m").Leaves.Single(b => b.Chord.Label == "V").Command);
+        Assert.DoesNotContain(Group(keys, "m").Leaves, b => b.Chord.Label == "v");
+        Assert.Null(keys.PrefixCommand(Key.Q, Mods.Shift, "Q"));
+        Assert.Equal("menu quit", Group(keys, "s").Leaves.Single(b => b.Chord.Label == "Q").Command);
+        Assert.Equal("fleet", Group(keys, "c", Group(keys, "g")).Label);
     }
 
     [Fact]
