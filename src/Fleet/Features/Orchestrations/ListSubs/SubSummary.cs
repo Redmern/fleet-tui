@@ -61,7 +61,7 @@ public static class SubSummary
 
     private static IEnumerable<string> Sub(AgentRecord sub, IEnumerable<AgentRecord> children, bool open)
     {
-        var status = SubStatus.Derive(sub, children) ?? OrchestrationStatus.Normalize(sub.Status);
+        var status = SubStatus.Shown(sub, children, open);
         var where = open ? "pane open" : "pane closed";
         var hidden = sub.Hidden ? ", hidden" : string.Empty;
 

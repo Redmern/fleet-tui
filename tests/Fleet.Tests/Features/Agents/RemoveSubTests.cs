@@ -1,3 +1,4 @@
+using Fleet.Features.Agents;
 using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
@@ -50,7 +51,7 @@ public sealed class RemoveSubTests : IDisposable
     }
 
     private RemoveSubHandler Handler() =>
-        new(new RemoveAgentHandler(new GitRunner(), _mux, _store), _store);
+        new(new RemoveAgentHandler(new GitRunner(), _mux, _store), _store, _mux);
 
     private static RemoveSubCommand Command(
         string slug = "upgrade", string caller = "", bool deleteFolder = false, bool removeAgents = false) =>
@@ -227,6 +228,7 @@ public sealed class RemoveSubTests : IDisposable
     public async Task A_sub_still_working_is_refused_and_nothing_changes()
     {
         var sub = Sub(status: OrchestrationStatus.Working);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
         var child = await ChildAsync("feature/login");
 
         var result = await Handler().HandleAsync(Command(deleteFolder: true, removeAgents: true));
@@ -241,7 +243,8 @@ public sealed class RemoveSubTests : IDisposable
     [Fact]
     public async Task A_sub_that_never_reported_counts_as_working()
     {
-        Sub(status: string.Empty);
+        var sub = Sub(status: string.Empty);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
 
         var result = await Handler().HandleAsync(Command());
 
@@ -300,6 +303,43 @@ public sealed class RemoveSubTests : IDisposable
         Assert.Empty(await _mux.ListPanesAsync());
         Assert.True(Directory.Exists(sub.Worktree));
         Assert.False(Stored(sub)!.Open);
+    }
+
+    [Fact]
+    public async Task A_stopped_sub_that_still_says_working_can_be_removed()
+    {
+        var sub = Sub(status: OrchestrationStatus.Working);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
+
+        var stopped = await new StopAgentHandler(_mux, _store).HandleAsync(Project, sub);
+        var result = await Handler().HandleAsync(Command());
+
+        Assert.True(stopped.Succeeded, stopped.Error);
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Null(Stored(sub));
+    }
+
+    [Fact]
+    public async Task A_working_sub_whose_pane_is_gone_can_be_removed()
+    {
+        var sub = Sub(status: OrchestrationStatus.Working);
+
+        var result = await Handler().HandleAsync(Command());
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Null(Stored(sub));
+    }
+
+    [Fact]
+    public async Task Only_a_files_pane_left_does_not_keep_a_sub_working()
+    {
+        var sub = Sub(status: OrchestrationStatus.Working);
+        var files = await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
+        _mux.SetPaneTitle(files, SubBrowse.Title(sub));
+
+        var result = await Handler().HandleAsync(Command());
+
+        Assert.True(result.Succeeded, result.Error);
     }
 
     private sealed class MemoryStore : IAgentStore

@@ -41,6 +41,15 @@ public sealed class SubSummaryTests
     }
 
     [Fact]
+    public void A_working_sub_whose_pane_was_stopped_shows_stopped()
+    {
+        var text = Text([Sub("upgrade", OrchestrationStatus.Working), Sub("audit", OrchestrationStatus.Working)], "audit");
+
+        Assert.Contains("upgrade — stopped, pane closed", text);
+        Assert.Contains("audit — working, pane open", text);
+    }
+
+    [Fact]
     public void A_done_sub_shows_idle_until_its_agents_finish_and_failed_if_one_failed()
     {
         var waiting = Text([Sub("upgrade", OrchestrationStatus.Done), Agent("backend", "story", "upgrade")]);
@@ -82,7 +91,7 @@ public sealed class SubSummaryTests
 
         var lines = text.Split('\n');
 
-        Assert.Equal("upgrade — working, pane closed", lines[0]);
+        Assert.Equal("upgrade — stopped, pane closed", lines[0]);
         Assert.Contains("  - backend/story — closed, done", lines);
         Assert.Contains("  - frontend/form — open, no report", lines);
         Assert.DoesNotContain("solo", text);

@@ -1,12 +1,13 @@
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.RemoveAgent;
 
-public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore store)
+public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore store, IMuxDriver mux)
 {
     public static AgentRecord? Find(IReadOnlyList<AgentRecord> agents, string slug) =>
         agents.FirstOrDefault(a => AgentHarness.IsOrchestrator(a.Harness)
@@ -31,11 +32,12 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 + "the orchestrator that dispatched you remove it.");
         }
 
-        if (OrchestrationStatus.Normalize(sub.Status) == OrchestrationStatus.Working)
+        if (OrchestrationStatus.Normalize(sub.Status) == OrchestrationStatus.Working
+            && await RunningAsync(sub, ct).ConfigureAwait(false))
         {
             return Result<SubRemoval>.Fail(
-                $"{sub.Branch} is still working. Wait until it reports done or failed, "
-                + "or remove it from the dashboard's Subs tab.");
+                $"{sub.Branch} is still working. Wait until it reports done or failed, stop it with "
+                + "stop_sub, or remove it from the dashboard's Subs tab.");
         }
 
         var gone = await remover.HandleAsync(command.Project, sub, command.DeleteFolder, ct)
@@ -75,6 +77,13 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
 
         return Result<SubRemoval>.Ok(
             new SubRemoval(sub.Branch, sub.Worktree, command.DeleteFolder, removed, kept, released));
+    }
+
+    private async Task<bool> RunningAsync(AgentRecord sub, CancellationToken ct)
+    {
+        var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+
+        return panes.Any(p => AgentPanes.Owns(p, sub) && !SubBrowse.Is(p));
     }
 
     private async Task<string?> RemoveOrRefuseAsync(string project, AgentRecord child, CancellationToken ct)
