@@ -34,6 +34,8 @@ public sealed class DaemonOptions
 
     public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
 
+    public TimeSpan RevealWhenQuietRemote { get; init; } = TimeSpan.FromMilliseconds(15);
+
     public bool WarmMenus { get; init; }
 
     public TimeProvider Clock { get; init; } = TimeProvider.System;
@@ -1930,6 +1932,18 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private TimeSpan QuietFor(string pane)
+    {
+        var workspace = CallerWorkspace(pane);
+        var viewers = _model.Clients
+            .Where(c => workspace is not null && string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return viewers.Count > 0 && viewers.All(c => _bridged.ContainsKey(c.Id))
+            ? options.RevealWhenQuietRemote
+            : options.RevealWhenQuiet;
+    }
+
     private void Hold(string pane)
     {
         if (_model.Float(pane) is { Hidden: false } box)
@@ -1950,7 +1964,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             var redrawn = box.ReleaseAfterOutput >= 0
                           && _runtimes.TryGetValue(box.Pane, out var runtime)
                           && runtime.Outputs > box.ReleaseAfterOutput
-                          && Environment.TickCount64 - runtime.LastOutputAt >= options.RevealWhenQuiet.TotalMilliseconds;
+                          && Environment.TickCount64 - runtime.LastOutputAt >= QuietFor(box.Pane).TotalMilliseconds;
 
             if (redrawn || DateTime.UtcNow - box.HeldSince > RevealAnyway)
             {
@@ -2017,7 +2031,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         && runtime.Outputs > box.RevealAfterOutput
                         && HasContent(runtime.Screen)
                         && (box.Baseline is null || Signature(runtime.Screen) != box.Baseline)
-                        && Environment.TickCount64 - runtime.LastOutputAt >= options.RevealWhenQuiet.TotalMilliseconds;
+                        && Environment.TickCount64 - runtime.LastOutputAt >= QuietFor(box.Pane).TotalMilliseconds;
 
             if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
             {
