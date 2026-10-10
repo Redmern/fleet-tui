@@ -313,6 +313,42 @@ Notifications always opens this machine's center, whether from the remote's menu
 click on the remote's notice pill, the same way Switch project and the head stay here; only
 fleet used directly on the remote machine opens the remote's own center.
 
+#### Web apps on a remote machine
+
+While a machine is connected, fleet forwards the web apps its projects run to `localhost`
+here, over the same ssh connection (it is the ssh ControlMaster, on a private socket in
+`$XDG_RUNTIME_DIR/fleet` or `/tmp/fleet-<user>`), so there is no second login. Forwards
+always bind `127.0.0.1`. Every few seconds fleet lists the remote's listening ports (`ss`,
+or `/proc/net/tcp`), leaving out ports below 1024 and sshd's own. List the ports a project
+should get in its project config (`projects/<name>.json` in the fleet config folder on the
+remote):
+
+```json
+{ "forwardPorts": [5173, 3000], "runCommand": "npm run dev", "readyPort": 5173, "healthPath": "/" }
+```
+
+Those ports are forwarded on their own while the project runs, and dropped when nothing
+listens on them any more. A local port keeps the remote's number when it is free here,
+otherwise fleet picks another one and always shows the one it used. Other listening ports
+are shown but not forwarded. `p` on a connected machine under **Remote machines** lists its
+ports: `f` forwards one (or a port you type), `u` stops it and `enter` opens it in your
+browser. A project's dashboard shows its ports on a `web` line and `w` opens the first one,
+on the machine you are viewing from. If the link drops while ports are forwarded, fleet
+reconnects and puts them back; disconnecting removes them.
+
+From a terminal: `fleet forward <host> <port> [--local <n>] [--open]`, `fleet forward ls`,
+`fleet forward rm <host> <port>` and `fleet forward open <port>`. `fleet forward start
+<host> <project> [--open]` runs the project's `runCommand` in a pane of that project on the
+remote, waits until `readyPort` (or the first forward port) listens and, with `healthPath`,
+answers 2xx, then forwards it; `fleet forward stop` closes that pane. The head and the
+agents have the same as tools: `list_forwards`, `forward_port`, `unforward_port`, `open_url`,
+`start_stack` and `stop_stack`. This needs OpenSSH control sockets, so not on Windows.
+
+Things that can bite: an app that checks the Host header (Vite's `server.allowedHosts`)
+must allow `localhost`; when the local port differs, hot reload needs its client port set
+(Vite's `server.hmr.clientPort`); projects that share `localhost` share its cookies; and a
+docker `-p` port binds `0.0.0.0` on the remote, so it is reachable there by others too.
+
 ### Sessions
 
 A session is a saved set of projects for one window. **Save session** (`w` in
