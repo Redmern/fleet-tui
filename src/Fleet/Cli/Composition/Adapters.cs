@@ -167,6 +167,8 @@ public static class Adapters
 
     public static Ports.Browser.IBrowserLauncher Browser() => new Platform.Forwards.SystemBrowser();
 
+    public static Ports.Forwards.IListenerProbe ListenerProbe() => new Platform.Forwards.TcpListenerProbe();
+
     public static IDispatchHistory History() => new FileDispatchHistory();
 
     public static IIntentStore Intents() => new JsonIntentStore();
