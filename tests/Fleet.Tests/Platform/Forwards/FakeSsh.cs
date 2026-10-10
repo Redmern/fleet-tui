@@ -10,9 +10,17 @@ public sealed class FakeSsh
 
     public Func<IReadOnlyList<string>, SshResult?> Answer { get; set; } = _ => null;
 
-    public IEnumerable<string> Forwards(string op) =>
-        Calls.Where(c => c.Contains("-O") && c[c.ToList().IndexOf("-O") + 1] == op)
+    public IEnumerable<string> Forwards(string op)
+    {
+        List<IReadOnlyList<string>> calls;
+        lock (Calls)
+        {
+            calls = [.. Calls];
+        }
+
+        return calls.Where(c => c.Contains("-O") && c[c.ToList().IndexOf("-O") + 1] == op)
             .Select(c => c[c.ToList().IndexOf("-L") + 1]);
+    }
 
     public Task<SshResult> RunAsync(IReadOnlyList<string> arguments, CancellationToken ct)
     {

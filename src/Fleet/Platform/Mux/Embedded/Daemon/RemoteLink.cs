@@ -393,11 +393,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
             _wire = null;
             Pty.Exit();
             channel?.Owner.Dispose();
-
-            foreach (var waiting in _pending.Values)
-            {
-                waiting.TrySetException(new IOException("the remote went away"));
-            }
+            FailPending();
         }
     }
 
@@ -463,6 +459,10 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
         request.Id = Interlocked.Increment(ref _nextId);
         var reply = new TaskCompletionSource<ControlResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pending[request.Id] = reply;
+        if (_readerEnded)
+        {
+            FailPending();
+        }
 
         try
         {
@@ -506,8 +506,24 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
             }
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException or EndOfStreamException
-                                      or InvalidDataException or System.Text.Json.JsonException)
+                                      or InvalidDataException or System.Text.Json.JsonException
+                                      or OperationCanceledException)
         {
+        }
+        finally
+        {
+            _readerEnded = true;
+            FailPending();
+        }
+    }
+
+    private volatile bool _readerEnded;
+
+    private void FailPending()
+    {
+        foreach (var waiting in _pending.Values)
+        {
+            waiting.TrySetException(new IOException("the remote went away"));
         }
     }
 

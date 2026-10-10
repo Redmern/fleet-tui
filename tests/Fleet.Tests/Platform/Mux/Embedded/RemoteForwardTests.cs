@@ -310,6 +310,41 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_scan_that_finishes_after_the_link_dropped_does_not_stop_the_retries()
+    {
+        await OpenFarProjectAsync();
+        _ssh.Listening = Web;
+        using var home = new EmbeddedDriver(_home);
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await ForwardsAsync(_home)).Any(f => f is { RemotePort: 5173, State: "forwarded" }));
+
+        using var scanning = new SemaphoreSlim(0);
+        using var release = new ManualResetEventSlim();
+        _ssh.Answer = args =>
+        {
+            if (!args.Contains("-O"))
+            {
+                scanning.Release();
+                release.Wait();
+            }
+
+            return null;
+        };
+        await scanning.WaitAsync();
+
+        _unreachable = true;
+        var before = Volatile.Read(ref _opens);
+        Assert.True(_links.TryDequeue(out var first));
+        await first.DisposeAsync();
+        await Eventually(() => Task.FromResult(Volatile.Read(ref _opens) >= before + 1));
+        release.Set();
+        await Eventually(() => Task.FromResult(Volatile.Read(ref _opens) >= before + 3));
+
+        _unreachable = false;
+        await Eventually(async () => (await ForwardsAsync(_home)).Any(f => f is { RemotePort: 5173, State: "forwarded", LocalPort: 5173 }));
+    }
+
+    [Fact]
     public async Task Starting_a_stack_whose_pane_died_runs_it_again()
     {
         _ssh.Answer = args => args.Contains("-O") || _farPanes.ByProgram("sh") is null

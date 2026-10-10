@@ -606,6 +606,40 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         Assert.Equal(new SwitchTarget("pc"), tabs.Targets[tabs.ThisMachine][1]);
     }
 
+    [Fact]
+    public async Task A_link_that_drops_while_a_request_waits_for_its_answer_ends_at_once()
+    {
+        var remote = NewEndpoint();
+        using var listener = remote.Listen();
+        var server = Task.Run(async () =>
+        {
+            await using var stream = await listener.AcceptAsync(_stop.Token);
+            using var wire = new Wire(stream);
+            await wire.ReceiveAsync(_stop.Token);
+            await wire.SendAsync(MessageType.Welcome, new Welcome { Version = Wire.Version }, WireJsonContext.Default.Welcome, _stop.Token);
+            while (await wire.ReceiveAsync(_stop.Token) is { Type: MessageType.Request } message)
+            {
+                var request = Wire.Read(message.Payload, WireJsonContext.Default.ControlRequest);
+                if (request.Op == "list-workspaces")
+                {
+                    return;
+                }
+
+                await wire.SendAsync(MessageType.Response, new ControlResponse { Id = request.Id, Ok = true }, WireJsonContext.Default.ControlResponse, _stop.Token);
+            }
+        });
+        var link = new RemoteLink("red@far", _ =>
+        {
+            var stream = remote.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+            return new RemoteChannel(stream, null, stream);
+        }, _ => { });
+
+        var run = link.RunAsync(_stop.Token);
+        await server;
+
+        Assert.Same(run, await Task.WhenAny(run, Task.Delay(RemoteLink.AnswerWithin / 2)));
+    }
+
     private sealed class SilentStream : Stream
     {
         public override bool CanRead => true;
