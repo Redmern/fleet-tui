@@ -29,13 +29,29 @@ public sealed class RemoteSshArgumentsTests
         var link = EmbeddedWiring.RemoteSsh("box", "token", new Fleet.Platform.Mux.Embedded.Daemon.Endpoint("/tmp/fleet-test.sock"));
 
         Assert.Equal("ssh", attach.FileName);
-        Assert.Equal(link.ArgumentList, attach.ArgumentList);
+        Assert.Equal(WithoutControlPath(link.ArgumentList), WithoutControlPath(attach.ArgumentList));
         Assert.Equal(["box", "fleet", "bridge"], attach.ArgumentList.TakeLast(3));
-        if (EmbeddedWiring.ControlSocket("box") is { } socket)
+        if (EmbeddedWiring.ControlSocket(EmbeddedWiring.AttachSocketKey("box")) is { } socket)
         {
+            Assert.Contains("ControlMaster=yes", attach.ArgumentList);
             Assert.Contains($"ControlPath={socket}", attach.ArgumentList);
         }
     }
+
+    // An attach that starts first must not become the master the link's port forwards ride on.
+    [Fact]
+    public void Attach_over_ssh_masters_its_own_socket_not_the_links()
+    {
+        var attach = EmbeddedWiring.AttachSsh("box");
+
+        if (EmbeddedWiring.ControlSocket("box") is { } linkSocket)
+        {
+            Assert.DoesNotContain($"ControlPath={linkSocket}", attach.ArgumentList);
+        }
+    }
+
+    private static IEnumerable<string> WithoutControlPath(IEnumerable<string> args) =>
+        args.Where(a => !a.StartsWith("ControlPath=", StringComparison.Ordinal));
 
     [Fact]
     public void Attach_over_ssh_keeps_its_terminal_for_password_prompts()

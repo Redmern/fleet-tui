@@ -749,7 +749,7 @@ public static class EmbeddedWiring
             RedirectStandardError = true,
         };
 
-        foreach (var arg in BridgeSshArguments(host))
+        foreach (var arg in BridgeSshArguments(host, host))
         {
             start.ArgumentList.Add(arg);
         }
@@ -771,7 +771,7 @@ public static class EmbeddedWiring
             RedirectStandardError = false,
         };
 
-        foreach (var arg in BridgeSshArguments(host))
+        foreach (var arg in BridgeSshArguments(host, AttachSocketKey(host)))
         {
             start.ArgumentList.Add(arg);
         }
@@ -779,9 +779,11 @@ public static class EmbeddedWiring
         return start;
     }
 
-    private static IReadOnlyList<string> BridgeSshArguments(string host)
+    public static string AttachSocketKey(string host) => "attach " + host;
+
+    private static IReadOnlyList<string> BridgeSshArguments(string host, string socketKey)
     {
-        var socket = ControlSocket(host);
+        var socket = ControlSocket(socketKey);
         if (socket is not null)
         {
             ControlPaths.Reclaim(socket, ControlPaths.Answers);
