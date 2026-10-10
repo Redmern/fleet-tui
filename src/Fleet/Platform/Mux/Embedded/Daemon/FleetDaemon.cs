@@ -820,12 +820,11 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
     private string? ViewerOf(string? client, string? shown) =>
-        client is not null
-            ? IsViewer(client) ? client : null
-            : Showing(_sessions.Keys.Where(IsViewer), shown);
+        (client ?? Showing(_sessions.Keys.Where(IsViewer), shown)) is { } viewer && IsViewer(viewer) && !_cannotForward.Contains(viewer)
+            ? viewer
+            : null;
 
-    private bool IsViewer(string client) =>
-        _sessions.ContainsKey(client) && _model.Client(client)?.Label is not null && !_cannotForward.Contains(client);
+    private bool IsViewer(string client) => _sessions.ContainsKey(client) && _model.Client(client)?.Label is not null;
 
     private string? SshOf(string? client, string? shown) =>
         client is not null
