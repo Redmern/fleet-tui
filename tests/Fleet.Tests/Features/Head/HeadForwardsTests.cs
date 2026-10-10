@@ -46,11 +46,36 @@ public sealed class HeadForwardsTests
     }
 
     [Fact]
-    public async Task Forward_tools_refuse_the_local_machine_and_bad_ports()
+    public async Task Forward_tools_refuse_bad_ports()
     {
-        Assert.True((await Service().HandleAsync(Call(HeadTools.ForwardPort, ("port", "5173")))).IsError);
         Assert.True((await Service().HandleAsync(Call(HeadTools.ForwardPort, ("remote", "lab"), ("port", "http")))).IsError);
+        Assert.True((await Service().HandleAsync(Call(HeadTools.ForwardPort, ("port", "http")))).IsError);
         Assert.Empty(_forwards.Calls);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("local")]
+    public async Task Forward_port_on_this_machine_goes_to_the_machine_viewing_it(string? remote)
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null);
+        (string, string)[] args = remote is null ? [("port", "5173")] : [("remote", remote), ("port", "5173")];
+
+        var forwarded = await Service().HandleAsync(Call(HeadTools.ForwardPort, args));
+        var unforwarded = await Service().HandleAsync(Call(HeadTools.UnforwardPort, args));
+
+        Assert.False(forwarded.IsError, forwarded.Text);
+        Assert.False(unforwarded.IsError, unforwarded.Text);
+        Assert.Equal(["viewer-forward 5173", "viewer-unforward 5173"], _forwards.Calls);
+    }
+
+    [Fact]
+    public async Task Forward_port_on_this_machine_without_a_viewer_is_an_error()
+    {
+        var result = await Service().HandleAsync(Call(HeadTools.ForwardPort, ("port", "5173")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("no machine views this one", result.Text, StringComparison.Ordinal);
     }
 
     [Fact]

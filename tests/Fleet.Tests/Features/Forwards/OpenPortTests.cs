@@ -118,7 +118,7 @@ public sealed class OpenPortTests
     [InlineData("")]
     [InlineData("garbage")]
     public void A_missing_or_broken_ssh_connection_gives_no_command(string? connection) =>
-        Assert.Null(OpenPortHandler.SshCommand(5272, "red", connection));
+        Assert.Null(new ViewerForward(null, connection).SshCommand(5272, "red"));
 
     [Fact]
     public async Task When_nothing_listens_it_says_so_and_still_opens()

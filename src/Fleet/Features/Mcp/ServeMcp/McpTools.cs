@@ -21,6 +21,14 @@ public static class McpTools
     private static readonly ToolParam Remote =
         new(ToolArguments.Remote, "string", "The remote machine's ssh host or nickname.", true);
 
+    private static readonly ToolParam ViewerRemote =
+        new(
+            ToolArguments.Remote,
+            "string",
+            "The remote machine's ssh host or nickname; leave out for a port on this machine, which the machine "
+            + "viewing this one then forwards and opens.",
+            false);
+
     private static readonly ToolParam Port =
         new(ToolArguments.Port, "integer", "The port the web app listens on, on the remote machine.", true);
 
@@ -165,11 +173,16 @@ public static class McpTools
             + "that are not forwarded. On a machine viewed from another, lists the ports that machine forwards."),
         Spec(
             HarnessTool.ForwardPort,
-            "Forward a remote machine's port to localhost here (127.0.0.1 only) over fleet's ssh link.",
-            Remote,
+            "Forward a remote machine's port to localhost here (127.0.0.1 only) over fleet's ssh link; without "
+            + "remote, forward this machine's port to the machine viewing it and open it there.",
+            ViewerRemote,
             Port,
             new ToolParam(ToolArguments.LocalPort, "integer", "The local port to use instead of the same number.", false)),
-        Spec(HarnessTool.UnforwardPort, "Stop forwarding a remote machine's port.", Remote, Port),
+        Spec(
+            HarnessTool.UnforwardPort,
+            "Stop forwarding a remote machine's port; without remote, the machine viewing this one stops forwarding it.",
+            ViewerRemote,
+            Port),
         Spec(
             HarnessTool.OpenUrl,
             "Open a forwarded port in the user's browser; on a machine viewed from another, opens it there.",

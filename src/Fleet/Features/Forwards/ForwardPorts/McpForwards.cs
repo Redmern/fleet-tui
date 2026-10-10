@@ -27,7 +27,6 @@ public static class McpForwards
 
         string? missing = verb switch
         {
-            ForwardVerb.Add or ForwardVerb.Remove when remote.Length == 0 => Remote,
             ForwardVerb.Add or ForwardVerb.Remove or ForwardVerb.Open when port is null => Port,
             ForwardVerb.Start or ForwardVerb.Stop when remote.Length == 0 => Remote,
             ForwardVerb.Start or ForwardVerb.Stop when project.Length == 0 => Project,

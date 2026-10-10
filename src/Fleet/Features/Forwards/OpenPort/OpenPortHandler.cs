@@ -20,11 +20,6 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
             ? Result<int>.Ok(port)
             : Result<int>.Fail($"'{typed}' is not a port; type a whole number in 1-65535.");
 
-    public static string? SshCommand(int port, string user, string? sshConnection) =>
-        sshConnection?.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [_, _, var host, var sshPort]
-            ? $"ssh -N -L {port}:localhost:{port}{(sshPort == "22" ? string.Empty : $" -p {sshPort}")} {user}@{host}"
-            : null;
-
     public async Task<OpenPortOutcome> HandleAsync(int port, CancellationToken ct = default)
     {
         var listening = await probe.ListeningAsync(port, ct).ConfigureAwait(false);
@@ -48,7 +43,7 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
             return new OpenPortOutcome(port, listening, OpenPortRoute.Viewer, lines);
         }
 
-        if (SshCommand(port, user, sent.SshConnection) is { } command)
+        if (sent.SshCommand(port, user) is { } command)
         {
             lines.Add($"Run this on the machine you view fleet from, then open {url} there:");
             return new OpenPortOutcome(port, listening, OpenPortRoute.Ssh, lines, command);
