@@ -846,6 +846,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 _menuWaits.Remove(pane, out var replaced);
                 replaced?.TrySetCanceled();
                 _menuWaits[pane] = waiting;
+                options.Log($"{pane} waits to open");
             }
         }
 
@@ -2113,6 +2114,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
             {
                 box.Hidden = false;
+                options.Log($"{box.Pane} revealed {(drawn ? "after drawing" : "after waiting")}");
                 _timing?.Revealed(box.Pane);
             }
             else
@@ -2247,9 +2249,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                 && (action is null || _menuWaits.ContainsKey(warm.Pane))
                 && _model.Unpark(warm.Pane))
             {
-                if (_menuWaits.Remove(warm.Pane, out var waiting))
+                if (action is not null)
                 {
                     HideUntilRedrawn(warm);
+                }
+
+                if (_menuWaits.Remove(warm.Pane, out var waiting))
+                {
                     waiting.TrySetResult(action);
                 }
 

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
@@ -12,6 +13,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
 {
     private readonly FakePanes _panes = new();
     private readonly SimulatedLinkClock _clock = new();
+    private readonly ConcurrentQueue<string> _log = new();
     private readonly List<DaemonTests.TestClient> _clients = [];
     private readonly CancellationTokenSource _stop = new();
     private Endpoint _endpoint = null!;
@@ -29,6 +31,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
             FleetExecutable = "fleet",
             WarmMenus = true,
             Clock = _clock,
+            Log = _log.Enqueue,
         });
         _running = daemon.RunAsync(_stop.Token);
         return Task.CompletedTask;
@@ -110,6 +113,14 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         await Eventually(() => Menus == 2);
     }
 
+    private static string PaneOf(FakePanes.FakePty pty) => pty.Env[FleetDaemon.PaneVariable];
+
+    private Task Logged(string line) => Eventually(() => _log.Contains(line));
+
+    private Task Settled(FakePanes.FakePty warm) => Logged($"{PaneOf(warm)} revealed after waiting");
+
+    private Task Waiting(FakePanes.FakePty warm) => Logged($"{PaneOf(warm)} waits to open");
+
     private static Task<ControlResponse> WaitForOpen(DaemonTests.TestClient control, FakePanes.FakePty menu) =>
         control.RequestAsync(new ControlRequest { Op = FleetDaemon.MenuWaitOp, Caller = menu.Env[FleetDaemon.PaneVariable] });
 
@@ -117,9 +128,9 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
     public async Task A_menu_opened_with_an_action_switches_a_waiting_warm_menu_to_it()
     {
         var (control, client, warm) = await WarmAsync();
-        await Task.Delay(FleetDaemon.RevealAnyway - FleetDaemon.RevealAfterFit + TimeSpan.FromMilliseconds(200));
+        await Settled(warm);
         var waiting = WaitForOpen(control, warm);
-        await Task.Delay(100);
+        await Waiting(warm);
         Assert.False(waiting.IsCompleted);
 
         await client.SendCommandAsync("menu", "switch-project");
@@ -127,7 +138,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         var opened = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(opened.Ok, opened.Error);
         Assert.Equal("switch-project", opened.Text);
-        await Task.Delay(200);
+        await Eventually(() => _log.Any(l => l.Contains($"warm menu {PaneOf(warm)} for switch-project", StringComparison.Ordinal)));
         warm.Emit("\u001b[2J\u001b[HACTION-SCREEN\nprojects\n");
         await client.WaitForAsync("ACTION-SCREEN");
         Assert.DoesNotContain(client.Frames.TakeWhile(f => !f.Contains("ACTION-SCREEN")), f => f.Contains("WARM-MENU"));
@@ -139,7 +150,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
     {
         var (control, client, warm) = await WarmAsync();
         var waiting = WaitForOpen(control, warm);
-        await Task.Delay(100);
+        await Waiting(warm);
 
         await client.SendCommandAsync("menu");
 
@@ -147,6 +158,21 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         Assert.True(opened.Ok, opened.Error);
         Assert.Null(opened.Text);
         await client.WaitForAsync("WARM-MENU");
+    }
+
+    [Fact]
+    public async Task A_plain_open_shows_a_settled_waiting_warm_menu_at_once()
+    {
+        var (control, client, warm) = await WarmAsync();
+        await Settled(warm);
+        _ = WaitForOpen(control, warm);
+        await Waiting(warm);
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        await client.SendCommandAsync("menu");
+        await client.WaitForAsync("WARM-MENU");
+
+        Assert.True(clock.Elapsed < FleetDaemon.RevealAnyway / 2, $"shown after {clock.ElapsedMilliseconds} ms");
     }
 
     [Fact]
@@ -168,7 +194,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         var (_, client, warm) = await WarmAsync();
         using var driver = new EmbeddedDriver(_endpoint);
         var waiting = driver.WaitForMenuOpenAsync(new PaneId(warm.Env[FleetDaemon.PaneVariable]));
-        await Task.Delay(100);
+        await Waiting(warm);
         Assert.False(waiting.IsCompleted);
 
         await client.SendCommandAsync("menu", "notifications");
@@ -193,7 +219,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
     {
         var (control, _, warm) = await WarmAsync();
         var first = WaitForOpen(control, warm);
-        await Task.Delay(100);
+        await Waiting(warm);
 
         _ = WaitForOpen(control, warm);
 
