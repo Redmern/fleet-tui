@@ -94,6 +94,12 @@ public static class MenuCommand
             return await PickProjectCommand.RunAsync(startNew: requested == FleetAction.NewProject).ConfigureAwait(false);
         }
 
+        if (RunsHeadless(requested))
+        {
+            Adapters.Toggles().Toggle(project.Name, requested);
+            return 0;
+        }
+
         var keymaps = Adapters.Keymaps();
         var adder = new AddRepositoryHandler(Adapters.Git());
 
@@ -138,6 +144,8 @@ public static class MenuCommand
     }
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
+
+    public static bool RunsHeadless(FleetAction action) => FleetMenus.IsToggle(action);
 
     public static Pane? DashboardPane(IReadOnlyList<Pane> panes, string root, string? dashPane)
     {
@@ -412,15 +420,6 @@ public static class MenuCommand
                             return null;
                         });
 
-                    break;
-                }
-
-            case FleetAction.EditMainOrchestratorInNvim:
-            case FleetAction.EditSubOrchestratorsInNvim:
-                {
-                    var hostSettings = Adapters.Settings();
-
-                    hostSettings.Save(project.Name, FleetMenus.Flip(chosen, hostSettings.Load(project.Name)));
                     break;
                 }
 
