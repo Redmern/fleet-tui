@@ -161,6 +161,7 @@ public static class MenuCommand
         var settings = Adapters.Settings();
         var current = settings.Load(project.Name);
         var head = Adapters.HeadModel();
+        var toggles = Adapters.Toggles();
 
         return FleetUi.Menu(
             app,
@@ -170,11 +171,7 @@ public static class MenuCommand
             action => FleetMenus.Value(action, current, head),
             action =>
             {
-                current = FleetMenus.Flip(action, current);
-                settings.Save(project.Name, current);
-                Adapters.SaveShowMenuKeys(current.ShowMenuKeys);
-                Adapters.SaveNvimConfig(current.Nvim);
-                Adapters.SaveButtonHints(current.ButtonHints);
+                current = toggles.Flip(project.Name, action, current);
                 return FleetMenus.Value(action, current, head);
             },
             () => current.ShowMenuKeys,
