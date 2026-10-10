@@ -66,4 +66,5 @@ public enum FleetAction
     WhatsNew,
     HideAllAgents,
     OpenWebApp,
+    OpenPort,
 }

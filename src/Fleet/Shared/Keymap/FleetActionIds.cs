@@ -57,6 +57,7 @@ public static class FleetActionIds
         FleetAction.WhatsNew => "whats-new",
         FleetAction.HideAllAgents => "hide-all",
         FleetAction.OpenWebApp => "open-web-app",
+        FleetAction.OpenPort => "open-port",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -111,6 +112,7 @@ public static class FleetActionIds
         "whats-new" => FleetAction.WhatsNew,
         "hide-all" => FleetAction.HideAllAgents,
         "open-web-app" => FleetAction.OpenWebApp,
+        "open-port" => FleetAction.OpenPort,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };

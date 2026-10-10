@@ -10,6 +10,7 @@ public static class BridgedHello
     {
         hello.Bridged = true;
         hello.Origin = Origin(sshConnection) ?? Origin(sshClient);
+        hello.Ssh = sshConnection;
         return hello;
     }
 

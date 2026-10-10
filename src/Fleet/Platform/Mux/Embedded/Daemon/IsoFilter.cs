@@ -27,6 +27,8 @@ public static class IsoFilter
         "open-window",
         "window",
         "hand-back",
+        ForwardHub.ViewerForwardOp,
+        ForwardHub.ViewerUnforwardOp,
     };
 
     public static bool IsServed(string op) => Served.Contains(op);

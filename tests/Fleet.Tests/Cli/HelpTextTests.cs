@@ -13,6 +13,7 @@ public class HelpTextTests
     [InlineData("m maintenance")]
     [InlineData("Q quit fleet")]
     [InlineData("r reload keys")]
+    [InlineData("o open port")]
     [InlineData("x close tab")]
     public void Fleet_help_documents_the_ctrl_s_groups(string text) =>
         Assert.Contains(text, HelpCommand.Text, StringComparison.Ordinal);

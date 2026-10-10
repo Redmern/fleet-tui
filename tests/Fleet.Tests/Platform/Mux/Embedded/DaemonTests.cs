@@ -1348,13 +1348,12 @@ public sealed class DaemonTests : IAsyncLifetime
         public string? Farewell { get; private set; }
 
         public static async Task<TestClient> ConnectAsync(
-            Endpoint endpoint, string role, int cols, int rows, string? workspace, bool bridged = false)
+            Endpoint endpoint, string role, int cols, int rows, string? workspace, bool bridged = false, Action<Hello>? furnish = null)
         {
             var wire = new Wire(await endpoint.ConnectAsync(TimeSpan.FromSeconds(5)));
-            await wire.SendAsync(
-                MessageType.Hello,
-                new Hello { Version = Wire.Version, Role = role, Cols = cols, Rows = rows, Workspace = workspace, Os = "test", Bridged = bridged },
-                WireJsonContext.Default.Hello);
+            var hello = new Hello { Version = Wire.Version, Role = role, Cols = cols, Rows = rows, Workspace = workspace, Os = "test", Bridged = bridged };
+            furnish?.Invoke(hello);
+            await wire.SendAsync(MessageType.Hello, hello, WireJsonContext.Default.Hello);
 
             var welcome = await wire.ReceiveAsync();
             Assert.Equal(MessageType.Welcome, welcome!.Value.Type);

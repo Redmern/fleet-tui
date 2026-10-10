@@ -15,7 +15,7 @@ public static class ForwardCommand
             return 2;
         }
 
-        var handler = new ForwardPortsHandler(Adapters.Forwards(), Adapters.Browser(), Adapters.KnownRemotes());
+        var handler = new ForwardPortsHandler(Adapters.Forwards(), Adapters.Browser(), Adapters.KnownRemotes(), Environment.UserName);
         var result = await handler.HandleAsync(order.Value).ConfigureAwait(false);
 
         if (!result.Succeeded)

@@ -41,11 +41,51 @@ public sealed class RemoteSshArgumentsTests
     [Fact]
     public void The_attach_ssh_asks_for_low_delay_and_keeps_the_link_alive()
     {
-        var args = EmbeddedWiring.AttachSshArguments("box", "fleet");
+        var args = EmbeddedWiring.AttachSsh("box").ArgumentList;
 
         Assert.Contains("IPQoS=lowdelay", args);
         Assert.Contains("ServerAliveInterval=15", args);
         Assert.Equal(["-T"], args.Take(1));
         Assert.Equal(["box", "fleet", "bridge"], args.TakeLast(3));
+    }
+
+    [Fact]
+    public void Attach_over_ssh_uses_the_same_ssh_arguments_and_control_master_as_a_remote_link()
+    {
+        var attach = EmbeddedWiring.AttachSsh("box");
+        var link = EmbeddedWiring.RemoteSsh("box", "token", new Fleet.Platform.Mux.Embedded.Daemon.Endpoint("/tmp/fleet-test.sock"));
+
+        Assert.Equal("ssh", attach.FileName);
+        Assert.Equal(WithoutControlPath(link.ArgumentList), WithoutControlPath(attach.ArgumentList));
+        Assert.Equal(["box", "fleet", "bridge"], attach.ArgumentList.TakeLast(3));
+        if (EmbeddedWiring.ControlSocket(EmbeddedWiring.AttachSocketKey("box")) is { } socket)
+        {
+            Assert.Contains("ControlMaster=yes", attach.ArgumentList);
+            Assert.Contains($"ControlPath={socket}", attach.ArgumentList);
+        }
+    }
+
+    // An attach that starts first must not become the master the link's port forwards ride on.
+    [Fact]
+    public void Attach_over_ssh_masters_its_own_socket_not_the_links()
+    {
+        var attach = EmbeddedWiring.AttachSsh("box");
+
+        if (EmbeddedWiring.ControlSocket("box") is { } linkSocket)
+        {
+            Assert.DoesNotContain($"ControlPath={linkSocket}", attach.ArgumentList);
+        }
+    }
+
+    private static IEnumerable<string> WithoutControlPath(IEnumerable<string> args) =>
+        args.Where(a => !a.StartsWith("ControlPath=", StringComparison.Ordinal));
+
+    [Fact]
+    public void Attach_over_ssh_keeps_its_terminal_for_password_prompts()
+    {
+        var attach = EmbeddedWiring.AttachSsh("box");
+
+        Assert.False(attach.RedirectStandardError);
+        Assert.False(attach.Environment.ContainsKey("SSH_ASKPASS"));
     }
 }

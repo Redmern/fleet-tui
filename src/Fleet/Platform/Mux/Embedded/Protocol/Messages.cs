@@ -69,6 +69,9 @@ public sealed class Hello
 
     [JsonPropertyName("origin")]
     public string? Origin { get; set; }
+
+    [JsonPropertyName("ssh")]
+    public string? Ssh { get; set; }
 }
 
 public sealed class WindowEntryDto
@@ -269,6 +272,10 @@ public static class HostEffects
     public const string HandBack = "hand-back";
 
     public const string OpenUrl = "open-url";
+
+    public const string ForwardPort = "forward-port";
+
+    public const string UnforwardPort = "unforward-port";
 }
 
 public sealed class HostEffect
@@ -527,6 +534,12 @@ public sealed class ControlResponse
 
     [JsonPropertyName("projectConfigs")]
     public List<ProjectConfigDto>? ProjectConfigs { get; set; }
+
+    [JsonPropertyName("viewer")]
+    public string? Viewer { get; set; }
+
+    [JsonPropertyName("ssh")]
+    public string? Ssh { get; set; }
 }
 
 public sealed class NoticeDto

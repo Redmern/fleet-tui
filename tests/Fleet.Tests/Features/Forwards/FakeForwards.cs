@@ -46,6 +46,22 @@ public sealed class FakeForwards : IPortForwards
         Calls.Add($"viewer-open {remotePort}");
         return Task.CompletedTask;
     }
+
+    public ViewerForward Viewer { get; set; } = new(null, null);
+
+    public Exception? ViewerFails { get; set; }
+
+    public Task<ViewerForward> ForwardToViewerAsync(int port, CancellationToken ct = default)
+    {
+        Calls.Add($"viewer-forward {port}");
+        return ViewerFails is { } failed ? Task.FromException<ViewerForward>(failed) : Task.FromResult(Viewer);
+    }
+
+    public Task<ViewerForward> UnforwardFromViewerAsync(int port, CancellationToken ct = default)
+    {
+        Calls.Add($"viewer-unforward {port}");
+        return ViewerFails is { } failed ? Task.FromException<ViewerForward>(failed) : Task.FromResult(Viewer);
+    }
 }
 
 public sealed class FakeBrowser : IBrowserLauncher

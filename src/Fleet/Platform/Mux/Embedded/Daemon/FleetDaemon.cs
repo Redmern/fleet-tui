@@ -90,6 +90,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Hello> _bridged = new(StringComparer.Ordinal);
     private readonly ForwardHub _hub = new(options.Forwards, options.Log);
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _sshOf = new(StringComparer.Ordinal);
     private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
@@ -296,6 +297,19 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case ForwardHub.ViewerOpenOp:
                         OpenOnViewer(request.Port);
                         break;
+                    case ForwardHub.ViewerForwardOp:
+                    case ForwardHub.ViewerUnforwardOp:
+                        {
+                            var client = ClientFor(request, attachedClient);
+                            var shown = CallerWorkspace(request.Caller);
+                            response.Viewer = ToViewer(
+                                client,
+                                shown,
+                                request.Op == ForwardHub.ViewerForwardOp ? HostEffects.ForwardPort : HostEffects.UnforwardPort,
+                                request.Port);
+                            response.Ssh = response.Viewer is null ? SshOf(client, shown) : null;
+                            break;
+                        }
                     case "list-remotes":
                         response.Remotes = [.. _remotes.Values.Select(r => r.Snapshot())];
                         break;
@@ -446,6 +460,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                     if (hello.Bridged)
                     {
                         _bridged[client.Id] = hello;
+                    }
+
+                    if (hello.Ssh is { Length: > 0 } ssh)
+                    {
+                        _sshOf[client.Id] = ssh;
                     }
 
                     Furnish(client.Id, hello);
@@ -774,6 +793,44 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         _sessions[viewer].Pending.Enqueue(new HostEffect { Kind = HostEffects.OpenUrl, Value = port.ToString(System.Globalization.CultureInfo.InvariantCulture) });
         _wake.Release();
+    }
+
+    private string? ToViewer(string? client, string? shown, string kind, int port)
+    {
+        if (port is < 1 or > 65535)
+        {
+            throw new InvalidOperationException($"{port} is not a port");
+        }
+
+        if (ViewerOf(client, shown) is not { } viewer)
+        {
+            return null;
+        }
+
+        _sessions[viewer].Pending.Enqueue(new HostEffect { Kind = kind, Value = port.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+        _wake.Release();
+        options.Log($"{viewer}: {kind} {port} sent to the machine viewing this one");
+        return _viewerForwards.GetValueOrDefault(viewer)?.FirstOrDefault()?.Host ?? "the machine viewing this one";
+    }
+
+    private string? ViewerOf(string? client, string? shown) =>
+        client is not null
+            ? IsViewer(client) ? client : null
+            : Showing(_sessions.Keys.Where(IsViewer), shown);
+
+    private bool IsViewer(string client) => _sessions.ContainsKey(client) && _model.Client(client)?.Label is not null;
+
+    private string? SshOf(string? client, string? shown) =>
+        client is not null
+            ? _sshOf.GetValueOrDefault(client)
+            : Showing(_sshOf.Keys, shown) is { } showing ? _sshOf[showing] : null;
+
+    private string? Showing(IEnumerable<string> clients, string? shown)
+    {
+        var candidates = clients.ToList();
+        return candidates.FirstOrDefault(c => shown is not null && _model.Client(c)?.Showing == shown)
+            ?? candidates.FirstOrDefault(_viewerForwards.ContainsKey)
+            ?? candidates.FirstOrDefault();
     }
 
     private async Task AnswerHeadAsync(Wire wire, ControlRequest request, bool redact, CancellationToken ct)
@@ -1899,6 +1956,24 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
+        if (effect.Kind is HostEffects.ForwardPort or HostEffects.UnforwardPort)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await (effect.Kind == HostEffects.ForwardPort
+                        ? _hub.ForwardForViewerAsync(link, effect.Value, _stop.Token)
+                        : _hub.UnforwardForViewerAsync(link, effect.Value, _stop.Token)).ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
+                {
+                    options.Log($"remote {link.Host}: could not {effect.Kind} {effect.Value}: {e.Message}");
+                }
+            });
+            return;
+        }
+
         if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell or HostEffects.HandBack or HostEffects.OpenWindow))
         {
             return;
@@ -2670,6 +2745,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             _sessions.Remove(session.Client);
             _bridged.TryRemove(session.Client, out _);
             _viewerForwards.Remove(session.Client);
+            _sshOf.Remove(session.Client);
             ApplyResizes();
         }
 

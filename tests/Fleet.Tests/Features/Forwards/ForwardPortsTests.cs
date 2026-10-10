@@ -13,7 +13,7 @@ public sealed class ForwardPortsTests
     private readonly FakeForwards _forwards = new();
     private readonly FakeBrowser _browser = new();
 
-    private ForwardPortsHandler Handler => new(_forwards, _browser, new Known());
+    private ForwardPortsHandler Handler => new(_forwards, _browser, new Known(), "red");
 
     [Theory]
     [InlineData("box 5173", ForwardVerb.Add, "box", 5173, null, false)]
@@ -52,6 +52,41 @@ public sealed class ForwardPortsTests
         Assert.Equal(["add red@lab.example 5173 "], _forwards.Calls);
         Assert.Equal(["http://localhost:5173"], _browser.Opened);
         Assert.EndsWith("http://localhost:5173", result.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Forwarding_without_a_remote_sends_the_port_to_the_machine_viewing_this_one()
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null);
+
+        var result = await Handler.HandleAsync(new ForwardOrder(ForwardVerb.Add, null, 5173));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(["viewer-forward 5173"], _forwards.Calls);
+        Assert.Contains("laptop", result.Value, StringComparison.Ordinal);
+        Assert.Empty(_browser.Opened);
+    }
+
+    [Fact]
+    public async Task Unforwarding_without_a_remote_asks_the_viewing_machine_to_stop()
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null);
+
+        var result = await Handler.HandleAsync(new ForwardOrder(ForwardVerb.Remove, null, 5173));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(["viewer-unforward 5173"], _forwards.Calls);
+    }
+
+    [Fact]
+    public async Task Without_a_fleet_viewer_the_answer_gives_the_ssh_command()
+    {
+        _forwards.Viewer = new ViewerForward(null, "10.0.0.5 52000 10.0.0.9 22");
+
+        var result = await Handler.HandleAsync(new ForwardOrder(ForwardVerb.Add, null, 5173));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("ssh -N -L 5173:localhost:5173 red@10.0.0.9", result.Error, StringComparison.Ordinal);
     }
 
     [Fact]

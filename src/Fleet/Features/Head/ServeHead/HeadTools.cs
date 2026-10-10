@@ -69,6 +69,14 @@ public static class HeadTools
     private static readonly HeadToolParam ProjectParam =
         new(Project, "string", "The fleet project's name, as list_projects shows it.", true);
 
+    private static readonly HeadToolParam ViewerRemoteParam =
+        new(
+            Remote,
+            "string",
+            "The remote machine's nickname, as list_remotes shows it (or its ssh host); leave out for a port on this "
+            + "machine, which the machine viewing this one then forwards and opens.",
+            false);
+
     private static readonly HeadToolParam RemoteParam =
         new(
             Remote,
@@ -152,13 +160,17 @@ public static class HeadTools
         new(
             ForwardPort,
             "Forward a web app port of a remote machine to localhost on this machine over fleet's ssh link (bound to "
-            + "127.0.0.1 only). Uses the same local port when free, else another; the answer names the URL.",
+            + "127.0.0.1 only). Uses the same local port when free, else another; the answer names the URL. Without "
+            + "remote, the machine viewing this one forwards this machine's port and opens it.",
             [
-                ForwardRemoteParam,
+                ViewerRemoteParam,
                 PortParam,
                 new(LocalPort, "string", "The local port to use instead of the same number.", false),
             ]),
-        new(UnforwardPort, "Stop forwarding a remote machine's port.", [ForwardRemoteParam, PortParam]),
+        new(
+            UnforwardPort,
+            "Stop forwarding a remote machine's port; without remote, the machine viewing this one stops forwarding it.",
+            [ViewerRemoteParam, PortParam]),
         new(
             OpenUrl,
             "Open a forwarded port in the browser on this machine.",

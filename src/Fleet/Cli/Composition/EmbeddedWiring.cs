@@ -323,7 +323,14 @@ public static class EmbeddedWiring
                 stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse,
                 project => OpenAttachWindow(project, sshHost, log),
                 (project, host) => OpenAttachWindow(project, host, log),
-                session is null ? null : hello => Furnish(hello, session))
+                hello =>
+                {
+                    hello.Ssh = sshHost is null ? Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable) : null;
+                    if (session is not null)
+                    {
+                        Furnish(hello, session);
+                    }
+                })
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -742,13 +749,7 @@ public static class EmbeddedWiring
             RedirectStandardError = true,
         };
 
-        var socket = ControlSocket(host);
-        if (socket is not null)
-        {
-            ControlPaths.Reclaim(socket, ControlPaths.Answers);
-        }
-
-        foreach (var arg in RemoteSshArguments(host, socket, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet"))
+        foreach (var arg in BridgeSshArguments(host, host))
         {
             start.ArgumentList.Add(arg);
         }
@@ -758,6 +759,37 @@ public static class EmbeddedWiring
         start.Environment[CommandLine.AskPassVariable] = token;
         start.Environment[Endpoint.Variable] = home.Address;
         return start;
+    }
+
+    public static ProcessStartInfo AttachSsh(string host)
+    {
+        var start = new ProcessStartInfo("ssh")
+        {
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = false,
+        };
+
+        foreach (var arg in BridgeSshArguments(host, AttachSocketKey(host)))
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        return start;
+    }
+
+    public static string AttachSocketKey(string host) => "attach " + host;
+
+    private static IReadOnlyList<string> BridgeSshArguments(string host, string socketKey)
+    {
+        var socket = ControlSocket(socketKey);
+        if (socket is not null)
+        {
+            ControlPaths.Reclaim(socket, ControlPaths.Answers);
+        }
+
+        return RemoteSshArguments(host, socket, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet");
     }
 
     public static IReadOnlyList<string> RemoteSshArguments(string host, string? controlPath, string remoteFleet) =>
@@ -892,28 +924,11 @@ public static class EmbeddedWiring
 
     private static Stream Ssh(string host)
     {
-        var remote = Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet";
-        var start = new ProcessStartInfo("ssh")
-        {
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = false,
-        };
-
         RefuseSshInIso();
 
-        foreach (var arg in AttachSshArguments(host, remote))
-        {
-            start.ArgumentList.Add(arg);
-        }
-
-        var process = Process.Start(start) ?? throw new IOException("could not start ssh");
+        var process = Process.Start(AttachSsh(host)) ?? throw new IOException("could not start ssh");
         return new DuplexStream(process.StandardOutput.BaseStream, process.StandardInput.BaseStream, process);
     }
-
-    public static IReadOnlyList<string> AttachSshArguments(string host, string remoteFleet) =>
-        ["-T", .. SshControl.LinkOptions, host, remoteFleet, "bridge"];
 
     private static void RefuseSshInIso()
     {

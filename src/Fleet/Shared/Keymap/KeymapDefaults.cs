@@ -60,6 +60,7 @@ public static class KeymapDefaults
             [FleetAction.Notifications] = "n",
             [FleetAction.Remotes] = "r",
             [FleetAction.SaveSession] = "w",
+            [FleetAction.OpenPort] = "o",
             [FleetAction.DismissNotice] = "d",
             [FleetAction.DismissAllNotices] = "D",
             [FleetAction.OpenEditor] = "e",
@@ -130,6 +131,7 @@ public static class KeymapDefaults
             FleetAction.WhatsNew => "what's new",
             FleetAction.HideAllAgents => "hide all",
             FleetAction.OpenWebApp => "web app",
+            FleetAction.OpenPort => "open port",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -199,6 +201,7 @@ public static class KeymapDefaults
             FleetAction.WhatsNew => "What's new",
             FleetAction.HideAllAgents => "Hide all agents",
             FleetAction.OpenWebApp => "Open the project's web app in the browser",
+            FleetAction.OpenPort => "Open port",
             _ => action.ToString(),
         };
 }

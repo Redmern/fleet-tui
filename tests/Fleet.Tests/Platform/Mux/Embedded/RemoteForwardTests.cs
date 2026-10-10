@@ -158,6 +158,62 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_viewer_forward_on_the_far_side_makes_the_viewer_pin_forward_and_open_the_port()
+    {
+        _ssh.Listening = Web;
+        using var home = new EmbeddedDriver(_home);
+        using var far = new EmbeddedDriver(_far);
+        await home.ConnectRemoteAsync("red@far");
+
+        await Eventually(async () => (await far.ViewerForwardAsync(9229)).Viewer is not null);
+
+        await Eventually(() => Task.FromResult(_ssh.Forwards("forward").Contains("127.0.0.1:9229:127.0.0.1:9229")));
+        await Eventually(() => Task.FromResult(_opened.Contains("http://localhost:9229")));
+        Assert.Equal("forwarded", (await ForwardsAsync(_home)).Single(f => f.RemotePort == 9229).State);
+    }
+
+    [Fact]
+    public async Task A_viewer_unforward_makes_the_viewer_unpin_and_cancel_the_forward()
+    {
+        _ssh.Listening = Web;
+        using var home = new EmbeddedDriver(_home);
+        using var far = new EmbeddedDriver(_far);
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await far.ViewerForwardAsync(9229)).Viewer is not null);
+        await Eventually(async () => (await ForwardsAsync(_home)).Any(f => f is { RemotePort: 9229, State: "forwarded" }));
+
+        var sent = await far.ViewerUnforwardAsync(9229);
+
+        Assert.NotNull(sent.Viewer);
+        await Eventually(() => Task.FromResult(_ssh.Forwards("cancel").Contains("127.0.0.1:9229:127.0.0.1:9229")));
+        await Eventually(async () => (await ForwardsAsync(_home)).Single(f => f.RemotePort == 9229).State == "detected");
+    }
+
+    [Fact]
+    public async Task Without_a_fleet_viewer_a_viewer_forward_reaches_nobody()
+    {
+        using var far = new EmbeddedDriver(_far);
+
+        var sent = await far.ViewerForwardAsync(5173);
+
+        Assert.Null(sent.Viewer);
+        Assert.Null(sent.SshConnection);
+    }
+
+    [Fact]
+    public async Task Without_a_fleet_viewer_the_ssh_connection_the_client_was_reached_by_comes_back()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Ssh = "10.0.0.5 52000 10.0.0.9 22");
+
+        var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+
+        Assert.True(sent.Ok);
+        Assert.Null(sent.Viewer);
+        Assert.Equal("10.0.0.5 52000 10.0.0.9 22", sent.Ssh);
+    }
+
+    [Fact]
     public async Task A_manual_forward_is_made_on_request_and_removed_on_request()
     {
         _ssh.Listening = Web;

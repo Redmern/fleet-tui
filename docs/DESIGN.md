@@ -3591,7 +3591,7 @@ for the prefix. `prefix s r` reloads the file.
 | `d` | detach |
 | `Q` | quit fleet (the menu's quit, as a float) |
 | `a` › `m l e f n` | **+agents**: dashboard / list agents / open editor / files / notifications |
-| `s` › `p w R d q r` | **+session**: switch project / save session / remotes / detach / detach / reload keys |
+| `s` › `p w R o d q r` | **+session**: switch project / save session / remotes / open port / detach / detach / reload keys |
 | `t` › `c n p 1–9 x` | **+tabs**: new tab / next / previous / go to tab / close tab (after a `y/n`) |
 | `g` › `k K t T` | **+configure**: edit keybinds / show keybinds / button hints / theme |
 | `g c` › `v V N i A C e H M S R p` | **+fleet config**: nvim toggles (main, subs, config) / auto-close / AI-DLC mode / Claude profile / edit fleet config / head, main, sub, agent model / permissions |
@@ -5872,6 +5872,42 @@ What the phases add up to:
 - Verified against a real user-level sshd on 127.0.0.1 (`RealSshTests`, run with
   `FLEET_SSH_IT_CONFIG`/`FLEET_SSH_IT_HOST`; skipped otherwise).
 
+## Open port: this machine's port in the viewer's browser, 2026-10-10
+
+- **The action.** `FleetAction.OpenPort` (menu section Session, `ctrl+s s o`) asks for one
+  port, `OpenPortHandler.Parse` takes 1-65535 only, and `OpenPortHandler` decides where it
+  goes. It probes `127.0.0.1:<port>` first (`IListenerProbe`, `TcpListenerProbe`); nothing
+  listening is a note, never a stop.
+- **One round trip decides the route.** The menu sends `viewer-forward` to its own fleetd.
+  fleetd resolves the menu's client (`ClientFor`, via the menu pane), and when that client
+  is a fleet viewer (a `RemoteLink` session, the ones with a label) it queues a
+  `forward-port` host effect on it and answers with the viewer's name. Unlike `viewer-open`
+  the viewer need not forward the port already: that is the point. The viewer's fleetd runs
+  `ForwardHub.ForwardForViewerAsync`: pin, `ForwardNowAsync` (`-O forward -L`), wait to
+  settle, open the mapped URL. `viewer-unforward` / `unforward-port` unpin and cancel.
+  A caller without a client (an agent's MCP call) goes to the fleet viewer showing the
+  caller's workspace, else one that reports forwards, else any.
+- **Plain ssh.** Without a fleet viewer the reply carries the `SSH_CONNECTION` that client
+  came in by, and the menu shows `ssh -N -L p:localhost:p user@<server address>` (`-p` when
+  sshd is not on 22) with a **Copy** button. fleetd strips `SSH_*` from its own environment
+  and its panes, so it cannot read this itself: the attach client sends its own
+  `SSH_CONNECTION` in `Hello.ssh`, and `fleet bridge` overwrites that with the bridge's,
+  which is the one that names this machine. Copy writes OSC 52 from the menu pane; fleetd's
+  terminal hands it to the client's clipboard as it does for copy mode.
+- **Neither:** the menu opens `http://localhost:<port>` itself.
+- **Tools.** `forward_port` / `unforward_port` (MCP and head) take `remote` as optional;
+  without it they go through `IPortForwards.ForwardToViewerAsync` /
+  `UnforwardFromViewerAsync`, so the empty-host fallback in `ForwardPortsHandler`, the
+  required-remote checks and the head's rejection of `local` for these two are gone.
+  `local_port` and `open` do not apply there: the viewer picks the local port and opens.
+- **`fleet attach --ssh`** builds its arguments with the link's builder
+  (`BridgeSshArguments`: `-T`, `ConnectTimeout`, the ControlMaster options), and keeps its
+  own terminal for password prompts. It masters its own socket (`AttachSocketKey`), not the
+  link's: an attach that started first would otherwise carry fleetd's forwards and drop them
+  on detach. The attach client applies no
+  `forward-port` effects (it has no `ForwardHub`), so an attach-only viewer gets the ssh
+  command route; for one-step forwarding link the machine under Remote machines instead.
+
 ## ISO mode, 2026-10-10
 
 - **Two halves.** fleet has no push channel to the head: the origin pulls over
@@ -5909,6 +5945,11 @@ What the phases add up to:
   release's separate `machine.json` flag is gone, so `iso.json` is the one machine switch, and
   the per-project `Iso` setting still blocks sync for that project alone), the update check and release list, `FinishAgentHandler`'s
   push, and the agent permission plan (push and merge forced to deny, `gh pr create` denied).
+- **Viewer forwards are served.** `viewer-forward` and `viewer-unforward` are on
+  `IsoFilter`'s list (a user decision, pinned by `IsoDaemonTests`): **Open port** keeps
+  working for a machine viewing an ISO machine. They carry a port number only, but a bridged
+  client can make the viewing machine forward a port of this one, which weakens the
+  isolation on purpose.
 - **Limits, stated.** An agent's own network use and the model API are outside fleet's
   reach; the README gives an nftables egress example instead of claiming more.
 

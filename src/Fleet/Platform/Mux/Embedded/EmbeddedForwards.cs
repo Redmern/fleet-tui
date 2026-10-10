@@ -53,4 +53,16 @@ public sealed class EmbeddedForwards(Func<EmbeddedDriver> driver) : IPortForward
         using var fleetd = driver();
         await fleetd.ViewerOpenAsync(remotePort, ct).ConfigureAwait(false);
     }
+
+    public async Task<ViewerForward> ForwardToViewerAsync(int port, CancellationToken ct = default)
+    {
+        using var fleetd = driver();
+        return await fleetd.ViewerForwardAsync(port, ct).ConfigureAwait(false);
+    }
+
+    public async Task<ViewerForward> UnforwardFromViewerAsync(int port, CancellationToken ct = default)
+    {
+        using var fleetd = driver();
+        return await fleetd.ViewerUnforwardAsync(port, ct).ConfigureAwait(false);
+    }
 }

@@ -9,13 +9,12 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Forwards.ForwardPorts;
 
-public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher browser, IKnownRemoteStore known)
+public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher browser, IKnownRemoteStore known, string user)
 {
     public async Task<Result<string>> HandleAsync(ForwardOrder order, CancellationToken ct = default)
     {
         try
         {
-            var host = order.Host is { } named ? Resolve(named) : string.Empty;
             switch (order.Verb)
             {
                 case ForwardVerb.List:
@@ -24,26 +23,35 @@ public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher
                         ? "no forwarded or detected ports; connect a remote machine first"
                         : string.Join('\n', rows.Select(r => r.Describe())));
 
+                case ForwardVerb.Add when order.Host is null:
+                    return (await forwards.ForwardToViewerAsync(order.Port, ct).ConfigureAwait(false)).Answer(order.Port, forward: true, user);
+
                 case ForwardVerb.Add:
                     return await OpenedAsync(
-                        await forwards.AddAsync(host, order.Port, order.Local, ct).ConfigureAwait(false), order.Open, ct)
+                        await forwards.AddAsync(Resolve(order.Host), order.Port, order.Local, ct).ConfigureAwait(false), order.Open, ct)
                         .ConfigureAwait(false);
 
-                case ForwardVerb.Remove:
-                    await forwards.RemoveAsync(host, order.Port, ct).ConfigureAwait(false);
-                    return Result<string>.Ok($"stopped forwarding {order.Port} from {host}");
+                case ForwardVerb.Remove when order.Host is null:
+                    return (await forwards.UnforwardFromViewerAsync(order.Port, ct).ConfigureAwait(false)).Answer(order.Port, forward: false, user);
 
-                case ForwardVerb.Start:
+                case ForwardVerb.Remove:
+                    {
+                        var host = Resolve(order.Host);
+                        await forwards.RemoveAsync(host, order.Port, ct).ConfigureAwait(false);
+                        return Result<string>.Ok($"stopped forwarding {order.Port} from {host}");
+                    }
+
+                case ForwardVerb.Start when order.Host is { } host:
                     return await OpenedAsync(
-                        await forwards.StartStackAsync(host, order.Project!, ct).ConfigureAwait(false), order.Open, ct)
+                        await forwards.StartStackAsync(Resolve(host), order.Project!, ct).ConfigureAwait(false), order.Open, ct)
                         .ConfigureAwait(false);
 
                 case ForwardVerb.Open:
-                    return await OpenPortAsync(order.Port, order.Host is null ? null : host, ct).ConfigureAwait(false);
+                    return await OpenPortAsync(order.Port, order.Host is { } named ? Resolve(named) : null, ct).ConfigureAwait(false);
 
-                case ForwardVerb.Stop:
-                    await forwards.StopStackAsync(host, order.Project!, ct).ConfigureAwait(false);
-                    return Result<string>.Ok($"stopped {order.Project} on {host}");
+                case ForwardVerb.Stop when order.Host is { } host:
+                    await forwards.StopStackAsync(Resolve(host), order.Project!, ct).ConfigureAwait(false);
+                    return Result<string>.Ok($"stopped {order.Project} on {Resolve(host)}");
             }
         }
         catch (MuxUnavailableException e)
