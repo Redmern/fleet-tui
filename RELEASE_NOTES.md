@@ -4,6 +4,12 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.15 (2026-10-10)
+
+- **Open port** no longer does nothing when you view fleet from Windows: a viewer that can't forward ports now gets the ready-to-copy `ssh -L` command instead.
+- With several viewers attached, Open port picks the one showing your workspace before checking whether it can forward, so the port no longer opens on another machine.
+- CI: the warm-menu latency test no longer fails on Windows runners, whose coarse timer tick stretched the simulated link's delays.
+
 ## 0.7.14 (2026-10-10)
 
 - New **Open port** (Session section, `ctrl+s s o`): type a port of the machine fleet runs on and it opens in the browser of the machine you view it from, forwarded by your fleet there or with a ready-to-copy `ssh -L` command. `forward_port` and `unforward_port` no longer need `remote` for a port on this machine.
