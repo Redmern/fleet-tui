@@ -116,7 +116,7 @@ public class FleetMenusTests
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
         var headers = ShowMenuHandler.Headers(items);
 
-        Assert.Equal([0, 2, 7], headers.Keys.Order());
+        Assert.Equal([0, 3, 8], headers.Keys.Order());
         Assert.Equal(FleetMenus.Actions(FleetMenus.Settings), items.Select(i => i.Action));
     }
 
@@ -126,11 +126,11 @@ public class FleetMenusTests
     {
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Settings, _ => null);
         var rows = ShowMenuHandler.Rows(items);
-        var header = ShowMenuHandler.Headers(items)[2];
+        var header = ShowMenuHandler.Headers(items)[3];
 
         Assert.Equal(FleetTones.Muted, Assert.Single(header.Spans).Tone);
         Assert.DoesNotContain("─", header.Text);
-        Assert.Equal($"{new string(' ', rows[2].Spans[0].Text.Length)}{FleetIcons.Configure}  configure", header.Text);
+        Assert.Equal($"{new string(' ', rows[3].Spans[0].Text.Length)}{FleetIcons.Configure}  configure", header.Text);
     }
 
     [Fact]
@@ -157,13 +157,13 @@ public class FleetMenusTests
         var source = new FleetRowSource(
             ShowMenuHandler.Rows(items), gaps, headersBefore: ShowMenuHandler.Headers(items));
 
-        Assert.Equal([1, 6], gaps);
+        Assert.Equal([2, 7], gaps);
         Assert.Equal(items.Count + 3 + 2, source.Count);
         Assert.Equal(
             ShowMenuHandler.Height(ShowMenuHandler.Rows(items), 3, gaps.Count),
             source.Count);
-        Assert.Equal(string.Empty, source.ToList()[3]);
-        Assert.Equal(string.Empty, source.ToList()[10]);
+        Assert.Equal(string.Empty, source.ToList()[4]);
+        Assert.Equal(string.Empty, source.ToList()[11]);
     }
 
     [Fact]
@@ -176,6 +176,7 @@ public class FleetMenusTests
     [InlineData(FleetAction.SwitchProject, "Switch")]
     [InlineData(FleetAction.FocusMain, "Dashboard")]
     [InlineData(FleetAction.SaveSession, "Save session")]
+    [InlineData(FleetAction.OpenPort, "Open port")]
     [InlineData(FleetAction.RebuildDashboard, "Rebuild dashboard")]
     [InlineData(FleetAction.CleanupProject, "Clean up agents")]
     [InlineData(FleetAction.EditShowMenuKeys, "Show keybinds")]
@@ -187,6 +188,16 @@ public class FleetMenusTests
         var items = new ShowMenuHandler(Keymap.Default).Items(sections, _ => null);
 
         Assert.Equal(label, items.Single(i => i.Action == action).Label);
+    }
+
+    [Fact]
+    public void Session_offers_opening_a_port_in_the_viewers_browser()
+    {
+        var session = FleetMenus.Settings.Single(s => s.Header == "session").Actions;
+
+        Assert.Equal([FleetAction.SaveSession, FleetAction.Remotes, FleetAction.OpenPort], session);
+        Assert.False(FleetMenus.OpensMore(FleetAction.OpenPort));
+        Assert.Equal(FleetIcons.OpenBrowser, FleetIcons.For(FleetAction.OpenPort));
     }
 
     [Fact]

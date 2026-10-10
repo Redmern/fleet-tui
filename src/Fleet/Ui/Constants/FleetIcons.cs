@@ -142,6 +142,7 @@ public static class FleetIcons
         FleetAction.ToggleHidden => "",
         FleetAction.HideAllAgents => HideAll,
         FleetAction.OpenWebApp => OpenBrowser,
+        FleetAction.OpenPort => OpenBrowser,
         FleetAction.StopAgent => "",
         FleetAction.RemoveAgent => "",
         FleetAction.AddRepository => "",

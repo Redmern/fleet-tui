@@ -152,6 +152,7 @@ public class KeysTests
             ["s p"] = "menu switch-project",
             ["s w"] = "menu save-session",
             ["s R"] = "menu remotes",
+            ["s o"] = "menu open-port",
             ["s d"] = "detach",
             ["s q"] = "detach",
             ["s r"] = "reload",
@@ -759,7 +760,7 @@ public class KeysTests
             Group(keys, "f").Leaves.Select(b => b.Command).Order());
         Assert.Equal(["next-workspace", "switch-project"], Group(keys, "w").Leaves.Select(b => b.Command).Order());
         Assert.Equal(
-            ["detach", "detach", "menu remotes", "menu save-session", "menu switch-project", "reload"],
+            ["detach", "detach", "menu open-port", "menu remotes", "menu save-session", "menu switch-project", "reload"],
             Group(keys, "s").Leaves.Select(b => b.Command).Order());
         Assert.Equal(
             ["kill-tab", "new-tab", "next-tab", "prev-tab", "tab 1", "tab 2", "tab 3", "tab 4", "tab 5", "tab 6", "tab 7", "tab 8", "tab 9"],
@@ -795,6 +796,7 @@ public class KeysTests
     [InlineData("sp", "menu switch-project")]
     [InlineData("sw", "menu save-session")]
     [InlineData("sR", "menu remotes")]
+    [InlineData("so", "menu open-port")]
     [InlineData("sd", "detach")]
     [InlineData("sq", "detach")]
     [InlineData("sr", "reload")]

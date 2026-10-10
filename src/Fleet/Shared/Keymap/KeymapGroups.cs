@@ -25,6 +25,7 @@ public static class KeymapGroups
         [
             FleetAction.SaveSession,
             FleetAction.Remotes,
+            FleetAction.OpenPort,
             FleetAction.OpenFleetConfigMenu,
             FleetAction.EditKeybinds,
             FleetAction.EditShowMenuKeys,

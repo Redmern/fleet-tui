@@ -18,6 +18,7 @@ public class MenuBackTests
     [Theory]
     [InlineData(FleetAction.SaveSession)]
     [InlineData(FleetAction.Remotes)]
+    [InlineData(FleetAction.OpenPort)]
     [InlineData(FleetAction.EditKeybinds)]
     [InlineData(FleetAction.ViewLogs)]
     [InlineData(FleetAction.WhatsNew)]

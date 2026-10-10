@@ -29,7 +29,7 @@ public static class FleetMenus
 
     public static IReadOnlyList<MenuSection> Settings { get; } =
     [
-        new("session", [FleetAction.SaveSession, FleetAction.Remotes], FleetIcons.Session),
+        new("session", [FleetAction.SaveSession, FleetAction.Remotes, FleetAction.OpenPort], FleetIcons.Session),
         new("configure", [FleetAction.OpenFleetConfigMenu, FleetAction.EditKeybinds, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints, FleetAction.EditTheme], FleetIcons.Configure),
         new("maintenance", [FleetAction.RebuildDashboard, FleetAction.CleanupProject, FleetAction.HideAllAgents, FleetAction.ViewLogs, FleetAction.UpdateFleet, FleetAction.ShowVersion, FleetAction.WhatsNew], FleetIcons.Maintenance),
     ];

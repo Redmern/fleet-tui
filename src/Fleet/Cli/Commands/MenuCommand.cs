@@ -9,6 +9,7 @@ using Fleet.Features.Agents.OpenEditor;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
 using Fleet.Features.Files.BrowseFiles;
+using Fleet.Features.Forwards.OpenPort;
 using Fleet.Features.Menu.EditAidlc;
 using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
@@ -558,6 +559,34 @@ public static class MenuCommand
                     if (!saved.Succeeded)
                     {
                         FleetDialog.Error(app, "Save window as session", saved.Error!);
+                    }
+
+                    break;
+                }
+
+            case FleetAction.OpenPort:
+                {
+                    var typed = FleetDialog.Ask(app, OpenPortHandler.Title, OpenPortHandler.Question);
+
+                    if (typed is null)
+                    {
+                        break;
+                    }
+
+                    var port = OpenPortHandler.Parse(typed);
+                    if (!port.Succeeded)
+                    {
+                        FleetDialog.Error(app, OpenPortHandler.Title, port.Error!);
+                        break;
+                    }
+
+                    var opened = await new OpenPortHandler(Adapters.ListenerProbe(), Adapters.Browser())
+                        .HandleAsync(port.Value)
+                        .ConfigureAwait(false);
+
+                    if (opened.Lines.Count > 0)
+                    {
+                        FleetDialog.Inform(app, $"{OpenPortHandler.Title} {opened.Port}", opened.Lines);
                     }
 
                     break;

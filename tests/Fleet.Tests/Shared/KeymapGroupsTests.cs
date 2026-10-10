@@ -29,6 +29,7 @@ public class KeymapGroupsTests
     [InlineData(FleetAction.OpenSettings, "fleet menu")]
     [InlineData(FleetAction.SaveSession, "fleet menu › settings")]
     [InlineData(FleetAction.Remotes, "fleet menu › settings")]
+    [InlineData(FleetAction.OpenPort, "fleet menu › settings")]
     [InlineData(FleetAction.OpenFleetConfigMenu, "fleet menu › settings")]
     [InlineData(FleetAction.ViewLogs, "fleet menu › settings")]
     [InlineData(FleetAction.EditSettings, "fleet menu › settings › fleet config")]
