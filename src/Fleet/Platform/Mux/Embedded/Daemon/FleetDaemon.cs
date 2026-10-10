@@ -90,7 +90,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Hello> _bridged = new(StringComparer.Ordinal);
     private readonly ForwardHub _hub = new(options.Forwards, options.Log);
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
-    private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(TimeProvider.System) : null;
+    private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
