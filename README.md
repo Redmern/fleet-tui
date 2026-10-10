@@ -345,12 +345,34 @@ From a terminal: `fleet forward <host> <port> [--local <n>] [--open]`, `fleet fo
 remote, waits until `readyPort` (or the first forward port) listens and, with `healthPath`,
 answers 2xx, then forwards it; `fleet forward stop` closes that pane. The head and the
 agents have the same as tools: `list_forwards`, `forward_port`, `unforward_port`, `open_url`,
-`start_stack` and `stop_stack`. This needs OpenSSH control sockets, so not on Windows.
+`start_stack` and `stop_stack`. `remote` is optional for `forward_port` and `unforward_port`:
+left out, the port is on the machine the tool runs on, and the machine viewing that one
+forwards it (see below). This needs OpenSSH control sockets, so not on Windows.
 
 Things that can bite: an app that checks the Host header (Vite's `server.allowedHosts`)
 must allow `localhost`; when the local port differs, hot reload needs its client port set
 (Vite's `server.hmr.clientPort`); projects that share `localhost` share its cookies; and a
 docker `-p` port binds `0.0.0.0` on the remote, so it is reachable there by others too.
+
+#### Open a port of this machine
+
+**Open port** in the fleet menu (Settings › session) or `ctrl+s s o` asks for one port number
+(1-65535) of the machine fleet runs on, such as the `5272` of `127.0.0.1:5272`, and makes it
+reachable in the browser of the machine you are looking from:
+
+- **fleet on your laptop, linked under Remote machines:** the remote fleet sends
+  `viewer-forward` to your laptop's fleet, which pins the port, forwards it over the link's
+  ssh (`-O forward -L`) and opens `http://localhost:<port>` (or the local port it had to pick).
+- **a plain ssh login** (you ssh'd in and ran `fleet`, or `fleet attach --ssh`): a dialog
+  shows `ssh -N -L <port>:localhost:<port> <user>@<host>`, built from the `SSH_CONNECTION`
+  the attach process was reached by. **Copy** puts it on your clipboard (OSC 52); run it on
+  your machine, then open `http://localhost:<port>`.
+- **no ssh in between:** fleet opens `http://localhost:<port>` here.
+
+When nothing listens on `127.0.0.1:<port>` yet, the dialog says so and fleet still forwards,
+shows the command or opens it. `unforward_port` without `remote` sends `viewer-unforward`,
+which unpins the port and cancels the forward on the viewing machine. `fleet attach --ssh`
+uses the same ssh options as a Remote machines link, ControlMaster included.
 
 ### ISO mode
 
@@ -381,7 +403,10 @@ answer `ok` or `failed` with no detail; `show_agent` and `hide_agent` are refuse
 Notifications cross as a code and a fixed word. Pane titles, folders, screen text
 (`get-text`), notice text, the machine name and the projects' web ports do not cross. Another machine cannot start
 panes or type into them (`spawn`, `send-text`), because that would let it run commands here;
-prompts reach agents through the head's `tell` and `relay`. Any other operation is refused.
+prompts reach agents through the head's `tell` and `relay`. Another machine may send
+`viewer-forward` and `viewer-unforward` (a port number only), so **Open port** works for a
+machine viewing this one; it can ask the machine viewing this one to forward a port of this
+machine, which is a deliberate hole in the isolation. Any other operation is refused.
 
 **Attach.** Seeing a project means seeing its screen, so attach over ssh is allowed only
 from hosts on an allowlist. `fleet iso allow <address>` adds one, `fleet iso disallow
