@@ -78,6 +78,7 @@ public sealed class HostForwards(
         lock (_gate)
         {
             _linked = false;
+            _hostError = null;
             foreach (var (remote, active) in _active)
             {
                 _preferred[remote] = active.Local;

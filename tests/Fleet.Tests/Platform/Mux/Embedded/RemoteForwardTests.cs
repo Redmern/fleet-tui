@@ -19,6 +19,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     private readonly ConcurrentQueue<string> _opened = new();
     private readonly ConcurrentQueue<Stream> _links = new();
     private int _nextLocal = 41000;
+    private volatile bool _unreachable;
     private Endpoint _home = null!;
     private Endpoint _far = null!;
 
@@ -65,6 +66,11 @@ public sealed class RemoteForwardTests : IAsyncLifetime
             Terminal = _homePanes.NewTerminal,
             RemoteOpen = (_, _) =>
             {
+                if (_unreachable)
+                {
+                    throw new IOException("ssh: connect to host nowhere port 22: Connection refused");
+                }
+
                 var stream = _far.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
                 _links.Enqueue(stream);
                 return new RemoteChannel(stream, null, stream);
@@ -182,6 +188,31 @@ public sealed class RemoteForwardTests : IAsyncLifetime
 
         await home.StopStackAsync("red@far", "homelab");
         await Assert.ThrowsAsync<Fleet.Ports.Mux.Exceptions.MuxUnavailableException>(() => home.StopStackAsync("red@far", "homelab"));
+    }
+
+    [Fact]
+    public async Task Two_stack_starts_at_once_run_the_command_once()
+    {
+        _ssh.Answer = args => args.Contains("-O") || _farPanes.ByProgram("sh") is null
+            ? null
+            : new Fleet.Platform.Forwards.Models.SshResult(0, Web, string.Empty);
+        using var one = new EmbeddedDriver(_home);
+        using var two = new EmbeddedDriver(_home);
+
+        await Task.WhenAll(one.StartStackAsync("red@far", "homelab"), two.StartStackAsync("red@far", "homelab"));
+
+        Assert.Single(_farPanes.Started, p => p.Program == "sh");
+    }
+
+    [Fact]
+    public async Task Forwarding_from_a_host_that_cannot_be_reached_leaves_no_forward_behind()
+    {
+        _unreachable = true;
+        using var home = new EmbeddedDriver(_home);
+
+        await Assert.ThrowsAsync<Fleet.Ports.Mux.Exceptions.MuxUnavailableException>(() => home.AddForwardAsync("nowhere", 5173, null));
+
+        Assert.Empty(await ForwardsAsync(_home));
     }
 
     [Fact]

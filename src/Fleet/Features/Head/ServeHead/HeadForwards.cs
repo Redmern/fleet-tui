@@ -57,10 +57,7 @@ public sealed class HeadForwards(HeadDeps deps)
         var port = Port(request, HeadTools.Port);
         var remote = request.Value(HeadTools.Remote).Trim();
         var host = remote.Length == 0 ? null : HostOf(remote);
-        var rows = await forwards.ListAsync(ct).ConfigureAwait(false);
-        var row = rows.FirstOrDefault(r => r.RemotePort == port && r.Url is not null
-                                           && (host is null || string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase)))
-            ?? rows.FirstOrDefault(r => r.LocalPort == port && r.Url is not null && host is null);
+        var row = ForwardOpening.Find(await forwards.ListAsync(ct).ConfigureAwait(false), port, host);
 
         if (row is null)
         {

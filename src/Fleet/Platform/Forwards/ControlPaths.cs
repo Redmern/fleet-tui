@@ -72,6 +72,24 @@ public static class ControlPaths
         return removed;
     }
 
+    public static bool Reclaim(string socket, Func<string, bool> alive)
+    {
+        if (!File.Exists(socket) || alive(socket))
+        {
+            return false;
+        }
+
+        try
+        {
+            File.Delete(socket);
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public static bool Answers(string socket)
     {
         try

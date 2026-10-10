@@ -125,6 +125,20 @@ public sealed class HostForwardsTests
     }
 
     [Fact]
+    public async Task A_refusal_is_forgotten_once_the_link_restarts()
+    {
+        var forwards = For();
+        await forwards.ReconcileAsync(Listening(5173), Allowed(5173), default);
+        forwards.Prohibited();
+        Assert.Equal(HostForwards.ProhibitedError, forwards.Row(5173).Error);
+
+        forwards.Unlinked();
+        await forwards.ReconcileAsync(Listening(5173), Allowed(5173), default);
+
+        Assert.Null(forwards.Row(5173).Error);
+    }
+
+    [Fact]
     public async Task An_app_on_ipv6_loopback_only_is_reached_on_ipv6()
     {
         var forwards = For();

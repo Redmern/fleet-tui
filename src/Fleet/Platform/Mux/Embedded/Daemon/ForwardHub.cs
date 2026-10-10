@@ -88,13 +88,22 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
 
     public TimeSpan? Ended(RemoteLink link, bool stillWanted)
     {
-        if (!_hosts.TryGetValue(link.Host, out var forwards))
+        HostForwards? forwards;
+        lock (_gate)
+        {
+            _hosts.TryGetValue(link.Host, out forwards);
+        }
+
+        if (forwards is null)
         {
             return null;
         }
 
         var wanted = forwards.Wanted;
-        forwards.Unlinked();
+        if (stillWanted)
+        {
+            forwards.Unlinked();
+        }
 
         if (!stillWanted || !wanted || !link.WasConnected)
         {
@@ -168,8 +177,23 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                 {
                     var port = Port(request.Port);
                     int? local = request.LocalPort > 0 ? Port(request.LocalPort) : null;
+                    var known = linkOf(host) is { WasConnected: true };
                     forwards.Pin(port, local);
-                    await ConnectedAsync(host, linkOf, connect, options.ForwardWithin, ct).ConfigureAwait(false);
+                    try
+                    {
+                        await ConnectedAsync(host, linkOf, connect, options.ForwardWithin, ct).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException) when (!known)
+                    {
+                        forwards.Unpin(port);
+                        if (!forwards.Wanted)
+                        {
+                            Dropped(host);
+                        }
+
+                        throw;
+                    }
+
                     await forwards.ForwardNowAsync(port, local, ct).ConfigureAwait(false);
                     var row = await SettledAsync(forwards, port, options.ForwardWithin, ct).ConfigureAwait(false);
                     return new ControlResponse { Ok = true, Forwards = [ToDto(row)] };
@@ -292,22 +316,35 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
 
         await link.EnsureOpenAsync(config.Name).ConfigureAwait(false);
 
-        var key = $"{host}\n{config.Name}";
+        var key = StackKey(host, config.Name);
         bool started;
         lock (_gate)
         {
-            started = _stacks.ContainsKey(key);
+            started = !_stacks.TryAdd(key, string.Empty);
         }
 
         if (!started)
         {
-            var spawned = await link.SendAsync(new ControlRequest
+            ControlResponse spawned;
+            try
             {
-                Op = "spawn",
-                Workspace = config.Name,
-                Cwd = config.Root,
-                Args = StackCommand(command),
-            }).ConfigureAwait(false);
+                spawned = await link.SendAsync(new ControlRequest
+                {
+                    Op = "spawn",
+                    Workspace = config.Name,
+                    Cwd = config.Root,
+                    Args = StackCommand(command),
+                }).ConfigureAwait(false);
+            }
+            catch
+            {
+                lock (_gate)
+                {
+                    _stacks.Remove(key);
+                }
+
+                throw;
+            }
 
             lock (_gate)
             {
@@ -322,6 +359,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             forwards.Pin(port, null);
         }
 
+        var stackClock = System.Diagnostics.Stopwatch.StartNew();
         var row = await SettledAsync(forwards, port, options.StackWithin, ct, waitForListening: true).ConfigureAwait(false);
         if (row.State != ForwardState.Forwarded)
         {
@@ -334,10 +372,9 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         if (config.HealthPath is { Length: > 0 } path)
         {
             var url = $"http://127.0.0.1:{row.LocalPort}/{path.TrimStart('/')}";
-            var waited = System.Diagnostics.Stopwatch.StartNew();
             while (!await options.Healthy(url, ct).ConfigureAwait(false))
             {
-                if (waited.Elapsed > options.StackWithin)
+                if (stackClock.Elapsed > options.StackWithin)
                 {
                     throw new TimeoutException($"{config.Name} is listening on {port} but {path} did not answer 2xx");
                 }
@@ -349,14 +386,17 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         return row;
     }
 
+    private static string StackKey(string host, string project) => $"{host}\n{project}";
+
     public static List<string> StackCommand(string command) => ["sh", "-lc", command];
 
     private async Task StopStackAsync(string host, string project, Func<string, RemoteLink?> linkOf)
     {
+        var key = StackKey(host, project);
         string? pane;
         lock (_gate)
         {
-            _stacks.Remove($"{host}\n{project}", out pane);
+            pane = _stacks.GetValueOrDefault(key);
         }
 
         if (pane is not { Length: > 0 })
@@ -370,6 +410,14 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         }
 
         await link.SendAsync(new ControlRequest { Op = "kill", Pane = pane }).ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (_stacks.GetValueOrDefault(key) == pane)
+            {
+                _stacks.Remove(key);
+            }
+        }
+
         log($"remote {host}: stopped the stack of {project}");
     }
 

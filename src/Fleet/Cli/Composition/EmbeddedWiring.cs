@@ -98,7 +98,7 @@ public static class EmbeddedWiring
             Toast = (title, body) => Platform.Notifications.DesktopToast.Show(title, body),
             Head = HeadWiring.ServeOrigin(Driver, log),
             Forwards = ForwardWiring(log),
-            ProjectConfigs = () => [.. Adapters.Projects().List().Select(ProjectConfig)],
+            ProjectConfigs = ProjectConfigsCached,
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
@@ -717,7 +717,13 @@ public static class EmbeddedWiring
             RedirectStandardError = true,
         };
 
-        foreach (var arg in RemoteSshArguments(host, ControlSocket(host), Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet"))
+        var socket = ControlSocket(host);
+        if (socket is not null)
+        {
+            ControlPaths.Reclaim(socket, ControlPaths.Answers);
+        }
+
+        foreach (var arg in RemoteSshArguments(host, socket, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet"))
         {
             start.ArgumentList.Add(arg);
         }
@@ -771,6 +777,21 @@ public static class EmbeddedWiring
 
         var browser = new SystemBrowser();
         return new ForwardOptions { ControlPath = ControlSocket, OpenBrowser = browser.Open };
+    }
+
+    private static (DateTime At, IReadOnlyList<ProjectConfigDto> Configs) _configs = (DateTime.MinValue, []);
+
+    private static IReadOnlyList<ProjectConfigDto> ProjectConfigsCached()
+    {
+        var cached = _configs;
+        if (DateTime.UtcNow - cached.At < TimeSpan.FromSeconds(5))
+        {
+            return cached.Configs;
+        }
+
+        IReadOnlyList<ProjectConfigDto> fresh = [.. Adapters.Projects().List().Select(ProjectConfig)];
+        _configs = (DateTime.UtcNow, fresh);
+        return fresh;
     }
 
     public static ProjectConfigDto ProjectConfig(Project project) =>

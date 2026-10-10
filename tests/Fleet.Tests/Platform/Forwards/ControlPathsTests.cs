@@ -48,6 +48,23 @@ public sealed class ControlPathsTests
     }
 
     [Fact]
+    public void A_socket_left_by_a_killed_master_is_reclaimed_before_the_next_master()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            Assert.False(ControlPaths.Reclaim(file, _ => true));
+            Assert.True(File.Exists(file));
+            Assert.True(ControlPaths.Reclaim(file, _ => false));
+            Assert.False(File.Exists(file));
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
     public void A_file_that_is_not_a_listening_socket_does_not_answer()
     {
         var file = Path.GetTempFileName();

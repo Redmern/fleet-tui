@@ -5,6 +5,11 @@ namespace Fleet.Ports.Forwards;
 
 public static class ForwardOpening
 {
+    public static PortForward? Find(IReadOnlyList<PortForward> rows, int port, string? host) =>
+        rows.FirstOrDefault(r => r.RemotePort == port && r.Url is not null
+                                 && (host is null || string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase)))
+        ?? rows.FirstOrDefault(r => host is null && r.LocalPort == port && r.Url is not null);
+
     public static async Task<string?> OpenAsync(
         IPortForwards forwards, IBrowserLauncher browser, PortForward forward, CancellationToken ct = default)
     {

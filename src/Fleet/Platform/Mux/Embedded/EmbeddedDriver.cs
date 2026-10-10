@@ -201,7 +201,7 @@ public sealed class EmbeddedDriver(
             TimeSpan.FromMinutes(1)).ConfigureAwait(false)).Forwards?.FirstOrDefault();
 
     public Task RemoveForwardAsync(string host, int remotePort, CancellationToken ct = default) =>
-        RequestAsync(new ControlRequest { Op = ForwardHub.RemoveOp, Host = host, Port = remotePort }, ct);
+        RequestAsync(new ControlRequest { Op = ForwardHub.RemoveOp, Host = host, Port = remotePort }, ct, TimeSpan.FromMinutes(2));
 
     public async Task<ForwardDto?> StartStackAsync(string host, string project, CancellationToken ct = default) =>
         (await RequestAsync(

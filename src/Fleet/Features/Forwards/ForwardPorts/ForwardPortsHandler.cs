@@ -78,10 +78,7 @@ public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher
 
     public async Task<Result<string>> OpenPortAsync(int port, string? host, CancellationToken ct)
     {
-        var rows = await forwards.ListAsync(ct).ConfigureAwait(false);
-        var row = rows.FirstOrDefault(r => r.RemotePort == port && r.Url is not null
-                                           && (host is null || string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase)))
-            ?? rows.FirstOrDefault(r => host is null && r.LocalPort == port && r.Url is not null);
+        var row = ForwardOpening.Find(await forwards.ListAsync(ct).ConfigureAwait(false), port, host);
 
         return row is null
             ? Result<string>.Fail($"port {port} is not forwarded{(host is null ? string.Empty : $" from {host}")}")
