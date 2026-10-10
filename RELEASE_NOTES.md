@@ -4,6 +4,13 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.12 (2026-10-10)
+
+- ISO mode (`fleet iso on|off`): the machine opens no ssh to other machines, skips update checks, and agents can't push or merge. Remote clients see redacted project info. See the README for its limits and an example egress firewall.
+- Forward a remote project's web app to localhost over the existing ssh link: `fleet forward`, the `w` key on the dashboard, and tools for the head and agents. A project can keep its ports and a run command in its config.
+- Host sync groundwork: the `sync_to_remote` tool (asks first by default) and one checkpoint that refuses anything outbound in ISO mode, for this machine or for a single project.
+- `ctrl+s a` opens agent menu actions directly (`m`, `l`, `e`, `f`, `n`), labelled in the key hints.
+
 ## 0.7.11 (2026-10-09)
 
 - Visible agents and sub-orchestrators now show an eye on their dashboard row. Hidden ones keep the struck-through eye.
