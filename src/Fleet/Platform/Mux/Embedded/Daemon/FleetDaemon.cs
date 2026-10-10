@@ -3061,6 +3061,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Shutdown()
     {
+        _hub.Shutdown();
         lock (_gate)
         {
             foreach (var runtime in _runtimes.Values)

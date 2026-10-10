@@ -164,6 +164,22 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         forwards?.Unlinked();
     }
 
+    public void Shutdown()
+    {
+        List<HostForwards> hosts;
+        lock (_gate)
+        {
+            hosts = [.. _hosts.Values];
+        }
+
+        foreach (var forwards in hosts)
+        {
+            forwards.Close();
+        }
+
+        (options.Tunnels as IDisposable)?.Dispose();
+    }
+
     public List<ForwardDto> List()
     {
         List<HostForwards> hosts;

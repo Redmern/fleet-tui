@@ -3,7 +3,7 @@ using Fleet.Ports.Forwards;
 
 namespace Fleet.Tests.Platform.Forwards;
 
-public sealed class FakeTunnels : ITunnelLauncher, IListenerProbe
+public sealed class FakeTunnels : ITunnelLauncher, IListenerProbe, IDisposable
 {
     private readonly List<FakeTunnel> _started = [];
 
@@ -20,6 +20,10 @@ public sealed class FakeTunnels : ITunnelLauncher, IListenerProbe
             }
         }
     }
+
+    public bool Disposed { get; private set; }
+
+    public void Dispose() => Disposed = true;
 
     public IEnumerable<string> Specs => Started.Select(t => t.Arguments[t.Arguments.ToList().IndexOf("-L") + 1]);
 

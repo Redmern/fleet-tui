@@ -36,6 +36,23 @@ public sealed class TunnelProcessesTests
     }
 
     [Fact]
+    public async Task Disposing_the_launcher_kills_every_tunnel_it_started()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var launcher = new TunnelProcesses("sh");
+        var one = launcher.Start(["-c", "sleep 30"]);
+        var two = launcher.Start(["-c", "sleep 30"]);
+
+        launcher.Dispose();
+
+        await Task.WhenAll(one.Exited, two.Exited).WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
     public async Task A_missing_program_is_an_exited_tunnel_that_says_so()
     {
         var tunnel = new TunnelProcesses("fleet-no-such-ssh").Start(["-N"]);

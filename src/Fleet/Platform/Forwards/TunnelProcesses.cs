@@ -3,8 +3,28 @@ using System.Diagnostics;
 
 namespace Fleet.Platform.Forwards;
 
-public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher
+public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher, IDisposable
 {
+    private readonly Lock _gate = new();
+    private readonly HashSet<Running> _running = [];
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        List<Running> running;
+        lock (_gate)
+        {
+            _disposed = true;
+            running = [.. _running];
+            _running.Clear();
+        }
+
+        foreach (var tunnel in running)
+        {
+            tunnel.Kill();
+        }
+    }
+
     public ITunnel Start(IReadOnlyList<string> arguments)
     {
         var start = new ProcessStartInfo(program)
@@ -21,15 +41,41 @@ public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher
             start.ArgumentList.Add(argument);
         }
 
-        try
+        lock (_gate)
         {
-            return Process.Start(start) is { } process
-                ? new Running(process)
-                : new Ended(127, $"could not run {program}");
+            if (_disposed)
+            {
+                return new Ended(143, "fleet is stopping");
+            }
+
+            Process? process;
+            try
+            {
+                process = Process.Start(start);
+            }
+            catch (Win32Exception e)
+            {
+                return new Ended(127, $"could not run {program}: {e.Message}");
+            }
+
+            if (process is null)
+            {
+                return new Ended(127, $"could not run {program}");
+            }
+
+            KillOnCloseJob.Hold(process.Handle);
+            var running = new Running(process);
+            _running.Add(running);
+            _ = running.Exited.ContinueWith(_ => Forget(running), TaskScheduler.Default);
+            return running;
         }
-        catch (Win32Exception e)
+    }
+
+    private void Forget(Running running)
+    {
+        lock (_gate)
         {
-            return new Ended(127, $"could not run {program}: {e.Message}");
+            _running.Remove(running);
         }
     }
 
@@ -68,7 +114,7 @@ public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher
             {
                 _process.Kill(entireProcessTree: true);
             }
-            catch (Exception e) when (e is InvalidOperationException or Win32Exception or NotSupportedException)
+            catch (Exception e) when (e is InvalidOperationException or Win32Exception or NotSupportedException or ObjectDisposedException)
             {
             }
         }

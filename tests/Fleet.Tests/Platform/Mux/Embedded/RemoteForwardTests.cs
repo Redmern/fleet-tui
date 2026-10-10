@@ -292,10 +292,12 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         Assert.Null(sent.Viewer);
     }
 
-    private Endpoint TunnellingViewer(FakeTunnels tunnels)
+    private Endpoint TunnellingViewer(FakeTunnels tunnels) => TunnellingViewer(tunnels, _stop.Token).Endpoint;
+
+    private (Endpoint Endpoint, Task Running) TunnellingViewer(FakeTunnels tunnels, CancellationToken stop)
     {
         var endpoint = NewEndpoint();
-        _running.Add(new FleetDaemon(new DaemonOptions
+        var running = new FleetDaemon(new DaemonOptions
         {
             Endpoint = endpoint,
             Pty = _homePanes.NewPty,
@@ -320,8 +322,9 @@ public sealed class RemoteForwardTests : IAsyncLifetime
                 ForwardWithin = TimeSpan.FromSeconds(5),
                 ReconnectAfter = TimeSpan.FromMilliseconds(100),
             },
-        }).RunAsync(_stop.Token));
-        return endpoint;
+        }).RunAsync(stop);
+        _running.Add(running);
+        return (endpoint, running);
     }
 
     [Fact]
@@ -351,6 +354,24 @@ public sealed class RemoteForwardTests : IAsyncLifetime
 
         Assert.Equal("failed", added!.State);
         Assert.Equal("red@far: Permission denied (publickey).", added.Error);
+    }
+
+    [Fact]
+    public async Task Stopping_fleetd_kills_its_background_tunnels()
+    {
+        var tunnels = new FakeTunnels();
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
+        var (endpoint, running) = TunnellingViewer(tunnels, stop.Token);
+        using (var viewer = new EmbeddedDriver(endpoint))
+        {
+            Assert.Equal("forwarded", (await viewer.AddForwardAsync("red@far", 9229, 19229))!.State);
+        }
+
+        await stop.CancelAsync();
+        await running;
+
+        Assert.True(tunnels.Started.Single().Killed);
+        Assert.True(tunnels.Disposed);
     }
 
     [Fact]
