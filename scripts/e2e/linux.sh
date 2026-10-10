@@ -86,10 +86,10 @@ after=$(panes | wc -l)
 [ "$after" -eq $((before + 1)) ] && ok "split added a pane ($before -> $after)" || bad "split ($before -> $after)"
 keys 'echo SPLIT-PANE' Enter; sleep 1
 sees 'SPLIT-PANE' 'typing reaches the split pane'
-keys C-s c; sleep 2
+keys C-s t c; sleep 2
 tabs=$(panes | awk '$2=="demo1" && $3!="float" {print $3}' | sort -u | wc -l)
 [ "$tabs" -ge 2 ] && ok "new tab ($tabs tabs)" || bad "new tab ($tabs tabs)"
-keys C-s 1; sleep 1
+keys C-s t 1; sleep 1
 sees 'SPLIT-PANE' 'prefix 1 goes back to the first tab'
 keys C-s z; sleep 1
 lacks 'Agents' 'zoom hides the other panes'
@@ -125,7 +125,7 @@ if [ "$col" -gt 0 ]; then
 else
     bad "no tab 2 in bar: $bar" noscreen
 fi
-keys C-s 1; sleep 1
+keys C-s t 1; sleep 1
 
 echo "== 8. copy mode enters and leaves"
 keys C-s '['; sleep 1
