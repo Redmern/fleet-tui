@@ -27,6 +27,17 @@ public static class SshControl
     public static IReadOnlyList<string> Cancel(string controlPath, string host, int local, string target, int remote) =>
         ["-S", controlPath, "-O", "cancel", "-L", Spec(local, target, remote), host];
 
+    public static IReadOnlyList<string> Tunnel(string host, int local, string target, int remote) =>
+    [
+        "-N", "-T",
+        "-o", "ExitOnForwardFailure=yes",
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=15",
+        .. LinkOptions,
+        "-L", Spec(local, target, remote),
+        host,
+    ];
+
     public static IReadOnlyList<string> Check(string controlPath, string host) =>
         ["-S", controlPath, "-O", "check", host];
 

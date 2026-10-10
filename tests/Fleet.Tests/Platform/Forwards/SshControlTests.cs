@@ -49,6 +49,24 @@ public sealed class SshControlTests
     }
 
     [Fact]
+    public void A_tunnel_runs_no_command_never_prompts_and_dies_when_its_forward_fails()
+    {
+        var tunnel = SshControl.Tunnel("red@box", 15173, "localhost", 5173);
+
+        Assert.Equal(
+            [
+                "-N", "-T",
+                "-o", "ExitOnForwardFailure=yes",
+                "-o", "BatchMode=yes",
+                "-o", "ConnectTimeout=15",
+                "-o", "IPQoS=lowdelay", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
+                "-L", "127.0.0.1:15173:localhost:5173",
+                "red@box",
+            ],
+            tunnel);
+    }
+
+    [Fact]
     public void A_refusing_sshd_is_recognised() =>
         Assert.True(SshControl.Prohibited("channel 3: open failed: administratively prohibited: open failed"));
 }
