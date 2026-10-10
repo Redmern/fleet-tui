@@ -1,4 +1,5 @@
 using Fleet.Ports.Mcp.Models;
+using Fleet.Shared.Mcp;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 

@@ -1,7 +1,7 @@
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 
-namespace Fleet.Features.Mcp.ServeMcp;
+namespace Fleet.Shared.Mcp;
 
 public static class McpAudit
 {
@@ -19,4 +19,7 @@ public static class McpAudit
 
     public static string Forbidden(string caller, HarnessTool tool) =>
         $"{Who(caller)}: {HarnessToolIds.For(tool)} is not allowed for this project";
+
+    public static string Refused(string caller, HarnessTool tool, string reason) =>
+        $"{Who(caller)}: {HarnessToolIds.For(tool)} refused — {SafeText.Clean(reason)}";
 }
