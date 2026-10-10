@@ -62,5 +62,8 @@ Breaking one fails `dotnet test`, so check these before you write code:
   push a `vX.Y.Z` tag; `release.yml` builds and publishes both platforms. The same commit adds a
   `## X.Y.Z (yyyy-mm-dd)` entry with 2-6 plain bullets to the top of `RELEASE_NOTES.md`: it becomes the
   GitHub release text and Settings › What's new, and both `dotnet test` and `release.yml` fail without it.
+- On headless Linux, `git push` fails with the default credential store (secretservice needs a GUI); push with
+  `git -c credential.helper= -c credential.helper='!gh auth git-credential' push ...` (the empty
+  `credential.helper=` clears the failing default first).
 - A project hook (`.claude/settings.json`) whitespace-formats every `.cs` file Claude edits
   (`dotnet format whitespace --folder`, ~2 s). It needs `pwsh` on `PATH`.
