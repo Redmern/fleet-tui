@@ -3555,7 +3555,7 @@ The defaults started as a copy of `~/.wezterm/tmux-mode.lua`; since the
 which-key submenus (2026-10-06) the rarely used keys sit in groups, so they no
 longer mirror it one to one. The file only needs overrides; `"none"` unbinds a
 key, comments and trailing commas are allowed, and `FLEET_PREFIX` still wins
-for the prefix. `prefix q r` reloads the file.
+for the prefix. `prefix s r` reloads the file.
 
 ```jsonc
 {
@@ -3567,7 +3567,7 @@ for the prefix. `prefix q r` reloads the file.
   },
   "groups": {
     "g": "git-ish stuff",   // the group's label; without one, the label is the key
-    "q": "none"             // drops a default group and its children
+    "m": "none"             // drops a default group and its children
   },
   "icons": {
     "g": "",          // a group's icon, keyed by the group's key
@@ -3583,25 +3583,33 @@ for the prefix. `prefix q r` reloads the file.
 | `h j k l` | move focus |
 | arrows | resize the focused pane by 5 cells |
 | `%`, `"` | split right / down (a shell in the pane's folder) |
-| `c`, `n`, `p`, `1`–`9` | new tab, next, previous, go to tab |
 | `z` | zoom the focused pane (toggle; moving focus unzooms) |
-| `x`, `&` | close pane / tab, after a `y/n` |
+| `x` | close pane, after a `y/n` |
 | `o` | next pane |
-| `s` | switch project (the picker, as a float) |
 | `space` | menu |
 | `[`, `]` | copy mode / paste the Windows clipboard |
 | `d` | detach |
+| `Q` | quit fleet (the menu's quit, as a float) |
+| `a` › `m l e f n` | **+agents**: dashboard / list agents / open editor / files / notifications |
+| `s` › `p w R d q r` | **+session**: switch project / save session / remotes / detach / detach / reload keys |
+| `t` › `c n p 1–9 x` | **+tabs**: new tab / next / previous / go to tab / close tab (after a `y/n`) |
+| `g` › `k K t T` | **+configure**: edit keybinds / show keybinds / button hints / theme |
+| `g c` › `v V N i A C e H M S R p` | **+fleet config**: nvim toggles (main, subs, config) / auto-close / AI-DLC mode / Claude profile / edit fleet config / head, main, sub, agent model / permissions |
+| `m` › `b x X l u v W` | **+maintenance**: rebuild dashboard / clean up agents / hide all agents / view logs / update / version / what's new |
 | `f` › `f t e g` | **+float**: new float / show-hide floats / float↔tile / move-resize float |
 | `w` › `w s` | **+project**: next project / switch project |
-| `q` › `d q r` | **+session**: detach / detach / reload keys |
 | the prefix again | sends the prefix to the pane (inside a group: back to the root) |
+
+The fleet-menu keys (`a`, `s p w R`, `Q`, `g`, `m`) run the menu action directly:
+toggles (show keybinds, button hints, the nvim toggles) flip without a menu and show a
+desktop toast with the new state; the rest open the fleet menu as a float on that action.
 
 **Sequences and groups.** A `prefixKeys` spec with spaces (`"f t"`) is a
 sequence; every key but the last opens a group. The popup stays open inside a
 group and shows only that level, titled with the path (`ctrl+s › float`).
 `esc` closes it, `backspace` goes up a level (`esc close · bksp back` in the
 footer), and an unknown key closes it and does nothing. There is no timeout.
-Depth is unlimited; the defaults use one level. Only prefix keys take
+Depth is unlimited; the defaults go two deep (`g c`). Only prefix keys take
 sequences: one under `keys` is dropped with a log line.
 
 A key cannot be a leaf and a group on the same level. When they collide:
@@ -4220,7 +4228,7 @@ leave the remote's layout code alone:
   `homelab @machine`. Clicks on the remote's tabs are the remote's to handle.
 - **Input.** Keys, pastes and commands to a focused remote pane, and mouse events
   over it, are forwarded verbatim; the remote encodes them for its panes (rule 3).
-  `switch-project`, `next-workspace`, `show` and `redraw` stay local, so `ctrl+s s`
+  `switch-project`, `next-workspace`, `show` and `redraw` stay local, so `ctrl+s s p`
   is the way back; the local switcher opens on the remote machine's tab when started
   from `@<machine>`. Remote clipboard and bell effects go to the windows showing it.
 - **Switch project is handed back.** The remote's menu, opened in a labelled client
@@ -4236,7 +4244,7 @@ leave the remote's layout code alone:
   `set-label` (phase 2 and later).
 - **Tested** with two in-process fleetds: the remote's text and pill label reach the
   local pane, a typed key reaches the remote pane and not the local one, a split is
-  made on the remote, `ctrl+s s` opens the local switcher for `@<machine>`, and
+  made on the remote, `ctrl+s s p` opens the local switcher for `@<machine>`, and
   disconnecting removes the view. Not yet exercised against a real ssh remote with
   the ghostty terminal in between.
 ## A window hears only its own projects, 2026-09-29
@@ -5755,7 +5763,7 @@ keybind model.
   Ctrl+h/j/k/l stays focus. Both client paths reach it: Windows console records
   (`DirectCommand`) and the Unix ESC prefix (`DirectBytes`, `\eh`).
 - **Layers unchanged:** `embedded-keys.json` overrides the derived defaults exactly as it
-  overrode the literal tables (`"none"` unbinds, `prefix q r` reloads), and `FLEET_PREFIX`
+  overrode the literal tables (`"none"` unbinds, `prefix s r` reloads), and `FLEET_PREFIX`
   still wins for the prefix. `"alt+h": "smart-focus left"` brings the old Alt behaviour back.
   The user layer of the model (`keybinds` in `keybinds.json`) does not reach the mux yet;
   that is phase 5's wiring. `KeybindActions.FromMux` reads `smart-resize <dir>` as

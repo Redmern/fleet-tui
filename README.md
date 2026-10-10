@@ -203,7 +203,7 @@ Only Windows and Linux x64 have published binaries — build from source with
 You can also update from inside fleet. The project picker shows "You are on vX. vY is
 available" with an **update** button (`u`) when a newer release exists; it checks at most
 once an hour and uses the last answer when offline. Settings › maintenance has **Update
-fleet** (`u`) and **Version** (`v`), which shows the installed and latest version and
+fleet** (`u`, or `ctrl+s m u`) and **Version** (`v`, or `ctrl+s m v`), which shows the installed and latest version and
 installs any release you pick. After an update, open dashboards restart on the new build
 by themselves. fleetd keeps your panes on the old build until you restart it
 (`fleet daemon stop`, then `fleet attach`); fleet says so after the update, and
@@ -304,7 +304,7 @@ has this entry, so its tab is never empty.
 A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar
 reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode and the
 fleet menu (`ctrl+enter`) all act on the remote. Switch project always opens this machine's
-switcher, from `ctrl+s s` or from the remote's menu, so you can always get back to a project
+switcher, from `ctrl+s s p` or from the remote's menu, so you can always get back to a project
 here. One window at a time follows a given remote machine;
 disconnecting it closes its view here and leaves its panes running there.
 
@@ -470,7 +470,7 @@ When a notice opens, fleet shows a desktop toast (on by default) and can ring th
 bell (off by default); toggle both in the notification center. The embedded multiplexer's
 tab bar adds the counts to the project pill, `fleet ● 2 +3`: two open notices in this project,
 three in other open projects.
-Click it to open the notification center.
+Click it, or press `ctrl+s a n`, to open the notification center.
 
 The dashboard keys act on whatever row is selected there, so they are not in this
 menu — a menu you can open from a claude pane cannot act on a selection you cannot
@@ -584,8 +584,27 @@ fleet apply-keybinds --dry-run           # show what would change, write nothing
 with `fleet apply-keybinds` as the fix. To have the same nvim keys in your own nvim config,
 add `dofile('<fleet config>/fleet-keys.lua').setup()` to it (see *Fleet's nvim config* below).
 
-On the built-in multiplexer, the `ctrl+s` popup has submenus: `ctrl+s f` › *float*,
-`ctrl+s w` › *project*, `ctrl+s q` › *session* (`ctrl+s f t` shows or hides the floats).
+On the built-in multiplexer, the `ctrl+s` popup has submenus: `ctrl+s a` › *agents*,
+`ctrl+s s` › *session*, `ctrl+s t` › *tabs*, `ctrl+s g` › *configure*, `ctrl+s m` ›
+*maintenance*, `ctrl+s f` › *float* and `ctrl+s w` › *project* (`ctrl+s f t` shows or hides
+the floats). Every fleet menu action has a key there:
+
+| Group | Keys |
+|---|---|
+| top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
+| `a` agents | `m` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications |
+| `s` session | `p` switch project, `w` save session, `R` remotes, `d` / `q` detach, `r` reload keys |
+| `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
+| `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
+| `g c` fleet config | `v` / `V` / `N` nvim toggles, `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
+| `m` maintenance | `b` rebuild dashboard, `x` clean up agents, `X` hide all agents, `l` view logs, `u` update, `v` version, `W` what's new |
+| `f` float | `f` new, `t` show or hide, `e` embed, `g` mode |
+| `w` project | `w` next workspace, `s` switch project |
+
+Toggles (show keybinds, button hints and the nvim toggles) flip straight away and show a
+desktop toast with the new state; every other action opens the fleet menu in a float on that
+action. Older keys moved: the `q` group is now `s`, the tab keys (`c`, `n`, `p`, `1`-`9`, `&`)
+are under `t`, and top-level `s` is gone (use `s p` or `w s`).
 `esc` closes the popup and `backspace` goes up a level. Prefix keys in
 `embedded-keys.json` can be sequences, and `groups` names them:
 `{ "prefixKeys": { "g s": "split-down" }, "groups": { "g": "git" } }`. Binding a group's
@@ -921,7 +940,7 @@ as if you had.
   login, as it does anywhere in Claude Code.
 - The chord is direct, with no prefix, and rebindable under **Keybinds** in the
   *anywhere, no prefix* group. The built-in multiplexer picks a change up on its next
-  attach or `prefix q r`.
+  attach or `prefix s r`.
 - **On the built-in multiplexer** the head is a real float: 80% of the screen, over
   whichever project the window shows. Hiding moves it out of sight without stopping it,
   and showing it from another project brings the same head along. `embedded-keys.json`
