@@ -33,6 +33,7 @@ public static class HarnessToolIds
         HarnessTool.StopSub => "stop_sub",
         HarnessTool.RemoveSub => "remove_sub",
         HarnessTool.Report => "report",
+        HarnessTool.SyncToRemote => "sync_to_remote",
         _ => string.Empty,
     };
 

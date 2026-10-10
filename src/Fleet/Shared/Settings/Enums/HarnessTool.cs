@@ -27,4 +27,5 @@ public enum HarnessTool
     StopSub,
     RemoveSub,
     Report,
+    SyncToRemote,
 }

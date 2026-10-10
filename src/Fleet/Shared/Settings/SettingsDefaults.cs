@@ -51,6 +51,8 @@ public static class SettingsDefaults
 
     public const bool SubagentGuidance = true;
 
+    public const bool Iso = false;
+
     public const bool ShowMenuKeys = true;
 
     public const NvimConfig Nvim = NvimConfig.Fleet;
@@ -142,6 +144,7 @@ public static class SettingsDefaults
         HarnessTool.StopSub => "Stop a sub-orchestrator",
         HarnessTool.RemoveSub => "Remove a sub-orchestrator",
         HarnessTool.Report => "Report its own status",
+        HarnessTool.SyncToRemote => "Send work to another machine",
         _ => tool.ToString(),
     };
 }

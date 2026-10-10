@@ -69,6 +69,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             {
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
                 SubagentGuidance = stored.SubagentGuidance ?? SettingsDefaults.SubagentGuidance,
+                Iso = stored.Iso ?? SettingsDefaults.Iso,
                 Models = new RoleModels(
                     ParseRole(stored.MainModel, stored.MainEffort, SettingsDefaults.MainModel),
                     ParseRole(stored.SubModel, stored.SubEffort, SettingsDefaults.SubModel),
@@ -108,6 +109,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             AutoCloseMinutes = config.AutoCloseMinutes == SettingsDefaults.AutoCloseMinutes ? 0 : config.AutoCloseMinutes,
             StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
+            Iso = config.Iso == SettingsDefaults.Iso ? null : config.Iso,
             MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),
