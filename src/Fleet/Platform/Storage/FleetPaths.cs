@@ -26,6 +26,8 @@ public static class FleetPaths
 
     public static string HeadSettingsFile => Path.Combine(Config, "head.json");
 
+    public static string IsoFile => Path.Combine(Config, "iso.json");
+
     public static string MenuSettingsFile => Path.Combine(Config, "menu.json");
 
     public static string NvimSettingsFile => Path.Combine(Config, "nvim.json");

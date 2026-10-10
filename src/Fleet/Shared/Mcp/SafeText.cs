@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Fleet.Features.Mcp.ServeMcp;
+namespace Fleet.Shared.Mcp;
 
 public static class SafeText
 {

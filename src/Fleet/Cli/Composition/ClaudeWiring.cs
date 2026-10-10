@@ -39,7 +39,7 @@ public static class ClaudeWiring
 
     private static Result SyncLocked(string project, string directory, string caller, SettingsConfig settings)
     {
-        var permissions = ClaudePermissionPlanner.Plan(settings);
+        var permissions = ClaudePermissionPlanner.Plan(settings, Adapters.Iso().Load().On);
         var server = McpRegistration.For(Adapters.Executable, project, caller);
 
         var plan = new ClaudePlan(
@@ -84,7 +84,7 @@ public static class ClaudeWiring
     private static Result SyncWorktreeConfig(string project, string folder, string repository, string branch)
     {
         var settings = Adapters.Settings().Load(project).MergedOverDefaults();
-        var permissions = ClaudePermissionPlanner.Plan(settings);
+        var permissions = ClaudePermissionPlanner.Plan(settings, Adapters.Iso().Load().On);
 
         var server = McpRegistration.For(
             Adapters.Executable, project, McpCaller.ForAgent(repository, branch));

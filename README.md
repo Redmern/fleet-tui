@@ -169,6 +169,9 @@ fleet theme list|get        the themes, and the active one
 fleet theme set <name>      switch theme; running fleet windows follow live
 fleet theme sync            follow omarchy's current theme
 fleet theme install omarchy hook omarchy so fleet follows every theme switch
+fleet iso on|off|status     ISO mode: other machines get status codes only (see ISO mode)
+fleet iso allow <address>   let that ssh client attach while ISO mode is on
+fleet iso code <p> [<code>] pin the code other machines see for project <p>
 fleet version               show the version, and check for an update
 fleet update                download and install the latest release
 fleet attach                attach this terminal to fleetd, starting it if needed
@@ -312,6 +315,116 @@ a toast (with this machine's settings), and the notification center gets a tab f
 Notifications always opens this machine's center, whether from the remote's menu (`n`) or a
 click on the remote's notice pill, the same way Switch project and the head stay here; only
 fleet used directly on the remote machine opens the remote's own center.
+
+#### Web apps on a remote machine
+
+While a machine is connected, fleet forwards the web apps its projects run to `localhost`
+here, over the same ssh connection (it is the ssh ControlMaster, on a private socket in
+`$XDG_RUNTIME_DIR/fleet` or `/tmp/fleet-<user>`), so there is no second login. Forwards
+always bind `127.0.0.1`. Every few seconds fleet lists the remote's listening ports (`ss`,
+or `/proc/net/tcp`), leaving out ports below 1024 and sshd's own. List the ports a project
+should get in its project config (`projects/<name>.json` in the fleet config folder on the
+remote):
+
+```json
+{ "forwardPorts": [5173, 3000], "runCommand": "npm run dev", "readyPort": 5173, "healthPath": "/" }
+```
+
+Those ports are forwarded on their own while the project runs, and dropped when nothing
+listens on them any more. A local port keeps the remote's number when it is free here,
+otherwise fleet picks another one and always shows the one it used. Other listening ports
+are shown but not forwarded. `p` on a connected machine under **Remote machines** lists its
+ports: `f` forwards one (or a port you type), `u` stops it and `enter` opens it in your
+browser. A project's dashboard shows its ports on a `web` line and `w` opens the first one,
+on the machine you are viewing from. If the link drops while ports are forwarded, fleet
+reconnects and puts them back; disconnecting removes them.
+
+From a terminal: `fleet forward <host> <port> [--local <n>] [--open]`, `fleet forward ls`,
+`fleet forward rm <host> <port>` and `fleet forward open <port>`. `fleet forward start
+<host> <project> [--open]` runs the project's `runCommand` in a pane of that project on the
+remote, waits until `readyPort` (or the first forward port) listens and, with `healthPath`,
+answers 2xx, then forwards it; `fleet forward stop` closes that pane. The head and the
+agents have the same as tools: `list_forwards`, `forward_port`, `unforward_port`, `open_url`,
+`start_stack` and `stop_stack`. This needs OpenSSH control sockets, so not on Windows.
+
+Things that can bite: an app that checks the Host header (Vite's `server.allowedHosts`)
+must allow `localhost`; when the local port differs, hot reload needs its client port set
+(Vite's `server.hmr.clientPort`); projects that share `localhost` share its cookies; and a
+docker `-p` port binds `0.0.0.0` on the remote, so it is reachable there by others too.
+
+### ISO mode
+
+ISO mode is for a machine that holds data which must not leave it, such as customer data.
+Another machine can still steer it over ssh, but gets status codes only. Turn it on in a terminal
+on that machine:
+
+```
+fleet iso on          # other machines get codes and states only
+fleet iso status      # the mode, the attach allowlist and the code overrides
+fleet iso off         # asks you to type 'off' first
+```
+
+`fleet iso` runs only in a local, interactive terminal. It refuses when stdin is not a TTY,
+over ssh (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` set) and inside a Claude agent. No
+fleet tool, MCP call or bridged request can change it. The setting lives in `iso.json` in the
+fleet config folder and takes effect without a restart. A damaged `iso.json` reads as on.
+The file belongs to your user, so a process running as you, an agent included, can still edit
+it; ISO mode keeps other machines out, not code that already runs here.
+
+**What another machine sees.** Projects become codes (`sub1`, `sub2`, ...) and agents
+`sub1.agent2`, numbered in name order. Codes never come from repository or branch names. Pin a
+code with `fleet iso code <project> <code>` (no code clears it). The head on the other machine
+gets lines such as `sub1.agent2: waiting for input` from `list_agents` and
+`project_structure`. The states are working, waiting for input, idle, done, failed and
+stopped. Reports and summaries never cross. `tell`, `relay` and `menu_action` take a code and
+answer `ok` or `failed` with no detail; `show_agent` and `hide_agent` are refused.
+Notifications cross as a code and a fixed word. Pane titles, folders, screen text
+(`get-text`), notice text, the machine name and the projects' web ports do not cross. Another machine cannot start
+panes or type into them (`spawn`, `send-text`), because that would let it run commands here;
+prompts reach agents through the head's `tell` and `relay`. Any other operation is refused.
+
+**Attach.** Seeing a project means seeing its screen, so attach over ssh is allowed only
+from hosts on an allowlist. `fleet iso allow <address>` adds one, `fleet iso disallow
+<address>` removes one. An entry is the client address that ssh reports in `SSH_CONNECTION`,
+usually an IP address. A machine that is not on the list still connects and gets codes, but no
+view. Removing a host, or turning ISO mode on, ends its view within a second. Clients on this
+machine are never restricted.
+
+**Outbound.** With ISO mode on, fleet on this machine opens no ssh connection to another
+machine, does not forward head tools to one, starts no port forward or stack on one, skips
+the update check, and merges finished agents without pushing. `sync_to_remote` is refused too;
+it is also refused for a single project whose own ISO setting is on. Agents get `git push`, `gh pr merge` and `gh pr create` denied, whatever
+the project allows; running agents get this when their Claude settings next resync. `fleet
+update`, which you run yourself, still downloads from GitHub. `git fetch` and clone
+still work, because data only comes in. Remote links that were open before you turned ISO mode
+on stay open until you disconnect them.
+
+**What ISO mode cannot do.** It is enforcement in fleet, not a sandbox:
+
+- An agent can still run `curl` or any other network tool. Permission rules are best effort.
+- Every agent sends its prompts and the code it reads to the model API. That traffic always
+  leaves the machine. Decide whether that is acceptable for the data, or point Claude at a
+  private endpoint.
+- Anyone with a shell on the machine over ssh can do anything. Restrict the ssh key with
+  `command="fleet bridge"` (or `ForceCommand`) so it can only reach the bridge.
+
+For a real guarantee, add an egress firewall that allows only inbound ssh, the model API and
+your git hosts. For example, with nftables:
+
+```
+table inet iso {
+  chain output {
+    type filter hook output priority 0; policy drop;
+    oif lo accept
+    ct state established,related accept
+    udp dport 53 accept
+    ip daddr { 160.79.104.0/23 } tcp dport 443 accept   # api.anthropic.com
+    ip daddr { 140.82.112.0/20 } tcp dport { 22, 443 } accept   # github.com
+  }
+}
+```
+
+Check the current address ranges of your model API and git host before you rely on them.
 
 ### Sessions
 

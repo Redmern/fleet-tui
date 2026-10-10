@@ -6,6 +6,7 @@ using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Iso;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings.Enums;
@@ -26,6 +27,12 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
     private readonly HeadVisibility _visibility = new(deps, new HeadGate(deps));
 
+    private HeadIso? _iso;
+
+    private HeadIso Iso => _iso ??= new HeadIso(deps, _gate, (request, ct) => HandleHereAsync(request, show: false, ct));
+
+    private readonly HeadForwards _forwards = new(deps);
+
     public HeadRelay Relay => _relay ??= new HeadRelay(deps, _gate, timing ?? HeadTiming.Default);
 
     public static IReadOnlyList<FleetAction> MenuActions { get; } =
@@ -39,10 +46,14 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         {
             HeadTools.ListRemotes => await _remotes.ListAsync(ct).ConfigureAwait(false),
             HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
+            HeadTools.ListForwards or HeadTools.ForwardPort or HeadTools.UnforwardPort or HeadTools.OpenUrl
+                or HeadTools.StartStack or HeadTools.StopStack => await _forwards.HandleAsync(request, ct).ConfigureAwait(false),
             HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
                 or HeadTools.ProjectStructure or HeadTools.Relay or HeadTools.Tell or HeadTools.ShowAgent
                 or HeadTools.HideAgent when !HeadRemotes.IsLocal(remote) =>
-                await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
+                deps.Iso?.Load() is { On: true }
+                    ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
+                    : await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
     }
@@ -53,6 +64,11 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         {
             return McpResult.Error(
                 "this fleet acts on its own projects only; the machine fleet was opened on reaches the others.");
+        }
+
+        if (deps.Iso?.Load() is { On: true } iso)
+        {
+            return await Iso.ServeAsync(request, iso, ct).ConfigureAwait(false);
         }
 
         return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.ProjectStructure

@@ -69,6 +69,8 @@ public static class Adapters
 
     public static ISettingsStore Settings() => new JsonSettingsStore();
 
+    public static IIsoMode Iso() => new JsonIsoMode();
+
     public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorInNvim;
 
     public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsInNvim;
@@ -147,6 +149,11 @@ public static class Adapters
             KnownRemotes());
 
     public static Ports.Remotes.IKnownRemoteStore KnownRemotes() => new JsonKnownRemoteStore();
+
+    public static Ports.Forwards.IPortForwards Forwards() =>
+        new Platform.Mux.Embedded.EmbeddedForwards(() => new Platform.Mux.Embedded.EmbeddedDriver(Platform.Mux.Embedded.Daemon.Endpoint.Default()));
+
+    public static Ports.Browser.IBrowserLauncher Browser() => new Platform.Forwards.SystemBrowser();
 
     public static IDispatchHistory History() => new FileDispatchHistory();
 

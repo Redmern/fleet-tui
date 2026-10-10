@@ -19,7 +19,7 @@ public static class UpdateWiring
     public const string UpdatedElsewhere =
         "fleet was already updated from another window. Reopen this window to use the new build.";
 
-    public static CheckUpdateHandler Checker() => new(Adapters.Releases(), Adapters.UpdateChecks());
+    public static CheckUpdateHandler Checker() => new(Adapters.Releases(), Adapters.UpdateChecks(), iso: Adapters.Iso());
 
     public static string? CachedNotice(FreshBuild build) =>
         build.Replaced ? null : Checker().Cached(Adapters.ReleaseRepo, FleetVersion.Current)?.Notice(FleetVersion.Current);
@@ -35,6 +35,11 @@ public static class UpdateWiring
 
     public static async Task<VersionScreen> VersionScreenAsync(CancellationToken ct)
     {
+        if (Adapters.Iso().Load().On)
+        {
+            return Screen(FleetVersion.Current, null, []);
+        }
+
         try
         {
             var check = await Checker()

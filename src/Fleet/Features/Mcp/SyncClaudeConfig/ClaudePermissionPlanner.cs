@@ -8,8 +8,13 @@ namespace Fleet.Features.Mcp.SyncClaudeConfig;
 
 public static class ClaudePermissionPlanner
 {
-    public static ClaudePermissions Plan(SettingsConfig settings)
+    public static ClaudePermissions Plan(SettingsConfig settings, bool iso = false)
     {
+        if (iso)
+        {
+            settings = settings.WithPush(ActionPolicy.Forbid).WithMerge(ActionPolicy.Forbid);
+        }
+
         var allow = new List<string>();
         var deny = new List<string>();
         var ask = new List<string>();
@@ -44,6 +49,11 @@ public static class ClaudePermissionPlanner
         Gate(GitGates.PushRule, settings.Push, allow, deny, ask);
         Gate(GitGates.MergeRule, settings.Merge, allow, deny, ask);
         Gate(GitGates.MergePowerShellRule, settings.Merge, allow, deny, ask);
+
+        if (iso)
+        {
+            deny.Add(GitGates.PrCreateRule);
+        }
 
         return new ClaudePermissions(allow, deny, ask);
     }

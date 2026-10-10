@@ -568,7 +568,7 @@ public static class MenuCommand
                 }
 
             case FleetAction.Remotes:
-                ManageRemotesView.Show(app, keymap, Adapters.Remotes(), Adapters.KnownRemotes());
+                ManageRemotesView.Show(app, keymap, Adapters.Remotes(), Adapters.KnownRemotes(), Adapters.Forwards(), Adapters.Browser());
                 break;
 
             case FleetAction.Notifications when EmbeddedWiring.HandBack(FleetActionIds.For(FleetAction.Notifications)):

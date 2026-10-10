@@ -3,6 +3,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Mcp;
 using Fleet.Shared.Settings.Enums;
 
 namespace Fleet.Tests.Features.Mcp;

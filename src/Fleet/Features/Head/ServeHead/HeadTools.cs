@@ -42,6 +42,30 @@ public static class HeadTools
 
     public const string Local = "local";
 
+    public const string ListForwards = "list_forwards";
+
+    public const string ForwardPort = "forward_port";
+
+    public const string UnforwardPort = "unforward_port";
+
+    public const string OpenUrl = "open_url";
+
+    public const string StartStack = "start_stack";
+
+    public const string StopStack = "stop_stack";
+
+    public const string Port = "port";
+
+    public const string LocalPort = "local_port";
+
+    public const string Open = "open";
+
+    private static readonly HeadToolParam ForwardRemoteParam =
+        new(Remote, "string", "The remote machine's nickname, as list_remotes shows it (or its ssh host).", true);
+
+    private static readonly HeadToolParam PortParam =
+        new(Port, "string", "The port the web app listens on, on the remote machine.", true);
+
     private static readonly HeadToolParam ProjectParam =
         new(Project, "string", "The fleet project's name, as list_projects shows it.", true);
 
@@ -119,6 +143,39 @@ public static class HeadTools
             "Hide the pane of one agent or sub-orchestrator by name, without stopping it. Hiding a hidden pane "
             + "does nothing.",
             TargetParams),
+        new(
+            ListForwards,
+            "List the web app ports of the connected remote machines: each forwarded port with its localhost URL, "
+            + "and the listening ports that are not forwarded. Ports a project lists in forwardPorts are forwarded "
+            + "automatically while it runs.",
+            []),
+        new(
+            ForwardPort,
+            "Forward a web app port of a remote machine to localhost on this machine over fleet's ssh link (bound to "
+            + "127.0.0.1 only). Uses the same local port when free, else another; the answer names the URL.",
+            [
+                ForwardRemoteParam,
+                PortParam,
+                new(LocalPort, "string", "The local port to use instead of the same number.", false),
+            ]),
+        new(UnforwardPort, "Stop forwarding a remote machine's port.", [ForwardRemoteParam, PortParam]),
+        new(
+            OpenUrl,
+            "Open a forwarded port in the browser on this machine.",
+            [
+                new(Port, "string", "The remote port (or the local port) of the forward.", true),
+                new(Remote, "string", "The remote machine's nickname; leave out when only one forward has that port.", false),
+            ]),
+        new(
+            StartStack,
+            "Run a remote project's runCommand in a pane there, wait until its readyPort (or first forwardPorts "
+            + "entry) listens and answers, forward it and give the URL.",
+            [
+                ForwardRemoteParam,
+                ProjectParam,
+                new(Open, "string", "'true' to open the URL in the browser once it is up.", false),
+            ]),
+        new(StopStack, "Stop the stack start_stack started for a remote project.", [ForwardRemoteParam, ProjectParam]),
     ];
 
     private static IReadOnlyList<HeadToolParam> TargetParams =>

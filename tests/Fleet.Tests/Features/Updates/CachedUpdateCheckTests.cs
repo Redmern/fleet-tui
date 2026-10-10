@@ -2,6 +2,7 @@ using Fleet.Features.Updates.CheckUpdate;
 using Fleet.Platform.Releases.Fake;
 using Fleet.Ports.Releases;
 using Fleet.Ports.Releases.Models;
+using Fleet.Shared.Iso;
 
 namespace Fleet.Tests.Features.Updates;
 
@@ -40,6 +41,19 @@ public class CachedUpdateCheckTests
 
         public Task<byte[]?> DownloadAsync(string url, CancellationToken ct = default) =>
             _inner.DownloadAsync(url, ct);
+    }
+
+    [Fact]
+    public async Task In_iso_mode_github_is_never_asked()
+    {
+        var client = new CountingClient(new ReleaseInfo("v0.3.0", []));
+
+        var check = await new CheckUpdateHandler(client, new MemoryCache(), () => Now, new IsoSwitch(on: true))
+            .HandleCachedAsync(Repo, "0.1.0");
+
+        Assert.Equal(0, client.Lookups);
+        Assert.False(check.UpdateAvailable);
+        Assert.Equal(IsoGuard.Refusal(IsoGuard.UpdateCheck), check.Error);
     }
 
     [Fact]

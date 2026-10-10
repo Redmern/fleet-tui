@@ -27,6 +27,8 @@ public enum FleetVerb
     Cli,
     AskPass,
     Theme,
+    Iso,
     Help,
+    Forward,
     Unknown,
 }

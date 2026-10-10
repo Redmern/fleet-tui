@@ -10,9 +10,12 @@ public static class GitGates
 
     public const string MergePowerShellRule = "PowerShell(gh pr merge:*)";
 
+    public const string PrCreateRule = "Bash(gh pr create:*)";
+
     public static bool IsOwned(string rule) =>
         rule.Equals(CommitRule, StringComparison.Ordinal)
         || rule.Equals(PushRule, StringComparison.Ordinal)
         || rule.Equals(MergeRule, StringComparison.Ordinal)
-        || rule.Equals(MergePowerShellRule, StringComparison.Ordinal);
+        || rule.Equals(MergePowerShellRule, StringComparison.Ordinal)
+        || rule.Equals(PrCreateRule, StringComparison.Ordinal);
 }

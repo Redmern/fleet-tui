@@ -51,6 +51,8 @@ public static class SettingsDefaults
 
     public const bool SubagentGuidance = true;
 
+    public const bool Iso = false;
+
     public const bool ShowMenuKeys = true;
 
     public const NvimConfig Nvim = NvimConfig.Fleet;
@@ -85,6 +87,12 @@ public static class SettingsDefaults
         HarnessTool.StopSub,
         HarnessTool.RemoveSub,
         HarnessTool.Report,
+        HarnessTool.ListForwards,
+        HarnessTool.ForwardPort,
+        HarnessTool.UnforwardPort,
+        HarnessTool.OpenUrl,
+        HarnessTool.StartStack,
+        HarnessTool.StopStack,
     ];
 
     public static ToolRule RuleFor(HarnessTool tool)
@@ -142,6 +150,13 @@ public static class SettingsDefaults
         HarnessTool.StopSub => "Stop a sub-orchestrator",
         HarnessTool.RemoveSub => "Remove a sub-orchestrator",
         HarnessTool.Report => "Report its own status",
+        HarnessTool.ListForwards => "List forwarded web ports",
+        HarnessTool.ForwardPort => "Forward a remote port to localhost",
+        HarnessTool.UnforwardPort => "Stop forwarding a remote port",
+        HarnessTool.OpenUrl => "Open a forwarded port in the browser",
+        HarnessTool.StartStack => "Run a remote project's stack",
+        HarnessTool.StopStack => "Stop a remote project's stack",
+        HarnessTool.SyncToRemote => "Send work to another machine",
         _ => tool.ToString(),
     };
 }

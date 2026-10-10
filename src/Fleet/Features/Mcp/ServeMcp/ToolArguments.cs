@@ -38,6 +38,16 @@ public static class ToolArguments
 
     public const string Typed = "typed";
 
+    public const string Remote = "remote";
+
+    public const string Port = "port";
+
+    public const string LocalPort = "local_port";
+
+    public const string Project = "project";
+
+    public const string Open = "open";
+
     public static string Text(McpRequest request, string key) => request.Value(key).Trim();
 
     public static bool Flag(McpRequest request, string key) => request.Flag(key);

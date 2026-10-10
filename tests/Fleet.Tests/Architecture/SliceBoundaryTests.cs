@@ -249,6 +249,37 @@ public class SliceBoundaryTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void Only_the_sync_egress_reaches_for_the_sync_spawn_helper()
+    {
+        // ISO is only a guarantee while every fleet-initiated transfer goes through SshSyncEgress,
+        // whose first step is the ISO check. Anything else spawning sync processes would bypass it.
+        var spawnHelper = new System.Text.RegularExpressions.Regex(@"\bSyncSpawn\b");
+
+        var violations = CsFiles(SrcDir)
+            .Where(f => !Under(f, Path.Combine("Platform", "Sync")))
+            .Where(f => spawnHelper.IsMatch(File.ReadAllText(f)))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Only_the_composition_root_hands_out_the_real_sync_process_runner()
+    {
+        var runner = new System.Text.RegularExpressions.Regex(@"\bSyncProcessRunner\b");
+
+        var violations = CsFiles(SrcDir)
+            .Where(f => !Under(f, Path.Combine("Platform", "Sync")))
+            .Where(f => !Under(f, Path.Combine("Cli", "Composition")))
+            .Where(f => runner.IsMatch(File.ReadAllText(f)))
+            .Select(Relative)
+            .ToList();
+
+        Assert.Empty(violations);
+    }
+
     private static bool Under(string file, string relativeDir) =>
         file.StartsWith(
             Path.Combine(SrcDir, relativeDir) + Path.DirectorySeparatorChar,

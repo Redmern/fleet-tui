@@ -7,6 +7,8 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Mux.Embedded.Render;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Iso;
+using Fleet.Shared.Iso.Models;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -53,6 +55,16 @@ public sealed class DaemonOptions
     public Action<string, string> Toast { get; init; } = (_, _) => { };
 
     public Func<string, IReadOnlyDictionary<string, string>, CancellationToken, Task<(string Text, bool Failed)>>? Head { get; init; }
+
+    public Func<IsoConfig> Iso { get; init; } = () => IsoConfig.Off;
+
+    public Func<string, IEnumerable<string>> Worktrees { get; init; } = _ => [];
+
+    public TimeSpan IsoSweepEvery { get; init; } = TimeSpan.FromSeconds(1);
+
+    public ForwardOptions Forwards { get; init; } = new();
+
+    public Func<IReadOnlyList<ProjectConfigDto>> ProjectConfigs { get; init; } = () => [];
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -69,6 +81,9 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Pane, string Text)> _copies = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<string, RemoteLink> _remotes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Hello> _bridged = new(StringComparer.Ordinal);
+    private readonly ForwardHub _hub = new(options.Forwards, options.Log);
+    private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
@@ -90,6 +105,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         RestoreSession();
 
         var render = Task.Run(() => RenderLoopAsync(token), CancellationToken.None);
+        var sweep = Task.Run(() => SweepViewsAsync(token), CancellationToken.None);
 
         try
         {
@@ -106,6 +122,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             _stop.Cancel();
             await render.ConfigureAwait(false);
+            await sweep.ConfigureAwait(false);
             Shutdown();
         }
     }
@@ -256,6 +273,22 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                             break;
                         }
+                    case ForwardHub.ListOp:
+                        response.Forwards = [.. _hub.List(), .. ViewerForwards()];
+                        break;
+                    case RemoteLink.ProjectConfigsOp:
+                        response.ProjectConfigs = [.. options.ProjectConfigs()];
+                        break;
+                    case RemoteLink.ViewerForwardsOp:
+                        if (ClientFor(request, attachedClient) is { } viewer)
+                        {
+                            _viewerForwards[viewer] = [.. (request.Forwards ?? []).Select(f => Viewed(f, request.Host ?? viewer))];
+                        }
+
+                        break;
+                    case ForwardHub.ViewerOpenOp:
+                        OpenOnViewer(request.Port);
+                        break;
                     case "list-remotes":
                         response.Remotes = [.. _remotes.Values.Select(r => r.Snapshot())];
                         break;
@@ -269,6 +302,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         if (_remotes.Remove(request.Host ?? string.Empty, out var leaving))
                         {
                             leaving.Stop();
+                            _hub.Dropped(leaving.Host);
                         }
 
                         break;
@@ -387,7 +421,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
 
             var clientId = string.Empty;
-            if (hello.Role == ClientRoles.Attach)
+            if (hello.Role == ClientRoles.Attach && !MayView(hello))
+            {
+                options.Log($"iso mode: {hello.Origin ?? "an unknown host"} connects without a view; attach is not allowed from there");
+            }
+            else if (hello.Role == ClientRoles.Attach)
             {
                 lock (_gate)
                 {
@@ -396,6 +434,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     clientId = client.Id;
                     session = new AttachSession(client.Id, wire);
                     _sessions[client.Id] = session;
+
+                    if (hello.Bridged)
+                    {
+                        _bridged[client.Id] = hello;
+                    }
+
                     Furnish(client.Id, hello);
                     ApplyResizes();
                 }
@@ -424,7 +468,17 @@ public sealed class FleetDaemon(DaemonOptions options)
                     break;
                 }
 
-                await HandleAsync(wire, session, message.Type, message.Payload, ct).ConfigureAwait(false);
+                if (session is not null && (!IsAttached(session) || !MayView(hello)))
+                {
+                    if (IsAttached(session))
+                    {
+                        LoseView(session, hello);
+                    }
+
+                    session = null;
+                }
+
+                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, ct).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException
@@ -442,22 +496,85 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private bool IsAttached(AttachSession session)
+    {
+        lock (_gate)
+        {
+            return _sessions.ContainsKey(session.Client);
+        }
+    }
+
+    private void LoseView(AttachSession session, Hello hello)
+    {
+        options.Log($"iso mode: {hello.Origin ?? "an unknown host"} lost its view; attach is not allowed from there");
+        Detach(session);
+    }
+
+    private async Task SweepViewsAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(options.IsoSweepEvery, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (_bridged.IsEmpty)
+            {
+                continue;
+            }
+
+            foreach (var (client, hello) in _bridged)
+            {
+                AttachSession? viewing;
+                lock (_gate)
+                {
+                    viewing = _sessions.GetValueOrDefault(client);
+                }
+
+                if (viewing is not null && !MayView(hello))
+                {
+                    LoseView(viewing, hello);
+                }
+            }
+        }
+    }
+
+    private bool MayView(Hello hello) =>
+        !hello.Bridged || options.Iso() is not { On: true } iso || iso.MayAttachFrom(hello.Origin);
+
     private async Task HandleAsync(
-        Wire wire, AttachSession? session, MessageType type, byte[] payload, CancellationToken ct)
+        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken ct)
     {
         switch (type)
         {
             case MessageType.Request:
                 {
                     var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
+                    var iso = options.Iso();
 
-                    if (request.Op is RemoteLink.HeadOp or RemoteHeadOp)
+                    if (request.Op == RemoteLink.HeadOp || (request.Op == RemoteHeadOp && !iso.On))
                     {
-                        _ = Task.Run(() => AnswerHeadAsync(wire, request, ct), CancellationToken.None);
+                        var redact = bridged && iso.On;
+                        _ = Task.Run(() => AnswerHeadAsync(wire, request, redact, ct), CancellationToken.None);
                         break;
                     }
 
-                    var response = Execute(request, session?.Client);
+                    if (RunsForward(request.Op, iso, bridged))
+                    {
+                        _ = Task.Run(() => AnswerForwardAsync(wire, request, ct), CancellationToken.None);
+                        break;
+                    }
+
+                    var response = IsoRefusal(request.Op, iso) is { } refused
+                        ? new ControlResponse { Id = request.Id, Ok = false, Error = refused }
+                        : bridged && iso.On
+                            ? ExecuteIso(request, session?.Client, iso)
+                            : Execute(request, session?.Client);
                     await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
                         .ConfigureAwait(false);
                     break;
@@ -510,7 +627,134 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string RemoteHeadOp = "remote-head";
 
-    private async Task AnswerHeadAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    private static bool RunsForward(string op, IsoConfig iso, bool bridged) =>
+        ForwardHub.SlowOps.Contains(op)
+        && (!iso.On || (!bridged && op is ForwardHub.RemoveOp or ForwardHub.StackStopOp));
+
+    private static string? IsoRefusal(string op, IsoConfig iso) =>
+        !iso.On ? null
+        : op == RemoteHeadOp ? IsoProjection.Refused
+        : ForwardHub.SlowOps.Contains(op) ? IsoGuard.Refusal(IsoGuard.Forward)
+        : null;
+
+    private ControlResponse ExecuteIso(ControlRequest request, string? attachedClient, IsoConfig iso)
+    {
+        var codes = IsoCodes.Assign(iso, options.SavedProjects(), options.Worktrees);
+
+        if (IsoFilter.Inbound(request, codes) is { } refused)
+        {
+            return new ControlResponse { Id = request.Id, Ok = false, Error = refused };
+        }
+
+        var response = Execute(request, attachedClient);
+        IsoFilter.Outbound(response, codes);
+        return response;
+    }
+
+    private async Task AnswerForwardAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    {
+        ControlResponse response;
+        try
+        {
+            response = await _hub.HandleAsync(request, LinkOf, ConnectRemoteLocked, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
+        {
+            response = new ControlResponse { Ok = false, Error = e.Message };
+        }
+
+        response.Id = request.Id;
+
+        try
+        {
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
+    private RemoteLink? LinkOf(string host)
+    {
+        lock (_gate)
+        {
+            return _remotes.GetValueOrDefault(host);
+        }
+    }
+
+    private void ConnectRemoteLocked(string host)
+    {
+        lock (_gate)
+        {
+            ConnectRemote(host);
+        }
+    }
+
+    private bool IsCurrent(RemoteLink link)
+    {
+        lock (_gate)
+        {
+            return _remotes.GetValueOrDefault(link.Host) == link;
+        }
+    }
+
+    private async Task RunLinkAsync(RemoteLink link)
+    {
+        await link.RunAsync(_stop.Token).ConfigureAwait(false);
+
+        if (_stop.IsCancellationRequested || _hub.Ended(link, IsCurrent(link)) is not { } wait)
+        {
+            return;
+        }
+
+        options.Log($"remote {link.Host}: the link dropped with forwards open; reconnecting in {wait.TotalSeconds:0}s");
+
+        try
+        {
+            await Task.Delay(wait, _stop.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (_remotes.GetValueOrDefault(link.Host) == link)
+            {
+                ConnectRemote(link.Host);
+            }
+        }
+    }
+
+    private IEnumerable<ForwardDto> ViewerForwards() => _viewerForwards.Values.SelectMany(v => v);
+
+    private static ForwardDto Viewed(ForwardDto forward, string viewer) =>
+        new()
+        {
+            Host = viewer,
+            RemotePort = forward.RemotePort,
+            LocalPort = forward.LocalPort,
+            State = forward.State,
+            Project = forward.Project,
+            Error = forward.Error,
+            Viewer = true,
+        };
+
+    private void OpenOnViewer(int port)
+    {
+        var viewer = _viewerForwards
+            .Where(v => v.Value.Any(f => f.RemotePort == port && f.LocalPort is not null))
+            .Select(v => v.Key)
+            .FirstOrDefault(_sessions.ContainsKey)
+            ?? throw new InvalidOperationException($"no machine viewing this one forwards port {port}");
+
+        _sessions[viewer].Pending.Enqueue(new HostEffect { Kind = HostEffects.OpenUrl, Value = port.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+        _wake.Release();
+    }
+
+    private async Task AnswerHeadAsync(Wire wire, ControlRequest request, bool redact, CancellationToken ct)
     {
         var tool = request.Text ?? string.Empty;
         IReadOnlyDictionary<string, string> arguments = request.Env ?? [];
@@ -545,9 +789,14 @@ public sealed class FleetDaemon(DaemonOptions options)
                 response = new ControlResponse { Ok = false, Error = "this fleetd cannot serve head tools" };
             }
         }
-        catch (Exception e) when (e is IOException or InvalidOperationException or OperationCanceledException)
+        catch (Exception e) when (redact || e is IOException or InvalidOperationException or OperationCanceledException)
         {
             response = new ControlResponse { Ok = false, Error = e.Message };
+        }
+
+        if (redact && !response.Ok)
+        {
+            response.Error = IsoFilter.Failed;
         }
 
         response.Id = request.Id;
@@ -1238,6 +1487,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             throw new InvalidOperationException("this fleetd cannot connect to remotes");
         }
 
+        if (options.Iso().On)
+        {
+            throw new InvalidOperationException(IsoGuard.Refusal(IsoGuard.Ssh));
+        }
+
         if (_remotes.TryGetValue(host, out var existing) && existing.Snapshot().State != RemoteLink.Failed)
         {
             return;
@@ -1247,7 +1501,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);
         _remotes[host] = link;
-        _ = Task.Run(() => link.RunAsync(_stop.Token), CancellationToken.None);
+        _hub.Watch(link, IsCurrent, _stop.Token);
+        _ = Task.Run(() => RunLinkAsync(link), CancellationToken.None);
         options.Log($"remote {host}: connecting");
     }
 
@@ -1510,6 +1765,12 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Forward(RemoteLink link, HostEffect effect)
     {
+        if (effect.Kind == HostEffects.OpenUrl)
+        {
+            _hub.Open(link, effect.Value);
+            return;
+        }
+
         if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell or HostEffects.HandBack or HostEffects.OpenWindow))
         {
             return;
@@ -2223,6 +2484,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             _model.Disconnect(session.Client);
             _sessions.Remove(session.Client);
+            _bridged.TryRemove(session.Client, out _);
+            _viewerForwards.Remove(session.Client);
             ApplyResizes();
         }
 

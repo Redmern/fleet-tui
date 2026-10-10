@@ -5830,6 +5830,80 @@ What the phases add up to:
   (`DashboardKeys.HideHint`, from the keymap, so it follows rebinding): one chip, fewer
   buttons, no lost key.
 
+## Remote web apps over the link's ssh, 2026-10-10
+
+- **The bridge ssh is the master.** `RemoteSsh` adds `ControlMaster=yes`, a private
+  `ControlPath` (`ControlPaths`: `$XDG_RUNTIME_DIR/fleet`, else `/tmp/fleet-<user>`, 0700,
+  `cm-<12 hex of the host>`, kept under 80 characters because ssh appends a 17-character
+  temp suffix and the socket limit is 104/108), `ControlPersist=no` and ServerAlive. A
+  second `ssh -N -M` would ask for the password again; reusing the link's process keeps
+  the one SSH_ASKPASS flow and dies with the link. Stale sockets (no listener) are deleted
+  when fleetd starts. Windows OpenSSH has no control sockets, so no forwards there.
+- **fleetd owns forwards** (`ForwardHub`, one `HostForwards` per host, kept across link
+  restarts). Every 3 s it runs `ss -ltnHp || cat /proc/net/tcp*` over the master
+  (`BatchMode`, never a prompt), and reconciles: wanted = allowlist of the remote's
+  *running* projects (their `forwardPorts`, read from the remote fleetd's new
+  `project-configs` op) minus ports the user removed, plus manual pins; active iff wanted
+  and listening. `-O forward`/`-O cancel -L 127.0.0.1:<local>:<target>:<remote>`; the
+  target follows where the app listens (`[::1]` when only IPv6 loopback). `LocalPorts`
+  is shared by all hosts, so two hosts' `3000` never collide; a forward keeps its local
+  port across reconnects.
+- **Refusals show up late.** `-O forward` succeeds even when sshd has
+  `AllowTcpForwarding no`; the master prints `channel N: open failed: administratively
+  prohibited` on the first connection. The link's stderr feeds `HostForwards.Prohibited`.
+- **Reconnect.** A link that ends with forwards open is reconnected with backoff
+  (5 s doubling to 1 min) and its forwards come back; disconnect drops them.
+- **The remote's dashboard.** A remote project's dashboard runs on the remote, so the local
+  fleetd reports its forwards to the remote (`viewer-forwards`), which lists them as
+  `Viewer` rows; `w` there sends `viewer-open`, which the remote turns into an `open-url`
+  host effect for that viewer, and the local fleetd opens its own browser on the mapped
+  port.
+- **Stacks.** `stack-start` opens the remote project, spawns `sh -lc <runCommand>` in it,
+  waits for `readyPort` to be forwarded and for `healthPath` to answer 2xx, and returns the
+  forward; `stack-stop` kills that pane. fleet only remembers stacks it started.
+- Verified against a real user-level sshd on 127.0.0.1 (`RealSshTests`, run with
+  `FLEET_SSH_IT_CONFIG`/`FLEET_SSH_IT_HOST`; skipped otherwise).
+
+## ISO mode, 2026-10-10
+
+- **Two halves.** fleet has no push channel to the head: the origin pulls over
+  `ssh host fleet bridge` into the remote fleetd, which only answers. So ISO mode is a filter
+  on what fleetd answers to bridged clients, plus a block on connections the ISO machine starts.
+- **Bridged, not trusted.** `fleet bridge` reads the first frame, stamps the `Hello` with
+  `bridged: true` and the first word of `SSH_CONNECTION` (or `SSH_CLIENT`) as `origin`,
+  overwriting whatever the client sent, then copies bytes as before. fleetd treats a bridged
+  connection as remote. A local client that claims to be bridged only restricts itself.
+- **Fail closed.** `iso.json` (`JsonIsoMode`, port `IIsoMode`) is read per request, so a toggle
+  needs no restart; a file that exists but cannot be read counts as on. With ISO mode on, a
+  bridged request must be on `IsoFilter`'s short list of ops, its workspace must be a code,
+  its `client` is dropped (it acts on its own view only), and its response is rewritten: codes
+  for names, empty paths and titles, notice text replaced by a fixed word, failures (head
+  errors included) reduced to `failed`. `spawn` and `send-text` are off the list: either one
+  runs commands here. fleetd reads `iso.json` through `CachedIsoMode`, keyed on its write time.
+- **Codes.** `IsoCodes` numbers projects in name order (`sub1`, ...) after any overrides from
+  `iso.json`, and agents within a project by worktree path (`sub1.agent2`); fleetd and the head
+  both code saved projects only, so they agree. Codes map back for
+  inbound ops (show, open-project, dismiss-notices), and only codes are accepted, so a real
+  name is never an oracle. The numbering shifts when projects are added; overrides pin it.
+- **Head.** `HeadService.ServeOriginAsync` hands off to `HeadIso`, which answers `code: state`
+  lines (`IsoProjection.State` whitelists the status words) and bare acks. The local head is
+  not filtered.
+- **Attach.** `RemoteLink` always connects with the attach role, so a host off the allowlist
+  is not dropped: it gets a control connection without a session, and the codes still flow.
+  A sweep (`IsoSweepEvery`, 1 s) detaches a bridged session whose host leaves the list, so a
+  silent client cannot keep streaming. fleetd started by `fleet bridge` drops the `SSH_*`
+  variables, so its panes do not look like ssh sessions to `fleet iso`.
+- **Outbound.** `IsoGuard` gives one refusal text and is the hook for a future sync feature.
+  Gated now: `ConnectRemote` and the ssh process starters, `remote-head`, the head's
+  forwarding to other machines, `forward-add` and `stack-start` (removing and stopping still
+  work, so you can wind them down), `project-configs` and `viewer-forwards` for bridged
+  clients (off `IsoFilter`'s list), `SshSyncEgress` (which reads the same `IIsoMode`; the
+  release's separate `machine.json` flag is gone, so `iso.json` is the one machine switch, and
+  the per-project `Iso` setting still blocks sync for that project alone), the update check and release list, `FinishAgentHandler`'s
+  push, and the agent permission plan (push and merge forced to deny, `gh pr create` denied).
+- **Limits, stated.** An agent's own network use and the model API are outside fleet's
+  reach; the README gives an nftables egress example instead of claiming more.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

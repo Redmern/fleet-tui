@@ -42,6 +42,51 @@ public static class ShowDashboardView
 
         var status = FleetTheme.StatusLine(Pos.AnchorEnd(2));
         var hints = new FleetActionBar(Pos.AnchorEnd(1));
+        var webPorts = FleetTheme.StatusLine(Pos.AnchorEnd(3));
+        webPorts.Visible = false;
+        var webShown = string.Empty;
+        var webLoading = 0;
+
+        void ShowWebPorts(string? text)
+        {
+            var shown = text ?? string.Empty;
+            if (shown == webShown)
+            {
+                return;
+            }
+
+            webShown = shown;
+            webPorts.Text = shown;
+            webPorts.Visible = shown.Length > 0;
+            foreach (var list in new[] { agentList, subList, repoList, noticeList })
+            {
+                list.Height = Dim.Fill(shown.Length > 0 ? 3 : 2);
+            }
+
+            hints.Show(BarFor(tabBar.Selected));
+            window.SetNeedsDraw();
+        }
+
+        void LoadWebPorts()
+        {
+            if (callbacks.WebPorts is not { } load || Interlocked.Exchange(ref webLoading, 1) != 0)
+            {
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var text = await load().ConfigureAwait(false);
+                    app.Invoke(() => ShowWebPorts(text));
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref webLoading, 0);
+                }
+            });
+        }
 
         var tip = FleetTheme.Caption(0, 0, string.Empty);
         tip.Visible = false;
@@ -446,6 +491,17 @@ public static class ShowDashboardView
             {
                 app.Invoke(() => app.RequestStop(window));
             }
+        }
+
+        async Task OpenWebAppAsync()
+        {
+            if (callbacks.OpenWebApp is null)
+            {
+                return;
+            }
+
+            var said = await callbacks.OpenWebApp().ConfigureAwait(false);
+            app.Invoke(() => status.Text = said ?? string.Empty);
         }
 
         async Task OpenEditorAsync()
@@ -956,6 +1012,10 @@ public static class ShowDashboardView
                     Start(OpenEditorAsync);
                     break;
 
+                case FleetAction.OpenWebApp:
+                    Start(OpenWebAppAsync);
+                    break;
+
                 case FleetAction.RemoveRepository:
                     RemoveRepository();
                     break;
@@ -1025,8 +1085,14 @@ public static class ShowDashboardView
                         ? FleetIcons.Show
                         : FleetIcons.Hide,
                     () => FromKey(FleetAction.ToggleHidden), FleetAction.ToggleHidden),
+                .. WebChip(),
                 (keys.PrefixDisplay, FleetIcons.Menu, () => FromKey(FleetAction.OpenMenu), FleetAction.OpenMenu),
             ];
+
+        IEnumerable<(string, string, Action, FleetAction)> WebChip() =>
+            webShown.Length == 0 || callbacks.OpenWebApp is null
+                ? []
+                : [(keys.DisplayFor(FleetAction.OpenWebApp), FleetIcons.OpenBrowser, () => FromKey(FleetAction.OpenWebApp), FleetAction.OpenWebApp)];
 
         IReadOnlyList<(string, string, Action, FleetAction)> SubBar() =>
             [
@@ -1252,6 +1318,8 @@ public static class ShowDashboardView
                 Start(AutoRefreshAsync);
             }
 
+            LoadWebPorts();
+
             return true;
         }
 
@@ -1302,6 +1370,7 @@ public static class ShowDashboardView
             repoList,
             noticeList,
             status,
+            webPorts,
             hints.Root,
             tip);
 
@@ -1318,6 +1387,7 @@ public static class ShowDashboardView
         callbacks.Heartbeat();
 
         Start(RefreshAsync);
+        LoadWebPorts();
 
         if (menu)
         {

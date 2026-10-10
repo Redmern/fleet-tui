@@ -9,6 +9,8 @@ using Fleet.Features.Agents.RemoveAgent;
 using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Agents.TellAgent;
+using Fleet.Features.Forwards.ForwardPorts;
+using Fleet.Features.Forwards.ForwardPorts.Enums;
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
@@ -84,6 +86,8 @@ public sealed class McpActions(
 
     private readonly BranchStates _states = new(git);
 
+    private readonly ForwardPortsHandler _forwardPorts = new(Adapters.Forwards(), Adapters.Browser(), Adapters.KnownRemotes());
+
     public async Task<McpResult> PerformAsync(McpRequest request, CancellationToken ct)
     {
         var tool = HarnessToolIds.Parse(request.Tool);
@@ -113,8 +117,26 @@ public sealed class McpActions(
             HarnessTool.StopSub => await StopSub(request, ct).ConfigureAwait(false),
             HarnessTool.RemoveSub => await RemoveSub(request, ct).ConfigureAwait(false),
             HarnessTool.Report => await Report(request, ct).ConfigureAwait(false),
+            HarnessTool.ListForwards => await Forward(request, ForwardVerb.List, ct).ConfigureAwait(false),
+            HarnessTool.ForwardPort => await Forward(request, ForwardVerb.Add, ct).ConfigureAwait(false),
+            HarnessTool.UnforwardPort => await Forward(request, ForwardVerb.Remove, ct).ConfigureAwait(false),
+            HarnessTool.OpenUrl => await Forward(request, ForwardVerb.Open, ct).ConfigureAwait(false),
+            HarnessTool.StartStack => await Forward(request, ForwardVerb.Start, ct).ConfigureAwait(false),
+            HarnessTool.StopStack => await Forward(request, ForwardVerb.Stop, ct).ConfigureAwait(false),
             _ => McpResult.Error($"{request.Tool} is not available."),
         };
+    }
+
+    private async Task<McpResult> Forward(McpRequest request, ForwardVerb verb, CancellationToken ct)
+    {
+        var order = McpForwards.Order(request, verb);
+        if (!order.Succeeded)
+        {
+            return McpResult.Error(order.Error ?? "bad arguments");
+        }
+
+        var done = await _forwardPorts.HandleAsync(order.Value, ct).ConfigureAwait(false);
+        return done.Succeeded ? Ok(done.Value) : McpResult.Error(done.Error ?? "failed");
     }
 
     private McpResult LogTail(McpRequest request)

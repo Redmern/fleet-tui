@@ -23,7 +23,7 @@ using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Head;
 
-public sealed class HeadServiceTests
+public sealed partial class HeadServiceTests
 {
     private const string Idle = "╭────╮\n│ >  │\n╰────╯\n  ? for shortcuts";
 
@@ -93,7 +93,8 @@ public sealed class HeadServiceTests
             _remotes,
             _known,
             Structure,
-            Inboxes: inboxes),
+            Inboxes: inboxes,
+            Iso: _iso),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
