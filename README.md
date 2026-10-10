@@ -346,7 +346,7 @@ remote, waits until `readyPort` (or the first forward port) listens and, with `h
 answers 2xx, then forwards it; `fleet forward stop` closes that pane. The head and the
 agents have the same as tools: `list_forwards`, `forward_port`, `unforward_port`, `open_url`,
 `start_stack` and `stop_stack`. `remote` is optional for `forward_port` and `unforward_port`:
-left out, the port is on the machine the tool runs on, and the machine viewing that one
+left out (or, for the head, `local`), the port is on the machine the tool runs on, and the machine viewing that one
 forwards it (see below). This needs OpenSSH control sockets, so not on Windows.
 
 Things that can bite: an app that checks the Host header (Vite's `server.allowedHosts`)
