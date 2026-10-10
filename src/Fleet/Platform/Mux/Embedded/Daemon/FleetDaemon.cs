@@ -294,11 +294,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case ForwardHub.ViewerUnforwardOp:
                         {
                             var client = ClientFor(request, attachedClient);
+                            var shown = CallerWorkspace(request.Caller);
                             response.Viewer = ToViewer(
                                 client,
+                                shown,
                                 request.Op == ForwardHub.ViewerForwardOp ? HostEffects.ForwardPort : HostEffects.UnforwardPort,
                                 request.Port);
-                            response.Ssh = response.Viewer is null ? SshOf(client) : null;
+                            response.Ssh = response.Viewer is null ? SshOf(client, shown) : null;
                             break;
                         }
                     case "list-remotes":
@@ -771,14 +773,14 @@ public sealed class FleetDaemon(DaemonOptions options)
         _wake.Release();
     }
 
-    private string? ToViewer(string? client, string kind, int port)
+    private string? ToViewer(string? client, string? shown, string kind, int port)
     {
         if (port is < 1 or > 65535)
         {
             throw new InvalidOperationException($"{port} is not a port");
         }
 
-        if (ViewerOf(client) is not { } viewer)
+        if (ViewerOf(client, shown) is not { } viewer)
         {
             return null;
         }
@@ -786,18 +788,28 @@ public sealed class FleetDaemon(DaemonOptions options)
         _sessions[viewer].Pending.Enqueue(new HostEffect { Kind = kind, Value = port.ToString(System.Globalization.CultureInfo.InvariantCulture) });
         _wake.Release();
         options.Log($"{viewer}: {kind} {port} sent to the machine viewing this one");
-        return _viewerForwards.GetValueOrDefault(viewer)?.FirstOrDefault()?.Host ?? viewer;
+        return _viewerForwards.GetValueOrDefault(viewer)?.FirstOrDefault()?.Host ?? "the machine viewing this one";
     }
 
-    private string? ViewerOf(string? client) =>
+    private string? ViewerOf(string? client, string? shown) =>
         client is not null
             ? IsViewer(client) ? client : null
-            : _viewerForwards.Keys.FirstOrDefault(IsViewer) ?? _sessions.Keys.FirstOrDefault(IsViewer);
+            : Showing(_sessions.Keys.Where(IsViewer), shown);
 
     private bool IsViewer(string client) => _sessions.ContainsKey(client) && _model.Client(client)?.Label is not null;
 
-    private string? SshOf(string? client) =>
-        client is not null ? _sshOf.GetValueOrDefault(client) : _sshOf.Values.FirstOrDefault();
+    private string? SshOf(string? client, string? shown) =>
+        client is not null
+            ? _sshOf.GetValueOrDefault(client)
+            : Showing(_sshOf.Keys, shown) is { } showing ? _sshOf[showing] : null;
+
+    private string? Showing(IEnumerable<string> clients, string? shown)
+    {
+        var candidates = clients.ToList();
+        return candidates.FirstOrDefault(c => shown is not null && _model.Client(c)?.Showing == shown)
+            ?? candidates.FirstOrDefault(_viewerForwards.ContainsKey)
+            ?? candidates.FirstOrDefault();
+    }
 
     private async Task AnswerHeadAsync(Wire wire, ControlRequest request, bool redact, CancellationToken ct)
     {

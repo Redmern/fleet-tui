@@ -5877,7 +5877,8 @@ What the phases add up to:
   the viewer need not forward the port already: that is the point. The viewer's fleetd runs
   `ForwardHub.ForwardForViewerAsync`: pin, `ForwardNowAsync` (`-O forward -L`), wait to
   settle, open the mapped URL. `viewer-unforward` / `unforward-port` unpin and cancel.
-  A caller without a client (an agent's MCP call) goes to any fleet viewer.
+  A caller without a client (an agent's MCP call) goes to the fleet viewer showing the
+  caller's workspace, else one that reports forwards, else any.
 - **Plain ssh.** Without a fleet viewer the reply carries the `SSH_CONNECTION` that client
   came in by, and the menu shows `ssh -N -L p:localhost:p user@<server address>` (`-p` when
   sshd is not on 22) with a **Copy** button. fleetd strips `SSH_*` from its own environment
@@ -5892,12 +5893,12 @@ What the phases add up to:
   required-remote checks and the head's rejection of `local` for these two are gone.
   `local_port` and `open` do not apply there: the viewer picks the local port and opens.
 - **`fleet attach --ssh`** builds its arguments with the link's builder
-  (`BridgeSshArguments`: `-T`, `ConnectTimeout`, ControlMaster on the per-host socket), and
-  keeps its own terminal for password prompts. The attach client applies no
+  (`BridgeSshArguments`: `-T`, `ConnectTimeout`, the ControlMaster options), and keeps its
+  own terminal for password prompts. It masters its own socket (`AttachSocketKey`), not the
+  link's: an attach that started first would otherwise carry fleetd's forwards and drop them
+  on detach. The attach client applies no
   `forward-port` effects (it has no `ForwardHub`), so an attach-only viewer gets the ssh
   command route; for one-step forwarding link the machine under Remote machines instead.
-  If a link to the same host is up, its master owns the socket and attach's ssh just
-  runs without multiplexing (ssh warns and goes on).
 
 ## ISO mode, 2026-10-10
 

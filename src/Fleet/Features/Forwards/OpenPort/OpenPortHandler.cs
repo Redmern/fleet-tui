@@ -37,7 +37,7 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
         {
             if (!listening)
             {
-                lines.Add($"{viewer} forwards {port} and opens {url} once it answers.");
+                lines.Add($"{viewer} forwards {port} once it listens; open {url} there then.");
             }
 
             return new OpenPortOutcome(port, listening, OpenPortRoute.Viewer, lines);
