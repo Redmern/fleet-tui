@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Fleet.Platform.Forwards.Models;
 using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
@@ -6,10 +7,11 @@ namespace Fleet.Platform.Forwards;
 
 public sealed class HostForwards(
     string host,
-    string controlPath,
+    string? controlPath,
     LocalPorts locals,
     Func<IReadOnlyList<string>, CancellationToken, Task<SshResult>> ssh,
-    Action<string> log)
+    Action<string> log,
+    TunnelMode? tunnels = null)
 {
     public const string ProhibitedError = "the ssh server refuses port forwarding (AllowTcpForwarding is off)";
 
@@ -26,11 +28,13 @@ public sealed class HostForwards(
     private bool _linked;
     private readonly HashSet<int> _restore = [];
 
-    private sealed record Active(int Local, string Target, string? Project);
+    private sealed record Active(int Local, string Target, string? Project, ITunnel? Tunnel = null);
+
+    private static readonly IReadOnlyList<string> TunnelTarget = ["localhost"];
 
     public string Host => host;
 
-    public string ControlPath => controlPath;
+    public string? ControlPath => controlPath;
 
     public bool Wanted
     {
@@ -92,6 +96,7 @@ public sealed class HostForwards(
             _restore.UnionWith(_active.Keys);
             foreach (var (remote, active) in _active)
             {
+                active.Tunnel?.Kill();
                 _preferred[remote] = active.Local;
                 locals.Release(active.Local);
             }
@@ -103,6 +108,14 @@ public sealed class HostForwards(
 
     public async Task<IReadOnlyDictionary<int, IReadOnlyList<string>>?> ScanAsync(CancellationToken ct)
     {
+        if (controlPath is null)
+        {
+            lock (_gate)
+            {
+                return PinnedLocked();
+            }
+        }
+
         var scan = await ssh(SshControl.Run(controlPath, host, ListeningPorts.Command), ct).ConfigureAwait(false);
         return scan.Ok || scan.Output.Length > 0 ? ListeningPorts.ByPort(ListeningPorts.Parse(scan.Output)) : null;
     }
@@ -120,6 +133,11 @@ public sealed class HostForwards(
 
             lock (_gate)
             {
+                if (controlPath is null)
+                {
+                    listening = PinnedLocked();
+                }
+
                 _linked = true;
                 _restore.Clear();
                 _listening = listening;
@@ -186,6 +204,14 @@ public sealed class HostForwards(
     public async Task UnforwardNowAsync(int remotePort, CancellationToken ct)
     {
         Unpin(remotePort);
+        if (controlPath is null)
+        {
+            lock (_gate)
+            {
+                _listening = PinnedLocked();
+            }
+        }
+
         await _turn.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -251,6 +277,8 @@ public sealed class HostForwards(
             .Where(listening.ContainsKey)
             .ToDictionary(p => p, p => ListeningPorts.Target(listening[p]));
 
+    private Dictionary<int, IReadOnlyList<string>> PinnedLocked() => _pins.Keys.ToDictionary(p => p, _ => TunnelTarget);
+
     private bool Moved(int remote, Active active) =>
         _pins.GetValueOrDefault(remote) is { } wanted && wanted != active.Local;
 
@@ -307,30 +335,83 @@ public sealed class HostForwards(
             return;
         }
 
-        var result = await ssh(SshControl.Forward(controlPath, host, local, target, remote), ct).ConfigureAwait(false);
-        if (!result.Ok)
+        var (tunnel, failed) = controlPath is null
+            ? await OpenTunnelAsync(local, target, remote, ct).ConfigureAwait(false)
+            : (null, await ForwardOverMasterAsync(controlPath, local, target, remote, ct).ConfigureAwait(false));
+        if (failed is { } why)
         {
             locals.Release(local);
-            var why = result.Errors.Trim() is { Length: > 0 } errors ? errors : $"ssh exited with {result.Exit}";
             Fail(remote, SshControl.Prohibited(why) ? ProhibitedError : why);
             return;
         }
 
         lock (_gate)
         {
-            _active[remote] = new Active(local, target, project);
+            _active[remote] = new Active(local, target, project, tunnel);
             _preferred[remote] = local;
         }
 
         log($"remote {host}: forwarded localhost:{local} to {target}:{remote}");
     }
 
+    private async Task<string?> ForwardOverMasterAsync(string master, int local, string target, int remote, CancellationToken ct)
+    {
+        var result = await ssh(SshControl.Forward(master, host, local, target, remote), ct).ConfigureAwait(false);
+        return result.Ok ? null : Why(result.Exit, result.Errors);
+    }
+
+    private async Task<(ITunnel? Tunnel, string? Error)> OpenTunnelAsync(int local, string target, int remote, CancellationToken ct)
+    {
+        var mode = tunnels ?? throw new InvalidOperationException($"remote {host} has neither an ssh control socket nor a tunnel launcher");
+        var tunnel = mode.Launcher.Start(SshControl.Tunnel(host, local, target, remote));
+        var waited = Stopwatch.StartNew();
+        try
+        {
+            while (true)
+            {
+                if (tunnel.Exited.IsCompleted)
+                {
+                    return (null, Why(await tunnel.Exited.ConfigureAwait(false), tunnel.Errors));
+                }
+
+                if (await mode.Probe.ListeningAsync(local, ct).ConfigureAwait(false))
+                {
+                    return (tunnel, null);
+                }
+
+                if (waited.Elapsed > mode.UpWithin)
+                {
+                    tunnel.Kill();
+                    return (null, $"ssh did not open localhost:{local} within {mode.UpWithin.TotalSeconds:0}s");
+                }
+
+                await Task.WhenAny(tunnel.Exited, Task.Delay(TimeSpan.FromMilliseconds(200), ct)).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            tunnel.Kill();
+            throw;
+        }
+    }
+
+    private static string Why(int exit, string errors) =>
+        errors.Trim() is { Length: > 0 } said ? said : $"ssh exited with {exit}";
+
     private async Task CancelAsync(int remote, Active active, CancellationToken ct)
     {
-        var result = await ssh(SshControl.Cancel(controlPath, host, active.Local, active.Target, remote), ct).ConfigureAwait(false);
-        if (!result.Ok)
+        if (active.Tunnel is { } tunnel)
         {
-            log($"remote {host}: could not cancel the forward of {remote}: {result.Errors.Trim()}");
+            tunnel.Kill();
+        }
+        else if (controlPath is not null)
+        {
+            var result = await ssh(SshControl.Cancel(controlPath, host, active.Local, active.Target, remote), ct).ConfigureAwait(false);
+            if (!result.Ok)
+            {
+                log($"remote {host}: could not cancel the forward of {remote}: {result.Errors.Trim()}");
+            }
         }
 
         lock (_gate)
