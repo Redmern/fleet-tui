@@ -117,17 +117,25 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
         return best;
     }
 
-    private async Task<FakePanes.FakePty> ReadyWarmAsync(DaemonTests.TestClient far, int count)
+    private static string PaneOf(FakePanes.FakePty pty) => pty.Env[FleetDaemon.PaneVariable];
+
+    private Task FarLogged(Func<string, bool> line) => Eventually(() => Task.FromResult(_farLog.Any(line)));
+
+    // Like the real warm menu (WarmMenuWiring): drawn at its fitted size, settled, and
+    // parked on a menu-wait. Reads fleetd's log instead of sleeping for each step.
+    private async Task<(FakePanes.FakePty Warm, Task<ControlResponse> Waiting)> ReadyWarmAsync(DaemonTests.TestClient far, int count)
     {
         await Eventually(() => Task.FromResult(FarMenus.Length == count));
         var warm = FarMenus[^1];
-        Assert.True((await far.RequestAsync(new ControlRequest { Op = "fit", Caller = warm.Env[FleetDaemon.PaneVariable], Cols = 40, Rows = 8 })).Ok);
-        // A real menu redraws after the fit's resize; emitting before fleetd takes the
-        // pre-fit baseline would keep the float hidden until RevealAfterFit.
-        await Task.Delay(100);
+        var pane = PaneOf(warm);
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "fit", Caller = pane, Cols = 40, Rows = 8 })).Ok);
         warm.Emit($"FAR-MENU-{count}\nitems\n");
-        await Task.Delay(300);
-        return warm;
+        await FarLogged(l => l.StartsWith($"{pane} revealed after ", StringComparison.Ordinal));
+
+        var waiting = far.RequestAsync(new ControlRequest { Op = FleetDaemon.MenuWaitOp, Caller = pane });
+        await FarLogged(l => l == $"{pane} waits to open");
+        Assert.False(waiting.IsCompleted);
+        return (warm, waiting);
     }
 
     [Fact]
@@ -152,9 +160,12 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
 
         for (var open = 1; open <= Opens; open++)
         {
-            var warm = await ReadyWarmAsync(far, open);
+            var (warm, waiting) = await ReadyWarmAsync(far, open);
 
             await window.SendCommandAsync("menu");
+            var opened = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(opened.Ok, opened.Error);
+            Assert.Null(opened.Text);
             await window.WaitForAsync($"FAR-MENU-{open}");
             await Eventually(() => Task.FromResult(HomeTimings.Length == open));
 
