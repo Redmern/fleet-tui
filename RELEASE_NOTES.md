@@ -4,6 +4,10 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.14 (2026-10-10)
+
+- New **Open port** (Session section, `ctrl+s s o`): type a port of the machine fleet runs on and it opens in the browser of the machine you view it from, forwarded by your fleet there or with a ready-to-copy `ssh -L` command. `forward_port` and `unforward_port` no longer need `remote` for a port on this machine.
+
 ## 0.7.13 (2026-10-10)
 
 - Every fleet menu action now has a `ctrl+s` key, in groups: `a` agents, `s` session, `t` tabs, `g` configure (`g c` fleet config), `m` maintenance, and `Q` quits fleet. `fleet help` and the README list them all.
