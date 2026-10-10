@@ -347,7 +347,17 @@ answers 2xx, then forwards it; `fleet forward stop` closes that pane. The head a
 agents have the same as tools: `list_forwards`, `forward_port`, `unforward_port`, `open_url`,
 `start_stack` and `stop_stack`. `remote` is optional for `forward_port` and `unforward_port`:
 left out (or, for the head, `local`), the port is on the machine the tool runs on, and the machine viewing that one
-forwards it (see below). This needs OpenSSH control sockets, so not on Windows.
+forwards it (see below).
+
+Where OpenSSH has no control sockets (Windows), fleet forwards each port with its own
+background `ssh -N -L 127.0.0.1:<local>:localhost:<port> <host>`, started without a console
+window and with `BatchMode=yes`, so the host must log you in with a key or agent, without a
+password prompt. A port counts as forwarded once its local port accepts connections; if
+ssh exits first, the row shows ssh's error. A tunnel that dies is started again with the
+same backoff as a dropped link, and fleet kills its tunnels when it stops. These forwards
+are made only on request (`f`, Open port, `forward_port`, `fleet forward`): without a
+control socket fleet cannot list the remote's ports, so `forwardPorts` are not forwarded on
+their own.
 
 Things that can bite: an app that checks the Host header (Vite's `server.allowedHosts`)
 must allow `localhost`; when the local port differs, hot reload needs its client port set
@@ -362,7 +372,8 @@ reachable in the browser of the machine you are looking from:
 
 - **fleet on your laptop, linked under Remote machines:** the remote fleet sends
   `viewer-forward` to your laptop's fleet, which pins the port, forwards it over the link's
-  ssh (`-O forward -L`) and opens `http://localhost:<port>` (or the local port it had to pick).
+  ssh (`-O forward -L`, or a background `ssh -N -L` on Windows) and opens
+  `http://localhost:<port>` (or the local port it had to pick).
 - **a plain ssh login** (you ssh'd in and ran `fleet`, or `fleet attach --ssh`): a dialog
   shows `ssh -N -L <port>:localhost:<port> <user>@<host>`, built from the `SSH_CONNECTION`
   the attach process was reached by. **Copy** puts it on your clipboard (OSC 52); run it on
