@@ -48,6 +48,7 @@ public sealed class IsoDaemonTests : IAsyncLifetime
                 },
             ],
             DismissNotices = (project, keys) => _dismissed.Add((project, keys)),
+            RemoteOpen = (_, _) => throw new IOException("iso mode should have refused before ssh"),
         });
         _running = daemon.RunAsync(_stop.Token);
         return Task.CompletedTask;
@@ -247,6 +248,17 @@ public sealed class IsoDaemonTests : IAsyncLifetime
         var (_, client) = await ConnectAsync(bridged: false, ClientRoles.Attach);
 
         Assert.NotEmpty(client);
+    }
+
+    [Fact]
+    public async Task This_machine_opens_no_ssh_connection_in_iso_mode()
+    {
+        var (local, _) = await ConnectAsync(bridged: false);
+
+        var refused = await RequestAsync(local, new ControlRequest { Op = "remote-connect", Host = "elsewhere" });
+
+        Assert.False(refused.Ok);
+        Assert.Equal(IsoGuard.Refusal(IsoGuard.Ssh), refused.Error);
     }
 
     [Fact]

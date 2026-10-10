@@ -7,6 +7,7 @@ using Fleet.Platform.Git;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Iso;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -54,6 +55,24 @@ public sealed class FinishAgentTests : IDisposable
 
         Assert.True(finished.Succeeded, finished.Error);
         Assert.Contains("main", finished.Value);
+        Assert.True(File.Exists(Path.Combine(repo, "main", "work.txt")));
+    }
+
+    [Fact]
+    public async Task In_iso_mode_it_merges_but_does_not_push()
+    {
+        var repo = await RepositoryAsync();
+        var agent = await AgentAsync(repo, "feature/iso");
+
+        File.WriteAllText(Path.Combine(agent.Worktree, "work.txt"), "done");
+        await _git.RunAsync(agent.Worktree, ["add", "."]);
+        await CommitAsync(agent.Worktree, "work");
+
+        var finished = await new FinishAgentHandler(_git, new IsoSwitch(on: true)).HandleAsync(agent, push: true);
+
+        Assert.True(finished.Succeeded, finished.Error);
+        Assert.Contains("did not push", finished.Value);
+        Assert.Contains(IsoGuard.Refusal(IsoGuard.Push), finished.Value);
         Assert.True(File.Exists(Path.Combine(repo, "main", "work.txt")));
     }
 

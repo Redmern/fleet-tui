@@ -1088,7 +1088,7 @@ public static class DashboardWiring
                             app, $"Push {baseBranch} to origin afterwards?", [], "Push"))
                         .ConfigureAwait(false);
 
-                    var finished = await new FinishAgentHandler(git)
+                    var finished = await new FinishAgentHandler(git, Adapters.Iso())
                         .HandleAsync(agent, pushIt)
                         .ConfigureAwait(false);
 

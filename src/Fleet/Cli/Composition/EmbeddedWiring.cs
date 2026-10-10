@@ -19,6 +19,7 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Iso;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Releases;
@@ -747,6 +748,7 @@ public static class EmbeddedWiring
 
     private static RemoteChannel RemoteChannelOver(ProcessStartInfo start)
     {
+        RefuseSshInIso();
         var process = Process.Start(start) ?? throw new IOException("could not start ssh");
         return new RemoteChannel(
             new DuplexStream(process.StandardOutput.BaseStream, process.StandardInput.BaseStream),
@@ -814,6 +816,8 @@ public static class EmbeddedWiring
             RedirectStandardError = false,
         };
 
+        RefuseSshInIso();
+
         start.ArgumentList.Add("-T");
         start.ArgumentList.Add(host);
         start.ArgumentList.Add(remote);
@@ -821,6 +825,14 @@ public static class EmbeddedWiring
 
         var process = Process.Start(start) ?? throw new IOException("could not start ssh");
         return new DuplexStream(process.StandardOutput.BaseStream, process.StandardInput.BaseStream, process);
+    }
+
+    private static void RefuseSshInIso()
+    {
+        if (IsoGuard.Outbound(Adapters.Iso().Load(), IsoGuard.Ssh) is { Succeeded: false, Error: { } refused })
+        {
+            throw new IOException(refused);
+        }
     }
 
     private static async Task<Stream?> TryConnectAsync(Endpoint endpoint)

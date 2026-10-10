@@ -8,6 +8,19 @@ namespace Fleet.Tests.Features.Mcp;
 public sealed class ClaudePermissionPlannerTests
 {
     [Fact]
+    public void In_iso_mode_push_and_merge_are_denied_whatever_the_project_says()
+    {
+        var settings = SettingsConfig.Default.WithPush(ActionPolicy.Allow).WithMerge(ActionPolicy.Allow);
+
+        var plan = ClaudePermissionPlanner.Plan(settings, iso: true);
+
+        Assert.Contains(GitGates.PushRule, plan.Deny);
+        Assert.Contains(GitGates.MergeRule, plan.Deny);
+        Assert.Contains(GitGates.MergePowerShellRule, plan.Deny);
+        Assert.DoesNotContain(GitGates.PushRule, plan.Allow);
+    }
+
+    [Fact]
     public void Read_tools_are_allowed_on_the_claude_side_by_default()
     {
         var plan = ClaudePermissionPlanner.Plan(SettingsConfig.Default);

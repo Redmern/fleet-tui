@@ -8,8 +8,13 @@ namespace Fleet.Features.Mcp.SyncClaudeConfig;
 
 public static class ClaudePermissionPlanner
 {
-    public static ClaudePermissions Plan(SettingsConfig settings)
+    public static ClaudePermissions Plan(SettingsConfig settings, bool iso = false)
     {
+        if (iso)
+        {
+            settings = settings.WithPush(ActionPolicy.Forbid).WithMerge(ActionPolicy.Forbid);
+        }
+
         var allow = new List<string>();
         var deny = new List<string>();
         var ask = new List<string>();

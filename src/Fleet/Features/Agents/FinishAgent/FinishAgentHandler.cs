@@ -1,11 +1,13 @@
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Git;
+using Fleet.Ports.Settings;
 using Fleet.Shared;
+using Fleet.Shared.Iso;
 using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.FinishAgent;
 
-public sealed class FinishAgentHandler(IGitRunner git)
+public sealed class FinishAgentHandler(IGitRunner git, IIsoMode? iso = null)
 {
     public async Task<Result<string>> HandleAsync(
         AgentRecord agent, bool push, CancellationToken ct = default)
@@ -65,6 +67,11 @@ public sealed class FinishAgentHandler(IGitRunner git)
         if (!push)
         {
             return Result<string>.Ok($"{how} {agent.Branch} into {baseBranch}.");
+        }
+
+        if (iso is not null && IsoGuard.Outbound(iso.Load(), IsoGuard.Push) is { Succeeded: false, Error: { } refused })
+        {
+            return Result<string>.Ok($"{how} {agent.Branch} into {baseBranch}, but did not push. {refused}");
         }
 
         var pushed = await git

@@ -1,5 +1,4 @@
 using Fleet.Features.Head.ServeHead;
-using Fleet.Ports.Settings;
 using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
 using Fleet.Shared.Keymap.Enums;
@@ -133,12 +132,17 @@ public sealed partial class HeadServiceTests
         Assert.Contains("site/login", result.Text, StringComparison.Ordinal);
     }
 
-    private sealed class IsoSwitch : IIsoMode
+    [Fact]
+    public async Task In_iso_mode_the_head_does_not_reach_another_machine()
     {
-        public IsoConfig Config { get; set; } = IsoConfig.Off;
+        IsoOn();
+        KnowHostinger();
 
-        public IsoConfig Load() => Config;
+        var result = await Service().HandleAsync(Call(HeadTools.ListAgents, (HeadTools.Remote, "hostinger")));
 
-        public void Save(IsoConfig config) => Config = config;
+        Assert.True(result.IsError);
+        Assert.Equal(IsoGuard.Refusal(IsoGuard.Ssh), result.Text);
+        Assert.Empty(_remotes.Connected);
+        Assert.Empty(_remotes.Forwarded);
     }
 }

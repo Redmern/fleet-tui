@@ -1283,6 +1283,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             throw new InvalidOperationException("this fleetd cannot connect to remotes");
         }
 
+        if (options.Iso().On)
+        {
+            throw new InvalidOperationException(IsoGuard.Refusal(IsoGuard.Ssh));
+        }
+
         if (_remotes.TryGetValue(host, out var existing) && existing.Snapshot().State != RemoteLink.Failed)
         {
             return;

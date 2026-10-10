@@ -6,6 +6,7 @@ using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Iso;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings.Enums;
@@ -46,7 +47,9 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
                 or HeadTools.ProjectStructure or HeadTools.Relay or HeadTools.Tell or HeadTools.ShowAgent
                 or HeadTools.HideAgent when !HeadRemotes.IsLocal(remote) =>
-                await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
+                deps.Iso?.Load() is { On: true }
+                    ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
+                    : await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
     }
