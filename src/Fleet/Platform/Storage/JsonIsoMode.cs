@@ -29,7 +29,7 @@ public sealed class JsonIsoMode : IIsoMode
 
         try
         {
-            var read = JsonSerializer.Deserialize(text, FleetJsonContext.Default.IsoFile);
+            var read = JsonSerializer.Deserialize(text, IsoJsonContext.Default.IsoFile);
 
             return read is null
                 ? IsoConfig.Unreadable
@@ -56,7 +56,7 @@ public sealed class JsonIsoMode : IIsoMode
         };
 
         var temp = Target + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(saved, FleetJsonContext.Default.IsoFile));
+        File.WriteAllText(temp, JsonSerializer.Serialize(saved, IsoJsonContext.Default.IsoFile));
         File.Move(temp, Target, overwrite: true);
     }
 }

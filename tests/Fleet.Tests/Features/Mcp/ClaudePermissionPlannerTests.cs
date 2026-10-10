@@ -18,7 +18,12 @@ public sealed class ClaudePermissionPlannerTests
         Assert.Contains(GitGates.MergeRule, plan.Deny);
         Assert.Contains(GitGates.MergePowerShellRule, plan.Deny);
         Assert.DoesNotContain(GitGates.PushRule, plan.Allow);
+        Assert.Contains(GitGates.PrCreateRule, plan.Deny);
     }
+
+    [Fact]
+    public void Without_iso_mode_creating_a_pr_is_left_alone() =>
+        Assert.DoesNotContain(GitGates.PrCreateRule, ClaudePermissionPlanner.Plan(SettingsConfig.Default).Deny);
 
     [Fact]
     public void Read_tools_are_allowed_on_the_claude_side_by_default()

@@ -37,6 +37,29 @@ public sealed class JsonIsoModeTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_hand_edited_file_is_read_whatever_the_case_of_its_keys()
+    {
+        File.WriteAllText(FleetPaths.IsoFile, """{ "On": true, "AttachFrom": ["10.0.0.5"] }""");
+
+        var loaded = new JsonIsoMode().Load();
+
+        Assert.True(loaded.On);
+        Assert.Equal(["10.0.0.5"], loaded.AttachFrom);
+    }
+
+    [Fact]
+    public void The_cache_sees_a_change_to_the_file()
+    {
+        var cached = new CachedIsoMode(new JsonIsoMode());
+        Assert.False(cached.Load().On);
+
+        new JsonIsoMode().Save(IsoConfig.Off with { On = true });
+        File.SetLastWriteTimeUtc(FleetPaths.IsoFile, DateTime.UtcNow.AddMinutes(1));
+
+        Assert.True(cached.Load().On);
+    }
+
+    [Fact]
     public void A_toggle_shows_on_the_next_load_without_a_restart()
     {
         var iso = new JsonIsoMode();

@@ -97,7 +97,7 @@ public static class EmbeddedWiring
             AlertSettings = () => Adapters.Notices().Settings() is var s ? (s.Bell, s.Toast) : (false, false),
             Toast = (title, body) => Platform.Notifications.DesktopToast.Show(title, body),
             Head = HeadWiring.ServeOrigin(Driver, log),
-            Iso = () => Adapters.Iso().Load(),
+            Iso = new CachedIsoMode(Adapters.Iso()).Load,
             Worktrees = project => Adapters.Agents().List(project).Select(a => a.Worktree),
         });
 
@@ -703,6 +703,11 @@ public static class EmbeddedWiring
 
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
+
+        foreach (var name in (string[])[BridgedHello.SshConnectionVariable, BridgedHello.SshClientVariable, "SSH_TTY"])
+        {
+            start.Environment.Remove(name);
+        }
 
         if (!OperatingSystem.IsWindows())
         {

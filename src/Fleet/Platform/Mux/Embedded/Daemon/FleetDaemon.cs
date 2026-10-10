@@ -59,6 +59,8 @@ public sealed class DaemonOptions
     public Func<IsoConfig> Iso { get; init; } = () => IsoConfig.Off;
 
     public Func<string, IEnumerable<string>> Worktrees { get; init; } = _ => [];
+
+    public TimeSpan IsoSweepEvery { get; init; } = TimeSpan.FromSeconds(1);
 }
 
 public sealed class FleetDaemon(DaemonOptions options)
@@ -75,6 +77,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Pane, string Text)> _copies = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<string, RemoteLink> _remotes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Hello> _bridged = new(StringComparer.Ordinal);
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
@@ -96,6 +99,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         RestoreSession();
 
         var render = Task.Run(() => RenderLoopAsync(token), CancellationToken.None);
+        var sweep = Task.Run(() => SweepViewsAsync(token), CancellationToken.None);
 
         try
         {
@@ -112,6 +116,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             _stop.Cancel();
             await render.ConfigureAwait(false);
+            await sweep.ConfigureAwait(false);
             Shutdown();
         }
     }
@@ -406,6 +411,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     clientId = client.Id;
                     session = new AttachSession(client.Id, wire);
                     _sessions[client.Id] = session;
+
+                    if (hello.Bridged)
+                    {
+                        _bridged[client.Id] = hello;
+                    }
+
                     Furnish(client.Id, hello);
                     ApplyResizes();
                 }
@@ -434,10 +445,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                     break;
                 }
 
-                if (session is not null && !MayView(hello))
+                if (session is not null && (!IsAttached(session) || !MayView(hello)))
                 {
-                    options.Log($"iso mode: {hello.Origin ?? "an unknown host"} lost its view; attach is not allowed from there");
-                    Detach(session);
+                    if (IsAttached(session))
+                    {
+                        LoseView(session, hello);
+                    }
+
                     session = null;
                 }
 
@@ -459,6 +473,54 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private bool IsAttached(AttachSession session)
+    {
+        lock (_gate)
+        {
+            return _sessions.ContainsKey(session.Client);
+        }
+    }
+
+    private void LoseView(AttachSession session, Hello hello)
+    {
+        options.Log($"iso mode: {hello.Origin ?? "an unknown host"} lost its view; attach is not allowed from there");
+        Detach(session);
+    }
+
+    private async Task SweepViewsAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(options.IsoSweepEvery, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (_bridged.IsEmpty)
+            {
+                continue;
+            }
+
+            foreach (var (client, hello) in _bridged)
+            {
+                AttachSession? viewing;
+                lock (_gate)
+                {
+                    viewing = _sessions.GetValueOrDefault(client);
+                }
+
+                if (viewing is not null && !MayView(hello))
+                {
+                    LoseView(viewing, hello);
+                }
+            }
+        }
+    }
+
     private bool MayView(Hello hello) =>
         !hello.Bridged || options.Iso() is not { On: true } iso || iso.MayAttachFrom(hello.Origin);
 
@@ -474,7 +536,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     if (request.Op == RemoteLink.HeadOp || (request.Op == RemoteHeadOp && !iso.On))
                     {
-                        _ = Task.Run(() => AnswerHeadAsync(wire, request, ct), CancellationToken.None);
+                        var redact = bridged && iso.On;
+                        _ = Task.Run(() => AnswerHeadAsync(wire, request, redact, ct), CancellationToken.None);
                         break;
                     }
 
@@ -537,13 +600,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private ControlResponse ExecuteIso(ControlRequest request, string? attachedClient, IsoConfig iso)
     {
-        List<string> running;
-        lock (_gate)
-        {
-            running = [.. _model.ListWorkspaces(null).Select(w => w.Name)];
-        }
-
-        var codes = IsoCodes.Assign(iso, options.SavedProjects().Concat(running), options.Worktrees);
+        var codes = IsoCodes.Assign(iso, options.SavedProjects(), options.Worktrees);
 
         if (IsoFilter.Inbound(request, codes) is { } refused)
         {
@@ -555,7 +612,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         return response;
     }
 
-    private async Task AnswerHeadAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    private async Task AnswerHeadAsync(Wire wire, ControlRequest request, bool redact, CancellationToken ct)
     {
         var tool = request.Text ?? string.Empty;
         IReadOnlyDictionary<string, string> arguments = request.Env ?? [];
@@ -590,9 +647,14 @@ public sealed class FleetDaemon(DaemonOptions options)
                 response = new ControlResponse { Ok = false, Error = "this fleetd cannot serve head tools" };
             }
         }
-        catch (Exception e) when (e is IOException or InvalidOperationException or OperationCanceledException)
+        catch (Exception e) when (redact || e is IOException or InvalidOperationException or OperationCanceledException)
         {
             response = new ControlResponse { Ok = false, Error = e.Message };
+        }
+
+        if (redact && !response.Ok)
+        {
+            response.Error = IsoFilter.Failed;
         }
 
         response.Id = request.Id;
@@ -2273,6 +2335,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             _model.Disconnect(session.Client);
             _sessions.Remove(session.Client);
+            _bridged.TryRemove(session.Client, out _);
             ApplyResizes();
         }
 

@@ -5842,10 +5842,13 @@ What the phases add up to:
 - **Fail closed.** `iso.json` (`JsonIsoMode`, port `IIsoMode`) is read per request, so a toggle
   needs no restart; a file that exists but cannot be read counts as on. With ISO mode on, a
   bridged request must be on `IsoFilter`'s short list of ops, its workspace must be a code,
-  and its response is rewritten: codes for names, empty paths and titles, notice text replaced
-  by a fixed word, failures reduced to `failed`.
+  its `client` is dropped (it acts on its own view only), and its response is rewritten: codes
+  for names, empty paths and titles, notice text replaced by a fixed word, failures (head
+  errors included) reduced to `failed`. `spawn` and `send-text` are off the list: either one
+  runs commands here. fleetd reads `iso.json` through `CachedIsoMode`, keyed on its write time.
 - **Codes.** `IsoCodes` numbers projects in name order (`sub1`, ...) after any overrides from
-  `iso.json`, and agents within a project by worktree path (`sub1.agent2`). Codes map back for
+  `iso.json`, and agents within a project by worktree path (`sub1.agent2`); fleetd and the head
+  both code saved projects only, so they agree. Codes map back for
   inbound ops (show, open-project, dismiss-notices), and only codes are accepted, so a real
   name is never an oracle. The numbering shifts when projects are added; overrides pin it.
 - **Head.** `HeadService.ServeOriginAsync` hands off to `HeadIso`, which answers `code: state`
@@ -5853,11 +5856,13 @@ What the phases add up to:
   not filtered.
 - **Attach.** `RemoteLink` always connects with the attach role, so a host off the allowlist
   is not dropped: it gets a control connection without a session, and the codes still flow.
-  A session whose host leaves the list is detached on its next message.
+  A sweep (`IsoSweepEvery`, 1 s) detaches a bridged session whose host leaves the list, so a
+  silent client cannot keep streaming. fleetd started by `fleet bridge` drops the `SSH_*`
+  variables, so its panes do not look like ssh sessions to `fleet iso`.
 - **Outbound.** `IsoGuard` gives one refusal text and is the hook for a future sync feature.
   Gated now: `ConnectRemote` and the ssh process starters, `remote-head`, the head's
   forwarding to other machines, the update check and release list, `FinishAgentHandler`'s
-  push, and the agent permission plan (push and merge forced to deny).
+  push, and the agent permission plan (push and merge forced to deny, `gh pr create` denied).
 - **Limits, stated.** An agent's own network use and the model API are outside fleet's
   reach; the README gives an nftables egress example instead of claiming more.
 

@@ -42,6 +42,13 @@ public sealed class IsoCodesTests
         Assert.Equal("sub2", codes.Project("acme-portal"));
     }
 
+    [Theory]
+    [InlineData("default")]
+    [InlineData("fleet-head")]
+    [InlineData("fleet-hidden")]
+    public void Fleet_workspace_names_are_not_codes(string code) =>
+        Assert.False(IsoCodes.IsValidCode(code));
+
     [Fact]
     public void An_invalid_override_falls_back_to_an_auto_code()
     {

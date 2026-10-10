@@ -329,9 +329,11 @@ fleet iso off         # asks you to type 'off' first
 ```
 
 `fleet iso` runs only in a local, interactive terminal. It refuses when stdin is not a TTY,
-over ssh (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` set) and inside an agent, so neither a
-remote caller nor a prompt-injected agent can turn it off. The setting lives in `iso.json` in
-the fleet config folder and takes effect without a restart. A damaged `iso.json` reads as on.
+over ssh (`SSH_CONNECTION`, `SSH_CLIENT` or `SSH_TTY` set) and inside a Claude agent. No
+fleet tool, MCP call or bridged request can change it. The setting lives in `iso.json` in the
+fleet config folder and takes effect without a restart. A damaged `iso.json` reads as on.
+The file belongs to your user, so a process running as you, an agent included, can still edit
+it; ISO mode keeps other machines out, not code that already runs here.
 
 **What another machine sees.** Projects become codes (`sub1`, `sub2`, ...) and agents
 `sub1.agent2`, numbered in name order. Codes never come from repository or branch names. Pin a
@@ -341,19 +343,22 @@ gets lines such as `sub1.agent2: waiting for input` from `list_agents` and
 stopped. Reports and summaries never cross. `tell`, `relay` and `menu_action` take a code and
 answer `ok` or `failed` with no detail; `show_agent` and `hide_agent` are refused.
 Notifications cross as a code and a fixed word. Pane titles, folders, screen text
-(`get-text`), notice text and the machine name do not cross, and any other operation is refused.
+(`get-text`), notice text and the machine name do not cross. Another machine cannot start
+panes or type into them (`spawn`, `send-text`), because that would let it run commands here;
+prompts reach agents through the head's `tell` and `relay`. Any other operation is refused.
 
 **Attach.** Seeing a project means seeing its screen, so attach over ssh is allowed only
 from hosts on an allowlist. `fleet iso allow <address>` adds one, `fleet iso disallow
 <address>` removes one. An entry is the client address that ssh reports in `SSH_CONNECTION`,
 usually an IP address. A machine that is not on the list still connects and gets codes, but no
-view. Removing a host ends its view on its next request. Clients on this machine are never
-restricted.
+view. Removing a host, or turning ISO mode on, ends its view within a second. Clients on this
+machine are never restricted.
 
 **Outbound.** With ISO mode on, fleet on this machine opens no ssh connection to another
 machine, does not forward head tools to one, skips the update check, and merges finished
-agents without pushing. Agents get `git push` and `gh pr merge` denied, whatever the project
-allows; running agents get this when their Claude settings next resync. `git fetch` and clone
+agents without pushing. Agents get `git push`, `gh pr merge` and `gh pr create` denied, whatever
+the project allows; running agents get this when their Claude settings next resync. `fleet
+update`, which you run yourself, still downloads from GitHub. `git fetch` and clone
 still work, because data only comes in. Remote links that were open before you turned ISO mode
 on stay open until you disconnect them.
 

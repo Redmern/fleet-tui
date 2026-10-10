@@ -26,7 +26,10 @@ public sealed class IsoCodes
     }
 
     public static bool IsValidCode(string code) =>
-        code.Length is > 0 and <= LongestCode && code.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
+        code.Length is > 0 and <= LongestCode
+        && code.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+        && !IsFleetWorkspace(code)
+        && !string.Equals(code, FleetWorkspaces.Hidden, StringComparison.OrdinalIgnoreCase);
 
     public static IsoCodes Assign(
         IsoConfig config, IEnumerable<string> projects, Func<string, IEnumerable<string>> worktrees)

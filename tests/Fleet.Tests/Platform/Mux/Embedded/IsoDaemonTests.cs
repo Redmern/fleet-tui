@@ -49,6 +49,7 @@ public sealed class IsoDaemonTests : IAsyncLifetime
             ],
             DismissNotices = (project, keys) => _dismissed.Add((project, keys)),
             RemoteOpen = (_, _) => throw new IOException("iso mode should have refused before ssh"),
+            IsoSweepEvery = TimeSpan.FromMilliseconds(20),
         });
         _running = daemon.RunAsync(_stop.Token);
         return Task.CompletedTask;
@@ -164,6 +165,7 @@ public sealed class IsoDaemonTests : IAsyncLifetime
 
         Assert.Equal(spawned.Pane, pane.Id);
         Assert.Equal("sub1", pane.Session);
+        Assert.Equal("sub1", pane.Window);
         Assert.Empty(pane.Cwd);
         Assert.Empty(pane.Title);
     }
@@ -173,6 +175,8 @@ public sealed class IsoDaemonTests : IAsyncLifetime
     [InlineData("list-remotes")]
     [InlineData("remote-connect")]
     [InlineData("kill")]
+    [InlineData("spawn")]
+    [InlineData("send-text")]
     public async Task Ops_that_would_leak_or_reach_out_are_refused(string op)
     {
         var refused = await RequestAsync(await BridgedAsync(), new ControlRequest { Op = op, Pane = "1", Host = "elsewhere" });
@@ -227,9 +231,25 @@ public sealed class IsoDaemonTests : IAsyncLifetime
         Assert.Equal(1, (await RequestAsync(local, new ControlRequest { Op = "status" })).Status!.Clients);
 
         _iso = _iso with { AttachFrom = [] };
-        await RequestAsync(viewer, new ControlRequest { Op = "ping" });
+
+        for (var i = 0; i < 100 && (await RequestAsync(local, new ControlRequest { Op = "status" })).Status!.Clients > 0; i++)
+        {
+            await Task.Delay(20);
+        }
 
         Assert.Equal(0, (await RequestAsync(local, new ControlRequest { Op = "status" })).Status!.Clients);
+        Assert.True((await RequestAsync(viewer, new ControlRequest { Op = "ping" })).Ok);
+    }
+
+    [Fact]
+    public async Task A_bridged_client_cannot_act_on_another_clients_view()
+    {
+        var (_, local) = await ConnectAsync(bridged: false, ClientRoles.Attach);
+
+        var labelled = await RequestAsync(await BridgedAsync(), new ControlRequest { Op = "show", Client = local, Workspace = "sub1" });
+
+        Assert.False(labelled.Ok);
+        Assert.Equal(IsoFilter.Failed, labelled.Error);
     }
 
     [Fact]

@@ -22,8 +22,6 @@ public static class IsoFilter
         "list-notices",
         "dismiss-notices",
         "open-project",
-        "spawn",
-        "send-text",
         "set-label",
         "show",
         "open-window",
@@ -40,14 +38,13 @@ public static class IsoFilter
             return IsoProjection.Refused;
         }
 
-        var keepUnknown = request.Op == "spawn";
-
-        if (!Translate(request.Workspace, codes, keepUnknown, out var workspace)
-            || !Translate(request.Session, codes, keepUnknown, out var session))
+        if (!Translate(request.Workspace, codes, out var workspace)
+            || !Translate(request.Session, codes, out var session))
         {
             return NoSuchCode;
         }
 
+        request.Client = null;
         request.Workspace = workspace;
         request.Session = session;
 
@@ -79,6 +76,7 @@ public static class IsoFilter
         foreach (var pane in response.Panes ?? [])
         {
             pane.Session = codes.Workspace(pane.Session);
+            pane.Window = codes.Workspace(pane.Window);
             pane.Title = string.Empty;
             pane.PaneTitle = string.Empty;
             pane.Cwd = string.Empty;
@@ -113,7 +111,7 @@ public static class IsoFilter
         }
     }
 
-    private static bool Translate(string? value, IsoCodes codes, bool keepUnknown, out string? translated)
+    private static bool Translate(string? value, IsoCodes codes, out string? translated)
     {
         if (value is null)
         {
@@ -121,7 +119,7 @@ public static class IsoFilter
             return true;
         }
 
-        translated = codes.WorkspaceNamed(value) ?? (keepUnknown ? value : null);
+        translated = codes.WorkspaceNamed(value);
         return translated is not null;
     }
 
