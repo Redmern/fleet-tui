@@ -2,9 +2,7 @@ namespace Fleet.Cli.Commands;
 
 public static class HelpCommand
 {
-    public static int Run()
-    {
-        Console.WriteLine("""
+    public const string Text = """
             fleet - orchestration for AI coding agents
 
             usage:
@@ -55,12 +53,27 @@ public static class HelpCommand
               pitfalls: Vite allowedHosts/Host checks, HMR clientPort when the local port differs, shared
               localhost cookies between projects, docker -p binding 0.0.0.0 on the remote
               prefix is ctrl+s (FLEET_PREFIX; keys in <fleet config>\embedded-keys.json), and it shows
-              the keys: h/j/k/l focus, arrows resize, % " split, c new tab, n/p/1-9 tabs, z zoom,
-              x/& close pane/tab, o next pane, s switch project, space menu, [ copy, ] paste,
-              f/t/e/g floats, r reload keys, d detach; ctrl+s again sends ctrl+s
+              the keys: h/j/k/l focus, arrows resize, % " split, x close pane, z zoom, o next pane,
+              space menu, [ copy, ] paste, d detach, Q quit fleet; ctrl+s again sends ctrl+s
+              groups (ctrl+s, then the group key, then the key):
+                a agents       m dashboard, l list agents, e open editor, f files, n notifications
+                s session      p switch project, w save session, R remotes, d/q detach, r reload keys
+                t tabs         c new, n next, p previous, 1-9 go to tab, x close tab
+                g configure    k edit keybinds, K show keybinds, t button hints, T theme, c fleet config:
+                  g c          v/V/N nvim toggles, i auto-close, A aidlc mode, C claude profile,
+                               e edit fleet config, H/M/S/R head/main/sub/agent model, p permissions
+                m maintenance  b rebuild dashboard, x clean up agents, X hide all agents, l view logs,
+                               u update, v version, W what's new
+                f float        f new, t show/hide, e embed, g mode
+                w project      w next workspace, s switch project
+              toggles flip at once and show a toast; other menu actions open the menu on that action
               without prefix: ctrl+h/j/k/l move focus, alt+h/j/k/l resize (nvim gets both), alt+left/right tabs,
               ctrl+enter menu, shift+enter newline for claude, alt+o the head (voice)
-            """);
+            """;
+
+    public static int Run()
+    {
+        Console.WriteLine(Text);
 
         return 0;
     }
