@@ -34,7 +34,13 @@ public sealed class DaemonOptions
 
     public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
 
+    public TimeSpan RevealWhenQuietRemote { get; init; } = TimeSpan.FromMilliseconds(15);
+
     public bool WarmMenus { get; init; }
+
+    public TimeProvider Clock { get; init; } = TimeProvider.System;
+
+    public bool TimeMenus { get; init; } = MenuTiming.On(Environment.GetEnvironmentVariable(MenuTiming.Variable));
 
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
 
@@ -84,6 +90,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Hello> _bridged = new(StringComparer.Ordinal);
     private readonly ForwardHub _hub = new(options.Forwards, options.Log);
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
+    private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
@@ -400,6 +407,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private async Task ServeAsync(Stream stream, CancellationToken ct)
     {
         using var wire = new Wire(stream);
+        using var gone = new CancellationTokenSource();
         AttachSession? session = null;
 
         try
@@ -478,7 +486,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     session = null;
                 }
 
-                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, ct).ConfigureAwait(false);
+                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, gone.Token, ct).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException
@@ -489,6 +497,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
         finally
         {
+            await gone.CancelAsync().ConfigureAwait(false);
+
             if (session is not null)
             {
                 Detach(session);
@@ -548,7 +558,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         !hello.Bridged || options.Iso() is not { On: true } iso || iso.MayAttachFrom(hello.Origin);
 
     private async Task HandleAsync(
-        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken ct)
+        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken gone, CancellationToken ct)
     {
         switch (type)
         {
@@ -561,6 +571,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     {
                         var redact = bridged && iso.On;
                         _ = Task.Run(() => AnswerHeadAsync(wire, request, redact, ct), CancellationToken.None);
+                        break;
+                    }
+
+                    if (request.Op == MenuWaitOp && !bridged)
+                    {
+                        _ = Task.Run(() => AnswerMenuWaitAsync(wire, request, gone, ct), CancellationToken.None);
                         break;
                     }
 
@@ -582,6 +598,12 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             case MessageType.Key or MessageType.Text or MessageType.Mouse or MessageType.Command
                 when session is not null && RemoteTarget(session, type, payload) is { } remote:
+                if (_timing is not null && type == MessageType.Command
+                    && Wire.Read(payload, WireJsonContext.Default.CommandMessage).Name == "menu")
+                {
+                    _timing.Begin(session.Client, remote.Host);
+                }
+
                 await remote.ForwardAsync(type, payload).ConfigureAwait(false);
                 break;
 
@@ -809,6 +831,94 @@ public sealed class FleetDaemon(DaemonOptions options)
         catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
         {
             options.Log($"could not answer {request.Op} {tool}: {e.Message}");
+        }
+    }
+
+    public const string MenuWaitOp = "menu-wait";
+
+    private readonly Dictionary<string, TaskCompletionSource<string?>> _menuWaits = new(StringComparer.Ordinal);
+
+    private async Task AnswerMenuWaitAsync(Wire wire, ControlRequest request, CancellationToken gone, CancellationToken ct)
+    {
+        TaskCompletionSource<string?>? waiting = null;
+        lock (_gate)
+        {
+            if (request.Caller is { } pane && _model.Float(pane) is { Parked: true })
+            {
+                waiting = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _menuWaits.Remove(pane, out var replaced);
+                replaced?.TrySetCanceled();
+                _menuWaits[pane] = waiting;
+                options.Log($"{pane} waits to open");
+            }
+        }
+
+        var response = new ControlResponse { Id = request.Id, Ok = waiting is not null };
+
+        try
+        {
+            if (waiting is null)
+            {
+                response.Error = $"{request.Caller} is not a parked menu";
+            }
+            else
+            {
+                try
+                {
+                    response.Text = await waiting.Task.WaitAsync(gone).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!gone.IsCancellationRequested)
+                {
+                    response.Ok = false;
+                    response.Error = $"{request.Caller} stopped waiting to open";
+                }
+                finally
+                {
+                    StopWaiting(request.Caller!, waiting);
+                }
+            }
+
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            options.Log($"could not answer {request.Op} for {request.Caller}: {e.Message}");
+        }
+    }
+
+    private void StopWaiting(string pane, TaskCompletionSource<string?> waiting)
+    {
+        lock (_gate)
+        {
+            if (_menuWaits.TryGetValue(pane, out var registered) && registered == waiting)
+            {
+                _menuWaits.Remove(pane);
+                options.Log($"{pane} no longer waits to open");
+            }
+        }
+    }
+
+    private void HideUntilRedrawn(FloatState box)
+    {
+        if (box.Hidden || !_runtimes.TryGetValue(box.Pane, out var runtime))
+        {
+            return;
+        }
+
+        box.Hidden = true;
+        box.HiddenSince = DateTime.UtcNow;
+        box.RevealAfterOutput = runtime.Outputs;
+        box.Baseline = Signature(runtime.Screen);
+        box.NeedsBaseline = false;
+    }
+
+    private void ForgetMenuWaits()
+    {
+        foreach (var pane in _menuWaits.Keys.Where(p => _model.Float(p) is not { Parked: true }).ToList())
+        {
+            _menuWaits.Remove(pane, out var gone);
+            gone?.TrySetCanceled();
         }
     }
 
@@ -1160,6 +1270,11 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Command(AttachSession session, CommandMessage command)
     {
+        if (command.Name == "menu")
+        {
+            _timing?.Begin(session.Client);
+        }
+
         if (command.Name is not ("focus-in" or "focus-out" or "copy" or "float-move" or "float-size"))
         {
             options.Log($"{session.Client}: {command.Name}{(command.Arg is null ? string.Empty : " " + command.Arg)}");
@@ -1765,6 +1880,19 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Forward(RemoteLink link, HostEffect effect)
     {
+        if (effect.Kind == MenuTiming.ReportEffect)
+        {
+            if (_timing is not null && effect.Value is { } report)
+            {
+                lock (_gate)
+                {
+                    _timing.Reported(link.Host, report, RemoteOutputs(link.Host));
+                }
+            }
+
+            return;
+        }
+
         if (effect.Kind == HostEffects.OpenUrl)
         {
             _hub.Open(link, effect.Value);
@@ -1803,6 +1931,14 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         _wake.Release();
     }
+
+    private bool MenuShown(string pane) =>
+        _model.Pane(pane) is not null && _model.Float(pane) is not ({ Hidden: true } or { Parked: true });
+
+    private long RemoteOutputs(string host) =>
+        _remotes.GetValueOrDefault(host) is { } link && _runtimes.Values.FirstOrDefault(r => r.Pty == link.Pty) is { } runtime
+            ? runtime.Outputs
+            : 0;
 
     private RemoteLink RemoteFor(string? host) =>
         host is not null && _remotes.TryGetValue(host, out var link)
@@ -1893,6 +2029,18 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private TimeSpan QuietFor(string pane)
+    {
+        var workspace = CallerWorkspace(pane);
+        var viewers = _model.Clients
+            .Where(c => workspace is not null && string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return viewers.Count > 0 && viewers.All(c => _bridged.ContainsKey(c.Id))
+            ? options.RevealWhenQuietRemote
+            : options.RevealWhenQuiet;
+    }
+
     private void Hold(string pane)
     {
         if (_model.Float(pane) is { Hidden: false } box)
@@ -1913,7 +2061,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             var redrawn = box.ReleaseAfterOutput >= 0
                           && _runtimes.TryGetValue(box.Pane, out var runtime)
                           && runtime.Outputs > box.ReleaseAfterOutput
-                          && Environment.TickCount64 - runtime.LastOutputAt >= options.RevealWhenQuiet.TotalMilliseconds;
+                          && Environment.TickCount64 - runtime.LastOutputAt >= QuietFor(box.Pane).TotalMilliseconds;
 
             if (redrawn || DateTime.UtcNow - box.HeldSince > RevealAnyway)
             {
@@ -1980,11 +2128,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                         && runtime.Outputs > box.RevealAfterOutput
                         && HasContent(runtime.Screen)
                         && (box.Baseline is null || Signature(runtime.Screen) != box.Baseline)
-                        && Environment.TickCount64 - runtime.LastOutputAt >= options.RevealWhenQuiet.TotalMilliseconds;
+                        && Environment.TickCount64 - runtime.LastOutputAt >= QuietFor(box.Pane).TotalMilliseconds;
 
             if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
             {
                 box.Hidden = false;
+                options.Log($"{box.Pane} revealed {(drawn ? "after drawing" : "after waiting")}");
+                _timing?.Revealed(box.Pane);
             }
             else
             {
@@ -1994,12 +2144,19 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
 
-    private readonly Dictionary<string, DateTime> _warmedAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly record struct Warmed(DateTime Wall, DateTimeOffset AgainFrom);
+
+    private readonly Dictionary<string, Warmed> _warmed = new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly TimeSpan WarmAgainAfter = TimeSpan.FromSeconds(2);
 
     private List<string> MenuArgs(string? project) =>
         project is null ? [options.FleetExecutable, "menu"] : [options.FleetExecutable, "menu", "--project", project];
+
+    private string? ShownMenuWorkspace(string? pane) =>
+        pane is not null && _model.Pane(pane)?.Args is [_, "menu", ..] && _model.Float(pane) is { Parked: false }
+            ? CallerWorkspace(pane)
+            : null;
 
     private bool HasMenu(string workspace) =>
         _model.PanesIn(workspace).Any(id => _model.Pane(id)?.Args is [_, "menu", ..]);
@@ -2008,9 +2165,9 @@ public sealed class FleetDaemon(DaemonOptions options)
     {
         try
         {
-            return _warmedAt.TryGetValue(workspace, out var at)
+            return _warmed.TryGetValue(workspace, out var warmed)
                 && File.Exists(options.FleetExecutable)
-                && File.GetLastWriteTimeUtc(options.FleetExecutable) > at;
+                && File.GetLastWriteTimeUtc(options.FleetExecutable) > warmed.Wall;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -2020,6 +2177,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void WarmMenus()
     {
+        ForgetMenuWaits();
+
         foreach (var stranded in _model.StrandedParked())
         {
             Kill(stranded);
@@ -2040,12 +2199,12 @@ public sealed class FleetDaemon(DaemonOptions options)
         foreach (var workspace in shown)
         {
             if (HasMenu(workspace)
-                || (_warmedAt.TryGetValue(workspace, out var at) && DateTime.UtcNow - at < WarmAgainAfter))
+                || (_warmed.TryGetValue(workspace, out var warmed) && options.Clock.GetUtcNow() - warmed.AgainFrom < WarmAgainAfter))
             {
                 continue;
             }
 
-            _warmedAt[workspace] = DateTime.UtcNow;
+            _warmed[workspace] = new Warmed(DateTime.UtcNow, options.Clock.GetUtcNow());
             var (cols, rows) = _model.Clients
                 .Where(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
                 .Select(c => (c.Cols, c.Rows))
@@ -2104,10 +2263,23 @@ public sealed class FleetDaemon(DaemonOptions options)
                 options.Log($"{client}: warm menu {outdated.Pane} predates the installed fleet; opening a fresh one");
             }
 
-            if (action is null && _model.Parked(shown) is { } warm && _model.Unpark(warm.Pane))
+            if (_model.Parked(shown) is { } warm
+                && (action is null || _menuWaits.ContainsKey(warm.Pane))
+                && _model.Unpark(warm.Pane))
             {
+                if (action is not null)
+                {
+                    HideUntilRedrawn(warm);
+                }
+
+                if (_menuWaits.Remove(warm.Pane, out var waiting))
+                {
+                    waiting.TrySetResult(action);
+                }
+
                 state.Menu = warm.Pane;
-                options.Log($"{client}: warm menu {warm.Pane}{(warm.Hidden ? " (still drawing)" : string.Empty)}");
+                _timing?.Opened(client, warm.Pane, warm: true);
+                options.Log($"{client}: warm menu {warm.Pane}{(action is null ? string.Empty : $" for {action}")}{(warm.Hidden ? " (still drawing)" : string.Empty)}");
                 return;
             }
 
@@ -2126,6 +2298,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 hidden.HiddenSince = DateTime.UtcNow;
             }
             state.Menu = menu.Id;
+            _timing?.Opened(client, menu.Id, warm: false);
             ApplyResizes();
             Start(menu, env);
             return;
@@ -2133,6 +2306,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         var pane = _model.Spawn(MuxModel.OverlayWorkspace, Environment.CurrentDirectory, args);
         _model.SetOverlay(client, pane.Id);
+        _timing?.Opened(client, pane.Id, warm: false);
         ApplyResizes();
         Start(pane, env);
     }
@@ -2431,9 +2605,19 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private bool Kill(string? id)
     {
+        var closedMenuIn = ShownMenuWorkspace(id);
+
         if (id is null || !_model.Kill(id))
         {
             return false;
+        }
+
+        if (closedMenuIn is not null)
+        {
+            if (_warmed.TryGetValue(closedMenuIn, out var warmed))
+            {
+                _warmed[closedMenuIn] = warmed with { AgainFrom = DateTimeOffset.MinValue };
+            }
         }
 
         if (_runtimes.Remove(id, out var runtime))
@@ -2595,6 +2779,15 @@ public sealed class FleetDaemon(DaemonOptions options)
                     sends.Add((session, ++session.Seq, full, FrameEncoder.Encode(session.Shown, frame), session.Switching));
                     session.Shown = frame;
                     session.Switching = null;
+
+                    if (_timing?.Framed(session.Client, MenuShown, RemoteOutputs) is { } timed)
+                    {
+                        options.Log(timed.Line);
+                        if (timed.Host is null)
+                        {
+                            effects.Add((session, new HostEffect { Kind = MenuTiming.ReportEffect, Value = timed.Report() }));
+                        }
+                    }
                 }
 
                 WarmMenus();
