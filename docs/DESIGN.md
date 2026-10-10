@@ -5830,6 +5830,37 @@ What the phases add up to:
   (`DashboardKeys.HideHint`, from the keymap, so it follows rebinding): one chip, fewer
   buttons, no lost key.
 
+## ISO mode, 2026-10-10
+
+- **Two halves.** fleet has no push channel to the head: the origin pulls over
+  `ssh host fleet bridge` into the remote fleetd, which only answers. So ISO mode is a filter
+  on what fleetd answers to bridged clients, plus a block on connections the ISO machine starts.
+- **Bridged, not trusted.** `fleet bridge` reads the first frame, stamps the `Hello` with
+  `bridged: true` and the first word of `SSH_CONNECTION` (or `SSH_CLIENT`) as `origin`,
+  overwriting whatever the client sent, then copies bytes as before. fleetd treats a bridged
+  connection as remote. A local client that claims to be bridged only restricts itself.
+- **Fail closed.** `iso.json` (`JsonIsoMode`, port `IIsoMode`) is read per request, so a toggle
+  needs no restart; a file that exists but cannot be read counts as on. With ISO mode on, a
+  bridged request must be on `IsoFilter`'s short list of ops, its workspace must be a code,
+  and its response is rewritten: codes for names, empty paths and titles, notice text replaced
+  by a fixed word, failures reduced to `failed`.
+- **Codes.** `IsoCodes` numbers projects in name order (`sub1`, ...) after any overrides from
+  `iso.json`, and agents within a project by worktree path (`sub1.agent2`). Codes map back for
+  inbound ops (show, open-project, dismiss-notices), and only codes are accepted, so a real
+  name is never an oracle. The numbering shifts when projects are added; overrides pin it.
+- **Head.** `HeadService.ServeOriginAsync` hands off to `HeadIso`, which answers `code: state`
+  lines (`IsoProjection.State` whitelists the status words) and bare acks. The local head is
+  not filtered.
+- **Attach.** `RemoteLink` always connects with the attach role, so a host off the allowlist
+  is not dropped: it gets a control connection without a session, and the codes still flow.
+  A session whose host leaves the list is detached on its next message.
+- **Outbound.** `IsoGuard` gives one refusal text and is the hook for a future sync feature.
+  Gated now: `ConnectRemote` and the ssh process starters, `remote-head`, the head's
+  forwarding to other machines, the update check and release list, `FinishAgentHandler`'s
+  push, and the agent permission plan (push and merge forced to deny).
+- **Limits, stated.** An agent's own network use and the model API are outside fleet's
+  reach; the README gives an nftables egress example instead of claiming more.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

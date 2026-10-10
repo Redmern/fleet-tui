@@ -8,7 +8,7 @@ namespace Fleet.Features.Iso.ToggleIso;
 public sealed class ToggleIsoHandler(IIsoMode iso)
 {
     public const string Usage =
-        "usage: fleet iso on | off | status | allow <host> | disallow <host> | code <project> [<code>]";
+        "usage: fleet iso on | off | status | allow <address> | disallow <address> | code <project> [<code>]";
 
     public const string OffQuestion =
         "Turn ISO mode off? Status, notices and screens will reach other machines again. Type 'off' to confirm: ";
