@@ -1,4 +1,7 @@
 using Fleet.Features.Remotes.ManageRemotes.Models;
+using Fleet.Ports.Browser;
+using Fleet.Ports.Forwards;
+using Fleet.Ports.Forwards.Models;
 using Fleet.Ports.Remotes;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
@@ -19,7 +22,13 @@ public static class ManageRemotesView
 
     public static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
 
-    public static void Show(IApplication app, Keymap keymap, IRemoteMachines remotes, IKnownRemoteStore known)
+    public static void Show(
+        IApplication app,
+        Keymap keymap,
+        IRemoteMachines remotes,
+        IKnownRemoteStore known,
+        IPortForwards? forwards = null,
+        IBrowserLauncher? browser = null)
     {
         var window = FleetTheme.Overlay("remote machines", 90, 16 + FleetCorners.Rows);
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
@@ -28,12 +37,13 @@ public static class ManageRemotesView
         FleetKeys.ApplyMotions(list, keymap);
 
         IReadOnlyList<RemoteEntry> shown = [];
+        IReadOnlyList<PortForward> ports = [];
         var busy = 0;
 
         void Fill(IReadOnlyList<RemoteEntry> entries)
         {
             shown = entries;
-            FleetRows.Fill(list, Rows(entries), FleetRows.Selected(list));
+            FleetRows.Fill(list, Rows(entries, host => RemotePortsView.Forwarded(ports, host)), FleetRows.Selected(list));
         }
 
         void Reload() =>
@@ -50,7 +60,12 @@ public static class ManageRemotesView
                 }
 
                 var entries = RemoteEntry.Merge(machines, remembered);
-                app.Invoke(() => Fill(entries));
+                var forwarded = forwards is null ? [] : await forwards.ListAsync().ConfigureAwait(false);
+                app.Invoke(() =>
+                {
+                    ports = forwarded;
+                    Fill(entries);
+                });
             });
 
         RemoteEntry? Selected()
@@ -154,6 +169,23 @@ public static class ManageRemotesView
             Reload();
         }
 
+        void Ports()
+        {
+            if (forwards is null || browser is null)
+            {
+                return;
+            }
+
+            if (Selected() is not { Live.State: RemoteState.Connected } entry)
+            {
+                status.Text = "connect the machine first; its web app ports show once it is connected";
+                return;
+            }
+
+            RemotePortsView.Show(app, keymap, forwards, browser, entry.Host, entry.Described);
+            Reload();
+        }
+
         void Forget()
         {
             if (Selected() is not { } entry)
@@ -193,6 +225,7 @@ public static class ManageRemotesView
             ("e", FleetIcons.Rename, Rename),
             ("x", FleetIcons.Forget, Forget),
             ("d", FleetIcons.Disconnect, Disconnect),
+            .. forwards is null ? [] : (IEnumerable<(string, string, Action)>)[("p", FleetIcons.Ports, Ports)],
         ]);
 
         var claim = FleetModal.Enter();
@@ -231,6 +264,10 @@ public static class ManageRemotesView
             else if (key == Key.X)
             {
                 Forget();
+            }
+            else if (key == Key.P && forwards is not null)
+            {
+                Ports();
             }
             else
             {
@@ -367,7 +404,7 @@ public static class ManageRemotesView
         say($"{host}: still connecting; check it here later");
     }
 
-    public static IReadOnlyList<FleetRow> Rows(IReadOnlyList<RemoteEntry> entries)
+    public static IReadOnlyList<FleetRow> Rows(IReadOnlyList<RemoteEntry> entries, Func<string, int>? forwarded = null)
     {
         if (entries.Count == 0)
         {
@@ -389,7 +426,7 @@ public static class ManageRemotesView
 
             var (mark, tone, state) = m.State switch
             {
-                RemoteState.Connected => ("●", FleetTones.Good, Projects(m.Projects.Count)),
+                RemoteState.Connected => ("●", FleetTones.Good, Projects(m.Projects.Count) + Forwarded(forwarded?.Invoke(m.Host) ?? 0)),
                 RemoteState.Asking => ("?", FleetTones.Warn, "waiting for your answer: press enter"),
                 RemoteState.Failed => ("✗", FleetTones.Bad, m.Error ?? "could not connect"),
                 _ => ("…", FleetTones.Muted, "connecting"),
@@ -400,6 +437,13 @@ public static class ManageRemotesView
                 [FleetSpan.Muted($"{state} ")]);
         })];
     }
+
+    private static string Forwarded(int count) => count switch
+    {
+        0 => string.Empty,
+        1 => " · 1 port forwarded",
+        _ => $" · {count} ports forwarded",
+    };
 
     private static string Projects(int count) => count == 1 ? "1 project" : $"{count} projects";
 }

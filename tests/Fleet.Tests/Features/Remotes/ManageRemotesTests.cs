@@ -1,3 +1,5 @@
+using Fleet.Ports.Forwards.Enums;
+using Fleet.Ports.Forwards.Models;
 using Fleet.Features.Remotes.ManageRemotes;
 using Fleet.Features.Remotes.ManageRemotes.Models;
 using Fleet.Ports.Remotes.Enums;
@@ -68,6 +70,39 @@ public sealed class ManageRemotesTests
         Assert.Equal("user@homelab", row.Spans[2].Text.Trim());
         Assert.Equal(FleetTones.Muted, row.Spans[2].Tone);
         Assert.Contains("2 projects", row.Text);
+    }
+
+    [Fact]
+    public void A_live_row_counts_its_forwarded_ports()
+    {
+        var row = Assert.Single(ManageRemotesView.Rows(RemoteEntry.Merge([Homelab], []), host => host == "user@homelab" ? 2 : 0));
+
+        Assert.Contains("2 projects · 2 ports forwarded", row.Text);
+    }
+
+    [Fact]
+    public void Port_rows_show_the_url_of_a_forward_and_how_to_forward_the_rest()
+    {
+        IReadOnlyList<PortForward> all =
+        [
+            new("user@homelab", 5173, 15173, ForwardState.Forwarded, "web"),
+            new("user@homelab", 9229, null, ForwardState.Detected),
+            new("user@homelab", 3000, null, ForwardState.Failed, null, "refused"),
+            new("other", 5173, 5173, ForwardState.Forwarded),
+            new("laptop", 5173, 5173, ForwardState.Forwarded, Viewer: true),
+        ];
+
+        var mine = RemotePortsView.Of(all, "user@homelab");
+        var rows = RemotePortsView.Rows(mine);
+
+        Assert.Equal(3, mine.Count);
+        Assert.Equal(1, RemotePortsView.Forwarded(all, "user@homelab"));
+        Assert.Contains("http://localhost:15173", rows[0].Text);
+        Assert.Contains("web", rows[0].Text);
+        Assert.Contains("f forwards it", rows[1].Text);
+        Assert.Equal(FleetTones.Bad, rows[2].Spans[0].Tone);
+        Assert.Contains("refused", rows[2].Text);
+        Assert.Equal(RemotePortsView.EmptyHint, Assert.Single(RemotePortsView.Rows([])).Text);
     }
 
     [Fact]

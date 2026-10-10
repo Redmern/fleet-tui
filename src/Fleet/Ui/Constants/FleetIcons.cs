@@ -56,6 +56,14 @@ public static class FleetIcons
 
     public const string Disconnect = "";
 
+    public const string Ports = "";
+
+    public const string Forward = "";
+
+    public const string Unforward = "";
+
+    public const string OpenBrowser = "";
+
     private static readonly Dictionary<string, string> Names = new()
     {
         [Info] = "keybinds",
@@ -80,6 +88,10 @@ public static class FleetIcons
         [Rename] = "rename",
         [Forget] = "forget",
         [Disconnect] = "disconnect",
+        [Ports] = "ports",
+        [Forward] = "forward",
+        [Unforward] = "unforward",
+        [OpenBrowser] = "open",
         [For(FleetAction.NewAgent)!] = "new agent",
         [For(FleetAction.AddRepository)!] = "add repo",
         [For(FleetAction.Refresh)!] = "refresh",
