@@ -21,4 +21,28 @@ public sealed class RemoteSshArgumentsTests
             ["-T", "-o", "ConnectTimeout=15", "box", "fleet", "bridge"],
             EmbeddedWiring.RemoteSshArguments("box", null, "fleet"));
     }
+
+    [Fact]
+    public void Attach_over_ssh_uses_the_same_ssh_arguments_and_control_master_as_a_remote_link()
+    {
+        var attach = EmbeddedWiring.AttachSsh("box");
+        var link = EmbeddedWiring.RemoteSsh("box", "token", new Fleet.Platform.Mux.Embedded.Daemon.Endpoint("/tmp/fleet-test.sock"));
+
+        Assert.Equal("ssh", attach.FileName);
+        Assert.Equal(link.ArgumentList, attach.ArgumentList);
+        Assert.Equal(["box", "fleet", "bridge"], attach.ArgumentList.TakeLast(3));
+        if (EmbeddedWiring.ControlSocket("box") is { } socket)
+        {
+            Assert.Contains($"ControlPath={socket}", attach.ArgumentList);
+        }
+    }
+
+    [Fact]
+    public void Attach_over_ssh_keeps_its_terminal_for_password_prompts()
+    {
+        var attach = EmbeddedWiring.AttachSsh("box");
+
+        Assert.False(attach.RedirectStandardError);
+        Assert.False(attach.Environment.ContainsKey("SSH_ASKPASS"));
+    }
 }

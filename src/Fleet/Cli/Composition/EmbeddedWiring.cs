@@ -749,13 +749,7 @@ public static class EmbeddedWiring
             RedirectStandardError = true,
         };
 
-        var socket = ControlSocket(host);
-        if (socket is not null)
-        {
-            ControlPaths.Reclaim(socket, ControlPaths.Answers);
-        }
-
-        foreach (var arg in RemoteSshArguments(host, socket, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet"))
+        foreach (var arg in BridgeSshArguments(host))
         {
             start.ArgumentList.Add(arg);
         }
@@ -765,6 +759,35 @@ public static class EmbeddedWiring
         start.Environment[CommandLine.AskPassVariable] = token;
         start.Environment[Endpoint.Variable] = home.Address;
         return start;
+    }
+
+    public static ProcessStartInfo AttachSsh(string host)
+    {
+        var start = new ProcessStartInfo("ssh")
+        {
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = false,
+        };
+
+        foreach (var arg in BridgeSshArguments(host))
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        return start;
+    }
+
+    private static IReadOnlyList<string> BridgeSshArguments(string host)
+    {
+        var socket = ControlSocket(host);
+        if (socket is not null)
+        {
+            ControlPaths.Reclaim(socket, ControlPaths.Answers);
+        }
+
+        return RemoteSshArguments(host, socket, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet");
     }
 
     public static IReadOnlyList<string> RemoteSshArguments(string host, string? controlPath, string remoteFleet) =>
@@ -898,23 +921,9 @@ public static class EmbeddedWiring
 
     private static Stream Ssh(string host)
     {
-        var remote = Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet";
-        var start = new ProcessStartInfo("ssh")
-        {
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = false,
-        };
-
         RefuseSshInIso();
 
-        start.ArgumentList.Add("-T");
-        start.ArgumentList.Add(host);
-        start.ArgumentList.Add(remote);
-        start.ArgumentList.Add("bridge");
-
-        var process = Process.Start(start) ?? throw new IOException("could not start ssh");
+        var process = Process.Start(AttachSsh(host)) ?? throw new IOException("could not start ssh");
         return new DuplexStream(process.StandardOutput.BaseStream, process.StandardInput.BaseStream, process);
     }
 
