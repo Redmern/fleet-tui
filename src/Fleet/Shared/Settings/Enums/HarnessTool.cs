@@ -33,4 +33,5 @@ public enum HarnessTool
     OpenUrl,
     StartStack,
     StopStack,
+    SyncToRemote,
 }

@@ -51,6 +51,8 @@ public static class SettingsDefaults
 
     public const bool SubagentGuidance = true;
 
+    public const bool Iso = false;
+
     public const bool ShowMenuKeys = true;
 
     public const NvimConfig Nvim = NvimConfig.Fleet;
@@ -158,6 +160,7 @@ public static class SettingsDefaults
         HarnessTool.OpenUrl => "Open a forwarded port in the browser",
         HarnessTool.StartStack => "Run a remote project's stack",
         HarnessTool.StopStack => "Stop a remote project's stack",
+        HarnessTool.SyncToRemote => "Send work to another machine",
         _ => tool.ToString(),
     };
 }

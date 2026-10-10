@@ -39,6 +39,7 @@ public static class HarnessToolIds
         HarnessTool.OpenUrl => "open_url",
         HarnessTool.StartStack => "start_stack",
         HarnessTool.StopStack => "stop_stack",
+        HarnessTool.SyncToRemote => "sync_to_remote",
         _ => string.Empty,
     };
 

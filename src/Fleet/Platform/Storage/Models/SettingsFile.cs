@@ -49,6 +49,9 @@ public sealed class SettingsFile
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? SubagentGuidance { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Iso { get; set; }
 }
 
 public sealed class HeadSettingsFile
@@ -69,6 +72,14 @@ public sealed class MenuSettingsFile
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ButtonHints { get; set; }
+}
+
+public sealed class MachineSettingsFile
+{
+    public int Version { get; set; } = 1;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Iso { get; set; }
 }
 
 public sealed class NvimSettingsFile

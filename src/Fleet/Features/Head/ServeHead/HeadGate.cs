@@ -13,9 +13,7 @@ public sealed class HeadGate(HeadDeps deps)
         deps.Settings.Load(project).MergedOverDefaults().RuleFor(tool).Policy;
 
     public string? Refused(string project, HarnessTool tool) =>
-        PolicyFor(project, tool) == ActionPolicy.Forbid
-            ? $"{project} does not allow {HarnessToolIds.For(tool)}; change it in that project's permissions."
-            : null;
+        ToolRefusal.Forbidden(project, deps.Settings.Load(project).MergedOverDefaults(), tool);
 
     public async Task<string?> CheckAsync(string project, HarnessTool tool, string detail, CancellationToken ct)
     {
