@@ -1,18 +1,20 @@
-using System.Diagnostics;
+using System.Collections.Concurrent;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
 // The pause after the fit lets fleetd take its baseline before the menu draws.
-// The local quiet window is stretched to 1 s here so a reveal after the short remote window
-// stands well clear of it; the reveal-anyway fallback lands 1.3 s after a fit.
+// The local quiet window is stretched past the reveal-anyway fallback (1.3 s after a fit), so a
+// local menu can only be revealed "after waiting" and a bridged one "after drawing"; the tests
+// read that from fleetd's log instead of timing the reveal.
 public sealed class RevealQuietTests : IAsyncLifetime
 {
-    private static readonly TimeSpan LocalQuiet = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan LocalQuiet = TimeSpan.FromSeconds(30);
 
     private readonly FakePanes _panes = new();
     private readonly List<DaemonTests.TestClient> _clients = [];
+    private readonly ConcurrentQueue<string> _log = new();
     private readonly CancellationTokenSource _stop = new();
     private Endpoint _endpoint = null!;
     private Task _running = Task.CompletedTask;
@@ -28,6 +30,7 @@ public sealed class RevealQuietTests : IAsyncLifetime
             Terminal = _panes.NewTerminal,
             FleetExecutable = "fleet",
             RevealWhenQuiet = LocalQuiet,
+            Log = _log.Enqueue,
         });
         _running = daemon.RunAsync(_stop.Token);
         return Task.CompletedTask;
@@ -51,7 +54,7 @@ public sealed class RevealQuietTests : IAsyncLifetime
         return client;
     }
 
-    private async Task<DaemonTests.TestClient> OpenDrawnMenuAsync(bool bridged)
+    private async Task<(DaemonTests.TestClient Client, string Menu)> OpenDrawnMenuAsync(bool bridged)
     {
         var control = await ConnectAsync(ClientRoles.Control);
         Assert.True((await control.RequestAsync(new ControlRequest
@@ -78,7 +81,7 @@ public sealed class RevealQuietTests : IAsyncLifetime
         })).Ok);
         await Task.Delay(100);
         menu.Emit("THE-MENU\nitems\n");
-        return client;
+        return (client, menu.Env[FleetDaemon.PaneVariable]);
     }
 
     [Fact]
@@ -93,24 +96,22 @@ public sealed class RevealQuietTests : IAsyncLifetime
     [Fact]
     public async Task A_bridged_client_sees_a_drawn_menu_after_the_remote_quiet_window()
     {
-        var clock = Stopwatch.StartNew();
-        var client = await OpenDrawnMenuAsync(bridged: true);
-        clock.Restart();
+        var (client, menu) = await OpenDrawnMenuAsync(bridged: true);
 
         await client.WaitForAsync("THE-MENU");
 
-        Assert.True(clock.Elapsed < TimeSpan.FromMilliseconds(800), $"revealed after {clock.ElapsedMilliseconds} ms");
+        Assert.Contains($"{menu} revealed after drawing", _log);
     }
 
     [Fact]
     public async Task A_local_client_still_waits_the_local_quiet_window()
     {
-        var client = await OpenDrawnMenuAsync(bridged: false);
+        var (client, menu) = await OpenDrawnMenuAsync(bridged: false);
 
-        await Task.Delay(500);
-
-        Assert.DoesNotContain("THE-MENU", client.AllText);
         await client.WaitForAsync("THE-MENU");
+
+        Assert.Contains($"{menu} revealed after waiting", _log);
+        Assert.DoesNotContain($"{menu} revealed after drawing", _log);
     }
 
     private static async Task Eventually(Func<bool> condition)

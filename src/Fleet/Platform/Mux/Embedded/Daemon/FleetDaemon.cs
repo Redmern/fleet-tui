@@ -90,7 +90,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Hello> _bridged = new(StringComparer.Ordinal);
     private readonly ForwardHub _hub = new(options.Forwards, options.Log);
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
-    private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(TimeProvider.System) : null;
+    private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
@@ -407,6 +407,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private async Task ServeAsync(Stream stream, CancellationToken ct)
     {
         using var wire = new Wire(stream);
+        using var gone = new CancellationTokenSource();
         AttachSession? session = null;
 
         try
@@ -485,7 +486,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     session = null;
                 }
 
-                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, ct).ConfigureAwait(false);
+                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, gone.Token, ct).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException
@@ -496,6 +497,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
         finally
         {
+            await gone.CancelAsync().ConfigureAwait(false);
+
             if (session is not null)
             {
                 Detach(session);
@@ -555,7 +558,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         !hello.Bridged || options.Iso() is not { On: true } iso || iso.MayAttachFrom(hello.Origin);
 
     private async Task HandleAsync(
-        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken ct)
+        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken gone, CancellationToken ct)
     {
         switch (type)
         {
@@ -573,7 +576,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     if (request.Op == MenuWaitOp && !bridged)
                     {
-                        _ = Task.Run(() => AnswerMenuWaitAsync(wire, request, ct), CancellationToken.None);
+                        _ = Task.Run(() => AnswerMenuWaitAsync(wire, request, gone, ct), CancellationToken.None);
                         break;
                     }
 
@@ -835,7 +838,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private readonly Dictionary<string, TaskCompletionSource<string?>> _menuWaits = new(StringComparer.Ordinal);
 
-    private async Task AnswerMenuWaitAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    private async Task AnswerMenuWaitAsync(Wire wire, ControlRequest request, CancellationToken gone, CancellationToken ct)
     {
         TaskCompletionSource<string?>? waiting = null;
         lock (_gate)
@@ -846,6 +849,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 _menuWaits.Remove(pane, out var replaced);
                 replaced?.TrySetCanceled();
                 _menuWaits[pane] = waiting;
+                options.Log($"{pane} waits to open");
             }
         }
 
@@ -861,12 +865,16 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 try
                 {
-                    response.Text = await waiting.Task.WaitAsync(ct).ConfigureAwait(false);
+                    response.Text = await waiting.Task.WaitAsync(gone).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                catch (OperationCanceledException) when (!gone.IsCancellationRequested)
                 {
                     response.Ok = false;
                     response.Error = $"{request.Caller} stopped waiting to open";
+                }
+                finally
+                {
+                    StopWaiting(request.Caller!, waiting);
                 }
             }
 
@@ -876,6 +884,18 @@ public sealed class FleetDaemon(DaemonOptions options)
         catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
         {
             options.Log($"could not answer {request.Op} for {request.Caller}: {e.Message}");
+        }
+    }
+
+    private void StopWaiting(string pane, TaskCompletionSource<string?> waiting)
+    {
+        lock (_gate)
+        {
+            if (_menuWaits.TryGetValue(pane, out var registered) && registered == waiting)
+            {
+                _menuWaits.Remove(pane);
+                options.Log($"{pane} no longer waits to open");
+            }
         }
     }
 
@@ -2113,6 +2133,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
             {
                 box.Hidden = false;
+                options.Log($"{box.Pane} revealed {(drawn ? "after drawing" : "after waiting")}");
                 _timing?.Revealed(box.Pane);
             }
             else
@@ -2123,9 +2144,9 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
 
-    private readonly Dictionary<string, DateTime> _warmedAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly record struct Warmed(DateTime Wall, DateTimeOffset AgainFrom);
 
-    private readonly Dictionary<string, DateTimeOffset> _warmAgainFrom = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Warmed> _warmed = new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly TimeSpan WarmAgainAfter = TimeSpan.FromSeconds(2);
 
@@ -2144,9 +2165,9 @@ public sealed class FleetDaemon(DaemonOptions options)
     {
         try
         {
-            return _warmedAt.TryGetValue(workspace, out var at)
+            return _warmed.TryGetValue(workspace, out var warmed)
                 && File.Exists(options.FleetExecutable)
-                && File.GetLastWriteTimeUtc(options.FleetExecutable) > at;
+                && File.GetLastWriteTimeUtc(options.FleetExecutable) > warmed.Wall;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -2178,13 +2199,12 @@ public sealed class FleetDaemon(DaemonOptions options)
         foreach (var workspace in shown)
         {
             if (HasMenu(workspace)
-                || (_warmAgainFrom.TryGetValue(workspace, out var at) && options.Clock.GetUtcNow() - at < WarmAgainAfter))
+                || (_warmed.TryGetValue(workspace, out var warmed) && options.Clock.GetUtcNow() - warmed.AgainFrom < WarmAgainAfter))
             {
                 continue;
             }
 
-            _warmedAt[workspace] = DateTime.UtcNow;
-            _warmAgainFrom[workspace] = options.Clock.GetUtcNow();
+            _warmed[workspace] = new Warmed(DateTime.UtcNow, options.Clock.GetUtcNow());
             var (cols, rows) = _model.Clients
                 .Where(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
                 .Select(c => (c.Cols, c.Rows))
@@ -2247,9 +2267,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                 && (action is null || _menuWaits.ContainsKey(warm.Pane))
                 && _model.Unpark(warm.Pane))
             {
-                if (_menuWaits.Remove(warm.Pane, out var waiting))
+                if (action is not null)
                 {
                     HideUntilRedrawn(warm);
+                }
+
+                if (_menuWaits.Remove(warm.Pane, out var waiting))
+                {
                     waiting.TrySetResult(action);
                 }
 
@@ -2590,7 +2614,10 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         if (closedMenuIn is not null)
         {
-            _warmAgainFrom.Remove(closedMenuIn);
+            if (_warmed.TryGetValue(closedMenuIn, out var warmed))
+            {
+                _warmed[closedMenuIn] = warmed with { AgainFrom = DateTimeOffset.MinValue };
+            }
         }
 
         if (_runtimes.Remove(id, out var runtime))

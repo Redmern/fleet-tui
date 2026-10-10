@@ -105,54 +105,63 @@ public static class MenuCommand
 
             var chosen = requested;
             var switchedTo = FleetAction.None;
-            _ = SwitchWhenOpenedAsync(
+            using var opening = new CancellationTokenSource();
+            var switching = SwitchWhenOpenedAsync(
                 app,
-                invocation.Action is null ? WarmMenuWiring.WaitForOpenAsync() : Task.FromResult<string?>(null),
+                invocation.Action is null ? WarmMenuWiring.WaitForOpenAsync(opening.Token) : Task.FromResult<string?>(null),
                 action => switchedTo = action);
 
-            while (true)
+            try
             {
-                if (chosen == FleetAction.None || FleetMenus.IsSubmenu(chosen))
+                while (true)
                 {
-                    var submenu = chosen;
-
-                    chosen = await ShowMenu(app, keymap, project, submenu).ConfigureAwait(false);
-
-                    if (chosen == FleetAction.None && submenu != FleetAction.None && FleetModal.WentBack())
+                    if (chosen == FleetAction.None || FleetMenus.IsSubmenu(chosen))
                     {
-                        chosen = FleetMenus.Parent(submenu);
-                        continue;
-                    }
+                        var submenu = chosen;
 
-                    if (chosen == FleetAction.None && submenu == FleetAction.None && switchedTo != FleetAction.None)
-                    {
-                        (chosen, switchedTo) = (switchedTo, FleetAction.None);
-                        if (chosen is FleetAction.OpenProject or FleetAction.NewProject)
+                        chosen = await ShowMenu(app, keymap, project, submenu).ConfigureAwait(false);
+
+                        if (chosen == FleetAction.None && submenu != FleetAction.None && FleetModal.WentBack())
                         {
-                            pick = chosen;
-                            break;
+                            chosen = FleetMenus.Parent(submenu);
+                            continue;
+                        }
+
+                        if (chosen == FleetAction.None && submenu == FleetAction.None && switchedTo != FleetAction.None)
+                        {
+                            (chosen, switchedTo) = (switchedTo, FleetAction.None);
+                            if (chosen is FleetAction.OpenProject or FleetAction.NewProject)
+                            {
+                                pick = chosen;
+                                break;
+                            }
+
+                            continue;
+                        }
+
+                        if (chosen == FleetAction.None)
+                        {
+                            return 0;
                         }
 
                         continue;
                     }
 
-                    if (chosen == FleetAction.None)
+                    var code = await Perform(app, keymap, keymaps, adder, projects, project, chosen).ConfigureAwait(false);
+
+                    if (code != 0 || !FleetModal.WentBack())
                     {
-                        return 0;
+                        return code;
                     }
 
-                    continue;
+                    keymap = new Keymap(keymaps.Load());
+                    chosen = Parent(chosen);
                 }
-
-                var code = await Perform(app, keymap, keymaps, adder, projects, project, chosen).ConfigureAwait(false);
-
-                if (code != 0 || !FleetModal.WentBack())
-                {
-                    return code;
-                }
-
-                keymap = new Keymap(keymaps.Load());
-                chosen = Parent(chosen);
+            }
+            finally
+            {
+                await opening.CancelAsync().ConfigureAwait(false);
+                await switching.ConfigureAwait(false);
             }
         }
 
