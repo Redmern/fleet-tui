@@ -1,5 +1,8 @@
+using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports.Mux.Exceptions;
+using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
@@ -153,6 +156,32 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         var cold = _panes.Started.Last(p => p.Program == "fleet");
         Assert.Equal(["menu", "--project", "techweb", "--action", "switch-project"], cold.Args);
         Assert.False(warm.IsDisposed);
+    }
+
+    [Fact]
+    public async Task The_driver_waits_until_its_warm_menu_is_opened_and_returns_the_action()
+    {
+        var (_, client, warm) = await WarmAsync();
+        using var driver = new EmbeddedDriver(_endpoint);
+        var waiting = driver.WaitForMenuOpenAsync(new PaneId(warm.Env[FleetDaemon.PaneVariable]));
+        await Task.Delay(100);
+        Assert.False(waiting.IsCompleted);
+
+        await client.SendCommandAsync("menu", "notifications");
+
+        Assert.Equal("notifications", await waiting.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task The_driver_reports_a_menu_that_is_not_parked()
+    {
+        var (_, client, warm) = await WarmAsync();
+        await client.SendCommandAsync("menu");
+        await client.WaitForAsync("WARM-MENU");
+        using var driver = new EmbeddedDriver(_endpoint);
+
+        await Assert.ThrowsAsync<MuxUnavailableException>(
+            () => driver.WaitForMenuOpenAsync(new PaneId(warm.Env[FleetDaemon.PaneVariable])).WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
