@@ -190,6 +190,18 @@ public sealed class HostForwardsTests
     }
 
     [Fact]
+    public async Task Removing_every_forward_while_the_link_is_down_stops_wanting_the_host()
+    {
+        var forwards = For();
+        await forwards.ReconcileAsync(Listening(5173), Allowed(5173), default);
+        forwards.Unlinked();
+
+        await forwards.UnforwardNowAsync(5173, default);
+
+        Assert.False(forwards.Wanted);
+    }
+
+    [Fact]
     public void Allowlists_of_several_projects_merge_and_the_first_project_names_a_shared_port()
     {
         var allowed = HostForwards.Allowlist([("web", [5173, 3000]), ("api", [3000, 8080])]);

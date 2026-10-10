@@ -47,6 +47,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
     private readonly Dictionary<string, HostForwards> _hosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _stacks = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _failures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _stackPins = new(StringComparer.OrdinalIgnoreCase);
 
     public HostForwards? For(string host)
     {
@@ -139,6 +140,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             foreach (var stack in _stacks.Keys.Where(k => k.StartsWith(host + "\n", StringComparison.OrdinalIgnoreCase)).ToList())
             {
                 _stacks.Remove(stack);
+                _stackPins.Remove(stack);
             }
         }
 
@@ -183,20 +185,15 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                 {
                     var port = Port(request.Port);
                     int? local = request.LocalPort > 0 ? Port(request.LocalPort) : null;
-                    var known = linkOf(host) is { WasConnected: true };
+                    var pinnedBefore = forwards.IsPinned(port);
                     forwards.Pin(port, local);
                     try
                     {
                         await ConnectedAsync(host, linkOf, connect, options.ForwardWithin, ct).ConfigureAwait(false);
                     }
-                    catch (InvalidOperationException) when (!known)
+                    catch (InvalidOperationException) when (!pinnedBefore)
                     {
                         forwards.Unpin(port);
-                        if (!forwards.Wanted)
-                        {
-                            Dropped(host);
-                        }
-
                         throw;
                     }
 
@@ -368,7 +365,14 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             log($"remote {host}: started the stack of {config.Name}: {command}");
         }
 
-        forwards.Pin(port, null);
+        if (!forwards.IsPinned(port))
+        {
+            forwards.Pin(port, null);
+            lock (_gate)
+            {
+                _stackPins[key] = port;
+            }
+        }
 
         var stackClock = System.Diagnostics.Stopwatch.StartNew();
         var row = await SettledAsync(forwards, port, options.StackWithin, ct, waitForListening: true).ConfigureAwait(false);
@@ -438,12 +442,23 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         }
 
         await link.SendAsync(new ControlRequest { Op = "kill", Pane = pane }).ConfigureAwait(false);
+        int? pinned = null;
         lock (_gate)
         {
             if (_stacks.GetValueOrDefault(key) == pane)
             {
                 _stacks.Remove(key);
             }
+
+            if (_stackPins.Remove(key, out var port))
+            {
+                pinned = port;
+            }
+        }
+
+        if (pinned is { } unpin && For(host) is { } forwards)
+        {
+            forwards.Unpin(unpin);
         }
 
         log($"remote {host}: stopped the stack of {project}");

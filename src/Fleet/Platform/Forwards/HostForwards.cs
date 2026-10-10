@@ -24,7 +24,7 @@ public sealed class HostForwards(
     private IReadOnlyDictionary<int, string> _allowed = new Dictionary<int, string>();
     private string? _hostError;
     private bool _linked;
-    private bool _restoring;
+    private readonly HashSet<int> _restore = [];
 
     private sealed record Active(int Local, string Target, string? Project);
 
@@ -38,7 +38,7 @@ public sealed class HostForwards(
         {
             lock (_gate)
             {
-                return _pins.Count > 0 || _active.Count > 0 || _restoring;
+                return _pins.Count > 0 || _active.Count > 0 || _restore.Count > 0;
             }
         }
     }
@@ -53,11 +53,20 @@ public sealed class HostForwards(
         }
     }
 
+    public bool IsPinned(int remotePort)
+    {
+        lock (_gate)
+        {
+            return _pins.ContainsKey(remotePort);
+        }
+    }
+
     public void Unpin(int remotePort)
     {
         lock (_gate)
         {
             _pins.Remove(remotePort);
+            _restore.Remove(remotePort);
             _failed.Remove(remotePort);
             if (_allowed.ContainsKey(remotePort))
             {
@@ -80,7 +89,7 @@ public sealed class HostForwards(
         {
             _linked = false;
             _hostError = null;
-            _restoring |= _active.Count > 0;
+            _restore.UnionWith(_active.Keys);
             foreach (var (remote, active) in _active)
             {
                 _preferred[remote] = active.Local;
@@ -112,7 +121,7 @@ public sealed class HostForwards(
             lock (_gate)
             {
                 _linked = true;
-                _restoring = false;
+                _restore.Clear();
                 _listening = listening;
                 _allowed = allowed;
 

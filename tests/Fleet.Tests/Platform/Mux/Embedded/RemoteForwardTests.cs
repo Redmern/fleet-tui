@@ -274,6 +274,24 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_failed_forward_during_an_outage_keeps_the_pin_made_before_it()
+    {
+        _ssh.Listening = Web;
+        using var home = new EmbeddedDriver(_home);
+        await home.AddForwardAsync("red@far", 9229, 19229);
+
+        _unreachable = true;
+        Assert.True(_links.TryDequeue(out var first));
+        await first.DisposeAsync();
+        await Eventually(async () => (await home.RemotesAsync()).Single().State == RemoteLink.Failed);
+        await Assert.ThrowsAsync<Fleet.Ports.Mux.Exceptions.MuxUnavailableException>(() => home.AddForwardAsync("red@far", 9229, 19229));
+
+        _unreachable = false;
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await ForwardsAsync(_home)).Any(f => f is { RemotePort: 9229, State: "forwarded", LocalPort: 19229 }));
+    }
+
+    [Fact]
     public async Task Disconnecting_drops_every_forward()
     {
         await OpenFarProjectAsync();
