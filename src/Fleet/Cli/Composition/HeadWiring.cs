@@ -64,7 +64,8 @@ public static class HeadWiring
             Adapters.Remotes(),
             Adapters.KnownRemotes(),
             (project, ct) => ProjectStructureReader.ReadAsync(Adapters.Git(), mux, Adapters.Agents(), project, ct),
-            HeadPanes.SetVisible(mux, Adapters.Agents(), Adapters.SubOrchestratorsInNvim, ClaudeWiring.TrustFolder));
+            HeadPanes.SetVisible(mux, Adapters.Agents(), Adapters.SubOrchestratorsInNvim, ClaudeWiring.TrustFolder),
+            Iso: Adapters.Iso());
 
     public static int Launch(bool voice)
     {

@@ -28,7 +28,8 @@ public sealed record HeadDeps(
     IKnownRemoteStore KnownRemotes,
     Func<Project, CancellationToken, Task<ProjectStructure>> Structure,
     Func<Project, AgentRecord, bool, CancellationToken, Task<Result<AgentRecord>>>? SetVisible = null,
-    IAgentInboxes? Inboxes = null);
+    IAgentInboxes? Inboxes = null,
+    IIsoMode? Iso = null);
 
 public sealed record HeadTiming(
     TimeSpan Poll,

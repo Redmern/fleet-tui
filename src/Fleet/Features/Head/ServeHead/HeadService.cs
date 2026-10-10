@@ -26,6 +26,10 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
     private readonly HeadVisibility _visibility = new(deps, new HeadGate(deps));
 
+    private HeadIso? _iso;
+
+    private HeadIso Iso => _iso ??= new HeadIso(deps, _gate, (request, ct) => HandleHereAsync(request, show: false, ct));
+
     public HeadRelay Relay => _relay ??= new HeadRelay(deps, _gate, timing ?? HeadTiming.Default);
 
     public static IReadOnlyList<FleetAction> MenuActions { get; } =
@@ -53,6 +57,11 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         {
             return McpResult.Error(
                 "this fleet acts on its own projects only; the machine fleet was opened on reaches the others.");
+        }
+
+        if (deps.Iso?.Load() is { On: true } iso)
+        {
+            return await Iso.ServeAsync(request, iso, ct).ConfigureAwait(false);
         }
 
         return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.ProjectStructure
