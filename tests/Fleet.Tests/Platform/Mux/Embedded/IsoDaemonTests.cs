@@ -305,6 +305,19 @@ public sealed class IsoDaemonTests : IAsyncLifetime
         Assert.Equal(IsoProjection.Refused, refused.Error);
     }
 
+    // Accepted trade-off: a bridged client in iso mode may ask the machine viewing this one to forward a port.
+    [Theory]
+    [InlineData(ForwardHub.ViewerForwardOp)]
+    [InlineData(ForwardHub.ViewerUnforwardOp)]
+    public async Task Viewer_forward_ops_from_another_machine_are_served_in_iso_mode(string op)
+    {
+        Assert.True(IsoFilter.IsServed(op));
+
+        var served = await RequestAsync(await BridgedAsync(), new ControlRequest { Op = op, Port = 5173 });
+
+        Assert.True(served.Ok, served.Error);
+    }
+
     [Fact]
     public async Task Head_tools_are_not_forwarded_to_another_machine_in_iso_mode()
     {

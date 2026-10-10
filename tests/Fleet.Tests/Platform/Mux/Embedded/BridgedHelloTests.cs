@@ -22,6 +22,14 @@ public sealed class BridgedHelloTests
     }
 
     [Fact]
+    public void A_stamp_carries_the_bridges_own_ssh_connection_over_the_clients_claim()
+    {
+        var hello = BridgedHello.Stamp(new Hello { Ssh = "1.1.1.1 1 2.2.2.2 22" }, "10.0.0.5 51234 10.0.0.9 2222", null);
+
+        Assert.Equal("10.0.0.5 51234 10.0.0.9 2222", hello.Ssh);
+    }
+
+    [Fact]
     public void Without_ssh_variables_the_hello_is_bridged_from_nowhere()
     {
         var hello = BridgedHello.Stamp(new Hello { Origin = "trusted.lan" }, null, null);

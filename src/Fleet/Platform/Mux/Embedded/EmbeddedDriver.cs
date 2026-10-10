@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports.Forwards.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Exceptions;
@@ -214,6 +215,18 @@ public sealed class EmbeddedDriver(
 
     public Task ViewerOpenAsync(int remotePort, CancellationToken ct = default) =>
         RequestAsync(new ControlRequest { Op = ForwardHub.ViewerOpenOp, Port = remotePort }, ct);
+
+    public Task<ViewerForward> ViewerForwardAsync(int port, CancellationToken ct = default) =>
+        ToViewerAsync(ForwardHub.ViewerForwardOp, port, ct);
+
+    public Task<ViewerForward> ViewerUnforwardAsync(int port, CancellationToken ct = default) =>
+        ToViewerAsync(ForwardHub.ViewerUnforwardOp, port, ct);
+
+    private async Task<ViewerForward> ToViewerAsync(string op, int port, CancellationToken ct)
+    {
+        var sent = await RequestAsync(new ControlRequest { Op = op, Port = port }, ct).ConfigureAwait(false);
+        return new ViewerForward(sent.Viewer, sent.Ssh);
+    }
 
     public async Task<IReadOnlyList<RemoteDto>> RemotesAsync(CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "list-remotes" }, ct).ConfigureAwait(false)).Remotes ?? [];

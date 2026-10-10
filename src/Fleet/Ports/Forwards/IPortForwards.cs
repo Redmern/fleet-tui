@@ -15,4 +15,8 @@ public interface IPortForwards
     Task StopStackAsync(string host, string project, CancellationToken ct = default);
 
     Task OpenOnViewerAsync(int remotePort, CancellationToken ct = default);
+
+    Task<ViewerForward> ForwardToViewerAsync(int port, CancellationToken ct = default);
+
+    Task<ViewerForward> UnforwardFromViewerAsync(int port, CancellationToken ct = default);
 }

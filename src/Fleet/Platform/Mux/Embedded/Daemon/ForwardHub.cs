@@ -37,6 +37,8 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
     public const string StackStartOp = "stack-start";
     public const string StackStopOp = "stack-stop";
     public const string ViewerOpenOp = "viewer-open";
+    public const string ViewerForwardOp = "viewer-forward";
+    public const string ViewerUnforwardOp = "viewer-unforward";
 
     public static readonly IReadOnlySet<string> SlowOps = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -169,6 +171,38 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         if (options.OpenBrowser(url) is { } failed)
         {
             log($"remote {link.Host}: {failed}");
+        }
+    }
+
+    public async Task ForwardForViewerAsync(RemoteLink link, string? value, CancellationToken ct)
+    {
+        if (!int.TryParse(value, out var port) || For(link.Host) is not { } forwards)
+        {
+            log($"remote {link.Host}: asked to forward port {value}, which cannot be forwarded here");
+            return;
+        }
+
+        forwards.Pin(port, null);
+        await forwards.ForwardNowAsync(port, null, ct).ConfigureAwait(false);
+        var row = await SettledAsync(forwards, port, options.ForwardWithin, ct).ConfigureAwait(false);
+
+        if (row.Url is not { } url)
+        {
+            log($"remote {link.Host}: port {port} is pinned and forwards once it listens ({row.Error ?? row.State.ToString().ToLowerInvariant()})");
+            return;
+        }
+
+        if (options.OpenBrowser(url) is { } failed)
+        {
+            log($"remote {link.Host}: {failed}");
+        }
+    }
+
+    public async Task UnforwardForViewerAsync(RemoteLink link, string? value, CancellationToken ct)
+    {
+        if (int.TryParse(value, out var port) && For(link.Host) is { } forwards)
+        {
+            await forwards.UnforwardNowAsync(port, ct).ConfigureAwait(false);
         }
     }
 

@@ -323,7 +323,14 @@ public static class EmbeddedWiring
                 stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse,
                 project => OpenAttachWindow(project, sshHost, log),
                 (project, host) => OpenAttachWindow(project, host, log),
-                session is null ? null : hello => Furnish(hello, session))
+                hello =>
+                {
+                    hello.Ssh = sshHost is null ? Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable) : null;
+                    if (session is not null)
+                    {
+                        Furnish(hello, session);
+                    }
+                })
             .RunAsync()
             .ConfigureAwait(false);
 
