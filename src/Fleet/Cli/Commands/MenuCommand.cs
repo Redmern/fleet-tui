@@ -580,13 +580,22 @@ public static class MenuCommand
                         break;
                     }
 
-                    var opened = await new OpenPortHandler(Adapters.ListenerProbe(), Adapters.Browser())
+                    var opened = await new OpenPortHandler(
+                            Adapters.ListenerProbe(), Adapters.Forwards(), Adapters.Browser(), Environment.UserName)
                         .HandleAsync(port.Value)
                         .ConfigureAwait(false);
 
-                    if (opened.Lines.Count > 0)
+                    var openedTitle = $"{OpenPortHandler.Title} {opened.Port}";
+                    if (opened.Command is { } command)
                     {
-                        FleetDialog.Inform(app, $"{OpenPortHandler.Title} {opened.Port}", opened.Lines);
+                        if (FleetDialog.Confirm(app, openedTitle, [.. opened.Lines, string.Empty, command], "Copy"))
+                        {
+                            TerminalClipboard.Copy(command);
+                        }
+                    }
+                    else if (opened.Lines.Count > 0)
+                    {
+                        FleetDialog.Inform(app, openedTitle, opened.Lines);
                     }
 
                     break;
