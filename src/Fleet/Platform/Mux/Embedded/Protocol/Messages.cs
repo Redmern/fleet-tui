@@ -72,6 +72,9 @@ public sealed class Hello
 
     [JsonPropertyName("ssh")]
     public string? Ssh { get; set; }
+
+    [JsonPropertyName("forwards")]
+    public bool? Forwards { get; set; }
 }
 
 public sealed class WindowEntryDto

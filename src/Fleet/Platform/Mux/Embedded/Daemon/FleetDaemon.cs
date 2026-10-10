@@ -91,6 +91,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly ForwardHub _hub = new(options.Forwards, options.Log);
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _sshOf = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _cannotForward = new(StringComparer.Ordinal);
     private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
@@ -467,6 +468,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                         _sshOf[client.Id] = ssh;
                     }
 
+                    if (hello.Forwards is false)
+                    {
+                        _cannotForward.Add(client.Id);
+                    }
+
                     Furnish(client.Id, hello);
                     ApplyResizes();
                 }
@@ -818,7 +824,8 @@ public sealed class FleetDaemon(DaemonOptions options)
             ? IsViewer(client) ? client : null
             : Showing(_sessions.Keys.Where(IsViewer), shown);
 
-    private bool IsViewer(string client) => _sessions.ContainsKey(client) && _model.Client(client)?.Label is not null;
+    private bool IsViewer(string client) =>
+        _sessions.ContainsKey(client) && _model.Client(client)?.Label is not null && !_cannotForward.Contains(client);
 
     private string? SshOf(string? client, string? shown) =>
         client is not null
@@ -1669,7 +1676,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
-        var link = new RemoteLink(host, token => open(host, token), options.Log);
+        var link = new RemoteLink(host, token => open(host, token), options.Log) { CanForward = _hub.For(host) is not null };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);
         _remotes[host] = link;
@@ -2746,6 +2753,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             _bridged.TryRemove(session.Client, out _);
             _viewerForwards.Remove(session.Client);
             _sshOf.Remove(session.Client);
+            _cannotForward.Remove(session.Client);
             ApplyResizes();
         }
 
