@@ -113,8 +113,7 @@ public static class SettingsDefaults
         or HarnessTool.RepositoryStatus
         or HarnessTool.LogTail
         or HarnessTool.ListSubs
-        or HarnessTool.Report
-        or HarnessTool.ListForwards;
+        or HarnessTool.Report;
 
     private static bool AllowedByDefault(HarnessTool tool) =>
         IsRead(tool)
@@ -123,10 +122,7 @@ public static class SettingsDefaults
             or HarnessTool.SetAgentVisible
             or HarnessTool.TellAgent
             or HarnessTool.DistributeSecrets
-            or HarnessTool.Dispatch
-            or HarnessTool.ForwardPort
-            or HarnessTool.UnforwardPort
-            or HarnessTool.OpenUrl;
+            or HarnessTool.Dispatch;
 
     public static string Describe(HarnessTool tool) => tool switch
     {

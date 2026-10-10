@@ -7,7 +7,7 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 ## 0.7.12 (2026-10-10)
 
 - ISO mode (`fleet iso on|off`): the machine opens no ssh to other machines, skips update checks, and agents can't push or merge. Remote clients see redacted project info. See the README for its limits and an example egress firewall.
-- Forward a remote project's web app to localhost over the existing ssh link: `fleet forward`, the `w` key on the dashboard, and tools for the head and agents. A project can keep its ports and a run command in its config.
+- Forward a remote project's web app to localhost over the existing ssh link: `fleet forward`, the `w` key on the dashboard, and tools for the head and agents, which ask first by default. A project can keep its ports and a run command in its config.
 - Host sync groundwork: the `sync_to_remote` tool (asks first by default) and one checkpoint that refuses anything outbound in ISO mode, for this machine or for a single project.
 - `ctrl+s a` opens agent menu actions directly (`m`, `l`, `e`, `f`, `n`), labelled in the key hints.
 
