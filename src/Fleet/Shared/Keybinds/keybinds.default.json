@@ -72,6 +72,7 @@
     "fleet-ui.show-version": { "action": "show-version", "chord": "v", "targets": { "fleet-ui": [] } },
     "fleet-ui.whats-new": { "action": "whats-new", "chord": "W", "targets": { "fleet-ui": [] } },
     "fleet-ui.hide-all-agents": { "action": "hide-all-agents", "chord": "X", "targets": { "fleet-ui": [] } },
+    "fleet-ui.open-web-app": { "action": "open-web-app", "chord": "w", "targets": { "fleet-ui": [] } },
     "mux.prefix": { "action": "prefix", "chord": "Ctrl+s", "targets": { "mux": ["leader"] } },
     "mux.focus-left": { "action": "focus-left", "chord": "h", "targets": { "mux": ["prefix"] } },
     "mux.focus-down": { "action": "focus-down", "chord": "j", "targets": { "mux": ["prefix"] } },

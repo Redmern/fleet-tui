@@ -281,6 +281,30 @@ public sealed class IsoDaemonTests : IAsyncLifetime
         Assert.Equal(IsoGuard.Refusal(IsoGuard.Ssh), refused.Error);
     }
 
+    [Theory]
+    [InlineData(ForwardHub.AddOp)]
+    [InlineData(ForwardHub.StackStartOp)]
+    public async Task This_machine_starts_no_forward_in_iso_mode(string op)
+    {
+        var (local, _) = await ConnectAsync(bridged: false);
+
+        var refused = await RequestAsync(local, new ControlRequest { Op = op, Host = "elsewhere", Workspace = "acme-portal" });
+
+        Assert.False(refused.Ok);
+        Assert.Equal(IsoGuard.Refusal(IsoGuard.Forward), refused.Error);
+    }
+
+    [Theory]
+    [InlineData("project-configs")]
+    [InlineData("viewer-forwards")]
+    public async Task Forwarding_ops_from_another_machine_are_refused(string op)
+    {
+        var refused = await RequestAsync(await BridgedAsync(), new ControlRequest { Op = op });
+
+        Assert.False(refused.Ok);
+        Assert.Equal(IsoProjection.Refused, refused.Error);
+    }
+
     [Fact]
     public async Task Head_tools_are_not_forwarded_to_another_machine_in_iso_mode()
     {

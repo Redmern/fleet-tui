@@ -80,6 +80,7 @@ public static class CommandLine
         "cli" => FleetVerb.Cli,
         "theme" => FleetVerb.Theme,
         "iso" => FleetVerb.Iso,
+        "forward" => FleetVerb.Forward,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         Shared.Constants.AgentHarness.WithEnvVerb => FleetVerb.WithEnv,
         "help" or "--help" or "-h" => FleetVerb.Help,

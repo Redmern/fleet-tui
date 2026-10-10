@@ -18,6 +18,15 @@ public static class McpTools
     private static readonly ToolParam Slug =
         new(ToolArguments.Slug, "string", "The sub-orchestrator's slug, as list_subs shows it.", true);
 
+    private static readonly ToolParam Remote =
+        new(ToolArguments.Remote, "string", "The remote machine's ssh host or nickname.", true);
+
+    private static readonly ToolParam Port =
+        new(ToolArguments.Port, "integer", "The port the web app listens on, on the remote machine.", true);
+
+    private static readonly ToolParam Project =
+        new(ToolArguments.Project, "string", "The project on the remote machine.", true);
+
     public static string RuleId(HarnessTool tool) => McpServerId.RuleId(tool);
 
     public static IReadOnlyList<ToolSpec> All { get; } =
@@ -150,6 +159,29 @@ public static class McpTools
             + "a new task or follow-up, done only when it is fully implemented and verified, failed if you cannot finish it.",
             new ToolParam(ToolArguments.Status, "string", "working, done, or failed.", true),
             new ToolParam(ToolArguments.Summary, "string", "A one-line summary.", false)),
+        Spec(
+            HarnessTool.ListForwards,
+            "List web app ports forwarded over fleet's ssh links (with their localhost URL) and listening ports "
+            + "that are not forwarded. On a machine viewed from another, lists the ports that machine forwards."),
+        Spec(
+            HarnessTool.ForwardPort,
+            "Forward a remote machine's port to localhost here (127.0.0.1 only) over fleet's ssh link.",
+            Remote,
+            Port,
+            new ToolParam(ToolArguments.LocalPort, "integer", "The local port to use instead of the same number.", false)),
+        Spec(HarnessTool.UnforwardPort, "Stop forwarding a remote machine's port.", Remote, Port),
+        Spec(
+            HarnessTool.OpenUrl,
+            "Open a forwarded port in the user's browser; on a machine viewed from another, opens it there.",
+            Port,
+            new ToolParam(ToolArguments.Remote, "string", "The machine the port is on, when several forward it.", false)),
+        Spec(
+            HarnessTool.StartStack,
+            "Run a remote project's runCommand in a pane there, wait for its port, forward it and give the URL.",
+            Remote,
+            Project,
+            new ToolParam(ToolArguments.Open, "boolean", "true to open the URL in the browser once it is up.", false)),
+        Spec(HarnessTool.StopStack, "Stop the stack start_stack started.", Remote, Project),
     ];
 
     public static ToolSpec? Find(string name)

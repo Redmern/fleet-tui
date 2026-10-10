@@ -30,6 +30,10 @@ public sealed class JsonProjectStore : IProjectStore
             Name = name,
             Root = HomePath.Contract(root),
             ClaudeProfile = string.IsNullOrWhiteSpace(project.ClaudeProfile) ? null : project.ClaudeProfile.Trim(),
+            ForwardPorts = project.ForwardPorts is { Count: > 0 } ports ? [.. ports.Where(IsPort).Distinct()] : null,
+            RunCommand = string.IsNullOrWhiteSpace(project.RunCommand) ? null : project.RunCommand.Trim(),
+            ReadyPort = project.ReadyPort is { } ready && IsPort(ready) ? ready : null,
+            HealthPath = string.IsNullOrWhiteSpace(project.HealthPath) ? null : project.HealthPath.Trim(),
         };
         File.WriteAllText(
             FileFor(name),
@@ -58,7 +62,11 @@ public sealed class JsonProjectStore : IProjectStore
             return new Project(
                 string.IsNullOrWhiteSpace(file.Name) ? sanitized : file.Name,
                 HomePath.Expand(file.Root),
-                string.IsNullOrWhiteSpace(file.ClaudeProfile) ? null : file.ClaudeProfile);
+                string.IsNullOrWhiteSpace(file.ClaudeProfile) ? null : file.ClaudeProfile,
+                file.ForwardPorts is { Count: > 0 } ports ? [.. ports.Where(IsPort).Distinct()] : null,
+                string.IsNullOrWhiteSpace(file.RunCommand) ? null : file.RunCommand,
+                file.ReadyPort is { } ready && IsPort(ready) ? ready : null,
+                string.IsNullOrWhiteSpace(file.HealthPath) ? null : file.HealthPath);
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -96,6 +104,8 @@ public sealed class JsonProjectStore : IProjectStore
         {
         }
     }
+
+    private static bool IsPort(int port) => port is > 0 and <= 65535;
 
     private static string FileFor(string sanitized) =>
         Path.Combine(FleetPaths.Projects, sanitized + ".json");

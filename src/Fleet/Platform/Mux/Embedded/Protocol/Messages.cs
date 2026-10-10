@@ -267,6 +267,8 @@ public static class HostEffects
     public const string OpenRemote = "open-remote";
 
     public const string HandBack = "hand-back";
+
+    public const string OpenUrl = "open-url";
 }
 
 public sealed class HostEffect
@@ -348,6 +350,60 @@ public sealed class ControlRequest
 
     [JsonPropertyName("buttons")]
     public List<FloatButtonDto>? Buttons { get; set; }
+
+    [JsonPropertyName("port")]
+    public int Port { get; set; }
+
+    [JsonPropertyName("localPort")]
+    public int LocalPort { get; set; }
+
+    [JsonPropertyName("forwards")]
+    public List<ForwardDto>? Forwards { get; set; }
+}
+
+public sealed class ForwardDto
+{
+    [JsonPropertyName("host")]
+    public string Host { get; set; } = string.Empty;
+
+    [JsonPropertyName("remotePort")]
+    public int RemotePort { get; set; }
+
+    [JsonPropertyName("localPort")]
+    public int? LocalPort { get; set; }
+
+    [JsonPropertyName("state")]
+    public string State { get; set; } = string.Empty;
+
+    [JsonPropertyName("project")]
+    public string? Project { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("viewer")]
+    public bool Viewer { get; set; }
+}
+
+public sealed class ProjectConfigDto
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("root")]
+    public string Root { get; set; } = string.Empty;
+
+    [JsonPropertyName("forwardPorts")]
+    public List<int>? ForwardPorts { get; set; }
+
+    [JsonPropertyName("runCommand")]
+    public string? RunCommand { get; set; }
+
+    [JsonPropertyName("readyPort")]
+    public int? ReadyPort { get; set; }
+
+    [JsonPropertyName("healthPath")]
+    public string? HealthPath { get; set; }
 }
 
 public sealed class FloatButtonDto
@@ -465,6 +521,12 @@ public sealed class ControlResponse
 
     [JsonPropertyName("toolFailed")]
     public bool ToolFailed { get; set; }
+
+    [JsonPropertyName("forwards")]
+    public List<ForwardDto>? Forwards { get; set; }
+
+    [JsonPropertyName("projectConfigs")]
+    public List<ProjectConfigDto>? ProjectConfigs { get; set; }
 }
 
 public sealed class NoticeDto

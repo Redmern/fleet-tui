@@ -13,6 +13,8 @@ public static class IsoGuard
 
     public const string Sync = "sync to other machines";
 
+    public const string Forward = "forward ports from other machines";
+
     public static string Refusal(string what) => $"ISO mode is on: fleet does not {what} from this machine.";
 
     public static Result Outbound(IsoConfig config, string what) => config.On ? Result.Fail(Refusal(what)) : Result.Ok();

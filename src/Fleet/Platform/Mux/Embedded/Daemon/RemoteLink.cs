@@ -33,6 +33,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
     private string? _answer;
     private IReadOnlyList<string> _projects = [];
     private IReadOnlyList<string> _runningProjects = [];
+    private IReadOnlyList<ProjectConfigDto> _configs = [];
 
     public static readonly TimeSpan OpenWithin = TimeSpan.FromMinutes(1);
 
@@ -56,6 +57,68 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
     public event Action<HostEffect>? Effect;
 
     public event Action<IReadOnlyList<NoticeDto>>? Noticed;
+
+    public event Action<string>? Errored;
+
+    public bool WasConnected { get; private set; }
+
+    public IReadOnlyList<ProjectConfigDto> Configs
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _configs;
+            }
+        }
+    }
+
+    public IReadOnlyList<string> RunningProjects
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _runningProjects;
+            }
+        }
+    }
+
+    public Task<ControlResponse> SendAsync(ControlRequest request, TimeSpan? within = null) =>
+        RequestAsync(request, _stop.Token, within);
+
+    public async Task ReportForwardsAsync(IReadOnlyList<ForwardDto> forwards)
+    {
+        try
+        {
+            await RequestAsync(new ControlRequest { Op = ViewerForwardsOp, Host = Environment.MachineName, Forwards = [.. forwards] }, _stop.Token).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
+        {
+        }
+    }
+
+    public const string ViewerForwardsOp = "viewer-forwards";
+
+    public const string ProjectConfigsOp = "project-configs";
+
+    private async Task PollConfigsAsync(CancellationToken ct)
+    {
+        IReadOnlyList<ProjectConfigDto> configs;
+        try
+        {
+            configs = (await RequestAsync(new ControlRequest { Op = ProjectConfigsOp }, ct).ConfigureAwait(false)).ProjectConfigs ?? [];
+        }
+        catch (InvalidOperationException)
+        {
+            configs = [];
+        }
+
+        lock (_gate)
+        {
+            _configs = configs;
+        }
+    }
 
     private IReadOnlyList<NoticeDto> _notices = [];
     private HashSet<string>? _openBefore;
@@ -177,6 +240,13 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public async Task ShowAsync(string project)
     {
+        await EnsureOpenAsync(project).ConfigureAwait(false);
+        await RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token).ConfigureAwait(false);
+        Showing = project;
+    }
+
+    public async Task EnsureOpenAsync(string project)
+    {
         if (!await RunningAsync(project).ConfigureAwait(false))
         {
             await RequestAsync(new ControlRequest { Op = "open-project", Workspace = project }, _stop.Token).ConfigureAwait(false);
@@ -192,9 +262,6 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 await Task.Delay(TimeSpan.FromMilliseconds(300), _stop.Token).ConfigureAwait(false);
             }
         }
-
-        await RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token).ConfigureAwait(false);
-        Showing = project;
     }
 
     public async Task NewProjectAsync()
@@ -319,6 +386,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                     _error = null;
                 }
 
+                WasConnected = true;
+                await PollConfigsAsync(ct).ConfigureAwait(false);
                 await PollNoticesAsync(ct).ConfigureAwait(false);
 
                 if (await Task.WhenAny(reader, Task.Delay(RefreshEvery, ct)).ConfigureAwait(false) == reader)
@@ -466,6 +535,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                     continue;
                 }
 
+                Errored?.Invoke(line);
                 lock (_gate)
                 {
                     _errors.Enqueue(line.Trim());

@@ -27,4 +27,11 @@ public enum HarnessTool
     StopSub,
     RemoveSub,
     Report,
+    ListForwards,
+    ForwardPort,
+    UnforwardPort,
+    OpenUrl,
+    StartStack,
+    StopStack,
+    SyncToRemote,
 }

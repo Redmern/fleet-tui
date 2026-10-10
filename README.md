@@ -316,6 +316,42 @@ Notifications always opens this machine's center, whether from the remote's menu
 click on the remote's notice pill, the same way Switch project and the head stay here; only
 fleet used directly on the remote machine opens the remote's own center.
 
+#### Web apps on a remote machine
+
+While a machine is connected, fleet forwards the web apps its projects run to `localhost`
+here, over the same ssh connection (it is the ssh ControlMaster, on a private socket in
+`$XDG_RUNTIME_DIR/fleet` or `/tmp/fleet-<user>`), so there is no second login. Forwards
+always bind `127.0.0.1`. Every few seconds fleet lists the remote's listening ports (`ss`,
+or `/proc/net/tcp`), leaving out ports below 1024 and sshd's own. List the ports a project
+should get in its project config (`projects/<name>.json` in the fleet config folder on the
+remote):
+
+```json
+{ "forwardPorts": [5173, 3000], "runCommand": "npm run dev", "readyPort": 5173, "healthPath": "/" }
+```
+
+Those ports are forwarded on their own while the project runs, and dropped when nothing
+listens on them any more. A local port keeps the remote's number when it is free here,
+otherwise fleet picks another one and always shows the one it used. Other listening ports
+are shown but not forwarded. `p` on a connected machine under **Remote machines** lists its
+ports: `f` forwards one (or a port you type), `u` stops it and `enter` opens it in your
+browser. A project's dashboard shows its ports on a `web` line and `w` opens the first one,
+on the machine you are viewing from. If the link drops while ports are forwarded, fleet
+reconnects and puts them back; disconnecting removes them.
+
+From a terminal: `fleet forward <host> <port> [--local <n>] [--open]`, `fleet forward ls`,
+`fleet forward rm <host> <port>` and `fleet forward open <port>`. `fleet forward start
+<host> <project> [--open]` runs the project's `runCommand` in a pane of that project on the
+remote, waits until `readyPort` (or the first forward port) listens and, with `healthPath`,
+answers 2xx, then forwards it; `fleet forward stop` closes that pane. The head and the
+agents have the same as tools: `list_forwards`, `forward_port`, `unforward_port`, `open_url`,
+`start_stack` and `stop_stack`. This needs OpenSSH control sockets, so not on Windows.
+
+Things that can bite: an app that checks the Host header (Vite's `server.allowedHosts`)
+must allow `localhost`; when the local port differs, hot reload needs its client port set
+(Vite's `server.hmr.clientPort`); projects that share `localhost` share its cookies; and a
+docker `-p` port binds `0.0.0.0` on the remote, so it is reachable there by others too.
+
 ### ISO mode
 
 ISO mode is for a machine that holds data which must not leave it, such as customer data.
@@ -343,7 +379,7 @@ gets lines such as `sub1.agent2: waiting for input` from `list_agents` and
 stopped. Reports and summaries never cross. `tell`, `relay` and `menu_action` take a code and
 answer `ok` or `failed` with no detail; `show_agent` and `hide_agent` are refused.
 Notifications cross as a code and a fixed word. Pane titles, folders, screen text
-(`get-text`), notice text and the machine name do not cross. Another machine cannot start
+(`get-text`), notice text, the machine name and the projects' web ports do not cross. Another machine cannot start
 panes or type into them (`spawn`, `send-text`), because that would let it run commands here;
 prompts reach agents through the head's `tell` and `relay`. Any other operation is refused.
 
@@ -355,8 +391,9 @@ view. Removing a host, or turning ISO mode on, ends its view within a second. Cl
 machine are never restricted.
 
 **Outbound.** With ISO mode on, fleet on this machine opens no ssh connection to another
-machine, does not forward head tools to one, skips the update check, and merges finished
-agents without pushing. Agents get `git push`, `gh pr merge` and `gh pr create` denied, whatever
+machine, does not forward head tools to one, starts no port forward or stack on one, skips
+the update check, and merges finished agents without pushing. `sync_to_remote` is refused too;
+it is also refused for a single project whose own ISO setting is on. Agents get `git push`, `gh pr merge` and `gh pr create` denied, whatever
 the project allows; running agents get this when their Claude settings next resync. `fleet
 update`, which you run yourself, still downloads from GitHub. `git fetch` and clone
 still work, because data only comes in. Remote links that were open before you turned ISO mode

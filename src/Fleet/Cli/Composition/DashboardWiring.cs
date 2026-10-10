@@ -737,6 +737,9 @@ public static class DashboardWiring
             return agent is null ? $"that agent is gone ({worktree})" : await OpenFlow(agent).ConfigureAwait(false);
         }
 
+        var webForwards = Adapters.Forwards();
+        var webBrowser = Adapters.Browser();
+
         return new DashboardCallbacks(
             LoadRepositories: async () =>
             {
@@ -1475,6 +1478,14 @@ public static class DashboardWiring
                 barPanes = null;
 
                 return Noted(log, project.Name, HideAllAgentsHandler.Summary(hidden));
-            });
+            },
+
+            WebPorts: async () => DashboardWebPorts.Summary(
+                DashboardWebPorts.For(await webForwards.ListAsync().ConfigureAwait(false), project)),
+
+            OpenWebApp: async () => await DashboardWebPorts.OpenAsync(
+                webForwards,
+                webBrowser,
+                DashboardWebPorts.For(await webForwards.ListAsync().ConfigureAwait(false), project)).ConfigureAwait(false));
     }
 }

@@ -29,5 +29,6 @@ public enum FleetVerb
     Theme,
     Iso,
     Help,
+    Forward,
     Unknown,
 }

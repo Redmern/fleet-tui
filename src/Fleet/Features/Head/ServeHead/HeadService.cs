@@ -31,6 +31,8 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
     private HeadIso Iso => _iso ??= new HeadIso(deps, _gate, (request, ct) => HandleHereAsync(request, show: false, ct));
 
+    private readonly HeadForwards _forwards = new(deps);
+
     public HeadRelay Relay => _relay ??= new HeadRelay(deps, _gate, timing ?? HeadTiming.Default);
 
     public static IReadOnlyList<FleetAction> MenuActions { get; } =
@@ -44,6 +46,8 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         {
             HeadTools.ListRemotes => await _remotes.ListAsync(ct).ConfigureAwait(false),
             HeadTools.ListRemoteProjects => await ListRemoteProjectsAsync(ct).ConfigureAwait(false),
+            HeadTools.ListForwards or HeadTools.ForwardPort or HeadTools.UnforwardPort or HeadTools.OpenUrl
+                or HeadTools.StartStack or HeadTools.StopStack => await _forwards.HandleAsync(request, ct).ConfigureAwait(false),
             HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
                 or HeadTools.ProjectStructure or HeadTools.Relay or HeadTools.Tell or HeadTools.ShowAgent
                 or HeadTools.HideAgent when !HeadRemotes.IsLocal(remote) =>
