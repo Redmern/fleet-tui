@@ -46,4 +46,6 @@ public sealed record DashboardCallbacks(
     Func<SubBoard>? LoadSubsFast = null,
     Func<NoticeBoard>? LoadNoticesFast = null,
     Func<bool>? Outdated = null,
-    Func<Task<string?>>? HideAllAgents = null);
+    Func<Task<string?>>? HideAllAgents = null,
+    Func<Task<string?>>? WebPorts = null,
+    Func<Task<string?>>? OpenWebApp = null);

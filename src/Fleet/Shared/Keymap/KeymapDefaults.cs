@@ -69,6 +69,7 @@ public static class KeymapDefaults
             [FleetAction.ShowVersion] = "v",
             [FleetAction.WhatsNew] = "W",
             [FleetAction.HideAllAgents] = "X",
+            [FleetAction.OpenWebApp] = "w",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -128,6 +129,7 @@ public static class KeymapDefaults
             FleetAction.ShowVersion => "version",
             FleetAction.WhatsNew => "what's new",
             FleetAction.HideAllAgents => "hide all",
+            FleetAction.OpenWebApp => "web app",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -196,6 +198,7 @@ public static class KeymapDefaults
             FleetAction.ShowVersion => "Version",
             FleetAction.WhatsNew => "What's new",
             FleetAction.HideAllAgents => "Hide all agents",
+            FleetAction.OpenWebApp => "Open the project's web app in the browser",
             _ => action.ToString(),
         };
 }

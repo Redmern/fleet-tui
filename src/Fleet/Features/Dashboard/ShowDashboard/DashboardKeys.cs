@@ -14,6 +14,7 @@ public static class DashboardKeys
         FleetAction.ToggleHidden,
         FleetAction.HideAllAgents,
         FleetAction.OpenEditor,
+        FleetAction.OpenWebApp,
         FleetAction.Refresh,
         FleetAction.PrevTab,
         FleetAction.NextTab,
