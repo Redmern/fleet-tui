@@ -7,6 +7,12 @@ public sealed class ControlPathsTests
     [Fact]
     public void A_short_runtime_dir_is_used_and_a_long_one_falls_back_to_tmp()
     {
+        // ssh control sockets are Unix-only; on Windows Path.Combine joins with '\'.
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         Assert.Equal("/run/user/1000/fleet", ControlPaths.Directory(_ => "/run/user/1000", "red"));
         Assert.Equal("/tmp/fleet-red", ControlPaths.Directory(_ => "/" + new string('x', 90), "red"));
         Assert.Equal("/tmp/fleet-red", ControlPaths.Directory(_ => null, "red"));
