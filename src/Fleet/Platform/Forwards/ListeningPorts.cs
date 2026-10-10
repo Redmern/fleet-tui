@@ -36,7 +36,7 @@ public static partial class ListeningPorts
     }
 
     public static bool Worth(ListeningPort port) =>
-        port.Port >= Lowest && !string.Equals(port.Process, "sshd", StringComparison.Ordinal);
+        port.Port >= Lowest && port.Process?.StartsWith("sshd", StringComparison.Ordinal) != true;
 
     public static IReadOnlyDictionary<int, IReadOnlyList<string>> ByPort(IEnumerable<ListeningPort> ports) =>
         ports.Where(Worth)

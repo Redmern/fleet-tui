@@ -20,6 +20,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     private readonly ConcurrentQueue<Stream> _links = new();
     private int _nextLocal = 41000;
     private volatile bool _unreachable;
+    private int _opens;
     private Endpoint _home = null!;
     private Endpoint _far = null!;
 
@@ -66,6 +67,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
             Terminal = _homePanes.NewTerminal,
             RemoteOpen = (_, _) =>
             {
+                Interlocked.Increment(ref _opens);
                 if (_unreachable)
                 {
                     throw new IOException("ssh: connect to host nowhere port 22: Connection refused");
@@ -230,6 +232,45 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         await Eventually(() => Task.FromResult(!_links.IsEmpty));
         await Eventually(async () => _ssh.Forwards("forward").Count() == 2
             && (await ForwardsAsync(_home)).Any(f => f is { RemotePort: 5173, State: "forwarded", LocalPort: 5173 }));
+    }
+
+    [Fact]
+    public async Task Forwards_come_back_after_an_outage_that_outlasts_the_first_retry()
+    {
+        await OpenFarProjectAsync();
+        _ssh.Listening = Web;
+        using var home = new EmbeddedDriver(_home);
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await ForwardsAsync(_home)).Any(f => f is { RemotePort: 5173, State: "forwarded" }));
+
+        _unreachable = true;
+        var before = Volatile.Read(ref _opens);
+        Assert.True(_links.TryDequeue(out var first));
+        await first.DisposeAsync();
+        await Eventually(() => Task.FromResult(Volatile.Read(ref _opens) >= before + 2));
+
+        _unreachable = false;
+        await Eventually(async () => (await ForwardsAsync(_home)).Any(f => f is { RemotePort: 5173, State: "forwarded", LocalPort: 5173 }));
+    }
+
+    [Fact]
+    public async Task Starting_a_stack_whose_pane_died_runs_it_again()
+    {
+        _ssh.Answer = args => args.Contains("-O") || _farPanes.ByProgram("sh") is null
+            ? null
+            : new Fleet.Platform.Forwards.Models.SshResult(0, Web, string.Empty);
+        using var home = new EmbeddedDriver(_home);
+        await home.StartStackAsync("red@far", "homelab");
+
+        _farPanes.ByProgram("sh")!.Exit();
+        await Eventually(async () =>
+        {
+            await using var far = await DaemonTests.TestClient.ConnectAsync(_far, ClientRoles.Control, 0, 0, null);
+            return ((await far.RequestAsync(new ControlRequest { Op = "list-panes" })).Panes ?? []).Count == 1;
+        });
+        await home.StartStackAsync("red@far", "homelab");
+
+        Assert.Equal(2, _farPanes.Started.Count(p => p.Program == "sh"));
     }
 
     [Fact]

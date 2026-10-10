@@ -61,6 +61,7 @@ public sealed class ListeningPortsTests
         [
             new ListeningPort(22, "0.0.0.0"),
             new ListeningPort(6010, "127.0.0.1", "sshd"),
+            new ListeningPort(6011, "127.0.0.1", "sshd-session"),
             new ListeningPort(5173, "127.0.0.1", "node"),
             new ListeningPort(5173, "::1", "node"),
         ]);

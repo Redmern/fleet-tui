@@ -164,15 +164,29 @@ public sealed class HostForwardsTests
     }
 
     [Fact]
-    public async Task Closing_cancels_every_forward()
+    public async Task Asking_for_another_local_port_moves_an_existing_forward()
     {
         var forwards = For();
-        await forwards.ReconcileAsync(Listening(5173, 8080), Allowed(5173, 8080), default);
+        await forwards.ReconcileAsync(Listening(5173), Allowed(5173), default);
 
-        await forwards.CloseAsync(default);
+        var moved = await forwards.ForwardNowAsync(5173, 8080, default);
 
-        Assert.Equal(2, _ssh.Forwards("cancel").Count());
-        Assert.False(_locals.Holds(5173));
+        Assert.Equal(8080, moved.LocalPort);
+        Assert.Equal(["127.0.0.1:5173:127.0.0.1:5173"], _ssh.Forwards("cancel"));
+    }
+
+    [Fact]
+    public async Task A_host_that_had_forwards_stays_wanted_until_it_reconnects()
+    {
+        var forwards = For();
+        await forwards.ReconcileAsync(Listening(5173), Allowed(5173), default);
+
+        forwards.Unlinked();
+        forwards.Unlinked();
+        Assert.True(forwards.Wanted);
+
+        await forwards.ReconcileAsync(Listening(), Allowed(), default);
+        Assert.False(forwards.Wanted);
     }
 
     [Fact]

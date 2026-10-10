@@ -105,7 +105,13 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             forwards.Unlinked();
         }
 
-        if (!stillWanted || !wanted || !link.WasConnected)
+        bool retrying;
+        lock (_gate)
+        {
+            retrying = _failures.ContainsKey(link.Host);
+        }
+
+        if (!stillWanted || !wanted || !(link.WasConnected || retrying))
         {
             lock (_gate)
             {
@@ -317,6 +323,14 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         await link.EnsureOpenAsync(config.Name).ConfigureAwait(false);
 
         var key = StackKey(host, config.Name);
+        if (await StackGoneAsync(link, key).ConfigureAwait(false))
+        {
+            lock (_gate)
+            {
+                _stacks.Remove(key);
+            }
+        }
+
         bool started;
         lock (_gate)
         {
@@ -354,10 +368,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             log($"remote {host}: started the stack of {config.Name}: {command}");
         }
 
-        if (!(config.ForwardPorts ?? []).Contains(port))
-        {
-            forwards.Pin(port, null);
-        }
+        forwards.Pin(port, null);
 
         var stackClock = System.Diagnostics.Stopwatch.StartNew();
         var row = await SettledAsync(forwards, port, options.StackWithin, ct, waitForListening: true).ConfigureAwait(false);
@@ -384,6 +395,23 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         }
 
         return row;
+    }
+
+    private async Task<bool> StackGoneAsync(RemoteLink link, string key)
+    {
+        string? pane;
+        lock (_gate)
+        {
+            pane = _stacks.GetValueOrDefault(key);
+        }
+
+        if (pane is not { Length: > 0 })
+        {
+            return false;
+        }
+
+        var panes = (await link.SendAsync(new ControlRequest { Op = "list-panes" }).ConfigureAwait(false)).Panes ?? [];
+        return panes.All(p => p.Id != pane);
     }
 
     private static string StackKey(string host, string project) => $"{host}\n{project}";

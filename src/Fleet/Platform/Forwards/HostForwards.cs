@@ -24,6 +24,7 @@ public sealed class HostForwards(
     private IReadOnlyDictionary<int, string> _allowed = new Dictionary<int, string>();
     private string? _hostError;
     private bool _linked;
+    private bool _restoring;
 
     private sealed record Active(int Local, string Target, string? Project);
 
@@ -37,7 +38,7 @@ public sealed class HostForwards(
         {
             lock (_gate)
             {
-                return _pins.Count > 0 || _active.Count > 0;
+                return _pins.Count > 0 || _active.Count > 0 || _restoring;
             }
         }
     }
@@ -79,6 +80,7 @@ public sealed class HostForwards(
         {
             _linked = false;
             _hostError = null;
+            _restoring |= _active.Count > 0;
             foreach (var (remote, active) in _active)
             {
                 _preferred[remote] = active.Local;
@@ -110,6 +112,7 @@ public sealed class HostForwards(
             lock (_gate)
             {
                 _linked = true;
+                _restoring = false;
                 _listening = listening;
                 _allowed = allowed;
 
@@ -125,11 +128,11 @@ public sealed class HostForwards(
 
                 var wanted = Wants(listening, allowed);
                 cancel = [.. _active
-                    .Where(a => !wanted.TryGetValue(a.Key, out var target) || target != a.Value.Target)
+                    .Where(a => !wanted.TryGetValue(a.Key, out var target) || target != a.Value.Target || Moved(a.Key, a.Value))
                     .Select(a => (a.Key, a.Value))];
                 add = [.. wanted
                     .Where(w => !_failed.ContainsKey(w.Key)
-                        && (!_active.TryGetValue(w.Key, out var active) || active.Target != w.Value))
+                        && (!_active.TryGetValue(w.Key, out var active) || active.Target != w.Value || Moved(w.Key, active)))
                     .Select(w => (w.Key, w.Value, allowed.GetValueOrDefault(w.Key), _pins.GetValueOrDefault(w.Key)))];
             }
 
@@ -194,36 +197,6 @@ public sealed class HostForwards(
         }
     }
 
-    public async Task CloseAsync(CancellationToken ct)
-    {
-        List<(int Remote, Active Active)> open;
-        lock (_gate)
-        {
-            open = [.. _active.Select(a => (a.Key, a.Value))];
-        }
-
-        foreach (var (remote, active) in open)
-        {
-            await CancelAsync(remote, active, ct).ConfigureAwait(false);
-        }
-
-        lock (_gate)
-        {
-            _pins.Clear();
-            _suppressed.Clear();
-            _failed.Clear();
-            _preferred.Clear();
-        }
-    }
-
-    public bool IsListening(int remotePort)
-    {
-        lock (_gate)
-        {
-            return _listening.ContainsKey(remotePort);
-        }
-    }
-
     public PortForward Row(int remotePort)
     {
         lock (_gate)
@@ -268,6 +241,9 @@ public sealed class HostForwards(
             .Distinct()
             .Where(listening.ContainsKey)
             .ToDictionary(p => p, p => ListeningPorts.Target(listening[p]));
+
+    private bool Moved(int remote, Active active) =>
+        _pins.GetValueOrDefault(remote) is { } wanted && wanted != active.Local;
 
     private PortForward RowLocked(int remote)
     {

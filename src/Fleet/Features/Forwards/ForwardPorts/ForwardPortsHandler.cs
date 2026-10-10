@@ -11,11 +11,6 @@ namespace Fleet.Features.Forwards.ForwardPorts;
 
 public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher browser, IKnownRemoteStore known)
 {
-    public const string Pitfalls =
-        "If the app checks the Host header (Vite allowedHosts) allow localhost; a remapped local port breaks HMR "
-        + "unless its clientPort matches; projects on the same localhost share cookies; a docker -p port binds 0.0.0.0 "
-        + "on the remote.";
-
     public async Task<Result<string>> HandleAsync(ForwardOrder order, CancellationToken ct = default)
     {
         try
