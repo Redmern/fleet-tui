@@ -4,6 +4,13 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.13 (2026-10-10)
+
+- Every fleet menu action now has a `ctrl+s` key, in groups: `a` agents, `s` session, `t` tabs, `g` configure (`g c` fleet config), `m` maintenance, and `Q` quits fleet. `fleet help` and the README list them all.
+- Toggles such as show keybinds, button hints and the nvim settings flip straight from `ctrl+s` and show a toast with the new state.
+- Moved keys: the `ctrl+s q` session group is now `ctrl+s s` (`s r` reloads keys), and the tab keys moved under `ctrl+s t` (`t c` new, `t n`/`t p`, `t 1`-`9`, `t x` close tab).
+- Removed: top-level `ctrl+s s`, `c`, `n`, `p`, `1`-`9` and `&`. Switch project is `ctrl+s s p` or `ctrl+s w s`. A custom `embedded-keys.json` can bring a flat key back.
+
 ## 0.7.12 (2026-10-10)
 
 - ISO mode (`fleet iso on|off`): the machine opens no ssh to other machines, skips update checks, and agents can't push or merge. Remote clients see redacted project info. See the README for its limits and an example egress firewall.
