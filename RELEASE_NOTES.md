@@ -7,6 +7,9 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 ## 0.7.14 (2026-10-10)
 
 - New **Open port** (Session section, `ctrl+s s o`): type a port of the machine fleet runs on and it opens in the browser of the machine you view it from, forwarded by your fleet there or with a ready-to-copy `ssh -L` command. `forward_port` and `unforward_port` no longer need `remote` for a port on this machine.
+- The fleet menu opens faster on a remote machine: the link batches its polls, keeps a warm menu ready and uses low-latency ssh options. `fleet attach --ssh` now drops a stalled link after about 45 s.
+- Forwarded ports come back after a long outage: a late port scan no longer stops the link from reconnecting.
+- A sub-orchestrator stopped with `stop_sub` shows as stopped and can be removed with `remove_sub`.
 
 ## 0.7.13 (2026-10-10)
 
