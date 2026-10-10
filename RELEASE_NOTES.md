@@ -10,7 +10,7 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 - Toggles such as show keybinds, button hints and the nvim settings flip straight from `ctrl+s` and show a toast with the new state.
 - Moved keys: the `ctrl+s q` session group is now `ctrl+s s` (`s r` reloads keys), and the tab keys moved under `ctrl+s t` (`t c` new, `t n`/`t p`, `t 1`-`9`, `t x` close tab).
 - Removed: top-level `ctrl+s s`, `c`, `n`, `p`, `1`-`9` and `&`. Switch project is `ctrl+s s p` or `ctrl+s w s`. A custom `embedded-keys.json` can bring a flat key back.
-- New **Open port** (Session section, `ctrl+s s o`): type a port of the machine fleet runs on and it opens in the browser of the machine you view it from, forwarded by your fleet there or with a ready-to-copy `ssh -L` command. `forward_port` and `unforward_port` no longer need `remote` for a port on this machine.
+- Sub-orchestrators get real names again: a line printed by a `claude` wrapper (such as mise's banner) no longer becomes every sub's name.
 
 ## 0.7.12 (2026-10-10)
 

@@ -784,7 +784,13 @@ public class KeysTests
         var keys = MuxKeys.Defaults;
 
         Assert.DoesNotContain(keys.Root.Leaves, b => b.Spec == key);
+    }
+
+    [Fact]
+    public void The_old_q_session_group_is_gone()
+    {
         Assert.DoesNotContain(MuxKeys.DefaultPrefixKeys.Keys, k => k.StartsWith("q ", StringComparison.Ordinal));
+        Assert.DoesNotContain(MuxKeys.DefaultGroups.Keys, k => k == "q");
     }
 
     [Theory]

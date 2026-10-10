@@ -558,7 +558,7 @@ public sealed partial class HeadServiceTests
               api
               site
             sub-orchestrators
-              upgrade — working, pane closed
+              upgrade — stopped, pane closed
                 last report 2026-10-04T09:00:00Z: two agents started
                 - api/auth — closed, no report
                 - site/login — open, done
@@ -663,7 +663,7 @@ public sealed partial class HeadServiceTests
         var result = await Service().ServeOriginAsync(Call(HeadTools.ProjectStructure, (HeadTools.Project, "web")));
 
         Assert.False(result.IsError, result.Text);
-        Assert.Contains("upgrade — working", result.Text);
+        Assert.Contains("upgrade — stopped", result.Text);
         Assert.Contains("    - site/login", result.Text);
         Assert.Empty(_remotes.Forwarded);
     }

@@ -204,7 +204,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     public async Task Without_a_fleet_viewer_the_ssh_connection_the_client_was_reached_by_comes_back()
     {
         await using var client = await DaemonTests.TestClient.ConnectAsync(
-            _far, ClientRoles.Attach, 80, 24, null, hello => hello.Ssh = "10.0.0.5 52000 10.0.0.9 22");
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Ssh = "10.0.0.5 52000 10.0.0.9 22");
 
         var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
 

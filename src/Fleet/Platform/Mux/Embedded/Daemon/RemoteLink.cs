@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Shared.Constants;
@@ -102,24 +103,6 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public const string ProjectConfigsOp = "project-configs";
 
-    private async Task PollConfigsAsync(CancellationToken ct)
-    {
-        IReadOnlyList<ProjectConfigDto> configs;
-        try
-        {
-            configs = (await RequestAsync(new ControlRequest { Op = ProjectConfigsOp }, ct).ConfigureAwait(false)).ProjectConfigs ?? [];
-        }
-        catch (InvalidOperationException)
-        {
-            configs = [];
-        }
-
-        lock (_gate)
-        {
-            _configs = configs;
-        }
-    }
-
     private IReadOnlyList<NoticeDto> _notices = [];
     private HashSet<string>? _openBefore;
 
@@ -152,14 +135,9 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
             }
         });
 
-    private async Task PollNoticesAsync(CancellationToken ct)
+    private void TakeNotices(IReadOnlyList<NoticeDto>? now)
     {
-        IReadOnlyList<NoticeDto> now;
-        try
-        {
-            now = (await RequestAsync(new ControlRequest { Op = "list-notices" }, ct).ConfigureAwait(false)).Notices ?? [];
-        }
-        catch (InvalidOperationException)
+        if (now is null)
         {
             return;
         }
@@ -367,28 +345,23 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
             while (!ct.IsCancellationRequested)
             {
-                var workspaces = (await RequestAsync(new ControlRequest { Op = "list-workspaces" }, ct).ConfigureAwait(false)).Workspaces ?? [];
-                IReadOnlyList<string> saved;
-                try
-                {
-                    saved = (await RequestAsync(new ControlRequest { Op = "list-projects" }, ct).ConfigureAwait(false)).Projects ?? [];
-                }
-                catch (InvalidOperationException)
-                {
-                    saved = [];
-                }
+                var workspaces = PollAsync("list-workspaces", r => r.Workspaces ?? [], ct, required: true);
+                var saved = PollAsync("list-projects", r => r.Projects ?? [], ct);
+                var configs = PollAsync(ProjectConfigsOp, r => r.ProjectConfigs ?? [], ct);
+                var notices = PollAsync<IReadOnlyList<NoticeDto>>("list-notices", r => r.Notices ?? [], ct);
+                await Task.WhenAll(workspaces, saved, configs, notices).ConfigureAwait(false);
 
                 lock (_gate)
                 {
-                    _runningProjects = [.. workspaces.Select(w => w.Name).Where(n => !FleetWorkspaces.IsHidden(n))];
-                    _projects = Listed(saved, _runningProjects);
+                    _runningProjects = [.. workspaces.Result!.Select(w => w.Name).Where(n => !FleetWorkspaces.IsHidden(n))];
+                    _projects = Listed(saved.Result ?? [], _runningProjects);
                     _state = Connected;
                     _error = null;
+                    _configs = configs.Result ?? [];
                 }
 
                 WasConnected = true;
-                await PollConfigsAsync(ct).ConfigureAwait(false);
-                await PollNoticesAsync(ct).ConfigureAwait(false);
+                TakeNotices(notices.Result);
 
                 if (await Task.WhenAny(reader, Task.Delay(RefreshEvery, ct)).ConfigureAwait(false) == reader)
                 {
@@ -470,8 +443,21 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public static readonly TimeSpan HeadWithin = TimeSpan.FromMinutes(10);
 
+    private async Task<T?> PollAsync<T>(string op, Func<ControlResponse, T> take, CancellationToken ct, bool required = false)
+        where T : class
+    {
+        try
+        {
+            return take(await RequestAsync(new ControlRequest { Op = op }, ct, background: true).ConfigureAwait(false));
+        }
+        catch (InvalidOperationException) when (!required)
+        {
+            return null;
+        }
+    }
+
     private async Task<ControlResponse> RequestAsync(
-        ControlRequest request, CancellationToken ct, TimeSpan? within = null, bool raw = false)
+        ControlRequest request, CancellationToken ct, TimeSpan? within = null, bool raw = false, bool background = false)
     {
         var wire = _wire ?? throw new IOException("not connected");
         request.Id = Interlocked.Increment(ref _nextId);
@@ -480,7 +466,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
         try
         {
-            await wire.SendAsync(MessageType.Request, request, WireJsonContext.Default.ControlRequest, ct).ConfigureAwait(false);
+            var payload = JsonSerializer.SerializeToUtf8Bytes(request, WireJsonContext.Default.ControlRequest);
+            await (background ? wire.SendInBackgroundAsync(MessageType.Request, payload, ct) : wire.SendAsync(MessageType.Request, payload, ct)).ConfigureAwait(false);
             var response = await reply.Task.WaitAsync(within ?? AnswerWithin, ct).ConfigureAwait(false);
             return response.Ok || raw ? response : throw new InvalidOperationException($"remote: {response.Error}");
         }

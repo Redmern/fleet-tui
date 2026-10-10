@@ -796,6 +796,7 @@ public static class EmbeddedWiring
     [
         "-T",
         "-o", "ConnectTimeout=15",
+        .. SshControl.LinkOptions,
         .. controlPath is null ? [] : SshControl.MasterOptions(controlPath),
         host,
         remoteFleet,

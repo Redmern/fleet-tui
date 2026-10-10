@@ -249,6 +249,11 @@ public sealed class EmbeddedDriver(
     public async Task<IReadOnlyList<WindowEntryDto>> WindowAsync(CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "window", Client = CurrentClient }, ct).ConfigureAwait(false)).Window ?? [];
 
+    public async Task<string?> WaitForMenuOpenAsync(PaneId menu, CancellationToken ct = default) =>
+        (await RequestAsync(
+            new ControlRequest { Op = FleetDaemon.MenuWaitOp, Caller = menu.Value }, ct, Timeout.InfiniteTimeSpan)
+            .ConfigureAwait(false)).Text;
+
     public async Task<bool> HandBackAsync(string action, CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "hand-back", Text = action, Client = CurrentClient }, ct).ConfigureAwait(false)).Pending;
 

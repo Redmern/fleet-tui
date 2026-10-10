@@ -66,7 +66,7 @@ public sealed class McpActions(
 
     private readonly RemoveAgentHandler _remover = new(git, mux, store);
 
-    private readonly RemoveSubHandler _subRemover = new(new RemoveAgentHandler(git, mux, store), store);
+    private readonly RemoveSubHandler _subRemover = new(new RemoveAgentHandler(git, mux, store), store, mux);
 
     private readonly ChangeHarnessHandler _harnesses = new(store);
 

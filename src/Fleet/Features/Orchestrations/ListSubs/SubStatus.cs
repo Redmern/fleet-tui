@@ -8,6 +8,20 @@ public static class SubStatus
 {
     public const string Idle = "idle";
 
+    public const string Stopped = "stopped";
+
+    public static string Shown(AgentRecord sub, IEnumerable<AgentRecord> children, bool paneOpen)
+    {
+        if (Derive(sub, children) is { } derived)
+        {
+            return derived;
+        }
+
+        var own = OrchestrationStatus.Normalize(sub.Status);
+
+        return own == OrchestrationStatus.Working && !paneOpen ? Stopped : own;
+    }
+
     public static string? Derive(AgentRecord sub, IEnumerable<AgentRecord> children)
     {
         var own = OrchestrationStatus.Normalize(sub.Status);

@@ -4,14 +4,19 @@ public static class SshControl
 {
     public const string Loopback = "127.0.0.1";
 
+    public static IReadOnlyList<string> LinkOptions { get; } =
+    [
+        "-o", "IPQoS=lowdelay",
+        "-o", "ServerAliveInterval=15",
+        "-o", "ServerAliveCountMax=3",
+    ];
+
     public static IReadOnlyList<string> MasterOptions(string controlPath) =>
     [
         "-o", "ControlMaster=yes",
         "-o", $"ControlPath={controlPath}",
         "-o", "ControlPersist=no",
         "-o", "ExitOnForwardFailure=yes",
-        "-o", "ServerAliveInterval=15",
-        "-o", "ServerAliveCountMax=3",
     ];
 
     public static string Spec(int local, string target, int remote) => $"{Loopback}:{local}:{target}:{remote}";
