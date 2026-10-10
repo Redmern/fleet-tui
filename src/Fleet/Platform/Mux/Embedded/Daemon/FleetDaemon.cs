@@ -844,7 +844,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 waiting = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _menuWaits.Remove(pane, out var replaced);
-                replaced?.TrySetCanceled(ct);
+                replaced?.TrySetCanceled();
                 _menuWaits[pane] = waiting;
             }
         }
@@ -859,7 +859,15 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
             else
             {
-                response.Text = await waiting.Task.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    response.Text = await waiting.Task.WaitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    response.Ok = false;
+                    response.Error = $"{request.Caller} stopped waiting to open";
+                }
             }
 
             await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)

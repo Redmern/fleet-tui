@@ -189,6 +189,20 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_replaced_wait_is_answered_without_an_action()
+    {
+        var (control, _, warm) = await WarmAsync();
+        var first = WaitForOpen(control, warm);
+        await Task.Delay(100);
+
+        _ = WaitForOpen(control, warm);
+
+        var answer = await first.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(answer.Ok);
+        Assert.Null(answer.Text);
+    }
+
+    [Fact]
     public async Task Only_a_parked_warm_menu_may_wait_to_be_opened()
     {
         var (control, client, warm) = await WarmAsync();
