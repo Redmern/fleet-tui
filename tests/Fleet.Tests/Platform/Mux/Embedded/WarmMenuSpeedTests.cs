@@ -107,6 +107,66 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         await Eventually(() => Menus == 2);
     }
 
+    private static Task<ControlResponse> WaitForOpen(DaemonTests.TestClient control, FakePanes.FakePty menu) =>
+        control.RequestAsync(new ControlRequest { Op = FleetDaemon.MenuWaitOp, Caller = menu.Env[FleetDaemon.PaneVariable] });
+
+    [Fact]
+    public async Task A_menu_opened_with_an_action_switches_a_waiting_warm_menu_to_it()
+    {
+        var (control, client, warm) = await WarmAsync();
+        var waiting = WaitForOpen(control, warm);
+        await Task.Delay(100);
+        Assert.False(waiting.IsCompleted);
+
+        await client.SendCommandAsync("menu", "switch-project");
+
+        var opened = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(opened.Ok, opened.Error);
+        Assert.Equal("switch-project", opened.Text);
+        await client.WaitForAsync("WARM-MENU");
+        Assert.Equal(1, Menus);
+    }
+
+    [Fact]
+    public async Task A_plain_menu_open_tells_a_waiting_warm_menu_there_is_no_action()
+    {
+        var (control, client, warm) = await WarmAsync();
+        var waiting = WaitForOpen(control, warm);
+        await Task.Delay(100);
+
+        await client.SendCommandAsync("menu");
+
+        var opened = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(opened.Ok, opened.Error);
+        Assert.Null(opened.Text);
+        await client.WaitForAsync("WARM-MENU");
+    }
+
+    [Fact]
+    public async Task A_menu_opened_with_an_action_starts_a_cold_one_when_no_warm_menu_waits()
+    {
+        var (_, client, warm) = await WarmAsync();
+
+        await client.SendCommandAsync("menu", "switch-project");
+
+        await Eventually(() => Menus == 2);
+        var cold = _panes.Started.Last(p => p.Program == "fleet");
+        Assert.Equal(["menu", "--project", "techweb", "--action", "switch-project"], cold.Args);
+        Assert.False(warm.IsDisposed);
+    }
+
+    [Fact]
+    public async Task Only_a_parked_warm_menu_may_wait_to_be_opened()
+    {
+        var (control, client, warm) = await WarmAsync();
+        await client.SendCommandAsync("menu");
+        await client.WaitForAsync("WARM-MENU");
+
+        var answer = await WaitForOpen(control, warm).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.False(answer.Ok);
+    }
+
     private static async Task Eventually(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);

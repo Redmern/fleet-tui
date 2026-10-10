@@ -571,6 +571,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
                     }
 
+                    if (request.Op == MenuWaitOp && !bridged)
+                    {
+                        _ = Task.Run(() => AnswerMenuWaitAsync(wire, request, ct), CancellationToken.None);
+                        break;
+                    }
+
                     if (RunsForward(request.Op, iso, bridged))
                     {
                         _ = Task.Run(() => AnswerForwardAsync(wire, request, ct), CancellationToken.None);
@@ -822,6 +828,55 @@ public sealed class FleetDaemon(DaemonOptions options)
         catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
         {
             options.Log($"could not answer {request.Op} {tool}: {e.Message}");
+        }
+    }
+
+    public const string MenuWaitOp = "menu-wait";
+
+    private readonly Dictionary<string, TaskCompletionSource<string?>> _menuWaits = new(StringComparer.Ordinal);
+
+    private async Task AnswerMenuWaitAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    {
+        TaskCompletionSource<string?>? waiting = null;
+        lock (_gate)
+        {
+            if (request.Caller is { } pane && _model.Float(pane) is { Parked: true })
+            {
+                waiting = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _menuWaits.Remove(pane, out var replaced);
+                replaced?.TrySetCanceled(ct);
+                _menuWaits[pane] = waiting;
+            }
+        }
+
+        var response = new ControlResponse { Id = request.Id, Ok = waiting is not null };
+
+        try
+        {
+            if (waiting is null)
+            {
+                response.Error = $"{request.Caller} is not a parked menu";
+            }
+            else
+            {
+                response.Text = await waiting.Task.WaitAsync(ct).ConfigureAwait(false);
+            }
+
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            options.Log($"could not answer {request.Op} for {request.Caller}: {e.Message}");
+        }
+    }
+
+    private void ForgetMenuWaits()
+    {
+        foreach (var pane in _menuWaits.Keys.Where(p => _model.Float(p) is not { Parked: true }).ToList())
+        {
+            _menuWaits.Remove(pane, out var gone);
+            gone?.TrySetCanceled();
         }
     }
 
@@ -2079,6 +2134,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void WarmMenus()
     {
+        ForgetMenuWaits();
+
         foreach (var stranded in _model.StrandedParked())
         {
             Kill(stranded);
@@ -2164,11 +2221,18 @@ public sealed class FleetDaemon(DaemonOptions options)
                 options.Log($"{client}: warm menu {outdated.Pane} predates the installed fleet; opening a fresh one");
             }
 
-            if (action is null && _model.Parked(shown) is { } warm && _model.Unpark(warm.Pane))
+            if (_model.Parked(shown) is { } warm
+                && (action is null || _menuWaits.ContainsKey(warm.Pane))
+                && _model.Unpark(warm.Pane))
             {
+                if (_menuWaits.Remove(warm.Pane, out var waiting))
+                {
+                    waiting.TrySetResult(action);
+                }
+
                 state.Menu = warm.Pane;
                 _timing?.Opened(client, warm.Pane, warm: true);
-                options.Log($"{client}: warm menu {warm.Pane}{(warm.Hidden ? " (still drawing)" : string.Empty)}");
+                options.Log($"{client}: warm menu {warm.Pane}{(action is null ? string.Empty : $" for {action}")}{(warm.Hidden ? " (still drawing)" : string.Empty)}");
                 return;
             }
 
