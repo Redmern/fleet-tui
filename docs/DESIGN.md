@@ -4034,8 +4034,8 @@ show the same project (attaching from a second machine).
 
 ### New panes open the default shell
 
-A pane opened without a program (`prefix c` for a new tab, the splits,
-`prefix f` for a float) used to start `COMSPEC`, which is `cmd.exe`. It now
+A pane opened without a program (`prefix t c` for a new tab, the splits,
+`prefix f f` for a float) used to start `COMSPEC`, which is `cmd.exe`. It now
 starts the user's default shell (`DefaultShell.Resolve`, passed to fleetd as
 `DaemonOptions.Shell`):
 
