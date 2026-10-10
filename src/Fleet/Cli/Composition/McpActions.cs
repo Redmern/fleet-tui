@@ -86,7 +86,7 @@ public sealed class McpActions(
 
     private readonly BranchStates _states = new(git);
 
-    private readonly ForwardPortsHandler _forwardPorts = new(Adapters.Forwards(), Adapters.Browser(), Adapters.KnownRemotes());
+    private readonly ForwardPortsHandler _forwardPorts = new(Adapters.Forwards(), Adapters.Browser(), Adapters.KnownRemotes(), Environment.UserName);
 
     public async Task<McpResult> PerformAsync(McpRequest request, CancellationToken ct)
     {

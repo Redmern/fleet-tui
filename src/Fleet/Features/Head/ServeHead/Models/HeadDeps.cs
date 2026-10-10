@@ -33,7 +33,8 @@ public sealed record HeadDeps(
     IAgentInboxes? Inboxes = null,
     IIsoMode? Iso = null,
     IPortForwards? Forwards = null,
-    IBrowserLauncher? Browser = null);
+    IBrowserLauncher? Browser = null,
+    string User = "");
 
 public sealed record HeadTiming(
     TimeSpan Poll,

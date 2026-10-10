@@ -30,7 +30,8 @@ public sealed class HeadForwardsTests
         new Known(),
         (_, _) => Task.FromResult(new ProjectStructure([], string.Empty, string.Empty)),
         Forwards: _forwards,
-        Browser: _browser));
+        Browser: _browser,
+        User: "red"));
 
     private static McpRequest Call(string tool, params (string Key, string Value)[] args) =>
         new(tool, args.ToDictionary(a => a.Key, a => a.Value));
@@ -67,6 +68,17 @@ public sealed class HeadForwardsTests
         Assert.False(forwarded.IsError, forwarded.Text);
         Assert.False(unforwarded.IsError, unforwarded.Text);
         Assert.Equal(["viewer-forward 5173", "viewer-unforward 5173"], _forwards.Calls);
+    }
+
+    [Fact]
+    public async Task Forward_port_on_this_machine_reached_by_plain_ssh_names_the_ssh_command()
+    {
+        _forwards.Viewer = new ViewerForward(null, "10.0.0.5 52000 10.0.0.9 22");
+
+        var result = await Service().HandleAsync(Call(HeadTools.ForwardPort, ("port", "5173")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("ssh -N -L 5173:localhost:5173 red@10.0.0.9", result.Text, StringComparison.Ordinal);
     }
 
     [Fact]

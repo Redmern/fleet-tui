@@ -67,7 +67,8 @@ public static class HeadWiring
             HeadPanes.SetVisible(mux, Adapters.Agents(), Adapters.SubOrchestratorsInNvim, ClaudeWiring.TrustFolder),
             Iso: Adapters.Iso(),
             Forwards: Adapters.Forwards(),
-            Browser: Adapters.Browser());
+            Browser: Adapters.Browser(),
+            User: Environment.UserName);
 
     public static int Launch(bool voice)
     {

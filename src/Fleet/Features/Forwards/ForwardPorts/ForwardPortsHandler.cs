@@ -9,7 +9,7 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Forwards.ForwardPorts;
 
-public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher browser, IKnownRemoteStore known)
+public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher browser, IKnownRemoteStore known, string user)
 {
     public async Task<Result<string>> HandleAsync(ForwardOrder order, CancellationToken ct = default)
     {
@@ -24,7 +24,7 @@ public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher
                         : string.Join('\n', rows.Select(r => r.Describe())));
 
                 case ForwardVerb.Add when order.Host is null:
-                    return Viewed(await forwards.ForwardToViewerAsync(order.Port, ct).ConfigureAwait(false), order.Port, forward: true);
+                    return (await forwards.ForwardToViewerAsync(order.Port, ct).ConfigureAwait(false)).Answer(order.Port, forward: true, user);
 
                 case ForwardVerb.Add:
                     return await OpenedAsync(
@@ -32,11 +32,14 @@ public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher
                         .ConfigureAwait(false);
 
                 case ForwardVerb.Remove when order.Host is null:
-                    return Viewed(await forwards.UnforwardFromViewerAsync(order.Port, ct).ConfigureAwait(false), order.Port, forward: false);
+                    return (await forwards.UnforwardFromViewerAsync(order.Port, ct).ConfigureAwait(false)).Answer(order.Port, forward: false, user);
 
                 case ForwardVerb.Remove:
-                    await forwards.RemoveAsync(Resolve(order.Host), order.Port, ct).ConfigureAwait(false);
-                    return Result<string>.Ok($"stopped forwarding {order.Port} from {Resolve(order.Host)}");
+                    {
+                        var host = Resolve(order.Host);
+                        await forwards.RemoveAsync(host, order.Port, ct).ConfigureAwait(false);
+                        return Result<string>.Ok($"stopped forwarding {order.Port} from {host}");
+                    }
 
                 case ForwardVerb.Start when order.Host is { } host:
                     return await OpenedAsync(
@@ -58,11 +61,6 @@ public sealed class ForwardPortsHandler(IPortForwards forwards, IBrowserLauncher
 
         return Result<string>.Fail(ForwardOrders.Usage);
     }
-
-    private static Result<string> Viewed(ViewerForward sent, int port, bool forward) =>
-        sent.Sent
-            ? Result<string>.Ok(sent.Describe(port, forward, Environment.UserName))
-            : Result<string>.Fail(sent.Describe(port, forward, Environment.UserName));
 
     public async Task<Result<string>> OpenedAsync(PortForward forward, bool open, CancellationToken ct)
     {

@@ -21,17 +21,15 @@ public sealed class HeadForwards(HeadDeps deps)
             return request.Tool switch
             {
                 HeadTools.ListForwards => List(await forwards.ListAsync(ct).ConfigureAwait(false)),
-                HeadTools.ForwardPort when OnThisMachine(request) => Viewed(
-                    await forwards.ForwardToViewerAsync(Port(request, HeadTools.Port), ct).ConfigureAwait(false),
-                    Port(request, HeadTools.Port),
-                    forward: true),
+                HeadTools.ForwardPort when OnThisMachine(request) => Mcp(
+                    (await forwards.ForwardToViewerAsync(Port(request, HeadTools.Port), ct).ConfigureAwait(false))
+                        .Answer(Port(request, HeadTools.Port), forward: true, deps.User)),
                 HeadTools.ForwardPort => await WithHostAsync(request, async host => Done(
                     await forwards.AddAsync(host, Port(request, HeadTools.Port), LocalPort(request), ct).ConfigureAwait(false)))
                     .ConfigureAwait(false),
-                HeadTools.UnforwardPort when OnThisMachine(request) => Viewed(
-                    await forwards.UnforwardFromViewerAsync(Port(request, HeadTools.Port), ct).ConfigureAwait(false),
-                    Port(request, HeadTools.Port),
-                    forward: false),
+                HeadTools.UnforwardPort when OnThisMachine(request) => Mcp(
+                    (await forwards.UnforwardFromViewerAsync(Port(request, HeadTools.Port), ct).ConfigureAwait(false))
+                        .Answer(Port(request, HeadTools.Port), forward: false, deps.User)),
                 HeadTools.UnforwardPort => await WithHostAsync(request, async host =>
                 {
                     await forwards.RemoveAsync(host, Port(request, HeadTools.Port), ct).ConfigureAwait(false);
@@ -90,10 +88,8 @@ public sealed class HeadForwards(HeadDeps deps)
 
     private static bool OnThisMachine(McpRequest request) => HeadRemotes.IsLocal(request.Value(HeadTools.Remote).Trim());
 
-    private static McpResult Viewed(ViewerForward sent, int port, bool forward) =>
-        sent.Sent
-            ? McpResult.Ok(sent.Describe(port, forward, Environment.UserName))
-            : McpResult.Error(sent.Describe(port, forward, Environment.UserName));
+    private static McpResult Mcp(Shared.Results.Result<string> answer) =>
+        answer.Succeeded ? McpResult.Ok(answer.Value) : McpResult.Error(answer.Error!);
 
     private string HostOf(string remote) =>
         deps.KnownRemotes.Load().FirstOrDefault(k => string.Equals(k.Nickname, remote, StringComparison.OrdinalIgnoreCase))?.Host

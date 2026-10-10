@@ -1,3 +1,5 @@
+using Fleet.Shared.Results;
+
 namespace Fleet.Ports.Forwards.Models;
 
 public sealed record ViewerForward(string? Viewer, string? SshConnection)
@@ -8,6 +10,9 @@ public sealed record ViewerForward(string? Viewer, string? SshConnection)
         SshConnection?.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [_, _, var host, var sshPort]
             ? $"ssh -N -L {port}:localhost:{port}{(sshPort == "22" ? string.Empty : $" -p {sshPort}")} {user}@{host}"
             : null;
+
+    public Result<string> Answer(int port, bool forward, string user) =>
+        Sent ? Result<string>.Ok(Describe(port, forward, user)) : Result<string>.Fail(Describe(port, forward, user));
 
     public string Describe(int port, bool forward, string user) =>
         Viewer is { } viewer

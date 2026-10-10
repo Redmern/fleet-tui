@@ -13,7 +13,7 @@ public sealed class ForwardPortsTests
     private readonly FakeForwards _forwards = new();
     private readonly FakeBrowser _browser = new();
 
-    private ForwardPortsHandler Handler => new(_forwards, _browser, new Known());
+    private ForwardPortsHandler Handler => new(_forwards, _browser, new Known(), "red");
 
     [Theory]
     [InlineData("box 5173", ForwardVerb.Add, "box", 5173, null, false)]
@@ -86,7 +86,7 @@ public sealed class ForwardPortsTests
         var result = await Handler.HandleAsync(new ForwardOrder(ForwardVerb.Add, null, 5173));
 
         Assert.False(result.Succeeded);
-        Assert.Contains($"ssh -N -L 5173:localhost:5173 {Environment.UserName}@10.0.0.9", result.Error, StringComparison.Ordinal);
+        Assert.Contains("ssh -N -L 5173:localhost:5173 red@10.0.0.9", result.Error, StringComparison.Ordinal);
     }
 
     [Fact]
