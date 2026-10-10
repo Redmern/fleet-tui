@@ -73,7 +73,13 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                 return null;
             }
 
-            var tunnels = options.Tunnels is { } launcher ? new TunnelMode(launcher, options.TunnelProbe, options.TunnelUpWithin) : null;
+            var tunnels = options.Tunnels is { } launcher
+                ? new TunnelMode(launcher, options.TunnelProbe, options.TunnelUpWithin)
+                {
+                    RestartAfter = options.ReconnectAfter,
+                    RestartAtMost = options.ReconnectAtMost,
+                }
+                : null;
             var made = new HostForwards(host, path, options.Locals, options.Ssh, log, tunnels);
             _hosts[host] = made;
             return made;

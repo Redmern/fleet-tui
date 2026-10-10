@@ -27,8 +27,11 @@ public sealed class HostForwards(
     private string? _hostError;
     private bool _linked;
     private readonly HashSet<int> _restore = [];
+    private readonly Dictionary<int, int> _deaths = [];
+    private readonly Dictionary<int, (DateTimeOffset At, string Why)> _retry = [];
+    private bool _closed;
 
-    private sealed record Active(int Local, string Target, string? Project, ITunnel? Tunnel = null);
+    private sealed record Active(int Local, string Target, string? Project, ITunnel? Tunnel = null, DateTimeOffset Since = default);
 
     private static readonly IReadOnlyList<string> TunnelTarget = ["localhost"];
 
@@ -54,6 +57,7 @@ public sealed class HostForwards(
             _pins[remotePort] = localPort;
             _suppressed.Remove(remotePort);
             _failed.Remove(remotePort);
+            _retry.Remove(remotePort);
         }
     }
 
@@ -72,6 +76,8 @@ public sealed class HostForwards(
             _pins.Remove(remotePort);
             _restore.Remove(remotePort);
             _failed.Remove(remotePort);
+            _retry.Remove(remotePort);
+            _deaths.Remove(remotePort);
             if (_allowed.ContainsKey(remotePort))
             {
                 _suppressed.Add(remotePort);
@@ -102,7 +108,23 @@ public sealed class HostForwards(
             }
 
             _active.Clear();
+            _retry.Clear();
             _listening = new Dictionary<int, IReadOnlyList<string>>();
+        }
+    }
+
+    public void Close()
+    {
+        lock (_gate)
+        {
+            _closed = true;
+            foreach (var active in _active.Values)
+            {
+                active.Tunnel?.Kill();
+                locals.Release(active.Local);
+            }
+
+            _active.Clear();
         }
     }
 
@@ -133,8 +155,14 @@ public sealed class HostForwards(
 
             lock (_gate)
             {
+                if (_closed)
+                {
+                    return;
+                }
+
                 if (controlPath is null)
                 {
+                    ReapLocked();
                     listening = PinnedLocked();
                 }
 
@@ -158,7 +186,7 @@ public sealed class HostForwards(
                     .Where(a => !wanted.TryGetValue(a.Key, out var target) || target != a.Value.Target || Moved(a.Key, a.Value))
                     .Select(a => (a.Key, a.Value))];
                 add = [.. wanted
-                    .Where(w => !_failed.ContainsKey(w.Key)
+                    .Where(w => !_failed.ContainsKey(w.Key) && !BackingOffLocked(w.Key)
                         && (!_active.TryGetValue(w.Key, out var active) || active.Target != w.Value || Moved(w.Key, active)))
                     .Select(w => (w.Key, w.Value, allowed.GetValueOrDefault(w.Key), _pins.GetValueOrDefault(w.Key)))];
             }
@@ -277,6 +305,34 @@ public sealed class HostForwards(
             .Where(listening.ContainsKey)
             .ToDictionary(p => p, p => ListeningPorts.Target(listening[p]));
 
+    private TunnelMode Mode =>
+        tunnels ?? throw new InvalidOperationException($"remote {host} has neither an ssh control socket nor a tunnel launcher");
+
+    private DateTimeOffset Now => Mode.Time.GetUtcNow();
+
+    private bool BackingOffLocked(int remote) => _retry.TryGetValue(remote, out var retry) && retry.At > Now;
+
+    private void ReapLocked()
+    {
+        foreach (var (remote, active) in _active.Where(a => a.Value.Tunnel is { Exited.IsCompleted: true }).ToList())
+        {
+            _active.Remove(remote);
+            _preferred[remote] = active.Local;
+            locals.Release(active.Local);
+            var why = Why(active.Tunnel!.Exited.Result, active.Tunnel.Errors);
+            BackOffLocked(remote, why, lastedLong: Now - active.Since >= Mode.RestartAtMost);
+        }
+    }
+
+    private void BackOffLocked(int remote, string why, bool lastedLong)
+    {
+        var deaths = _deaths[remote] = (lastedLong ? 0 : _deaths.GetValueOrDefault(remote)) + 1;
+        var wait = Mode.RestartAfter * Math.Pow(2, Math.Min(deaths - 1, 16));
+        wait = wait < Mode.RestartAtMost ? wait : Mode.RestartAtMost;
+        _retry[remote] = (Now + wait, why);
+        log($"remote {host}: the ssh tunnel of {remote} exited ({why}); restarting in {wait.TotalSeconds:0}s");
+    }
+
     private Dictionary<int, IReadOnlyList<string>> PinnedLocked() => _pins.Keys.ToDictionary(p => p, _ => TunnelTarget);
 
     private bool Moved(int remote, Active active) =>
@@ -285,6 +341,24 @@ public sealed class HostForwards(
     private PortForward RowLocked(int remote)
     {
         var project = _allowed.GetValueOrDefault(remote);
+
+        if (_active.TryGetValue(remote, out var dead) && dead.Tunnel is { Exited.IsCompleted: true } exited)
+        {
+            return new PortForward(
+                host, remote, null, ForwardState.Waiting, project, $"the ssh tunnel exited ({Why(exited.Exited.Result, exited.Errors)})");
+        }
+
+        if (_retry.TryGetValue(remote, out var retry))
+        {
+            var left = retry.At - Now;
+            return new PortForward(
+                host,
+                remote,
+                null,
+                ForwardState.Waiting,
+                project,
+                $"the ssh tunnel exited ({retry.Why}); restarting in {Math.Max(0, Math.Ceiling(left.TotalSeconds)):0}s");
+        }
 
         if (_active.TryGetValue(remote, out var active))
         {
@@ -341,13 +415,30 @@ public sealed class HostForwards(
         if (failed is { } why)
         {
             locals.Release(local);
+            lock (_gate)
+            {
+                if (controlPath is null && _deaths.ContainsKey(remote) && !SshControl.Prohibited(why))
+                {
+                    BackOffLocked(remote, why, lastedLong: false);
+                    return;
+                }
+            }
+
             Fail(remote, SshControl.Prohibited(why) ? ProhibitedError : why);
             return;
         }
 
         lock (_gate)
         {
-            _active[remote] = new Active(local, target, project, tunnel);
+            if (_closed)
+            {
+                tunnel?.Kill();
+                locals.Release(local);
+                return;
+            }
+
+            _retry.Remove(remote);
+            _active[remote] = new Active(local, target, project, tunnel, controlPath is null ? Now : default);
             _preferred[remote] = local;
         }
 
@@ -362,7 +453,7 @@ public sealed class HostForwards(
 
     private async Task<(ITunnel? Tunnel, string? Error)> OpenTunnelAsync(int local, string target, int remote, CancellationToken ct)
     {
-        var mode = tunnels ?? throw new InvalidOperationException($"remote {host} has neither an ssh control socket nor a tunnel launcher");
+        var mode = Mode;
         var tunnel = mode.Launcher.Start(SshControl.Tunnel(host, local, target, remote));
         var waited = Stopwatch.StartNew();
         try

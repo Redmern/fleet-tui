@@ -1,6 +1,7 @@
 using Fleet.Platform.Forwards;
 using Fleet.Platform.Forwards.Models;
 using Fleet.Ports.Forwards.Enums;
+using Fleet.Tests.Platform.Mux.Embedded;
 
 namespace Fleet.Tests.Platform.Forwards;
 
@@ -10,6 +11,7 @@ public sealed class HostForwardsTunnelTests
     private readonly FakeSsh _ssh = new();
     private readonly FakeTunnels _tunnels = new();
     private readonly LocalPorts _locals = new(_ => true, () => 41000);
+    private readonly SimulatedLinkClock _clock = new();
 
     private HostForwards For(LocalPorts? locals = null) =>
         new(
@@ -18,7 +20,12 @@ public sealed class HostForwardsTunnelTests
             locals ?? _locals,
             _ssh.RunAsync,
             _ => { },
-            new TunnelMode(_tunnels, _tunnels, TimeSpan.FromSeconds(2)));
+            new TunnelMode(_tunnels, _tunnels, TimeSpan.FromSeconds(2))
+            {
+                RestartAfter = TimeSpan.FromSeconds(5),
+                RestartAtMost = TimeSpan.FromSeconds(60),
+                Time = _clock,
+            });
 
     private static async Task ScanAndReconcileAsync(HostForwards forwards)
     {
@@ -114,6 +121,126 @@ public sealed class HostForwardsTunnelTests
 
         Assert.True(_tunnels.Started.Single().Killed);
         Assert.Equal(ForwardState.Waiting, forwards.Row(5173).State);
+    }
+
+    [Fact]
+    public async Task A_tunnel_that_dies_while_pinned_waits_out_the_backoff_then_comes_back_on_its_port()
+    {
+        var forwards = For(new LocalPorts(p => p != 5173, () => 41000));
+        forwards.Pin(5173, null);
+        await ScanAndReconcileAsync(forwards);
+
+        _tunnels.Started.Single().Exit(255, "Connection reset by peer\r\n");
+
+        var row = forwards.Row(5173);
+        Assert.Equal(ForwardState.Waiting, row.State);
+        Assert.Contains("Connection reset by peer", row.Error);
+
+        await ScanAndReconcileAsync(forwards);
+        Assert.Single(_tunnels.Started);
+        Assert.Contains("restarting in 5s", forwards.Row(5173).Error);
+
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        await ScanAndReconcileAsync(forwards);
+
+        Assert.Equal(2, _tunnels.Started.Count);
+        Assert.Equal(["127.0.0.1:41000:localhost:5173", "127.0.0.1:41000:localhost:5173"], _tunnels.Specs);
+        Assert.Equal(ForwardState.Forwarded, forwards.Row(5173).State);
+    }
+
+    [Fact]
+    public async Task A_tunnel_that_keeps_dying_backs_off_twice_as_long_each_time_up_to_the_cap()
+    {
+        var forwards = For();
+        forwards.Pin(5173, null);
+        await ScanAndReconcileAsync(forwards);
+
+        foreach (var wait in new[] { 5, 10, 20, 40, 60, 60 })
+        {
+            _tunnels.Started.Last().Exit(255, "gone");
+            await ScanAndReconcileAsync(forwards);
+            var started = _tunnels.Started.Count;
+
+            _clock.Advance(TimeSpan.FromSeconds(wait) - TimeSpan.FromMilliseconds(1));
+            await ScanAndReconcileAsync(forwards);
+            Assert.Equal(started, _tunnels.Started.Count);
+
+            _clock.Advance(TimeSpan.FromMilliseconds(1));
+            await ScanAndReconcileAsync(forwards);
+            Assert.Equal(started + 1, _tunnels.Started.Count);
+        }
+    }
+
+    [Fact]
+    public async Task A_tunnel_that_stayed_up_a_while_restarts_after_the_first_backoff_again()
+    {
+        var forwards = For();
+        forwards.Pin(5173, null);
+        await ScanAndReconcileAsync(forwards);
+        _tunnels.Started.Last().Exit(255, "gone");
+        await ScanAndReconcileAsync(forwards);
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        await ScanAndReconcileAsync(forwards);
+
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        _tunnels.Started.Last().Exit(255, "gone");
+        await ScanAndReconcileAsync(forwards);
+
+        Assert.Contains("restarting in 5s", forwards.Row(5173).Error);
+    }
+
+    [Fact]
+    public async Task A_restart_that_cannot_connect_keeps_retrying_instead_of_failing()
+    {
+        var forwards = For();
+        forwards.Pin(5173, null);
+        await ScanAndReconcileAsync(forwards);
+        _tunnels.Exits = _ => (255, "ssh: connect to host box port 22: Connection timed out");
+        _tunnels.Started.Last().Exit(255, "Connection reset by peer");
+        await ScanAndReconcileAsync(forwards);
+
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        await ScanAndReconcileAsync(forwards);
+
+        var row = forwards.Row(5173);
+        Assert.Equal(ForwardState.Waiting, row.State);
+        Assert.Contains("Connection timed out", row.Error);
+        Assert.Contains("restarting in 10s", row.Error);
+
+        _tunnels.Exits = _ => null;
+        _clock.Advance(TimeSpan.FromSeconds(10));
+        await ScanAndReconcileAsync(forwards);
+        Assert.Equal(ForwardState.Forwarded, forwards.Row(5173).State);
+    }
+
+    [Fact]
+    public async Task Forwarding_again_by_hand_skips_the_backoff()
+    {
+        var forwards = For();
+        forwards.Pin(5173, null);
+        await ScanAndReconcileAsync(forwards);
+        _tunnels.Started.Single().Exit(255, "gone");
+        await ScanAndReconcileAsync(forwards);
+
+        var row = await forwards.ForwardNowAsync(5173, null, default);
+
+        Assert.Equal(ForwardState.Forwarded, row.State);
+        Assert.Equal(2, _tunnels.Started.Count);
+    }
+
+    [Fact]
+    public async Task Closing_kills_every_tunnel_and_forwards_nothing_after()
+    {
+        var forwards = For();
+        forwards.Pin(5173, null);
+        forwards.Pin(9229, null);
+        await ScanAndReconcileAsync(forwards);
+
+        forwards.Close();
+
+        Assert.All(_tunnels.Started, t => Assert.True(t.Killed));
+        await ScanAndReconcileAsync(forwards);
+        Assert.Equal(2, _tunnels.Started.Count);
     }
 
     private sealed class Never : Fleet.Ports.Forwards.IListenerProbe

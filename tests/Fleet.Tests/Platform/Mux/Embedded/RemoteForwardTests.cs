@@ -318,6 +318,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
                 },
                 ScanEvery = TimeSpan.FromMilliseconds(50),
                 ForwardWithin = TimeSpan.FromSeconds(5),
+                ReconnectAfter = TimeSpan.FromMilliseconds(100),
             },
         }).RunAsync(_stop.Token));
         return endpoint;
@@ -350,6 +351,21 @@ public sealed class RemoteForwardTests : IAsyncLifetime
 
         Assert.Equal("failed", added!.State);
         Assert.Equal("red@far: Permission denied (publickey).", added.Error);
+    }
+
+    [Fact]
+    public async Task Without_control_sockets_a_tunnel_that_dies_is_started_again()
+    {
+        var tunnels = new FakeTunnels();
+        using var viewer = new EmbeddedDriver(TunnellingViewer(tunnels));
+        await viewer.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await viewer.RemotesAsync()).Any(r => r.State == RemoteLink.Connected));
+        Assert.Equal("forwarded", (await viewer.AddForwardAsync("red@far", 9229, 19229))!.State);
+
+        tunnels.Started.Single().Exit(255, "Connection reset by peer");
+
+        await Eventually(() => Task.FromResult(tunnels.Started.Count == 2));
+        await Eventually(async () => (await viewer.ForwardsAsync()).Any(f => f is { RemotePort: 9229, State: "forwarded", LocalPort: 19229 }));
     }
 
     [Fact]
