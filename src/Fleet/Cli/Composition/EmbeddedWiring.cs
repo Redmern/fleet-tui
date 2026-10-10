@@ -764,6 +764,7 @@ public static class EmbeddedWiring
     [
         "-T",
         "-o", "ConnectTimeout=15",
+        .. SshControl.LinkOptions,
         .. controlPath is null ? [] : SshControl.MasterOptions(controlPath),
         host,
         remoteFleet,
@@ -902,14 +903,17 @@ public static class EmbeddedWiring
 
         RefuseSshInIso();
 
-        start.ArgumentList.Add("-T");
-        start.ArgumentList.Add(host);
-        start.ArgumentList.Add(remote);
-        start.ArgumentList.Add("bridge");
+        foreach (var arg in AttachSshArguments(host, remote))
+        {
+            start.ArgumentList.Add(arg);
+        }
 
         var process = Process.Start(start) ?? throw new IOException("could not start ssh");
         return new DuplexStream(process.StandardOutput.BaseStream, process.StandardInput.BaseStream, process);
     }
+
+    public static IReadOnlyList<string> AttachSshArguments(string host, string remoteFleet) =>
+        ["-T", .. SshControl.LinkOptions, host, remoteFleet, "bridge"];
 
     private static void RefuseSshInIso()
     {
