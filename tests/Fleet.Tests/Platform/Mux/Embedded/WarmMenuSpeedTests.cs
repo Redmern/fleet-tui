@@ -117,6 +117,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
     public async Task A_menu_opened_with_an_action_switches_a_waiting_warm_menu_to_it()
     {
         var (control, client, warm) = await WarmAsync();
+        await Task.Delay(FleetDaemon.RevealAnyway - FleetDaemon.RevealAfterFit + TimeSpan.FromMilliseconds(200));
         var waiting = WaitForOpen(control, warm);
         await Task.Delay(100);
         Assert.False(waiting.IsCompleted);
@@ -126,7 +127,10 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         var opened = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.True(opened.Ok, opened.Error);
         Assert.Equal("switch-project", opened.Text);
-        await client.WaitForAsync("WARM-MENU");
+        await Task.Delay(200);
+        warm.Emit("\u001b[2J\u001b[HACTION-SCREEN\nprojects\n");
+        await client.WaitForAsync("ACTION-SCREEN");
+        Assert.DoesNotContain(client.Frames.TakeWhile(f => !f.Contains("ACTION-SCREEN")), f => f.Contains("WARM-MENU"));
         Assert.Equal(1, Menus);
     }
 

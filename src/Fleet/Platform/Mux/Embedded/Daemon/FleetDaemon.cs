@@ -871,6 +871,20 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private void HideUntilRedrawn(FloatState box)
+    {
+        if (box.Hidden || !_runtimes.TryGetValue(box.Pane, out var runtime))
+        {
+            return;
+        }
+
+        box.Hidden = true;
+        box.HiddenSince = DateTime.UtcNow;
+        box.RevealAfterOutput = runtime.Outputs;
+        box.Baseline = Signature(runtime.Screen);
+        box.NeedsBaseline = false;
+    }
+
     private void ForgetMenuWaits()
     {
         foreach (var pane in _menuWaits.Keys.Where(p => _model.Float(p) is not { Parked: true }).ToList())
@@ -2227,6 +2241,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 if (_menuWaits.Remove(warm.Pane, out var waiting))
                 {
+                    HideUntilRedrawn(warm);
                     waiting.TrySetResult(action);
                 }
 
