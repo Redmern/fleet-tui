@@ -214,6 +214,85 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_viewer_that_cannot_forward_gets_the_ssh_command_instead_of_a_forward_it_would_drop()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            {
+                hello.Label = RemoteLink.Label("laptop");
+                hello.Forwards = false;
+                hello.Ssh = "10.0.0.5 52000 10.0.0.9 22";
+            });
+
+        var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+
+        Assert.True(sent.Ok);
+        Assert.Null(sent.Viewer);
+        Assert.Equal("10.0.0.5 52000 10.0.0.9 22", sent.Ssh);
+    }
+
+    [Fact]
+    public async Task The_viewer_showing_the_callers_workspace_gets_the_ssh_command_even_when_another_viewer_could_forward()
+    {
+        await using var control = await DaemonTests.TestClient.ConnectAsync(_far, ClientRoles.Control, 0, 0, null);
+        var caller = (await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "alpha", Cwd = ".", Args = ["claude"] })).Pane;
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "beta", Cwd = ".", Args = ["claude"] })).Ok);
+        await using var windows = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "alpha", furnish: hello =>
+            {
+                hello.Label = RemoteLink.Label("windows");
+                hello.Forwards = false;
+                hello.Ssh = "10.0.0.5 52000 10.0.0.9 22";
+            });
+        await using var linux = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "beta", furnish: hello => hello.Label = RemoteLink.Label("linux"));
+
+        var sent = await control.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Caller = caller });
+
+        Assert.True(sent.Ok);
+        Assert.Null(sent.Viewer);
+        Assert.Equal("10.0.0.5 52000 10.0.0.9 22", sent.Ssh);
+    }
+
+    [Fact]
+    public async Task A_viewer_that_does_not_say_whether_it_forwards_is_still_sent_the_forward()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Label = RemoteLink.Label("laptop"));
+
+        var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+
+        Assert.NotNull(sent.Viewer);
+    }
+
+    [Fact]
+    public async Task A_viewer_without_ssh_control_sockets_is_not_sent_a_forward()
+    {
+        var windowsLike = NewEndpoint();
+        _running.Add(new FleetDaemon(new DaemonOptions
+        {
+            Endpoint = windowsLike,
+            Pty = _homePanes.NewPty,
+            Terminal = _homePanes.NewTerminal,
+            RemoteOpen = (_, _) =>
+            {
+                var stream = _far.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+                return new RemoteChannel(stream, null, stream);
+            },
+            Forwards = new ForwardOptions(),
+        }).RunAsync(_stop.Token));
+
+        using var viewer = new EmbeddedDriver(windowsLike);
+        using var far = new EmbeddedDriver(_far);
+        await viewer.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await viewer.RemotesAsync()).Any(r => r.State == RemoteLink.Connected));
+
+        var sent = await far.ViewerForwardAsync(5173);
+
+        Assert.Null(sent.Viewer);
+    }
+
+    [Fact]
     public async Task A_manual_forward_is_made_on_request_and_removed_on_request()
     {
         _ssh.Listening = Web;

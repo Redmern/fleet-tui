@@ -40,6 +40,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public string Host => host;
 
+    public bool CanForward { get; init; } = true;
+
     public string Name
     {
         get
@@ -310,6 +312,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                     Cols = cols,
                     Rows = rows,
                     Label = Label(host),
+                    Forwards = CanForward,
                 },
                 WireJsonContext.Default.Hello,
                 ct).ConfigureAwait(false);
