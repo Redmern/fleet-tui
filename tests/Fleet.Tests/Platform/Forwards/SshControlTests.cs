@@ -36,7 +36,16 @@ public sealed class SshControlTests
         Assert.Contains("ControlPath=/run/f/cm-1", options);
         Assert.Contains("ControlPersist=no", options);
         Assert.Contains("ExitOnForwardFailure=yes", options);
-        Assert.Contains("ServerAliveInterval=15", options);
+    }
+
+    [Fact]
+    public void The_link_asks_for_low_delay_and_drops_a_dead_peer()
+    {
+        var options = SshControl.LinkOptions;
+
+        Assert.Equal(
+            ["-o", "IPQoS=lowdelay", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"],
+            options);
     }
 
     [Fact]
