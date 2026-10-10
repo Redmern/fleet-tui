@@ -92,6 +92,20 @@ public sealed class OpenPortTests
     }
 
     [Fact]
+    public async Task A_plain_ssh_viewer_hears_that_nothing_listens_yet_and_still_gets_the_command()
+    {
+        _forwards.Viewer = new ViewerForward(null, "10.0.0.5 52000 10.0.0.9 22");
+
+        var outcome = await Handler().HandleAsync(3000);
+
+        Assert.Equal(OpenPortRoute.Ssh, outcome.Route);
+        Assert.False(outcome.Listening);
+        Assert.Equal("ssh -N -L 3000:localhost:3000 red@10.0.0.9", outcome.Command);
+        Assert.Contains(outcome.Lines, l => l.Contains("nothing listens on 127.0.0.1:3000", StringComparison.Ordinal));
+        Assert.Empty(_browser.Opened);
+    }
+
+    [Fact]
     public async Task The_ssh_command_names_a_port_other_than_22()
     {
         _forwards.Viewer = new ViewerForward(null, "fe80::5 52000 fe80::9 2222");
