@@ -141,6 +141,76 @@ public class WireTests
     }
 
     [Fact]
+    public async Task A_key_sent_behind_background_requests_waits_for_at_most_the_write_in_progress()
+    {
+        var peer = new HeldFirstWrite();
+        var wire = new Wire(peer);
+        var sends = new List<Task> { wire.SendInBackgroundAsync(MessageType.Request, "a"u8.ToArray()) };
+        await peer.Holding.Task;
+
+        sends.Add(wire.SendInBackgroundAsync(MessageType.Request, "b"u8.ToArray()));
+        sends.Add(wire.SendInBackgroundAsync(MessageType.Request, "c"u8.ToArray()));
+        sends.Add(wire.SendAsync(MessageType.Key, "k"u8.ToArray()));
+        sends.Add(wire.SendInBackgroundAsync(MessageType.Request, "d"u8.ToArray()));
+        sends.Add(wire.SendAsync(MessageType.Frame, "f"u8.ToArray()));
+        peer.Release.SetResult();
+        await Task.WhenAll(sends);
+
+        peer.Position = 0;
+        var reader = new Wire(peer);
+        var order = new List<string>();
+        while (await reader.ReceiveAsync() is { } message)
+        {
+            order.Add($"{message.Type}:{System.Text.Encoding.ASCII.GetString(message.Payload)}");
+        }
+
+        Assert.Equal(["Request:a", "Key:k", "Frame:f", "Request:b", "Request:c", "Request:d"], order);
+    }
+
+    [Fact]
+    public async Task A_background_send_cancelled_while_waiting_never_writes_and_lets_the_next_one_through()
+    {
+        var peer = new HeldFirstWrite();
+        var wire = new Wire(peer);
+        var first = wire.SendAsync(MessageType.Key, "a"u8.ToArray());
+        await peer.Holding.Task;
+
+        using var cancel = new CancellationTokenSource();
+        var cancelled = wire.SendInBackgroundAsync(MessageType.Request, "x"u8.ToArray(), cancel.Token);
+        var after = wire.SendInBackgroundAsync(MessageType.Request, "b"u8.ToArray());
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
+        peer.Release.SetResult();
+        await Task.WhenAll(first, after);
+
+        peer.Position = 0;
+        var reader = new Wire(peer);
+        Assert.Equal("a", System.Text.Encoding.ASCII.GetString((await reader.ReceiveAsync())!.Value.Payload));
+        Assert.Equal("b", System.Text.Encoding.ASCII.GetString((await reader.ReceiveAsync())!.Value.Payload));
+        Assert.Null(await reader.ReceiveAsync());
+    }
+
+    private sealed class HeldFirstWrite : MemoryStream
+    {
+        private int _writes;
+
+        public TaskCompletionSource Holding { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _writes) == 1)
+            {
+                Holding.SetResult();
+                await Release.Task;
+            }
+
+            await base.WriteAsync(buffer, cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task A_closed_stream_reads_as_the_end_not_an_error()
     {
         var received = await new Wire(new MemoryStream()).ReceiveAsync();
