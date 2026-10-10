@@ -36,6 +36,8 @@ public sealed class DaemonOptions
 
     public bool WarmMenus { get; init; }
 
+    public bool TimeMenus { get; init; } = MenuTiming.On(Environment.GetEnvironmentVariable(MenuTiming.Variable));
+
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
 
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
@@ -84,6 +86,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Hello> _bridged = new(StringComparer.Ordinal);
     private readonly ForwardHub _hub = new(options.Forwards, options.Log);
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
+    private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(TimeProvider.System) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
@@ -582,6 +585,12 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             case MessageType.Key or MessageType.Text or MessageType.Mouse or MessageType.Command
                 when session is not null && RemoteTarget(session, type, payload) is { } remote:
+                if (_timing is not null && type == MessageType.Command
+                    && Wire.Read(payload, WireJsonContext.Default.CommandMessage).Name == "menu")
+                {
+                    _timing.Begin(session.Client, remote.Host);
+                }
+
                 await remote.ForwardAsync(type, payload).ConfigureAwait(false);
                 break;
 
@@ -1160,6 +1169,11 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Command(AttachSession session, CommandMessage command)
     {
+        if (command.Name == "menu")
+        {
+            _timing?.Begin(session.Client);
+        }
+
         if (command.Name is not ("focus-in" or "focus-out" or "copy" or "float-move" or "float-size"))
         {
             options.Log($"{session.Client}: {command.Name}{(command.Arg is null ? string.Empty : " " + command.Arg)}");
@@ -1765,6 +1779,19 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void Forward(RemoteLink link, HostEffect effect)
     {
+        if (effect.Kind == MenuTiming.ReportEffect)
+        {
+            if (_timing is not null && effect.Value is { } report)
+            {
+                lock (_gate)
+                {
+                    _timing.Reported(link.Host, report, RemoteOutputs(link.Host));
+                }
+            }
+
+            return;
+        }
+
         if (effect.Kind == HostEffects.OpenUrl)
         {
             _hub.Open(link, effect.Value);
@@ -1803,6 +1830,14 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         _wake.Release();
     }
+
+    private bool MenuShown(string pane) =>
+        _model.Pane(pane) is not null && _model.Float(pane) is not ({ Hidden: true } or { Parked: true });
+
+    private long RemoteOutputs(string host) =>
+        _remotes.GetValueOrDefault(host) is { } link && _runtimes.Values.FirstOrDefault(r => r.Pty == link.Pty) is { } runtime
+            ? runtime.Outputs
+            : 0;
 
     private RemoteLink RemoteFor(string? host) =>
         host is not null && _remotes.TryGetValue(host, out var link)
@@ -1985,6 +2020,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             if (drawn || DateTime.UtcNow - box.HiddenSince > RevealAnyway)
             {
                 box.Hidden = false;
+                _timing?.Revealed(box.Pane);
             }
             else
             {
@@ -2107,6 +2143,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             if (action is null && _model.Parked(shown) is { } warm && _model.Unpark(warm.Pane))
             {
                 state.Menu = warm.Pane;
+                _timing?.Opened(client, warm.Pane, warm: true);
                 options.Log($"{client}: warm menu {warm.Pane}{(warm.Hidden ? " (still drawing)" : string.Empty)}");
                 return;
             }
@@ -2126,6 +2163,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 hidden.HiddenSince = DateTime.UtcNow;
             }
             state.Menu = menu.Id;
+            _timing?.Opened(client, menu.Id, warm: false);
             ApplyResizes();
             Start(menu, env);
             return;
@@ -2133,6 +2171,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         var pane = _model.Spawn(MuxModel.OverlayWorkspace, Environment.CurrentDirectory, args);
         _model.SetOverlay(client, pane.Id);
+        _timing?.Opened(client, pane.Id, warm: false);
         ApplyResizes();
         Start(pane, env);
     }
@@ -2595,6 +2634,15 @@ public sealed class FleetDaemon(DaemonOptions options)
                     sends.Add((session, ++session.Seq, full, FrameEncoder.Encode(session.Shown, frame), session.Switching));
                     session.Shown = frame;
                     session.Switching = null;
+
+                    if (_timing?.Framed(session.Client, MenuShown, RemoteOutputs) is { } timed)
+                    {
+                        options.Log(timed.Line);
+                        if (timed.Host is null)
+                        {
+                            effects.Add((session, new HostEffect { Kind = MenuTiming.ReportEffect, Value = timed.Report() }));
+                        }
+                    }
                 }
 
                 WarmMenus();
