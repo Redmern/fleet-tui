@@ -43,7 +43,7 @@ public class MenuToggleTests
         var source = MenuSource();
         var run = source.IndexOf("public static async Task<int> RunAsync", StringComparison.Ordinal);
         var headless = source.IndexOf("RunsHeadless(requested)", run, StringComparison.Ordinal);
-        var ui = source.IndexOf("using IApplication app = FleetUi.Start()", run, StringComparison.Ordinal);
+        var ui = source.IndexOf("IApplication app = FleetUi.Start()", run, StringComparison.Ordinal);
 
         Assert.True(headless > run, "RunAsync should branch on RunsHeadless(requested)");
         Assert.True(headless < ui, "the toggle branch must run before FleetUi.Start draws anything");
