@@ -19,7 +19,11 @@ public sealed class MuxKeys
         ["a"] = "agents",
         ["f"] = "float",
         ["w"] = "project",
-        ["q"] = "session",
+        ["s"] = "session",
+        ["t"] = "tabs",
+        ["g"] = "configure",
+        ["g c"] = "fleet config",
+        ["m"] = "maintenance",
     };
 
     public static readonly IReadOnlyDictionary<string, string> DefaultIcons = new Dictionary<string, string>
@@ -27,7 +31,11 @@ public sealed class MuxKeys
         ["a"] = "",
         ["f"] = "",
         ["w"] = "",
-        ["q"] = "",
+        ["s"] = "",
+        ["t"] = "",
+        ["g"] = "",
+        ["g c"] = "",
+        ["m"] = "",
     };
 
     public static readonly IReadOnlyDictionary<string, string> DefaultDirectKeys =

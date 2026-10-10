@@ -63,6 +63,7 @@ public static class WhichKey
         "float-embed" => "float ↔ tile",
         "float-mode" => "move/resize float",
         "reload" => "reload keys",
+        "menu button-hints" => "button hints",
         _ when MenuAction(command) is { } action => KeymapDefaults.Describe(action).ToLowerInvariant(),
         _ => command.Replace('-', ' '),
     };

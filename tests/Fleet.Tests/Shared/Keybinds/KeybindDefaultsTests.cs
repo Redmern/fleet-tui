@@ -95,45 +95,10 @@ public class KeybindDefaultsTests
         AssertContext(mux, "direct", MuxKeys.DefaultDirectKeys);
     }
 
-    // Fleet-menu actions that do not have a ctrl+s binding yet. Each later unit
-    // binds its group and deletes its rows here; the list should end up empty.
-    private static readonly FleetAction[] NotYetOnCtrlS =
-    [
-        // quit and session
-        FleetAction.QuitFleet,
-        FleetAction.SwitchProject,
-        FleetAction.SaveSession,
-        FleetAction.Remotes,
-
-        // settings › configure
-        FleetAction.EditKeybinds,
-        FleetAction.EditShowMenuKeys,
-        FleetAction.EditButtonHints,
-        FleetAction.EditTheme,
-
-        // settings › maintenance
-        FleetAction.RebuildDashboard,
-        FleetAction.CleanupProject,
-        FleetAction.HideAllAgents,
-        FleetAction.ViewLogs,
-        FleetAction.UpdateFleet,
-        FleetAction.ShowVersion,
-        FleetAction.WhatsNew,
-
-        // settings › fleet config
-        FleetAction.EditMainOrchestratorInNvim,
-        FleetAction.EditSubOrchestratorsInNvim,
-        FleetAction.EditNvimConfig,
-        FleetAction.EditAutoClose,
-        FleetAction.EditAidlcMode,
-        FleetAction.EditClaudeProfile,
-        FleetAction.EditFleetConfig,
-        FleetAction.EditHeadModel,
-        FleetAction.EditMainModel,
-        FleetAction.EditSubModel,
-        FleetAction.EditAgentModel,
-        FleetAction.EditSettings,
-    ];
+    // Fleet-menu leaf actions that deliberately have no ctrl+s binding. Submenu
+    // openers are left out by MenuLeaves; add a row here, with a reason, only for
+    // an action that must not be reachable from the mux prefix.
+    private static readonly FleetAction[] ExemptFromCtrlS = [];
 
     private static IEnumerable<FleetAction> MenuLeaves =>
         new[] { FleetMenus.Main, FleetMenus.Settings, FleetMenus.FleetConfig }
@@ -142,12 +107,12 @@ public class KeybindDefaultsTests
             .Distinct();
 
     [Fact]
-    public void Every_fleet_menu_action_opens_from_ctrl_s_or_is_listed_as_not_yet_bound()
+    public void Every_fleet_menu_action_opens_from_ctrl_s_or_is_explicitly_exempt()
     {
         var commands = MuxKeys.DefaultPrefixKeys.Values.ToHashSet(StringComparer.Ordinal);
 
         var missing = MenuLeaves
-            .Except(NotYetOnCtrlS)
+            .Except(ExemptFromCtrlS)
             .Where(a => !commands.Contains("menu " + FleetActionIds.For(a)))
             .ToList();
 
@@ -155,11 +120,11 @@ public class KeybindDefaultsTests
     }
 
     [Fact]
-    public void The_not_yet_bound_list_holds_only_unbound_menu_actions()
+    public void The_exemption_list_holds_only_unbound_menu_actions()
     {
         var commands = MuxKeys.DefaultPrefixKeys.Values.ToHashSet(StringComparer.Ordinal);
 
-        Assert.All(NotYetOnCtrlS, a =>
+        Assert.All(ExemptFromCtrlS, a =>
         {
             Assert.Contains(a, MenuLeaves);
             Assert.DoesNotContain("menu " + FleetActionIds.For(a), commands);
