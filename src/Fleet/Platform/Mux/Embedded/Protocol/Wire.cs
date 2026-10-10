@@ -33,18 +33,27 @@ public sealed class Wire(Stream stream) : IDisposable
 
     public static readonly TimeSpan FinishSendingWithin = TimeSpan.FromSeconds(1);
 
-    private readonly SemaphoreSlim _writeGate = new(1, 1);
+    private readonly Lock _lanes = new();
+    private readonly LinkedList<TaskCompletionSource> _urgent = new();
+    private readonly LinkedList<TaskCompletionSource> _background = new();
+    private bool _writing;
     private readonly byte[] _header = new byte[5];
 
     public Stream Stream => stream;
 
-    public async Task SendAsync(MessageType type, ReadOnlyMemory<byte> payload, CancellationToken ct = default)
+    public Task SendAsync(MessageType type, ReadOnlyMemory<byte> payload, CancellationToken ct = default) =>
+        WriteAsync(type, payload, background: false, ct);
+
+    public Task SendInBackgroundAsync(MessageType type, ReadOnlyMemory<byte> payload, CancellationToken ct = default) =>
+        WriteAsync(type, payload, background: true, ct);
+
+    private async Task WriteAsync(MessageType type, ReadOnlyMemory<byte> payload, bool background, CancellationToken ct)
     {
         var header = new byte[5];
         BinaryPrimitives.WriteUInt32LittleEndian(header, (uint)(payload.Length + 1));
         header[4] = (byte)type;
 
-        await _writeGate.WaitAsync(ct).ConfigureAwait(false);
+        await EnterAsync(background, ct).ConfigureAwait(false);
         try
         {
             await stream.WriteAsync(header, ct).ConfigureAwait(false);
@@ -57,8 +66,92 @@ public sealed class Wire(Stream stream) : IDisposable
         }
         finally
         {
-            _writeGate.Release();
+            Leave();
         }
+    }
+
+    private async Task EnterAsync(bool background, CancellationToken ct)
+    {
+        TaskCompletionSource turn;
+        LinkedListNode<TaskCompletionSource> place;
+        lock (_lanes)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!_writing)
+            {
+                _writing = true;
+                return;
+            }
+
+            turn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            place = (background ? _background : _urgent).AddLast(turn);
+        }
+
+        try
+        {
+            await turn.Task.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            if (!GiveUp(place))
+            {
+                Leave();
+            }
+
+            throw;
+        }
+    }
+
+    private bool TryEnter(TimeSpan within)
+    {
+        TaskCompletionSource turn;
+        LinkedListNode<TaskCompletionSource> place;
+        lock (_lanes)
+        {
+            if (!_writing)
+            {
+                _writing = true;
+                return true;
+            }
+
+            turn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            place = _urgent.AddLast(turn);
+        }
+
+        return turn.Task.Wait(within) || !GiveUp(place);
+    }
+
+    private bool GiveUp(LinkedListNode<TaskCompletionSource> place)
+    {
+        lock (_lanes)
+        {
+            if (place.List is not { } lane)
+            {
+                return false;
+            }
+
+            lane.Remove(place);
+            return true;
+        }
+    }
+
+    private void Leave()
+    {
+        TaskCompletionSource next;
+        lock (_lanes)
+        {
+            var lane = _urgent.Count > 0 ? _urgent : _background;
+            if (lane.First is not { } first)
+            {
+                _writing = false;
+                return;
+            }
+
+            lane.RemoveFirst();
+            next = first.Value;
+        }
+
+        next.SetResult();
     }
 
     public Task SendAsync<T>(MessageType type, T message, JsonTypeInfo<T> info, CancellationToken ct = default) =>
@@ -105,7 +198,7 @@ public sealed class Wire(Stream stream) : IDisposable
 
     public void Dispose()
     {
-        var sendFinished = _writeGate.Wait(FinishSendingWithin);
+        var sendFinished = TryEnter(FinishSendingWithin);
         try
         {
             stream.Dispose();
@@ -114,7 +207,7 @@ public sealed class Wire(Stream stream) : IDisposable
         {
             if (sendFinished)
             {
-                _writeGate.Release();
+                Leave();
             }
         }
     }
