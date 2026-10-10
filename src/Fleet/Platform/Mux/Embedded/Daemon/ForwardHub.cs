@@ -1,6 +1,7 @@
 using Fleet.Platform.Forwards;
 using Fleet.Platform.Forwards.Models;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports.Forwards;
 using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
 
@@ -11,6 +12,12 @@ public sealed class ForwardOptions
     public Func<string, string?> ControlPath { get; init; } = _ => null;
 
     public Func<IReadOnlyList<string>, CancellationToken, Task<SshResult>> Ssh { get; init; } = SshProcess.RunAsync;
+
+    public ITunnelLauncher? Tunnels { get; init; }
+
+    public IListenerProbe TunnelProbe { get; init; } = new TcpListenerProbe();
+
+    public TimeSpan TunnelUpWithin { get; init; } = TimeSpan.FromSeconds(20);
 
     public LocalPorts Locals { get; init; } = LocalPorts.Loopback();
 
@@ -60,12 +67,14 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                 return known;
             }
 
-            if (options.ControlPath(host) is not { } path)
+            var path = options.ControlPath(host);
+            if (path is null && options.Tunnels is null)
             {
                 return null;
             }
 
-            var made = new HostForwards(host, path, options.Locals, options.Ssh, log);
+            var tunnels = options.Tunnels is { } launcher ? new TunnelMode(launcher, options.TunnelProbe, options.TunnelUpWithin) : null;
+            var made = new HostForwards(host, path, options.Locals, options.Ssh, log, tunnels);
             _hosts[host] = made;
             return made;
         }
@@ -211,7 +220,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
     {
         var host = request.Host is { Length: > 0 } named ? named : throw new InvalidOperationException($"{request.Op} needs a host");
         var forwards = For(host)
-            ?? throw new InvalidOperationException("port forwarding needs OpenSSH control sockets, which this system does not have");
+            ?? throw new InvalidOperationException("port forwarding needs OpenSSH control sockets or ssh tunnels, and this fleet has neither");
 
         switch (request.Op)
         {

@@ -834,7 +834,7 @@ public static class EmbeddedWiring
         }
 
         var browser = new SystemBrowser();
-        return new ForwardOptions { ControlPath = ControlSocket, OpenBrowser = browser.Open };
+        return new ForwardOptions { ControlPath = ControlSocket, Tunnels = new TunnelProcesses(), OpenBrowser = browser.Open };
     }
 
     private static (DateTime At, IReadOnlyList<ProjectConfigDto> Configs) _configs = (DateTime.MinValue, []);
