@@ -407,6 +407,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private async Task ServeAsync(Stream stream, CancellationToken ct)
     {
         using var wire = new Wire(stream);
+        using var gone = new CancellationTokenSource();
         AttachSession? session = null;
 
         try
@@ -485,7 +486,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     session = null;
                 }
 
-                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, ct).ConfigureAwait(false);
+                await HandleAsync(wire, session, hello.Bridged, message.Type, message.Payload, gone.Token, ct).ConfigureAwait(false);
             }
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException
@@ -496,6 +497,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
         finally
         {
+            await gone.CancelAsync().ConfigureAwait(false);
+
             if (session is not null)
             {
                 Detach(session);
@@ -555,7 +558,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         !hello.Bridged || options.Iso() is not { On: true } iso || iso.MayAttachFrom(hello.Origin);
 
     private async Task HandleAsync(
-        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken ct)
+        Wire wire, AttachSession? session, bool bridged, MessageType type, byte[] payload, CancellationToken gone, CancellationToken ct)
     {
         switch (type)
         {
@@ -573,7 +576,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     if (request.Op == MenuWaitOp && !bridged)
                     {
-                        _ = Task.Run(() => AnswerMenuWaitAsync(wire, request, ct), CancellationToken.None);
+                        _ = Task.Run(() => AnswerMenuWaitAsync(wire, request, gone, ct), CancellationToken.None);
                         break;
                     }
 
@@ -835,7 +838,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private readonly Dictionary<string, TaskCompletionSource<string?>> _menuWaits = new(StringComparer.Ordinal);
 
-    private async Task AnswerMenuWaitAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    private async Task AnswerMenuWaitAsync(Wire wire, ControlRequest request, CancellationToken gone, CancellationToken ct)
     {
         TaskCompletionSource<string?>? waiting = null;
         lock (_gate)
@@ -862,12 +865,16 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 try
                 {
-                    response.Text = await waiting.Task.WaitAsync(ct).ConfigureAwait(false);
+                    response.Text = await waiting.Task.WaitAsync(gone).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                catch (OperationCanceledException) when (!gone.IsCancellationRequested)
                 {
                     response.Ok = false;
                     response.Error = $"{request.Caller} stopped waiting to open";
+                }
+                finally
+                {
+                    StopWaiting(request.Caller!, waiting);
                 }
             }
 
@@ -877,6 +884,18 @@ public sealed class FleetDaemon(DaemonOptions options)
         catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
         {
             options.Log($"could not answer {request.Op} for {request.Caller}: {e.Message}");
+        }
+    }
+
+    private void StopWaiting(string pane, TaskCompletionSource<string?> waiting)
+    {
+        lock (_gate)
+        {
+            if (_menuWaits.TryGetValue(pane, out var registered) && registered == waiting)
+            {
+                _menuWaits.Remove(pane);
+                options.Log($"{pane} no longer waits to open");
+            }
         }
     }
 

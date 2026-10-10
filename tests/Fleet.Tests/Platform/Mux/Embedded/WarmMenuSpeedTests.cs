@@ -229,6 +229,22 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_wait_whose_connection_drops_no_longer_takes_an_action()
+    {
+        var (_, client, warm) = await WarmAsync();
+        var menuSide = await DaemonTests.TestClient.ConnectAsync(_endpoint, ClientRoles.Control, 0, 0, null);
+        _ = WaitForOpen(menuSide, warm);
+        await Waiting(warm);
+
+        await menuSide.DisposeAsync();
+        await Logged($"{PaneOf(warm)} no longer waits to open");
+        await client.SendCommandAsync("menu", "switch-project");
+
+        await Eventually(() => Menus == 2);
+        Assert.Equal(["menu", "--project", "techweb", "--action", "switch-project"], _panes.Started.Last(p => p.Program == "fleet").Args);
+    }
+
+    [Fact]
     public async Task Only_a_parked_warm_menu_may_wait_to_be_opened()
     {
         var (control, client, warm) = await WarmAsync();
