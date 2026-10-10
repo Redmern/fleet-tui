@@ -2144,9 +2144,9 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
 
-    private readonly Dictionary<string, DateTime> _warmedAt = new(StringComparer.OrdinalIgnoreCase);
+    private readonly record struct Warmed(DateTime Wall, DateTimeOffset AgainFrom);
 
-    private readonly Dictionary<string, DateTimeOffset> _warmAgainFrom = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Warmed> _warmed = new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly TimeSpan WarmAgainAfter = TimeSpan.FromSeconds(2);
 
@@ -2165,9 +2165,9 @@ public sealed class FleetDaemon(DaemonOptions options)
     {
         try
         {
-            return _warmedAt.TryGetValue(workspace, out var at)
+            return _warmed.TryGetValue(workspace, out var warmed)
                 && File.Exists(options.FleetExecutable)
-                && File.GetLastWriteTimeUtc(options.FleetExecutable) > at;
+                && File.GetLastWriteTimeUtc(options.FleetExecutable) > warmed.Wall;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -2199,13 +2199,12 @@ public sealed class FleetDaemon(DaemonOptions options)
         foreach (var workspace in shown)
         {
             if (HasMenu(workspace)
-                || (_warmAgainFrom.TryGetValue(workspace, out var at) && options.Clock.GetUtcNow() - at < WarmAgainAfter))
+                || (_warmed.TryGetValue(workspace, out var warmed) && options.Clock.GetUtcNow() - warmed.AgainFrom < WarmAgainAfter))
             {
                 continue;
             }
 
-            _warmedAt[workspace] = DateTime.UtcNow;
-            _warmAgainFrom[workspace] = options.Clock.GetUtcNow();
+            _warmed[workspace] = new Warmed(DateTime.UtcNow, options.Clock.GetUtcNow());
             var (cols, rows) = _model.Clients
                 .Where(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
                 .Select(c => (c.Cols, c.Rows))
@@ -2615,7 +2614,10 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         if (closedMenuIn is not null)
         {
-            _warmAgainFrom.Remove(closedMenuIn);
+            if (_warmed.TryGetValue(closedMenuIn, out var warmed))
+            {
+                _warmed[closedMenuIn] = warmed with { AgainFrom = DateTimeOffset.MinValue };
+            }
         }
 
         if (_runtimes.Remove(id, out var runtime))
