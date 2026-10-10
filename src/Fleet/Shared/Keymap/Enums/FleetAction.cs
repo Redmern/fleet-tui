@@ -65,4 +65,5 @@ public enum FleetAction
     ShowVersion,
     WhatsNew,
     HideAllAgents,
+    OpenWebApp,
 }

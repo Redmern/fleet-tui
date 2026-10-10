@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
+using Fleet.Platform.Forwards;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
@@ -96,6 +97,8 @@ public static class EmbeddedWiring
             AlertSettings = () => Adapters.Notices().Settings() is var s ? (s.Bell, s.Toast) : (false, false),
             Toast = (title, body) => Platform.Notifications.DesktopToast.Show(title, body),
             Head = HeadWiring.ServeOrigin(Driver, log),
+            Forwards = ForwardWiring(log),
+            ProjectConfigs = ProjectConfigsCached,
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
@@ -714,7 +717,13 @@ public static class EmbeddedWiring
             RedirectStandardError = true,
         };
 
-        foreach (var arg in (string[])["-T", "-o", "ConnectTimeout=15", host, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet", "bridge"])
+        var socket = ControlSocket(host);
+        if (socket is not null)
+        {
+            ControlPaths.Reclaim(socket, ControlPaths.Answers);
+        }
+
+        foreach (var arg in RemoteSshArguments(host, socket, Environment.GetEnvironmentVariable(RemoteCommandVariable) ?? "fleet"))
         {
             start.ArgumentList.Add(arg);
         }
@@ -725,6 +734,76 @@ public static class EmbeddedWiring
         start.Environment[Endpoint.Variable] = home.Address;
         return start;
     }
+
+    public static IReadOnlyList<string> RemoteSshArguments(string host, string? controlPath, string remoteFleet) =>
+    [
+        "-T",
+        "-o", "ConnectTimeout=15",
+        .. controlPath is null ? [] : SshControl.MasterOptions(controlPath),
+        host,
+        remoteFleet,
+        "bridge",
+    ];
+
+    private static readonly Lazy<string?> ControlSockets = new(() =>
+    {
+        if (!ControlPaths.Supported)
+        {
+            return null;
+        }
+
+        try
+        {
+            return ControlPaths.Prepare(ControlPaths.Default());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    });
+
+    public static string? ControlSocket(string host) =>
+        ControlSockets.Value is { } directory && ControlPaths.For(directory, host) is var path && ControlPaths.Fits(path) ? path : null;
+
+    private static ForwardOptions ForwardWiring(IFleetLog log)
+    {
+        if (ControlSockets.Value is { } directory)
+        {
+            foreach (var stale in ControlPaths.CleanStale(directory, ControlPaths.Answers))
+            {
+                log.Write($"fleetd: removed the stale ssh control socket {stale}");
+            }
+        }
+
+        var browser = new SystemBrowser();
+        return new ForwardOptions { ControlPath = ControlSocket, OpenBrowser = browser.Open };
+    }
+
+    private static (DateTime At, IReadOnlyList<ProjectConfigDto> Configs) _configs = (DateTime.MinValue, []);
+
+    private static IReadOnlyList<ProjectConfigDto> ProjectConfigsCached()
+    {
+        var cached = _configs;
+        if (DateTime.UtcNow - cached.At < TimeSpan.FromSeconds(5))
+        {
+            return cached.Configs;
+        }
+
+        IReadOnlyList<ProjectConfigDto> fresh = [.. Adapters.Projects().List().Select(ProjectConfig)];
+        _configs = (DateTime.UtcNow, fresh);
+        return fresh;
+    }
+
+    public static ProjectConfigDto ProjectConfig(Project project) =>
+        new()
+        {
+            Name = project.Name,
+            Root = project.Root,
+            ForwardPorts = project.ForwardPorts is { Count: > 0 } ports ? [.. ports] : null,
+            RunCommand = project.RunCommand,
+            ReadyPort = project.ReadyPort,
+            HealthPath = project.HealthPath,
+        };
 
     private static RemoteChannel RemoteChannelOver(ProcessStartInfo start)
     {

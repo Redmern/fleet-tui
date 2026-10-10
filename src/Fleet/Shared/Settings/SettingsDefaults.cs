@@ -85,6 +85,12 @@ public static class SettingsDefaults
         HarnessTool.StopSub,
         HarnessTool.RemoveSub,
         HarnessTool.Report,
+        HarnessTool.ListForwards,
+        HarnessTool.ForwardPort,
+        HarnessTool.UnforwardPort,
+        HarnessTool.OpenUrl,
+        HarnessTool.StartStack,
+        HarnessTool.StopStack,
     ];
 
     public static ToolRule RuleFor(HarnessTool tool)
@@ -105,7 +111,8 @@ public static class SettingsDefaults
         or HarnessTool.RepositoryStatus
         or HarnessTool.LogTail
         or HarnessTool.ListSubs
-        or HarnessTool.Report;
+        or HarnessTool.Report
+        or HarnessTool.ListForwards;
 
     private static bool AllowedByDefault(HarnessTool tool) =>
         IsRead(tool)
@@ -114,7 +121,10 @@ public static class SettingsDefaults
             or HarnessTool.SetAgentVisible
             or HarnessTool.TellAgent
             or HarnessTool.DistributeSecrets
-            or HarnessTool.Dispatch;
+            or HarnessTool.Dispatch
+            or HarnessTool.ForwardPort
+            or HarnessTool.UnforwardPort
+            or HarnessTool.OpenUrl;
 
     public static string Describe(HarnessTool tool) => tool switch
     {
@@ -142,6 +152,12 @@ public static class SettingsDefaults
         HarnessTool.StopSub => "Stop a sub-orchestrator",
         HarnessTool.RemoveSub => "Remove a sub-orchestrator",
         HarnessTool.Report => "Report its own status",
+        HarnessTool.ListForwards => "List forwarded web ports",
+        HarnessTool.ForwardPort => "Forward a remote port to localhost",
+        HarnessTool.UnforwardPort => "Stop forwarding a remote port",
+        HarnessTool.OpenUrl => "Open a forwarded port in the browser",
+        HarnessTool.StartStack => "Run a remote project's stack",
+        HarnessTool.StopStack => "Stop a remote project's stack",
         _ => tool.ToString(),
     };
 }

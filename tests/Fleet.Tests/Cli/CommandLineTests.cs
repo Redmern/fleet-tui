@@ -18,6 +18,7 @@ public class CommandLineTests
     [InlineData("apply-keybinds", FleetVerb.ApplyKeybinds)]
     [InlineData("doctor", FleetVerb.Doctor)]
     [InlineData("theme", FleetVerb.Theme)]
+    [InlineData("forward", FleetVerb.Forward)]
     [InlineData("help", FleetVerb.Help)]
     [InlineData("--help", FleetVerb.Help)]
     [InlineData("-h", FleetVerb.Help)]

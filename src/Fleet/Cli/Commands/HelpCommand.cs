@@ -41,6 +41,16 @@ public static class HelpCommand
               fleet daemon                run fleetd in the foreground
               fleet daemon stop           stop fleetd and forget its projects (the next start opens only what you open)
               fleet bridge                ssh's remote end: pipe stdio to the local fleetd
+
+            remote web apps (over the remote link's ssh, binds 127.0.0.1 only):
+              fleet forward <host> <port> [--local <n>] [--open]  forward a remote port to localhost, open it
+              fleet forward ls            list forwarded and detected remote ports
+              fleet forward rm <host> <port>  stop forwarding a port
+              fleet forward start <host> <project> [--open]  run the project's runCommand there, forward, open
+              fleet forward stop <host> <project>  stop the stack fleet started
+              a project's config may list forwardPorts (forwarded automatically), runCommand, readyPort, healthPath
+              pitfalls: Vite allowedHosts/Host checks, HMR clientPort when the local port differs, shared
+              localhost cookies between projects, docker -p binding 0.0.0.0 on the remote
               prefix is ctrl+s (FLEET_PREFIX; keys in <fleet config>\embedded-keys.json), and it shows
               the keys: h/j/k/l focus, arrows resize, % " split, c new tab, n/p/1-9 tabs, z zoom,
               x/& close pane/tab, o next pane, s switch project, space menu, [ copy, ] paste,

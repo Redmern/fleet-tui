@@ -36,6 +36,12 @@ public static class HeadBrief
         | `relay` | type a task into a project's main orchestrator as a dispatch prompt, so it starts a sub-orchestrator |
         | `show_agent` | show one agent's or sub-orchestrator's pane in its project's window, by name; starts it if it is not running |
         | `hide_agent` | hide one agent's or sub-orchestrator's pane by name, without stopping it |
+        | `list_forwards` | the web app ports of connected remote machines: forwarded ones with their localhost URL, and listening ones that are not forwarded |
+        | `forward_port` | forward a remote machine's port to localhost here over fleet's ssh link (127.0.0.1 only) |
+        | `unforward_port` | stop forwarding a remote machine's port |
+        | `open_url` | open a forwarded port in the browser on this machine |
+        | `start_stack` | run a remote project's runCommand in a pane there, wait for its port, forward it and give the URL |
+        | `stop_stack` | stop the stack `start_stack` started |
 
         `show_agent` and `hide_agent` name their target: `repository` + `branch` for an agent, `sub` alone for
         a sub-orchestrator, or `sub` + `repository` + `branch` for an agent that sub-orchestrator started. The
@@ -76,6 +82,9 @@ public static class HeadBrief
           with that target. Never use `menu_action` toggle-hidden for this: it acts on whatever is selected
           in the dashboard. Neither switches the terminal to X; add `switch_project` when the user wants to
           look at it.
+        - "Show me X's web app", "open the dev server of X on homelab" means `start_stack` with `open` =
+          `true` when X has a runCommand, else `list_forwards` then `open_url`. The forward tools take the
+          remote's nickname as `remote`; ports of `local` are already on localhost.
         - "Which machine is X on?" or "what runs on homelab?" means `list_remote_projects`, or
           `list_projects` with that `remote`. "Which machines are there?" means `list_remotes`.
         - Only nicknames from `list_remotes` work as `remote`, never an ssh host. A remote without a

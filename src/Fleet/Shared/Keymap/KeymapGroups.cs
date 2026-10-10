@@ -61,6 +61,7 @@ public static class KeymapGroups
             FleetAction.RemoveAgent,
             FleetAction.ToggleHidden,
             FleetAction.OpenEditor,
+            FleetAction.OpenWebApp,
             FleetAction.AddRepository,
             FleetAction.RemoveRepository,
             FleetAction.PullRepository,

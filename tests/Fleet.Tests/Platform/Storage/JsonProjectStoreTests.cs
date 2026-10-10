@@ -32,6 +32,23 @@ public sealed class JsonProjectStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Forward_ports_and_the_run_command_round_trip_and_bad_ports_are_dropped()
+    {
+        var root = ARoot;
+        Store.Save(new Project("web", root, null, [5173, 0, 5173, 70000, 8080], "  npm run dev ", 5173, "/health"));
+        Store.Save(new Project("plain", root));
+
+        var web = Store.Load("web")!;
+
+        Assert.Equal([5173, 8080], web.Forwarded);
+        Assert.Equal("npm run dev", web.RunCommand);
+        Assert.Equal(5173, web.ReadyPort);
+        Assert.Equal("/health", web.HealthPath);
+        Assert.Empty(Store.Load("plain")!.Forwarded);
+        Assert.DoesNotContain("forwardPorts", File.ReadAllText(Path.Combine(FleetPaths.Projects, "plain.json")), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Save_then_Load_round_trips()
     {
         var root = ARoot;

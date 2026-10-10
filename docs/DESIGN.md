@@ -5830,6 +5830,40 @@ What the phases add up to:
   (`DashboardKeys.HideHint`, from the keymap, so it follows rebinding): one chip, fewer
   buttons, no lost key.
 
+## Remote web apps over the link's ssh, 2026-10-10
+
+- **The bridge ssh is the master.** `RemoteSsh` adds `ControlMaster=yes`, a private
+  `ControlPath` (`ControlPaths`: `$XDG_RUNTIME_DIR/fleet`, else `/tmp/fleet-<user>`, 0700,
+  `cm-<12 hex of the host>`, kept under 80 characters because ssh appends a 17-character
+  temp suffix and the socket limit is 104/108), `ControlPersist=no` and ServerAlive. A
+  second `ssh -N -M` would ask for the password again; reusing the link's process keeps
+  the one SSH_ASKPASS flow and dies with the link. Stale sockets (no listener) are deleted
+  when fleetd starts. Windows OpenSSH has no control sockets, so no forwards there.
+- **fleetd owns forwards** (`ForwardHub`, one `HostForwards` per host, kept across link
+  restarts). Every 3 s it runs `ss -ltnHp || cat /proc/net/tcp*` over the master
+  (`BatchMode`, never a prompt), and reconciles: wanted = allowlist of the remote's
+  *running* projects (their `forwardPorts`, read from the remote fleetd's new
+  `project-configs` op) minus ports the user removed, plus manual pins; active iff wanted
+  and listening. `-O forward`/`-O cancel -L 127.0.0.1:<local>:<target>:<remote>`; the
+  target follows where the app listens (`[::1]` when only IPv6 loopback). `LocalPorts`
+  is shared by all hosts, so two hosts' `3000` never collide; a forward keeps its local
+  port across reconnects.
+- **Refusals show up late.** `-O forward` succeeds even when sshd has
+  `AllowTcpForwarding no`; the master prints `channel N: open failed: administratively
+  prohibited` on the first connection. The link's stderr feeds `HostForwards.Prohibited`.
+- **Reconnect.** A link that ends with forwards open is reconnected with backoff
+  (5 s doubling to 1 min) and its forwards come back; disconnect drops them.
+- **The remote's dashboard.** A remote project's dashboard runs on the remote, so the local
+  fleetd reports its forwards to the remote (`viewer-forwards`), which lists them as
+  `Viewer` rows; `w` there sends `viewer-open`, which the remote turns into an `open-url`
+  host effect for that viewer, and the local fleetd opens its own browser on the mapped
+  port.
+- **Stacks.** `stack-start` opens the remote project, spawns `sh -lc <runCommand>` in it,
+  waits for `readyPort` to be forwarded and for `healthPath` to answer 2xx, and returns the
+  forward; `stack-stop` kills that pane. fleet only remembers stacks it started.
+- Verified against a real user-level sshd on 127.0.0.1 (`RealSshTests`, run with
+  `FLEET_SSH_IT_CONFIG`/`FLEET_SSH_IT_HOST`; skipped otherwise).
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
