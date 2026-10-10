@@ -97,43 +97,77 @@ public static class MenuCommand
         var keymaps = Adapters.Keymaps();
         var adder = new AddRepositoryHandler(Adapters.Git());
 
-        using IApplication app = FleetUi.Start();
+        FleetAction pick;
 
-        var keymap = new Keymap(keymaps.Load());
-
-        var chosen = requested;
-
-        while (true)
+        using (IApplication app = FleetUi.Start())
         {
-            if (chosen == FleetAction.None || FleetMenus.IsSubmenu(chosen))
+            var keymap = new Keymap(keymaps.Load());
+
+            var chosen = requested;
+            var switchedTo = FleetAction.None;
+            _ = SwitchWhenOpenedAsync(
+                app,
+                invocation.Action is null ? WarmMenuWiring.WaitForOpenAsync() : Task.FromResult<string?>(null),
+                action => switchedTo = action);
+
+            while (true)
             {
-                var submenu = chosen;
-
-                chosen = await ShowMenu(app, keymap, project, submenu).ConfigureAwait(false);
-
-                if (chosen == FleetAction.None && submenu != FleetAction.None && FleetModal.WentBack())
+                if (chosen == FleetAction.None || FleetMenus.IsSubmenu(chosen))
                 {
-                    chosen = FleetMenus.Parent(submenu);
+                    var submenu = chosen;
+
+                    chosen = await ShowMenu(app, keymap, project, submenu).ConfigureAwait(false);
+
+                    if (chosen == FleetAction.None && submenu != FleetAction.None && FleetModal.WentBack())
+                    {
+                        chosen = FleetMenus.Parent(submenu);
+                        continue;
+                    }
+
+                    if (chosen == FleetAction.None && submenu == FleetAction.None && switchedTo != FleetAction.None)
+                    {
+                        (chosen, switchedTo) = (switchedTo, FleetAction.None);
+                        if (chosen is FleetAction.OpenProject or FleetAction.NewProject)
+                        {
+                            pick = chosen;
+                            break;
+                        }
+
+                        continue;
+                    }
+
+                    if (chosen == FleetAction.None)
+                    {
+                        return 0;
+                    }
+
                     continue;
                 }
 
-                if (chosen == FleetAction.None)
+                var code = await Perform(app, keymap, keymaps, adder, projects, project, chosen).ConfigureAwait(false);
+
+                if (code != 0 || !FleetModal.WentBack())
                 {
-                    return 0;
+                    return code;
                 }
 
-                continue;
+                keymap = new Keymap(keymaps.Load());
+                chosen = Parent(chosen);
             }
+        }
 
-            var code = await Perform(app, keymap, keymaps, adder, projects, project, chosen).ConfigureAwait(false);
+        return await PickProjectCommand.RunAsync(startNew: pick == FleetAction.NewProject).ConfigureAwait(false);
+    }
 
-            if (code != 0 || !FleetModal.WentBack())
+    private static async Task SwitchWhenOpenedAsync(IApplication app, Task<string?> opened, Action<FleetAction> switchTo)
+    {
+        if (await opened.ConfigureAwait(false) is { } id && FleetActionIds.Parse(id) is var action and not FleetAction.None)
+        {
+            app.Invoke(() =>
             {
-                return code;
-            }
-
-            keymap = new Keymap(keymaps.Load());
-            chosen = Parent(chosen);
+                switchTo(action);
+                app.RequestStop();
+            });
         }
     }
 
