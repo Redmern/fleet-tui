@@ -3591,7 +3591,7 @@ for the prefix. `prefix s r` reloads the file.
 | `d` | detach |
 | `Q` | quit fleet (the menu's quit, as a float) |
 | `a` › `m l e f n` | **+agents**: dashboard / list agents / open editor / files / notifications |
-| `s` › `p w R d q r` | **+session**: switch project / save session / remotes / detach / detach / reload keys |
+| `s` › `p w R o d q r` | **+session**: switch project / save session / remotes / open port / detach / detach / reload keys |
 | `t` › `c n p 1–9 x` | **+tabs**: new tab / next / previous / go to tab / close tab (after a `y/n`) |
 | `g` › `k K t T` | **+configure**: edit keybinds / show keybinds / button hints / theme |
 | `g c` › `v V N i A C e H M S R p` | **+fleet config**: nvim toggles (main, subs, config) / auto-close / AI-DLC mode / Claude profile / edit fleet config / head, main, sub, agent model / permissions |

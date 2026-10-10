@@ -618,7 +618,7 @@ the floats). Every fleet menu action has a key there:
 |---|---|
 | top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
 | `a` agents | `m` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications |
-| `s` session | `p` switch project, `w` save session, `R` remotes, `d` / `q` detach, `r` reload keys |
+| `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
 | `g c` fleet config | `v` / `V` / `N` nvim toggles, `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
