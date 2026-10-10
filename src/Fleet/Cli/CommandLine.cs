@@ -79,6 +79,7 @@ public static class CommandLine
         "approve" => FleetVerb.Approve,
         "cli" => FleetVerb.Cli,
         "theme" => FleetVerb.Theme,
+        "iso" => FleetVerb.Iso,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         Shared.Constants.AgentHarness.WithEnvVerb => FleetVerb.WithEnv,
         "help" or "--help" or "-h" => FleetVerb.Help,

@@ -29,6 +29,9 @@ public static class HelpCommand
               fleet theme set <name>      switch theme; running fleet windows follow live
               fleet theme sync            follow omarchy's current theme
               fleet theme install omarchy hook omarchy's theme-set so fleet follows every switch
+              fleet iso on|off|status     ISO mode: other machines get status codes only (local terminal only)
+              fleet iso allow <host>      let <host> attach over ssh while ISO mode is on
+              fleet iso code <p> [<code>] show project <p> as <code> to other machines
               fleet version               show the version, and check for an update
               fleet update                download and install the latest release
               fleet update <v>            install a specific release instead of latest
