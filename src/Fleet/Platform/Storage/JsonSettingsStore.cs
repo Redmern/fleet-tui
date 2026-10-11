@@ -65,9 +65,11 @@ public sealed class JsonSettingsStore : ISettingsStore
                     ParseOnOff(stored.AutoClose, SettingsDefaults.AutoClose),
                     stored.AutoCloseMinutes,
                     ParsePolicy(stored.Merge, SettingsDefaults.Merge))
-                .MergedOverDefaults() with
             {
                 TodoTrigger = stored.TodoTrigger.Length == 0 ? SettingsDefaults.TodoTrigger : stored.TodoTrigger,
+            }
+                .MergedOverDefaults() with
+            {
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
                 SubagentGuidance = stored.SubagentGuidance ?? SettingsDefaults.SubagentGuidance,
                 Iso = stored.Iso ?? SettingsDefaults.Iso,

@@ -59,6 +59,11 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithTrigger(string trigger) => this with { Trigger = trigger };
 
+    public string? DispatchTriggerRefusal(string trigger) =>
+        TodoTrigger.Length > 0 && string.Equals(trigger, TodoTrigger, StringComparison.Ordinal)
+            ? $"'{trigger}' is the todo trigger; the dispatch trigger must differ."
+            : null;
+
     public Result<SettingsConfig> WithTodoTrigger(string trigger)
     {
         if (!DispatchTrigger.IsValid(trigger))

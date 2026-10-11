@@ -40,6 +40,13 @@ public class TodoTriggerSettingsTests
     }
 
     [Fact]
+    public void A_dispatch_trigger_equal_to_the_todo_trigger_is_refused()
+    {
+        Assert.Contains("todo trigger", SettingsConfig.Default.DispatchTriggerRefusal("+"));
+        Assert.Null(SettingsConfig.Default.DispatchTriggerRefusal(";"));
+    }
+
+    [Fact]
     public void A_todo_trigger_that_clashes_with_the_dispatch_trigger_turns_capture_off_when_merged()
     {
         var merged = (SettingsConfig.Default.WithTrigger("+") with { TodoTrigger = "+" }).MergedOverDefaults();
