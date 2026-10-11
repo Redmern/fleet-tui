@@ -295,7 +295,7 @@ draws the buttons in a float's or the dashboard's frame.
   its own project (`l` dispatches into that project), and `r` (and opening the board) pulls Jira
   for each project that has a `jira` block, one after the other; the status line lists each
   project's count or error. Projects without Jira make no network calls.
-- **Jira** (optional, Jira Cloud, pull only): give a project a `jira` block in
+- **Jira** (experimental: optional, Jira Cloud, pull only, and not yet tested against a real Jira instance): give a project a `jira` block in
   `~/.config/fleet/settings/<project>.json` and put an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens) in
   `~/.config/fleet/secrets/jira-<project>` (`chmod 600`; fleet refuses a file others can read).

@@ -4,17 +4,13 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
-## 0.8.0 (2026-10-11)
-
-- New **todo board**: capture ideas as tickets in `<project>/.fleet/todos` with a `+idea` prompt in the main pane (zero model turn), `fleet todo "idea"` or the `todo_add` MCP tool. The `+` sigil is the new per-project `todoTrigger` setting.
-- Open the board with `t` in the fleet menu or `ctrl+s a t`; `T` and `ctrl+s a T` show the tickets of all projects with a project column.
-- On the board, `enter` opens a ticket's markdown in nvim, `e` sets the effort (XS-XL), `x` closes it and `l` launches it as a sub-orchestrator; the ticket follows the sub's done or failed report.
-- Optional Jira Cloud pull sync: a `jira` block in the project settings plus a token in `secrets/jira-<project>` pulls your assigned issues when the board opens and on `r`. fleet never writes to Jira.
-
 ## 0.7.16 (2026-10-11)
 
 - **Go to dashboard** moved from `m` to `d`: `d` in the fleet menu and `ctrl+s a d` in the popup. Keys you rebound yourself in the keybinds editor or `embedded-keys.json` are unchanged.
 - Go to dashboard leaves the keyboard focus on the dashboard again instead of the main orchestrator's claude pane.
+- New **todo board**: capture ideas with a `+idea` prompt in the main pane, `fleet todo "idea"` or the `todo_add` MCP tool; open the board with `t` in the fleet menu or `ctrl+s a t` (`T` / `ctrl+s a T` for all projects), `enter` opens a ticket in nvim and `l` launches it as a sub-orchestrator.
+- **Experimental** Jira Cloud pull sync for the todo board: a `jira` block in the project settings and a token in `secrets/jira-<project>` pull your assigned issues; fleet never writes to Jira.
+- **Open port** and `forward_port` fall back to a background `ssh -N -L` tunnel where ssh control sockets are missing, such as Windows viewers.
 
 ## 0.7.15 (2026-10-10)
 
