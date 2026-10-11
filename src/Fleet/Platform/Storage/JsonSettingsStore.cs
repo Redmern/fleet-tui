@@ -67,6 +67,7 @@ public sealed class JsonSettingsStore : ISettingsStore
                     ParsePolicy(stored.Merge, SettingsDefaults.Merge))
                 .MergedOverDefaults() with
             {
+                TodoTrigger = stored.TodoTrigger.Length == 0 ? SettingsDefaults.TodoTrigger : stored.TodoTrigger,
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
                 SubagentGuidance = stored.SubagentGuidance ?? SettingsDefaults.SubagentGuidance,
                 Iso = stored.Iso ?? SettingsDefaults.Iso,
@@ -94,6 +95,7 @@ public sealed class JsonSettingsStore : ISettingsStore
         var stored = new SettingsFile
         {
             Trigger = SettingsDiff.TriggerAgainstDefault(config.Trigger),
+            TodoTrigger = SettingsDiff.TodoTriggerAgainstDefault(config.TodoTrigger),
             Commit = PolicyAgainstDefault(config.Commit, SettingsDefaults.Commit),
             Push = PolicyAgainstDefault(config.Push, SettingsDefaults.Push),
             Merge = PolicyAgainstDefault(config.Merge, SettingsDefaults.Merge),

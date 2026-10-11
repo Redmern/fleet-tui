@@ -8,6 +8,8 @@ public sealed class SettingsFile
 
     public string Trigger { get; set; } = string.Empty;
 
+    public string TodoTrigger { get; set; } = string.Empty;
+
     public string Commit { get; set; } = string.Empty;
 
     public string Push { get; set; } = string.Empty;

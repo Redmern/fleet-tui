@@ -7,6 +7,8 @@ public static class SettingsDefaults
 {
     public const string Trigger = ",";
 
+    public const string TodoTrigger = "+";
+
     public const ActionPolicy Commit = ActionPolicy.Ask;
 
     public const ActionPolicy Push = ActionPolicy.Ask;
