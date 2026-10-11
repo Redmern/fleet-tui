@@ -234,6 +234,7 @@ typed and only goes back once the field is empty; the key-capture dialog in **Ke
 │     p     Switch                     │
 │     l     List agents                │
 │     t     Todo board   ›             │
+│     T     All todos    ›             │
 │     f     Files                      │
 │     s     Settings     ›             │
 │                                      │
@@ -289,6 +290,11 @@ draws the buttons in a float's or the dashboard's frame.
   sub-orchestrator reports done the ticket is done; when it reports failed the ticket is open
   again with a `note`. Tickets that aren't open don't launch, and the status line says why. `r`
   re-reads the folder; the board also picks up edits made on disk every two seconds.
+- **All todos** (`T`, or `ctrl+s a T` from any pane) is the same board over every project fleet
+  knows, with a project column in front of the id. `enter`, `e`, `x` and `l` act on the ticket in
+  its own project (`l` dispatches into that project), and `r` (and opening the board) pulls Jira
+  for each project that has a `jira` block, one after the other; the status line lists each
+  project's count or error. Projects without Jira make no network calls.
 - **Jira** (optional, Jira Cloud, pull only): give a project a `jira` block in
   `~/.config/fleet/settings/<project>.json` and put an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens) in
@@ -682,7 +688,7 @@ the floats). Every fleet menu action has a key there:
 | Group | Keys |
 |---|---|
 | top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
-| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board |
+| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board, `T` todo board of all projects |
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
@@ -951,7 +957,10 @@ the orchestrator spins up a *sub-orchestrator*: its own Claude in a hidden pane,
 working under `<project>/.fleet/orchestrations/<slug>/`, with a file browser split
 alongside. A sub-orchestrator uses the same MCP tools under the same permissions,
 creates repo agents that are stamped as its own, and reports back with
-`fleet report`. The **Subs** tab (between Agents and Repositories) groups each
+`fleet report`. A prompt beginning with the todo trigger (`+` by default, `todoTrigger` in
+`settings/<project>.json`; it must differ from the dispatch trigger) files the rest as a ticket
+on the todo board instead, with no model turn; `+<project>: idea` files it under
+that project. Orchestrators can do the same with the `todo_add` MCP tool. The **Subs** tab (between Agents and Repositories) groups each
 sub-orchestrator with the agents it created and shows its status as an icon — working,
 waiting for input, idle, stalled, done or failed; hover it for the name — until you
 remove it. Agent rows on the Agents tab use the same icons. A sub's report is not sent to
