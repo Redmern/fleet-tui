@@ -736,7 +736,10 @@ public sealed class FleetDaemon(DaemonOptions options)
                 options.Log($"{response.Viewer} cannot forward {port} ({response.ForwardResult.Reason}); falling back to the ssh command");
                 lock (_gate)
                 {
-                    _cannotForward.Add(waiting.Viewer);
+                    if (_sessions.ContainsKey(waiting.Viewer))
+                    {
+                        _cannotForward.Add(waiting.Viewer);
+                    }
                 }
 
                 response.Viewer = null;
@@ -2047,7 +2050,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         if (effect.Kind == HostEffects.OpenUrl)
         {
-            _hub.Open(link, effect.Value);
+            _ = Task.Run(() => _hub.Open(link, effect.Value), CancellationToken.None);
             return;
         }
 
