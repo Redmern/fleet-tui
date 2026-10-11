@@ -6,6 +6,7 @@ using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
+using Fleet.Shared.Constants;
 using Fleet.Tests.Platform.Forwards;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
@@ -253,6 +254,73 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         Assert.NotNull(sent.Viewer);
         Assert.Equal(ForwardResults.NoAnswer, sent.ForwardResult?.State);
         Assert.Equal("http://localhost:5173", sent.ForwardResult?.Url);
+    }
+
+    [Fact]
+    public async Task A_fleet_viewer_on_another_build_that_never_answers_names_both_builds()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            {
+                hello.Label = RemoteLink.Label("laptop");
+                hello.Build = "0.0.1";
+            });
+
+        var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+
+        Assert.Equal(ForwardResults.NoAnswer, sent.ForwardResult?.State);
+        Assert.Contains("0.0.1", sent.ForwardResult?.Reason, StringComparison.Ordinal);
+        Assert.Contains(FleetVersion.Current, sent.ForwardResult?.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_fleet_viewer_on_the_same_build_that_never_answers_gives_no_build_reason()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            {
+                hello.Label = RemoteLink.Label("laptop");
+                hello.Build = FleetVersion.Current;
+            });
+
+        var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+
+        Assert.Equal(ForwardResults.NoAnswer, sent.ForwardResult?.State);
+        Assert.Null(sent.ForwardResult?.Reason);
+    }
+
+    [Fact]
+    public async Task A_fleet_viewer_that_cannot_handle_the_forward_gets_the_ssh_command_from_then_on()
+    {
+        const string ssh = "10.0.0.5 52000 10.0.0.9 22";
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            {
+                hello.Label = RemoteLink.Label("laptop");
+                hello.Ssh = ssh;
+            });
+
+        var asking = client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+        await Eventually(() => Task.FromResult(client.Effects.Any(e => e is { Kind: HostEffects.ForwardPort, Reply: not null })));
+        var reply = client.Effects.First(e => e.Kind == HostEffects.ForwardPort).Reply;
+        await using var viewer = await DaemonTests.TestClient.ConnectAsync(_far, ClientRoles.Control, 0, 0, null);
+        await viewer.RequestAsync(new ControlRequest
+        {
+            Op = ForwardHub.ViewerForwardedOp,
+            Reply = reply,
+            ForwardResult = new ForwardResultDto { State = ForwardResults.Unsupported, Url = "http://localhost:5173", Reason = "laptop cannot" },
+        });
+
+        var sent = await asking;
+
+        Assert.Null(sent.Viewer);
+        Assert.Equal(ssh, sent.Ssh);
+        Assert.Equal(ForwardResults.Unsupported, sent.ForwardResult?.State);
+        Assert.Equal("laptop cannot", sent.ForwardResult?.Reason);
+
+        var again = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+        Assert.Null(again.Viewer);
+        Assert.Equal(ssh, again.Ssh);
     }
 
     [Fact]

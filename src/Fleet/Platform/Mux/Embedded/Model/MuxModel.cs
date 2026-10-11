@@ -1544,6 +1544,8 @@ public sealed class ClientState(string id)
     public bool Leaving { get; set; }
 
     public string? Label { get; set; }
+
+    public string? Build { get; set; }
 }
 
 public enum HeadToggle

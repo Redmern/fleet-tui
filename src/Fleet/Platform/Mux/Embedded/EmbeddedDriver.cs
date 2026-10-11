@@ -241,6 +241,7 @@ public sealed class EmbeddedDriver(
                     ForwardResults.Pending => ViewerForwardState.Pending,
                     ForwardResults.BrowserFailed => ViewerForwardState.BrowserFailed,
                     ForwardResults.NoAnswer => ViewerForwardState.NoAnswer,
+                    ForwardResults.Unsupported => ViewerForwardState.Unsupported,
                     _ => ViewerForwardState.Failed,
                 },
                 result.Url,

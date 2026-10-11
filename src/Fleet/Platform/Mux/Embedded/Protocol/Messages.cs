@@ -301,6 +301,7 @@ public static class ForwardResults
     public const string Failed = "failed";
     public const string BrowserFailed = "browser-failed";
     public const string NoAnswer = "no-answer";
+    public const string Unsupported = "unsupported";
 }
 
 public sealed class ForwardResultDto
