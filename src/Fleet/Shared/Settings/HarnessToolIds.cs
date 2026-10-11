@@ -40,6 +40,7 @@ public static class HarnessToolIds
         HarnessTool.StartStack => "start_stack",
         HarnessTool.StopStack => "stop_stack",
         HarnessTool.SyncToRemote => "sync_to_remote",
+        HarnessTool.TodoAdd => "todo_add",
         _ => string.Empty,
     };
 

@@ -24,6 +24,7 @@ using Fleet.Features.Repositories.PullRepository;
 using Fleet.Features.Repositories.RemoveRepository;
 using Fleet.Features.Repositories.Secrets;
 using Fleet.Features.Repositories.SetDefaultBranch;
+using Fleet.Features.Todos.AddTodo;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
@@ -39,6 +40,7 @@ using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Todos;
 
 namespace Fleet.Cli.Composition;
 
@@ -123,6 +125,7 @@ public sealed class McpActions(
             HarnessTool.OpenUrl => await Forward(request, ForwardVerb.Open, ct).ConfigureAwait(false),
             HarnessTool.StartStack => await Forward(request, ForwardVerb.Start, ct).ConfigureAwait(false),
             HarnessTool.StopStack => await Forward(request, ForwardVerb.Stop, ct).ConfigureAwait(false),
+            HarnessTool.TodoAdd => TodoAdd(request),
             _ => McpResult.Error($"{request.Tool} is not available."),
         };
     }
@@ -666,6 +669,30 @@ public sealed class McpActions(
         }
 
         return reported.Succeeded ? Ok(reported.Value!) : McpResult.Error(reported.Error!);
+    }
+
+    private McpResult TodoAdd(McpRequest request)
+    {
+        if (Missing(request, ToolArguments.Title) is { } error)
+        {
+            return error;
+        }
+
+        var added = new AddTodoHandler(Adapters.Todos()).HandleTool(
+            root,
+            ToolArguments.Text(request, ToolArguments.Title),
+            ToolArguments.Text(request, ToolArguments.Body),
+            ToolArguments.Text(request, ToolArguments.Effort),
+            DateTimeOffset.UtcNow);
+
+        if (!added.Succeeded)
+        {
+            return McpResult.Error(added.Error!);
+        }
+
+        log.Write(LogTag.For(project, $"{caller} added todo {added.Value.Id}"));
+
+        return Ok($"added todo {added.Value.Id} ({TodoPaths.File(root, added.Value.Id)}).");
     }
 
     private Task<RepositorySummary?> Resolve(McpRequest request, CancellationToken ct) =>

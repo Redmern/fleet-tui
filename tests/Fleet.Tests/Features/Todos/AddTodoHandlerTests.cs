@@ -53,6 +53,29 @@ public class AddTodoHandlerTests
         Assert.Equal(TicketEffort.L, ticket.Effort);
     }
 
+    [Theory]
+    [InlineData("xl", TicketEffort.XL)]
+    [InlineData(" S ", TicketEffort.S)]
+    [InlineData("", null)]
+    public void A_tool_call_reads_its_effort_from_text(string effort, TicketEffort? expected)
+    {
+        var added = Handler.HandleTool("/p", "Title", "body", effort, Now);
+
+        Assert.True(added.Succeeded, added.Error);
+        Assert.Equal(expected, _store.Added.Single().Effort);
+        Assert.Equal("Title", _store.Added.Single().Title);
+    }
+
+    [Fact]
+    public void A_tool_call_with_an_unknown_effort_is_refused()
+    {
+        var added = Handler.HandleTool("/p", "Title", string.Empty, "huge", Now);
+
+        Assert.False(added.Succeeded);
+        Assert.Contains("XS, S, M, L or XL", added.Error);
+        Assert.Empty(_store.Added);
+    }
+
     [Fact]
     public void A_title_without_a_body_leaves_the_body_empty()
     {

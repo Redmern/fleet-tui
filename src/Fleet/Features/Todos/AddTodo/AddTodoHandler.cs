@@ -1,6 +1,7 @@
 using Fleet.Features.Todos.AddTodo.Models;
 using Fleet.Ports.Todos;
 using Fleet.Shared.Results;
+using Fleet.Shared.Todos;
 using Fleet.Shared.Todos.Enums;
 using Fleet.Shared.Todos.Models;
 
@@ -30,6 +31,20 @@ public sealed class AddTodoHandler(ITodoStore store)
             body.Length == 0 ? string.Empty : body + "\n");
 
         return store.Add(command.ProjectRoot, draft);
+    }
+
+    public Result<Ticket> HandleTool(string projectRoot, string title, string body, string effort, DateTimeOffset now)
+    {
+        var parsed = TicketWords.Effort(effort);
+
+        if (effort.Trim().Length > 0 && parsed is null)
+        {
+            return Result<Ticket>.Fail($"effort '{effort.Trim()}' is not one of XS, S, M, L or XL.");
+        }
+
+        return title.Trim().Length == 0
+            ? Result<Ticket>.Fail("a todo needs a title.")
+            : Handle(new AddTodoCommand(projectRoot, body, title, parsed), now);
     }
 
     private static string FirstLine(string text) =>

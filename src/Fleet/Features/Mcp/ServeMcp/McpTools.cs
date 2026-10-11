@@ -195,6 +195,12 @@ public static class McpTools
             Project,
             new ToolParam(ToolArguments.Open, "boolean", "true to open the URL in the browser once it is up.", false)),
         Spec(HarnessTool.StopStack, "Stop the stack start_stack started.", Remote, Project),
+        Spec(
+            HarnessTool.TodoAdd,
+            "File an idea as a todo ticket in this project's .fleet/todos, without starting any work. Returns the ticket id.",
+            new ToolParam(ToolArguments.Title, "string", "The ticket's title, one line.", true),
+            new ToolParam(ToolArguments.Body, "string", "Optional: the ticket's markdown body.", false),
+            new ToolParam(ToolArguments.Effort, "string", "Optional: XS, S, M, L or XL.", false)),
     ];
 
     public static ToolSpec? Find(string name)

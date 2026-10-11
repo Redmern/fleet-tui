@@ -95,6 +95,7 @@ public static class SettingsDefaults
         HarnessTool.OpenUrl,
         HarnessTool.StartStack,
         HarnessTool.StopStack,
+        HarnessTool.TodoAdd,
     ];
 
     public static ToolRule RuleFor(HarnessTool tool)
@@ -124,7 +125,8 @@ public static class SettingsDefaults
             or HarnessTool.SetAgentVisible
             or HarnessTool.TellAgent
             or HarnessTool.DistributeSecrets
-            or HarnessTool.Dispatch;
+            or HarnessTool.Dispatch
+            or HarnessTool.TodoAdd;
 
     public static string Describe(HarnessTool tool) => tool switch
     {
@@ -159,6 +161,7 @@ public static class SettingsDefaults
         HarnessTool.StartStack => "Run a remote project's stack",
         HarnessTool.StopStack => "Stop a remote project's stack",
         HarnessTool.SyncToRemote => "Send work to another machine",
+        HarnessTool.TodoAdd => "Add a todo ticket",
         _ => tool.ToString(),
     };
 }
