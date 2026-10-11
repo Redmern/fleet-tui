@@ -142,43 +142,25 @@ public sealed class NewAgentHandler(
     private async Task<RoleModel> RoutedModel(NewAgentCommand command, string branch, CancellationToken ct)
     {
         var task = command.Task.Trim();
-        var routed = task.Length == 0
-            ? null
-            : await RouteOrNull(new ModelRoutingRequest(task, null, false, command.RepositoryName), ct)
-                .ConfigureAwait(false);
 
-        if (routed is not null && ModelRouting.IsValid(routed))
+        if (task.Length == 0)
         {
-            return routed;
+            return SettingsDefaults.AgentModel;
         }
 
-        var fallback = SettingsDefaults.AgentModel;
+        var routed = await router
+            .TryChooseAsync(new ModelRoutingRequest(task, null, false, command.RepositoryName), log, ct)
+            .ConfigureAwait(false);
 
-        if (task.Length > 0)
+        var outcome = ModelRouting.OrFallback(
+            routed, SettingsDefaults.AgentModel, $"agent {command.RepositoryName}/{branch}");
+
+        if (outcome.LogLine is not null)
         {
-            log?.Write(
-                $"model router gave no answer for agent {command.RepositoryName}/{branch}; using {fallback.Model}/{fallback.Effort}");
+            log?.Write(outcome.LogLine);
         }
 
-        return fallback;
-    }
-
-    private async Task<RoleModel?> RouteOrNull(ModelRoutingRequest request, CancellationToken ct)
-    {
-        if (router is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            return await router.ChooseAsync(request, ct).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
-        {
-            log?.Swallowed(e);
-            return null;
-        }
+        return outcome.Model;
     }
 
     private async Task SeedSecretsAsync(
