@@ -71,6 +71,8 @@ public static class KeymapDefaults
             [FleetAction.WhatsNew] = "W",
             [FleetAction.HideAllAgents] = "X",
             [FleetAction.OpenWebApp] = "w",
+            [FleetAction.TodoBoard] = "t",
+            [FleetAction.TodoBoardAll] = "T",
         };
 
     public static IReadOnlyList<FleetAction> Configurable { get; } =
@@ -132,6 +134,8 @@ public static class KeymapDefaults
             FleetAction.HideAllAgents => "hide all",
             FleetAction.OpenWebApp => "web app",
             FleetAction.OpenPort => "open port",
+            FleetAction.TodoBoard => "todos",
+            FleetAction.TodoBoardAll => "all todos",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -202,6 +206,8 @@ public static class KeymapDefaults
             FleetAction.HideAllAgents => "Hide all agents",
             FleetAction.OpenWebApp => "Open the project's web app in the browser",
             FleetAction.OpenPort => "Open port",
+            FleetAction.TodoBoard => "Todo board",
+            FleetAction.TodoBoardAll => "Todo board of all projects",
             _ => action.ToString(),
         };
 }

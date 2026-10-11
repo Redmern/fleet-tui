@@ -16,6 +16,9 @@ public static class HelpCommand
               fleet setup                 first run: check what is missing
               fleet dispatch --project <p> "<task>"
                                           spin up a hidden sub-orchestrator for a task
+              fleet todo [--project <p>] "<idea>"
+                                          file an idea as a ticket in <project>/.fleet/todos;
+                                          a main-pane prompt starting with + (todoTrigger) does the same
               fleet apply-keybinds        write the keybinds: nvim and Claude
                 [--target nvim|claude]    only that target
                 [--dry-run]               show what would change, write nothing
@@ -56,7 +59,8 @@ public static class HelpCommand
               the keys: h/j/k/l focus, arrows resize, % " split, x close pane, z zoom, o next pane,
               space menu, [ copy, ] paste, d detach, Q quit fleet; ctrl+s again sends ctrl+s
               groups (ctrl+s, then the group key, then the key):
-                a agents       d dashboard, l list agents, e open editor, f files, n notifications
+                a agents       d dashboard, l list agents, e open editor, f files,
+                               n notifications, t todo board, T todo board of all projects
                                (dashboard was m; keys you rebound yourself are kept)
                 s session      p switch project, w save session, R remotes, o open port, d/q detach, r reload keys
                 t tabs         c new, n next, p previous, 1-9 go to tab, x close tab

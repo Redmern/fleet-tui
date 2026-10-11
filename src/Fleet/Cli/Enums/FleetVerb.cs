@@ -10,6 +10,8 @@ public enum FleetVerb
     Setup,
     Dispatch,
     HookDispatch,
+    Todo,
+    HookTodo,
     Hook,
     Report,
     Mcp,

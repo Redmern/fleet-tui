@@ -106,6 +106,17 @@ public sealed class McpToolsTests
     }
 
     [Fact]
+    public void Todo_add_takes_a_required_title_and_an_optional_body_and_effort()
+    {
+        var spec = McpTools.Find("todo_add")!;
+
+        Assert.Equal(HarnessTool.TodoAdd, spec.Tool);
+        Assert.True(spec.Params.Single(p => p.Name == "title").Required);
+        Assert.False(spec.Params.Single(p => p.Name == "body").Required);
+        Assert.False(spec.Params.Single(p => p.Name == "effort").Required);
+    }
+
+    [Fact]
     public void Remove_sub_takes_a_slug_and_two_optional_flags()
     {
         var remove = McpTools.Find("remove_sub")!;

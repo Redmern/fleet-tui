@@ -58,6 +58,12 @@ public static class EditSettingsView
                 return;
             }
 
+            if (config.DispatchTriggerRefusal(trigger) is { } refusal)
+            {
+                status.Text = refusal;
+                return;
+            }
+
             Persist(config.WithTrigger(trigger), $"The dispatch trigger is now '{trigger}'.");
             Refill(0);
         }

@@ -5,7 +5,8 @@ public sealed record ClaudeState(
     bool ServerEnabled,
     bool HookInstalled,
     IReadOnlyList<string> Allow,
-    bool StatusHooksInstalled = false)
+    bool StatusHooksInstalled = false,
+    bool TodoHookInstalled = false)
 {
     public static readonly ClaudeState Absent = new(false, false, false, []);
 }

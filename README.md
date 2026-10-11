@@ -162,6 +162,9 @@ fleet mcp --head            serve the head orchestrator's cross-project tools
 fleet head [--voice]        run the head orchestrator's Claude (the alt+o chord does this)
 fleet dispatch "<task>" --project <name>
                             spin up a sub-orchestrator for a task
+fleet todo "<idea>" [--project <name>]
+                            file an idea as a ticket in <project>/.fleet/todos (a `+` prompt
+                            in the main pane does the same, `+<project>: idea` files it there)
 fleet report --caller <slug> --status <s> --project <name> -- <summary>
                             a sub-orchestrator reports its own status
 fleet doctor                check the environment
@@ -230,6 +233,8 @@ typed and only goes back once the field is empty; the key-capture dialog in **Ke
 │     d     Dashboard                  │
 │     p     Switch                     │
 │     l     List agents                │
+│     t     Todo board   ›             │
+│     T     All todos    ›             │
 │     f     Files                      │
 │     s     Settings     ›             │
 │                                      │
@@ -274,6 +279,48 @@ draws the buttons in a float's or the dashboard's frame.
 - **Notifications** (`n`) opens the notification center: an **All** tab and one tab per
   project, switched with `h`/`l` or the arrows. `enter` goes to the agent, `d` dismisses the selected notice, `D` all shown ones,
   `b` turns the terminal bell on or off and `t` the desktop toasts.
+- **Todo board** (`t`, or `ctrl+s a t` from any pane) lists the project's tickets from
+  `.fleet/todos`: id, title, effort, status and source, open ones first, then in-progress, done
+  and closed, newest first within each. `enter` (or a click on the selected row, or a double
+  click) opens the ticket's markdown in an nvim pane with fleet's nvim config, focusing it when it
+  is already open and splitting beside an open ticket otherwise; `e` cycles the effort
+  (XS, S, M, L, XL, unset) and `x` closes the ticket, both saved straight to its file, which is
+  never deleted. `l` launches an open ticket: its body goes to a new sub-orchestrator as the
+  task, and the ticket turns in-progress with `orchestration: <slug>` in its file. When that
+  sub-orchestrator reports done the ticket is done; when it reports failed the ticket is open
+  again with a `note`. Tickets that aren't open don't launch, and the status line says why. `r`
+  re-reads the folder; the board also picks up edits made on disk every two seconds.
+- **All todos** (`T`, or `ctrl+s a T` from any pane) is the same board over every project fleet
+  knows, with a project column in front of the id. `enter`, `e`, `x` and `l` act on the ticket in
+  its own project (`l` dispatches into that project), and `r` (and opening the board) pulls Jira
+  for each project that has a `jira` block, one after the other; the status line lists each
+  project's count or error. Projects without Jira make no network calls.
+- **Jira** (experimental: optional, Jira Cloud, pull only, and not yet tested against a real Jira instance): give a project a `jira` block in
+  `~/.config/fleet/settings/<project>.json` and put an
+  [API token](https://id.atlassian.com/manage-profile/security/api-tokens) in
+  `~/.config/fleet/secrets/jira-<project>` (`chmod 600`; fleet refuses a file others can read).
+
+  ```json
+  {
+    "jira": {
+      "baseUrl": "https://acme.atlassian.net",
+      "email": "me@acme.com",
+      "jql": "assignee = currentUser() AND resolution = EMPTY",
+      "storyPointsField": "customfield_10016"
+    }
+  }
+  ```
+
+  `baseUrl` (https) and `email` are required; `jql` and `storyPointsField` default to the values
+  shown. When the board opens and on `r`, fleet pulls the matching issues in the background and
+  writes each one to `.fleet/todos/<KEY>.md` (source jira); the status line says how many it
+  synced or why the pull failed, and the cached tickets stay on the board. Jira owns the title
+  and the text between `<!-- jira:start -->` and `<!-- jira:end -->`; effort, status, note and
+  anything you write outside those markers are yours and survive every pull. Story points set
+  the effort once, when the ticket is first pulled (1 XS, 2 S, 3-4 M, 5-7 L, 8+ XL). An issue
+  done in Jira, or no longer matched by the query, is closed with `jira-closed: done|query` (its
+  file is kept) and opens again if it comes back; a ticket you closed yourself stays closed. fleet never writes to Jira, never logs the token, and without a `jira`
+  block it makes no network calls.
 
 ### Remote machines
 
@@ -641,7 +688,7 @@ the floats). Every fleet menu action has a key there:
 | Group | Keys |
 |---|---|
 | top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
-| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications |
+| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board, `T` todo board of all projects |
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
@@ -910,7 +957,10 @@ the orchestrator spins up a *sub-orchestrator*: its own Claude in a hidden pane,
 working under `<project>/.fleet/orchestrations/<slug>/`, with a file browser split
 alongside. A sub-orchestrator uses the same MCP tools under the same permissions,
 creates repo agents that are stamped as its own, and reports back with
-`fleet report`. The **Subs** tab (between Agents and Repositories) groups each
+`fleet report`. A prompt beginning with the todo trigger (`+` by default, `todoTrigger` in
+`settings/<project>.json`; it must differ from the dispatch trigger) files the rest as a ticket
+on the todo board instead, with no model turn; `+<project>: idea` files it under
+that project. Orchestrators can do the same with the `todo_add` MCP tool. The **Subs** tab (between Agents and Repositories) groups each
 sub-orchestrator with the agents it created and shows its status as an icon — working,
 waiting for input, idle, stalled, done or failed; hover it for the name — until you
 remove it. Agent rows on the Agents tab use the same icons. A sub's report is not sent to

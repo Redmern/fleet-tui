@@ -34,6 +34,12 @@ public sealed class ClaudePermissionPlannerTests
     }
 
     [Fact]
+    public void Adding_a_todo_is_allowed_on_the_claude_side_by_default()
+    {
+        Assert.Contains("mcp__fleet__todo_add", ClaudePermissionPlanner.Plan(SettingsConfig.Default).Allow);
+    }
+
+    [Fact]
     public void A_fleet_dialog_ask_is_allowed_on_the_claude_side_so_the_call_reaches_fleets_gate()
     {
         var settings = SettingsConfig.Default

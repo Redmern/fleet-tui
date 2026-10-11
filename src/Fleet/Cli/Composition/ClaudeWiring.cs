@@ -51,7 +51,8 @@ public static class ClaudeWiring
             [server.Name],
             Adapters.Executable,
             ["hook-dispatch", "--project", project],
-            StatusHook(settings));
+            StatusHook(settings),
+            TodoHookArgs(project, settings));
 
         var writer = new ClaudeConfigWriter();
 
@@ -92,6 +93,11 @@ public static class ClaudeWiring
         return new ClaudeConfigWriter()
             .SyncWorktree(server, folder, permissions.Allow, permissions.Deny, permissions.Ask, StatusHook(settings));
     }
+
+    public const string TodoHookVerb = "hook-todo";
+
+    public static IReadOnlyList<string>? TodoHookArgs(string project, SettingsConfig settings) =>
+        settings.TodoTrigger.Length > 0 ? [TodoHookVerb, "--project", project] : null;
 
     private static string StatusHook(SettingsConfig settings) =>
         settings.StatusHooks ? Adapters.Executable : string.Empty;

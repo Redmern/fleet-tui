@@ -1,3 +1,4 @@
+using Fleet.Shared.Results;
 using Fleet.Shared.Settings.Enums;
 
 namespace Fleet.Shared.Settings.Models;
@@ -24,6 +25,8 @@ public sealed record SettingsConfig(
         SettingsDefaults.SubOrchestratorsInNvim,
         Merge: SettingsDefaults.Merge);
 
+    public string TodoTrigger { get; init; } = SettingsDefaults.TodoTrigger;
+
     public bool StatusHooks { get; init; } = SettingsDefaults.StatusHooks;
 
     public bool SubagentGuidance { get; init; } = SettingsDefaults.SubagentGuidance;
@@ -36,6 +39,8 @@ public sealed record SettingsConfig(
     public ButtonHints ButtonHints { get; init; } = SettingsDefaults.ButtonHints;
 
     public RoleModels Models { get; init; } = SettingsDefaults.Models;
+
+    public JiraSettings? Jira { get; init; }
 
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
@@ -55,6 +60,23 @@ public sealed record SettingsConfig(
     }
 
     public SettingsConfig WithTrigger(string trigger) => this with { Trigger = trigger };
+
+    public string? DispatchTriggerRefusal(string trigger) =>
+        TodoTrigger.Length > 0 && string.Equals(trigger, TodoTrigger, StringComparison.Ordinal)
+            ? $"'{trigger}' is the todo trigger; the dispatch trigger must differ."
+            : null;
+
+    public Result<SettingsConfig> WithTodoTrigger(string trigger)
+    {
+        if (!DispatchTrigger.IsValid(trigger))
+        {
+            return Result<SettingsConfig>.Fail("The todo trigger must be one symbol, not a letter, digit or space.");
+        }
+
+        return string.Equals(trigger, Trigger, StringComparison.Ordinal)
+            ? Result<SettingsConfig>.Fail($"The todo trigger cannot be the dispatch trigger '{Trigger}'.")
+            : Result<SettingsConfig>.Ok(this with { TodoTrigger = trigger });
+    }
 
     public SettingsConfig WithCommit(ActionPolicy policy) => this with { Commit = policy };
 
@@ -98,8 +120,11 @@ public sealed record SettingsConfig(
             }
         }
 
+        var trigger = DispatchTrigger.IsValid(Trigger) ? Trigger : SettingsDefaults.Trigger;
+        var todoTrigger = DispatchTrigger.IsValid(TodoTrigger) ? TodoTrigger : SettingsDefaults.TodoTrigger;
+
         return new SettingsConfig(
-            DispatchTrigger.IsValid(Trigger) ? Trigger : SettingsDefaults.Trigger,
+            trigger,
             rules,
             Commit,
             Push,
@@ -110,6 +135,7 @@ public sealed record SettingsConfig(
             AutoCloseMinutes > 0 ? AutoCloseMinutes : SettingsDefaults.AutoCloseMinutes,
             Merge)
         {
+            TodoTrigger = todoTrigger == trigger ? string.Empty : todoTrigger,
             StatusHooks = StatusHooks,
             SubagentGuidance = SubagentGuidance,
             ShowMenuKeys = ShowMenuKeys,
@@ -117,6 +143,7 @@ public sealed record SettingsConfig(
             Nvim = Nvim,
             ButtonHints = ButtonHints,
             Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
+            Jira = Jira,
         };
     }
 

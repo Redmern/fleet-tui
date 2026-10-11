@@ -12,9 +12,13 @@ using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Models;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.ShowMenu;
+using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Features.Themes.ManageThemes;
+using Fleet.Features.Todos.LaunchTicket;
+using Fleet.Features.Todos.SyncJira;
+using Fleet.Platform.Jira;
 using Fleet.Platform.Nvim;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Hooks;
@@ -36,9 +40,11 @@ using Fleet.Ports.Releases;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
+using Fleet.Ports.Todos;
 using Fleet.Platform.Releases;
 using Fleet.Shared;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Results;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Themes;
@@ -127,9 +133,11 @@ public static class Adapters
         return new StdioMcpServer(Console.In, stdout, log);
     }
 
-    public static (string Text, string? Cwd) ReadHookPayload()
+    public static (string Text, string? Cwd) ReadHookPayload() => ReadHookPayload(Console.In);
+
+    public static (string Text, string? Cwd) ReadHookPayload(TextReader input)
     {
-        var payload = HookIo.Read(Console.In);
+        var payload = HookIo.Read(input);
 
         return (payload.Text, payload.Cwd);
     }
@@ -171,6 +179,14 @@ public static class Adapters
     public static Ports.Forwards.IListenerProbe ListenerProbe() => new Platform.Forwards.TcpListenerProbe();
 
     public static IDispatchHistory History() => new FileDispatchHistory();
+
+    public static ITodoStore Todos() => new FileTodoStore();
+
+    public static ITicketStatusSink TicketStatus() => new TicketFollowUp(Todos());
+
+    public static IDispatcher Dispatcher(IMuxDriver mux) =>
+        new SubDispatcher(new DispatchHandler(
+            mux, Agents(), HarnessConfig(), history: History(), namer: SlugNamer(), settings: Settings(), intents: Intents()));
 
     public static IIntentStore Intents() => new JsonIntentStore();
 

@@ -15,7 +15,9 @@ public interface IClaudeConfigStore
         IReadOnlyList<string> allow,
         IReadOnlyList<string> deny,
         IReadOnlyList<string> ask,
-        string statusHook = "");
+        string statusHook = "",
+        string todoHookCommand = "",
+        IReadOnlyList<string>? todoHookArgs = null);
 
     ClaudeState Inspect(string directory, string serverName);
 }

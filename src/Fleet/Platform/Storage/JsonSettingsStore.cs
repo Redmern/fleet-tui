@@ -65,11 +65,17 @@ public sealed class JsonSettingsStore : ISettingsStore
                     ParseOnOff(stored.AutoClose, SettingsDefaults.AutoClose),
                     stored.AutoCloseMinutes,
                     ParsePolicy(stored.Merge, SettingsDefaults.Merge))
+            {
+                TodoTrigger = stored.TodoTrigger.Length == 0 ? SettingsDefaults.TodoTrigger : stored.TodoTrigger,
+            }
                 .MergedOverDefaults() with
             {
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
                 SubagentGuidance = stored.SubagentGuidance ?? SettingsDefaults.SubagentGuidance,
                 Iso = stored.Iso ?? SettingsDefaults.Iso,
+                Jira = stored.Jira is { } jira
+                    ? JiraSettings.From(jira.BaseUrl, jira.Email, jira.Jql, jira.StoryPointsField)
+                    : null,
                 Models = new RoleModels(
                     ParseRole(stored.MainModel, stored.MainEffort, SettingsDefaults.MainModel),
                     ParseRole(stored.SubModel, stored.SubEffort, SettingsDefaults.SubModel),
@@ -94,6 +100,7 @@ public sealed class JsonSettingsStore : ISettingsStore
         var stored = new SettingsFile
         {
             Trigger = SettingsDiff.TriggerAgainstDefault(config.Trigger),
+            TodoTrigger = SettingsDiff.TodoTriggerAgainstDefault(config.TodoTrigger),
             Commit = PolicyAgainstDefault(config.Commit, SettingsDefaults.Commit),
             Push = PolicyAgainstDefault(config.Push, SettingsDefaults.Push),
             Merge = PolicyAgainstDefault(config.Merge, SettingsDefaults.Merge),
@@ -110,6 +117,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
             Iso = config.Iso == SettingsDefaults.Iso ? null : config.Iso,
+            Jira = config.Jira is { } jira ? JiraFile(jira) : StoredJira(file),
             MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),
@@ -310,6 +318,28 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     public static string EffortAgainstDefault(RoleModel value, RoleModel fallback) =>
         ModelChoice.Effort(value.Effort) == ModelChoice.Effort(fallback.Effort) ? string.Empty : ModelChoice.Effort(value.Effort);
+
+    private static JiraSettingsFile? StoredJira(string file)
+    {
+        try
+        {
+            return File.Exists(file)
+                ? JsonSerializer.Deserialize(File.ReadAllText(file), FleetJsonContext.Default.SettingsFile)?.Jira
+                : null;
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static JiraSettingsFile JiraFile(JiraSettings jira) => new()
+    {
+        BaseUrl = jira.BaseUrl,
+        Email = jira.Email,
+        Jql = jira.Jql == SettingsDefaults.JiraJql ? null : jira.Jql,
+        StoryPointsField = jira.StoryPointsField == SettingsDefaults.JiraStoryPointsField ? null : jira.StoryPointsField,
+    };
 
     private static string OnOffAgainstDefault(bool value, bool fallback) =>
         value == fallback ? string.Empty : value ? "on" : "off";

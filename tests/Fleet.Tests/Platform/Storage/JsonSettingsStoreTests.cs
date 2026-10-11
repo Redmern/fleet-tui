@@ -41,6 +41,33 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_todo_trigger_round_trips_and_is_stored_only_when_changed()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+        var file = Path.Combine(FleetPaths.Settings, "techweb.json");
+
+        Assert.Contains("\"todoTrigger\": \"\"", File.ReadAllText(file));
+        Assert.Equal("+", Store.Load("techweb").TodoTrigger);
+
+        Store.Save("techweb", SettingsConfig.Default.WithTodoTrigger("!").Value);
+
+        Assert.Equal("!", Store.Load("techweb").TodoTrigger);
+    }
+
+    [Fact]
+    public void A_stored_todo_trigger_that_clashes_or_is_invalid_is_merged_on_load()
+    {
+        Directory.CreateDirectory(FleetPaths.Settings);
+        var file = Path.Combine(FleetPaths.Settings, "techweb.json");
+
+        File.WriteAllText(file, """{"trigger":"+","todoTrigger":"+"}""");
+        Assert.Equal(string.Empty, Store.Load("techweb").TodoTrigger);
+
+        File.WriteAllText(file, """{"todoTrigger":"ab"}""");
+        Assert.Equal("+", Store.Load("techweb").TodoTrigger);
+    }
+
+    [Fact]
     public void The_commit_and_push_gates_default_to_ask()
     {
         var config = Store.Load("techweb");

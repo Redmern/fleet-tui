@@ -33,6 +33,10 @@ using Fleet.Features.Updates.ShowVersion;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
+using Fleet.Features.Todos.LaunchTicket;
+using Fleet.Features.Todos.OpenTicket;
+using Fleet.Features.Todos.ShowBoard;
+using Fleet.Features.Todos.ShowBoard.Models;
 using Fleet.Ports.Keymap;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
@@ -44,9 +48,11 @@ using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Todos.Models;
 using Fleet.Ui;
 using Fleet.Ui.Enums;
 using Fleet.Ui.Models;
@@ -764,6 +770,14 @@ public static class MenuCommand
                     break;
                 }
 
+            case FleetAction.TodoBoard:
+                ShowBoard(app, keymap, project.Name, BoardScope.One(project.Name, project.Root));
+                break;
+
+            case FleetAction.TodoBoardAll:
+                ShowBoard(app, keymap, project.Name, BoardScope.All(projects.List().Select(p => new BoardProject(p.Name, p.Root))));
+                break;
+
             case FleetAction.BrowseFiles:
                 if (!Adapters.OnPath(FileBrowser.Command))
                 {
@@ -882,6 +896,30 @@ public static class MenuCommand
         return 0;
     }
 
+
+    private static void ShowBoard(IApplication app, Keymap keymap, string here, BoardScope scope)
+    {
+        var boardMux = Adapters.Mux(Adapters.Log());
+        using var pulls = new JiraPulls();
+
+        BoardView.Show(
+            app,
+            keymap,
+            scope,
+            new BoardTickets(Adapters.Todos()),
+            (owner, id) => boardMux.Unsupported is { } unsupported
+                ? Task.FromResult(Result.Fail(unsupported))
+                : new OpenTicketHandler(boardMux.Driver).HandleAsync(here, owner.Root, id),
+            (owner, id) => boardMux.Unsupported is { } unsupported
+                ? Task.FromResult(Result<Ticket>.Fail(unsupported))
+                : new LaunchTicketHandler(Adapters.Todos(), Adapters.Dispatcher(boardMux.Driver))
+                    .HandleAsync(owner.Name, owner.Root, id),
+            [
+                .. scope.Projects
+                    .Select(p => pulls.For(p.Name, p.Root) is { } pull ? new BoardJira(p, pull) : null)
+                    .OfType<BoardJira>(),
+            ]);
+    }
 
     private static async Task ShowNotices(IApplication app, Keymap keymap, IProjectStore projects, Project? current)
     {

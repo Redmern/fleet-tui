@@ -61,6 +61,8 @@ public class MenuBackTests
     [InlineData(FleetAction.ListAgents)]
     [InlineData(FleetAction.Notifications)]
     [InlineData(FleetAction.OpenEditor)]
+    [InlineData(FleetAction.TodoBoard)]
+    [InlineData(FleetAction.TodoBoardAll)]
     [InlineData(FleetAction.QuitFleet)]
     [InlineData(FleetAction.OpenSettings)]
     public void A_top_level_screen_goes_back_to_the_fleet_menu(FleetAction action) =>
@@ -85,6 +87,7 @@ public class MenuBackTests
         new[] { "Features", "Repositories", "Secrets", "SecretsView.cs" },
         new[] { "Features", "Agents", "NewAgent", "NewAgentView.cs" },
         new[] { "Features", "Agents", "ListAgents", "ListAgentsView.cs" },
+        new[] { "Features", "Todos", "ShowBoard", "BoardView.cs" },
     };
 
     [Theory]

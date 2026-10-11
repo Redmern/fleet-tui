@@ -139,6 +139,18 @@ public class CommandLineTests
     }
 
     [Fact]
+    public void Todo_and_hook_todo_are_verbs_and_todo_reads_its_text()
+    {
+        Assert.Equal(FleetVerb.HookTodo, CommandLine.Parse(["hook-todo", "--project", "techweb"]).Verb);
+
+        var todo = CommandLine.Parse(["todo", "--project", "techweb", "board view"]);
+
+        Assert.Equal(FleetVerb.Todo, todo.Verb);
+        Assert.Equal("techweb", todo.Project);
+        Assert.Equal("board view", todo.Text);
+    }
+
+    [Fact]
     public void Hook_is_the_status_reporter_verb()
     {
         Assert.Equal(FleetVerb.Hook, CommandLine.Parse(["hook"]).Verb);

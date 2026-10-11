@@ -10,6 +10,11 @@ public static class SettingsDiff
             ? string.Empty
             : trigger;
 
+    public static string TodoTriggerAgainstDefault(string trigger) =>
+        string.Equals(trigger, SettingsDefaults.TodoTrigger, StringComparison.Ordinal)
+            ? string.Empty
+            : trigger;
+
     public static IReadOnlyDictionary<HarnessTool, ToolRule> AgainstDefaults(
         IReadOnlyDictionary<HarnessTool, ToolRule> rules)
     {

@@ -83,6 +83,26 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void The_todo_board_sits_in_the_main_menu_on_t()
+    {
+        Assert.Contains(FleetAction.TodoBoard, FleetMenus.Actions(FleetMenus.Main));
+        Assert.Equal("t", KeymapDefaults.Bindings[FleetAction.TodoBoard]);
+        Assert.Equal("Todo board", FleetMenus.Label(FleetAction.TodoBoard));
+        Assert.True(FleetMenus.OpensMore(FleetAction.TodoBoard));
+    }
+
+    [Fact]
+    public void The_all_projects_todo_board_sits_next_to_the_todo_board_on_capital_t()
+    {
+        var main = FleetMenus.Actions(FleetMenus.Main);
+
+        Assert.Equal(main.ToList().IndexOf(FleetAction.TodoBoard) + 1, main.ToList().IndexOf(FleetAction.TodoBoardAll));
+        Assert.Equal("T", KeymapDefaults.Bindings[FleetAction.TodoBoardAll]);
+        Assert.Equal("All todos", FleetMenus.Label(FleetAction.TodoBoardAll));
+        Assert.True(FleetMenus.OpensMore(FleetAction.TodoBoardAll));
+    }
+
+    [Fact]
     public void Open_editor_can_be_left_out_of_the_main_menu()
     {
         var without = FleetMenus.Actions(FleetMenus.Without(FleetMenus.Main, FleetAction.OpenEditor));
