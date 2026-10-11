@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
 using Fleet.Platform.Forwards;
+using Fleet.Platform.Forwards.Models;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
@@ -319,6 +320,7 @@ public static class EmbeddedWiring
         }
 
         var mouse = !string.Equals(Environment.GetEnvironmentVariable(MouseVariable), "off", StringComparison.OrdinalIgnoreCase);
+        using var tunnels = AttachTunnels(sshHost, log);
         var code = await new AttachClient(
                 stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse,
                 project => OpenAttachWindow(project, sshHost, log),
@@ -326,11 +328,17 @@ public static class EmbeddedWiring
                 hello =>
                 {
                     hello.Ssh = sshHost is null ? Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable) : null;
+                    if (tunnels is not null)
+                    {
+                        hello.Forwards = true;
+                    }
+
                     if (session is not null)
                     {
                         Furnish(hello, session);
                     }
-                })
+                },
+                tunnels is null ? null : tunnels.Apply)
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -759,6 +767,18 @@ public static class EmbeddedWiring
         start.Environment[CommandLine.AskPassVariable] = token;
         start.Environment[Endpoint.Variable] = home.Address;
         return start;
+    }
+
+    private static ViewerTunnels? AttachTunnels(string? sshHost, IFleetLog log)
+    {
+        if (sshHost is null || ControlSocket(AttachSocketKey(sshHost)) is not null)
+        {
+            return null;
+        }
+
+        void Log(string line) => log.Write($"attach: {line}");
+        var mode = new TunnelMode(new TunnelProcesses(log: Log), new TcpListenerProbe(), TimeSpan.FromSeconds(20));
+        return new ViewerTunnels(sshHost, mode, LocalPorts.Loopback(), new SystemBrowser().Open, Log, TimeSpan.FromSeconds(3));
     }
 
     public static ProcessStartInfo AttachSsh(string host)

@@ -88,6 +88,18 @@ public sealed class ViewerTunnelsTests
     }
 
     [Fact]
+    public async Task Applying_a_forward_effect_forwards_and_an_unforward_effect_stops_it()
+    {
+        using var viewer = For();
+
+        viewer.Apply(forward: true, 5173);
+        await WaitUntil(() => _opened.Contains("http://localhost:5173"));
+
+        viewer.Apply(forward: false, 5173);
+        await WaitUntil(() => _tunnels.Started.Single().Killed);
+    }
+
+    [Fact]
     public async Task Disposing_kills_every_tunnel_and_the_launcher()
     {
         var viewer = For();
@@ -98,5 +110,16 @@ public sealed class ViewerTunnelsTests
 
         Assert.All(_tunnels.Started, t => Assert.True(t.Killed));
         Assert.True(_tunnels.Disposed);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(condition());
     }
 }

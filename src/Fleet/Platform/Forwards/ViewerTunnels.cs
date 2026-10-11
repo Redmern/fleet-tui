@@ -47,6 +47,19 @@ public sealed class ViewerTunnels : IDisposable
 
     public Task UnforwardAsync(int port, CancellationToken ct) => _forwards.UnforwardNowAsync(port, ct);
 
+    public void Apply(bool forward, int port) =>
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await (forward ? ForwardAsync(port, _stop.Token) : UnforwardAsync(port, _stop.Token)).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException or InvalidOperationException or OperationCanceledException)
+            {
+                _log($"could not {(forward ? "forward" : "unforward")} port {port}: {e.Message}");
+            }
+        });
+
     public void Dispose()
     {
         _stop.Cancel();
