@@ -88,6 +88,19 @@ public class ClipboardShimTests
         Assert.Contains("not focused", stderr);
     }
 
+    [Theory]
+    [InlineData("xclip", "-selection clipboard -t TARGETS -o")]
+    [InlineData("wl-paste", "--list-types")]
+    public async Task Listing_types_only_probes_and_never_reads_the_png(string tool, string args)
+    {
+        var clipboard = new CountingClipboard(new ClipboardImage(Png));
+
+        await ClipboardShim.RunAsync(ClipboardShim.Parse(tool, Split(args)), clipboard, new MemoryStream(), new StringWriter());
+
+        Assert.Equal(0, clipboard.Reads);
+        Assert.Equal(1, clipboard.Probes);
+    }
+
     [Fact]
     public async Task Another_image_type_never_asks_the_viewer()
     {
@@ -112,6 +125,14 @@ public class ClipboardShimTests
     private sealed class CountingClipboard(ClipboardImage image) : IClipboardImageSource
     {
         public int Reads { get; private set; }
+
+        public int Probes { get; private set; }
+
+        public Task<ClipboardImage> ProbePngAsync(CancellationToken ct = default)
+        {
+            Probes++;
+            return Task.FromResult(image.HasPng ? ClipboardImage.Available : image with { Png = null });
+        }
 
         public Task<ClipboardImage> ReadPngAsync(CancellationToken ct = default)
         {

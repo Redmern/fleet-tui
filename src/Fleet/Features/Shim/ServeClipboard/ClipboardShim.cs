@@ -32,19 +32,21 @@ public static class ClipboardShim
             return await NoImageAsync(call, stderr).ConfigureAwait(false);
         }
 
-        var image = await clipboard.ReadPngAsync(ct).ConfigureAwait(false);
+        var image = call.Read == ShimRead.Png
+            ? await clipboard.ReadPngAsync(ct).ConfigureAwait(false)
+            : await clipboard.ProbePngAsync(ct).ConfigureAwait(false);
         if (image.Refused is { } refused)
         {
             await stderr.WriteLineAsync($"fleet: no clipboard image: {refused}").ConfigureAwait(false);
             return 1;
         }
 
-        if (image.Png is not { Length: > 0 } png)
+        if (!image.HasPng || (call.Read == ShimRead.Png && image.Png is not { Length: > 0 }))
         {
             return await NoImageAsync(call, stderr).ConfigureAwait(false);
         }
 
-        var output = call.Read == ShimRead.Png ? png : Encoding.UTF8.GetBytes(Listed(call.Tool));
+        var output = call.Read == ShimRead.Png ? image.Png! : Encoding.UTF8.GetBytes(Listed(call.Tool));
         await stdout.WriteAsync(output, ct).ConfigureAwait(false);
         await stdout.FlushAsync(ct).ConfigureAwait(false);
         return 0;

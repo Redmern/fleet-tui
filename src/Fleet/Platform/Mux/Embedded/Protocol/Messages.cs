@@ -299,6 +299,9 @@ public sealed class ClipboardImageRequest
 
     [JsonPropertyName("pane")]
     public string Pane { get; set; } = string.Empty;
+
+    [JsonPropertyName("probe")]
+    public bool Probe { get; set; }
 }
 
 public sealed class ClipboardImageResponse
@@ -319,12 +322,18 @@ public sealed class ClipboardImageResponse
     [JsonPropertyName("error")]
     public string? Error { get; set; }
 
+    [JsonPropertyName("has")]
+    public bool HasImage { get; set; }
+
     public static ClipboardImageResponse For(int id, byte[]? png) => png switch
     {
         null or [] => new ClipboardImageResponse { Id = id },
         { Length: > MaxBytes } => new ClipboardImageResponse { Id = id, Error = TooLarge(png.Length) },
-        _ => new ClipboardImageResponse { Id = id, Mime = Png, Data = png },
+        _ => new ClipboardImageResponse { Id = id, Mime = Png, Data = png, HasImage = true },
     };
+
+    public static ClipboardImageResponse Probed(int id, bool hasImage) =>
+        new() { Id = id, Mime = hasImage ? Png : null, HasImage = hasImage };
 
     public static string TooLarge(long bytes) =>
         $"the clipboard image is too large: {Mib(bytes)} MiB, the limit is {Mib(MaxBytes)} MiB";
@@ -592,6 +601,9 @@ public sealed class ControlResponse
 
     [JsonPropertyName("data")]
     public byte[]? Data { get; set; }
+
+    [JsonPropertyName("hasImage")]
+    public bool HasImage { get; set; }
 }
 
 public sealed class NoticeDto

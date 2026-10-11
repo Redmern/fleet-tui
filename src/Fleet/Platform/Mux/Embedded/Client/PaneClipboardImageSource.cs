@@ -11,7 +11,11 @@ public sealed class PaneClipboardImageSource(Endpoint endpoint, string? pane) : 
 
     public static readonly TimeSpan AnswerWithin = FleetDaemon.ClipboardImageWithin + TimeSpan.FromSeconds(2);
 
-    public async Task<ClipboardImage> ReadPngAsync(CancellationToken ct = default)
+    public Task<ClipboardImage> ReadPngAsync(CancellationToken ct = default) => AskAsync(FleetDaemon.ClipboardImageOp, ct);
+
+    public Task<ClipboardImage> ProbePngAsync(CancellationToken ct = default) => AskAsync(FleetDaemon.ClipboardTypesOp, ct);
+
+    private async Task<ClipboardImage> AskAsync(string op, CancellationToken ct)
     {
         if (pane is not { Length: > 0 } caller)
         {
@@ -34,7 +38,7 @@ public sealed class PaneClipboardImageSource(Endpoint endpoint, string? pane) : 
 
             await wire.SendAsync(
                 MessageType.Request,
-                new ControlRequest { Id = 1, Op = FleetDaemon.ClipboardImageOp, Pane = caller },
+                new ControlRequest { Id = 1, Op = op, Pane = caller },
                 WireJsonContext.Default.ControlRequest,
                 ct).ConfigureAwait(false);
 
@@ -52,6 +56,7 @@ public sealed class PaneClipboardImageSource(Endpoint endpoint, string? pane) : 
                 {
                     { Ok: false } => ClipboardImage.Refusal(response.Error ?? "fleetd refused"),
                     { Data: { Length: > 0 } png } => new ClipboardImage(png),
+                    { HasImage: true } => ClipboardImage.Available,
                     _ => ClipboardImage.None,
                 };
             }

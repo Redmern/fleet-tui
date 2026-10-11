@@ -19,6 +19,31 @@ public class LinuxClipboardImageSourceTests
         Assert.Equal(Max + 1, image.Png!.Length);
     }
 
+    [Theory]
+    [InlineData("text/plain\nimage/png\n", true)]
+    [InlineData("text/plain\nUTF8_STRING\n", false)]
+    public async Task A_probe_lists_types_with_wl_paste_and_never_reads_the_image(string types, bool has)
+    {
+        var tools = new FakeTools { ["wl-paste"] = (0, System.Text.Encoding.UTF8.GetBytes(types)) };
+
+        var probed = await new LinuxClipboardImageSource(Max, tools.RunAsync).ProbePngAsync();
+
+        Assert.Equal(has, probed.HasPng);
+        Assert.Null(probed.Png);
+        Assert.Equal("wl-paste --list-types", tools.Ran[0]);
+    }
+
+    [Fact]
+    public async Task A_probe_falls_back_to_xclip_targets()
+    {
+        var tools = new FakeTools { ["wl-paste"] = (1, []), ["xclip"] = (0, "TARGETS\nimage/png\n"u8.ToArray()) };
+
+        var probed = await new LinuxClipboardImageSource(Max, tools.RunAsync).ProbePngAsync();
+
+        Assert.True(probed.HasPng);
+        Assert.Equal("xclip -selection clipboard -t TARGETS -o", tools.Ran[^1]);
+    }
+
     [Fact]
     public async Task Wl_paste_is_asked_first_for_a_png()
     {

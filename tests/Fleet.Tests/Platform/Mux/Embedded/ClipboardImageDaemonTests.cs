@@ -167,6 +167,37 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task End_to_end_a_types_probe_then_a_read_ships_the_png_once()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var clipboard = new FakeClipboardImageSource(Png);
+        var viewer = await ViewAsync("techweb", clipboard);
+
+        var probed = await ShimAsync(pane, "xclip", "-selection", "clipboard", "-t", "TARGETS", "-o");
+        var listed = await ShimAsync(pane, "wl-paste", "--list-types");
+        var read = await ShimAsync(pane, "xclip", "-selection", "clipboard", "-t", "image/png", "-o");
+
+        Assert.Equal("TARGETS\nimage/png\n"u8.ToArray(), probed.Stdout);
+        Assert.Equal("image/png\n"u8.ToArray(), listed.Stdout);
+        Assert.Equal(Png, read.Stdout);
+        Assert.Equal(1, viewer.ShippedImages);
+        Assert.Equal(1, clipboard.Reads);
+        Assert.Equal(2, clipboard.Probes);
+    }
+
+    [Fact]
+    public async Task End_to_end_a_types_probe_with_an_empty_viewer_clipboard_lists_nothing()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        await ViewAsync("techweb", new FakeClipboardImageSource(null));
+
+        var (code, stdout, _) = await ShimAsync(pane, "wl-paste", "--list-types");
+
+        Assert.Equal(1, code);
+        Assert.Empty(stdout);
+    }
+
+    [Fact]
     public async Task End_to_end_a_pane_the_viewer_does_not_focus_gets_no_image()
     {
         await SpawnAsync("techweb", "claude");
@@ -258,8 +289,17 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
     internal sealed class FakeClipboardImageSource(byte[]? png) : IClipboardImageSource
     {
         private int _reads;
+        private int _probes;
 
         public int Reads => _reads;
+
+        public int Probes => _probes;
+
+        public Task<ClipboardImage> ProbePngAsync(CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _probes);
+            return Task.FromResult(png is { Length: > 0 } ? ClipboardImage.Available : ClipboardImage.None);
+        }
 
         public Task<ClipboardImage> ReadPngAsync(CancellationToken ct = default)
         {
@@ -274,6 +314,7 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         private readonly IClipboardImageSource _clipboard;
         private readonly Task _reader;
         private int _frames;
+        private int _shipped;
 
         private ClipboardViewer(Wire wire, string id, IClipboardImageSource clipboard)
         {
@@ -286,6 +327,8 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         public string Id { get; }
 
         public int Frames => _frames;
+
+        public int ShippedImages => _shipped;
 
         public ConcurrentQueue<ClipboardImageRequest> Asked { get; } = new();
 
@@ -330,10 +373,13 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
                     {
                         var request = Wire.Read(message.Payload, WireJsonContext.Default.ClipboardImageRequest);
                         Asked.Enqueue(request);
-                        await _wire.SendAsync(
-                            MessageType.ClipboardImageResponse,
-                            await ClipboardImageAnswer.ForAsync(request, _clipboard),
-                            WireJsonContext.Default.ClipboardImageResponse);
+                        var answer = await ClipboardImageAnswer.ForAsync(request, _clipboard);
+                        if (answer.Data is { Length: > 0 })
+                        {
+                            Interlocked.Increment(ref _shipped);
+                        }
+
+                        await _wire.SendAsync(MessageType.ClipboardImageResponse, answer, WireJsonContext.Default.ClipboardImageResponse);
                     }
                 }
             }

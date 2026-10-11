@@ -621,7 +621,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
                     }
 
-                    if (request.Op == ClipboardImageOp)
+                    if (request.Op is ClipboardImageOp or ClipboardTypesOp)
                     {
                         if (bridged)
                         {
@@ -717,13 +717,15 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string ClipboardImageOp = "clipboard-image";
 
+    public const string ClipboardTypesOp = "clipboard-types";
+
     public static readonly TimeSpan ClipboardImageWithin = TimeSpan.FromSeconds(20);
 
     public static readonly TimeSpan RelayedClipboardImageWithin = TimeSpan.FromSeconds(15);
 
     private async Task AnswerClipboardImageAsync(Wire wire, ControlRequest request, CancellationToken ct)
     {
-        var response = await ClipboardImageForAsync(request.Pane, ct).ConfigureAwait(false);
+        var response = await ClipboardImageForAsync(request.Pane, request.Op == ClipboardTypesOp, ct).ConfigureAwait(false);
         response.Id = request.Id;
 
         try
@@ -736,7 +738,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
-    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, CancellationToken ct, TimeSpan? within = null)
+    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, bool probe, CancellationToken ct, TimeSpan? within = null)
     {
         AttachSession? viewer;
         lock (_gate)
@@ -750,12 +752,13 @@ public sealed class FleetDaemon(DaemonOptions options)
             return new ControlResponse { Ok = false, Error = $"pane {pane} is not focused in any viewer" };
         }
 
-        var answer = await AskClipboardImageAsync(viewer, pane!, within ?? ClipboardImageWithin, ct).ConfigureAwait(false);
+        var answer = await AskClipboardImageAsync(viewer, pane!, probe, within ?? ClipboardImageWithin, ct).ConfigureAwait(false);
         return answer switch
         {
             { Error: { } error } => new ControlResponse { Ok = false, Error = error },
+            _ when probe => new ControlResponse { Ok = true, HasImage = answer.HasImage },
             { Data.Length: > ClipboardImageResponse.MaxBytes } => new ControlResponse { Ok = false, Error = ClipboardImageResponse.TooLarge(answer.Data.Length) },
-            { Data: { Length: > 0 } png } => new ControlResponse { Ok = true, Mime = answer.Mime ?? ClipboardImageResponse.Png, Data = png },
+            { Data: { Length: > 0 } png } => new ControlResponse { Ok = true, Mime = answer.Mime ?? ClipboardImageResponse.Png, Data = png, HasImage = true },
             _ => new ControlResponse { Ok = true },
         };
     }
@@ -768,10 +771,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             shownHere = _runtimes.Values.FirstOrDefault(r => r.Pty == link.Pty)?.Id;
         }
 
-        var answer = await ClipboardImageForAsync(shownHere, _stop.Token, RelayedClipboardImageWithin).ConfigureAwait(false);
-        await link.AnswerClipboardImageAsync(answer.Ok
-            ? ClipboardImageResponse.For(asked.Id, answer.Data)
-            : new ClipboardImageResponse { Id = asked.Id, Error = answer.Error }).ConfigureAwait(false);
+        var answer = await ClipboardImageForAsync(shownHere, asked.Probe, _stop.Token, RelayedClipboardImageWithin).ConfigureAwait(false);
+        await link.AnswerClipboardImageAsync(
+            !answer.Ok ? new ClipboardImageResponse { Id = asked.Id, Error = answer.Error }
+            : asked.Probe ? ClipboardImageResponse.Probed(asked.Id, answer.HasImage)
+            : ClipboardImageResponse.For(asked.Id, answer.Data)).ConfigureAwait(false);
     }
 
     private AttachSession? FocusingViewer(string pane) =>
@@ -780,7 +784,8 @@ public sealed class FleetDaemon(DaemonOptions options)
             .OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0)
             .FirstOrDefault();
 
-    private async Task<ClipboardImageResponse> AskClipboardImageAsync(AttachSession viewer, string pane, TimeSpan within, CancellationToken ct)
+    private async Task<ClipboardImageResponse> AskClipboardImageAsync(
+        AttachSession viewer, string pane, bool probe, TimeSpan within, CancellationToken ct)
     {
         var id = Interlocked.Increment(ref _nextClipboardAsk);
         var reply = new TaskCompletionSource<ClipboardImageResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -790,7 +795,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             await viewer.Wire.SendAsync(
                 MessageType.ClipboardImageRequest,
-                new ClipboardImageRequest { Id = id, Pane = pane },
+                new ClipboardImageRequest { Id = id, Pane = pane, Probe = probe },
                 WireJsonContext.Default.ClipboardImageRequest,
                 ct).ConfigureAwait(false);
             return await reply.Task.WaitAsync(within, ct).ConfigureAwait(false);
