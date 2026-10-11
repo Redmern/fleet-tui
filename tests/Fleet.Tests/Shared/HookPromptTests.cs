@@ -46,10 +46,17 @@ public class HookPromptTests
         Assert.False(HookPrompt.Intercepted(delivered, trigger).Take);
     }
 
-    [Fact]
-    public void The_space_after_the_trigger_is_optional()
+    [Theory]
+    [InlineData(", fix the double scrollbar")]
+    [InlineData(",fix the double scrollbar")]
+    [InlineData(",\tfix the double scrollbar")]
+    [InlineData(",\nfix the double scrollbar")]
+    public void The_relay_form_and_the_legacy_no_space_form_both_dispatch(string prompt)
     {
-        Assert.Equal("task", HookPrompt.Intercepted(",task", ",").Task);
+        var decision = HookPrompt.Intercepted(prompt, ",");
+
+        Assert.True(decision.Take);
+        Assert.Equal("fix the double scrollbar", decision.Task);
     }
 
     [Fact]

@@ -123,7 +123,7 @@ public sealed partial class HeadServiceTests
             Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, "add a login page")));
 
         Assert.False(result.IsError, result.Text);
-        Assert.Equal([RelayText.IntoNvimTerminal + ",add a login page", RelayText.Submit], _mux.SentTo(main));
+        Assert.Equal([RelayText.IntoNvimTerminal + ", add a login page", RelayText.Submit], _mux.SentTo(main));
         Assert.Empty(_mux.SentTo(dash));
     }
 
@@ -135,7 +135,7 @@ public sealed partial class HeadServiceTests
 
         await Service().HandleAsync(Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, "go")));
 
-        Assert.Equal([",go", RelayText.Submit], _mux.SentTo(main));
+        Assert.Equal([", go", RelayText.Submit], _mux.SentTo(main));
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed partial class HeadServiceTests
 
         await Service().HandleAsync(Call(HeadTools.Relay, (HeadTools.Project, "web"), (HeadTools.Prompt, ";fix it")));
 
-        Assert.Equal(RelayText.IntoNvimTerminal + ";fix it", _mux.SentTo(main)[0]);
+        Assert.Equal(RelayText.IntoNvimTerminal + "; fix it", _mux.SentTo(main)[0]);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed partial class HeadServiceTests
         await service.Relay.Drained("web").WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(0, service.Relay.Pending("web"));
-        Assert.Equal([RelayText.IntoNvimTerminal + ",ship it", RelayText.Submit], _mux.SentTo(main));
+        Assert.Equal([RelayText.IntoNvimTerminal + ", ship it", RelayText.Submit], _mux.SentTo(main));
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public sealed partial class HeadServiceTests
         await service.Relay.Drained("web").WaitAsync(TimeSpan.FromSeconds(5));
 
         var typed = _mux.SentTo(main).Where(t => t != RelayText.Submit).ToList();
-        Assert.Equal([RelayText.IntoNvimTerminal + ",first", RelayText.IntoNvimTerminal + ",second"], typed);
+        Assert.Equal([RelayText.IntoNvimTerminal + ", first", RelayText.IntoNvimTerminal + ", second"], typed);
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public sealed partial class HeadServiceTests
         Assert.False(result.IsError, result.Text);
         Assert.Equal(["api"], _opened);
         Assert.StartsWith("opened api", result.Text);
-        Assert.Equal(RelayText.IntoNvimTerminal + ",bump deps", _mux.SentTo(_open["api"].Main)[0]);
+        Assert.Equal(RelayText.IntoNvimTerminal + ", bump deps", _mux.SentTo(_open["api"].Main)[0]);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed partial class HeadServiceTests
         var asked = Assert.Single(_approvals.Asked);
         Assert.Equal("web", asked.Project);
         Assert.Equal("dispatch", asked.Tool);
-        Assert.Contains(",deploy", asked.Summary);
+        Assert.Contains(", deploy", asked.Summary);
         Assert.Empty(_mux.SentTo(main));
     }
 
@@ -314,6 +314,7 @@ public sealed partial class HeadServiceTests
         Assert.Contains("dispatch tool", result.Text);
         Assert.Contains("add a login page", result.Text);
         Assert.DoesNotContain(",add a login page", result.Text);
+        Assert.DoesNotContain(", add a login page", result.Text);
         Assert.Empty(_approvals.Asked);
         Assert.Empty(_mux.SentTo(main));
     }
