@@ -1,9 +1,11 @@
 using Fleet.Features.Agents.NewAgent.Models;
+using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Git;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Orchestrations;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
@@ -18,7 +20,9 @@ public sealed class NewAgentHandler(
     IMuxDriver mux,
     IAgentStore store,
     Func<string, RoleModels>? models = null,
-    Func<string, bool>? subagentGuidance = null)
+    Func<string, bool>? subagentGuidance = null,
+    IModelRouter? router = null,
+    IFleetLog? log = null)
 {
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
@@ -71,6 +75,11 @@ public sealed class NewAgentHandler(
             await SeedSecretsAsync(command, plan.TargetDirectory, ct).ConfigureAwait(false);
         }
 
+        var settings = models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models;
+        var routed = settings.Agent.IsAuto
+            ? await RoutedModel(command, branch, ct).ConfigureAwait(false)
+            : null;
+
         var agent = new AgentRecord(
             plan.TargetDirectory,
             command.RepositoryName,
@@ -81,7 +90,8 @@ public sealed class NewAgentHandler(
             Hidden: true,
             Open: true,
             Owner: command.Owner,
-            Claude: command.Claude ?? command.Owner.Length > 0);
+            Claude: command.Claude ?? command.Owner.Length > 0,
+            Model: routed);
 
         store.Save(command.ProjectName, agent);
 
@@ -107,7 +117,7 @@ public sealed class NewAgentHandler(
                             agent.Repository,
                             agent.Branch,
                             orchestrator: false,
-                            models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models,
+                            agent.ModelsFrom(settings, orchestrator: false),
                             agent.Worktree)),
                     Env = AgentHarness.SpawnEnv(command.Harness),
                 }),
@@ -127,6 +137,48 @@ public sealed class NewAgentHandler(
         }
 
         return Result<AgentRecord>.Ok(agent);
+    }
+
+    private async Task<RoleModel> RoutedModel(NewAgentCommand command, string branch, CancellationToken ct)
+    {
+        var task = command.Task.Trim();
+        var routed = task.Length == 0
+            ? null
+            : await RouteOrNull(new ModelRoutingRequest(task, null, false, command.RepositoryName), ct)
+                .ConfigureAwait(false);
+
+        if (routed is not null && ModelRouting.IsValid(routed))
+        {
+            return routed;
+        }
+
+        var fallback = SettingsDefaults.AgentModel;
+
+        if (task.Length > 0)
+        {
+            log?.Write(
+                $"model router gave no answer for agent {command.RepositoryName}/{branch}; using {fallback.Model}/{fallback.Effort}");
+        }
+
+        return fallback;
+    }
+
+    private async Task<RoleModel?> RouteOrNull(ModelRoutingRequest request, CancellationToken ct)
+    {
+        if (router is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await router.ChooseAsync(request, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            log?.Swallowed(e);
+            return null;
+        }
     }
 
     private async Task SeedSecretsAsync(

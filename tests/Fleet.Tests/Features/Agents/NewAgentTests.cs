@@ -6,9 +6,11 @@ using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Platform.Git;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Orchestrations;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings;
@@ -425,5 +427,120 @@ public sealed class NewAgentTests : IDisposable
             .HandleAsync(new NewAgentCommand("techweb", "backend", directory, "feature/notes", string.Empty, AgentHarness.Nvim));
 
         Assert.False(SubagentGuidance.IsIn(Path.Combine(directory, "feature_notes")));
+    }
+    private static readonly RoleModels AutoAgent =
+        SettingsDefaults.Models with { Agent = new RoleModel(ModelChoice.Auto, ModelChoice.Inherit) };
+
+    private readonly RecordingLog _log = new();
+
+    private NewAgentHandler Routed(RoleModels models, IModelRouter? router) =>
+        new(new GitRunner(), _mux, _store, _ => models, router: router, log: _log);
+
+    private NewAgentCommand TaskCommand(string directory, string task) =>
+        new("techweb", "backend", directory, "feat/x", string.Empty, "claude", Task: task);
+
+    private async Task<IReadOnlyList<string>> AgentArgs() =>
+        _mux.ArgsFor(Assert.Single(await _mux.ListPanesAsync()).Id);
+
+    [Fact]
+    public async Task With_the_agent_model_on_auto_the_agent_launches_with_the_routed_model_and_effort()
+    {
+        var directory = await RepositoryAsync();
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+
+        var result = await Routed(AutoAgent, router).HandleAsync(TaskCommand(directory, "fix the login timeout"));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-backend-feat-x", "--model", "opus", "--effort", "high"],
+            await AgentArgs());
+        Assert.Equal(new ModelRoutingRequest("fix the login timeout", null, false, "backend"), Assert.Single(router.Requests));
+        Assert.Empty(_log.Lines);
+    }
+
+    [Fact]
+    public async Task A_routed_agent_keeps_its_model_and_effort_on_its_record()
+    {
+        var directory = await RepositoryAsync();
+
+        var result = await Routed(AutoAgent, new FakeModelRouter(new RoleModel("opus", "high")))
+            .HandleAsync(TaskCommand(directory, "fix the login timeout"));
+
+        Assert.Equal(new RoleModel("opus", "high"), result.Value!.Model);
+        Assert.Equal(new RoleModel("opus", "high"), _store.Saved.Last().Agent.Model);
+    }
+
+    [Fact]
+    public async Task With_a_fixed_agent_model_the_router_is_never_asked_and_nothing_is_stored()
+    {
+        var directory = await RepositoryAsync();
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+
+        var result = await Routed(SettingsDefaults.Models, router).HandleAsync(TaskCommand(directory, "fix it"));
+
+        Assert.Empty(router.Requests);
+        Assert.Null(result.Value!.Model);
+        Assert.Equal([AgentHarness.Claude, "--name", "techweb-backend-feat-x"], await AgentArgs());
+    }
+
+    public static TheoryData<string> RouterFailures => ["nothing", "throws", "invalid", "no router"];
+
+    [Theory]
+    [MemberData(nameof(RouterFailures))]
+    public async Task A_router_that_fails_falls_back_to_inherit_logs_it_and_still_starts_the_agent(string failure)
+    {
+        var directory = await RepositoryAsync();
+        var router = failure switch
+        {
+            "throws" => new FakeModelRouter(throws: true),
+            "invalid" => new FakeModelRouter(new RoleModel("gpt-4", "extreme")),
+            "no router" => null,
+            _ => new FakeModelRouter(null),
+        };
+
+        var result = await Routed(AutoAgent, router).HandleAsync(TaskCommand(directory, "fix it"));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal([AgentHarness.Claude, "--name", "techweb-backend-feat-x"], await AgentArgs());
+        Assert.Equal(SettingsDefaults.AgentModel, result.Value!.Model);
+        Assert.Contains(_log.Lines, l => l.Contains("backend/feat/x") && l.Contains("inherit"));
+    }
+
+    [Fact]
+    public async Task An_auto_agent_without_a_task_is_not_routed_and_runs_on_inherit()
+    {
+        var directory = await RepositoryAsync();
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+
+        var result = await Routed(AutoAgent, router).HandleAsync(TaskCommand(directory, "  "));
+
+        Assert.Empty(router.Requests);
+        Assert.Equal([AgentHarness.Claude, "--name", "techweb-backend-feat-x"], await AgentArgs());
+        Assert.Equal(SettingsDefaults.AgentModel, result.Value!.Model);
+    }
+
+    private sealed class FakeModelRouter(RoleModel? choice = null, bool throws = false) : IModelRouter
+    {
+        public List<ModelRoutingRequest> Requests { get; } = [];
+
+        public Task<RoleModel?> ChooseAsync(ModelRoutingRequest request, CancellationToken ct = default)
+        {
+            Requests.Add(request);
+
+            return throws
+                ? throw new InvalidOperationException("claude is unreachable")
+                : Task.FromResult(choice);
+        }
+    }
+
+    private sealed class RecordingLog : IFleetLog
+    {
+        public List<string> Lines { get; } = [];
+
+        public void Swallowed(Exception e) => Lines.Add(e.Message);
+
+        public void Write(string line) => Lines.Add(line);
+
+        public IReadOnlyList<string> Tail(int lines) => Lines.TakeLast(lines).ToList();
     }
 }
