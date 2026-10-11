@@ -46,6 +46,8 @@ public sealed class DaemonOptions
 
     public Action<IDictionary<string, string>>? RemotePaneEnv { get; init; }
 
+    public bool ServesBridge { get; init; }
+
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
@@ -80,6 +82,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     public const string ClientVariable = "FLEET_CLIENT";
     public const string PaneVariable = "FLEET_PANE";
     public const string ExecutableVariable = "FLEET_EXECUTABLE";
+    public const string PaneTokenVariable = "FLEET_PANE_TOKEN";
 
     private readonly Lock _gate = new();
     private readonly MuxModel _model = new();
@@ -103,6 +106,9 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly Lock _saveGate = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string Client, TaskCompletionSource<ClipboardImageResponse> Reply)> _clipboardAsks = new();
     private int _nextClipboardAsk;
+    private volatile bool _servedBridge;
+
+    private bool ServesRemoteViewers => options.ServesBridge || _servedBridge;
 
     public MuxModel Model => _model;
 
@@ -465,6 +471,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     if (hello.Bridged)
                     {
+                        _servedBridge = true;
                         _bridged[client.Id] = hello;
                     }
 
@@ -2720,7 +2727,10 @@ public sealed class FleetDaemon(DaemonOptions options)
             env[key] = value;
         }
 
-        options.RemotePaneEnv?.Invoke(env);
+        if (ServesRemoteViewers)
+        {
+            options.RemotePaneEnv?.Invoke(env);
+        }
 
         env = new Dictionary<string, string>(env, StringComparer.OrdinalIgnoreCase)
         {

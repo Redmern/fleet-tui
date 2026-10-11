@@ -85,7 +85,8 @@ public static class EmbeddedWiring
             SessionFile = SessionFile(Environment.GetEnvironmentVariable(Endpoint.Variable)),
             WarmMenus = true,
             PaneEnv = cwd => PaneProfile.Env(cwd, Adapters.Projects().List(), Profiles()),
-            RemotePaneEnv = ServesRemoteViewers ? RemotePaneEnv(log) : null,
+            ServesBridge = StartedForBridge,
+            RemotePaneEnv = OperatingSystem.IsWindows() ? null : RemotePaneEnv(log),
             Shell = () => DefaultShell.Resolve(
                 Environment.GetEnvironmentVariable,
                 Platform.Mux.Models.MuxEnvironment.OnPath,
@@ -113,21 +114,29 @@ public static class EmbeddedWiring
         return 0;
     }
 
-    public static bool ServesRemoteViewers =>
-        !OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable(ShimFolder.RemoteDaemonVariable) == "1";
+    public static bool StartedForBridge => Environment.GetEnvironmentVariable(ShimFolder.RemoteDaemonVariable) == "1";
 
-    private static Action<IDictionary<string, string>>? RemotePaneEnv(IFleetLog log)
+    private static Action<IDictionary<string, string>> RemotePaneEnv(IFleetLog log)
     {
         var shims = ShimFolder.Default;
-        var scripts = ClipboardShim.Tools.ToDictionary(tool => tool, tool => ShimScripts.Script(Adapters.Executable, tool));
-        if (!ShimFolder.Install(shims, scripts, line => log.Write($"fleetd: {line}")))
+        var installed = new Lazy<bool>(() =>
         {
-            return null;
-        }
+            var scripts = ClipboardShim.Tools.ToDictionary(tool => tool, tool => ShimScripts.Script(Adapters.Executable, tool));
+            var done = ShimFolder.Install(shims, scripts, line => log.Write($"fleetd: {line}"));
+            log.Write(done
+                ? $"fleetd: remote panes find the clipboard shims in {shims} first on PATH"
+                : "fleetd: remote panes get no clipboard shims");
+            return done;
+        });
 
-        log.Write($"fleetd: remote panes find the clipboard shims in {shims} first on PATH");
-        return env => env["PATH"] = ShimScripts.PathWith(
-            shims, env.TryGetValue("PATH", out var path) ? path : Environment.GetEnvironmentVariable("PATH"));
+        return env =>
+        {
+            if (installed.Value)
+            {
+                env["PATH"] = ShimScripts.PathWith(
+                    shims, env.TryGetValue("PATH", out var path) ? path : Environment.GetEnvironmentVariable("PATH"));
+            }
+        };
     }
 
     public static async Task<int> ShimAsync(IReadOnlyList<string> args)
@@ -713,7 +722,7 @@ public static class EmbeddedWiring
         var endpoint = Endpoint.Default();
         var local = await TryConnectAsync(endpoint).ConfigureAwait(false);
 
-        if (local is null && await StartDaemonAsync().ConfigureAwait(false))
+        if (local is null && await StartDaemonAsync(forBridge: true).ConfigureAwait(false))
         {
             for (var i = 0; i < 50 && local is null; i++)
             {
@@ -759,13 +768,10 @@ public static class EmbeddedWiring
         return 0;
     }
 
-    public static async Task<bool> StartDaemonAsync()
-    {
-        if (!Ready)
-        {
-            return false;
-        }
+    public static Task<bool> StartDaemonAsync() => StartDaemonAsync(forBridge: false);
 
+    public static ProcessStartInfo DaemonStart(bool forBridge)
+    {
         var start = OperatingSystem.IsWindows() || !Adapters.OnPath("setsid")
             ? new ProcessStartInfo(Adapters.Executable) { ArgumentList = { "daemon" } }
             : new ProcessStartInfo("setsid") { ArgumentList = { "-f", Adapters.Executable, "daemon" } };
@@ -773,14 +779,14 @@ public static class EmbeddedWiring
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
 
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable)))
-        {
-            start.Environment[ShimFolder.RemoteDaemonVariable] = "1";
-        }
-
-        foreach (var name in (string[])[BridgedHello.SshConnectionVariable, BridgedHello.SshClientVariable, "SSH_TTY"])
+        foreach (var name in (string[])[BridgedHello.SshConnectionVariable, BridgedHello.SshClientVariable, "SSH_TTY", ShimFolder.RemoteDaemonVariable])
         {
             start.Environment.Remove(name);
+        }
+
+        if (forBridge)
+        {
+            start.Environment[ShimFolder.RemoteDaemonVariable] = "1";
         }
 
         if (!OperatingSystem.IsWindows())
@@ -789,6 +795,18 @@ public static class EmbeddedWiring
             start.RedirectStandardOutput = true;
             start.RedirectStandardError = true;
         }
+
+        return start;
+    }
+
+    public static async Task<bool> StartDaemonAsync(bool forBridge)
+    {
+        if (!Ready)
+        {
+            return false;
+        }
+
+        var start = DaemonStart(forBridge);
 
         try
         {
