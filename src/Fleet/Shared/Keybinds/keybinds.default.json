@@ -93,6 +93,7 @@
     "mux.menu": { "action": "menu", "chord": "Space", "targets": { "mux": ["prefix"] } },
     "mux.copy-mode": { "action": "copy-mode", "chord": "[", "targets": { "mux": ["prefix"] } },
     "mux.paste": { "action": "paste", "chord": "]", "targets": { "mux": ["prefix"] } },
+    "mux.paste-image": { "action": "paste-image", "chord": "i", "targets": { "mux": ["prefix"] } },
     "mux.detach": { "action": "detach", "chord": "d", "targets": { "mux": ["prefix"] } },
     "mux.float-new": { "action": "float-new", "chord": "f f", "targets": { "mux": ["prefix"] } },
     "mux.float-toggle": { "action": "float-toggle", "chord": "f t", "targets": { "mux": ["prefix"] } },
