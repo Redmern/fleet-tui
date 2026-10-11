@@ -226,9 +226,7 @@ public static class Adapters
     public static string Executable => Environment.ProcessPath ?? "fleet";
 
     public static void MarkDashboardPane(string project) =>
-        MarkDashboardPane(project, Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable));
-
-    public static void MarkDashboardPane(string project, string? pane) => DashPaneMarker.Write(project, pane);
+        DashPaneMarker.Write(project, Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable));
 
     public static string? DashPane(string project) => DashPaneMarker.Read(project);
 
