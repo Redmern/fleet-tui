@@ -402,7 +402,8 @@ public static class EmbeddedWiring
                 },
                 tunnels is null ? null : tunnels.Apply,
                 ClipboardImageSources.ForThisMachine(ClipboardImageResponse.MaxBytes),
-                notice => Platform.Notifications.DesktopToast.Show("fleet", notice))
+                notice => Platform.Notifications.DesktopToast.Show("fleet", notice),
+                ClipboardText.ForThisMachine(PasteMarkers.MaxPaste))
             .RunAsync()
             .ConfigureAwait(false);
 

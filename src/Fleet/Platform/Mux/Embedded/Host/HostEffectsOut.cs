@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Fleet.Platform.Clipboard;
+using Fleet.Platform.Mux.Embedded.Native;
 
 namespace Fleet.Platform.Mux.Embedded.Host;
 
@@ -14,6 +16,21 @@ public static unsafe partial class HostEffectsOut
 
     public static string ClipboardSequence(string text) =>
         $"\e]52;c;{Convert.ToBase64String(Encoding.UTF8.GetBytes(text))}\a";
+
+    public static Task<ClipboardTextCopy> CopyTextAsync(string text, Action<byte[]> write, ClipboardText? native)
+    {
+        if (Encoding.UTF8.GetByteCount(text) > GhosttyTerminal.MaxClipboard)
+        {
+            return Task.FromResult(ClipboardTextCopy.TooLarge);
+        }
+
+        write(Encoding.UTF8.GetBytes(ClipboardSequence(text)));
+        return native?.CopyAsync(text) ?? Task.FromResult(ClipboardTextCopy.NotSet);
+    }
+
+    public static Task<string?> ReadTextAsync(ClipboardText? native) =>
+        OperatingSystem.IsWindows() ? Task.FromResult(ReadClipboard())
+        : native?.ReadAsync() ?? Task.FromResult<string?>(null);
 
     public static string Sanitize(string title)
     {
