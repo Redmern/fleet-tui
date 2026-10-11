@@ -826,8 +826,12 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private string? ViewerOf(string? client, string? shown) =>
         (client ?? Showing(_sessions.Keys.Where(IsViewer), shown)) is { } viewer && IsViewer(viewer) && !_cannotForward.Contains(viewer)
+        && (client is not null || TakesCallersForward(viewer, shown))
             ? viewer
             : null;
+
+    private bool TakesCallersForward(string viewer, string? shown) =>
+        !_tunnelsItself.Contains(viewer) || shown is null || _model.Client(viewer)?.Showing == shown;
 
     private bool IsViewer(string client) =>
         _sessions.ContainsKey(client) && (_model.Client(client)?.Label is not null || _tunnelsItself.Contains(client));

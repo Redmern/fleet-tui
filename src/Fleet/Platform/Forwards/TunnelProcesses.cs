@@ -67,7 +67,7 @@ public sealed class TunnelProcesses(string program = "ssh", Action<string>? log 
 
             if (!KillOnCloseJob.Hold(process.Handle))
             {
-                log?.Invoke($"could not put {program} (pid {process.Id}) in fleet's kill-on-close job; it may outlive fleetd");
+                log?.Invoke($"could not put {program} (pid {process.Id}) in fleet's kill-on-close job; it may outlive this fleet process");
             }
 
             var running = new Running(process);

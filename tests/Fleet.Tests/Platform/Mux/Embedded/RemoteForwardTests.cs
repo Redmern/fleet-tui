@@ -286,6 +286,38 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_tunnelling_attach_client_showing_another_workspace_is_not_sent_the_callers_forward()
+    {
+        await using var control = await DaemonTests.TestClient.ConnectAsync(_far, ClientRoles.Control, 0, 0, null);
+        var caller = (await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "alpha", Cwd = ".", Args = ["claude"] })).Pane;
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "beta", Cwd = ".", Args = ["claude"] })).Ok);
+        await using var plain = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "alpha", furnish: hello => hello.Ssh = "10.0.0.5 52000 10.0.0.9 22");
+        await using var windows = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "beta", furnish: hello => hello.Forwards = true);
+
+        var sent = await control.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Caller = caller });
+
+        Assert.Null(sent.Viewer);
+        Assert.Equal("10.0.0.5 52000 10.0.0.9 22", sent.Ssh);
+        Assert.DoesNotContain(windows.Effects, e => e.Kind == HostEffects.ForwardPort);
+    }
+
+    [Fact]
+    public async Task A_tunnelling_attach_client_showing_the_callers_workspace_is_sent_its_forward()
+    {
+        await using var control = await DaemonTests.TestClient.ConnectAsync(_far, ClientRoles.Control, 0, 0, null);
+        var caller = (await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "alpha", Cwd = ".", Args = ["claude"] })).Pane;
+        await using var windows = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "alpha", furnish: hello => hello.Forwards = true);
+
+        var sent = await control.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Caller = caller });
+
+        Assert.NotNull(sent.Viewer);
+        await Eventually(() => Task.FromResult(windows.Effects.Any(e => e is { Kind: HostEffects.ForwardPort, Value: "5173" })));
+    }
+
+    [Fact]
     public async Task An_unlabelled_attach_client_is_not_a_target_for_hand_backs_because_it_forwards()
     {
         await using var client = await DaemonTests.TestClient.ConnectAsync(
