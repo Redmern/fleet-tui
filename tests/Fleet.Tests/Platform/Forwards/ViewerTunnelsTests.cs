@@ -100,6 +100,21 @@ public sealed class ViewerTunnelsTests
     }
 
     [Fact]
+    public async Task Effects_run_in_the_order_they_arrive_so_a_quick_unforward_wins()
+    {
+        using var viewer = For();
+        var ports = Enumerable.Range(5000, 200).ToList();
+
+        foreach (var port in ports)
+        {
+            viewer.Apply(forward: true, port);
+            viewer.Apply(forward: false, port);
+        }
+
+        await WaitUntil(() => _tunnels.Started.Count == ports.Count && _tunnels.Started.All(t => t.Killed));
+    }
+
+    [Fact]
     public async Task Disposing_kills_every_tunnel_and_the_launcher()
     {
         var viewer = For();

@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Fleet.Platform.Forwards.Models;
 
 namespace Fleet.Platform.Forwards;
@@ -12,6 +13,10 @@ public sealed class ViewerTunnels : IDisposable
     private readonly Func<string, string?> _openBrowser;
     private readonly Action<string> _log;
     private readonly CancellationTokenSource _stop = new();
+    private readonly Channel<(bool Forward, int Port)> _effects = Channel.CreateUnbounded<(bool Forward, int Port)>(
+        new UnboundedChannelOptions { SingleReader = true });
+    private readonly Task _restarts;
+    private readonly Task _applying;
 
     public ViewerTunnels(
         string host,
@@ -25,7 +30,9 @@ public sealed class ViewerTunnels : IDisposable
         _openBrowser = openBrowser;
         _log = log;
         _forwards = new HostForwards(host, null, locals, NoMaster, log, mode);
-        _ = Task.Run(() => RestartLoopAsync(checkEvery, _stop.Token), CancellationToken.None);
+        var stop = _stop.Token;
+        _restarts = Task.Run(() => RestartLoopAsync(checkEvery, stop), CancellationToken.None);
+        _applying = Task.Run(() => ApplyLoopAsync(stop), CancellationToken.None);
     }
 
     public async Task ForwardAsync(int port, CancellationToken ct)
@@ -47,24 +54,37 @@ public sealed class ViewerTunnels : IDisposable
 
     public Task UnforwardAsync(int port, CancellationToken ct) => _forwards.UnforwardNowAsync(port, ct);
 
-    public void Apply(bool forward, int port) =>
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await (forward ? ForwardAsync(port, _stop.Token) : UnforwardAsync(port, _stop.Token)).ConfigureAwait(false);
-            }
-            catch (Exception e) when (e is IOException or InvalidOperationException or OperationCanceledException)
-            {
-                _log($"could not {(forward ? "forward" : "unforward")} port {port}: {e.Message}");
-            }
-        });
+    public void Apply(bool forward, int port) => _effects.Writer.TryWrite((forward, port));
 
     public void Dispose()
     {
+        _effects.Writer.TryComplete();
         _stop.Cancel();
         _forwards.Close();
         (_mode.Launcher as IDisposable)?.Dispose();
+        Task.WhenAll(_restarts, _applying).Wait(TimeSpan.FromSeconds(5));
+        _stop.Dispose();
+    }
+
+    private async Task ApplyLoopAsync(CancellationToken stop)
+    {
+        try
+        {
+            await foreach (var (forward, port) in _effects.Reader.ReadAllAsync(stop).ConfigureAwait(false))
+            {
+                try
+                {
+                    await (forward ? ForwardAsync(port, stop) : UnforwardAsync(port, stop)).ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is IOException or InvalidOperationException)
+                {
+                    _log($"could not {(forward ? "forward" : "unforward")} port {port}: {e.Message}");
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task RestartLoopAsync(TimeSpan every, CancellationToken stop)
