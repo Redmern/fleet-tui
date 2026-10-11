@@ -83,7 +83,8 @@ public static class HeadWiring
         var server = new McpServerEntry(McpServerId.ServerName, Adapters.Executable, HeadLaunch.McpArgs);
         var allow = HeadTools.Names.Select(n => $"mcp__{McpServerId.ServerName}__{n}").ToList();
 
-        var synced = new ClaudeConfigWriter().SyncWorktree(server, folder, allow, [], []);
+        var synced = new ClaudeConfigWriter().SyncWorktree(
+            server, folder, allow, [], [], todoHookCommand: Adapters.Executable, todoHookArgs: [ClaudeWiring.TodoHookVerb]);
 
         if (!synced.Succeeded)
         {

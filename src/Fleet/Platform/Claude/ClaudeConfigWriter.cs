@@ -134,7 +134,9 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         IReadOnlyList<string> allow,
         IReadOnlyList<string> deny,
         IReadOnlyList<string> ask,
-        string statusHook = "")
+        string statusHook = "",
+        string todoHookCommand = "",
+        IReadOnlyList<string>? todoHookArgs = null)
     {
         var mcpPath = Path.Combine(directory, ".mcp.json");
         var settingsPath = Path.Combine(directory, ".claude", "settings.local.json");
@@ -164,6 +166,11 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         settings.Permissions.Deny = Merge(settings.Permissions.Deny, deny);
         settings.Permissions.Ask = Merge(settings.Permissions.Ask, ask);
         ApplyStatusHooks(settings, statusHook);
+
+        if (todoHookArgs is { Count: > 0 })
+        {
+            ApplyTodoHook(settings, todoHookCommand, todoHookArgs);
+        }
 
         if (!Write(mcpPath, JsonSerializer.Serialize(mcp, ClaudeJsonContext.Default.McpJsonFile)))
         {
@@ -228,6 +235,9 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         var hookInstalled = settings.Hooks?.UserPromptSubmit
             .Any(group => group.Hooks.Any(IsOwnedHook)) ?? false;
 
+        var todoHookInstalled = settings.Hooks?.UserPromptSubmit
+            .Any(group => group.Hooks.Any(IsTodoHook)) ?? false;
+
         var statusHooksInstalled = settings.Hooks is { } hooks
             && HookStatus.Events.All(name => hooks.For(name)?.Any(group => group.Hooks.Any(IsStatusHook)) ?? false);
 
@@ -236,7 +246,8 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
             settings.EnabledMcpjsonServers.Contains(serverName),
             hookInstalled,
             settings.Permissions.Allow,
-            statusHooksInstalled);
+            statusHooksInstalled,
+            todoHookInstalled);
     }
 
     private static void Apply(McpJsonFile file, McpServerEntry server)
@@ -264,6 +275,7 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         }
 
         ApplyHook(file, plan.HookCommand, plan.HookArgs);
+        ApplyTodoHook(file, plan.HookCommand, plan.TodoHookArgs ?? []);
         ApplyStatusHooks(file, plan.StatusHook);
     }
 
@@ -339,6 +351,38 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
     }
 
     private const double DispatchHookTimeout = 90;
+
+    private const double TodoHookTimeout = 30;
+
+    private const string TodoHookVerb = "hook-todo";
+
+    private static void ApplyTodoHook(ClaudeSettingsFile file, string command, IReadOnlyList<string> args)
+    {
+        var on = command.Trim().Length > 0 && args.Count > 0;
+
+        if (!on && file.Hooks is null)
+        {
+            return;
+        }
+
+        var hooks = file.Hooks ??= new HooksJson();
+
+        hooks.UserPromptSubmit = hooks.UserPromptSubmit
+            .Where(group => !group.Hooks.Any(IsTodoHook))
+            .ToList();
+
+        if (on)
+        {
+            hooks.UserPromptSubmit.Add(new HookGroup
+            {
+                Hooks = [new HookEntry { Type = "command", Command = command, Args = [.. args], Timeout = TodoHookTimeout }],
+            });
+        }
+    }
+
+    private static bool IsTodoHook(HookEntry entry) =>
+        entry.Command.Contains(TodoHookVerb, StringComparison.Ordinal)
+        || (entry.Args?.Contains(TodoHookVerb) ?? false);
 
     private static bool IsOwnedHook(HookEntry entry) =>
         entry.Command.Contains("hook-dispatch", StringComparison.Ordinal)

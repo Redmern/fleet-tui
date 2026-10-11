@@ -171,6 +171,88 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         Assert.Equal(90, DispatchHookEntry().GetProperty("timeout").GetDouble());
     }
 
+    private ClaudePlan PlanWithTodo() => Plan() with { TodoHookArgs = ["hook-todo", "--project", "techweb"] };
+
+    private IReadOnlyList<string> PromptHookVerbs() =>
+        [.. Hooks().GetProperty("UserPromptSubmit").EnumerateArray()
+            .SelectMany(g => g.GetProperty("hooks").EnumerateArray())
+            .Select(h => h.GetProperty("args")[0].GetString()!)];
+
+    [Fact]
+    public void The_todo_hook_is_installed_next_to_the_dispatch_hook()
+    {
+        new ClaudeConfigWriter().Sync(PlanWithTodo());
+
+        Assert.Equal(["hook-dispatch", "hook-todo"], PromptHookVerbs());
+
+        var state = new ClaudeConfigWriter().Inspect(_dir, "fleet");
+        Assert.True(state.HookInstalled);
+        Assert.True(state.TodoHookInstalled);
+    }
+
+    [Fact]
+    public void Re_syncing_keeps_one_todo_hook_and_one_dispatch_hook()
+    {
+        var writer = new ClaudeConfigWriter();
+
+        writer.Sync(PlanWithTodo());
+        writer.Sync(PlanWithTodo());
+
+        Assert.Equal(["hook-dispatch", "hook-todo"], PromptHookVerbs());
+    }
+
+    [Fact]
+    public void A_todo_hook_alone_does_not_count_as_the_dispatch_hook()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """
+            {"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"fleet.exe","args":["hook-todo","--project","techweb"]}]}]}}
+            """);
+
+        var state = new ClaudeConfigWriter().Inspect(_dir, "fleet");
+
+        Assert.False(state.HookInstalled);
+        Assert.True(state.TodoHookInstalled);
+    }
+
+    [Fact]
+    public void A_missing_todo_hook_is_added_without_touching_an_existing_dispatch_hook()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllText(
+            SettingsPath,
+            """
+            {"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"fleet.exe","args":["hook-dispatch","--project","techweb"],"timeout":90}]}]}}
+            """);
+
+        new ClaudeConfigWriter().Sync(PlanWithTodo());
+
+        Assert.Equal(["hook-dispatch", "hook-todo"], PromptHookVerbs());
+        Assert.Equal(90, DispatchHookEntry().GetProperty("timeout").GetDouble());
+    }
+
+    [Fact]
+    public void A_plan_without_todo_args_removes_fleets_todo_hook()
+    {
+        var writer = new ClaudeConfigWriter();
+
+        writer.Sync(PlanWithTodo());
+        writer.Sync(Plan());
+
+        Assert.Equal(["hook-dispatch"], PromptHookVerbs());
+    }
+
+    [Fact]
+    public void A_worktree_sync_can_install_the_todo_hook_alone()
+    {
+        new ClaudeConfigWriter().SyncWorktree(
+            AgentServer(), _dir, [], [], [], todoHookCommand: "fleet.exe", todoHookArgs: ["hook-todo"]);
+
+        Assert.Equal(["hook-todo"], PromptHookVerbs());
+    }
+
     [Fact]
     public void A_users_own_hooks_survive_the_merge()
     {

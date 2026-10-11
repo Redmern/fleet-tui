@@ -9,4 +9,5 @@ public sealed record ClaudePlan(
     IReadOnlyList<string> EnabledServers,
     string HookCommand,
     IReadOnlyList<string> HookArgs,
-    string StatusHook = "");
+    string StatusHook = "",
+    IReadOnlyList<string>? TodoHookArgs = null);
