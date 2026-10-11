@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text;
+using System.Threading.Channels;
 using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
@@ -163,11 +165,7 @@ public sealed class AttachClient(
         var (cols, rows) = told;
         log($"attached as {client} at {cols}x{rows}");
         var savedTitle = HostEffectsOut.CurrentConsoleTitle();
-        write(Encoding.UTF8.GetBytes(
-            (OperatingSystem.IsWindows() ? string.Empty : PushTitle)
-            + EnterHost
-            + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)
-            + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Enable)));
+        write(Encoding.UTF8.GetBytes(EnterSequence(OperatingSystem.IsWindows(), mouse)));
 
         void Leave() => this.Leave(write, savedTitle, release);
 
@@ -206,6 +204,11 @@ public sealed class AttachClient(
 
         return 0;
     }
+
+    public static string EnterSequence(bool windows, bool mouse) =>
+        windows
+            ? EnterHost
+            : PushTitle + EnterHost + (mouse ? SgrMouse.Enable : string.Empty) + ModifiedKeys.Enable + PasteMarkers.Enable;
 
     public static string RestoreSequence => RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Disable + PopTitle);
 
@@ -508,31 +511,111 @@ public sealed class AttachClient(
 
     private async Task UnixInputAsync(Wire wire, UnixTerminal terminal)
     {
-        var buffer = new byte[4096];
+        var reads = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+
+        _ = Task.Run(() =>
+        {
+            var buffer = new byte[4096];
+            int n;
+            while (_running && (n = terminal.Read(buffer)) > 0)
+            {
+                reads.Writer.TryWrite(buffer[..n]);
+            }
+
+            reads.Writer.TryComplete();
+        });
+
+        await StdinAsync(wire, reads.Reader).ConfigureAwait(false);
+    }
+
+    public async Task StdinAsync(Wire wire, ChannelReader<byte[]> reads)
+    {
         var pending = new List<byte>(4096);
         var sgr = new SgrMouse();
+        var markers = new PasteMarkers();
+        var clock = Stopwatch.StartNew();
 
         while (_running)
         {
-            var n = await Task.Run(() => terminal.Read(buffer)).ConfigureAwait(false);
-            if (n <= 0)
+            var wait = markers.Deadline is { } due
+                ? TimeSpan.FromTicks(Math.Max((due - clock.Elapsed).Ticks, 0))
+                : Timeout.InfiniteTimeSpan;
+            var (read, closed) = await NextReadAsync(reads, wait).ConfigureAwait(false);
+
+            var chunks = read is not null ? markers.Feed(read, clock.Elapsed)
+                : markers.Expire(closed ? TimeSpan.MaxValue : clock.Elapsed);
+            foreach (var chunk in chunks)
+            {
+                await StdinChunkAsync(wire, chunk, sgr, pending).ConfigureAwait(false);
+            }
+
+            if (closed)
             {
                 return;
             }
-
-            var items = mouse ? sgr.Feed(buffer.AsSpan(0, n)) : [buffer[..n]];
-
-            foreach (var item in items)
-            {
-                if (item is MouseMessage message)
-                {
-                    await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage).ConfigureAwait(false);
-                    continue;
-                }
-
-                await TypedBytesAsync(wire, (byte[])item, pending).ConfigureAwait(false);
-            }
         }
+    }
+
+    private static async Task<(byte[]? Read, bool Closed)> NextReadAsync(ChannelReader<byte[]> reads, TimeSpan wait)
+    {
+        if (reads.TryRead(out var ready))
+        {
+            return (ready, false);
+        }
+
+        using var quiet = new CancellationTokenSource(wait);
+        try
+        {
+            if (!await reads.WaitToReadAsync(quiet.Token).ConfigureAwait(false))
+            {
+                return (null, true);
+            }
+
+            return reads.TryRead(out var read) ? (read, false) : (null, false);
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, false);
+        }
+    }
+
+    private async Task StdinChunkAsync(Wire wire, PasteChunk chunk, SgrMouse sgr, List<byte> pending)
+    {
+        if (chunk.Pasted)
+        {
+            await PastedAsync(wire, chunk.Bytes).ConfigureAwait(false);
+            return;
+        }
+
+        foreach (var item in mouse ? sgr.Feed(chunk.Bytes) : [chunk.Bytes])
+        {
+            if (item is MouseMessage message)
+            {
+                await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage).ConfigureAwait(false);
+                continue;
+            }
+
+            await TypedBytesAsync(wire, (byte[])item, pending).ConfigureAwait(false);
+        }
+    }
+
+    private async Task PastedAsync(Wire wire, byte[] bytes)
+    {
+        if (Sticky is not null)
+        {
+            log($"paste: {bytes.Length} bytes dropped in a mode that reads keys as commands");
+            return;
+        }
+
+        if (PrefixState.Armed)
+        {
+            PrefixState.Disarm();
+            await Badge(wire, null).ConfigureAwait(false);
+        }
+
+        log($"paste: {bytes.Length} bytes");
+        await Send(wire, MessageType.Text, new TextMessage { Text = Encoding.UTF8.GetString(bytes), Paste = true },
+            WireJsonContext.Default.TextMessage).ConfigureAwait(false);
     }
 
     private async Task TypedBytesAsync(Wire wire, byte[] bytes, List<byte> pending)
