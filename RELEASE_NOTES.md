@@ -9,7 +9,7 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 - **Open port** through a laptop fleet linked under Remote machines waits for the laptop's answer and says what happened: forwarded, pending until the port listens, or the reason it failed.
 - When the laptop can't open its browser, the dialog shows the URL to open yourself; a failed `xdg-open` (no display) is now reported instead of counted as success.
 - A laptop that doesn't answer within 20 s is reported with a pointer to its fleet log, and when it runs an older fleet, a hint to restart its fleetd.
-- A laptop fleet that can't handle a forward logs it and makes Open port fall back to the ssh command; opening a port whose forward failed tries it again.
+- fleetd logs host effects it doesn't handle instead of dropping them, and answers a newer fleet's forward request as unsupported so Open port falls back to the ssh command; opening a port whose forward failed tries it again.
 
 ## 0.7.16 (2026-10-11)
 
