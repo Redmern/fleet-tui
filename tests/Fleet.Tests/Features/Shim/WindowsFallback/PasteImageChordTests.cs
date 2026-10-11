@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Tests.Platform.Mux.Embedded;
@@ -75,6 +76,41 @@ public sealed class PasteImageChordTests : IAsyncLifetime
         await Task.Delay(100);
         Assert.Empty(_dropped);
         Assert.DoesNotContain("png", PtyOf(pane).Written, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_chord_with_no_image_tells_the_viewer()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var viewer = await ViewAsync("techweb", new FakeClipboardImageSource(null));
+
+        await viewer.SendCommandAsync(FleetDaemon.PasteImageCommand);
+
+        await Eventually(() => viewer.Notices.Any(n => n.Contains("no image", StringComparison.Ordinal) && n.Contains(pane, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task The_chord_with_a_too_large_image_tells_the_viewer_and_types_nothing()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var viewer = await ViewAsync("techweb", new FakeClipboardImageSource(new byte[ClipboardImageResponse.MaxBytes + 1]));
+
+        await viewer.SendCommandAsync(FleetDaemon.PasteImageCommand);
+
+        await Eventually(() => viewer.Notices.Any(n => n.Contains("too large", StringComparison.Ordinal)));
+        Assert.Empty(_dropped);
+        Assert.DoesNotContain("png", PtyOf(pane).Written, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_shim_read_with_no_image_does_not_notify_the_viewer()
+    {
+        var notices = new List<string>();
+
+        await ClipboardImageAnswer.ForAsync(new ClipboardImageRequest { Id = 1, Pane = "p1" }, new FakeClipboardImageSource(null), notices.Add);
+        await ClipboardImageAnswer.ForAsync(new ClipboardImageRequest { Id = 2, Pane = "p1", Probe = true }, new FakeClipboardImageSource(null), notices.Add);
+
+        Assert.Empty(notices);
     }
 
     [Fact]

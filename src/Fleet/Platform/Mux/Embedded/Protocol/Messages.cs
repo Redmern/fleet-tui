@@ -302,6 +302,9 @@ public sealed class ClipboardImageRequest
 
     [JsonPropertyName("probe")]
     public bool Probe { get; set; }
+
+    [JsonPropertyName("paste")]
+    public bool Paste { get; set; }
 }
 
 public sealed class ClipboardImageResponse

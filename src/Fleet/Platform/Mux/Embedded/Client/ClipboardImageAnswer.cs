@@ -21,6 +21,12 @@ public static class ClipboardImageAnswer
             {
                 notice?.Invoke(Notice(request.Pane, png.Length));
             }
+            else if (request.Paste)
+            {
+                notice?.Invoke(answer.Error is { } error
+                    ? $"cannot paste an image into {request.Pane}: {error}"
+                    : $"no image on your clipboard to paste into {request.Pane}");
+            }
 
             return answer;
         }
