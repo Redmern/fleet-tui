@@ -142,8 +142,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         lock (_gate)
         {
             var failures = _failures[link.Host] = link.WasConnected ? 1 : _failures.GetValueOrDefault(link.Host) + 1;
-            var wait = options.ReconnectAfter * Math.Pow(2, Math.Min(failures - 1, 6));
-            return wait < options.ReconnectAtMost ? wait : options.ReconnectAtMost;
+            return Backoff.After(options.ReconnectAfter, options.ReconnectAtMost, failures);
         }
     }
 
