@@ -40,3 +40,10 @@ public sealed class JiraStatusCategoryJson
 {
     public string? Key { get; set; }
 }
+
+public sealed class JiraErrorJson
+{
+    public List<string> ErrorMessages { get; set; } = [];
+
+    public Dictionary<string, string> Errors { get; set; } = [];
+}

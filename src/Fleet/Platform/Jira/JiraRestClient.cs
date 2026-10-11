@@ -15,6 +15,8 @@ public sealed class JiraRestClient : IJiraClient, IDisposable
 {
     public static readonly TimeSpan AnswerWithin = TimeSpan.FromSeconds(20);
 
+    public static readonly TimeSpan PullWithin = TimeSpan.FromMinutes(2);
+
     private const int PageSize = 100;
 
     private const int MaxPages = 50;
@@ -38,6 +40,9 @@ public sealed class JiraRestClient : IJiraClient, IDisposable
         var issues = new List<JiraIssue>();
         string? next = null;
 
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(PullWithin);
+
         try
         {
             for (var page = 0; page < MaxPages; page++)
@@ -45,14 +50,14 @@ public sealed class JiraRestClient : IJiraClient, IDisposable
                 using var request = new HttpRequestMessage(HttpMethod.Get, SearchUri(settings, next));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
-                using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+                using var response = await _http.SendAsync(request, deadline.Token).ConfigureAwait(false);
 
-                if (Refused(response, settings) is { } refused)
+                var body = await response.Content.ReadAsStringAsync(deadline.Token).ConfigureAwait(false);
+
+                if (Refused(response, body, settings) is { } refused)
                 {
                     return Result<IReadOnlyList<JiraIssue>>.Fail(refused);
                 }
-
-                var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
                 if (JsonSerializer.Deserialize(body, JiraJsonContext.Default.JiraSearchJson) is not { } found)
                 {
@@ -76,10 +81,9 @@ public sealed class JiraRestClient : IJiraClient, IDisposable
         {
             return Result<IReadOnlyList<JiraIssue>>.Fail($"Jira is unreachable at {settings.BaseUrl}: {e.Message}");
         }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return Result<IReadOnlyList<JiraIssue>>.Fail(
-                $"Jira at {settings.BaseUrl} did not answer within {AnswerWithin.TotalSeconds:0} s.");
+            return Result<IReadOnlyList<JiraIssue>>.Fail($"Jira at {settings.BaseUrl} did not answer in time.");
         }
         catch (JsonException)
         {
@@ -105,16 +109,45 @@ public sealed class JiraRestClient : IJiraClient, IDisposable
         return new Uri(settings.BaseUrl.TrimEnd('/') + "/rest/api/3/search/jql?" + query);
     }
 
-    private static string? Refused(HttpResponseMessage response, JiraSettings settings)
+    private static string? Refused(HttpResponseMessage response, string body, JiraSettings settings)
     {
         var code = (int)response.StatusCode;
 
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden || LoginFailed(response))
         {
             return $"Jira rejected the credentials for {settings.Email} (HTTP {code}); check the email and API token.";
         }
 
-        return response.IsSuccessStatusCode ? null : $"Jira answered HTTP {code}.";
+        if (response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var explained = Explained(body);
+
+        return explained.Length == 0 ? $"Jira answered HTTP {code}." : $"Jira answered HTTP {code}: {explained}";
+    }
+
+    private static bool LoginFailed(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("X-Seraph-LoginReason", out var reasons)
+        && reasons.Any(r => r.Contains("FAILED", StringComparison.OrdinalIgnoreCase)
+            || r.Contains("DENIED", StringComparison.OrdinalIgnoreCase));
+
+    private static string Explained(string body)
+    {
+        try
+        {
+            if (JsonSerializer.Deserialize(body, JiraJsonContext.Default.JiraErrorJson) is not { } error)
+            {
+                return string.Empty;
+            }
+
+            return string.Join(' ', error.ErrorMessages.Concat(error.Errors.Select(e => $"{e.Key}: {e.Value}")));
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private static JiraIssue Issue(JiraIssueJson issue, string storyPointsField)

@@ -122,6 +122,41 @@ public class JiraRestClientTests
         Assert.DoesNotContain(Convert.ToBase64String(Encoding.UTF8.GetBytes("me@acme.test:" + Token)), result.Error);
     }
 
+    [Theory]
+    [InlineData("AUTHENTICATED_FAILED")]
+    [InlineData("AUTHENTICATION_DENIED")]
+    public async Task An_anonymous_answer_after_failed_login_counts_as_rejected(string reason)
+    {
+        _handler.Reply(HttpStatusCode.OK, Page(string.Empty), ("X-Seraph-LoginReason", reason));
+
+        var result = await Client.SearchAsync(Settings, Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("rejected the credentials", result.Error);
+    }
+
+    [Fact]
+    public async Task A_bad_query_shows_jiras_error_messages()
+    {
+        _handler.Reply(HttpStatusCode.BadRequest, "{ \"errorMessages\": [\"Field 'asignee' does not exist.\"], \"errors\": {} }");
+
+        var result = await Client.SearchAsync(Settings, Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("HTTP 400", result.Error);
+        Assert.Contains("Field 'asignee' does not exist.", result.Error);
+    }
+
+    [Fact]
+    public async Task A_cancelled_pull_throws_instead_of_reporting_a_timeout()
+    {
+        using var cancel = new CancellationTokenSource();
+        cancel.Cancel();
+        _handler.Reply(HttpStatusCode.OK, Page(string.Empty));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Client.SearchAsync(Settings, Token, cancel.Token));
+    }
+
     [Fact]
     public async Task A_server_error_names_the_status()
     {
@@ -164,13 +199,24 @@ public class JiraRestClientTests
 
         public List<Seen> Requests { get; } = [];
 
-        public void Reply(HttpStatusCode code, string body) =>
-            _replies.Enqueue(() => new HttpResponseMessage(code) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+        public void Reply(HttpStatusCode code, string body, params (string Name, string Value)[] headers) =>
+            _replies.Enqueue(() =>
+            {
+                var response = new HttpResponseMessage(code) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+                foreach (var (name, value) in headers)
+                {
+                    response.Headers.TryAddWithoutValidation(name, value);
+                }
+
+                return response;
+            });
 
         public void Throw(Exception e) => _replies.Enqueue(() => throw e);
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Requests.Add(new Seen(request.Method, request.RequestUri!, request.Headers.Authorization?.ToString() ?? string.Empty));
             return Task.FromResult(_replies.Dequeue()());
         }
