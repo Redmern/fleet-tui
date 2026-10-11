@@ -1,6 +1,6 @@
 # Spec: Open port on the viewer route reports its outcome and stops failing silently
 
-Repository: fleet-tui. Stage: Specify (awaiting approval).
+Repository: fleet-tui. Status: approved.
 
 ## Problem
 With a laptop fleet linked under Remote machines, Open port on a remote project sends a `forward-port` effect to the laptop. Whatever the laptop does next (forward, fail, drop the effect, fail to open the browser) is invisible: errors go only to the laptop's fleet.log, success shows no dialog, and the menu closes before anything settles. The user sees "nothing happens" and falls back to a manual `ssh -N -L`, which prompts for a password. The viewer route never prompts by design (it reuses the link's authenticated master).
