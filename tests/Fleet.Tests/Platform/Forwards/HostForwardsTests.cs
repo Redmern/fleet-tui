@@ -125,6 +125,26 @@ public sealed class HostForwardsTests
     }
 
     [Fact]
+    public async Task Opening_a_failed_port_again_retries_its_forward()
+    {
+        var refuse = true;
+        _ssh.Answer = args => refuse && args.Contains("forward")
+            ? new SshResult(255, string.Empty, "bind [127.0.0.1]:5173: Address already in use")
+            : null;
+        var forwards = For();
+        await forwards.ReconcileAsync(Listening(5173), Allowed(), default);
+        await forwards.ForwardNowAsync(5173, null, default);
+        Assert.Equal(ForwardState.Failed, forwards.Row(5173).State);
+
+        refuse = false;
+        forwards.Pin(5173, null);
+        var row = await forwards.ForwardNowAsync(5173, null, default);
+
+        Assert.Equal(ForwardState.Forwarded, row.State);
+        Assert.Equal(2, _ssh.Forwards("forward").Count());
+    }
+
+    [Fact]
     public async Task A_refusal_is_forgotten_once_the_link_restarts()
     {
         var forwards = For();

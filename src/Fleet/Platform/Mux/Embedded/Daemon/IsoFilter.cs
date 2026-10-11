@@ -29,6 +29,7 @@ public static class IsoFilter
         "hand-back",
         ForwardHub.ViewerForwardOp,
         ForwardHub.ViewerUnforwardOp,
+        ForwardHub.ViewerForwardedOp,
     };
 
     public static bool IsServed(string op) => Served.Contains(op);

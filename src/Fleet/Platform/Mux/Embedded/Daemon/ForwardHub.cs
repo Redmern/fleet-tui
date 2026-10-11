@@ -29,6 +29,12 @@ public sealed class ForwardOptions
 
     public TimeSpan ForwardWithin { get; init; } = TimeSpan.FromSeconds(20);
 
+    public TimeSpan ViewerAnswerWithin { get; init; } = TimeSpan.FromSeconds(20);
+
+    public TimeSpan PendingAfter { get; init; } = TimeSpan.FromSeconds(5);
+
+    public TimeSpan OpenWhenListeningWithin { get; init; } = TimeSpan.FromMinutes(10);
+
     public TimeSpan StackWithin { get; init; } = TimeSpan.FromMinutes(3);
 
     public TimeSpan ReconnectAfter { get; init; } = TimeSpan.FromSeconds(5);
@@ -46,6 +52,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
     public const string ViewerOpenOp = "viewer-open";
     public const string ViewerForwardOp = "viewer-forward";
     public const string ViewerUnforwardOp = "viewer-unforward";
+    public const string ViewerForwardedOp = "viewer-forwarded";
 
     public static readonly IReadOnlySet<string> SlowOps = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -204,29 +211,67 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         }
     }
 
-    public async Task ForwardForViewerAsync(RemoteLink link, string? value, CancellationToken ct)
+    public async Task<ForwardResultDto> ForwardForViewerAsync(RemoteLink link, string? value, CancellationToken ct)
     {
         if (!int.TryParse(value, out var port) || For(link.Host) is not { } forwards)
         {
             log($"remote {link.Host}: asked to forward port {value}, which cannot be forwarded here");
-            return;
+            return ForwardResult(
+                ForwardResults.Failed,
+                $"http://localhost:{value}",
+                $"{Environment.MachineName} cannot forward port {value} from {link.Host}: it has no ssh control socket or tunnel there");
         }
 
         forwards.Pin(port, null);
         await forwards.ForwardNowAsync(port, null, ct).ConfigureAwait(false);
-        var row = await SettledAsync(forwards, port, options.ForwardWithin, ct).ConfigureAwait(false);
+        var row = await SettledAsync(forwards, port, options.ForwardWithin, options.PendingAfter, ct).ConfigureAwait(false);
 
-        if (row.Url is not { } url)
+        if (row.Url is { } url)
         {
-            log($"remote {link.Host}: port {port} is pinned and forwards once it listens ({row.Error ?? row.State.ToString().ToLowerInvariant()})");
-            return;
+            return OpenForViewer(link, url);
         }
 
+        if (row.State == ForwardState.Failed)
+        {
+            log($"remote {link.Host}: could not forward port {port}: {row.Error}");
+            return ForwardResult(ForwardResults.Failed, $"http://localhost:{port}", row.Error ?? "the forward failed");
+        }
+
+        log($"remote {link.Host}: port {port} is pinned and forwards once it listens ({row.Error ?? row.State.ToString().ToLowerInvariant()})");
+        _ = Task.Run(() => OpenWhenListeningAsync(link, forwards, port, ct), CancellationToken.None);
+        return ForwardResult(ForwardResults.Pending, $"http://localhost:{port}", row.Error);
+    }
+
+    private ForwardResultDto OpenForViewer(RemoteLink link, string url)
+    {
         if (options.OpenBrowser(url) is { } failed)
         {
             log($"remote {link.Host}: {failed}");
+            return ForwardResult(ForwardResults.BrowserFailed, url, failed);
+        }
+
+        return ForwardResult(ForwardResults.Forwarded, url);
+    }
+
+    private async Task OpenWhenListeningAsync(RemoteLink link, HostForwards forwards, int port, CancellationToken ct)
+    {
+        try
+        {
+            var row = await SettledAsync(forwards, port, options.OpenWhenListeningWithin, options.PendingAfter, ct, waitForListening: true)
+                .ConfigureAwait(false);
+            if (row.Url is { } url && forwards.IsPinned(port))
+            {
+                OpenForViewer(link, url);
+            }
+        }
+        catch (Exception e)
+        {
+            log($"remote {link.Host}: stopped waiting to open port {port}: {e.Message}");
         }
     }
+
+    public static ForwardResultDto ForwardResult(string state, string url, string? reason = null) =>
+        new() { State = state, Url = url, Reason = reason };
 
     public async Task UnforwardForViewerAsync(RemoteLink link, string? value, CancellationToken ct)
     {
@@ -262,7 +307,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                     }
 
                     await forwards.ForwardNowAsync(port, local, ct).ConfigureAwait(false);
-                    var row = await SettledAsync(forwards, port, options.ForwardWithin, ct).ConfigureAwait(false);
+                    var row = await SettledAsync(forwards, port, options.ForwardWithin, options.PendingAfter, ct).ConfigureAwait(false);
                     return new ControlResponse { Ok = true, Forwards = [ToDto(row)] };
                 }
 
@@ -435,7 +480,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         }
 
         var stackClock = System.Diagnostics.Stopwatch.StartNew();
-        var row = await SettledAsync(forwards, port, options.StackWithin, ct, waitForListening: true).ConfigureAwait(false);
+        var row = await SettledAsync(forwards, port, options.StackWithin, options.PendingAfter, ct, waitForListening: true).ConfigureAwait(false);
         if (row.State != ForwardState.Forwarded)
         {
             throw new TimeoutException(
@@ -564,7 +609,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
     }
 
     private static async Task<PortForward> SettledAsync(
-        HostForwards forwards, int port, TimeSpan within, CancellationToken ct, bool waitForListening = false)
+        HostForwards forwards, int port, TimeSpan within, TimeSpan pendingAfter, CancellationToken ct, bool waitForListening = false)
     {
         var waited = System.Diagnostics.Stopwatch.StartNew();
         while (true)
@@ -572,7 +617,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             var row = forwards.Row(port);
             var settled = row.State is ForwardState.Forwarded or ForwardState.Failed
                 || (!waitForListening && forwards.Retrying(port))
-                || (!waitForListening && row.State == ForwardState.Waiting && waited.Elapsed > TimeSpan.FromSeconds(5));
+                || (!waitForListening && row.State == ForwardState.Waiting && waited.Elapsed > pendingAfter);
 
             if (settled || waited.Elapsed > within)
             {

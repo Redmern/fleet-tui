@@ -5938,6 +5938,26 @@ What the phases add up to:
   settle, open the mapped URL. `viewer-unforward` / `unforward-port` unpin and cancel.
   A caller without a client (an agent's MCP call) goes to the fleet viewer showing the
   caller's workspace, else one that reports forwards, else any.
+- **The viewer answers.** A `forward-port` effect to a fleet viewer carries a `reply` id, and
+  fleetd holds the `viewer-forward` response until the viewer's fleetd sends `viewer-forwarded`
+  with that id and a `ForwardResultDto` (`forwarded`, `pending`, `failed` with ssh's trimmed
+  stderr, `browser-failed` with the URL, `unsupported`), or `ViewerAnswerWithin` (20 s)
+  passes and it answers `no-answer` itself (`AnswerViewerForwardAsync`, off the control loop).
+  The menu shows a wait dialog meanwhile (`FleetDialog.Wait`) and then the outcome, so Open
+  port is never silent: a failure is an error dialog with the reason, a browser that would not
+  open names the URL to open by hand, a pending forward says the viewer opens it once the port
+  listens (`OpenWhenListeningAsync`, up to 10 minutes). Any exception in the viewer's effect
+  task is logged and answered as `failed`.
+- **Loud failures.** The viewer's fleetd logs an effect kind it does not handle ("ignored the
+  ... effect") instead of dropping it, and when it carries a reply answers `unsupported`; the
+  remote then adds that viewer to `_cannotForward` and returns the ssh command instead, so a
+  newer remote falls back on its own. An older viewer that drops `forward-port` without a
+  word ends in `no-answer`; fleetd keeps each client's `Hello.build`, names both builds in
+  the reason when they differ, and the dialog says to restart the viewer's fleetd
+  (`fleet daemon stop`, then `fleet attach`), since fleetd outlives the binary it came from.
+  `HostForwards.Pin` clears a port's failure, so opening a failed port again retries it, and
+  `SystemBrowser` waits up to 2 s for `xdg-open` / `open` / `start` and reports a non-zero
+  exit (xdg-open without a display) instead of success once `sh` started.
 - **Plain ssh.** Without a fleet viewer the reply carries the `SSH_CONNECTION` that client
   came in by, and the menu shows `ssh -N -L p:localhost:p user@<server address>` (`-p` when
   sshd is not on 22) with a **Copy** button. fleetd strips `SSH_*` from its own environment

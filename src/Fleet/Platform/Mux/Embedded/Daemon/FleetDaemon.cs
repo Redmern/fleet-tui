@@ -93,6 +93,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly Dictionary<string, string> _sshOf = new(StringComparer.Ordinal);
     private readonly HashSet<string> _cannotForward = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tunnelsItself = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ViewerAnswer> _viewerAnswers = new(StringComparer.Ordinal);
     private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
@@ -304,14 +305,27 @@ public sealed class FleetDaemon(DaemonOptions options)
                         {
                             var client = ClientFor(request, attachedClient);
                             var shown = CallerWorkspace(request.Caller);
-                            response.Viewer = ToViewer(
+                            (response.Viewer, response.AwaitingReply) = ToViewer(
                                 client,
                                 shown,
                                 request.Op == ForwardHub.ViewerForwardOp ? HostEffects.ForwardPort : HostEffects.UnforwardPort,
                                 request.Port);
                             response.Ssh = response.Viewer is null ? SshOf(client, shown) : null;
+                            if (response.AwaitingReply is { } awaiting)
+                            {
+                                _viewerAnswers[awaiting].Fallback = SshOf(client, shown);
+                            }
+
                             break;
                         }
+                    case ForwardHub.ViewerForwardedOp:
+                        if (request.Reply is { } reply && _viewerAnswers.TryGetValue(reply, out var answered))
+                        {
+                            answered.Answer.TrySetResult(request.ForwardResult
+                                ?? ForwardHub.ForwardResult(ForwardResults.Failed, string.Empty, "the viewer sent no result"));
+                        }
+
+                        break;
                     case "list-remotes":
                         response.Remotes = [.. _remotes.Values.Select(r => r.Snapshot())];
                         break;
@@ -455,6 +469,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 {
                     var client = _model.Connect(hello.Cols, hello.Rows, hello.Workspace);
                     client.Label = hello.Label;
+                    client.Build = hello.Build;
                     clientId = client.Id;
                     session = new AttachSession(client.Id, wire);
                     _sessions[client.Id] = session;
@@ -621,6 +636,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                         : bridged && iso.On
                             ? ExecuteIso(request, session?.Client, iso)
                             : Execute(request, session?.Client);
+
+                    if (response.AwaitingReply is { } awaiting)
+                    {
+                        _ = Task.Run(() => AnswerViewerForwardAsync(wire, request.Port, response, awaiting, ct), CancellationToken.None);
+                        break;
+                    }
+
                     await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
                         .ConfigureAwait(false);
                     break;
@@ -701,6 +723,55 @@ public sealed class FleetDaemon(DaemonOptions options)
         var response = Execute(request, attachedClient);
         IsoFilter.Outbound(response, codes);
         return response;
+    }
+
+    private async Task AnswerViewerForwardAsync(Wire wire, int port, ControlResponse response, string reply, CancellationToken ct)
+    {
+        var waiting = _viewerAnswers[reply];
+        try
+        {
+            response.ForwardResult = await waiting.Answer.Task.WaitAsync(options.Forwards.ViewerAnswerWithin, ct).ConfigureAwait(false);
+            if (response.ForwardResult.State == ForwardResults.Unsupported)
+            {
+                options.Log($"{response.Viewer} cannot forward {port} ({response.ForwardResult.Reason}); falling back to the ssh command");
+                lock (_gate)
+                {
+                    if (_sessions.ContainsKey(waiting.Viewer))
+                    {
+                        _cannotForward.Add(waiting.Viewer);
+                    }
+                }
+
+                response.Viewer = null;
+                response.Ssh = waiting.Fallback;
+            }
+        }
+        catch (TimeoutException)
+        {
+            var skew = waiting.Build is { } build && build != FleetVersion.Current
+                ? $"{response.Viewer} runs fleet {build}, this machine {FleetVersion.Current}"
+                : null;
+            options.Log($"{response.Viewer} did not answer forward-port {port} within {options.Forwards.ViewerAnswerWithin.TotalSeconds:0}s{(skew is null ? string.Empty : $" ({skew})")}");
+            response.ForwardResult = ForwardHub.ForwardResult(
+                ForwardResults.NoAnswer, $"http://localhost:{port.ToString(System.Globalization.CultureInfo.InvariantCulture)}", skew);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            _viewerAnswers.TryRemove(reply, out _);
+        }
+
+        try
+        {
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
     }
 
     private async Task AnswerForwardAsync(Wire wire, ControlRequest request, CancellationToken ct)
@@ -806,7 +877,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         _wake.Release();
     }
 
-    private string? ToViewer(string? client, string? shown, string kind, int port)
+    private (string? Viewer, string? Reply) ToViewer(string? client, string? shown, string kind, int port)
     {
         if (port is < 1 or > 65535)
         {
@@ -815,13 +886,24 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         if (ViewerOf(client, shown) is not { } viewer)
         {
-            return null;
+            return (null, null);
         }
 
-        _sessions[viewer].Pending.Enqueue(new HostEffect { Kind = kind, Value = port.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+        var reply = kind == HostEffects.ForwardPort && _model.Client(viewer)?.Label is not null ? Guid.NewGuid().ToString("N") : null;
+        if (reply is not null)
+        {
+            _viewerAnswers[reply] = new ViewerAnswer(viewer, _model.Client(viewer)?.Build);
+        }
+
+        _sessions[viewer].Pending.Enqueue(new HostEffect
+        {
+            Kind = kind,
+            Value = port.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Reply = reply,
+        });
         _wake.Release();
         options.Log($"{viewer}: {kind} {port} sent to the machine viewing this one");
-        return _viewerForwards.GetValueOrDefault(viewer)?.FirstOrDefault()?.Host ?? "the machine viewing this one";
+        return (_viewerForwards.GetValueOrDefault(viewer)?.FirstOrDefault()?.Host ?? "the machine viewing this one", reply);
     }
 
     private string? ViewerOf(string? client, string? shown) =>
@@ -1968,30 +2050,28 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         if (effect.Kind == HostEffects.OpenUrl)
         {
-            _hub.Open(link, effect.Value);
+            _ = Task.Run(() => _hub.Open(link, effect.Value), CancellationToken.None);
             return;
         }
 
         if (effect.Kind is HostEffects.ForwardPort or HostEffects.UnforwardPort)
         {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await (effect.Kind == HostEffects.ForwardPort
-                        ? _hub.ForwardForViewerAsync(link, effect.Value, _stop.Token)
-                        : _hub.UnforwardForViewerAsync(link, effect.Value, _stop.Token)).ConfigureAwait(false);
-                }
-                catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
-                {
-                    options.Log($"remote {link.Host}: could not {effect.Kind} {effect.Value}: {e.Message}");
-                }
-            });
+            _ = Task.Run(() => ForwardForRemoteAsync(link, effect), CancellationToken.None);
             return;
         }
 
         if (effect.Kind is not (HostEffects.Clipboard or HostEffects.Bell or HostEffects.HandBack or HostEffects.OpenWindow))
         {
+            options.Log($"remote {link.Host}: ignored the {effect.Kind} effect, which fleetd {FleetVersion.Current} here does not handle");
+            if (effect.Reply is { } reply)
+            {
+                var unsupported = ForwardHub.ForwardResult(
+                    ForwardResults.Unsupported,
+                    $"http://localhost:{effect.Value}",
+                    $"{Environment.MachineName} runs fleetd {FleetVersion.Current}, which does not handle {effect.Kind}");
+                _ = Task.Run(() => ReplyToRemoteAsync(link, effect, reply, unsupported), CancellationToken.None);
+            }
+
             return;
         }
 
@@ -2021,6 +2101,44 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         _wake.Release();
+    }
+
+    private async Task ForwardForRemoteAsync(RemoteLink link, HostEffect effect)
+    {
+        ForwardResultDto result;
+        try
+        {
+            if (effect.Kind == HostEffects.UnforwardPort)
+            {
+                await _hub.UnforwardForViewerAsync(link, effect.Value, _stop.Token).ConfigureAwait(false);
+                return;
+            }
+
+            result = await _hub.ForwardForViewerAsync(link, effect.Value, _stop.Token).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            options.Log($"remote {link.Host}: could not {effect.Kind} {effect.Value}: {e.GetType().Name}: {e.Message}");
+            result = ForwardHub.ForwardResult(ForwardResults.Failed, $"http://localhost:{effect.Value}", e.Message);
+        }
+
+        if (effect.Reply is { } reply)
+        {
+            await ReplyToRemoteAsync(link, effect, reply, result).ConfigureAwait(false);
+        }
+    }
+
+    private async Task ReplyToRemoteAsync(RemoteLink link, HostEffect effect, string reply, ForwardResultDto result)
+    {
+        try
+        {
+            await link.SendAsync(new ControlRequest { Op = ForwardHub.ViewerForwardedOp, Reply = reply, ForwardResult = result })
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or TimeoutException or OperationCanceledException)
+        {
+            options.Log($"remote {link.Host}: could not report the forward of {effect.Value}: {e.Message}");
+        }
     }
 
     private bool MenuShown(string pane) =>
