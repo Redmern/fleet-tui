@@ -1,6 +1,7 @@
 using Fleet.Features.Orchestrations.ReportStatus;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Todos;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Orchestrations;
@@ -144,6 +145,53 @@ public sealed class ReportStatusTests
     }
 
     [Fact]
+    public async Task A_finished_sub_orchestrator_tells_the_ticket_sink_its_slug_and_status()
+    {
+        Seed("fix-login");
+        var tickets = new RecordingTickets();
+
+        await new ReportStatusHandler(_store, tickets: tickets).HandleAsync(
+            "techweb", Root, "fix-login", "DONE", "  merged  ");
+
+        Assert.Equal([(Root, "fix-login", OrchestrationStatus.Done, "merged")], tickets.Reports);
+    }
+
+    [Fact]
+    public void A_report_through_the_cli_reaches_the_ticket_sink_with_the_project_root()
+    {
+        Seed("fix-login");
+        var tickets = new RecordingTickets();
+
+        new ReportStatusHandler(_store, tickets: tickets).Handle(
+            "techweb", "fix-login", OrchestrationStatus.Failed, "broke", Root);
+
+        Assert.Equal([(Root, "fix-login", OrchestrationStatus.Failed, "broke")], tickets.Reports);
+    }
+
+    [Fact]
+    public async Task An_agent_report_never_reaches_the_ticket_sink()
+    {
+        SeedAgent("backend", "fix-login");
+        var tickets = new RecordingTickets();
+
+        await new ReportStatusHandler(_store, tickets: tickets).HandleAsync(
+            "techweb", Root, "agent:backend/fix-login", OrchestrationStatus.Done, "");
+
+        Assert.Empty(tickets.Reports);
+    }
+
+    [Fact]
+    public async Task A_failed_report_never_reaches_the_ticket_sink()
+    {
+        var tickets = new RecordingTickets();
+
+        await new ReportStatusHandler(_store, tickets: tickets).HandleAsync(
+            "techweb", Root, "ghost", OrchestrationStatus.Done, "");
+
+        Assert.Empty(tickets.Reports);
+    }
+
+    [Fact]
     public async Task A_finished_agent_is_told_to_message_its_sub_orchestrator()
     {
         var sub = Seed("some-sub");
@@ -282,5 +330,13 @@ public sealed class ReportStatusTests
         public IReadOnlyList<AgentRecord> List(string project) => Saved;
 
         public void Remove(string project, string worktree) { }
+    }
+
+    private sealed class RecordingTickets : ITicketStatusSink
+    {
+        public List<(string Root, string Orchestration, string Status, string Summary)> Reports { get; } = [];
+
+        public void Reported(string projectRoot, string orchestration, string status, string summary) =>
+            Reports.Add((projectRoot, orchestration, status, summary));
     }
 }

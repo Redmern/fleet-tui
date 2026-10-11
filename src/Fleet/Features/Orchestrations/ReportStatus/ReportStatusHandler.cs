@@ -1,6 +1,7 @@
 using System.Globalization;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Todos;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Mcp;
@@ -10,17 +11,21 @@ using Fleet.Shared.Results;
 namespace Fleet.Features.Orchestrations.ReportStatus;
 
 public sealed class ReportStatusHandler(
-    IAgentStore store, Func<DateTimeOffset>? clock = null, IAgentInboxes? inboxes = null)
+    IAgentStore store,
+    Func<DateTimeOffset>? clock = null,
+    IAgentInboxes? inboxes = null,
+    ITicketStatusSink? tickets = null)
 {
     private readonly Func<DateTimeOffset> _now = clock ?? (() => DateTimeOffset.UtcNow);
 
-    public Result<string> Handle(string project, string caller, string status, string summary) =>
-        Record(project, caller, status, summary, out _);
+    public Result<string> Handle(
+        string project, string caller, string status, string summary, string projectRoot = "") =>
+        Record(project, projectRoot, caller, status, summary, out _);
 
     public async Task<Result<string>> HandleAsync(
         string project, string root, string caller, string status, string summary, CancellationToken ct = default)
     {
-        var recorded = Record(project, caller, status, summary, out var reporter);
+        var recorded = Record(project, root, caller, status, summary, out var reporter);
 
         if (!recorded.Succeeded
             || inboxes is null
@@ -39,7 +44,7 @@ public sealed class ReportStatusHandler(
     }
 
     private Result<string> Record(
-        string project, string caller, string status, string summary, out AgentRecord? record)
+        string project, string root, string caller, string status, string summary, out AgentRecord? record)
     {
         record = null;
 
@@ -68,6 +73,11 @@ public sealed class ReportStatusHandler(
             Summary = summary.Trim(),
             ReportedAt = _now().ToString("O", CultureInfo.InvariantCulture),
         });
+
+        if (!isAgent && root.Trim().Length > 0)
+        {
+            tickets?.Reported(root, record.Branch, normalized, summary.Trim());
+        }
 
         return Result<string>.Ok(ReportNote.For(id, normalized, summary));
     }
