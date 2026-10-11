@@ -82,7 +82,7 @@ public sealed class McpActions(
 
     private readonly SecretsHandler _secrets = new();
 
-    private readonly ReportStatusHandler _reporter = new(store, inboxes: Adapters.AgentInboxes());
+    private readonly ReportStatusHandler _reporter = new(store, inboxes: Adapters.AgentInboxes(), tickets: Adapters.TicketStatus());
 
     private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes());
 

@@ -27,13 +27,14 @@ public static class ReportCommand
 
         var log = Adapters.Log();
 
-        var handler = new ReportStatusHandler(Adapters.Agents());
+        var handler = new ReportStatusHandler(Adapters.Agents(), tickets: Adapters.TicketStatus());
 
         var result = handler.Handle(
             project.Name,
             invocation.Caller!,
             invocation.Status ?? string.Empty,
-            invocation.Text ?? string.Empty);
+            invocation.Text ?? string.Empty,
+            project.Root);
 
         if (!result.Succeeded)
         {

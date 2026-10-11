@@ -12,9 +12,11 @@ using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Models;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.ShowMenu;
+using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Features.Themes.ManageThemes;
+using Fleet.Features.Todos.LaunchTicket;
 using Fleet.Platform.Nvim;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Hooks;
@@ -174,6 +176,12 @@ public static class Adapters
     public static IDispatchHistory History() => new FileDispatchHistory();
 
     public static ITodoStore Todos() => new FileTodoStore();
+
+    public static ITicketStatusSink TicketStatus() => new TicketFollowUp(Todos());
+
+    public static IDispatcher Dispatcher(IMuxDriver mux) =>
+        new SubDispatcher(new DispatchHandler(
+            mux, Agents(), HarnessConfig(), history: History(), namer: SlugNamer(), settings: Settings(), intents: Intents()));
 
     public static IIntentStore Intents() => new JsonIntentStore();
 
