@@ -176,8 +176,8 @@ public static class AgentHarness
 
     public const string WithEnvVerb = "with-env";
 
-    public static IReadOnlyList<string> BrowseCommandFor(string paneTitle) =>
-        [Environment.ProcessPath ?? "fleet", TitledVerb, TitleFlag, paneTitle, "--", .. BrowseCommand];
+    public static IReadOnlyList<string> BrowseCommandFor(string paneTitle, string? file = null) =>
+        [Environment.ProcessPath ?? "fleet", TitledVerb, TitleFlag, paneTitle, "--", .. BrowseCommand, .. file is { Length: > 0 } ? [file] : Array.Empty<string>()];
 
     public static string? TitledPaneTitle(IReadOnlyList<string> command) =>
         command.Count >= 5
