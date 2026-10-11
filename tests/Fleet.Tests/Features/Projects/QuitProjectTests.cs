@@ -4,6 +4,7 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Todos;
 
 namespace Fleet.Tests.Features.Projects;
 
@@ -67,6 +68,21 @@ public class QuitProjectTests
             agents: [Agent("C:/repos/techweb/backend/dev")]);
 
         Assert.Equal([new PaneId("1"), new PaneId("7")], doomed);
+    }
+
+    [Fact]
+    public void A_ticket_pane_open_in_the_todos_folder_is_closed_too()
+    {
+        var doomed = QuitPlan.PanesToClose(
+            [
+                Pane("1", "w1", "C:/repos/techweb"),
+                Pane("8", "w1", TodoPaths.Folder("C:/repos/techweb")),
+                Pane("9", "w1", TodoPaths.Folder("C:/repos/other")),
+            ],
+            projectRoot: "C:/repos/techweb",
+            agents: []);
+
+        Assert.Equal([new PaneId("1"), new PaneId("8")], doomed);
     }
 
     [Fact]
