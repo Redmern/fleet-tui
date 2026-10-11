@@ -234,7 +234,6 @@ typed and only goes back once the field is empty; the key-capture dialog in **Ke
 │     p     Switch                     │
 │     l     List agents                │
 │     t     Todo board   ›             │
-│     T     All todos    ›             │
 │     f     Files                      │
 │     s     Settings     ›             │
 │                                      │
@@ -290,10 +289,12 @@ draws the buttons in a float's or the dashboard's frame.
   sub-orchestrator reports done the ticket is done; when it reports failed the ticket is open
   again with a `note`. Tickets that aren't open don't launch, and the status line says why. `r`
   re-reads the folder; the board also picks up edits made on disk every two seconds.
-- **All todos** (`T`, or `ctrl+s a T` from any pane) is the same board over every project fleet
-  knows, with a project column in front of the id. `enter`, `e`, `x` and `l` act on the ticket in
-  its own project (`l` dispatches into that project), and `r` (and opening the board) pulls Jira
-  for each project that has a `jira` block, one after the other; the status line lists each
+  `a` switches the board between this project and all projects: every project fleet knows, with a
+  project column in front of the id, and the title and the `a` hint follow the scope. The selected
+  ticket stays selected when the other scope has it, otherwise the cursor goes to the first row.
+  `enter`, `e`, `x` and `l` act on the ticket in its own project (`l` dispatches into that
+  project). Opening the board, switching to a scope for the first time and `r` pull Jira for each
+  project in the scope that has a `jira` block, one after the other; the status line lists each
   project's count or error. Projects without Jira make no network calls.
 - **Jira** (experimental: optional, Jira Cloud, pull only, and not yet tested against a real Jira instance): give a project a `jira` block in
   `~/.config/fleet/settings/<project>.json` and put an
@@ -688,7 +689,7 @@ the floats). Every fleet menu action has a key there:
 | Group | Keys |
 |---|---|
 | top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
-| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board, `T` todo board of all projects |
+| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board |
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |

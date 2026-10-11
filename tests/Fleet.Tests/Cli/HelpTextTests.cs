@@ -23,8 +23,11 @@ public class HelpTextTests
         Assert.Contains("n notifications, t todo board", HelpCommand.Text, StringComparison.Ordinal);
 
     [Fact]
-    public void Fleet_help_documents_the_all_projects_todo_board_chord() =>
-        Assert.Contains("t todo board, T todo board of all projects", HelpCommand.Text, StringComparison.Ordinal);
+    public void Fleet_help_documents_one_todo_board_with_an_all_projects_switch()
+    {
+        Assert.DoesNotContain("T todo board of all projects", HelpCommand.Text, StringComparison.Ordinal);
+        Assert.Contains("a in the board switches to all projects", HelpCommand.Text, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void Fleet_help_documents_the_todo_sigil() =>
