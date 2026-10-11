@@ -20,6 +20,23 @@ public sealed class TunnelProcessesTests
     }
 
     [Fact]
+    public async Task Only_the_last_lines_of_stderr_are_kept()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var tunnel = new TunnelProcesses("sh").Start(
+            ["-c", "i=0; while [ $i -lt 500 ]; do echo \"channel $i: open failed\" >&2; i=$((i+1)); done; echo 'Connection reset' >&2; exit 255"]);
+
+        await tunnel.Exited.WaitAsync(TimeSpan.FromSeconds(10));
+        var lines = tunnel.Errors.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(TunnelProcesses.KeptErrorLines, lines.Length);
+        Assert.Equal("Connection reset", lines[^1].Trim());
+    }
+
+    [Fact]
     public async Task Killing_a_running_process_ends_it()
     {
         if (OperatingSystem.IsWindows())

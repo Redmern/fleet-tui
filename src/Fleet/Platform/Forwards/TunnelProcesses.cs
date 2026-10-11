@@ -5,6 +5,8 @@ namespace Fleet.Platform.Forwards;
 
 public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher, IDisposable
 {
+    public const int KeptErrorLines = 20;
+
     private readonly Lock _gate = new();
     private readonly HashSet<Running> _running = [];
     private bool _disposed;
@@ -93,20 +95,31 @@ public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher, I
     private sealed class Running : ITunnel
     {
         private readonly Process _process;
-        private string _errors = string.Empty;
+        private readonly Queue<string> _errors = new();
 
         public Running(Process process)
         {
             _process = process;
             _process.StandardInput.Close();
             _process.OutputDataReceived += (_, _) => { };
+            _process.ErrorDataReceived += (_, line) => Keep(line.Data);
             _process.BeginOutputReadLine();
+            _process.BeginErrorReadLine();
             Exited = WatchAsync();
         }
 
         public Task<int> Exited { get; }
 
-        public string Errors => Volatile.Read(ref _errors);
+        public string Errors
+        {
+            get
+            {
+                lock (_errors)
+                {
+                    return string.Join('\n', _errors);
+                }
+            }
+        }
 
         public void Kill()
         {
@@ -123,10 +136,25 @@ public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher, I
         {
             using (_process)
             {
-                var errors = _process.StandardError.ReadToEndAsync();
                 await _process.WaitForExitAsync().ConfigureAwait(false);
-                Volatile.Write(ref _errors, await errors.ConfigureAwait(false));
                 return _process.ExitCode;
+            }
+        }
+
+        private void Keep(string? line)
+        {
+            if (line is null)
+            {
+                return;
+            }
+
+            lock (_errors)
+            {
+                _errors.Enqueue(line);
+                while (_errors.Count > KeptErrorLines)
+                {
+                    _errors.Dequeue();
+                }
             }
         }
     }
