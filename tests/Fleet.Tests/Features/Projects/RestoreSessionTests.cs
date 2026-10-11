@@ -221,6 +221,33 @@ public sealed class RestoreSessionTests : IDisposable
     }
 
     [Fact]
+    public void A_repo_agent_with_a_stored_model_is_restored_on_it_and_not_on_the_agent_setting()
+    {
+        var agent = Agent("dev", open: true) with { Harness = AgentHarness.Claude, Model = new RoleModel("opus", "high") };
+        var models = SettingsDefaults.Models with { Agent = new RoleModel("haiku", "low") };
+
+        var options = RestoreSessionHandler.Options("techweb", agent, "w7", models: models);
+
+        Assert.Contains("--model opus --effort high", string.Join(' ', options.Args));
+    }
+
+    [Fact]
+    public void A_sub_orchestrator_whose_routing_failed_is_restored_on_sonnet_medium_under_auto()
+    {
+        var worktree = Path.Combine(ProjectRoot, "orchestrations", "sub");
+        Directory.CreateDirectory(worktree);
+        var sub = new AgentRecord(
+            worktree, "orchestrations", "sub", AgentHarness.Orchestrator, string.Empty, false, false, true);
+        var auto = SettingsDefaults.Models with { Sub = new RoleModel(ModelChoice.Auto, "medium") };
+
+        var options = RestoreSessionHandler.Options("techweb", sub, "w7", subOrchestratorsInNvim: false, models: auto);
+
+        Assert.Equal(
+            [AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-sub", "--model", "sonnet", "--effort", "medium"],
+            options.Args);
+    }
+
+    [Fact]
     public void Sub_orchestrators_in_nvim_off_leaves_ordinary_agents_alone()
     {
         var options = RestoreSessionHandler.Options(

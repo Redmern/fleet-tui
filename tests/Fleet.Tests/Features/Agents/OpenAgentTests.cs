@@ -441,6 +441,19 @@ public sealed class OpenAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task A_repo_agent_with_a_stored_model_reopens_on_it_and_not_on_the_agent_setting()
+    {
+        var agent = Agent() with { Model = new RoleModel("opus", "high") };
+        var models = SettingsDefaults.Models with { Agent = new RoleModel("haiku", "low") };
+
+        await new OpenAgentHandler(_mux, _store, models: models).HandleAsync("techweb", agent, ProjectRoot);
+
+        var claude = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Contains("--model opus --effort high", string.Join(' ', _mux.ArgsFor(claude.Id)));
+    }
+
+    [Fact]
     public async Task With_sub_orchestrators_in_nvim_on_an_orchestrator_reopens_inside_nvim_without_extra_env()
     {
         var agent = Agent() with { Harness = AgentHarness.Orchestrator };
