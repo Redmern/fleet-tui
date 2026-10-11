@@ -51,9 +51,9 @@ public static class BoardRows
     public static string JiraSynced(Result<int> pulled) =>
         pulled.Succeeded ? $"Jira: synced {pulled.Value}." : $"Jira: {pulled.Error} (showing cached tickets)";
 
-    public static string JiraSynced(IReadOnlyList<(string Project, Result<int> Pulled)> pulls)
+    public static string JiraSynced(IReadOnlyList<(string Project, Result<int> Pulled)> pulls, bool named)
     {
-        if (pulls.Count == 1)
+        if (!named && pulls.Count == 1)
         {
             return JiraSynced(pulls[0].Pulled);
         }

@@ -119,7 +119,7 @@ public static class BoardView
                 if (!closed)
                 {
                     Fill();
-                    status.Text = BoardRows.JiraSynced(pulled);
+                    status.Text = BoardRows.JiraSynced(pulled, scope.ShowsProject);
                 }
 
                 return true;

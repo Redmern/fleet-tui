@@ -131,7 +131,7 @@ public class AllProjectsBoardTests
         var pulled = await BoardPull.AllAsync([Pull(Alpha, 2), Pull(Beta, 3)], CancellationToken.None);
 
         Assert.Equal(["start alpha", "end alpha", "start beta", "end beta"], log);
-        Assert.Equal("Jira: alpha synced 2; beta synced 3.", BoardRows.JiraSynced(pulled));
+        Assert.Equal("Jira: alpha synced 2; beta synced 3.", BoardRows.JiraSynced(pulled, named: true));
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class AllProjectsBoardTests
             ],
             CancellationToken.None);
 
-        Assert.Equal("Jira: alpha: refused; beta synced 1 (showing cached tickets for alpha).", BoardRows.JiraSynced(pulled));
+        Assert.Equal("Jira: alpha: refused; beta synced 1 (showing cached tickets for alpha).", BoardRows.JiraSynced(pulled, named: true));
     }
 
     [Fact]
@@ -174,11 +174,17 @@ public class AllProjectsBoardTests
     [Fact]
     public void A_single_jira_project_keeps_the_single_board_wording()
     {
-        Assert.Equal("Jira: synced 3.", BoardRows.JiraSynced([("alpha", Result<int>.Ok(3))]));
+        Assert.Equal("Jira: synced 3.", BoardRows.JiraSynced([("alpha", Result<int>.Ok(3))], named: false));
         Assert.Equal(
             "Jira: down (showing cached tickets)",
-            BoardRows.JiraSynced([("alpha", Result<int>.Fail("down"))]));
+            BoardRows.JiraSynced([("alpha", Result<int>.Fail("down"))], named: false));
     }
+
+    [Fact]
+    public void The_all_projects_board_names_the_project_even_when_only_one_has_jira() =>
+        Assert.Equal(
+            "Jira: alpha: down (showing cached tickets for alpha).",
+            BoardRows.JiraSynced([("alpha", Result<int>.Fail("down"))], named: true));
 
     private sealed class RootedTodoStore : ITodoStore
     {
