@@ -266,6 +266,37 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_ssh_attach_client_that_tunnels_itself_is_sent_the_forward_instead_of_the_command()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            {
+                hello.Forwards = true;
+                hello.Ssh = "10.0.0.5 52000 10.0.0.9 22";
+            });
+
+        var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+
+        Assert.NotNull(sent.Viewer);
+        Assert.Null(sent.Ssh);
+        await Eventually(() => Task.FromResult(client.Effects.Any(e => e is { Kind: HostEffects.ForwardPort, Value: "5173" })));
+
+        await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerUnforwardOp, Port = 5173, Client = client.Id });
+        await Eventually(() => Task.FromResult(client.Effects.Any(e => e is { Kind: HostEffects.UnforwardPort, Value: "5173" })));
+    }
+
+    [Fact]
+    public async Task An_unlabelled_attach_client_is_not_a_target_for_hand_backs_because_it_forwards()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Forwards = true);
+
+        var handed = await client.RequestAsync(new ControlRequest { Op = "hand-back", Text = FleetDaemon.HandedBack, Client = client.Id });
+
+        Assert.False(handed.Pending is true);
+    }
+
+    [Fact]
     public async Task A_viewer_without_ssh_control_sockets_is_not_sent_a_forward()
     {
         var windowsLike = NewEndpoint();

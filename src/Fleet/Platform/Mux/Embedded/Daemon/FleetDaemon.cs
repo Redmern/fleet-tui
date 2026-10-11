@@ -92,6 +92,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _sshOf = new(StringComparer.Ordinal);
     private readonly HashSet<string> _cannotForward = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _tunnelsItself = new(StringComparer.Ordinal);
     private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
@@ -472,6 +473,10 @@ public sealed class FleetDaemon(DaemonOptions options)
                     {
                         _cannotForward.Add(client.Id);
                     }
+                    else if (hello.Forwards is true && hello.Label is null)
+                    {
+                        _tunnelsItself.Add(client.Id);
+                    }
 
                     Furnish(client.Id, hello);
                     ApplyResizes();
@@ -824,7 +829,8 @@ public sealed class FleetDaemon(DaemonOptions options)
             ? viewer
             : null;
 
-    private bool IsViewer(string client) => _sessions.ContainsKey(client) && _model.Client(client)?.Label is not null;
+    private bool IsViewer(string client) =>
+        _sessions.ContainsKey(client) && (_model.Client(client)?.Label is not null || _tunnelsItself.Contains(client));
 
     private string? SshOf(string? client, string? shown) =>
         client is not null
@@ -2753,6 +2759,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             _viewerForwards.Remove(session.Client);
             _sshOf.Remove(session.Client);
             _cannotForward.Remove(session.Client);
+            _tunnelsItself.Remove(session.Client);
             ApplyResizes();
         }
 
