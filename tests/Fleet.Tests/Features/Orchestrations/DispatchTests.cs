@@ -950,6 +950,32 @@ public sealed class DispatchTests : IDisposable
             await SubArgs());
     }
 
+    [Fact]
+    public async Task A_routed_sub_keeps_its_model_and_effort_on_its_record()
+    {
+        await Routed(AutoSub(), new FakeModelRouter(new RoleModel("opus", "high")))
+            .HandleAsync(Command("do the thing"), "t");
+
+        Assert.Equal(new RoleModel("opus", "high"), Assert.Single(_store.Saved).Model);
+    }
+
+    [Fact]
+    public async Task A_sub_on_a_fixed_model_stores_none_so_settings_keep_deciding()
+    {
+        await Routed(SettingsConfig.Default.WithSubOrchestratorsInNvim(false), new FakeModelRouter(new RoleModel("opus", "high")))
+            .HandleAsync(Command("do the thing"), "t");
+
+        Assert.Null(Assert.Single(_store.Saved).Model);
+    }
+
+    [Fact]
+    public async Task An_auto_sub_whose_router_failed_keeps_the_sonnet_medium_fallback_on_its_record()
+    {
+        await Routed(AutoSub(), new FakeModelRouter(null)).HandleAsync(Command("do the thing"), "t");
+
+        Assert.Equal(SettingsDefaults.SubModel, Assert.Single(_store.Saved).Model);
+    }
+
     private sealed class FakeModelRouter(
         RoleModel? choice = null, bool throws = false, TaskCompletionSource? started = null, Task? waitFor = null)
         : IModelRouter

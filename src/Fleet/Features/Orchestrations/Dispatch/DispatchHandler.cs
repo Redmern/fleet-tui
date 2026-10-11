@@ -145,7 +145,8 @@ public sealed class DispatchHandler(
             Open: true,
             Owner: command.Caller,
             Status: OrchestrationStatus.Working,
-            InNvim: inNvim);
+            InNvim: inNvim,
+            Model: config.Models.Sub.IsAuto ? models.Sub : null);
 
         store.Save(command.ProjectName, record);
 
