@@ -40,6 +40,25 @@ public class ShowBoardTests
     }
 
     [Fact]
+    public void A_jira_pull_reports_how_many_issues_it_synced() =>
+        Assert.Equal("Jira: synced 3.", BoardRows.JiraSynced(Result<int>.Ok(3)));
+
+    [Fact]
+    public void A_failed_jira_pull_shows_its_error_and_that_cached_tickets_are_shown() =>
+        Assert.Equal(
+            "Jira: Jira is unreachable at https://acme.atlassian.net: refused (showing cached tickets)",
+            BoardRows.JiraSynced(Result<int>.Fail("Jira is unreachable at https://acme.atlassian.net: refused")));
+
+    [Fact]
+    public async Task A_jira_pull_that_throws_becomes_a_failed_result()
+    {
+        var result = await BoardRows.SafelyAsync(new Func<Task<Result<int>>>(() => throw new InvalidOperationException("boom")));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("boom", result.Error);
+    }
+
+    [Fact]
     public void A_row_shows_id_title_effort_status_and_source()
     {
         var row = BoardRows.For([Ticket("PROJ-12", TicketStatus.InProgress, effort: TicketEffort.M, source: TicketSource.Jira)])

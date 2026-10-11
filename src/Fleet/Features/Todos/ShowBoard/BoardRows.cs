@@ -45,6 +45,11 @@ public static class BoardRows
         }
     }
 
+    public const string JiraSyncing = "Jira: pulling issues...";
+
+    public static string JiraSynced(Result<int> pulled) =>
+        pulled.Succeeded ? $"Jira: synced {pulled.Value}." : $"Jira: {pulled.Error} (showing cached tickets)";
+
     public static string Launched(Ticket ticket) =>
         $"Launched {ticket.Id} as sub-orchestrator {ticket.Orchestration}.";
 

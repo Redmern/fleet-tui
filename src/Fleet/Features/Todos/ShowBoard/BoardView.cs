@@ -20,7 +20,8 @@ public static class BoardView
         string projectRoot,
         BoardTickets board,
         Func<string, Task<Result>> open,
-        Func<string, Task<Result<Ticket>>> launch)
+        Func<string, Task<Result<Ticket>>> launch,
+        Func<Task<Result<int>>>? syncJira = null)
     {
         var window = FleetTheme.Overlay(BoardRows.Title(project));
 
@@ -32,6 +33,8 @@ public static class BoardView
         IReadOnlyList<Ticket> tickets = [];
         var shown = string.Empty;
         var busy = false;
+        var syncing = false;
+        var closed = false;
 
         Ticket? Selected() =>
             tickets.Count == 0 ? null : tickets[Math.Clamp(FleetRows.Selected(list), 0, tickets.Count - 1)];
@@ -101,6 +104,36 @@ public static class BoardView
             }).ConfigureAwait(false);
         }
 
+        async Task SyncAsync(Func<Task<Result<int>>> sync)
+        {
+            var pulled = await BoardRows.SafelyAsync(() => Task.Run(sync)).ConfigureAwait(false);
+
+            await FleetAsync.OnUi(app, () =>
+            {
+                syncing = false;
+
+                if (!closed)
+                {
+                    Fill();
+                    status.Text = BoardRows.JiraSynced(pulled);
+                }
+
+                return true;
+            }).ConfigureAwait(false);
+        }
+
+        void Sync()
+        {
+            if (syncJira is null || syncing)
+            {
+                return;
+            }
+
+            syncing = true;
+            status.Text = BoardRows.JiraSyncing;
+            _ = SyncAsync(syncJira);
+        }
+
         void Quit() => app.RequestStop(window);
 
         void Run(BoardCommand command)
@@ -115,6 +148,7 @@ public static class BoardView
             {
                 Fill();
                 status.Text = tickets.Count == 0 ? BoardRows.Empty : "Refreshed.";
+                Sync();
                 return;
             }
 
@@ -235,6 +269,7 @@ public static class BoardView
         });
 
         Fill();
+        Sync();
 
         window.Add(list, status, bar.Root);
         FleetCorners.Attach(window, Quit);
@@ -245,6 +280,8 @@ public static class BoardView
         }
         finally
         {
+            closed = true;
+
             if (timer is not null)
             {
                 app.RemoveTimeout(timer);
