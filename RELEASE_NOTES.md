@@ -6,11 +6,12 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 
 ## 0.7.17 (2026-10-11)
 
-- **Open port** through a laptop fleet linked under Remote machines waits for the laptop's answer and says what happened: forwarded, pending until the port listens, or the reason it failed.
-- When the laptop can't open its browser, the dialog shows the URL to open yourself; a failed `xdg-open` (no display) is now reported instead of counted as success.
-- A laptop that doesn't answer within 20 s is reported with a pointer to its fleet log, and when it runs an older fleet, a hint to restart its fleetd.
-- fleetd logs host effects it doesn't handle instead of dropping them, and answers a newer fleet's forward request as unsupported so Open port falls back to the ssh command; opening a port whose forward failed tries it again.
+- **Open port** through a laptop fleet linked under Remote machines waits for the laptop's answer and says what happened: forwarded, pending until the port listens, or the reason it failed; a failed browser opener shows the URL to open yourself, and a silent or older laptop fleet gets a log pointer, a restart hint or the ssh command.
 - The **todo board** no longer crashes on open, and there is one board: `a` in the board switches to all projects and back (the separate `T` all-projects action is gone).
+- **Images paste into Claude Code on a remote**: `ctrl+v` in a remote pane fetches the image from your own clipboard; on a Windows remote, `prefix i` saves it there and types its path.
+- Pastes arrive as one bracketed paste on Linux and macOS, `prefix ]` pastes your clipboard text, and a copy in a pane also goes through `wl-copy`, `xclip` or `pbcopy` when the terminal drops OSC 52.
+- **Experimental**, opt-in voice for a remote: `FLEET_VOICE_FORWARD=1` forwards your PulseAudio/PipeWire socket so `/voice` there can use your microphone; untested end to end.
+- A prompt relayed from the head reaches a project's orchestrator as `, task` (trigger, space, task), the same form you type.
 
 ## 0.7.16 (2026-10-11)
 
