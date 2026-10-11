@@ -637,6 +637,26 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_direct_dispatch_leaves_routing_to_the_agent_starter_and_hands_it_the_task()
+    {
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(
+                AutoSub().WithModels(SettingsDefaults.Models with { Agent = new RoleModel(ModelChoice.Auto, "medium") })),
+            intents: _intents,
+            starter: _starter,
+            router: router,
+            log: _log);
+
+        var reply = await handler.HandleAsync(ForRepository("fix the login timeout", branch: "fix/login"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Empty(router.Requests);
+        Assert.Equal("fix the login timeout", Assert.Single(_starter.Started).Task);
+    }
+
+    [Fact]
     public async Task Without_a_branch_the_direct_agent_is_named_like_a_sub()
     {
         _store.Saved.Add(new AgentRecord(
