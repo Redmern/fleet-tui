@@ -8,4 +8,5 @@ public sealed record NewAgentCommand(
     string Base,
     string Harness,
     string Owner = "",
-    bool? Claude = null);
+    bool? Claude = null,
+    string Task = "");

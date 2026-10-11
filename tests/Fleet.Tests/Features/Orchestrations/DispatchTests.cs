@@ -3,6 +3,7 @@ using Fleet.Features.Orchestrations.Dispatch.Models;
 using Fleet.Platform.Aidlc;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
@@ -636,6 +637,26 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
+    public async Task A_direct_dispatch_leaves_routing_to_the_agent_starter_and_hands_it_the_task()
+    {
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(
+                AutoSub().WithModels(SettingsDefaults.Models with { Agent = new RoleModel(ModelChoice.Auto, "medium") })),
+            intents: _intents,
+            starter: _starter,
+            router: router,
+            log: _log);
+
+        var reply = await handler.HandleAsync(ForRepository("fix the login timeout", branch: "fix/login"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Empty(router.Requests);
+        Assert.Equal("fix the login timeout", Assert.Single(_starter.Started).Task);
+    }
+
+    [Fact]
     public async Task Without_a_branch_the_direct_agent_is_named_like_a_sub()
     {
         _store.Saved.Add(new AgentRecord(
@@ -834,5 +855,197 @@ public sealed class DispatchTests : IDisposable
         var reply = await Handler.HandleAsync(Command("start work"), "t");
 
         Assert.Contains(SubagentGuidance.ForSubOrchestrators.Trim(), InstructionsOf(reply.Value!));
+    }
+
+    private static SettingsConfig AutoSub(AidlcMode mode = AidlcMode.Off) =>
+        SettingsConfig.Default
+            .WithSubOrchestratorsInNvim(false)
+            .WithAidlc(AidlcSettings.Default with { Mode = mode })
+            .WithModels(SettingsDefaults.Models with { Sub = new RoleModel(ModelChoice.Auto, "medium") });
+
+    private readonly RecordingLog _log = new();
+
+    private DispatchHandler Routed(SettingsConfig config, IModelRouter? router, ISlugNamer? namer = null) =>
+        new(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            namer: namer,
+            settings: new FakeSettingsStore(config),
+            intents: _intents,
+            router: router,
+            log: _log);
+
+    private async Task<IReadOnlyList<string>> SubArgs()
+    {
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+
+        return _mux.ArgsFor(pane.Id);
+    }
+
+    [Fact]
+    public async Task With_the_sub_model_on_auto_the_sub_launches_with_the_routed_model_and_effort()
+    {
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+
+        var reply = await Routed(AutoSub(), router).HandleAsync(Command("do the thing"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-do-the-thing", "--model", "opus", "--effort", "high"],
+            await SubArgs());
+        Assert.Empty(_log.Lines);
+    }
+
+    [Fact]
+    public async Task The_router_gets_the_task_profile_research_flag_and_repository()
+    {
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+
+        await Routed(AutoSub(AidlcMode.On), router)
+            .HandleAsync(ForRepository("feature: add the export button", research: true), "t");
+
+        var asked = Assert.Single(router.Requests);
+
+        Assert.Equal(new ModelRoutingRequest("add the export button", "feature", true, "backend"), asked);
+    }
+
+    [Fact]
+    public async Task With_a_fixed_sub_model_the_router_is_never_asked()
+    {
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+
+        await Routed(SettingsConfig.Default.WithSubOrchestratorsInNvim(false), router)
+            .HandleAsync(Command("do the thing"), "t");
+
+        Assert.Empty(router.Requests);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-do-the-thing", "--model", "sonnet", "--effort", "medium"],
+            await SubArgs());
+    }
+
+    public static TheoryData<string> RouterFailures => ["nothing", "throws", "invalid"];
+
+    [Theory]
+    [MemberData(nameof(RouterFailures))]
+    public async Task A_router_that_fails_falls_back_to_sonnet_medium_logs_it_and_still_dispatches(string failure)
+    {
+        var router = failure switch
+        {
+            "throws" => new FakeModelRouter(throws: true),
+            "invalid" => new FakeModelRouter(new RoleModel("gpt-4", "extreme")),
+            _ => new FakeModelRouter(null),
+        };
+
+        var reply = await Routed(AutoSub(), router).HandleAsync(Command("do the thing"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-do-the-thing", "--model", "sonnet", "--effort", "medium"],
+            await SubArgs());
+        Assert.Contains(_log.Lines, l => l.Contains("do-the-thing") && l.Contains("sonnet/medium"));
+    }
+
+    [Fact]
+    public async Task With_the_sub_model_on_auto_and_no_router_the_sub_still_runs_on_sonnet_medium()
+    {
+        await Routed(AutoSub(), router: null).HandleAsync(Command("do the thing"), "t");
+
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-do-the-thing", "--model", "sonnet", "--effort", "medium"],
+            await SubArgs());
+    }
+
+    [Fact]
+    public async Task The_slug_and_the_model_are_asked_for_at_the_same_time()
+    {
+        var routerAsked = new TaskCompletionSource();
+        var namerAsked = new TaskCompletionSource();
+        var router = new FakeModelRouter(new RoleModel("opus", "high"), started: routerAsked, waitFor: namerAsked.Task);
+        var namer = new MeetingSlugNamer("fix login timeout", started: namerAsked, waitFor: routerAsked.Task);
+
+        var reply = await Routed(AutoSub(), router, namer).HandleAsync(Command("make login stop timing out"), "t");
+
+        Assert.Equal("fix-login-timeout", reply.Value!.Slug);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-fix-login-timeout", "--model", "opus", "--effort", "high"],
+            await SubArgs());
+    }
+
+    [Fact]
+    public async Task A_routed_sub_keeps_its_model_and_effort_on_its_record()
+    {
+        await Routed(AutoSub(), new FakeModelRouter(new RoleModel("opus", "high")))
+            .HandleAsync(Command("do the thing"), "t");
+
+        Assert.Equal(new RoleModel("opus", "high"), Assert.Single(_store.Saved).Model);
+    }
+
+    [Fact]
+    public async Task A_sub_on_a_fixed_model_stores_none_so_settings_keep_deciding()
+    {
+        await Routed(SettingsConfig.Default.WithSubOrchestratorsInNvim(false), new FakeModelRouter(new RoleModel("opus", "high")))
+            .HandleAsync(Command("do the thing"), "t");
+
+        Assert.Null(Assert.Single(_store.Saved).Model);
+    }
+
+    [Theory]
+    [MemberData(nameof(RouterFailures))]
+    public async Task An_auto_sub_whose_router_failed_stores_no_model_but_still_launches_on_sonnet_medium(string failure)
+    {
+        var router = failure switch
+        {
+            "throws" => new FakeModelRouter(throws: true),
+            "invalid" => new FakeModelRouter(new RoleModel("gpt-4", "extreme")),
+            _ => new FakeModelRouter(null),
+        };
+
+        await Routed(AutoSub(), router).HandleAsync(Command("do the thing"), "t");
+
+        Assert.Null(Assert.Single(_store.Saved).Model);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-do-the-thing", "--model", "sonnet", "--effort", "medium"],
+            await SubArgs());
+    }
+
+    private sealed class FakeModelRouter(
+        RoleModel? choice = null, bool throws = false, TaskCompletionSource? started = null, Task? waitFor = null)
+        : IModelRouter
+    {
+        public List<ModelRoutingRequest> Requests { get; } = [];
+
+        public async Task<RoleModel?> ChooseAsync(ModelRoutingRequest request, CancellationToken ct = default)
+        {
+            Requests.Add(request);
+            started?.TrySetResult();
+
+            if (waitFor is not null)
+            {
+                await waitFor.WaitAsync(TimeSpan.FromSeconds(5), ct);
+            }
+
+            return throws ? throw new InvalidOperationException("claude is unreachable") : choice;
+        }
+    }
+
+    private sealed class MeetingSlugNamer(string name, TaskCompletionSource started, Task waitFor) : ISlugNamer
+    {
+        public async Task<string?> NameAsync(string prompt, CancellationToken ct = default)
+        {
+            started.TrySetResult();
+            await waitFor.WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+            return name;
+        }
+    }
+
+    private sealed class RecordingLog : IFleetLog
+    {
+        public List<string> Lines { get; } = [];
+
+        public void Swallowed(Exception e) => Lines.Add(e.Message);
+
+        public void Write(string line) => Lines.Add(line);
+
+        public IReadOnlyList<string> Tail(int lines) => Lines.TakeLast(lines).ToList();
     }
 }

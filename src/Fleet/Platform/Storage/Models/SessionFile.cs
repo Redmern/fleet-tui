@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Fleet.Platform.Storage.Models;
 
 public sealed class SessionFile
@@ -36,4 +38,10 @@ public sealed class AgentEntry
     public string Summary { get; set; } = string.Empty;
 
     public string ReportedAt { get; set; } = string.Empty;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Model { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Effort { get; set; }
 }

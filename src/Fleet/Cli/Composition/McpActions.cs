@@ -60,7 +60,8 @@ public sealed class McpActions(
 
     private readonly ListBranchesHandler _branches = new(git);
 
-    private readonly NewAgentHandler _spawner = new(git, mux, store, Adapters.Models, Adapters.SubagentGuidance);
+    private readonly NewAgentHandler _spawner = new(
+        git, mux, store, Adapters.Models, Adapters.SubagentGuidance, Adapters.ModelRouter(), log);
 
     private readonly HideAgentHandler _hider = new(mux, store);
 
@@ -256,7 +257,7 @@ public sealed class McpActions(
             .HandleAsync(
                 new NewAgentCommand(
                     project, repo.Name, repo.Path, branch, repo.DefaultBranch,
-                    AgentHarness.Nvim, owner, Claude: true),
+                    AgentHarness.Nvim, owner, Claude: true, Task: task),
                 ct)
             .ConfigureAwait(false);
 
@@ -583,7 +584,7 @@ public sealed class McpActions(
 
         var dispatcher = new DispatchHandler(
             mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(),
-            intents: Adapters.Intents(), starter: this);
+            intents: Adapters.Intents(), starter: this, router: Adapters.ModelRouter(), log: log);
 
         var reply = await dispatcher
             .HandleAsync(

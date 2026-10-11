@@ -501,6 +501,33 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void An_auto_sub_or_agent_model_is_read_from_the_file_as_auto()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{ "version": 1, "subModel": "Auto", "agentModel": "auto" }""");
+
+        var models = Store.Load("techweb").Models;
+
+        Assert.True(models.Sub.IsAuto);
+        Assert.True(models.Agent.IsAuto);
+    }
+
+    [Fact]
+    public void An_auto_sub_model_round_trips_through_the_file()
+    {
+        var models = SettingsDefaults.Models with { Sub = new RoleModel(ModelChoice.Auto, "medium") };
+
+        Store.Save("techweb", SettingsConfig.Default.WithModels(models));
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"subModel\": \"auto\"", raw);
+        Assert.Equal(models, Store.Load("techweb").Models);
+    }
+
+    [Fact]
     public void A_null_model_or_effort_falls_back_to_the_default()
     {
         FleetPaths.EnsureDirs();

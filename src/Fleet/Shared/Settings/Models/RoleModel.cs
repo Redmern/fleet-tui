@@ -6,10 +6,17 @@ public sealed record RoleModel(string Model, string Effort)
 
     public RoleModel Normalized => new(ModelChoice.Model(Model), ModelChoice.Effort(Effort));
 
+    public bool IsAuto => ModelChoice.IsAuto(Model);
+
     public IReadOnlyList<string> Arguments
     {
         get
         {
+            if (IsAuto)
+            {
+                return [];
+            }
+
             var model = ModelChoice.Model(Model);
             var effort = ModelChoice.Effort(Effort);
 

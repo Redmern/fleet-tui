@@ -1,4 +1,5 @@
 using Fleet.Features.Orchestrations.Dispatch.Models;
+using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Aidlc;
 using Fleet.Ports.Agents.Models;
@@ -33,7 +34,9 @@ public sealed class DispatchHandler(
     ISlugNamer? namer = null,
     ISettingsStore? settings = null,
     IIntentStore? intents = null,
-    IAgentStarter? starter = null)
+    IAgentStarter? starter = null,
+    IModelRouter? router = null,
+    IFleetLog? log = null)
 {
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(60);
 
@@ -82,11 +85,25 @@ public sealed class DispatchHandler(
             .Select(a => a.Branch)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var named = await NameOrNull(prompt, ct).ConfigureAwait(false);
+        var routing = config.Models.Sub.IsAuto
+            ? router.TryChooseAsync(
+                new ModelRoutingRequest(
+                    prompt, aidlc is var (chosen, _) ? Words.Of(chosen) : null, route.Research, command.Repository),
+                log,
+                ct)
+            : Task.FromResult<RoleModel?>(null);
+        var naming = NameOrNull(prompt, ct);
+
+        await Task.WhenAll(routing, naming).ConfigureAwait(false);
+
+        var named = await naming.ConfigureAwait(false);
 
         var slug = OrchestrationSlug.Unique(
             OrchestrationSlug.Of(string.IsNullOrWhiteSpace(named) ? prompt : named),
             s => existing.Contains(s) || Directory.Exists(OrchestrationPaths.For(command.ProjectRoot, s)));
+
+        var routed = await routing.ConfigureAwait(false);
+        var models = SubModels(config.Models, routed, slug);
 
         var folder = OrchestrationPaths.For(command.ProjectRoot, slug);
 
@@ -116,8 +133,7 @@ public sealed class DispatchHandler(
 
         var loaded = settings?.Load(command.ProjectName);
         var inNvim = loaded?.SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
-        var launch = ClaudeLaunch.ForAgent(
-            command.ProjectName, string.Empty, slug, orchestrator: true, loaded?.Models ?? SettingsDefaults.Models);
+        var launch = ClaudeLaunch.ForAgent(command.ProjectName, string.Empty, slug, orchestrator: true, models);
 
         var record = new AgentRecord(
             folder,
@@ -130,7 +146,8 @@ public sealed class DispatchHandler(
             Open: true,
             Owner: command.Caller,
             Status: OrchestrationStatus.Working,
-            InNvim: inNvim);
+            InNvim: inNvim,
+            Model: routed is not null && ModelRouting.IsValid(routed) ? routed : null);
 
         store.Save(command.ProjectName, record);
 
@@ -264,6 +281,23 @@ public sealed class DispatchHandler(
         {
             intents.Append(folder, entry);
         }
+    }
+
+    private RoleModels SubModels(RoleModels models, RoleModel? routed, string slug)
+    {
+        if (!models.Sub.IsAuto)
+        {
+            return models;
+        }
+
+        var outcome = ModelRouting.OrFallback(routed, SettingsDefaults.SubModel, $"sub {slug}");
+
+        if (outcome.LogLine is not null)
+        {
+            log?.Write(outcome.LogLine);
+        }
+
+        return models with { Sub = outcome.Model };
     }
 
     private async Task<string?> NameOrNull(string prompt, CancellationToken ct)

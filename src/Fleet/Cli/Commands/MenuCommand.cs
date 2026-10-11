@@ -486,14 +486,15 @@ public static class MenuCommand
                         : $"{ModelRows.Title(chosen)} — {project.Name}";
                     var was = ModelRows.Current(chosen, current, Adapters.HeadModel());
 
-                    var pickedModel = FleetPicker.Choose(app, title, ModelRows.ModelEntries, keymap, ModelRows.ModelIndex(was));
+                    var pickedModel = FleetPicker.Choose(
+                        app, title, ModelRows.ModelEntries(chosen), keymap, ModelRows.ModelIndex(chosen, was));
 
                     if (pickedModel is null)
                     {
                         break;
                     }
 
-                    var model = ModelRows.ModelAt(pickedModel.Value);
+                    var model = ModelRows.ModelAt(chosen, pickedModel.Value);
 
                     if (model is null)
                     {
@@ -505,13 +506,19 @@ public static class MenuCommand
                             break;
                         }
 
-                        model = ModelRows.Typed(typed);
+                        model = ModelRows.Typed(chosen, typed);
 
                         if (model is null)
                         {
                             FleetDialog.Error(app, title, $"'{typed}' is not a model alias or ID fleet can pass to claude.");
                             break;
                         }
+                    }
+
+                    if (ModelRows.Routes(chosen, model))
+                    {
+                        modelSettings.Save(project.Name, ModelRows.With(chosen, current, new RoleModel(model, ModelChoice.Inherit)));
+                        break;
                     }
 
                     var pickedEffort = FleetPicker.Choose(

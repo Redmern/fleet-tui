@@ -19,10 +19,20 @@ public static class ModelRows
 
     public const string OtherLabel = "other…";
 
-    public static IReadOnlyList<PickerEntry> ModelEntries { get; } =
+    public static bool AllowsAuto(FleetAction action) =>
+        action is FleetAction.EditSubModel or FleetAction.EditAgentModel;
+
+    public static bool Routes(FleetAction action, string model) => AllowsAuto(action) && ModelChoice.IsAuto(model);
+
+    public static IReadOnlyList<string> Choices(FleetAction action) =>
+        AllowsAuto(action) ? [ModelChoice.Auto, .. Aliases] : Aliases;
+
+    public static IReadOnlyList<PickerEntry> ModelEntries(FleetAction action) =>
     [
         new(ModelChoice.Inherit, "no --model: the profile's default"),
-        .. Aliases.Select(a => new PickerEntry(a, "latest " + a)),
+        .. Choices(action).Select(a => a == ModelChoice.Auto
+            ? new PickerEntry(a, "haiku picks the model and effort per task")
+            : new PickerEntry(a, "latest " + a)),
         new(OtherLabel, "type a model alias or full model ID"),
     ];
 
@@ -32,7 +42,7 @@ public static class ModelRows
         .. ModelChoice.Efforts.Select(e => new PickerEntry(e)),
     ];
 
-    public static int OtherIndex => ModelEntries.Count - 1;
+    public static int OtherIndex(FleetAction action) => ModelEntries(action).Count - 1;
 
     public static bool IsModelRow(FleetAction action) => Actions.Contains(action);
 
@@ -62,7 +72,7 @@ public static class ModelRows
         _ => settings,
     };
 
-    public static int ModelIndex(RoleModel current)
+    public static int ModelIndex(FleetAction action, RoleModel current)
     {
         var model = ModelChoice.Model(current.Model);
 
@@ -71,15 +81,19 @@ public static class ModelRows
             return 0;
         }
 
-        var alias = Aliases.ToList().IndexOf(model);
+        var choice = Choices(action).ToList().IndexOf(model);
 
-        return alias >= 0 ? alias + 1 : OtherIndex;
+        return choice >= 0 ? choice + 1 : OtherIndex(action);
     }
 
-    public static string? ModelAt(int index) =>
-        index == 0 ? ModelChoice.Inherit
-        : index > 0 && index <= Aliases.Count ? Aliases[index - 1]
-        : null;
+    public static string? ModelAt(FleetAction action, int index)
+    {
+        var choices = Choices(action);
+
+        return index == 0 ? ModelChoice.Inherit
+            : index > 0 && index <= choices.Count ? choices[index - 1]
+            : null;
+    }
 
     public static int EffortIndex(RoleModel current)
     {
@@ -91,9 +105,14 @@ public static class ModelRows
     public static string EffortAt(int index) =>
         index > 0 && index <= ModelChoice.Efforts.Count ? ModelChoice.Efforts[index - 1] : ModelChoice.Inherit;
 
-    public static string? Typed(string answer)
+    public static string? Typed(FleetAction action, string answer)
     {
         var trimmed = answer.Trim();
+
+        if (ModelChoice.IsAuto(trimmed))
+        {
+            return Routes(action, trimmed) ? ModelChoice.Auto : null;
+        }
 
         if (Aliases.FirstOrDefault(a => a.Equals(trimmed, StringComparison.OrdinalIgnoreCase)) is { } alias)
         {

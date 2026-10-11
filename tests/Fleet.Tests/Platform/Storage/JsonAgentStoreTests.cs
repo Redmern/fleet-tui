@@ -1,5 +1,6 @@
 using Fleet.Platform.Storage;
 using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 
@@ -74,6 +75,35 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
 
         Assert.Equal(string.Empty, agent.Owner);
         Assert.Equal(string.Empty, agent.Status);
+    }
+
+    [Fact]
+    public void A_routed_model_and_effort_survive_the_round_trip()
+    {
+        var worktree = Path.Combine(ConfigHome, ".fleet", "orchestrations", "add-login");
+
+        _store.Save("techweb", Agent(worktree) with { Model = new RoleModel("opus", "high") });
+
+        Assert.Equal(new RoleModel("opus", "high"), Assert.Single(_store.List("techweb")).Model);
+    }
+
+    [Fact]
+    public void An_agent_without_a_routed_model_stores_none()
+    {
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop")));
+
+        Assert.Null(Assert.Single(_store.List("techweb")).Model);
+    }
+
+    [Fact]
+    public void A_session_written_before_routing_loads_with_no_model()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Sessions, "techweb.json"),
+            """{"version":1,"agents":[{"worktree":"~/x","repository":"","branch":"sub","harness":"orchestrator"}]}""");
+
+        Assert.Null(Assert.Single(_store.List("techweb")).Model);
     }
 
     [Fact]

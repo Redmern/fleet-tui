@@ -110,7 +110,9 @@ public sealed class OpenAgentHandler(
 
         var orchestrator = Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness);
         var launch = Shared.Constants.ClaudeLaunch.ForAgent(
-            project, agent.Repository, agent.Branch, orchestrator, models ?? SettingsDefaults.Models, agent.Worktree);
+            project, agent.Repository, agent.Branch, orchestrator,
+            agent.ModelsFrom(models ?? SettingsDefaults.Models, orchestrator),
+            agent.Worktree);
 
         var pane = await mux.SpawnAsync(
             new SpawnOptions

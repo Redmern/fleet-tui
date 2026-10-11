@@ -192,6 +192,8 @@ public static class Adapters
 
     public static ISlugNamer SlugNamer() => new ClaudeSlugNamer();
 
+    public static IModelRouter ModelRouter() => new ClaudeModelRouter();
+
     public static INotifier Notifier() => new FileNotifyStore();
 
     public static MuxSelection Mux(IFleetLog log)
