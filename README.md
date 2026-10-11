@@ -426,7 +426,13 @@ reachable in the browser of the machine you are looking from:
 - **fleet on your laptop, linked under Remote machines:** the remote fleet sends
   `viewer-forward` to your laptop's fleet, which pins the port, forwards it over the link's
   ssh (`-O forward -L`, or a background `ssh -N -L` on Windows) and opens
-  `http://localhost:<port>` (or the local port it had to pick).
+  `http://localhost:<port>` (or the local port it had to pick). The dialog waits up to 20 s
+  for your laptop's answer and then says what happened: forwarded, pending (it opens the
+  browser once the port listens), the reason the forward failed, or the URL to open yourself
+  when the browser would not start. If your laptop does not answer, the dialog points to its
+  fleet log, and when it runs an older fleet, says to restart its fleetd (`fleet daemon
+  stop`, then `fleet attach`). A laptop fleet that cannot forward makes the dialog fall back
+  to the ssh command below. Opening a port whose forward failed tries it again.
 - **`fleet attach --ssh <host>` from a machine without control sockets (Windows):** the
   attach client forwards it itself with a background `ssh -N -L` to `<host>` and opens
   `http://localhost:<port>` (or the local port it had to pick). Unforwarding stops that
