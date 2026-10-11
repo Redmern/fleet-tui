@@ -14,10 +14,18 @@ Status: **plumbing built and unit-tested; not yet proven end to end with `/voice
 2. fleetd finds the viewer's pulse socket: `PULSE_SERVER=unix:<path>` if set, else
    `$XDG_RUNTIME_DIR/pulse/native`. If there is none it logs why and forwards nothing.
 3. Each time the link to a remote comes up, fleetd runs over the existing ssh ControlMaster:
+   - if it forwarded to this host before, `ssh -S <cm> -O cancel -R …` for that forward first, so a link that
+     reconnects while the master lives does not end up with a removed socket under a live forward (a failed
+     cancel, e.g. because the master died, is ignored);
    - `sh -c '…'` on the remote, which creates `$XDG_RUNTIME_DIR/fleet-pulse` (or `/tmp/fleet-pulse-<user>`
      when there is no runtime dir or the path would be too long), sets it to mode 700, removes an old socket
      of the same name and prints the folder;
    - `ssh -S <cm> -O forward -R <folder>/pulse-<id>.sock:<viewer pulse socket> <host>`.
+
+   fleetd takes the last non-empty line the script printed as the folder and refuses anything that is not an
+   absolute path free of `:` and whitespace (a login banner or `.bashrc` output would otherwise end up in the
+   `-R` spec). A viewer socket path with `:` is refused too. Every ssh call is bounded (20 s), and a link-up
+   step that throws or hangs is logged and retried; it never stops port scanning for the host.
 
    `<id>` is a hash of the viewer machine and user, so each viewer has its own socket and a reconnect reuses
    the same name. Removing the old socket first stands in for `StreamLocalBindUnlink`, which is an sshd
@@ -44,8 +52,10 @@ Code: `Platform/Forwards/ReverseForward.cs` (paths, prepare script, pane env),
 
 ## What Claude Code does (2.1.289, Linux)
 
-Read from the shipped binary (`~/.local/share/mise/installs/claude/2.1.289/claude`, the bundled
-`audio-capture` module), not from docs:
+These findings come from reading the strings of the shipped 2.1.289 binary
+(`~/.local/share/mise/installs/claude/2.1.289/claude`, the bundled `audio-capture` module), not from documentation.
+They are internal behaviour and **may change in any Claude Code release**; re-check them against the version you
+run:
 
 - `/voice` is refused outright only when `CLAUDE_CODE_REMOTE` is set. There is no ssh detection in the
   availability check.
@@ -78,12 +88,16 @@ On the viewer: Arch Linux (omarchy), kernel 7.2.5, PulseAudio-on-PipeWire 1.6.8,
 - `arecord` with Claude's exact arguments on the default device recorded with a bogus `PULSE_SERVER`: on a
   pipewire-alsa host the default device ignores `PULSE_SERVER`.
 
-**Not tested** (no headless ssh target was available, and no ssh key login to localhost):
+**Not tested** (no headless ssh target was available, and no ssh key login to localhost). These end-to-end steps
+are still to run:
 
-- A real `-O forward -R` of the pulse socket through a ControlMaster to a remote sshd.
-- Claude Code `/voice` capturing speech on a headless remote through the forward.
-- SoX `rec` with `libsox-fmt-pulse` (SoX is not installed on the test machine).
-- macOS viewers.
+1. A real `-O forward -R` of the viewer's pulse socket through a ControlMaster to a remote sshd, and `pactl info`
+   in a remote pane reaching the viewer's server.
+2. Claude Code `/voice` capturing and transcribing speech on a headless remote through the forward.
+3. SoX `rec` with `libsox-fmt-pulse` on that remote (SoX is not installed on the test machine), and `arecord`
+   with ALSA's default set to the pulse plugin.
+4. A macOS viewer running PulseAudio with `PULSE_SERVER=unix:<socket>`.
+5. A reconnect while the ControlMaster survives, and one after it died, on a real sshd.
 
 ## To finish the spike
 
