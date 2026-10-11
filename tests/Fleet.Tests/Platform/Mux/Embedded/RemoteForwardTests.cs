@@ -408,15 +408,17 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Without_control_sockets_a_tunnel_that_ssh_refuses_fails_with_what_ssh_said()
+    public async Task Without_control_sockets_a_tunnel_that_ssh_refuses_answers_at_once_with_what_ssh_said()
     {
         var tunnels = new FakeTunnels { Exits = _ => (255, "red@far: Permission denied (publickey).") };
         using var viewer = new EmbeddedDriver(TunnellingViewer(tunnels));
+        var asked = System.Diagnostics.Stopwatch.StartNew();
 
         var added = await viewer.AddForwardAsync("red@far", 9229, null);
 
-        Assert.Equal("failed", added!.State);
-        Assert.Equal("red@far: Permission denied (publickey).", added.Error);
+        Assert.True(asked.Elapsed < TimeSpan.FromSeconds(3), $"answered after {asked.Elapsed}");
+        Assert.Equal("waiting", added!.State);
+        Assert.Contains("red@far: Permission denied (publickey).", added.Error);
     }
 
     [Fact]

@@ -62,7 +62,7 @@ public sealed class HostForwardsTunnelTests
     }
 
     [Fact]
-    public async Task A_tunnel_that_exits_early_fails_the_row_with_what_ssh_said()
+    public async Task A_first_start_that_ssh_refuses_waits_with_what_ssh_said_then_retries()
     {
         _tunnels.Exits = _ => (255, "red@box: Permission denied (publickey).\r\n");
         var forwards = For();
@@ -71,13 +71,34 @@ public sealed class HostForwardsTunnelTests
         await ScanAndReconcileAsync(forwards);
 
         var row = forwards.Row(5173);
-        Assert.Equal(ForwardState.Failed, row.State);
-        Assert.Equal("red@box: Permission denied (publickey).", row.Error);
+        Assert.Equal(ForwardState.Waiting, row.State);
+        Assert.Equal("the ssh tunnel exited (red@box: Permission denied (publickey).); restarting in 5s", row.Error);
+        Assert.True(forwards.Retrying(5173));
         Assert.False(_locals.Holds(5173));
+
+        _tunnels.Exits = _ => null;
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        await ScanAndReconcileAsync(forwards);
+
+        Assert.Equal(ForwardState.Forwarded, forwards.Row(5173).State);
+        Assert.False(forwards.Retrying(5173));
     }
 
     [Fact]
-    public async Task A_tunnel_that_never_opens_its_port_is_killed_and_failed()
+    public async Task An_asked_for_local_port_that_is_busy_fails_at_once()
+    {
+        var forwards = For(new LocalPorts(p => p != 8080, () => 41000));
+        forwards.Pin(5173, 8080);
+
+        await ScanAndReconcileAsync(forwards);
+
+        Assert.Empty(_tunnels.Started);
+        Assert.Equal(ForwardState.Failed, forwards.Row(5173).State);
+        Assert.Equal("local port 8080 is in use", forwards.Row(5173).Error);
+    }
+
+    [Fact]
+    public async Task A_tunnel_that_never_opens_its_port_is_killed_and_retried()
     {
         var forwards = new HostForwards(
             "red@box",
@@ -91,7 +112,8 @@ public sealed class HostForwardsTunnelTests
         await ScanAndReconcileAsync(forwards);
 
         Assert.True(_tunnels.Started.Single().Killed);
-        Assert.Equal(ForwardState.Failed, forwards.Row(5173).State);
+        Assert.Equal(ForwardState.Waiting, forwards.Row(5173).State);
+        Assert.Contains("did not open localhost:5173", forwards.Row(5173).Error);
         Assert.False(_locals.Holds(5173));
     }
 
@@ -310,8 +332,8 @@ public sealed class HostForwardsTunnelTests
 
         var row = await forwards.ForwardNowAsync(5173, null, default);
 
-        Assert.Equal(ForwardState.Failed, row.State);
-        Assert.Equal("red@box: Permission denied (publickey).", row.Error);
+        Assert.Equal(ForwardState.Waiting, row.State);
+        Assert.Contains("restarting in 5s", row.Error);
     }
 
     [Fact]

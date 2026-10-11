@@ -67,6 +67,14 @@ public sealed class HostForwards(
         }
     }
 
+    public bool Retrying(int remotePort)
+    {
+        lock (_gate)
+        {
+            return _retry.ContainsKey(remotePort);
+        }
+    }
+
     public bool IsPinned(int remotePort)
     {
         lock (_gate)
@@ -334,7 +342,7 @@ public sealed class HostForwards(
         }
     }
 
-    private bool RestartingLocked(int remote) => controlPath is null && _deaths.ContainsKey(remote);
+    private bool RetriesTunnels => controlPath is null;
 
     private void BackOffLocked(int remote, string why, bool lastedLong)
     {
@@ -453,7 +461,7 @@ public sealed class HostForwards(
             locals.Release(local);
             lock (_gate)
             {
-                if (RestartingLocked(remote) && !SshControl.Prohibited(why))
+                if (RetriesTunnels && !SshControl.Prohibited(why))
                 {
                     BackOffLocked(remote, why, lastedLong: false);
                     return;

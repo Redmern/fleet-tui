@@ -571,6 +571,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         {
             var row = forwards.Row(port);
             var settled = row.State is ForwardState.Forwarded or ForwardState.Failed
+                || (!waitForListening && forwards.Retrying(port))
                 || (!waitForListening && row.State == ForwardState.Waiting && waited.Elapsed > TimeSpan.FromSeconds(5));
 
             if (settled || waited.Elapsed > within)
