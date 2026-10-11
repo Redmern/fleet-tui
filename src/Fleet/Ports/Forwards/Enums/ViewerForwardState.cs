@@ -7,4 +7,5 @@ public enum ViewerForwardState
     Failed,
     BrowserFailed,
     NoAnswer,
+    Unsupported,
 }

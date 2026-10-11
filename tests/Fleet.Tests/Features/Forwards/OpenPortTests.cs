@@ -142,6 +142,46 @@ public sealed class OpenPortTests
     }
 
     [Fact]
+    public async Task A_viewer_that_does_not_answer_says_to_restart_its_fleetd_if_it_runs_an_older_fleet()
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null, new ViewerForwardResult(ViewerForwardState.NoAnswer, "http://localhost:5272"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.Contains(outcome.Lines, l => l.Contains("restart", StringComparison.Ordinal)
+                                            && l.Contains("fleet daemon stop", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_viewer_on_another_build_that_does_not_answer_names_both_builds()
+    {
+        _forwards.Viewer = new ViewerForward(
+            "laptop", null, new ViewerForwardResult(ViewerForwardState.NoAnswer, "http://localhost:5272", "laptop runs fleet 0.7.9, this machine 0.7.17"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.True(outcome.Failed);
+        Assert.Contains(outcome.Lines, l => l.Contains("laptop runs fleet 0.7.9, this machine 0.7.17", StringComparison.Ordinal)
+                                            && l.Contains("fleet daemon stop", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_viewer_that_cannot_forward_falls_back_to_the_ssh_command_and_says_why()
+    {
+        _forwards.Viewer = new ViewerForward(
+            null,
+            "10.0.0.5 52000 10.0.0.9 22",
+            new ViewerForwardResult(ViewerForwardState.Unsupported, "http://localhost:5272", "laptop's fleetd does not handle forward-port"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.Equal(OpenPortRoute.Ssh, outcome.Route);
+        Assert.False(outcome.Failed);
+        Assert.Equal("ssh -N -L 5272:localhost:5272 red@10.0.0.9", outcome.Command);
+        Assert.Contains(outcome.Lines, l => l.Contains("laptop's fleetd does not handle forward-port", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_viewer_that_forwarded_but_could_not_open_its_browser_names_the_url()
     {
         _forwards.Viewer = new ViewerForward(

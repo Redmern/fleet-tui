@@ -57,6 +57,11 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
 
         if (sent.SshCommand(port, user) is { } command)
         {
+            if (sent.Result is { State: ViewerForwardState.Unsupported, Reason: { } unsupported })
+            {
+                lines.Add($"{unsupported}; forward it over ssh instead.");
+            }
+
             lines.Add($"Run this on the machine you view fleet from, then open {url} there:");
             return new OpenPortOutcome(port, listening, OpenPortRoute.Ssh, lines, command);
         }
@@ -77,7 +82,9 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
             ViewerForwardState.BrowserFailed =>
                 $"{viewer} forwards {port} but could not open its browser ({result.Reason}); open {result.Url} there.",
             ViewerForwardState.NoAnswer =>
-                $"{viewer} did not answer within 20 s; see the fleet.log on {viewer} for what happened.",
+                $"{viewer} did not answer within 20 s{(result.Reason is { } skew ? $" ({skew})" : string.Empty)}; "
+                + $"see the fleet.log on {viewer} for what happened. If {viewer} runs an older fleet, restart its fleetd "
+                + "there (fleet daemon stop, then fleet attach) and open the port again.",
             _ => $"{viewer} could not forward {port}: {result.Reason ?? "no reason given"}",
         };
 
