@@ -15,7 +15,8 @@ public sealed class AttachClient(
     bool mouse = true,
     Func<string, bool>? openWindow = null,
     Func<string, string, bool>? openRemote = null,
-    Action<Hello>? furnish = null)
+    Action<Hello>? furnish = null,
+    Action<bool, int>? forwardPort = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -228,8 +229,27 @@ public sealed class AttachClient(
         release();
     }
 
+    public static bool Forward(HostEffect effect, Action<bool, int>? forwardPort)
+    {
+        if (forwardPort is null
+            || effect.Kind is not (HostEffects.ForwardPort or HostEffects.UnforwardPort)
+            || !int.TryParse(effect.Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var port))
+        {
+            return false;
+        }
+
+        forwardPort(effect.Kind == HostEffects.ForwardPort, port);
+        return true;
+    }
+
     private void Apply(HostEffect effect, Action<byte[]> write)
     {
+        if (Forward(effect, forwardPort))
+        {
+            log($"{effect.Kind} {effect.Value}");
+            return;
+        }
+
         switch (effect.Kind)
         {
             case HostEffects.Title when effect.Value is { } title:
