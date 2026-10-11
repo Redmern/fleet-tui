@@ -134,7 +134,7 @@ public sealed class RestoreSessionHandler(
                 agent.Repository,
                 agent.Branch,
                 AgentHarness.IsOrchestrator(agent.Harness),
-                models ?? SettingsDefaults.Models,
+                agent.ModelsFrom(models ?? SettingsDefaults.Models, AgentHarness.IsOrchestrator(agent.Harness)),
                 agent.Worktree));
 
     private static SpawnOptions Options(

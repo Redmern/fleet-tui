@@ -3,6 +3,7 @@ using Fleet.Features.Agents.OpenAgent;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Settings.Models;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
@@ -399,6 +400,44 @@ public sealed class OpenAgentTests : IDisposable
             _mux.ArgsFor(claude.Id));
         Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(claude.Id));
         Assert.Equal(agent.Worktree, claude.Cwd);
+    }
+
+    [Fact]
+    public async Task An_orchestrator_with_a_stored_model_reopens_on_it_and_not_on_the_sub_setting()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator, Model = new RoleModel("opus", "high") };
+        var auto = SettingsDefaults.Models with { Sub = new RoleModel(ModelChoice.Auto, "medium") };
+
+        await new OpenAgentHandler(_mux, _store, subOrchestratorsInNvim: false, models: auto)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        var claude = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Equal(
+            [
+                AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-feature-login",
+                "--model", "opus", "--effort", "high",
+            ],
+            _mux.ArgsFor(claude.Id));
+    }
+
+    [Fact]
+    public async Task An_orchestrator_without_a_stored_model_reopens_on_the_current_sub_setting()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Orchestrator };
+        var models = SettingsDefaults.Models with { Sub = new RoleModel("haiku", "low") };
+
+        await new OpenAgentHandler(_mux, _store, subOrchestratorsInNvim: false, models: models)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        var claude = Assert.Single(await _mux.ListPanesAsync());
+
+        Assert.Equal(
+            [
+                AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-feature-login",
+                "--model", "haiku", "--effort", "low",
+            ],
+            _mux.ArgsFor(claude.Id));
     }
 
     [Fact]

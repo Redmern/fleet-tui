@@ -1,6 +1,8 @@
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Settings;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
@@ -183,6 +185,39 @@ public sealed class RestoreSessionTests : IDisposable
             options.Args);
         Assert.Equal(AgentHarness.SessionPersistence, options.Env);
         Assert.Equal(worktree, options.Cwd);
+    }
+
+    [Fact]
+    public void A_sub_orchestrator_with_a_stored_model_is_restored_on_it_and_not_on_the_sub_setting()
+    {
+        var worktree = Path.Combine(ProjectRoot, "orchestrations", "sub");
+        Directory.CreateDirectory(worktree);
+        var sub = new AgentRecord(
+            worktree, "orchestrations", "sub", AgentHarness.Orchestrator, string.Empty, false, false, true,
+            Model: new RoleModel("opus", "high"));
+        var auto = SettingsDefaults.Models with { Sub = new RoleModel(ModelChoice.Auto, "medium") };
+
+        var options = RestoreSessionHandler.Options("techweb", sub, "w7", subOrchestratorsInNvim: false, models: auto);
+
+        Assert.Equal(
+            [AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-sub", "--model", "opus", "--effort", "high"],
+            options.Args);
+    }
+
+    [Fact]
+    public void A_sub_orchestrator_saved_before_routing_is_restored_on_the_current_sub_setting()
+    {
+        var worktree = Path.Combine(ProjectRoot, "orchestrations", "sub");
+        Directory.CreateDirectory(worktree);
+        var sub = new AgentRecord(
+            worktree, "orchestrations", "sub", AgentHarness.Orchestrator, string.Empty, false, false, true);
+        var models = SettingsDefaults.Models with { Sub = new RoleModel("haiku", "low") };
+
+        var options = RestoreSessionHandler.Options("techweb", sub, "w7", subOrchestratorsInNvim: false, models: models);
+
+        Assert.Equal(
+            [AgentHarness.Claude, AgentHarness.ResumeArgument, "--name", "techweb-sub-sub", "--model", "haiku", "--effort", "low"],
+            options.Args);
     }
 
     [Fact]
