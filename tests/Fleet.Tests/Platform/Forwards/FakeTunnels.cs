@@ -43,8 +43,14 @@ public sealed class FakeTunnels : ITunnelLauncher, IListenerProbe, IDisposable
         return tunnel;
     }
 
-    public Task<bool> ListeningAsync(int port, CancellationToken ct = default) =>
-        Task.FromResult(Started.Any(t => !t.Exited.IsCompleted && t.Local == port));
+    // Holds every readiness probe until it completes, to catch a forward mid-start.
+    public Task Up { get; set; } = Task.CompletedTask;
+
+    public async Task<bool> ListeningAsync(int port, CancellationToken ct = default)
+    {
+        await Up.WaitAsync(ct);
+        return Started.Any(t => !t.Exited.IsCompleted && t.Local == port);
+    }
 }
 
 public sealed class FakeTunnel(IReadOnlyList<string> arguments) : ITunnel

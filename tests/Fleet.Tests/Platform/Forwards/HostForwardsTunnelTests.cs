@@ -243,6 +243,70 @@ public sealed class HostForwardsTunnelTests
         Assert.Equal(2, _tunnels.Started.Count);
     }
 
+    [Fact]
+    public async Task A_tunnel_that_comes_up_after_the_link_dropped_is_killed_and_frees_its_port()
+    {
+        var up = new TaskCompletionSource();
+        _tunnels.Up = up.Task;
+        var forwards = For();
+        forwards.Pin(5173, null);
+        var forwarding = ScanAndReconcileAsync(forwards);
+        await WaitUntil(() => _tunnels.Started.Count == 1);
+
+        forwards.Unlinked();
+        up.SetResult();
+        await forwarding;
+
+        Assert.True(_tunnels.Started.Single().Killed);
+        Assert.False(_locals.Holds(5173));
+        Assert.Equal(ForwardState.Waiting, forwards.Row(5173).State);
+    }
+
+    [Fact]
+    public async Task A_tunnel_that_comes_up_after_close_is_killed()
+    {
+        var up = new TaskCompletionSource();
+        _tunnels.Up = up.Task;
+        var forwards = For();
+        forwards.Pin(5173, null);
+        var forwarding = ScanAndReconcileAsync(forwards);
+        await WaitUntil(() => _tunnels.Started.Count == 1);
+
+        forwards.Close();
+        up.SetResult();
+        await forwarding;
+
+        Assert.True(_tunnels.Started.Single().Killed);
+        Assert.False(_locals.Holds(5173));
+    }
+
+    [Fact]
+    public async Task Forwarding_by_hand_after_a_death_shows_the_real_failure()
+    {
+        var forwards = For();
+        forwards.Pin(5173, null);
+        await ScanAndReconcileAsync(forwards);
+        _tunnels.Started.Single().Exit(255, "gone");
+        await ScanAndReconcileAsync(forwards);
+        _tunnels.Exits = _ => (255, "red@box: Permission denied (publickey).");
+
+        var row = await forwards.ForwardNowAsync(5173, null, default);
+
+        Assert.Equal(ForwardState.Failed, row.State);
+        Assert.Equal("red@box: Permission denied (publickey).", row.Error);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.True(condition());
+    }
+
     private sealed class Never : Fleet.Ports.Forwards.IListenerProbe
     {
         public Task<bool> ListeningAsync(int port, CancellationToken ct = default) => Task.FromResult(false);

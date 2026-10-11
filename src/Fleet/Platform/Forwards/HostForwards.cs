@@ -30,6 +30,7 @@ public sealed class HostForwards(
     private readonly Dictionary<int, int> _deaths = [];
     private readonly Dictionary<int, (DateTimeOffset At, string Why)> _retry = [];
     private bool _closed;
+    private int _epoch;
 
     private sealed record Active(int Local, string Target, string? Project, ITunnel? Tunnel = null, DateTimeOffset Since = default);
 
@@ -58,6 +59,7 @@ public sealed class HostForwards(
             _suppressed.Remove(remotePort);
             _failed.Remove(remotePort);
             _retry.Remove(remotePort);
+            _deaths.Remove(remotePort);
         }
     }
 
@@ -98,6 +100,7 @@ public sealed class HostForwards(
         lock (_gate)
         {
             _linked = false;
+            _epoch++;
             _hostError = null;
             _restore.UnionWith(_active.Keys);
             foreach (var (remote, active) in _active)
@@ -118,6 +121,7 @@ public sealed class HostForwards(
         lock (_gate)
         {
             _closed = true;
+            _epoch++;
             foreach (var active in _active.Values)
             {
                 active.Tunnel?.Kill();
@@ -319,7 +323,7 @@ public sealed class HostForwards(
             _active.Remove(remote);
             _preferred[remote] = active.Local;
             locals.Release(active.Local);
-            var why = Why(active.Tunnel!.Exited.Result, active.Tunnel.Errors);
+            var why = Why(active.Tunnel!);
             BackOffLocked(remote, why, lastedLong: Now - active.Since >= Mode.RestartAtMost);
         }
     }
@@ -345,7 +349,7 @@ public sealed class HostForwards(
         if (_active.TryGetValue(remote, out var dead) && dead.Tunnel is { Exited.IsCompleted: true } exited)
         {
             return new PortForward(
-                host, remote, null, ForwardState.Waiting, project, $"the ssh tunnel exited ({Why(exited.Exited.Result, exited.Errors)})");
+                host, remote, null, ForwardState.Waiting, project, $"the ssh tunnel exited ({Why(exited)})");
         }
 
         if (_retry.TryGetValue(remote, out var retry))
@@ -386,6 +390,12 @@ public sealed class HostForwards(
 
     private async Task ForwardAsync(int remote, string target, string? project, int? wantedLocal, CancellationToken ct)
     {
+        int epoch;
+        lock (_gate)
+        {
+            epoch = _epoch;
+        }
+
         int local;
         try
         {
@@ -430,7 +440,7 @@ public sealed class HostForwards(
 
         lock (_gate)
         {
-            if (_closed)
+            if (_closed || _epoch != epoch)
             {
                 tunnel?.Kill();
                 locals.Release(local);
@@ -462,7 +472,7 @@ public sealed class HostForwards(
             {
                 if (tunnel.Exited.IsCompleted)
                 {
-                    return (null, Why(await tunnel.Exited.ConfigureAwait(false), tunnel.Errors));
+                    return (null, Why(tunnel));
                 }
 
                 if (await mode.Probe.ListeningAsync(local, ct).ConfigureAwait(false))
@@ -490,11 +500,15 @@ public sealed class HostForwards(
     private static string Why(int exit, string errors) =>
         errors.Trim() is { Length: > 0 } said ? said : $"ssh exited with {exit}";
 
+    private static string Why(ITunnel tunnel) =>
+        Why(tunnel.Exited.IsCompletedSuccessfully ? tunnel.Exited.Result : -1, tunnel.Errors);
+
     private async Task CancelAsync(int remote, Active active, CancellationToken ct)
     {
         if (active.Tunnel is { } tunnel)
         {
             tunnel.Kill();
+            await Task.WhenAny(tunnel.Exited, Task.Delay(TimeSpan.FromSeconds(2), ct)).ConfigureAwait(false);
         }
         else if (controlPath is not null)
         {
@@ -507,10 +521,12 @@ public sealed class HostForwards(
 
         lock (_gate)
         {
-            if (_active.TryGetValue(remote, out var current) && current == active)
+            if (!_active.TryGetValue(remote, out var current) || current != active)
             {
-                _active.Remove(remote);
+                return;
             }
+
+            _active.Remove(remote);
         }
 
         locals.Release(active.Local);
