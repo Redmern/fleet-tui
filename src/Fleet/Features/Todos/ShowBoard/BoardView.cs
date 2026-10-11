@@ -51,20 +51,24 @@ public static class BoardView
             {
                 status.Text = BoardRows.Empty;
             }
+            else if (status.Text == BoardRows.Empty)
+            {
+                status.Text = string.Empty;
+            }
         }
 
         bool Changed() =>
             string.Join('\n', BoardRows.For(board.List(projectRoot)).Select(r => r.Text)) != shown;
 
-        void Apply(Result<Ticket> result, Func<Ticket, string> message)
+        void Apply(Result<Ticket> result, Func<Ticket, string> message, bool follow)
         {
             status.Text = result.Succeeded ? message(result.Value) : result.Error!;
-            Fill(result.Succeeded ? result.Value.Id : null);
+            Fill(result.Succeeded && follow ? result.Value.Id : string.Empty);
         }
 
         async Task OpenAsync(string id)
         {
-            var opened = await open(id).ConfigureAwait(false);
+            var opened = await BoardRows.SafelyAsync(() => open(id)).ConfigureAwait(false);
 
             await FleetAsync.OnUi(app, () =>
             {
@@ -114,11 +118,11 @@ public static class BoardView
                     break;
 
                 case BoardCommand.Effort:
-                    Apply(board.CycleEffort(projectRoot, ticket.Id), BoardRows.EffortSaved);
+                    Apply(board.CycleEffort(projectRoot, ticket.Id), BoardRows.EffortSaved, follow: true);
                     break;
 
                 case BoardCommand.Close:
-                    Apply(board.Close(projectRoot, ticket.Id), t => $"Closed {t.Id}. The file stays in .fleet/todos.");
+                    Apply(board.Close(projectRoot, ticket.Id), t => $"Closed {t.Id}. The file stays in .fleet/todos.", follow: false);
                     break;
             }
         }

@@ -105,6 +105,27 @@ public class ShowBoardTests
     }
 
     [Fact]
+    public async Task An_open_that_throws_becomes_a_failed_result_so_the_board_stays_usable()
+    {
+        var opened = await BoardRows.SafelyAsync(() => throw new InvalidOperationException("fleetd did not answer"));
+
+        Assert.False(opened.Succeeded);
+        Assert.Contains("fleetd did not answer", opened.Error);
+    }
+
+    [Fact]
+    public async Task An_open_that_fails_async_becomes_a_failed_result()
+    {
+        var opened = await BoardRows.SafelyAsync(async () =>
+        {
+            await Task.Yield();
+            throw new IOException("pipe closed");
+        });
+
+        Assert.Equal("pipe closed", opened.Error);
+    }
+
+    [Fact]
     public void The_status_line_names_the_saved_effort()
     {
         Assert.Equal("Effort of 0001-a is M.", BoardRows.EffortSaved(Ticket("0001-a", effort: TicketEffort.M)));

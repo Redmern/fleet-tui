@@ -1,3 +1,4 @@
+using Fleet.Shared.Results;
 using Fleet.Shared.Todos;
 using Fleet.Shared.Todos.Enums;
 using Fleet.Shared.Todos.Models;
@@ -19,6 +20,18 @@ public static class BoardRows
     public static string Title(string project) => $"{project} — todo board";
 
     public const string Empty = "No tickets yet. Capture one with + in a main pane or fleet todo \"idea\".";
+
+    public static async Task<Result> SafelyAsync(Func<Task<Result>> open)
+    {
+        try
+        {
+            return await open().ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            return Result.Fail(e.Message);
+        }
+    }
 
     public static string EffortSaved(Ticket ticket) =>
         ticket.Effort is { } effort
