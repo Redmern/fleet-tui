@@ -8,6 +8,39 @@ public sealed class ReverseForwardPulse(
     Func<IReadOnlyList<string>, CancellationToken, Task<SshResult>> ssh,
     Action<string> log)
 {
+    public string LocalSocket => localSocket;
+
+    public string Name => name;
+
+    public static ReverseForwardPulse? ForViewer(
+        Func<string, string?> env,
+        Func<string, bool> exists,
+        bool unix,
+        string machine,
+        string user,
+        Func<IReadOnlyList<string>, CancellationToken, Task<SshResult>> ssh,
+        Action<string> log)
+    {
+        if (!ReverseForward.OptedIn(env))
+        {
+            return null;
+        }
+
+        if (!unix)
+        {
+            log($"{ReverseForward.OptInVariable} is set, but voice forwarding needs ssh control sockets, which this system lacks");
+            return null;
+        }
+
+        if (ReverseForward.LocalPulse(env, exists) is not { } socket)
+        {
+            log($"{ReverseForward.OptInVariable} is set, but no pulse socket was found; set {ReverseForward.PulseVariable}=unix:<socket>");
+            return null;
+        }
+
+        return new ReverseForwardPulse(socket, ReverseForward.SocketName(machine, user), ssh, log);
+    }
+
     public async Task OpenAsync(string host, string? controlPath, CancellationToken ct)
     {
         if (controlPath is null)

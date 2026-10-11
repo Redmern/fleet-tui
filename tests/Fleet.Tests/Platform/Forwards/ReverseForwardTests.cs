@@ -220,6 +220,31 @@ public sealed class ReverseForwardTests
         Assert.Contains(lines, l => l.Contains("control socket"));
     }
 
+    [Fact]
+    public void A_viewer_forwards_voice_only_when_opted_in_on_a_unix_machine_with_a_pulse_socket()
+    {
+        var ssh = new FakeSsh();
+        var lines = new List<string>();
+        string? On(string name) => name switch
+        {
+            ReverseForward.OptInVariable => "1",
+            "XDG_RUNTIME_DIR" => "/run/user/1000",
+            _ => null,
+        };
+
+        Assert.Null(ReverseForwardPulse.ForViewer(_ => null, _ => true, unix: true, "laptop", "red", ssh.RunAsync, lines.Add));
+        Assert.Empty(lines);
+        Assert.Null(ReverseForwardPulse.ForViewer(On, _ => true, unix: false, "laptop", "red", ssh.RunAsync, lines.Add));
+        Assert.Null(ReverseForwardPulse.ForViewer(On, _ => false, unix: true, "laptop", "red", ssh.RunAsync, lines.Add));
+        Assert.Equal(2, lines.Count);
+
+        var pulse = ReverseForwardPulse.ForViewer(On, _ => true, unix: true, "laptop", "red", ssh.RunAsync, lines.Add);
+
+        Assert.NotNull(pulse);
+        Assert.Equal("/run/user/1000/pulse/native", pulse.LocalSocket);
+        Assert.Equal(ReverseForward.SocketName("laptop", "red"), pulse.Name);
+    }
+
     private static async Task<(int Exit, string Output)> ShAsync(string command, string runtime)
     {
         var start = new ProcessStartInfo("sh") { RedirectStandardOutput = true, UseShellExecute = false };
