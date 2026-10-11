@@ -48,6 +48,8 @@ public sealed class DaemonOptions
 
     public bool ServesBridge { get; init; }
 
+    public Func<byte[], string?>? DropClipboardImage { get; init; }
+
     public ClipboardImageLimit ClipboardImageLimit { get; init; } = new(Reads: 20, Per: TimeSpan.FromMinutes(1));
 
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
@@ -746,7 +748,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
-    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, bool probe, CancellationToken ct, TimeSpan? within = null)
+    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, bool probe, CancellationToken ct, TimeSpan? within = null, bool paste = false)
     {
         AttachSession? viewer;
         lock (_gate)
@@ -760,7 +762,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             return new ControlResponse { Ok = false, Error = $"pane {pane} is not focused in any viewer" };
         }
 
-        var answer = await AskClipboardImageAsync(viewer, pane!, probe, within ?? ClipboardImageWithin, ct).ConfigureAwait(false);
+        var answer = await AskClipboardImageAsync(viewer, pane!, probe, within ?? ClipboardImageWithin, ct, paste).ConfigureAwait(false);
         return answer switch
         {
             { Error: { } error } => new ControlResponse { Ok = false, Error = error },
@@ -779,7 +781,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             shownHere = _runtimes.Values.FirstOrDefault(r => r.Pty == link.Pty)?.Id;
         }
 
-        var answer = await ClipboardImageForAsync(shownHere, asked.Probe, _stop.Token, RelayedClipboardImageWithin).ConfigureAwait(false);
+        var answer = await ClipboardImageForAsync(shownHere, asked.Probe, _stop.Token, RelayedClipboardImageWithin, asked.Paste).ConfigureAwait(false);
         await link.AnswerClipboardImageAsync(
             !answer.Ok ? new ClipboardImageResponse { Id = asked.Id, Error = answer.Error }
             : asked.Probe ? ClipboardImageResponse.Probed(asked.Id, answer.HasImage)
@@ -820,6 +822,46 @@ public sealed class FleetDaemon(DaemonOptions options)
         return null;
     }
 
+    public const string PasteImageCommand = "paste-image";
+
+    private async Task PasteClipboardImageAsync(AttachSession session)
+    {
+        PaneRuntime? target;
+        lock (_gate)
+        {
+            _model.Touch(session.Client);
+            target = FocusedRuntime(session.Client);
+        }
+
+        if (target is null || options.DropClipboardImage is not { } drop)
+        {
+            return;
+        }
+
+        var answer = await AskClipboardImageAsync(session, target.Id, probe: false, ClipboardImageWithin, _stop.Token, paste: true).ConfigureAwait(false);
+        if (answer.Error is not null || answer.Data is not { Length: > 0 } png)
+        {
+            options.Log($"paste image into {target.Id}: {answer.Error ?? "no image on the viewer clipboard"}");
+            return;
+        }
+
+        if (png.Length > ClipboardImageResponse.MaxBytes || drop(png) is not { } typed)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (!_runtimes.ContainsKey(target.Id))
+            {
+                return;
+            }
+        }
+
+        FollowOutput(target);
+        target.Send(Encoding.UTF8.GetBytes(PasteBytes(new TextMessage { Text = typed, Paste = true }, target.Modes.BracketedPaste)));
+    }
+
     private AttachSession? FocusingViewer(string pane) =>
         _sessions.Values
             .Where(s => _model.View(s.Client)?.Focused == pane)
@@ -827,7 +869,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             .FirstOrDefault();
 
     private async Task<ClipboardImageResponse> AskClipboardImageAsync(
-        AttachSession viewer, string pane, bool probe, TimeSpan within, CancellationToken ct)
+        AttachSession viewer, string pane, bool probe, TimeSpan within, CancellationToken ct, bool paste = false)
     {
         var id = Interlocked.Increment(ref _nextClipboardAsk);
         var reply = new TaskCompletionSource<ClipboardImageResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -837,7 +879,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             await viewer.Wire.SendAsync(
                 MessageType.ClipboardImageRequest,
-                new ClipboardImageRequest { Id = id, Pane = pane, Probe = probe },
+                new ClipboardImageRequest { Id = id, Pane = pane, Probe = probe, Paste = paste },
                 WireJsonContext.Default.ClipboardImageRequest,
                 ct).ConfigureAwait(false);
             return await reply.Task.WaitAsync(within, ct).ConfigureAwait(false);
@@ -1542,6 +1584,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                 return;
             case "newline":
                 Newline(session, command);
+                return;
+            case PasteImageCommand:
+                _ = Task.Run(() => PasteClipboardImageAsync(session), CancellationToken.None);
                 return;
         }
 

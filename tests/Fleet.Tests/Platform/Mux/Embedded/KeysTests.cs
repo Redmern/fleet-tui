@@ -128,6 +128,7 @@ public class KeysTests
             ["space"] = "menu",
             ["["] = "copy-mode",
             ["]"] = "paste",
+            ["i"] = "paste-image",
             ["d"] = "detach",
             ["Q"] = "menu quit",
             ["f f"] = "float-new",
