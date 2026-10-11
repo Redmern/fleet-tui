@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
+using Fleet.Features.Shim.Mac;
+using Fleet.Features.Shim.Mac.Enums;
 using Fleet.Features.Shim.ServeClipboard;
 using Fleet.Features.Shim.ServeClipboard.Enums;
 using Fleet.Platform.Clipboard;
@@ -121,7 +123,7 @@ public static class EmbeddedWiring
         var shims = ShimFolder.Default;
         var installed = new Lazy<bool>(() =>
         {
-            var scripts = ClipboardShim.Tools.ToDictionary(tool => tool, tool => ShimScripts.Script(Adapters.Executable, tool));
+            var scripts = ShimTools.ToDictionary(tool => tool, tool => ShimScripts.Script(Adapters.Executable, tool));
             var done = ShimFolder.Install(shims, scripts, line => log.Write($"fleetd: {line}"));
             log.Write(done
                 ? $"fleetd: remote panes find the clipboard shims in {shims} first on PATH"
@@ -139,19 +141,24 @@ public static class EmbeddedWiring
         };
     }
 
+    private static IReadOnlyList<string> ShimTools =>
+        OperatingSystem.IsMacOS() ? [.. ClipboardShim.Tools, .. MacClipboardShim.Tools] : ClipboardShim.Tools;
+
     public static async Task<int> ShimAsync(IReadOnlyList<string> args)
     {
         if (args.Count == 0)
         {
-            await Console.Error.WriteLineAsync($"usage: fleet shim <{string.Join('|', ClipboardShim.Tools)}> [arguments]")
+            await Console.Error.WriteLineAsync(
+                    $"usage: fleet shim <{string.Join('|', ClipboardShim.Tools.Concat(MacClipboardShim.Tools))}> [arguments]")
                 .ConfigureAwait(false);
             return 2;
         }
 
         var tool = args[0];
         string[] rest = [.. args.Skip(1)];
+        var mac = MacClipboardShim.Tools.Contains(tool) ? MacClipboardShim.Parse(tool, rest) : null;
         var call = ClipboardShim.Parse(tool, rest);
-        if (call.Read == ShimRead.RealTool)
+        if (mac?.Read == MacRead.RealTool || (mac is null && call.Read == ShimRead.RealTool))
         {
             var real = ShimScripts.RealTool(tool, Environment.GetEnvironmentVariable("PATH"), ShimFolder.Default, File.Exists);
             return await ShimFolder.RunRealToolAsync(tool, real, rest).ConfigureAwait(false);
@@ -162,7 +169,9 @@ public static class EmbeddedWiring
             Endpoint.Default(),
             Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable),
             Environment.GetEnvironmentVariable(FleetDaemon.PaneTokenVariable));
-        return await ClipboardShim.RunAsync(call, pane, stdout, Console.Error).ConfigureAwait(false);
+        return mac is not null
+            ? await MacClipboardShim.RunAsync(mac, pane, stdout, Console.Error).ConfigureAwait(false)
+            : await ClipboardShim.RunAsync(call, pane, stdout, Console.Error).ConfigureAwait(false);
     }
 
     private static (DateTime Stamp, AccountProfiles? Profiles) _profiles;
