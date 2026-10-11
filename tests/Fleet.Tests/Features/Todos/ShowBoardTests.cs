@@ -1,4 +1,5 @@
 using Fleet.Features.Todos.ShowBoard;
+using Fleet.Features.Todos.ShowBoard.Models;
 using Fleet.Ports.Todos;
 using Fleet.Shared.Results;
 using Fleet.Shared.Todos.Enums;
@@ -14,7 +15,11 @@ public class ShowBoardTests
 
     private readonly FakeTodoStore _store = new();
 
+    private static readonly BoardProject Project = new("p", Root);
+
     private BoardTickets Board => new(_store);
+
+    private IReadOnlyList<Ticket> Listed() => [.. Board.List([Project]).Select(e => e.Ticket)];
 
     private static Ticket Ticket(
         string id,
@@ -34,7 +39,7 @@ public class ShowBoardTests
             Ticket("0004-new-open", TicketStatus.Open, day: 5),
             Ticket("0005-busy", TicketStatus.InProgress, day: 7));
 
-        var ids = Board.List(Root).Select(t => t.Id);
+        var ids = Listed().Select(t => t.Id);
 
         Assert.Equal(["0004-new-open", "0001-old-open", "0005-busy", "0003-done", "0002-closed"], ids);
     }
@@ -176,7 +181,7 @@ public class ShowBoardTests
 
         Assert.True(closed.Succeeded, closed.Error);
         Assert.Equal(TicketStatus.Closed, _store.Saved.Single().Status);
-        Assert.Single(Board.List(Root));
+        Assert.Single(Listed());
     }
 
     [Fact]
@@ -206,10 +211,10 @@ public class ShowBoardTests
     public void A_change_on_disk_shows_on_the_next_list()
     {
         _store.Put(Ticket("0001-a"));
-        var before = BoardRows.For(Board.List(Root));
+        var before = BoardRows.For(Listed());
 
         _store.Put(Ticket("0001-a") with { Title = "renamed on disk" });
-        var after = BoardRows.For(Board.List(Root));
+        var after = BoardRows.For(Listed());
 
         Assert.DoesNotContain("renamed on disk", before.Single().Text);
         Assert.Contains("renamed on disk", after.Single().Text);
@@ -218,11 +223,11 @@ public class ShowBoardTests
     [Fact]
     public void The_selection_follows_a_ticket_when_the_order_changes()
     {
-        var tickets = new[] { Ticket("0002-b", day: 2), Ticket("0001-a", day: 1) };
+        var tickets = new[] { new BoardEntry(Project, Ticket("0002-b", day: 2)), new BoardEntry(Project, Ticket("0001-a", day: 1)) };
 
-        Assert.Equal(1, BoardRows.IndexOf(tickets, "0001-a", fallback: 0));
-        Assert.Equal(1, BoardRows.IndexOf(tickets, "0009-gone", fallback: 7));
-        Assert.Equal(0, BoardRows.IndexOf([], "0001-a", fallback: 3));
+        Assert.Equal(1, BoardRows.IndexOf(tickets, new BoardEntry(Project, Ticket("0001-a")), fallback: 0));
+        Assert.Equal(1, BoardRows.IndexOf(tickets, new BoardEntry(Project, Ticket("0009-gone")), fallback: 7));
+        Assert.Equal(0, BoardRows.IndexOf([], tickets[0], fallback: 3));
     }
 
     private sealed class FakeTodoStore : ITodoStore

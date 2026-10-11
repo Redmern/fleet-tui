@@ -8,9 +8,6 @@ namespace Fleet.Features.Todos.ShowBoard;
 
 public sealed class BoardTickets(ITodoStore store)
 {
-    public IReadOnlyList<Ticket> List(string projectRoot) =>
-        [.. store.List(projectRoot).OrderBy(t => t.Status).ThenByDescending(t => t.Created).ThenByDescending(t => t.Id, StringComparer.Ordinal)];
-
     public IReadOnlyList<BoardEntry> List(IReadOnlyList<BoardProject> projects) =>
     [
         .. projects

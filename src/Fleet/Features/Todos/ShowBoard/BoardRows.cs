@@ -116,24 +116,6 @@ public static class BoardRows
         return Math.Clamp(fallback, 0, entries.Count - 1);
     }
 
-    public static int IndexOf(IReadOnlyList<Ticket> tickets, string? id, int fallback)
-    {
-        if (tickets.Count == 0)
-        {
-            return 0;
-        }
-
-        for (var i = 0; i < tickets.Count; i++)
-        {
-            if (tickets[i].Id == id)
-            {
-                return i;
-            }
-        }
-
-        return Math.Clamp(fallback, 0, tickets.Count - 1);
-    }
-
     private static FleetRow Row(Ticket ticket, int idWidth)
     {
         var effort = TicketWords.Of(ticket.Effort) is { Length: > 0 } size ? size : NoEffort;
