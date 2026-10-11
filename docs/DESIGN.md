@@ -5890,7 +5890,10 @@ What the phases add up to:
   stderr kept, and kills the process tree.
 - **Up means accepting.** After starting, `HostForwards` polls `127.0.0.1:<local>` with the
   `IListenerProbe` (one short connection through the tunnel) until it accepts (`Forwarded`),
-  ssh exits (`Failed`, ssh's stderr) or `UpWithin` (20 s) passes (killed, `Failed`).
+  ssh exits (ssh's stderr) or `UpWithin` (20 s) passes (killed). Either way the port backs
+  off and retries like a restart (AC-11), shown as `Waiting` with the reason; forward
+  requests settle as soon as a port is retrying (`HostForwards.Retrying`). Only a busy
+  local port asked for by hand, a refusing sshd and a host starting with `-` are `Failed`.
   `LocalPorts` picks the local port as before.
 - **No scan.** Without a master there is no `ss` over ssh, so `ScanAsync` reports the pins
   as listening on `localhost`: only pinned ports are forwarded, `forwardPorts` are not
@@ -5899,7 +5902,9 @@ What the phases add up to:
 - **Restarts.** Each reconcile reaps tunnels that exited: the port waits `RestartAfter`
   (fleetd's `ReconnectAfter`, 5 s), doubling per death up to `RestartAtMost` (1 min); a
   tunnel that stayed up that long starts the count again. A failed restart backs off again
-  instead of failing, and forwarding by hand (`Pin`) skips the wait. The local port is kept.
+  instead of failing, and forwarding by hand (`Pin`) skips the wait; pinning a port that was
+  not pinned starts its count afresh. The local port is kept. `Backoff.After` is shared
+  with the link reconnect in `ForwardHub.Ended`.
 - **Shutdown.** fleetd's `Shutdown` calls `ForwardHub.Shutdown`: every `HostForwards.Close`s
   (kills its tunnels, forwards nothing more) and the launcher is disposed, killing anything
   it still runs. On Windows each tunnel is also put in a kill-on-close job object
@@ -5913,7 +5918,8 @@ What the phases add up to:
   viewer for `forward-port` / `unforward-port` (`_tunnelsItself`), so Open port and
   `forward_port` send it the effect instead of the copy-this-command dialog; it stays out of
   hand-backs, which only labelled fleet viewers apply. `AttachClient.Forward` hands the
-  effect to `ViewerTunnels.Apply`, which forwards, opens the local URL and logs failures.
+  effect to `ViewerTunnels.Apply`, which queues it on a single-reader channel so a quick
+  forward and unforward run in order, then forwards, opens the local URL and logs failures.
   The tunnels are disposed when the attach ends (and sit in the Windows job object). No
   wire change: `Hello.forwards` existed; an old fleetd ignores it and sends the command.
 

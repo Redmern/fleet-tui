@@ -353,9 +353,11 @@ Where OpenSSH has no control sockets (Windows, or on Linux/macOS a host whose co
 socket path would be too long for ssh), fleet forwards each port with its own
 background `ssh -N -L 127.0.0.1:<local>:localhost:<port> <host>`, started without a console
 window and with `BatchMode=yes`, so the host must log you in with a key or agent, without a
-password prompt. A port counts as forwarded once its local port accepts connections; if
-ssh exits first, the row shows ssh's error. A tunnel that dies is started again with the
-same backoff as a dropped link, and fleet kills its tunnels when it stops. These forwards
+password prompt. A port counts as forwarded once its local port accepts connections. If
+ssh exits first, or a tunnel that was up dies, the port waits with ssh's error on its row
+and is tried again with the same backoff as a dropped link (5 s, doubling up to a minute);
+forwarding it again by hand tries at once. A local port you asked for (`--local`) that is
+busy fails straight away. fleet kills its tunnels when it stops. These forwards
 are made only on request (`f`, Open port, `forward_port`, `fleet forward`): without a
 control socket fleet cannot list the remote's ports, so `forwardPorts` are not forwarded on
 their own. `<host>` is the name you connected with, so a non-default ssh port, user or key
