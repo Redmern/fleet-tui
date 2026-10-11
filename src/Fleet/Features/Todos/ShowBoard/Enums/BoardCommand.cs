@@ -8,5 +8,6 @@ public enum BoardCommand
     Effort,
     Close,
     Refresh,
+    Scope,
     Quit,
 }

@@ -13,7 +13,6 @@ public static class KeymapGroups
             FleetAction.SwitchProject,
             FleetAction.ListAgents,
             FleetAction.TodoBoard,
-            FleetAction.TodoBoardAll,
             FleetAction.BrowseFiles,
             FleetAction.Notifications,
             FleetAction.OpenSettings,

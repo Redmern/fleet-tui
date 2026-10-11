@@ -16,7 +16,6 @@ public class FleetActionIdsTests
     [InlineData(FleetAction.OpenFleetConfigMenu, "fleet-config-menu")]
     [InlineData(FleetAction.EditAidlcMode, "aidlc-mode")]
     [InlineData(FleetAction.TodoBoard, "todo-board")]
-    [InlineData(FleetAction.TodoBoardAll, "todo-board-all")]
     public void An_action_round_trips_through_its_id(FleetAction action, string id)
     {
         Assert.Equal(id, FleetActionIds.For(action));
@@ -31,6 +30,10 @@ public class FleetActionIdsTests
             Assert.Equal(action, FleetActionIds.Parse(FleetActionIds.For(action)));
         }
     }
+
+    [Fact]
+    public void The_retired_all_projects_board_id_parses_to_no_action() =>
+        Assert.Equal(FleetAction.None, FleetActionIds.Parse("todo-board-all"));
 
     [Fact]
     public void Parsing_is_case_and_whitespace_tolerant()

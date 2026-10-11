@@ -778,11 +778,13 @@ public static class MenuCommand
                 }
 
             case FleetAction.TodoBoard:
-                ShowBoard(app, keymap, project.Name, BoardScope.One(project.Name, project.Root));
-                break;
-
-            case FleetAction.TodoBoardAll:
-                ShowBoard(app, keymap, project.Name, BoardScope.All(projects.List().Select(p => new BoardProject(p.Name, p.Root))));
+                ShowBoard(
+                    app,
+                    keymap,
+                    project.Name,
+                    new BoardScopes(
+                        BoardScope.One(project.Name, project.Root),
+                        BoardScope.All(projects.List().Select(p => new BoardProject(p.Name, p.Root)))));
                 break;
 
             case FleetAction.BrowseFiles:
@@ -904,7 +906,7 @@ public static class MenuCommand
     }
 
 
-    private static void ShowBoard(IApplication app, Keymap keymap, string here, BoardScope scope)
+    private static void ShowBoard(IApplication app, Keymap keymap, string here, BoardScopes scopes)
     {
         var boardMux = Adapters.Mux(Adapters.Log());
         using var pulls = new JiraPulls();
@@ -912,7 +914,7 @@ public static class MenuCommand
         BoardView.Show(
             app,
             keymap,
-            scope,
+            scopes,
             new BoardTickets(Adapters.Todos()),
             (owner, id) => boardMux.Unsupported is { } unsupported
                 ? Task.FromResult(Result.Fail(unsupported))
@@ -922,7 +924,7 @@ public static class MenuCommand
                 : new LaunchTicketHandler(Adapters.Todos(), Adapters.Dispatcher(boardMux.Driver))
                     .HandleAsync(owner.Name, owner.Root, id),
             [
-                .. scope.Projects
+                .. scopes.Project.Projects.Concat(scopes.All.Projects).DistinctBy(p => p.Name)
                     .Select(p => pulls.For(p.Name, p.Root) is { } pull ? new BoardJira(p, pull) : null)
                     .OfType<BoardJira>(),
             ]);

@@ -5,6 +5,9 @@ namespace Fleet.Features.Todos.ShowBoard;
 
 public static class BoardPull
 {
+    public static IReadOnlyList<BoardJira> In(IReadOnlyList<BoardJira> pulls, BoardScope scope) =>
+        [.. pulls.Where(p => scope.Projects.Any(s => s.Name == p.Project.Name))];
+
     public static async Task<IReadOnlyList<(string Project, Result<int> Pulled)>> AllAsync(
         IReadOnlyList<BoardJira> pulls, CancellationToken ct)
     {
