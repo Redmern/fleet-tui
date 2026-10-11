@@ -5,28 +5,18 @@ namespace Fleet.Tests.Platform.Forwards;
 // sh stands in for ssh: the launcher only starts, watches and kills a process.
 public sealed class TunnelProcessesTests
 {
-    [Fact]
+    [UnixFact]
     public async Task A_process_that_exits_reports_its_code_and_stderr()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var tunnel = new TunnelProcesses("sh").Start(["-c", "echo 'bind: Address already in use' >&2; exit 3"]);
 
         Assert.Equal(3, await tunnel.Exited.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Equal("bind: Address already in use", tunnel.Errors.Trim());
     }
 
-    [Fact]
+    [UnixFact]
     public async Task Only_the_last_lines_of_stderr_are_kept()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var tunnel = new TunnelProcesses("sh").Start(
             ["-c", "i=0; while [ $i -lt 500 ]; do echo \"channel $i: open failed\" >&2; i=$((i+1)); done; echo 'Connection reset' >&2; exit 255"]);
 
@@ -36,14 +26,9 @@ public sealed class TunnelProcessesTests
         Assert.Equal("Connection reset", lines[^1].Trim());
     }
 
-    [Fact]
+    [UnixFact]
     public async Task Killing_a_running_process_ends_it()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var tunnel = new TunnelProcesses("sh").Start(["-c", "sleep 30"]);
         Assert.False(tunnel.Exited.IsCompleted);
 
@@ -52,14 +37,9 @@ public sealed class TunnelProcessesTests
         await tunnel.Exited.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
-    [Fact]
+    [UnixFact]
     public async Task Disposing_the_launcher_kills_every_tunnel_it_started()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var launcher = new TunnelProcesses("sh");
         var one = launcher.Start(["-c", "sleep 30"]);
         var two = launcher.Start(["-c", "sleep 30"]);
@@ -76,5 +56,16 @@ public sealed class TunnelProcessesTests
 
         Assert.Equal(127, await tunnel.Exited.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Contains("could not run fleet-no-such-ssh", tunnel.Errors);
+    }
+
+    private sealed class UnixFactAttribute : FactAttribute
+    {
+        public UnixFactAttribute()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Skip = "sh stands in for ssh here, and Windows has no sh";
+            }
+        }
     }
 }
