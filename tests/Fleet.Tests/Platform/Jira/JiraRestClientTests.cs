@@ -180,6 +180,37 @@ public class JiraRestClientTests
         Assert.DoesNotContain(Token, result.Error);
     }
 
+    private static string Credentials => Convert.ToBase64String(Encoding.UTF8.GetBytes("me@acme.test:" + Token));
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    public async Task An_error_answer_that_echoes_the_credentials_never_shows_them(HttpStatusCode code)
+    {
+        _handler.Reply(code, "{ \"errorMessages\": [\"bad header Basic " + Credentials + " for token " + Token + "\"] }");
+
+        var result = await Client.SearchAsync(Settings, Token);
+
+        Assert.False(result.Succeeded);
+        Assert.DoesNotContain(Token, result.Error);
+        Assert.DoesNotContain(Credentials, result.Error);
+    }
+
+    [Fact]
+    public async Task A_network_failure_that_names_the_credentials_never_shows_them()
+    {
+        _handler.Throw(new HttpRequestException($"proxy refused Authorization: Basic {Credentials} ({Token})"));
+
+        var result = await Client.SearchAsync(Settings, Token);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("unreachable", result.Error);
+        Assert.DoesNotContain(Token, result.Error);
+        Assert.DoesNotContain(Credentials, result.Error);
+    }
+
     [Fact]
     public async Task An_answer_that_is_not_json_is_a_failed_result()
     {

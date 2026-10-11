@@ -21,6 +21,8 @@ public sealed class JiraRestClient : IJiraClient, IDisposable
 
     private const int MaxPages = 50;
 
+    private const string Hidden = "[hidden]";
+
     private const string Unreadable = "Jira sent an answer fleet could not read.";
 
     private readonly HttpClient _http;
@@ -37,6 +39,23 @@ public sealed class JiraRestClient : IJiraClient, IDisposable
         JiraSettings settings, string token, CancellationToken ct = default)
     {
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(settings.Email + ":" + token));
+        var found = await PagesAsync(settings, credentials, ct).ConfigureAwait(false);
+
+        return found.Succeeded
+            ? found
+            : Result<IReadOnlyList<JiraIssue>>.Fail(Scrubbed(found.Error!, token, credentials));
+    }
+
+    private static string Scrubbed(string error, string token, string credentials) =>
+        token.Length == 0
+            ? error
+            : error
+                .Replace(credentials, Hidden, StringComparison.Ordinal)
+                .Replace(token, Hidden, StringComparison.Ordinal);
+
+    private async Task<Result<IReadOnlyList<JiraIssue>>> PagesAsync(
+        JiraSettings settings, string credentials, CancellationToken ct)
+    {
         var issues = new List<JiraIssue>();
         string? next = null;
 
