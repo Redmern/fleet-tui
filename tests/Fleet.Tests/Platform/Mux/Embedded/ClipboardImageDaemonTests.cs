@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Fleet.Features.Shim;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
@@ -106,6 +107,77 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         Assert.False(answer.Ok);
         Assert.Null(answer.Data);
         Assert.Contains("too large", answer.Error);
+    }
+
+    [Fact]
+    public async Task End_to_end_the_xclip_shim_in_the_focused_pane_prints_the_viewer_png()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        await ViewAsync("techweb", new FakeClipboardImageSource(Png));
+
+        var (code, stdout, stderr) = await ShimAsync(pane, "xclip", "-selection", "clipboard", "-t", "image/png", "-o");
+
+        Assert.Equal(0, code);
+        Assert.Equal(Png, stdout);
+        Assert.Empty(stderr);
+    }
+
+    [Fact]
+    public async Task End_to_end_the_wl_paste_shim_lists_png_when_the_viewer_has_an_image()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        await ViewAsync("techweb", new FakeClipboardImageSource(Png));
+
+        var (code, stdout, _) = await ShimAsync(pane, "wl-paste", "--list-types");
+
+        Assert.Equal(0, code);
+        Assert.Equal("image/png\n"u8.ToArray(), stdout);
+    }
+
+    [Fact]
+    public async Task End_to_end_a_pane_the_viewer_does_not_focus_gets_no_image()
+    {
+        await SpawnAsync("techweb", "claude");
+        var hidden = await SpawnAsync("fleet", "claude");
+        var clipboard = new FakeClipboardImageSource(Png);
+        await ViewAsync("techweb", clipboard);
+
+        var (code, stdout, stderr) = await ShimAsync(hidden, "xclip", "-selection", "clipboard", "-t", "image/png", "-o");
+
+        Assert.Equal(1, code);
+        Assert.Empty(stdout);
+        Assert.Contains("not focused", stderr);
+        Assert.Equal(0, clipboard.Reads);
+    }
+
+    [Fact]
+    public async Task End_to_end_an_empty_viewer_clipboard_exits_like_xclip_without_an_image()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        await ViewAsync("techweb", new FakeClipboardImageSource(null));
+
+        var (code, stdout, stderr) = await ShimAsync(pane, "xclip", "-selection", "clipboard", "-t", "image/png", "-o");
+
+        Assert.Equal(1, code);
+        Assert.Empty(stdout);
+        Assert.Equal("Error: target image/png not available", stderr.TrimEnd());
+    }
+
+    [Fact]
+    public async Task A_shim_outside_any_fleet_pane_gets_no_image()
+    {
+        var answer = await new PaneClipboardImageSource(_endpoint, null).ReadPngAsync();
+
+        Assert.Null(answer.Png);
+        Assert.NotNull(answer.Refused);
+    }
+
+    private async Task<(int Code, byte[] Stdout, string Stderr)> ShimAsync(string pane, string tool, params string[] args)
+    {
+        var stdout = new MemoryStream();
+        var stderr = new StringWriter();
+        var code = await ClipboardShim.RunAsync(ClipboardShim.Parse(tool, args), new PaneClipboardImageSource(_endpoint, pane), stdout, stderr);
+        return (code, stdout.ToArray(), stderr.ToString());
     }
 
     private async Task<DaemonTests.TestClient> ControlAsync()
