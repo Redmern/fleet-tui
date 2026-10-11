@@ -90,6 +90,46 @@ public sealed class FileTodoStore : ITodoStore
             : Result.Fail($"fleet could not write {file}.");
     }
 
+    public Result<Ticket> Update(string projectRoot, string id, Func<Ticket, Ticket> change)
+    {
+        var folder = TodoPaths.Folder(projectRoot);
+
+        if (!Directory.Exists(folder))
+        {
+            return Result<Ticket>.Fail($"ticket {id} is gone.");
+        }
+
+        try
+        {
+            using var held = Lock(folder);
+
+            if (held is null)
+            {
+                return Result<Ticket>.Fail($"fleet could not lock {folder} to change ticket {id}.");
+            }
+
+            if (Get(projectRoot, id) is not { } current)
+            {
+                return Result<Ticket>.Fail($"ticket {id} is gone.");
+            }
+
+            var next = change(current) with { Id = id };
+
+            if (TicketFile.Format(next) == TicketFile.Format(current))
+            {
+                return Result<Ticket>.Ok(current);
+            }
+
+            var saved = Save(projectRoot, next);
+
+            return saved.Succeeded ? Result<Ticket>.Ok(next) : Result<Ticket>.Fail(saved.Error!);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return Result<Ticket>.Fail($"fleet could not change ticket {id}: {e.Message}");
+        }
+    }
+
     public Ticket? FindByOrchestration(string projectRoot, string orchestration) =>
         orchestration.Length == 0
             ? null

@@ -28,20 +28,24 @@ public sealed class TicketFollowUp(ITodoStore store) : ITicketStatusSink
             return;
         }
 
-        Ticket? next = OrchestrationStatus.Normalize(status) switch
-        {
-            OrchestrationStatus.Done => ticket with { Status = TicketStatus.Done },
-            OrchestrationStatus.Failed => ticket with
-            {
-                Status = TicketStatus.Open,
-                Note = FailureNote(orchestration, summary),
-            },
-            _ => null,
-        };
+        var normalized = OrchestrationStatus.Normalize(status);
 
-        if (next is not null)
+        if (normalized is not (OrchestrationStatus.Done or OrchestrationStatus.Failed))
         {
-            store.Save(projectRoot, next);
+            return;
         }
+
+        store.Update(projectRoot, ticket.Id, current => Follows(current, orchestration)
+            ? Next(current, normalized, orchestration, summary)
+            : current);
     }
+
+    private static bool Follows(Ticket ticket, string orchestration) =>
+        ticket.Status == TicketStatus.InProgress
+        && string.Equals(ticket.Orchestration, orchestration, StringComparison.OrdinalIgnoreCase);
+
+    private static Ticket Next(Ticket ticket, string status, string orchestration, string summary) =>
+        status == OrchestrationStatus.Done
+            ? ticket with { Status = TicketStatus.Done }
+            : ticket with { Status = TicketStatus.Open, Note = FailureNote(orchestration, summary) };
 }

@@ -61,15 +61,14 @@ public sealed class SyncJiraHandler(
                 continue;
             }
 
-            Keep(projectRoot, current, current is null ? Created(issue, now) : Updated(current, issue), failures);
+            Keep(current is null
+                ? Saved(projectRoot, Created(issue, now))
+                : store.Update(projectRoot, issue.Key, t => Updated(t, issue)), failures);
         }
 
         foreach (var listed in store.List(projectRoot).Where(t => IsPulled(t) && !keys.Contains(t.Id)))
         {
-            if (store.Get(projectRoot, listed.Id) is { } gone && IsPulled(gone))
-            {
-                Keep(projectRoot, gone, Closed(gone, NotInQuery), failures);
-            }
+            Keep(store.Update(projectRoot, listed.Id, t => IsPulled(t) ? Closed(t, NotInQuery) : t), failures);
         }
 
         return failures.Count == 0
@@ -77,18 +76,18 @@ public sealed class SyncJiraHandler(
             : Result<int>.Fail($"pulled {pulled.Count} Jira issues, but {string.Join("; ", failures)}");
     }
 
-    private void Keep(string projectRoot, Ticket? current, Ticket next, List<string> failures)
+    private Result<Ticket> Saved(string projectRoot, Ticket ticket)
     {
-        if (current is not null && TicketFile.Format(current) == TicketFile.Format(next))
-        {
-            return;
-        }
+        var saved = store.Save(projectRoot, ticket);
 
-        var saved = store.Save(projectRoot, next);
+        return saved.Succeeded ? Result<Ticket>.Ok(ticket) : Result<Ticket>.Fail(saved.Error!);
+    }
 
-        if (!saved.Succeeded)
+    private static void Keep(Result<Ticket> kept, List<string> failures)
+    {
+        if (!kept.Succeeded)
         {
-            failures.Add(saved.Error!);
+            failures.Add(kept.Error!);
         }
     }
 

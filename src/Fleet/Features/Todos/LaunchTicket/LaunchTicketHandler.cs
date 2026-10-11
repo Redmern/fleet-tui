@@ -31,18 +31,16 @@ public sealed class LaunchTicketHandler(ITodoStore store, IDispatcher dispatcher
         }
 
         var slug = dispatched.Value!;
-        var launched = (store.Get(projectRoot, id) ?? ticket) with
+        var launched = store.Update(projectRoot, id, t => t with
         {
             Status = TicketStatus.InProgress,
             Orchestration = slug,
             Note = string.Empty,
-        };
+        });
 
-        var saved = store.Save(projectRoot, launched);
-
-        return saved.Succeeded
-            ? Result<Ticket>.Ok(launched)
-            : Result<Ticket>.Fail($"dispatched {slug}, but ticket {id} could not be saved: {saved.Error}");
+        return launched.Succeeded
+            ? launched
+            : Result<Ticket>.Fail($"dispatched {slug}, but ticket {id} could not be saved: {launched.Error}");
     }
 
     private static string PromptOf(Ticket ticket) =>

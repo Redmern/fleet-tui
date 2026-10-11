@@ -46,16 +46,6 @@ public sealed class BoardTickets(ITodoStore store)
         }
     }
 
-    private Result<Ticket> Change(string projectRoot, string id, Func<Ticket, Ticket> change)
-    {
-        if (store.Get(projectRoot, id) is not { } current)
-        {
-            return Result<Ticket>.Fail($"ticket {id} is gone.");
-        }
-
-        var next = change(current);
-        var saved = store.Save(projectRoot, next);
-
-        return saved.Succeeded ? Result<Ticket>.Ok(next) : Result<Ticket>.Fail(saved.Error!);
-    }
+    private Result<Ticket> Change(string projectRoot, string id, Func<Ticket, Ticket> change) =>
+        store.Update(projectRoot, id, change);
 }

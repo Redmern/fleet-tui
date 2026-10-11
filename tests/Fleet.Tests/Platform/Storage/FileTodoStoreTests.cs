@@ -47,6 +47,59 @@ public sealed class FileTodoStoreTests : IDisposable
     }
 
     [Fact]
+    public void Two_concurrent_updates_of_different_fields_both_survive()
+    {
+        var id = _store.Add(_root, Draft("shared")).Value.Id;
+        const int Rounds = 60;
+
+        static string Next(string counter) => (counter.Length == 0 ? 1 : int.Parse(counter) + 1).ToString();
+
+        Parallel.Invoke(
+            () =>
+            {
+                for (var i = 0; i < Rounds; i++)
+                {
+                    Assert.True(new FileTodoStore().Update(_root, id, t => t with { Note = Next(t.Note) }).Succeeded);
+                }
+            },
+            () =>
+            {
+                for (var i = 0; i < Rounds; i++)
+                {
+                    Assert.True(new FileTodoStore().Update(_root, id, t => t with { Orchestration = Next(t.Orchestration) }).Succeeded);
+                }
+            });
+
+        var final = _store.Get(_root, id)!;
+
+        Assert.Equal(Rounds.ToString(), final.Note);
+        Assert.Equal(Rounds.ToString(), final.Orchestration);
+    }
+
+    [Fact]
+    public void Updating_a_ticket_that_is_gone_fails_and_writes_nothing()
+    {
+        var updated = _store.Update(_root, "0009-gone", t => t with { Note = "x" });
+
+        Assert.False(updated.Succeeded);
+        Assert.Contains("0009-gone", updated.Error);
+        Assert.False(File.Exists(TodoPaths.File(_root, "0009-gone")));
+    }
+
+    [Fact]
+    public void An_update_that_changes_nothing_does_not_rewrite_the_file()
+    {
+        var id = _store.Add(_root, Draft("same")).Value.Id;
+        var file = TodoPaths.File(_root, id);
+        File.SetLastWriteTimeUtc(file, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var updated = _store.Update(_root, id, t => t);
+
+        Assert.True(updated.Succeeded, updated.Error);
+        Assert.Equal(new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc), File.GetLastWriteTimeUtc(file));
+    }
+
+    [Fact]
     public void Two_tickets_with_the_same_title_get_distinct_files()
     {
         var first = _store.Add(_root, Draft("same idea")).Value;
