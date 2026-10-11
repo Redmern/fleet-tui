@@ -333,6 +333,24 @@ public sealed class HostForwardsTunnelTests
         Assert.DoesNotContain(forwards.Rows(), r => r.State == ForwardState.Forwarded);
     }
 
+    [Fact]
+    public async Task A_tunnel_start_that_is_cancelled_kills_ssh_and_frees_its_port()
+    {
+        _tunnels.Up = new TaskCompletionSource().Task;
+        var forwards = For();
+        forwards.Pin(5173, null);
+        using var stop = new CancellationTokenSource();
+        var forwarding = forwards.ReconcileAsync(
+            new Dictionary<int, IReadOnlyList<string>>(), new Dictionary<int, string>(), stop.Token);
+        await WaitUntil(() => _tunnels.Started.Count == 1);
+
+        await stop.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => forwarding);
+        Assert.True(_tunnels.Started.Single().Killed);
+        Assert.False(_locals.Holds(5173));
+    }
+
     private static async Task WaitUntil(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);

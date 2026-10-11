@@ -427,9 +427,20 @@ public sealed class HostForwards(
             return;
         }
 
-        var (tunnel, failed) = controlPath is null
-            ? await OpenTunnelAsync(local, target, remote, ct).ConfigureAwait(false)
-            : (null, await ForwardOverMasterAsync(controlPath, local, target, remote, ct).ConfigureAwait(false));
+        ITunnel? tunnel;
+        string? failed;
+        try
+        {
+            (tunnel, failed) = controlPath is null
+                ? await OpenTunnelAsync(local, target, remote, ct).ConfigureAwait(false)
+                : (null, await ForwardOverMasterAsync(controlPath, local, target, remote, ct).ConfigureAwait(false));
+        }
+        catch (OperationCanceledException)
+        {
+            locals.Release(local);
+            throw;
+        }
+
         if (failed is { } why)
         {
             locals.Release(local);
