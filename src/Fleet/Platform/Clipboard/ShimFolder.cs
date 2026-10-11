@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Fleet.Features.Shim;
 
 namespace Fleet.Platform.Clipboard;
 
@@ -9,7 +8,7 @@ public static class ShimFolder
 
     public static string Default => Path.Combine(Fleet.Shared.FleetHome.Config, "shims");
 
-    public static bool Install(string folder, string fleetExecutable, Action<string> log)
+    public static bool Install(string folder, IReadOnlyDictionary<string, string> scripts, Action<string> log)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -19,10 +18,9 @@ public static class ShimFolder
         try
         {
             Directory.CreateDirectory(folder);
-            foreach (var tool in ClipboardShim.Tools)
+            foreach (var (tool, script) in scripts)
             {
                 var file = Path.Combine(folder, tool);
-                var script = ShimScripts.Script(fleetExecutable, tool);
                 if (!File.Exists(file) || File.ReadAllText(file) != script)
                 {
                     File.WriteAllText(file, script);
@@ -42,9 +40,9 @@ public static class ShimFolder
         }
     }
 
-    public static async Task<int> RunRealToolAsync(string tool, IReadOnlyList<string> args, string folder)
+    public static async Task<int> RunRealToolAsync(string tool, string? real, IReadOnlyList<string> args)
     {
-        if (ShimScripts.RealTool(tool, Environment.GetEnvironmentVariable("PATH"), folder, File.Exists) is not { } real)
+        if (real is null)
         {
             await Console.Error.WriteLineAsync($"fleet: {tool} is not installed here; fleet only serves its clipboard image reads")
                 .ConfigureAwait(false);

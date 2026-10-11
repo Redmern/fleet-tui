@@ -1,4 +1,4 @@
-namespace Fleet.Features.Shim;
+namespace Fleet.Features.Shim.ServeClipboard;
 
 public static class ShimScripts
 {

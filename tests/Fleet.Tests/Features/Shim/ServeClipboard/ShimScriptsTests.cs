@@ -1,6 +1,6 @@
-using Fleet.Features.Shim;
+using Fleet.Features.Shim.ServeClipboard;
 
-namespace Fleet.Tests.Features.Shim;
+namespace Fleet.Tests.Features.Shim.ServeClipboard;
 
 public class ShimScriptsTests
 {

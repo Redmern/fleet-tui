@@ -1,9 +1,9 @@
 using System.Text;
-using Fleet.Features.Shim;
-using Fleet.Features.Shim.Enums;
+using Fleet.Features.Shim.ServeClipboard;
+using Fleet.Features.Shim.ServeClipboard.Enums;
 using Fleet.Ports;
 
-namespace Fleet.Tests.Features.Shim;
+namespace Fleet.Tests.Features.Shim.ServeClipboard;
 
 public class ClipboardShimTests
 {

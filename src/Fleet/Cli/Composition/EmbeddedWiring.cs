@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
-using Fleet.Features.Shim;
-using Fleet.Features.Shim.Enums;
+using Fleet.Features.Shim.ServeClipboard;
+using Fleet.Features.Shim.ServeClipboard.Enums;
 using Fleet.Platform.Clipboard;
 using Fleet.Platform.Forwards;
 using Fleet.Platform.Forwards.Models;
@@ -119,7 +119,8 @@ public static class EmbeddedWiring
     private static Action<IDictionary<string, string>>? RemotePaneEnv(IFleetLog log)
     {
         var shims = ShimFolder.Default;
-        if (!ShimFolder.Install(shims, Adapters.Executable, line => log.Write($"fleetd: {line}")))
+        var scripts = ClipboardShim.Tools.ToDictionary(tool => tool, tool => ShimScripts.Script(Adapters.Executable, tool));
+        if (!ShimFolder.Install(shims, scripts, line => log.Write($"fleetd: {line}")))
         {
             return null;
         }
@@ -143,7 +144,8 @@ public static class EmbeddedWiring
         var call = ClipboardShim.Parse(tool, rest);
         if (call.Read == ShimRead.RealTool)
         {
-            return await ShimFolder.RunRealToolAsync(tool, rest, ShimFolder.Default).ConfigureAwait(false);
+            var real = ShimScripts.RealTool(tool, Environment.GetEnvironmentVariable("PATH"), ShimFolder.Default, File.Exists);
+            return await ShimFolder.RunRealToolAsync(tool, real, rest).ConfigureAwait(false);
         }
 
         using var stdout = Console.OpenStandardOutput();

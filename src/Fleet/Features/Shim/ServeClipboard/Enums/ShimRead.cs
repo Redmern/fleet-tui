@@ -1,4 +1,4 @@
-namespace Fleet.Features.Shim.Enums;
+namespace Fleet.Features.Shim.ServeClipboard.Enums;
 
 public enum ShimRead
 {

@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using Fleet.Features.Shim;
+using Fleet.Features.Shim.ServeClipboard;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
@@ -107,6 +107,22 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         Assert.False(answer.Ok);
         Assert.Null(answer.Data);
         Assert.Contains("too large", answer.Error);
+    }
+
+    [Fact]
+    public async Task An_osc_52_clipboard_read_from_the_focused_pane_stays_refused()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var clipboard = new FakeClipboardImageSource(Png);
+        var viewer = await ViewAsync("techweb", clipboard);
+
+        _panes.ByProgram("claude")!.Emit("\e]52;c;?\a\e]52;c;?\e\\");
+        await Task.Delay(300);
+
+        Assert.Empty(viewer.Asked);
+        Assert.Equal(0, clipboard.Reads);
+        Assert.Equal(string.Empty, _panes.ByProgram("claude")!.Written);
+        Assert.NotEmpty(pane);
     }
 
     [Fact]
