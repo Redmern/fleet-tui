@@ -3,6 +3,7 @@ using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded.Client;
@@ -16,7 +17,8 @@ public sealed class AttachClient(
     Func<string, bool>? openWindow = null,
     Func<string, string, bool>? openRemote = null,
     Action<Hello>? furnish = null,
-    Action<bool, int>? forwardPort = null)
+    Action<bool, int>? forwardPort = null,
+    IClipboardImageSource? clipboardImages = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -297,6 +299,10 @@ public sealed class AttachClient(
                     case MessageType.HostEffect:
                         Apply(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect), write);
                         break;
+                    case MessageType.ClipboardImageRequest:
+                        var asked = Wire.Read(message.Payload, WireJsonContext.Default.ClipboardImageRequest);
+                        _ = Task.Run(() => AnswerClipboardImageAsync(wire, asked), CancellationToken.None);
+                        break;
                     case MessageType.Bye:
                         _farewell = message.Payload.Length > 0
                             ? Encoding.UTF8.GetString(message.Payload)
@@ -311,6 +317,15 @@ public sealed class AttachClient(
         {
             _farewell ??= _running ? $"lost fleetd: {e.Message}" : null;
         }
+    }
+
+    private async Task AnswerClipboardImageAsync(Wire wire, ClipboardImageRequest asked)
+    {
+        var answer = clipboardImages is null
+            ? ClipboardImageResponse.For(asked.Id, null)
+            : await ClipboardImageAnswer.ForAsync(asked, clipboardImages).ConfigureAwait(false);
+        log($"clipboard image for {asked.Pane}: {(answer.Data is { } png ? $"{png.Length} bytes" : answer.Error ?? "no image")}");
+        await Send(wire, MessageType.ClipboardImageResponse, answer, WireJsonContext.Default.ClipboardImageResponse).ConfigureAwait(false);
     }
 
     private async Task WatchSizeAsync(Wire wire, Func<(int Cols, int Rows)> size, (int Cols, int Rows) last)

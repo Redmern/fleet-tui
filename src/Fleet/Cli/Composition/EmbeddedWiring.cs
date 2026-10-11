@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
+using Fleet.Platform.Clipboard;
 using Fleet.Platform.Forwards;
 using Fleet.Platform.Forwards.Models;
 using Fleet.Platform.Mux.Embedded;
@@ -344,7 +345,8 @@ public static class EmbeddedWiring
                         Furnish(hello, session);
                     }
                 },
-                tunnels is null ? null : tunnels.Apply)
+                tunnels is null ? null : tunnels.Apply,
+                ClipboardImageSources.ForThisMachine())
             .RunAsync()
             .ConfigureAwait(false);
 
