@@ -4,6 +4,8 @@ public static class ModelChoice
 {
     public const string Inherit = "inherit";
 
+    public const string Auto = "auto";
+
     public const string ModelFlag = "--model";
 
     public const string EffortFlag = "--effort";
@@ -12,9 +14,16 @@ public static class ModelChoice
 
     public static bool IsInherit(string value) => Model(value) == Inherit;
 
+    public static bool IsAuto(string value) => Model(value) == Auto;
+
     public static string Model(string value)
     {
         var trimmed = value.Trim();
+
+        if (trimmed.Equals(Auto, StringComparison.OrdinalIgnoreCase))
+        {
+            return Auto;
+        }
 
         return trimmed.Length > 0
             && !trimmed.Equals(Inherit, StringComparison.OrdinalIgnoreCase)
