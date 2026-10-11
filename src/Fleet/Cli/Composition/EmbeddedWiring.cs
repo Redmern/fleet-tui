@@ -398,7 +398,7 @@ public static class EmbeddedWiring
                     }
                 },
                 tunnels is null ? null : tunnels.Apply,
-                ClipboardImageSources.ForThisMachine())
+                ClipboardImageSources.ForThisMachine(ClipboardImageResponse.MaxBytes))
             .RunAsync()
             .ConfigureAwait(false);
 

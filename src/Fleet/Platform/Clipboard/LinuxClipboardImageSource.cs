@@ -2,7 +2,7 @@ using Fleet.Ports;
 
 namespace Fleet.Platform.Clipboard;
 
-public sealed class LinuxClipboardImageSource(ClipboardTool? run = null) : IClipboardImageSource
+public sealed class LinuxClipboardImageSource(int maxBytes, ClipboardTool? run = null) : IClipboardImageSource
 {
     private static readonly (string Program, string[] Args)[] Readers =
     [
@@ -16,7 +16,7 @@ public sealed class LinuxClipboardImageSource(ClipboardTool? run = null) : IClip
     {
         foreach (var (program, args) in Readers)
         {
-            if (await _run(program, args, ct).ConfigureAwait(false) is (0, { Length: > 0 } png))
+            if (await _run(program, args, maxBytes + 1, ct).ConfigureAwait(false) is { Code: 0, Stdout: { Length: > 0 } png })
             {
                 return new ClipboardImage(png);
             }
