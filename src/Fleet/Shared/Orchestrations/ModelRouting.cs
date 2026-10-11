@@ -27,6 +27,12 @@ public static class ModelRouting
     public static bool IsValid(RoleModel choice) =>
         Models.Contains(choice.Model) && Efforts.Contains(choice.Effort);
 
+    public static ModelRoutingOutcome OrFallback(RoleModel? routed, RoleModel fallback, string subject) =>
+        routed is not null && IsValid(routed)
+            ? new ModelRoutingOutcome(routed, null)
+            : new ModelRoutingOutcome(
+                fallback, $"model router gave no answer for {subject}; using {fallback.Model}/{fallback.Effort}");
+
     public static RoleModel? Parse(string stdout) =>
         stdout
             .Split('\n')

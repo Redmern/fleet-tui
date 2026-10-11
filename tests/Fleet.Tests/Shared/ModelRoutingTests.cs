@@ -67,4 +67,27 @@ public class ModelRoutingTests
     {
         Assert.Equal(new RoleModel("sonnet", "low"), ModelRouting.Parse("model=sonnet effort=low\nHope that helps!\n"));
     }
+
+    private static readonly RoleModel Fallback = new("sonnet", "medium");
+
+    [Fact]
+    public void A_valid_routed_choice_is_used_with_no_log_line()
+    {
+        var outcome = ModelRouting.OrFallback(new RoleModel("opus", "high"), Fallback, "sub fix-it");
+
+        Assert.Equal(new RoleModel("opus", "high"), outcome.Model);
+        Assert.Null(outcome.LogLine);
+    }
+
+    public static TheoryData<RoleModel?> Unusable => [null, new RoleModel("gpt-4", "high"), new RoleModel("opus", "extreme")];
+
+    [Theory]
+    [MemberData(nameof(Unusable))]
+    public void No_or_an_invalid_choice_falls_back_and_says_so(RoleModel? routed)
+    {
+        var outcome = ModelRouting.OrFallback(routed, Fallback, "sub fix-it");
+
+        Assert.Equal(Fallback, outcome.Model);
+        Assert.Equal("model router gave no answer for sub fix-it; using sonnet/medium", outcome.LogLine);
+    }
 }

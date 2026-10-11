@@ -86,9 +86,10 @@ public sealed class DispatchHandler(
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var routing = config.Models.Sub.IsAuto
-            ? RouteOrNull(
+            ? router.TryChooseAsync(
                 new ModelRoutingRequest(
                     prompt, aidlc is var (chosen, _) ? Words.Of(chosen) : null, route.Research, command.Repository),
+                log,
                 ct)
             : Task.FromResult<RoleModel?>(null);
         var naming = NameOrNull(prompt, ct);
@@ -287,34 +288,14 @@ public sealed class DispatchHandler(
             return models;
         }
 
-        if (routed is null || !ModelRouting.IsValid(routed))
+        var outcome = ModelRouting.OrFallback(routed, SettingsDefaults.SubModel, $"sub {slug}");
+
+        if (outcome.LogLine is not null)
         {
-            var fallback = SettingsDefaults.SubModel;
-
-            log?.Write($"model router gave no answer for sub {slug}; using {fallback.Model}/{fallback.Effort}");
-
-            return models with { Sub = fallback };
+            log?.Write(outcome.LogLine);
         }
 
-        return models with { Sub = routed };
-    }
-
-    private async Task<RoleModel?> RouteOrNull(ModelRoutingRequest request, CancellationToken ct)
-    {
-        if (router is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            return await router.ChooseAsync(request, ct).ConfigureAwait(false);
-        }
-        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
-        {
-            log?.Swallowed(e);
-            return null;
-        }
+        return models with { Sub = outcome.Model };
     }
 
     private async Task<string?> NameOrNull(string prompt, CancellationToken ct)
