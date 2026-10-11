@@ -227,7 +227,7 @@ typed and only goes back once the field is empty; the key-capture dialog in **Ke
 │                                      │
 │                                      │
 │     Q     Quit                       │
-│     m     Dashboard                  │
+│     d     Dashboard                  │
 │     p     Switch                     │
 │     l     List agents                │
 │     f     Files                      │
@@ -267,7 +267,8 @@ draws the buttons in a float's or the dashboard's frame.
   already on disk, so reopening the project lists them again.
 - **keybinds** opens the editor in the dashboard and **focuses that pane**, so you
   end up looking at the view you asked for even from an agent pane.
-- **main pane** jumps to the dashboard. This one never starts a fleet process.
+- **Dashboard** (`d`, `ctrl+s a d`) jumps to the project's dashboard pane and leaves the keyboard
+  focus there. It used to be `m`; keys you rebound yourself keep working as they are.
 - **List agents** opens a list with **Open** and **Hidden** tabs, switched with
   `h`/`l` or the arrows; `enter` goes to the agent.
 - **Notifications** (`n`) opens the notification center: an **All** tab and one tab per
@@ -617,7 +618,7 @@ the floats). Every fleet menu action has a key there:
 | Group | Keys |
 |---|---|
 | top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
-| `a` agents | `m` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications |
+| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications |
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |

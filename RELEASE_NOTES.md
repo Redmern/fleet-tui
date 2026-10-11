@@ -4,6 +4,11 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.16 (2026-10-11)
+
+- **Go to dashboard** moved from `m` to `d`: `d` in the fleet menu and `ctrl+s a d` in the popup. Keys you rebound yourself in the keybinds editor or `embedded-keys.json` are unchanged.
+- Go to dashboard leaves the keyboard focus on the dashboard again instead of the main orchestrator's claude pane.
+
 ## 0.7.15 (2026-10-10)
 
 - **Open port** no longer does nothing when you view fleet from Windows: a viewer that can't forward ports now gets the ready-to-copy `ssh -L` command instead.

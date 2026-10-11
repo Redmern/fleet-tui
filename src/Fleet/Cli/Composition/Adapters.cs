@@ -8,6 +8,7 @@ using Fleet.Platform.Mcp;
 using Fleet.Platform.Logging;
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Constants;
+using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Models;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Menu.ShowMenu;
@@ -223,6 +224,9 @@ public static class Adapters
     public static string ConfigDirectory => FleetPaths.Config;
 
     public static string Executable => Environment.ProcessPath ?? "fleet";
+
+    public static void MarkDashboardPane(string project) =>
+        DashPaneMarker.Write(project, Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable));
 
     public static string? DashPane(string project) => DashPaneMarker.Read(project);
 

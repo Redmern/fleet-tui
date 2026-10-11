@@ -12,7 +12,7 @@ public class FocusMainTests
         new(new PaneId(id), "w1", "t1", session, "dashboard", cwd, false);
 
     // The main orchestrator's claude pane shares the project root with the
-    // dashboard and often comes first; "m" must land on the dashboard.
+    // dashboard and often comes first; "d" must land on the dashboard.
     [Fact]
     public void The_marked_dashboard_wins_over_claude_in_the_same_folder()
     {

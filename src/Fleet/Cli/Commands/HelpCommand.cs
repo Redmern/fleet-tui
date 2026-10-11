@@ -56,7 +56,8 @@ public static class HelpCommand
               the keys: h/j/k/l focus, arrows resize, % " split, x close pane, z zoom, o next pane,
               space menu, [ copy, ] paste, d detach, Q quit fleet; ctrl+s again sends ctrl+s
               groups (ctrl+s, then the group key, then the key):
-                a agents       m dashboard, l list agents, e open editor, f files, n notifications
+                a agents       d dashboard, l list agents, e open editor, f files, n notifications
+                               (dashboard was m; keys you rebound yourself are kept)
                 s session      p switch project, w save session, R remotes, o open port, d/q detach, r reload keys
                 t tabs         c new, n next, p previous, 1-9 go to tab, x close tab
                 g configure    k edit keybinds, K show keybinds, t button hints, T theme, c fleet config:

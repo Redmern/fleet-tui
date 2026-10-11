@@ -45,6 +45,8 @@ public static class DashCommand
         var log = Adapters.Log();
         var mux = Adapters.Mux(log);
 
+        Adapters.MarkDashboardPane(project.Name);
+
         var syncing = Task.Run(() =>
         {
             try
