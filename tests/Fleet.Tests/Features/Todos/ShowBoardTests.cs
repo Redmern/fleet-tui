@@ -105,6 +105,13 @@ public class ShowBoardTests
     }
 
     [Fact]
+    public void The_status_line_names_the_saved_effort()
+    {
+        Assert.Equal("Effort of 0001-a is M.", BoardRows.EffortSaved(Ticket("0001-a", effort: TicketEffort.M)));
+        Assert.Equal("Effort of 0001-a is unset.", BoardRows.EffortSaved(Ticket("0001-a")));
+    }
+
+    [Fact]
     public void Closing_sets_the_status_closed_and_keeps_the_ticket()
     {
         _store.Put(Ticket("0001-a", TicketStatus.InProgress));

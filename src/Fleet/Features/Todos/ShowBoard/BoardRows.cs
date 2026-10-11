@@ -20,6 +20,11 @@ public static class BoardRows
 
     public const string Empty = "No tickets yet. Capture one with + in a main pane or fleet todo \"idea\".";
 
+    public static string EffortSaved(Ticket ticket) =>
+        ticket.Effort is { } effort
+            ? $"Effort of {ticket.Id} is {TicketWords.Of(effort)}."
+            : $"Effort of {ticket.Id} is unset.";
+
     public static IReadOnlyList<FleetRow> For(IReadOnlyList<Ticket> tickets)
     {
         var idWidth = tickets.Count == 0 ? 0 : tickets.Max(t => t.Id.Length);

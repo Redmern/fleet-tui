@@ -86,6 +86,7 @@ public class MenuBackTests
         new[] { "Features", "Repositories", "Secrets", "SecretsView.cs" },
         new[] { "Features", "Agents", "NewAgent", "NewAgentView.cs" },
         new[] { "Features", "Agents", "ListAgents", "ListAgentsView.cs" },
+        new[] { "Features", "Todos", "ShowBoard", "BoardView.cs" },
     };
 
     [Theory]
