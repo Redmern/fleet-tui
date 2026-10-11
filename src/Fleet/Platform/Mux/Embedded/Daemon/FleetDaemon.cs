@@ -616,6 +616,16 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     if (request.Op == ClipboardImageOp)
                     {
+                        if (bridged)
+                        {
+                            await wire.SendAsync(
+                                MessageType.Response,
+                                new ControlResponse { Id = request.Id, Ok = false, Error = "clipboard images are only served to local panes" },
+                                WireJsonContext.Default.ControlResponse,
+                                ct).ConfigureAwait(false);
+                            break;
+                        }
+
                         _ = Task.Run(() => AnswerClipboardImageAsync(wire, request, ct), CancellationToken.None);
                         break;
                     }
@@ -700,7 +710,9 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string ClipboardImageOp = "clipboard-image";
 
-    public static readonly TimeSpan ClipboardImageWithin = TimeSpan.FromSeconds(5);
+    public static readonly TimeSpan ClipboardImageWithin = TimeSpan.FromSeconds(20);
+
+    public static readonly TimeSpan RelayedClipboardImageWithin = TimeSpan.FromSeconds(15);
 
     private async Task AnswerClipboardImageAsync(Wire wire, ControlRequest request, CancellationToken ct)
     {
@@ -717,7 +729,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
-    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, CancellationToken ct)
+    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, CancellationToken ct, TimeSpan? within = null)
     {
         AttachSession? viewer;
         lock (_gate)
@@ -731,7 +743,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             return new ControlResponse { Ok = false, Error = $"pane {pane} is not focused in any viewer" };
         }
 
-        var answer = await AskClipboardImageAsync(viewer, pane!, ct).ConfigureAwait(false);
+        var answer = await AskClipboardImageAsync(viewer, pane!, within ?? ClipboardImageWithin, ct).ConfigureAwait(false);
         return answer switch
         {
             { Error: { } error } => new ControlResponse { Ok = false, Error = error },
@@ -749,7 +761,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             shownHere = _runtimes.Values.FirstOrDefault(r => r.Pty == link.Pty)?.Id;
         }
 
-        var answer = await ClipboardImageForAsync(shownHere, _stop.Token).ConfigureAwait(false);
+        var answer = await ClipboardImageForAsync(shownHere, _stop.Token, RelayedClipboardImageWithin).ConfigureAwait(false);
         await link.AnswerClipboardImageAsync(answer.Ok
             ? ClipboardImageResponse.For(asked.Id, answer.Data)
             : new ClipboardImageResponse { Id = asked.Id, Error = answer.Error }).ConfigureAwait(false);
@@ -761,7 +773,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             .OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0)
             .FirstOrDefault();
 
-    private async Task<ClipboardImageResponse> AskClipboardImageAsync(AttachSession viewer, string pane, CancellationToken ct)
+    private async Task<ClipboardImageResponse> AskClipboardImageAsync(AttachSession viewer, string pane, TimeSpan within, CancellationToken ct)
     {
         var id = Interlocked.Increment(ref _nextClipboardAsk);
         var reply = new TaskCompletionSource<ClipboardImageResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -774,11 +786,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                 new ClipboardImageRequest { Id = id, Pane = pane },
                 WireJsonContext.Default.ClipboardImageRequest,
                 ct).ConfigureAwait(false);
-            return await reply.Task.WaitAsync(ClipboardImageWithin, ct).ConfigureAwait(false);
+            return await reply.Task.WaitAsync(within, ct).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
-            return new ClipboardImageResponse { Id = id, Error = $"the viewer did not answer within {ClipboardImageWithin.TotalSeconds:0} s" };
+            return new ClipboardImageResponse { Id = id, Error = $"the viewer did not answer within {within.TotalSeconds:0} s" };
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
         {

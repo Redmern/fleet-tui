@@ -21,14 +21,17 @@ public static class ShimFolder
             foreach (var (tool, script) in scripts)
             {
                 var file = Path.Combine(folder, tool);
-                if (!File.Exists(file) || File.ReadAllText(file) != script)
+                if (File.Exists(file) && File.ReadAllText(file) == script)
                 {
-                    File.WriteAllText(file, script);
+                    continue;
                 }
 
-                File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-                                           | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
-                                           | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                var fresh = $"{file}.{Environment.ProcessId}.tmp";
+                File.WriteAllText(fresh, script);
+                File.SetUnixFileMode(fresh, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                                            | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
+                                            | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+                File.Move(fresh, file, overwrite: true);
             }
 
             return true;

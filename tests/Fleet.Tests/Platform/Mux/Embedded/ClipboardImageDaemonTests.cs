@@ -97,6 +97,22 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_bridged_caller_is_refused_because_only_local_panes_run_the_shim()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var clipboard = new FakeClipboardImageSource(Png);
+        await ViewAsync("techweb", clipboard);
+        var bridged = await DaemonTests.TestClient.ConnectAsync(_endpoint, ClientRoles.Control, 0, 0, null, bridged: true);
+        _clients.Add(bridged);
+
+        var answer = await bridged.RequestAsync(new ControlRequest { Op = FleetDaemon.ClipboardImageOp, Pane = pane });
+
+        Assert.False(answer.Ok);
+        Assert.Null(answer.Data);
+        Assert.Equal(0, clipboard.Reads);
+    }
+
+    [Fact]
     public async Task An_image_over_the_limit_is_refused_with_a_clear_error()
     {
         var pane = await SpawnAsync("techweb", "claude");
