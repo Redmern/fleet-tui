@@ -292,10 +292,21 @@ public sealed class AttachClient(
 
     private async Task LogCopyAsync(string text, Task<ClipboardTextCopy> copying)
     {
-        var copied = await copying.ConfigureAwait(false);
-        log(copied.Done
-            ? $"clipboard: {text.Length} chars set with osc 52 and {copied.By}"
-            : $"clipboard: {text.Length} chars NOT set: osc 52 sent, but no wl-copy, xclip or pbcopy took it");
+        try
+        {
+            var copied = await copying.ConfigureAwait(false);
+            log(copied.Result switch
+            {
+                ClipboardTextResult.Set => $"clipboard: {text.Length} chars set with osc 52 and {copied.By}",
+                ClipboardTextResult.TooLarge => $"clipboard: {text.Length} chars NOT set: too large to copy",
+                ClipboardTextResult.Superseded => $"clipboard: {text.Length} chars superseded by a newer copy",
+                _ => $"clipboard: {text.Length} chars NOT set: osc 52 sent, but no wl-copy, xclip or pbcopy took it",
+            });
+        }
+        catch (Exception e)
+        {
+            log($"clipboard: {text.Length} chars NOT set: {e.GetType().Name}: {e.Message}");
+        }
     }
 
     private async Task ReadFramesAsync(Wire wire, Action<byte[]> write)

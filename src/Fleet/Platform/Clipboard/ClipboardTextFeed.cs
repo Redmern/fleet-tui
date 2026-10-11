@@ -36,6 +36,8 @@ public static class ClipboardTextFeed
                 return null;
             }
 
+            Discard(process.StandardOutput.BaseStream);
+            Discard(process.StandardError.BaseStream);
             try
             {
                 var stdin = process.StandardInput.BaseStream;
@@ -51,9 +53,16 @@ public static class ClipboardTextFeed
                 return null;
             }
         }
-        catch (System.ComponentModel.Win32Exception)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             return null;
         }
     }
+
+    private static void Discard(Stream output) =>
+        _ = output.CopyToAsync(Stream.Null).ContinueWith(
+            copied => _ = copied.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
 }

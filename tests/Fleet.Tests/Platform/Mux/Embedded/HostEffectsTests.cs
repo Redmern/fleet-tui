@@ -1,6 +1,7 @@
 using System.Text;
 using Fleet.Platform.Clipboard;
 using Fleet.Platform.Mux.Embedded.Host;
+using Fleet.Platform.Mux.Embedded.Native;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
@@ -45,7 +46,7 @@ public class HostEffectsTests
         {
             fed.Add($"{program}:{Encoding.UTF8.GetString(input)}");
             return Task.FromResult<int?>(program == "xclip" ? 0 : null);
-        });
+        }, env: _ => ":0");
 
         var copied = await HostEffectsOut.CopyTextAsync("yank", written.Add, native);
 
@@ -59,7 +60,7 @@ public class HostEffectsTests
     public async Task A_copy_fails_only_when_no_native_tool_takes_it()
     {
         var written = new List<byte[]>();
-        var native = ClipboardText.Linux(64, (_, _, _, _) => Task.FromResult<int?>(null));
+        var native = ClipboardText.Linux(64, (_, _, _, _) => Task.FromResult<int?>(null), env: _ => ":0");
 
         var copied = await HostEffectsOut.CopyTextAsync("yank", written.Add, native);
 
@@ -80,6 +81,24 @@ public class HostEffectsTests
     }
 
     [Fact]
+    public async Task A_copy_too_large_for_osc_52_is_neither_written_nor_handed_to_a_tool()
+    {
+        var written = new List<byte[]>();
+        var fed = 0;
+        var native = ClipboardText.Linux(int.MaxValue, (_, _, _, _) =>
+        {
+            fed++;
+            return Task.FromResult<int?>(0);
+        }, env: _ => ":0");
+
+        var copied = await HostEffectsOut.CopyTextAsync(new string('x', GhosttyTerminal.MaxClipboard + 1), written.Add, native);
+
+        Assert.Equal(ClipboardTextResult.TooLarge, copied.Result);
+        Assert.Empty(written);
+        Assert.Equal(0, fed);
+    }
+
+    [Fact]
     public async Task The_paste_chord_reads_text_through_the_native_tools_off_windows()
     {
         if (OperatingSystem.IsWindows())
@@ -88,7 +107,7 @@ public class HostEffectsTests
         }
 
         var native = ClipboardText.Linux(64, run: (program, _, limit, _) =>
-            Task.FromResult<ClipboardRun?>(program == "wl-paste" ? new ClipboardRun(0, "pasted"u8.ToArray(), false) : null));
+            Task.FromResult<ClipboardRun?>(program == "wl-paste" ? new ClipboardRun(0, "pasted"u8.ToArray(), false) : null), env: _ => ":0");
 
         Assert.Equal("pasted", await HostEffectsOut.ReadTextAsync(native));
         Assert.Null(await HostEffectsOut.ReadTextAsync(null));

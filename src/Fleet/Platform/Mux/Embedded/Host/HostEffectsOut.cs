@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using Fleet.Platform.Clipboard;
+using Fleet.Platform.Mux.Embedded.Native;
 
 namespace Fleet.Platform.Mux.Embedded.Host;
 
@@ -18,8 +19,13 @@ public static unsafe partial class HostEffectsOut
 
     public static Task<ClipboardTextCopy> CopyTextAsync(string text, Action<byte[]> write, ClipboardText? native)
     {
+        if (Encoding.UTF8.GetByteCount(text) > GhosttyTerminal.MaxClipboard)
+        {
+            return Task.FromResult(ClipboardTextCopy.TooLarge);
+        }
+
         write(Encoding.UTF8.GetBytes(ClipboardSequence(text)));
-        return ClipboardTextCopy.ThroughAsync(native, text);
+        return native?.CopyAsync(text) ?? Task.FromResult(ClipboardTextCopy.NotSet);
     }
 
     public static Task<string?> ReadTextAsync(ClipboardText? native) =>

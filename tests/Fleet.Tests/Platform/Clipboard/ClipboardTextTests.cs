@@ -7,14 +7,19 @@ public class ClipboardTextTests
 {
     private const int Max = 64;
 
+    private static readonly Func<string, string?> Display = name => name is "WAYLAND_DISPLAY" or "DISPLAY" ? ":0" : null;
+
+    private static ClipboardText Linux(FakeTools tools, Func<string, string?>? env = null) =>
+        ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync, env ?? Display);
+
     [Fact]
     public async Task A_copy_goes_to_wl_copy_first_as_utf8_on_stdin()
     {
         var tools = new FakeTools { Exits = { ["wl-copy"] = 0 } };
 
-        var by = await ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync).CopyAsync("héllo");
+        var copied = await Linux(tools).CopyAsync("héllo");
 
-        Assert.Equal("wl-copy", by);
+        Assert.Equal(new ClipboardTextCopy(ClipboardTextResult.Set, "wl-copy"), copied);
         Assert.Equal(["wl-copy"], tools.Ran);
         Assert.Equal(Encoding.UTF8.GetBytes("héllo"), tools.Fed[0]);
     }
@@ -24,9 +29,9 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools { Exits = { ["wl-copy"] = 1, ["xclip"] = 0 } };
 
-        var by = await ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync).CopyAsync("x");
+        var copied = await Linux(tools).CopyAsync("x");
 
-        Assert.Equal("xclip", by);
+        Assert.Equal("xclip", copied.By);
         Assert.Equal(["wl-copy", "xclip -selection clipboard -i"], tools.Ran);
     }
 
@@ -35,16 +40,60 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools();
 
-        var by = await ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync).CopyAsync("x");
+        var copied = await Linux(tools).CopyAsync("x");
 
-        Assert.Null(by);
+        Assert.Equal(ClipboardTextResult.NotSet, copied.Result);
+        Assert.False(copied.Done);
         Assert.Equal(2, tools.Ran.Count);
     }
 
     [Fact]
-    public async Task Copies_run_one_at_a_time_so_the_last_copy_wins()
+    public async Task A_tool_that_throws_counts_as_failed_and_the_next_one_is_tried()
     {
-        var first = new TaskCompletionSource<int?>();
+        var native = ClipboardText.Linux(Max, (program, _, _, _) =>
+            program == "wl-copy" ? throw new InvalidOperationException("no start") : Task.FromResult<int?>(0), env: Display);
+
+        Assert.Equal("xclip", (await native.CopyAsync("x")).By);
+    }
+
+    [Fact]
+    public async Task Wl_copy_is_skipped_without_a_wayland_display_and_xclip_without_an_x_display()
+    {
+        var tools = new FakeTools { Exits = { ["wl-copy"] = 0, ["xclip"] = 0 } };
+
+        var onlyX = await Linux(tools, name => name == "DISPLAY" ? ":0" : null).CopyAsync("x");
+        var none = await Linux(tools, _ => null).CopyAsync("x");
+
+        Assert.Equal("xclip", onlyX.By);
+        Assert.Equal(ClipboardTextResult.NotSet, none.Result);
+        Assert.Equal(["xclip -selection clipboard -i"], tools.Ran);
+    }
+
+    [Fact]
+    public async Task A_read_skips_tools_whose_display_is_missing()
+    {
+        var tools = new FakeTools { Outputs = { ["wl-paste"] = (0, "w"u8.ToArray()), ["xclip"] = (0, "x"u8.ToArray()) } };
+
+        Assert.Equal("x", await Linux(tools, name => name == "DISPLAY" ? ":0" : null).ReadAsync());
+        Assert.Null(await Linux(tools, _ => null).ReadAsync());
+        Assert.Equal(["xclip -selection clipboard -o"], tools.Ran);
+    }
+
+    [Fact]
+    public async Task A_copy_over_the_size_cap_is_refused_without_running_a_tool()
+    {
+        var tools = new FakeTools { Exits = { ["wl-copy"] = 0 } };
+
+        var copied = await Linux(tools).CopyAsync(new string('x', Max + 1));
+
+        Assert.Equal(ClipboardTextResult.TooLarge, copied.Result);
+        Assert.Empty(tools.Ran);
+    }
+
+    [Fact]
+    public async Task A_burst_of_copies_behind_a_hung_tool_keeps_only_the_latest_waiting()
+    {
+        var hung = new TaskCompletionSource<int?>();
         var fed = new List<string>();
         var native = ClipboardText.Linux(Max, (_, _, input, _) =>
         {
@@ -54,17 +103,38 @@ public class ClipboardTextTests
                 fed.Add(text);
             }
 
-            return text == "one" ? first.Task : Task.FromResult<int?>(0);
-        });
+            return text == "one" ? hung.Task : Task.FromResult<int?>(0);
+        }, env: Display);
+
+        bool Fed(string text)
+        {
+            lock (fed)
+            {
+                return fed.Contains(text);
+            }
+        }
 
         var one = native.CopyAsync("one");
-        var two = native.CopyAsync("two");
-        await Task.Delay(50);
+        while (!Fed("one"))
+        {
+            await Task.Delay(5);
+        }
 
+        var waiting = new[] { "two", "three", "four", "five" }.Select(t => native.CopyAsync(t)).ToArray();
+
+        foreach (var superseded in waiting[..^1])
+        {
+            Assert.Equal(ClipboardTextResult.Superseded, (await superseded).Result);
+        }
+
+        Assert.False(waiting[^1].IsCompleted);
         Assert.Equal(["one"], fed);
-        first.SetResult(0);
-        await Task.WhenAll(one, two);
-        Assert.Equal(["one", "two"], fed);
+
+        hung.SetResult(0);
+
+        Assert.Equal("wl-copy", (await one).By);
+        Assert.Equal("wl-copy", (await waiting[^1]).By);
+        Assert.Equal(["one", "five"], fed);
     }
 
     [Fact]
@@ -72,9 +142,9 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools { Exits = { ["pbcopy"] = 0 } };
 
-        var by = await ClipboardText.Mac(Max, tools.FeedAsync, tools.RunAsync).CopyAsync("x");
+        var copied = await ClipboardText.Mac(Max, tools.FeedAsync, tools.RunAsync, _ => null).CopyAsync("x");
 
-        Assert.Equal("pbcopy", by);
+        Assert.Equal("pbcopy", copied.By);
     }
 
     [Fact]
@@ -82,7 +152,7 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools { Outputs = { ["wl-paste"] = (0, "héllo"u8.ToArray()) } };
 
-        var text = await ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync).ReadAsync();
+        var text = await Linux(tools).ReadAsync();
 
         Assert.Equal("héllo", text);
         Assert.Equal(["wl-paste --no-newline"], tools.Ran);
@@ -93,7 +163,7 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools { Outputs = { ["wl-paste"] = (1, []), ["xclip"] = (0, "x"u8.ToArray()) } };
 
-        var text = await ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync).ReadAsync();
+        var text = await Linux(tools).ReadAsync();
 
         Assert.Equal("x", text);
         Assert.Equal("xclip -selection clipboard -o", tools.Ran[^1]);
@@ -104,7 +174,7 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools { Outputs = { ["pbpaste"] = (0, "x"u8.ToArray()) } };
 
-        Assert.Equal("x", await ClipboardText.Mac(Max, tools.FeedAsync, tools.RunAsync).ReadAsync());
+        Assert.Equal("x", await ClipboardText.Mac(Max, tools.FeedAsync, tools.RunAsync, _ => null).ReadAsync());
     }
 
     [Fact]
@@ -112,7 +182,7 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools { Outputs = { ["wl-paste"] = (0, new byte[Max + 1]), ["xclip"] = (0, "x"u8.ToArray()) } };
 
-        var text = await ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync).ReadAsync();
+        var text = await Linux(tools).ReadAsync();
 
         Assert.Null(text);
         Assert.Equal([Max + 1], tools.Limits);
@@ -123,7 +193,7 @@ public class ClipboardTextTests
     {
         var tools = new FakeTools { Outputs = { ["wl-paste"] = (0, []) } };
 
-        Assert.Null(await ClipboardText.Linux(Max, tools.FeedAsync, tools.RunAsync).ReadAsync());
+        Assert.Null(await Linux(tools).ReadAsync());
     }
 
     [Fact]
@@ -168,6 +238,33 @@ public class ClipboardTextTests
 
         Assert.Null(code);
         Assert.True(started.Elapsed < TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task Feeding_a_tool_that_forks_a_selection_owner_returns_at_once_and_leaves_the_owner_alive()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var pidFile = Path.Combine(Path.GetTempPath(), $"fleet-owner-{Guid.NewGuid():N}");
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var code = await ClipboardTextFeed.FeedAsync(
+                "sh", ["-c", $"cat >/dev/null; sleep 30 & echo $! > '{pidFile}'; exit 0"], "x"u8.ToArray(), TimeSpan.FromSeconds(10), default);
+
+            Assert.Equal(0, code);
+            Assert.True(started.Elapsed < TimeSpan.FromSeconds(5), $"took {started.Elapsed}");
+            using var owner = System.Diagnostics.Process.GetProcessById(int.Parse((await File.ReadAllTextAsync(pidFile)).Trim()));
+            Assert.False(owner.HasExited);
+            owner.Kill();
+        }
+        finally
+        {
+            File.Delete(pidFile);
+        }
     }
 
     [Fact]
