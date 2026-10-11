@@ -11,7 +11,9 @@ public sealed class ClaudeModelRouter(string executable = AgentHarness.Claude, T
 {
     private const string RouterModel = "haiku";
 
-    private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(8);
+    public static TimeSpan DefaultTimeout { get; } = TimeSpan.FromSeconds(8);
+
+    public TimeSpan Timeout { get; } = timeout ?? DefaultTimeout;
 
     public async Task<RoleModel?> ChooseAsync(ModelRoutingRequest request, CancellationToken ct = default)
     {
@@ -41,20 +43,26 @@ public sealed class ClaudeModelRouter(string executable = AgentHarness.Claude, T
             return null;
         }
 
-        using var budget = new CancellationTokenSource(_timeout);
+        using var budget = new CancellationTokenSource(Timeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, budget.Token);
 
         try
         {
             var stdout = process.StandardOutput.ReadToEndAsync(linked.Token);
-            var stderr = process.StandardError.ReadToEndAsync(linked.Token);
+            _ = process.StandardError.ReadToEndAsync(linked.Token);
             await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
 
             return process.ExitCode == 0 ? ModelRouting.Parse(await stdout.ConfigureAwait(false)) : null;
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             TryKill(process);
+
+            if (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+
             return null;
         }
     }

@@ -121,4 +121,82 @@ public sealed class ClaudeModelRouterTests : IDisposable
 
         Assert.Null(await router.ChooseAsync(Request));
     }
+
+    [Fact]
+    public void The_router_waits_eight_seconds_by_default()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(8), ClaudeModelRouter.DefaultTimeout);
+        Assert.Equal(ClaudeModelRouter.DefaultTimeout, new ClaudeModelRouter().Timeout);
+    }
+
+    private const string SpawnsAChild =
+        "sleep 30 &\necho $$ > \"$(dirname \"$0\")/pid\"\necho $! > \"$(dirname \"$0\")/child\"\nwait";
+
+    private int PidIn(string file) => int.Parse(File.ReadAllText(Path.Combine(_dir, file)).Trim());
+
+    private static async Task<bool> GoneWithin(int pid, TimeSpan budget)
+    {
+        var clock = Stopwatch.StartNew();
+
+        while (clock.Elapsed < budget)
+        {
+            var stat = $"/proc/{pid}/stat";
+
+            if (!File.Exists(stat))
+            {
+                return true;
+            }
+
+            try
+            {
+                var text = File.ReadAllText(stat);
+
+                if (text[(text.LastIndexOf(')') + 2)..].StartsWith('Z'))
+                {
+                    return true;
+                }
+            }
+            catch (IOException)
+            {
+                return true;
+            }
+
+            await Task.Delay(50);
+        }
+
+        return false;
+    }
+
+    [Fact]
+    public async Task A_timeout_kills_the_whole_process_tree()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var router = new ClaudeModelRouter(FakeClaude(SpawnsAChild), TimeSpan.FromMilliseconds(500));
+
+        Assert.Null(await router.ChooseAsync(Request));
+
+        Assert.True(await GoneWithin(PidIn("pid"), TimeSpan.FromSeconds(3)), "the script outlived the timeout");
+        Assert.True(await GoneWithin(PidIn("child"), TimeSpan.FromSeconds(3)), "the script's child outlived the timeout");
+    }
+
+    [Fact]
+    public async Task Cancelling_the_caller_kills_the_whole_process_tree()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var router = new ClaudeModelRouter(FakeClaude(SpawnsAChild), TimeSpan.FromSeconds(30));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => router.ChooseAsync(Request, cts.Token));
+
+        Assert.True(await GoneWithin(PidIn("pid"), TimeSpan.FromSeconds(3)), "the script outlived the cancel");
+        Assert.True(await GoneWithin(PidIn("child"), TimeSpan.FromSeconds(3)), "the script's child outlived the cancel");
+    }
 }
