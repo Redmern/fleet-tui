@@ -55,6 +55,7 @@ public sealed class JiraSettingsStoreTests : ConfigHomeFixture
     [InlineData("""{ "jira": { "baseUrl": "https://acme.atlassian.net" } }""")]
     [InlineData("""{ "jira": { "baseUrl": "not a url", "email": "me@acme.test" } }""")]
     [InlineData("""{ "jira": { "baseUrl": "ftp://acme.test", "email": "me@acme.test" } }""")]
+    [InlineData("""{ "jira": { "baseUrl": "http://acme.atlassian.net", "email": "me@acme.test" } }""")]
     public void Incomplete_or_invalid_jira_settings_leave_jira_off(string json)
     {
         Write(json);
@@ -72,6 +73,22 @@ public sealed class JiraSettingsStoreTests : ConfigHomeFixture
         var loaded = Store.Load("techweb");
         Assert.Equal(";", loaded.Trigger);
         Assert.Equal(new JiraSettings("https://acme.atlassian.net", "me@acme.test", "project = WEB", "customfield_10016"), loaded.Jira);
+    }
+
+    [Fact]
+    public void Plain_http_is_only_accepted_for_a_local_jira() =>
+        Assert.NotNull(JiraSettings.From("http://localhost:8080", "me@acme.test", null, null));
+
+    [Fact]
+    public void Saving_other_settings_keeps_an_invalid_jira_block_for_the_user_to_fix()
+    {
+        Write("""{ "jira": { "baseUrl": "acme.atlassian.net", "email": "me@acme.test" } }""");
+
+        Store.Save("techweb", Store.Load("techweb").WithTrigger(";"));
+
+        var text = File.ReadAllText(SettingsFile);
+        Assert.Contains("acme.atlassian.net", text);
+        Assert.Contains("me@acme.test", text);
     }
 
     [Fact]

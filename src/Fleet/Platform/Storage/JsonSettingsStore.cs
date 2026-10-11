@@ -117,7 +117,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
             Iso = config.Iso == SettingsDefaults.Iso ? null : config.Iso,
-            Jira = config.Jira is { } jira ? JiraFile(jira) : null,
+            Jira = config.Jira is { } jira ? JiraFile(jira) : StoredJira(file),
             MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),
@@ -318,6 +318,20 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     public static string EffortAgainstDefault(RoleModel value, RoleModel fallback) =>
         ModelChoice.Effort(value.Effort) == ModelChoice.Effort(fallback.Effort) ? string.Empty : ModelChoice.Effort(value.Effort);
+
+    private static JiraSettingsFile? StoredJira(string file)
+    {
+        try
+        {
+            return File.Exists(file)
+                ? JsonSerializer.Deserialize(File.ReadAllText(file), FleetJsonContext.Default.SettingsFile)?.Jira
+                : null;
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     private static JiraSettingsFile JiraFile(JiraSettings jira) => new()
     {

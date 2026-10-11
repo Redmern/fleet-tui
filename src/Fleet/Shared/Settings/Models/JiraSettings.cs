@@ -9,7 +9,7 @@ public sealed record JiraSettings(string BaseUrl, string Email, string Jql, stri
 
         if (address.Length == 0
             || !Uri.TryCreate(url, UriKind.Absolute, out var parsed)
-            || parsed.Scheme is not ("https" or "http"))
+            || !(parsed.Scheme == "https" || (parsed.Scheme == "http" && parsed.IsLoopback)))
         {
             return null;
         }
