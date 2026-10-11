@@ -162,6 +162,9 @@ fleet mcp --head            serve the head orchestrator's cross-project tools
 fleet head [--voice]        run the head orchestrator's Claude (the alt+o chord does this)
 fleet dispatch "<task>" --project <name>
                             spin up a sub-orchestrator for a task
+fleet todo "<idea>" [--project <name>]
+                            file an idea as a ticket in <project>/.fleet/todos (a `+` prompt
+                            in the main pane does the same, `+<project>: idea` files it there)
 fleet report --caller <slug> --status <s> --project <name> -- <summary>
                             a sub-orchestrator reports its own status
 fleet doctor                check the environment
