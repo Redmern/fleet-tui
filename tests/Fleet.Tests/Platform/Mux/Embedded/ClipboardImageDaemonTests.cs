@@ -243,12 +243,15 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         private readonly Task _reader;
         private int _frames;
 
-        private ClipboardViewer(Wire wire, IClipboardImageSource clipboard)
+        private ClipboardViewer(Wire wire, string id, IClipboardImageSource clipboard)
         {
             _wire = wire;
+            Id = id;
             _clipboard = clipboard;
             _reader = Task.Run(ReadAsync);
         }
+
+        public string Id { get; }
 
         public int Frames => _frames;
 
@@ -261,9 +264,13 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
                 MessageType.Hello,
                 new Hello { Version = Wire.Version, Role = ClientRoles.Attach, Cols = 60, Rows = 12, Workspace = workspace, Os = "test", Bridged = true },
                 WireJsonContext.Default.Hello);
-            Assert.Equal(MessageType.Welcome, (await wire.ReceiveAsync())!.Value.Type);
-            return new ClipboardViewer(wire, clipboard);
+            var welcome = (await wire.ReceiveAsync())!.Value;
+            Assert.Equal(MessageType.Welcome, welcome.Type);
+            return new ClipboardViewer(wire, Wire.Read(welcome.Payload, WireJsonContext.Default.Welcome).Client, clipboard);
         }
+
+        public Task SendCommandAsync(string name, string? arg = null) =>
+            _wire.SendAsync(MessageType.Command, new CommandMessage { Name = name, Arg = arg }, WireJsonContext.Default.CommandMessage);
 
         public async ValueTask DisposeAsync()
         {

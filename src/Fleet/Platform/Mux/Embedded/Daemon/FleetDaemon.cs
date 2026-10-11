@@ -741,6 +741,20 @@ public sealed class FleetDaemon(DaemonOptions options)
         };
     }
 
+    private async Task RelayClipboardImageAsync(RemoteLink link, ClipboardImageRequest asked)
+    {
+        string? shownHere;
+        lock (_gate)
+        {
+            shownHere = _runtimes.Values.FirstOrDefault(r => r.Pty == link.Pty)?.Id;
+        }
+
+        var answer = await ClipboardImageForAsync(shownHere, _stop.Token).ConfigureAwait(false);
+        await link.AnswerClipboardImageAsync(answer.Ok
+            ? ClipboardImageResponse.For(asked.Id, answer.Data)
+            : new ClipboardImageResponse { Id = asked.Id, Error = answer.Error }).ConfigureAwait(false);
+    }
+
     private AttachSession? FocusingViewer(string pane) =>
         _sessions.Values
             .Where(s => _model.View(s.Client)?.Focused == pane)
@@ -1787,6 +1801,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         var link = new RemoteLink(host, token => open(host, token), options.Log) { CanForward = _hub.For(host) is not null };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);
+        link.ClipboardImageRequested += asked => _ = Task.Run(() => RelayClipboardImageAsync(link, asked), CancellationToken.None);
         _remotes[host] = link;
         _hub.Watch(link, IsCurrent, _stop.Token);
         _ = Task.Run(() => RunLinkAsync(link), CancellationToken.None);
