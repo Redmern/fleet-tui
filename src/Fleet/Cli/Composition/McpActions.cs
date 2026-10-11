@@ -580,7 +580,7 @@ public sealed class McpActions(
 
         var dispatcher = new DispatchHandler(
             mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(),
-            intents: Adapters.Intents(), starter: this);
+            intents: Adapters.Intents(), starter: this, router: Adapters.ModelRouter(), log: log);
 
         var reply = await dispatcher
             .HandleAsync(

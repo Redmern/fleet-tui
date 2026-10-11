@@ -24,6 +24,9 @@ public static class ModelRouting
         + "repository: " + (string.IsNullOrWhiteSpace(request.Repository) ? "none" : request.Repository.Trim()) + "\n"
         + "task:\n\n" + request.Task;
 
+    public static bool IsValid(RoleModel choice) =>
+        Models.Contains(choice.Model) && Efforts.Contains(choice.Effort);
+
     public static RoleModel? Parse(string stdout) =>
         stdout
             .Split('\n')
@@ -40,9 +43,8 @@ public static class ModelRouting
             return null;
         }
 
-        var model = parts[0][ModelKey.Length..];
-        var effort = parts[1][EffortKey.Length..];
+        var choice = new RoleModel(parts[0][ModelKey.Length..], parts[1][EffortKey.Length..]);
 
-        return Models.Contains(model) && Efforts.Contains(effort) ? new RoleModel(model, effort) : null;
+        return IsValid(choice) ? choice : null;
     }
 }
