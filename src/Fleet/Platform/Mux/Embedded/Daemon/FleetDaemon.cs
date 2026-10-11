@@ -99,6 +99,8 @@ public sealed class FleetDaemon(DaemonOptions options)
     private string? _savedSession;
     private volatile bool _forgotten;
     private readonly Lock _saveGate = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string Client, TaskCompletionSource<ClipboardImageResponse> Reply)> _clipboardAsks = new();
+    private int _nextClipboardAsk;
 
     public MuxModel Model => _model;
 
@@ -610,6 +612,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
                     }
 
+                    if (request.Op == ClipboardImageOp)
+                    {
+                        _ = Task.Run(() => AnswerClipboardImageAsync(wire, request, ct), CancellationToken.None);
+                        break;
+                    }
+
                     if (RunsForward(request.Op, iso, bridged))
                     {
                         _ = Task.Run(() => AnswerForwardAsync(wire, request, ct), CancellationToken.None);
@@ -674,6 +682,95 @@ public sealed class FleetDaemon(DaemonOptions options)
             case MessageType.Command when session is not null:
                 Command(session, Wire.Read(payload, WireJsonContext.Default.CommandMessage));
                 break;
+
+            case MessageType.ClipboardImageResponse when session is not null:
+                {
+                    var answer = Wire.Read(payload, WireJsonContext.Default.ClipboardImageResponse);
+                    if (_clipboardAsks.TryGetValue(answer.Id, out var ask) && ask.Client == session.Client)
+                    {
+                        ask.Reply.TrySetResult(answer);
+                    }
+
+                    break;
+                }
+        }
+    }
+
+    public const string ClipboardImageOp = "clipboard-image";
+
+    public static readonly TimeSpan ClipboardImageWithin = TimeSpan.FromSeconds(5);
+
+    private async Task AnswerClipboardImageAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    {
+        var response = await ClipboardImageForAsync(request.Pane, ct).ConfigureAwait(false);
+        response.Id = request.Id;
+
+        try
+        {
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, CancellationToken ct)
+    {
+        AttachSession? viewer;
+        lock (_gate)
+        {
+            viewer = pane is { Length: > 0 } ? FocusingViewer(pane) : null;
+        }
+
+        if (viewer is null)
+        {
+            options.Log($"clipboard image for {pane ?? "an unnamed pane"} refused: not focused in any viewer");
+            return new ControlResponse { Ok = false, Error = $"pane {pane} is not focused in any viewer" };
+        }
+
+        var answer = await AskClipboardImageAsync(viewer, pane!, ct).ConfigureAwait(false);
+        return answer switch
+        {
+            { Error: { } error } => new ControlResponse { Ok = false, Error = error },
+            { Data.Length: > ClipboardImageResponse.MaxBytes } => new ControlResponse { Ok = false, Error = ClipboardImageResponse.TooLarge(answer.Data.Length) },
+            { Data: { Length: > 0 } png } => new ControlResponse { Ok = true, Mime = answer.Mime ?? ClipboardImageResponse.Png, Data = png },
+            _ => new ControlResponse { Ok = true },
+        };
+    }
+
+    private AttachSession? FocusingViewer(string pane) =>
+        _sessions.Values
+            .Where(s => _model.View(s.Client)?.Focused == pane)
+            .OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0)
+            .FirstOrDefault();
+
+    private async Task<ClipboardImageResponse> AskClipboardImageAsync(AttachSession viewer, string pane, CancellationToken ct)
+    {
+        var id = Interlocked.Increment(ref _nextClipboardAsk);
+        var reply = new TaskCompletionSource<ClipboardImageResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _clipboardAsks[id] = (viewer.Client, reply);
+
+        try
+        {
+            await viewer.Wire.SendAsync(
+                MessageType.ClipboardImageRequest,
+                new ClipboardImageRequest { Id = id, Pane = pane },
+                WireJsonContext.Default.ClipboardImageRequest,
+                ct).ConfigureAwait(false);
+            return await reply.Task.WaitAsync(ClipboardImageWithin, ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return new ClipboardImageResponse { Id = id, Error = $"the viewer did not answer within {ClipboardImageWithin.TotalSeconds:0} s" };
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            return new ClipboardImageResponse { Id = id, Error = $"the viewer went away: {e.Message}" };
+        }
+        finally
+        {
+            _clipboardAsks.TryRemove(id, out _);
         }
     }
 
