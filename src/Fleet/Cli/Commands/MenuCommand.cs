@@ -33,6 +33,7 @@ using Fleet.Features.Updates.ShowVersion;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
+using Fleet.Features.Todos.LaunchTicket;
 using Fleet.Features.Todos.OpenTicket;
 using Fleet.Features.Todos.ShowBoard;
 using Fleet.Ports.Keymap;
@@ -50,6 +51,7 @@ using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Todos.Models;
 using Fleet.Ui;
 using Fleet.Ui.Enums;
 using Fleet.Ui.Models;
@@ -772,7 +774,11 @@ public static class MenuCommand
                         new BoardTickets(Adapters.Todos()),
                         id => boardMux.Unsupported is { } unsupported
                             ? Task.FromResult(Result.Fail(unsupported))
-                            : new OpenTicketHandler(boardMux.Driver).HandleAsync(project.Name, project.Root, id));
+                            : new OpenTicketHandler(boardMux.Driver).HandleAsync(project.Name, project.Root, id),
+                        id => boardMux.Unsupported is { } unsupported
+                            ? Task.FromResult(Result<Ticket>.Fail(unsupported))
+                            : new LaunchTicketHandler(Adapters.Todos(), Adapters.Dispatcher(boardMux.Driver))
+                                .HandleAsync(project.Name, project.Root, id));
 
                     break;
                 }

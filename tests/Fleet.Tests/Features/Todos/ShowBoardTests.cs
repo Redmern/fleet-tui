@@ -126,6 +126,22 @@ public class ShowBoardTests
     }
 
     [Fact]
+    public void The_status_line_names_the_orchestration_a_launch_started()
+    {
+        var launched = Ticket("0001-a", TicketStatus.InProgress) with { Orchestration = "fix-a" };
+
+        Assert.Equal("Launched 0001-a as sub-orchestrator fix-a.", BoardRows.Launched(launched));
+    }
+
+    [Fact]
+    public async Task A_launch_that_throws_becomes_a_failed_result()
+    {
+        var launched = await BoardRows.SafelyAsync<Ticket>(() => throw new IOException("locked"));
+
+        Assert.Equal("locked", launched.Error);
+    }
+
+    [Fact]
     public void The_status_line_names_the_saved_effort()
     {
         Assert.Equal("Effort of 0001-a is M.", BoardRows.EffortSaved(Ticket("0001-a", effort: TicketEffort.M)));

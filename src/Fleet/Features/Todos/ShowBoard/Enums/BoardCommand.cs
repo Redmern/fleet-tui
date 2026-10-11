@@ -4,6 +4,7 @@ public enum BoardCommand
 {
     None,
     Open,
+    Launch,
     Effort,
     Close,
     Refresh,

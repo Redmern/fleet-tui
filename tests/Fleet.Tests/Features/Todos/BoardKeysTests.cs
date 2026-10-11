@@ -28,9 +28,9 @@ public class BoardKeysTests
     }
 
     [Fact]
-    public void The_launch_key_l_stays_free()
+    public void L_launches_the_selected_ticket()
     {
-        Assert.Equal(BoardCommand.None, BoardKeys.For(Key.L, Keys));
+        Assert.Equal(BoardCommand.Launch, BoardKeys.For(Key.L, Keys));
     }
 
     [Fact]
@@ -57,6 +57,6 @@ public class BoardKeysTests
     {
         var hints = BoardKeys.Hints(Keys).Select(h => h.Key).ToList();
 
-        Assert.Equal(["enter", "e", "x", "r", "q"], hints);
+        Assert.Equal(["enter", "l", "e", "x", "r", "q"], hints);
     }
 }

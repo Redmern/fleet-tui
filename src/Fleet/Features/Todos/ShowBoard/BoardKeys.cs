@@ -11,11 +11,18 @@ public static class BoardKeys
 
     public static readonly Key Close = Key.X;
 
+    public static readonly Key Launch = Key.L;
+
     public static BoardCommand For(Key key, Keymap keymap)
     {
         if (key == Effort)
         {
             return BoardCommand.Effort;
+        }
+
+        if (key == Launch)
+        {
+            return BoardCommand.Launch;
         }
 
         if (key == Close)
@@ -34,6 +41,7 @@ public static class BoardKeys
     public static IReadOnlyList<(string Key, string Label, BoardCommand Command)> Hints(Keymap keymap) =>
     [
         ("enter", "open", BoardCommand.Open),
+        ("l", "launch", BoardCommand.Launch),
         ("e", "effort", BoardCommand.Effort),
         ("x", "close", BoardCommand.Close),
         (keymap.DisplayFor(FleetAction.Refresh), "refresh", BoardCommand.Refresh),

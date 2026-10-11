@@ -19,7 +19,8 @@ public static class BoardView
         string project,
         string projectRoot,
         BoardTickets board,
-        Func<string, Task<Result>> open)
+        Func<string, Task<Result>> open,
+        Func<string, Task<Result<Ticket>>> launch)
     {
         var window = FleetTheme.Overlay(BoardRows.Title(project));
 
@@ -30,7 +31,7 @@ public static class BoardView
 
         IReadOnlyList<Ticket> tickets = [];
         var shown = string.Empty;
-        var opening = false;
+        var busy = false;
 
         Ticket? Selected() =>
             tickets.Count == 0 ? null : tickets[Math.Clamp(FleetRows.Selected(list), 0, tickets.Count - 1)];
@@ -72,7 +73,7 @@ public static class BoardView
 
             await FleetAsync.OnUi(app, () =>
             {
-                opening = false;
+                busy = false;
 
                 if (opened.Succeeded)
                 {
@@ -82,6 +83,19 @@ public static class BoardView
                 {
                     status.Text = opened.Error!;
                 }
+
+                return true;
+            }).ConfigureAwait(false);
+        }
+
+        async Task LaunchAsync(string id)
+        {
+            var launched = await BoardRows.SafelyAsync(() => launch(id)).ConfigureAwait(false);
+
+            await FleetAsync.OnUi(app, () =>
+            {
+                busy = false;
+                Apply(launched, BoardRows.Launched, follow: true);
 
                 return true;
             }).ConfigureAwait(false);
@@ -104,7 +118,7 @@ public static class BoardView
                 return;
             }
 
-            if (Selected() is not { } ticket || opening)
+            if (Selected() is not { } ticket || busy)
             {
                 return;
             }
@@ -112,9 +126,15 @@ public static class BoardView
             switch (command)
             {
                 case BoardCommand.Open:
-                    opening = true;
+                    busy = true;
                     status.Text = $"Opening {ticket.Id}...";
                     _ = OpenAsync(ticket.Id);
+                    break;
+
+                case BoardCommand.Launch:
+                    busy = true;
+                    status.Text = $"Launching {ticket.Id}...";
+                    _ = LaunchAsync(ticket.Id);
                     break;
 
                 case BoardCommand.Effort:
@@ -206,7 +226,7 @@ public static class BoardView
 
         var timer = app.AddTimeout(Refresh, () =>
         {
-            if (FleetModal.Owns(claim) && !opening && Changed())
+            if (FleetModal.Owns(claim) && !busy && Changed())
             {
                 Fill();
             }

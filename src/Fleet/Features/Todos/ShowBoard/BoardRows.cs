@@ -33,6 +33,21 @@ public static class BoardRows
         }
     }
 
+    public static async Task<Result<T>> SafelyAsync<T>(Func<Task<Result<T>>> run)
+    {
+        try
+        {
+            return await run().ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            return Result<T>.Fail(e.Message);
+        }
+    }
+
+    public static string Launched(Ticket ticket) =>
+        $"Launched {ticket.Id} as sub-orchestrator {ticket.Orchestration}.";
+
     public static string EffortSaved(Ticket ticket) =>
         ticket.Effort is { } effort
             ? $"Effort of {ticket.Id} is {TicketWords.Of(effort)}."
