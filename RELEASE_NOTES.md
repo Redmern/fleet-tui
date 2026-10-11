@@ -6,11 +6,12 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 
 ## 0.7.16 (2026-10-11)
 
-- **Go to dashboard** moved from `m` to `d`: `d` in the fleet menu and `ctrl+s a d` in the popup. Keys you rebound yourself in the keybinds editor or `embedded-keys.json` are unchanged.
-- Go to dashboard leaves the keyboard focus on the dashboard again instead of the main orchestrator's claude pane.
-- New **todo board**: capture ideas with a `+idea` prompt in the main pane, `fleet todo "idea"` or the `todo_add` MCP tool; open the board with `t` in the fleet menu or `ctrl+s a t` (`T` / `ctrl+s a T` for all projects), `enter` opens a ticket in nvim and `l` launches it as a sub-orchestrator.
+- **Go to dashboard** moved from `m` to `d` (`d` in the fleet menu, `ctrl+s a d` in the popup; your own rebinds stay) and leaves the keyboard focus on the dashboard instead of the main orchestrator's claude pane.
+- New **todo board**: capture ideas with a `+idea` prompt in the main pane, `fleet todo "idea"` or the `todo_add` MCP tool; open it with `t` in the fleet menu or `ctrl+s a t` (`T` / `ctrl+s a T` for all projects), `enter` opens a ticket in nvim and `l` launches it as a sub-orchestrator.
 - **Experimental** Jira Cloud pull sync for the todo board: a `jira` block in the project settings and a token in `secrets/jira-<project>` pull your assigned issues; fleet never writes to Jira.
 - **Open port** and `forward_port` fall back to a background `ssh -N -L` tunnel where ssh control sockets are missing, such as Windows viewers.
+- Set the Sub or Agent model to `auto` in Settings and fleet asks Haiku to pick the model and effort for each new sub-orchestrator or repo agent; it falls back to your fixed default if Haiku doesn't answer in time.
+- An agent keeps its picked model across restore and reopen.
 
 ## 0.7.15 (2026-10-10)
 
