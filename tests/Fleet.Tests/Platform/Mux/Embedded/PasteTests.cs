@@ -1,3 +1,4 @@
+using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
@@ -129,5 +130,115 @@ public class PasteTests
         var typed = new TextMessage { Text = "x", Paste = false };
 
         Assert.Equal("x", FleetDaemon.PasteBytes(typed, bracketed: true));
+    }
+}
+
+public class BracketedPasteHostTests
+{
+    private static byte[] B(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+
+    private static string Show(IEnumerable<PasteChunk> chunks) =>
+        string.Join("|", chunks.Select(c => (c.Pasted ? "P:" : "T:") + System.Text.Encoding.UTF8.GetString(c.Bytes)));
+
+    [Fact]
+    public void Entering_the_host_on_unix_enables_bracketed_paste()
+    {
+        Assert.Contains("\e[?2004h", AttachClient.EnterSequence(windows: false, mouse: true), StringComparison.Ordinal);
+        Assert.Contains("\e[?2004h", AttachClient.EnterSequence(windows: false, mouse: false), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Entering_the_host_on_windows_keeps_the_paste_burst_and_sends_no_bracketed_paste()
+    {
+        Assert.DoesNotContain("\e[?2004h", AttachClient.EnterSequence(windows: true, mouse: true), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Restoring_the_host_disables_bracketed_paste()
+    {
+        Assert.Contains("\e[?2004l", AttachClient.RestoreSequence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_bracketed_paste_becomes_one_paste_chunk_between_typed_bytes()
+    {
+        var markers = new PasteMarkers();
+
+        Assert.Equal("T:a|P:x\ry|T:b", Show(markers.Feed(B("a\e[200~x\ry\e[201~b"))));
+    }
+
+    [Fact]
+    public void Typed_bytes_without_markers_pass_through_unchanged()
+    {
+        var markers = new PasteMarkers();
+
+        Assert.Equal("T:ls\r", Show(markers.Feed(B("ls\r"))));
+        Assert.Equal("T:\e", Show(markers.Feed(B("\e"))));
+        Assert.Equal("T:\e[", Show(markers.Feed(B("\e["))));
+        Assert.Equal("T:\e[A\e[<0;5;7M", Show(markers.Feed(B("\e[A\e[<0;5;7M"))));
+    }
+
+    [Fact]
+    public void A_paste_split_across_reads_is_still_one_paste()
+    {
+        var markers = new PasteMarkers();
+
+        Assert.Equal("T:a", Show(markers.Feed(B("a\e[200~hel"))));
+        Assert.Equal(string.Empty, Show(markers.Feed(B("lo wor"))));
+        Assert.Equal("P:hello world|T:z", Show(markers.Feed(B("ld\e[201~z"))));
+    }
+
+    [Fact]
+    public void Markers_split_inside_themselves_across_reads_are_still_found()
+    {
+        var markers = new PasteMarkers();
+
+        Assert.Equal(string.Empty, Show(markers.Feed(B("\e[20"))));
+        Assert.Equal(string.Empty, Show(markers.Feed(B("0~one\e"))));
+        Assert.Equal(string.Empty, Show(markers.Feed(B("[201"))));
+        Assert.Equal("P:one|T:x", Show(markers.Feed(B("~x"))));
+    }
+
+    [Fact]
+    public void A_held_partial_start_that_is_not_a_marker_is_typed_with_the_next_read()
+    {
+        var markers = new PasteMarkers();
+
+        Assert.Equal(string.Empty, Show(markers.Feed(B("\e[2"))));
+        Assert.Equal("T:\e[2~", Show(markers.Feed(B("~"))));
+    }
+
+    [Fact]
+    public void A_mouse_sequence_inside_a_paste_stays_pasted_text()
+    {
+        var markers = new PasteMarkers();
+
+        Assert.Equal("P:\e[<0;5;7M", Show(markers.Feed(B("\e[200~\e[<0;5;7M\e[201~"))));
+    }
+
+    [Fact]
+    public void Multibyte_text_split_across_reads_survives()
+    {
+        var markers = new PasteMarkers();
+        var smile = B("🙂");
+
+        Assert.Empty(markers.Feed([.. B("\e[200~"), .. smile[..2]]));
+        Assert.Equal("P:🙂", Show(markers.Feed([.. smile[2..], .. B("\e[201~")])));
+    }
+
+    [Fact]
+    public void An_empty_paste_sends_nothing()
+    {
+        Assert.Empty(new PasteMarkers().Feed(B("\e[200~\e[201~")));
+    }
+
+    [Fact]
+    public void A_pasted_chunk_reaches_a_pane_without_bracketed_paste_as_plain_text()
+    {
+        var chunk = new PasteMarkers().Feed(B("\e[200~alpha\rbravo\e[201~")).Single();
+        var paste = new TextMessage { Text = System.Text.Encoding.UTF8.GetString(chunk.Bytes), Paste = chunk.Pasted };
+
+        Assert.Equal("alpha\rbravo", FleetDaemon.PasteBytes(paste, bracketed: false));
+        Assert.Equal("\e[200~alpha\rbravo\e[201~", FleetDaemon.PasteBytes(paste, bracketed: true));
     }
 }

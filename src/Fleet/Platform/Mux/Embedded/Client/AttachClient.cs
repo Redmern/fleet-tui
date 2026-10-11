@@ -163,11 +163,7 @@ public sealed class AttachClient(
         var (cols, rows) = told;
         log($"attached as {client} at {cols}x{rows}");
         var savedTitle = HostEffectsOut.CurrentConsoleTitle();
-        write(Encoding.UTF8.GetBytes(
-            (OperatingSystem.IsWindows() ? string.Empty : PushTitle)
-            + EnterHost
-            + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)
-            + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Enable)));
+        write(Encoding.UTF8.GetBytes(EnterSequence(OperatingSystem.IsWindows(), mouse)));
 
         void Leave() => this.Leave(write, savedTitle, release);
 
@@ -206,6 +202,11 @@ public sealed class AttachClient(
 
         return 0;
     }
+
+    public static string EnterSequence(bool windows, bool mouse) =>
+        windows
+            ? EnterHost
+            : PushTitle + EnterHost + (mouse ? SgrMouse.Enable : string.Empty) + ModifiedKeys.Enable + PasteMarkers.Enable;
 
     public static string RestoreSequence => RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Disable + PopTitle);
 
@@ -511,6 +512,7 @@ public sealed class AttachClient(
         var buffer = new byte[4096];
         var pending = new List<byte>(4096);
         var sgr = new SgrMouse();
+        var markers = new PasteMarkers();
 
         while (_running)
         {
@@ -520,17 +522,28 @@ public sealed class AttachClient(
                 return;
             }
 
-            var items = mouse ? sgr.Feed(buffer.AsSpan(0, n)) : [buffer[..n]];
-
-            foreach (var item in items)
+            foreach (var chunk in markers.Feed(buffer.AsSpan(0, n)))
             {
-                if (item is MouseMessage message)
+                if (chunk.Pasted && !PrefixState.Armed && Sticky is null)
                 {
-                    await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage).ConfigureAwait(false);
+                    log($"paste: {chunk.Bytes.Length} bytes");
+                    await Send(wire, MessageType.Text, new TextMessage { Text = Encoding.UTF8.GetString(chunk.Bytes), Paste = true },
+                        WireJsonContext.Default.TextMessage).ConfigureAwait(false);
                     continue;
                 }
 
-                await TypedBytesAsync(wire, (byte[])item, pending).ConfigureAwait(false);
+                var items = mouse && !chunk.Pasted ? sgr.Feed(chunk.Bytes) : [chunk.Bytes];
+
+                foreach (var item in items)
+                {
+                    if (item is MouseMessage message)
+                    {
+                        await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    await TypedBytesAsync(wire, (byte[])item, pending).ConfigureAwait(false);
+                }
             }
         }
     }
