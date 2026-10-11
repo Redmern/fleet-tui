@@ -55,15 +55,21 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
             return new OpenPortOutcome(port, listening, OpenPortRoute.Viewer, lines);
         }
 
+        var unsupported = sent.Result is { State: ViewerForwardState.Unsupported, Reason: { } reason } ? reason : null;
         if (sent.SshCommand(port, user) is { } command)
         {
-            if (sent.Result is { State: ViewerForwardState.Unsupported, Reason: { } unsupported })
+            if (unsupported is not null)
             {
                 lines.Add($"{unsupported}; forward it over ssh instead.");
             }
 
             lines.Add($"Run this on the machine you view fleet from, then open {url} there:");
             return new OpenPortOutcome(port, listening, OpenPortRoute.Ssh, lines, command);
+        }
+
+        if (unsupported is not null)
+        {
+            lines.Add($"{unsupported}; opening {url} on this machine instead.");
         }
 
         if (browser.Open(url) is { } failed)

@@ -182,6 +182,18 @@ public sealed class OpenPortTests
     }
 
     [Fact]
+    public async Task A_viewer_that_cannot_forward_without_an_ssh_command_still_says_why()
+    {
+        _forwards.Viewer = new ViewerForward(
+            null, null, new ViewerForwardResult(ViewerForwardState.Unsupported, "http://localhost:5272", "laptop's fleetd does not handle forward-port"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.Equal(OpenPortRoute.Local, outcome.Route);
+        Assert.Contains(outcome.Lines, l => l.Contains("laptop's fleetd does not handle forward-port", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_viewer_that_forwarded_but_could_not_open_its_browser_names_the_url()
     {
         _forwards.Viewer = new ViewerForward(
