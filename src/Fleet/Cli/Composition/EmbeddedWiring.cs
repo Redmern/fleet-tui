@@ -91,7 +91,7 @@ public static class EmbeddedWiring
             ServesBridge = StartedForBridge,
             RemotePaneEnv = OperatingSystem.IsWindows() ? null : RemotePaneEnv(log),
             DropClipboardImage = png => ClipboardImageDrop.Drop(
-                png, ClipboardImageDrop.Folder, DateTimeOffset.UtcNow, line => log.Write($"fleetd: {line}")),
+                png, ClipboardImageDrop.Folder, DateTimeOffset.UtcNow, OperatingSystem.IsWindows(), line => log.Write($"fleetd: {line}")),
             Shell = () => DefaultShell.Resolve(
                 Environment.GetEnvironmentVariable,
                 Platform.Mux.Models.MuxEnvironment.OnPath,
