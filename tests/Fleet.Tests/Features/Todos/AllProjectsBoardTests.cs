@@ -1,6 +1,8 @@
 using Fleet.Features.Todos.ShowBoard;
 using Fleet.Features.Todos.ShowBoard.Models;
+using Fleet.Platform.Storage;
 using Fleet.Ports.Todos;
+using Fleet.Shared.Todos;
 using Fleet.Shared.Results;
 using Fleet.Shared.Todos.Enums;
 using Fleet.Shared.Todos.Models;
@@ -62,6 +64,37 @@ public class AllProjectsBoardTests
         var listed = Board.List([Alpha, Beta]);
 
         Assert.Equal("0001-b", Assert.Single(listed).Ticket.Id);
+    }
+
+    [Fact]
+    public void A_ticket_file_with_broken_frontmatter_still_shows_with_the_others()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fleet-board-" + Guid.NewGuid().ToString("N"));
+        var store = new FileTodoStore();
+
+        try
+        {
+            Assert.True(store.Add(root, Ticket("") with { Title = "good one" }).Succeeded);
+            var folder = TodoPaths.Folder(root);
+            File.WriteAllText(Path.Combine(folder, "0002-no-title.md"), "---\nstatus: open\n---\nbody\n");
+            File.WriteAllText(Path.Combine(folder, "0003-unclosed.md"), "---\ntitle: never closed\n");
+            File.WriteAllText(Path.Combine(folder, "0004-empty.md"), string.Empty);
+            File.WriteAllBytes(Path.Combine(folder, "0005-binary.md"), [0xff, 0xfe, 0x00, 0x2d, 0x2d, 0x2d, 0x0a, 0x3a]);
+
+            var listed = new BoardTickets(store).List([new BoardProject("p", root)]);
+
+            Assert.Equal(
+                ["0001-good-one", "0002-no-title", "0003-unclosed", "0004-empty", "0005-binary"],
+                listed.Select(e => e.Ticket.Id).Order(StringComparer.Ordinal));
+            Assert.Equal("0002-no-title", listed.Single(e => e.Ticket.Id == "0002-no-title").Ticket.Title);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
     }
 
     [Fact]
