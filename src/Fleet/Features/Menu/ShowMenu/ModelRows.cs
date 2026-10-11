@@ -19,11 +19,13 @@ public static class ModelRows
 
     public const string OtherLabel = "other…";
 
-    public static bool Routes(FleetAction action, string model) =>
-        action is FleetAction.EditSubModel or FleetAction.EditAgentModel && ModelChoice.IsAuto(model);
+    public static bool AllowsAuto(FleetAction action) =>
+        action is FleetAction.EditSubModel or FleetAction.EditAgentModel;
+
+    public static bool Routes(FleetAction action, string model) => AllowsAuto(action) && ModelChoice.IsAuto(model);
 
     public static IReadOnlyList<string> Choices(FleetAction action) =>
-        Routes(action, ModelChoice.Auto) ? [ModelChoice.Auto, .. Aliases] : Aliases;
+        AllowsAuto(action) ? [ModelChoice.Auto, .. Aliases] : Aliases;
 
     public static IReadOnlyList<PickerEntry> ModelEntries(FleetAction action) =>
     [
@@ -40,7 +42,7 @@ public static class ModelRows
         .. ModelChoice.Efforts.Select(e => new PickerEntry(e)),
     ];
 
-    public static int OtherIndex(FleetAction action) => Choices(action).Count + 1;
+    public static int OtherIndex(FleetAction action) => ModelEntries(action).Count - 1;
 
     public static bool IsModelRow(FleetAction action) => Actions.Contains(action);
 

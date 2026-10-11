@@ -99,6 +99,18 @@ public class ModelRowsTests
     }
 
     [Theory]
+    [InlineData(FleetAction.EditHeadModel, false)]
+    [InlineData(FleetAction.EditMainModel, false)]
+    [InlineData(FleetAction.EditSubModel, true)]
+    [InlineData(FleetAction.EditAgentModel, true)]
+    public void Only_the_sub_and_agent_rows_allow_auto_and_other_is_always_the_last_entry(FleetAction action, bool allows)
+    {
+        Assert.Equal(allows, ModelRows.AllowsAuto(action));
+        Assert.Equal(ModelRows.OtherLabel, ModelRows.ModelEntries(action)[ModelRows.OtherIndex(action)].Label);
+        Assert.Equal(ModelRows.ModelEntries(action).Count - 1, ModelRows.OtherIndex(action));
+    }
+
+    [Theory]
     [InlineData(FleetAction.EditHeadModel)]
     [InlineData(FleetAction.EditMainModel)]
     public void The_head_and_main_rows_do_not_offer_auto(FleetAction action)
