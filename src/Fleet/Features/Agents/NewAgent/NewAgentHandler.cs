@@ -76,9 +76,13 @@ public sealed class NewAgentHandler(
         }
 
         var settings = models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models;
+        var runsClaude = command.Claude ?? command.Owner.Length > 0;
         var routed = settings.Agent.IsAuto
             ? await RoutedModel(command, branch, ct).ConfigureAwait(false)
             : null;
+        var stored = store.List(command.ProjectName)
+            .FirstOrDefault(a => string.Equals(a.Worktree, plan.TargetDirectory, StringComparison.Ordinal))
+            ?.Model;
 
         var agent = new AgentRecord(
             plan.TargetDirectory,
@@ -90,8 +94,8 @@ public sealed class NewAgentHandler(
             Hidden: true,
             Open: true,
             Owner: command.Owner,
-            Claude: command.Claude ?? command.Owner.Length > 0,
-            Model: routed);
+            Claude: runsClaude,
+            Model: routed ?? stored);
 
         store.Save(command.ProjectName, agent);
 

@@ -520,6 +520,36 @@ public sealed class NewAgentTests : IDisposable
         Assert.Null(result.Value!.Model);
     }
 
+    [Fact]
+    public async Task Restarting_a_routed_agent_without_a_task_keeps_its_stored_model()
+    {
+        var directory = await RepositoryAsync();
+        var first = await Routed(AutoAgent, new FakeModelRouter(new RoleModel("opus", "high")))
+            .HandleAsync(TaskCommand(directory, "fix the login timeout"));
+        var router = new FakeModelRouter(new RoleModel("haiku", "low"));
+
+        var again = await Routed(AutoAgent, router).HandleAsync(TaskCommand(directory, string.Empty));
+
+        Assert.Equal(first.Value!.Worktree, again.Value!.Worktree);
+        Assert.Empty(router.Requests);
+        Assert.Equal(new RoleModel("opus", "high"), again.Value!.Model);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-backend-feat-x", "--model", "opus", "--effort", "high"],
+            _mux.ArgsFor((await _mux.ListPanesAsync())[^1].Id));
+    }
+
+    [Fact]
+    public async Task Restarting_a_routed_agent_whose_new_route_fails_keeps_its_stored_model()
+    {
+        var directory = await RepositoryAsync();
+        await Routed(AutoAgent, new FakeModelRouter(new RoleModel("opus", "high")))
+            .HandleAsync(TaskCommand(directory, "fix the login timeout"));
+
+        var again = await Routed(AutoAgent, new FakeModelRouter(null)).HandleAsync(TaskCommand(directory, "now the logout"));
+
+        Assert.Equal(new RoleModel("opus", "high"), again.Value!.Model);
+    }
+
     private sealed class FakeModelRouter(RoleModel? choice = null, bool throws = false) : IModelRouter
     {
         public List<ModelRoutingRequest> Requests { get; } = [];
