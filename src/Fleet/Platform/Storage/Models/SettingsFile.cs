@@ -54,6 +54,22 @@ public sealed class SettingsFile
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Iso { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JiraSettingsFile? Jira { get; set; }
+}
+
+public sealed class JiraSettingsFile
+{
+    public string BaseUrl { get; set; } = string.Empty;
+
+    public string Email { get; set; } = string.Empty;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Jql { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StoryPointsField { get; set; }
 }
 
 public sealed class HeadSettingsFile

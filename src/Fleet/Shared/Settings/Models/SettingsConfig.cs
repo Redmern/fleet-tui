@@ -40,6 +40,8 @@ public sealed record SettingsConfig(
 
     public RoleModels Models { get; init; } = SettingsDefaults.Models;
 
+    public JiraSettings? Jira { get; init; }
+
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
 
@@ -141,6 +143,7 @@ public sealed record SettingsConfig(
             Nvim = Nvim,
             ButtonHints = ButtonHints,
             Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
+            Jira = Jira,
         };
     }
 

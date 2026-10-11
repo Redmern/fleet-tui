@@ -9,6 +9,10 @@ public static class SettingsDefaults
 
     public const string TodoTrigger = "+";
 
+    public const string JiraJql = "assignee = currentUser() AND resolution = EMPTY";
+
+    public const string JiraStoryPointsField = "customfield_10016";
+
     public const ActionPolicy Commit = ActionPolicy.Ask;
 
     public const ActionPolicy Push = ActionPolicy.Ask;

@@ -73,6 +73,9 @@ public sealed class JsonSettingsStore : ISettingsStore
                 StatusHooks = stored.StatusHooks ?? SettingsDefaults.StatusHooks,
                 SubagentGuidance = stored.SubagentGuidance ?? SettingsDefaults.SubagentGuidance,
                 Iso = stored.Iso ?? SettingsDefaults.Iso,
+                Jira = stored.Jira is { } jira
+                    ? JiraSettings.From(jira.BaseUrl, jira.Email, jira.Jql, jira.StoryPointsField)
+                    : null,
                 Models = new RoleModels(
                     ParseRole(stored.MainModel, stored.MainEffort, SettingsDefaults.MainModel),
                     ParseRole(stored.SubModel, stored.SubEffort, SettingsDefaults.SubModel),
@@ -114,6 +117,7 @@ public sealed class JsonSettingsStore : ISettingsStore
             StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
             Iso = config.Iso == SettingsDefaults.Iso ? null : config.Iso,
+            Jira = config.Jira is { } jira ? JiraFile(jira) : null,
             MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),
@@ -314,6 +318,14 @@ public sealed class JsonSettingsStore : ISettingsStore
 
     public static string EffortAgainstDefault(RoleModel value, RoleModel fallback) =>
         ModelChoice.Effort(value.Effort) == ModelChoice.Effort(fallback.Effort) ? string.Empty : ModelChoice.Effort(value.Effort);
+
+    private static JiraSettingsFile JiraFile(JiraSettings jira) => new()
+    {
+        BaseUrl = jira.BaseUrl,
+        Email = jira.Email,
+        Jql = jira.Jql == SettingsDefaults.JiraJql ? null : jira.Jql,
+        StoryPointsField = jira.StoryPointsField == SettingsDefaults.JiraStoryPointsField ? null : jira.StoryPointsField,
+    };
 
     private static string OnOffAgainstDefault(bool value, bool fallback) =>
         value == fallback ? string.Empty : value ? "on" : "off";
