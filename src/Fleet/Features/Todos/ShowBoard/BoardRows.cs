@@ -1,3 +1,4 @@
+using Fleet.Features.Todos.ShowBoard.Models;
 using Fleet.Shared.Results;
 using Fleet.Shared.Todos;
 using Fleet.Shared.Todos.Enums;
@@ -50,6 +51,24 @@ public static class BoardRows
     public static string JiraSynced(Result<int> pulled) =>
         pulled.Succeeded ? $"Jira: synced {pulled.Value}." : $"Jira: {pulled.Error} (showing cached tickets)";
 
+    public static string JiraSynced(IReadOnlyList<(string Project, Result<int> Pulled)> pulls)
+    {
+        if (pulls.Count == 1)
+        {
+            return JiraSynced(pulls[0].Pulled);
+        }
+
+        var parts = pulls.Select(p => p.Pulled.Succeeded
+            ? $"{p.Project} synced {p.Pulled.Value}"
+            : $"{p.Project}: {p.Pulled.Error}");
+
+        var failed = pulls.Where(p => !p.Pulled.Succeeded).Select(p => p.Project).ToList();
+
+        var cached = failed.Count == 0 ? string.Empty : $" (showing cached tickets for {string.Join(", ", failed)})";
+
+        return $"Jira: {string.Join("; ", parts)}{cached}.";
+    }
+
     public static string Launched(Ticket ticket) =>
         $"Launched {ticket.Id} as sub-orchestrator {ticket.Orchestration}.";
 
@@ -63,6 +82,38 @@ public static class BoardRows
         var idWidth = tickets.Count == 0 ? 0 : tickets.Max(t => t.Id.Length);
 
         return [.. tickets.Select(t => Row(t, idWidth))];
+    }
+
+    public static IReadOnlyList<FleetRow> For(IReadOnlyList<BoardEntry> entries, bool showProject)
+    {
+        var rows = For([.. entries.Select(e => e.Ticket)]);
+
+        if (!showProject)
+        {
+            return rows;
+        }
+
+        var projectWidth = entries.Count == 0 ? 0 : entries.Max(e => e.Project.Name.Length);
+
+        return [.. rows.Select((row, i) => row with { Spans = [FleetSpan.Muted(entries[i].Project.Name.PadRight(projectWidth) + "  "), .. row.Spans] })];
+    }
+
+    public static int IndexOf(IReadOnlyList<BoardEntry> entries, BoardEntry? keep, int fallback)
+    {
+        if (entries.Count == 0)
+        {
+            return 0;
+        }
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            if (entries[i].Same(keep))
+            {
+                return i;
+            }
+        }
+
+        return Math.Clamp(fallback, 0, entries.Count - 1);
     }
 
     public static int IndexOf(IReadOnlyList<Ticket> tickets, string? id, int fallback)

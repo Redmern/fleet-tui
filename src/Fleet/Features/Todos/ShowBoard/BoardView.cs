@@ -1,8 +1,10 @@
 using Fleet.Features.Todos.ShowBoard.Enums;
+using Fleet.Features.Todos.ShowBoard.Models;
 using Fleet.Shared.Results;
 using Fleet.Shared.Todos.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -16,38 +18,39 @@ public static class BoardView
     public static void Show(
         IApplication app,
         Keymap keymap,
-        string project,
-        string projectRoot,
+        BoardScope scope,
         BoardTickets board,
-        Func<string, Task<Result>> open,
-        Func<string, Task<Result<Ticket>>> launch,
-        Func<CancellationToken, Task<Result<int>>>? syncJira = null)
+        Func<BoardProject, string, Task<Result>> open,
+        Func<BoardProject, string, Task<Result<Ticket>>> launch,
+        IReadOnlyList<BoardJira> jira)
     {
-        var window = FleetTheme.Overlay(BoardRows.Title(project));
+        var window = FleetTheme.Overlay(scope.Title);
 
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
 
         FleetKeys.ApplyMotions(list, keymap);
 
-        IReadOnlyList<Ticket> tickets = [];
+        IReadOnlyList<BoardEntry> tickets = [];
         var shown = string.Empty;
         var busy = false;
         var syncing = false;
         var closed = false;
         using var stop = new CancellationTokenSource();
 
-        Ticket? Selected() =>
+        BoardEntry? Selected() =>
             tickets.Count == 0 ? null : tickets[Math.Clamp(FleetRows.Selected(list), 0, tickets.Count - 1)];
 
-        void Fill(string? keep = null)
+        IReadOnlyList<FleetRow> Rows(IReadOnlyList<BoardEntry> entries) => BoardRows.For(entries, scope.ShowsProject);
+
+        void Fill(BoardEntry? keep = null, bool follow = true)
         {
             var at = FleetRows.Selected(list);
-            keep ??= Selected()?.Id;
+            keep = follow ? keep ?? Selected() : null;
 
-            tickets = board.List(projectRoot);
+            tickets = board.List(scope.Projects);
 
-            var rows = BoardRows.For(tickets);
+            var rows = Rows(tickets);
             shown = string.Join('\n', rows.Select(r => r.Text));
 
             FleetRows.Fill(list, rows, BoardRows.IndexOf(tickets, keep, at));
@@ -63,17 +66,17 @@ public static class BoardView
         }
 
         bool Changed() =>
-            string.Join('\n', BoardRows.For(board.List(projectRoot)).Select(r => r.Text)) != shown;
+            string.Join('\n', Rows(board.List(scope.Projects)).Select(r => r.Text)) != shown;
 
-        void Apply(Result<Ticket> result, Func<Ticket, string> message, bool follow)
+        void Apply(BoardProject project, Result<Ticket> result, Func<Ticket, string> message, bool follow)
         {
             status.Text = result.Succeeded ? message(result.Value) : result.Error!;
-            Fill(result.Succeeded && follow ? result.Value.Id : string.Empty);
+            Fill(result.Succeeded && follow ? new BoardEntry(project, result.Value) : null, follow: result.Succeeded && follow);
         }
 
-        async Task OpenAsync(string id)
+        async Task OpenAsync(BoardEntry entry)
         {
-            var opened = await BoardRows.SafelyAsync(() => open(id)).ConfigureAwait(false);
+            var opened = await BoardRows.SafelyAsync(() => open(entry.Project, entry.Ticket.Id)).ConfigureAwait(false);
 
             await FleetAsync.OnUi(app, () =>
             {
@@ -92,22 +95,22 @@ public static class BoardView
             }).ConfigureAwait(false);
         }
 
-        async Task LaunchAsync(string id)
+        async Task LaunchAsync(BoardEntry entry)
         {
-            var launched = await BoardRows.SafelyAsync(() => launch(id)).ConfigureAwait(false);
+            var launched = await BoardRows.SafelyAsync(() => launch(entry.Project, entry.Ticket.Id)).ConfigureAwait(false);
 
             await FleetAsync.OnUi(app, () =>
             {
                 busy = false;
-                Apply(launched, BoardRows.Launched, follow: true);
+                Apply(entry.Project, launched, BoardRows.Launched, follow: true);
 
                 return true;
             }).ConfigureAwait(false);
         }
 
-        async Task SyncAsync(Func<CancellationToken, Task<Result<int>>> sync)
+        async Task SyncAsync()
         {
-            var pulled = await BoardRows.SafelyAsync(() => Task.Run(() => sync(stop.Token))).ConfigureAwait(false);
+            var pulled = await Task.Run(() => BoardPull.AllAsync(jira, stop.Token)).ConfigureAwait(false);
 
             await FleetAsync.OnUi(app, () =>
             {
@@ -125,14 +128,14 @@ public static class BoardView
 
         void Sync()
         {
-            if (syncJira is null || syncing)
+            if (jira.Count == 0 || syncing)
             {
                 return;
             }
 
             syncing = true;
             status.Text = BoardRows.JiraSyncing;
-            _ = SyncAsync(syncJira);
+            _ = SyncAsync();
         }
 
         void Quit() => app.RequestStop(window);
@@ -162,22 +165,22 @@ public static class BoardView
             {
                 case BoardCommand.Open:
                     busy = true;
-                    status.Text = $"Opening {ticket.Id}...";
-                    _ = OpenAsync(ticket.Id);
+                    status.Text = $"Opening {ticket.Ticket.Id}...";
+                    _ = OpenAsync(ticket);
                     break;
 
                 case BoardCommand.Launch:
                     busy = true;
-                    status.Text = $"Launching {ticket.Id}...";
-                    _ = LaunchAsync(ticket.Id);
+                    status.Text = $"Launching {ticket.Ticket.Id}...";
+                    _ = LaunchAsync(ticket);
                     break;
 
                 case BoardCommand.Effort:
-                    Apply(board.CycleEffort(projectRoot, ticket.Id), BoardRows.EffortSaved, follow: true);
+                    Apply(ticket.Project, board.CycleEffort(ticket.Project.Root, ticket.Ticket.Id), BoardRows.EffortSaved, follow: true);
                     break;
 
                 case BoardCommand.Close:
-                    Apply(board.Close(projectRoot, ticket.Id), t => $"Closed {t.Id}. The file stays in .fleet/todos.", follow: false);
+                    Apply(ticket.Project, board.Close(ticket.Project.Root, ticket.Ticket.Id), t => $"Closed {t.Id}. The file stays in .fleet/todos.", follow: false);
                     break;
             }
         }
