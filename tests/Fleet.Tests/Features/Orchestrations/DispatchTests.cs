@@ -968,12 +968,23 @@ public sealed class DispatchTests : IDisposable
         Assert.Null(Assert.Single(_store.Saved).Model);
     }
 
-    [Fact]
-    public async Task An_auto_sub_whose_router_failed_keeps_the_sonnet_medium_fallback_on_its_record()
+    [Theory]
+    [MemberData(nameof(RouterFailures))]
+    public async Task An_auto_sub_whose_router_failed_stores_no_model_but_still_launches_on_sonnet_medium(string failure)
     {
-        await Routed(AutoSub(), new FakeModelRouter(null)).HandleAsync(Command("do the thing"), "t");
+        var router = failure switch
+        {
+            "throws" => new FakeModelRouter(throws: true),
+            "invalid" => new FakeModelRouter(new RoleModel("gpt-4", "extreme")),
+            _ => new FakeModelRouter(null),
+        };
 
-        Assert.Equal(SettingsDefaults.SubModel, Assert.Single(_store.Saved).Model);
+        await Routed(AutoSub(), router).HandleAsync(Command("do the thing"), "t");
+
+        Assert.Null(Assert.Single(_store.Saved).Model);
+        Assert.Equal(
+            [AgentHarness.Claude, "--name", "techweb-sub-do-the-thing", "--model", "sonnet", "--effort", "medium"],
+            await SubArgs());
     }
 
     private sealed class FakeModelRouter(

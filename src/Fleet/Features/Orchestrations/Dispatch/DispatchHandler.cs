@@ -102,7 +102,8 @@ public sealed class DispatchHandler(
             OrchestrationSlug.Of(string.IsNullOrWhiteSpace(named) ? prompt : named),
             s => existing.Contains(s) || Directory.Exists(OrchestrationPaths.For(command.ProjectRoot, s)));
 
-        var models = SubModels(config.Models, await routing.ConfigureAwait(false), slug);
+        var routed = await routing.ConfigureAwait(false);
+        var models = SubModels(config.Models, routed, slug);
 
         var folder = OrchestrationPaths.For(command.ProjectRoot, slug);
 
@@ -146,7 +147,7 @@ public sealed class DispatchHandler(
             Owner: command.Caller,
             Status: OrchestrationStatus.Working,
             InNvim: inNvim,
-            Model: config.Models.Sub.IsAuto ? models.Sub : null);
+            Model: routed is not null && ModelRouting.IsValid(routed) ? routed : null);
 
         store.Save(command.ProjectName, record);
 
