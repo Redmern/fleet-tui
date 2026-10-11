@@ -44,6 +44,14 @@ public sealed class DaemonOptions
 
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
 
+    public Action<IDictionary<string, string>>? RemotePaneEnv { get; init; }
+
+    public bool ServesBridge { get; init; }
+
+    public Func<byte[], string?>? DropClipboardImage { get; init; }
+
+    public ClipboardImageLimit ClipboardImageLimit { get; init; } = new(Reads: 20, Per: TimeSpan.FromMinutes(1));
+
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
@@ -73,11 +81,14 @@ public sealed class DaemonOptions
     public Func<IReadOnlyList<ProjectConfigDto>> ProjectConfigs { get; init; } = () => [];
 }
 
+public sealed record ClipboardImageLimit(int Reads, TimeSpan Per);
+
 public sealed class FleetDaemon(DaemonOptions options)
 {
     public const string ClientVariable = "FLEET_CLIENT";
     public const string PaneVariable = "FLEET_PANE";
     public const string ExecutableVariable = "FLEET_EXECUTABLE";
+    public const string PaneTokenVariable = "FLEET_PANE_TOKEN";
 
     private readonly Lock _gate = new();
     private readonly MuxModel _model = new();
@@ -100,6 +111,13 @@ public sealed class FleetDaemon(DaemonOptions options)
     private string? _savedSession;
     private volatile bool _forgotten;
     private readonly Lock _saveGate = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string Client, TaskCompletionSource<ClipboardImageResponse> Reply)> _clipboardAsks = new();
+    private int _nextClipboardAsk;
+    private volatile bool _servedBridge;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _paneTokens = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Queue<DateTimeOffset>> _clipboardReads = new(StringComparer.Ordinal);
+
+    private bool ServesRemoteViewers => options.ServesBridge || _servedBridge;
 
     public MuxModel Model => _model;
 
@@ -476,6 +494,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                     if (hello.Bridged)
                     {
+                        _servedBridge = true;
                         _bridged[client.Id] = hello;
                     }
 
@@ -625,6 +644,22 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
                     }
 
+                    if (request.Op is ClipboardImageOp or ClipboardTypesOp)
+                    {
+                        if (bridged)
+                        {
+                            await wire.SendAsync(
+                                MessageType.Response,
+                                new ControlResponse { Id = request.Id, Ok = false, Error = "clipboard images are only served to local panes" },
+                                WireJsonContext.Default.ControlResponse,
+                                ct).ConfigureAwait(false);
+                            break;
+                        }
+
+                        _ = Task.Run(() => AnswerClipboardImageAsync(wire, request, ct), CancellationToken.None);
+                        break;
+                    }
+
                     if (RunsForward(request.Op, iso, bridged))
                     {
                         _ = Task.Run(() => AnswerForwardAsync(wire, request, ct), CancellationToken.None);
@@ -696,6 +731,192 @@ public sealed class FleetDaemon(DaemonOptions options)
             case MessageType.Command when session is not null:
                 Command(session, Wire.Read(payload, WireJsonContext.Default.CommandMessage));
                 break;
+
+            case MessageType.ClipboardImageResponse when session is not null:
+                {
+                    var answer = Wire.Read(payload, WireJsonContext.Default.ClipboardImageResponse);
+                    if (_clipboardAsks.TryGetValue(answer.Id, out var ask) && ask.Client == session.Client)
+                    {
+                        ask.Reply.TrySetResult(answer);
+                    }
+
+                    break;
+                }
+        }
+    }
+
+    public const string ClipboardImageOp = "clipboard-image";
+
+    public const string ClipboardTypesOp = "clipboard-types";
+
+    public static readonly TimeSpan ClipboardImageWithin = TimeSpan.FromSeconds(20);
+
+    public static readonly TimeSpan RelayedClipboardImageWithin = TimeSpan.FromSeconds(15);
+
+    private async Task AnswerClipboardImageAsync(Wire wire, ControlRequest request, CancellationToken ct)
+    {
+        var response = ClipboardCallerRefusal(request) is { } refused
+            ? new ControlResponse { Ok = false, Error = refused }
+            : await ClipboardImageForAsync(request.Pane, request.Op == ClipboardTypesOp, ct).ConfigureAwait(false);
+        response.Id = request.Id;
+
+        try
+        {
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task<ControlResponse> ClipboardImageForAsync(string? pane, bool probe, CancellationToken ct, TimeSpan? within = null, bool paste = false)
+    {
+        AttachSession? viewer;
+        lock (_gate)
+        {
+            viewer = pane is { Length: > 0 } ? FocusingViewer(pane) : null;
+        }
+
+        if (viewer is null)
+        {
+            options.Log($"clipboard image for {pane ?? "an unnamed pane"} refused: not focused in any viewer");
+            return new ControlResponse { Ok = false, Error = $"pane {pane} is not focused in any viewer" };
+        }
+
+        var answer = await AskClipboardImageAsync(viewer, pane!, probe, within ?? ClipboardImageWithin, ct, paste).ConfigureAwait(false);
+        return answer switch
+        {
+            { Error: { } error } => new ControlResponse { Ok = false, Error = error },
+            _ when probe => new ControlResponse { Ok = true, HasImage = answer.HasImage },
+            { Data.Length: > ClipboardImageResponse.MaxBytes } => new ControlResponse { Ok = false, Error = ClipboardImageResponse.TooLarge(answer.Data.Length) },
+            { Data: { Length: > 0 } png } => new ControlResponse { Ok = true, Mime = answer.Mime ?? ClipboardImageResponse.Png, Data = png, HasImage = true },
+            _ => new ControlResponse { Ok = true },
+        };
+    }
+
+    private async Task RelayClipboardImageAsync(RemoteLink link, ClipboardImageRequest asked)
+    {
+        string? shownHere;
+        lock (_gate)
+        {
+            shownHere = _runtimes.Values.FirstOrDefault(r => r.Pty == link.Pty)?.Id;
+        }
+
+        var answer = await ClipboardImageForAsync(shownHere, asked.Probe, _stop.Token, RelayedClipboardImageWithin, asked.Paste).ConfigureAwait(false);
+        await link.AnswerClipboardImageAsync(
+            !answer.Ok ? new ClipboardImageResponse { Id = asked.Id, Error = answer.Error }
+            : asked.Probe ? ClipboardImageResponse.Probed(asked.Id, answer.HasImage)
+            : ClipboardImageResponse.For(asked.Id, answer.Data)).ConfigureAwait(false);
+    }
+
+    private string? ClipboardCallerRefusal(ControlRequest request)
+    {
+        if (request.Pane is not { Length: > 0 } pane
+            || !_paneTokens.TryGetValue(pane, out var expected)
+            || request.Token is not { Length: > 0 } token
+            || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(token)))
+        {
+            options.Log($"clipboard image for {request.Pane ?? "an unnamed pane"} refused: wrong or missing pane token");
+            return $"the pane token of {request.Pane} is wrong or missing";
+        }
+
+        var now = options.Clock.GetUtcNow();
+        var limit = options.ClipboardImageLimit;
+        lock (_clipboardReads)
+        {
+            var reads = _clipboardReads.TryGetValue(pane, out var seen) ? seen : _clipboardReads[pane] = new Queue<DateTimeOffset>();
+            while (reads.TryPeek(out var oldest) && now - oldest >= limit.Per)
+            {
+                reads.Dequeue();
+            }
+
+            if (reads.Count >= limit.Reads)
+            {
+                options.Log($"clipboard image for {pane} refused: more than {limit.Reads} reads in {limit.Per.TotalSeconds:0} s");
+                return $"too many clipboard reads from {pane}: at most {limit.Reads} per {limit.Per.TotalSeconds:0} s";
+            }
+
+            reads.Enqueue(now);
+        }
+
+        return null;
+    }
+
+    public const string PasteImageCommand = "paste-image";
+
+    private async Task PasteClipboardImageAsync(AttachSession session)
+    {
+        PaneRuntime? target;
+        lock (_gate)
+        {
+            _model.Touch(session.Client);
+            target = FocusedRuntime(session.Client);
+        }
+
+        if (target is null || options.DropClipboardImage is not { } drop)
+        {
+            return;
+        }
+
+        var answer = await AskClipboardImageAsync(session, target.Id, probe: false, ClipboardImageWithin, _stop.Token, paste: true).ConfigureAwait(false);
+        if (answer.Error is not null || answer.Data is not { Length: > 0 } png)
+        {
+            options.Log($"paste image into {target.Id}: {answer.Error ?? "no image on the viewer clipboard"}");
+            return;
+        }
+
+        if (png.Length > ClipboardImageResponse.MaxBytes || drop(png) is not { } typed)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (!_runtimes.ContainsKey(target.Id))
+            {
+                return;
+            }
+        }
+
+        FollowOutput(target);
+        target.Send(Encoding.UTF8.GetBytes(PasteBytes(new TextMessage { Text = typed, Paste = true }, target.Modes.BracketedPaste)));
+    }
+
+    private AttachSession? FocusingViewer(string pane) =>
+        _sessions.Values
+            .Where(s => _model.View(s.Client)?.Focused == pane)
+            .OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0)
+            .FirstOrDefault();
+
+    private async Task<ClipboardImageResponse> AskClipboardImageAsync(
+        AttachSession viewer, string pane, bool probe, TimeSpan within, CancellationToken ct, bool paste = false)
+    {
+        var id = Interlocked.Increment(ref _nextClipboardAsk);
+        var reply = new TaskCompletionSource<ClipboardImageResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _clipboardAsks[id] = (viewer.Client, reply);
+
+        try
+        {
+            await viewer.Wire.SendAsync(
+                MessageType.ClipboardImageRequest,
+                new ClipboardImageRequest { Id = id, Pane = pane, Probe = probe, Paste = paste },
+                WireJsonContext.Default.ClipboardImageRequest,
+                ct).ConfigureAwait(false);
+            return await reply.Task.WaitAsync(within, ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return new ClipboardImageResponse { Id = id, Error = $"the viewer did not answer within {within.TotalSeconds:0} s" };
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            return new ClipboardImageResponse { Id = id, Error = $"the viewer went away: {e.Message}" };
+        }
+        finally
+        {
+            _clipboardAsks.TryRemove(id, out _);
         }
     }
 
@@ -1446,6 +1667,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             case "newline":
                 Newline(session, command);
                 return;
+            case PasteImageCommand:
+                _ = Task.Run(() => PasteClipboardImageAsync(session), CancellationToken.None);
+                return;
         }
 
         lock (_gate)
@@ -1770,6 +1994,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         var link = new RemoteLink(host, token => open(host, token), options.Log) { CanForward = _hub.For(host) is not null };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);
+        link.ClipboardImageRequested += asked => _ = Task.Run(() => RelayClipboardImageAsync(link, asked), CancellationToken.None);
         _remotes[host] = link;
         _hub.Watch(link, IsCurrent, _stop.Token);
         _ = Task.Run(() => RunLinkAsync(link), CancellationToken.None);
@@ -2712,6 +2937,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             env[key] = value;
         }
 
+        if (ServesRemoteViewers)
+        {
+            options.RemotePaneEnv?.Invoke(env);
+        }
+
         env = new Dictionary<string, string>(env, StringComparer.OrdinalIgnoreCase)
         {
             ["FLEET_MUX"] = "embedded",
@@ -2724,6 +2954,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             ["WEZTERM_UNIX_SOCKET"] = string.Empty,
             ["TMUX"] = string.Empty,
         };
+
+        if (ServesRemoteViewers)
+        {
+            env[PaneTokenVariable] = _paneTokens.GetOrAdd(
+                pane.Id, _ => Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
+        }
 
         var cols = Math.Max(pane.Cols, 2);
         var rows = Math.Max(pane.Rows, 2);
@@ -2827,6 +3063,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 _warmed[closedMenuIn] = warmed with { AgainFrom = DateTimeOffset.MinValue };
             }
+        }
+
+        _paneTokens.TryRemove(id, out _);
+        lock (_clipboardReads)
+        {
+            _clipboardReads.Remove(id);
         }
 
         if (_runtimes.Remove(id, out var runtime))

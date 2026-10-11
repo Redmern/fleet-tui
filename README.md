@@ -365,6 +365,36 @@ Notifications always opens this machine's center, whether from the remote's menu
 click on the remote's notice pill, the same way Switch project and the head stay here; only
 fleet used directly on the remote machine opens the remote's own center.
 
+#### Clipboard, image paste and voice on a remote machine
+
+These work only through fleet's own remote connection (`fleet bridge`, as above), not in a
+plain `ssh host` session. The viewer, the machine you sit at, may be Linux, macOS or Windows.
+
+- **Pasting an image into Claude Code on a remote.** Copy an image here and press `ctrl+v`
+  in Claude Code on the remote as usual. In remote panes fleet puts its own `xclip` and
+  `wl-paste` (plus `osascript` and `pngpaste` on a macOS remote) first on `PATH`;
+  when Claude Code calls them, fleet fetches the image from this machine's clipboard.
+  Local panes are untouched.
+- **Windows remote:** Claude Code on Windows reads the clipboard through PowerShell, which
+  fleet cannot stand in for. Press `prefix i` instead: fleet saves this machine's clipboard
+  image to a private temp folder on the remote and types the file's path into the pane.
+- **Consent.** Only the pane you are focused on can get your clipboard, only an image (never
+  text), at most 20 times a minute, and each read shows a notice here naming the pane. A
+  pane still cannot read your clipboard with OSC 52. Images are limited to about 12 MiB.
+- **Paste and copy.** On Linux and macOS fleet now turns on bracketed paste, so a pasted
+  block reaches Claude Code as one paste instead of typed lines. A copy in a pane is sent as
+  OSC 52 and, on Linux and macOS, also through `wl-copy`, `xclip` or `pbcopy`, so it works
+  where the terminal drops OSC 52; the log says when no way worked. `prefix ]` pastes this
+  machine's clipboard text into the focused pane.
+- **Voice (experimental).** With `FLEET_VOICE_FORWARD=1` set for fleet on a Linux or macOS
+  viewer, fleet forwards this machine's PulseAudio/PipeWire socket to the remote and sets
+  `PULSE_SERVER` in new remote panes, so `/voice` there could record your microphone. This
+  is **untested end to end**: see [docs/voice-over-ssh.md](docs/voice-over-ssh.md).
+
+Tested with automated tests and fakes only: the Windows and macOS clipboard readers, the
+macOS shims, the Windows `prefix i` path and voice have not been run on real Windows or
+macOS machines or on a real headless remote yet.
+
 #### Web apps on a remote machine
 
 While a machine is connected, fleet forwards the web apps its projects run to `localhost`
@@ -694,7 +724,7 @@ the floats). Every fleet menu action has a key there:
 
 | Group | Keys |
 |---|---|
-| top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
+| top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `i` paste image, `space` menu, `d` detach, `Q` quit fleet |
 | `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board |
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |

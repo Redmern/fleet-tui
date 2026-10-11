@@ -40,6 +40,8 @@ public sealed class ForwardOptions
     public TimeSpan ReconnectAfter { get; init; } = TimeSpan.FromSeconds(5);
 
     public TimeSpan ReconnectAtMost { get; init; } = TimeSpan.FromMinutes(1);
+
+    public Func<string, string?, CancellationToken, Task>? LinkUp { get; init; }
 }
 
 public sealed class ForwardHub(ForwardOptions options, Action<string> log)
@@ -361,12 +363,46 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             .Select(c => (c.Name, (IReadOnlyList<int>)(c.ForwardPorts ?? []))));
     }
 
+    private async Task<bool> LinkUpAsync(
+        string host, string? controlPath, Func<string, string?, CancellationToken, Task> linkUp, CancellationToken stop)
+    {
+        using var bounded = CancellationTokenSource.CreateLinkedTokenSource(stop);
+        bounded.CancelAfter(options.ForwardWithin);
+        try
+        {
+            await linkUp(host, controlPath, bounded.Token).WaitAsync(bounded.Token).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            if (!stop.IsCancellationRequested)
+            {
+                log($"remote {host}: the link-up step did not finish within {options.ForwardWithin.TotalSeconds:0.#}s");
+            }
+
+            return false;
+        }
+        catch (Exception e)
+        {
+            log($"remote {host}: the link-up step failed: {e.Message}");
+            return false;
+        }
+    }
+
     private async Task LoopAsync(RemoteLink link, HostForwards forwards, Func<RemoteLink, bool> current, CancellationToken stop)
     {
+        var up = false;
+        var retryUpAt = DateTimeOffset.MinValue;
         while (!stop.IsCancellationRequested && current(link))
         {
             if (link.IsConnected)
             {
+                if (!up && options.LinkUp is { } linkUp && DateTimeOffset.UtcNow >= retryUpAt)
+                {
+                    up = await LinkUpAsync(link.Host, forwards.ControlPath, linkUp, stop).ConfigureAwait(false);
+                    retryUpAt = up ? DateTimeOffset.MinValue : DateTimeOffset.UtcNow + options.ReconnectAfter;
+                }
+
                 try
                 {
                     if (await forwards.ScanAsync(stop).ConfigureAwait(false) is { } listening)
@@ -388,6 +424,10 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             else if (link.Snapshot().State == RemoteLink.Failed)
             {
                 return;
+            }
+            else
+            {
+                up = false;
             }
 
             try

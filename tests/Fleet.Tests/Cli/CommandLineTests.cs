@@ -37,6 +37,15 @@ public class CommandLineTests
     }
 
     [Fact]
+    public void The_shim_verb_keeps_the_tool_and_its_arguments_verbatim()
+    {
+        var invocation = CommandLine.Parse(["shim", "xclip", "-selection", "clipboard", "-t", "image/png", "-o"]);
+
+        Assert.Equal(FleetVerb.Shim, invocation.Verb);
+        Assert.Equal(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], invocation.Arguments);
+    }
+
+    [Fact]
     public void Theme_keeps_its_subcommand_and_name_as_arguments()
     {
         var invocation = CommandLine.Parse(["theme", "set", "tokyo-night"]);

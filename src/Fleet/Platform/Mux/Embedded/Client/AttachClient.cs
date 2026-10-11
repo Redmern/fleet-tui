@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using System.Text;
+using System.Threading.Channels;
+using Fleet.Platform.Clipboard;
 using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded.Client;
@@ -16,7 +20,10 @@ public sealed class AttachClient(
     Func<string, bool>? openWindow = null,
     Func<string, string, bool>? openRemote = null,
     Action<Hello>? furnish = null,
-    Action<bool, int>? forwardPort = null)
+    Action<bool, int>? forwardPort = null,
+    IClipboardImageSource? clipboardImages = null,
+    Action<string>? clipboardNotice = null,
+    ClipboardText? clipboardText = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -160,11 +167,7 @@ public sealed class AttachClient(
         var (cols, rows) = told;
         log($"attached as {client} at {cols}x{rows}");
         var savedTitle = HostEffectsOut.CurrentConsoleTitle();
-        write(Encoding.UTF8.GetBytes(
-            (OperatingSystem.IsWindows() ? string.Empty : PushTitle)
-            + EnterHost
-            + (mouse && !OperatingSystem.IsWindows() ? SgrMouse.Enable : string.Empty)
-            + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Enable)));
+        write(Encoding.UTF8.GetBytes(EnterSequence(OperatingSystem.IsWindows(), mouse)));
 
         void Leave() => this.Leave(write, savedTitle, release);
 
@@ -203,6 +206,11 @@ public sealed class AttachClient(
 
         return 0;
     }
+
+    public static string EnterSequence(bool windows, bool mouse) =>
+        windows
+            ? EnterHost
+            : PushTitle + EnterHost + (mouse ? SgrMouse.Enable : string.Empty) + ModifiedKeys.Enable + PasteMarkers.Enable;
 
     public static string RestoreSequence => RestoreHost + (OperatingSystem.IsWindows() ? string.Empty : ModifiedKeys.Disable + PopTitle);
 
@@ -269,18 +277,36 @@ public sealed class AttachClient(
                 break;
 
             case HostEffects.Clipboard when effect.Value is { } text:
-                var done = OperatingSystem.IsWindows()
-                    ? HostEffectsOut.SetWindowsClipboard(text)
-                    : WriteAndReport(write, HostEffectsOut.ClipboardSequence(text));
-                log($"clipboard: {text.Length} chars {(done ? "set" : "NOT set")}");
+                if (OperatingSystem.IsWindows())
+                {
+                    log($"clipboard: {text.Length} chars {(HostEffectsOut.SetWindowsClipboard(text) ? "set" : "NOT set")}");
+                }
+                else
+                {
+                    _ = LogCopyAsync(text, HostEffectsOut.CopyTextAsync(text, write, clipboardText));
+                }
+
                 break;
         }
     }
 
-    private static bool WriteAndReport(Action<byte[]> write, string sequence)
+    private async Task LogCopyAsync(string text, Task<ClipboardTextCopy> copying)
     {
-        write(Encoding.UTF8.GetBytes(sequence));
-        return true;
+        try
+        {
+            var copied = await copying.ConfigureAwait(false);
+            log(copied.Result switch
+            {
+                ClipboardTextResult.Set => $"clipboard: {text.Length} chars set with osc 52 and {copied.By}",
+                ClipboardTextResult.TooLarge => $"clipboard: {text.Length} chars NOT set: too large to copy",
+                ClipboardTextResult.Superseded => $"clipboard: {text.Length} chars superseded by a newer copy",
+                _ => $"clipboard: {text.Length} chars NOT set: osc 52 sent, but no wl-copy, xclip or pbcopy took it",
+            });
+        }
+        catch (Exception e)
+        {
+            log($"clipboard: {text.Length} chars NOT set: {e.GetType().Name}: {e.Message}");
+        }
     }
 
     private async Task ReadFramesAsync(Wire wire, Action<byte[]> write)
@@ -297,6 +323,10 @@ public sealed class AttachClient(
                     case MessageType.HostEffect:
                         Apply(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect), write);
                         break;
+                    case MessageType.ClipboardImageRequest:
+                        var asked = Wire.Read(message.Payload, WireJsonContext.Default.ClipboardImageRequest);
+                        _ = Task.Run(() => AnswerClipboardImageAsync(wire, asked), CancellationToken.None);
+                        break;
                     case MessageType.Bye:
                         _farewell = message.Payload.Length > 0
                             ? Encoding.UTF8.GetString(message.Payload)
@@ -311,6 +341,15 @@ public sealed class AttachClient(
         {
             _farewell ??= _running ? $"lost fleetd: {e.Message}" : null;
         }
+    }
+
+    private async Task AnswerClipboardImageAsync(Wire wire, ClipboardImageRequest asked)
+    {
+        var answer = clipboardImages is null
+            ? ClipboardImageResponse.For(asked.Id, null)
+            : await ClipboardImageAnswer.ForAsync(asked, clipboardImages, clipboardNotice).ConfigureAwait(false);
+        log($"clipboard image for {asked.Pane}: {(answer.Data is { } png ? $"{png.Length} bytes" : answer.Error ?? "no image")}");
+        await Send(wire, MessageType.ClipboardImageResponse, answer, WireJsonContext.Default.ClipboardImageResponse).ConfigureAwait(false);
     }
 
     private async Task WatchSizeAsync(Wire wire, Func<(int Cols, int Rows)> size, (int Cols, int Rows) last)
@@ -492,31 +531,111 @@ public sealed class AttachClient(
 
     private async Task UnixInputAsync(Wire wire, UnixTerminal terminal)
     {
-        var buffer = new byte[4096];
+        var reads = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+
+        _ = Task.Run(() =>
+        {
+            var buffer = new byte[4096];
+            int n;
+            while (_running && (n = terminal.Read(buffer)) > 0)
+            {
+                reads.Writer.TryWrite(buffer[..n]);
+            }
+
+            reads.Writer.TryComplete();
+        });
+
+        await StdinAsync(wire, reads.Reader).ConfigureAwait(false);
+    }
+
+    public async Task StdinAsync(Wire wire, ChannelReader<byte[]> reads)
+    {
         var pending = new List<byte>(4096);
         var sgr = new SgrMouse();
+        var markers = new PasteMarkers();
+        var clock = Stopwatch.StartNew();
 
         while (_running)
         {
-            var n = await Task.Run(() => terminal.Read(buffer)).ConfigureAwait(false);
-            if (n <= 0)
+            var wait = markers.Deadline is { } due
+                ? TimeSpan.FromTicks(Math.Max((due - clock.Elapsed).Ticks, 0))
+                : Timeout.InfiniteTimeSpan;
+            var (read, closed) = await NextReadAsync(reads, wait).ConfigureAwait(false);
+
+            var chunks = read is not null ? markers.Feed(read, clock.Elapsed)
+                : markers.Expire(closed ? TimeSpan.MaxValue : clock.Elapsed);
+            foreach (var chunk in chunks)
+            {
+                await StdinChunkAsync(wire, chunk, sgr, pending).ConfigureAwait(false);
+            }
+
+            if (closed)
             {
                 return;
             }
-
-            var items = mouse ? sgr.Feed(buffer.AsSpan(0, n)) : [buffer[..n]];
-
-            foreach (var item in items)
-            {
-                if (item is MouseMessage message)
-                {
-                    await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage).ConfigureAwait(false);
-                    continue;
-                }
-
-                await TypedBytesAsync(wire, (byte[])item, pending).ConfigureAwait(false);
-            }
         }
+    }
+
+    private static async Task<(byte[]? Read, bool Closed)> NextReadAsync(ChannelReader<byte[]> reads, TimeSpan wait)
+    {
+        if (reads.TryRead(out var ready))
+        {
+            return (ready, false);
+        }
+
+        using var quiet = new CancellationTokenSource(wait);
+        try
+        {
+            if (!await reads.WaitToReadAsync(quiet.Token).ConfigureAwait(false))
+            {
+                return (null, true);
+            }
+
+            return reads.TryRead(out var read) ? (read, false) : (null, false);
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, false);
+        }
+    }
+
+    private async Task StdinChunkAsync(Wire wire, PasteChunk chunk, SgrMouse sgr, List<byte> pending)
+    {
+        if (chunk.Pasted)
+        {
+            await PastedAsync(wire, chunk.Bytes).ConfigureAwait(false);
+            return;
+        }
+
+        foreach (var item in mouse ? sgr.Feed(chunk.Bytes) : [chunk.Bytes])
+        {
+            if (item is MouseMessage message)
+            {
+                await Send(wire, MessageType.Mouse, message, WireJsonContext.Default.MouseMessage).ConfigureAwait(false);
+                continue;
+            }
+
+            await TypedBytesAsync(wire, (byte[])item, pending).ConfigureAwait(false);
+        }
+    }
+
+    private async Task PastedAsync(Wire wire, byte[] bytes)
+    {
+        if (Sticky is not null)
+        {
+            log($"paste: {bytes.Length} bytes dropped in a mode that reads keys as commands");
+            return;
+        }
+
+        if (PrefixState.Armed)
+        {
+            PrefixState.Disarm();
+            await Badge(wire, null).ConfigureAwait(false);
+        }
+
+        log($"paste: {bytes.Length} bytes");
+        await Send(wire, MessageType.Text, new TextMessage { Text = Encoding.UTF8.GetString(bytes), Paste = true },
+            WireJsonContext.Default.TextMessage).ConfigureAwait(false);
     }
 
     private async Task TypedBytesAsync(Wire wire, byte[] bytes, List<byte> pending)
@@ -661,7 +780,7 @@ public sealed class AttachClient(
 
     private async Task PasteClipboard(Wire wire)
     {
-        if (HostEffectsOut.ReadClipboard() is { Length: > 0 } text)
+        if (await HostEffectsOut.ReadTextAsync(clipboardText).ConfigureAwait(false) is { Length: > 0 } text)
         {
             await Send(wire, MessageType.Text, new TextMessage { Text = text, Paste = true },
                 WireJsonContext.Default.TextMessage).ConfigureAwait(false);

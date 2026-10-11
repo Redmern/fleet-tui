@@ -63,6 +63,25 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public event Action<string>? Errored;
 
+    public event Action<ClipboardImageRequest>? ClipboardImageRequested;
+
+    public async Task AnswerClipboardImageAsync(ClipboardImageResponse answer)
+    {
+        if (_wire is not { } wire)
+        {
+            return;
+        }
+
+        try
+        {
+            await wire.SendAsync(MessageType.ClipboardImageResponse, answer, WireJsonContext.Default.ClipboardImageResponse, _stop.Token)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
+    }
+
     public bool WasConnected { get; private set; }
 
     public IReadOnlyList<ProjectConfigDto> Configs
@@ -501,6 +520,9 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                         break;
                     case MessageType.HostEffect:
                         Effect?.Invoke(Wire.Read(message.Payload, WireJsonContext.Default.HostEffect));
+                        break;
+                    case MessageType.ClipboardImageRequest:
+                        ClipboardImageRequested?.Invoke(Wire.Read(message.Payload, WireJsonContext.Default.ClipboardImageRequest));
                         break;
                     case MessageType.Bye:
                         EndView();
