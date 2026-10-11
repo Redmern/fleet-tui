@@ -13,7 +13,7 @@ public static class ReverseForward
 
     public const string Suffix = ".sock";
 
-    private const string Folder = "fleet-pulse";
+    private const string FolderName = "fleet-pulse";
 
     private const string UnixScheme = "unix:";
 
@@ -27,23 +27,31 @@ public static class ReverseForward
             ? server.StartsWith(UnixScheme, StringComparison.Ordinal) ? server[UnixScheme.Length..] : null
             : env("XDG_RUNTIME_DIR") is { Length: > 0 } runtime ? Path.Combine(runtime, "pulse", "native") : null;
 
-        return socket is { Length: > 0 } && exists(socket) ? socket : null;
+        return socket is { Length: > 0 } && !socket.Contains(':') && exists(socket) ? socket : null;
     }
+
+    public static string? Folder(string output) =>
+        output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() is { } last
+        && last.StartsWith('/')
+        && !last.Contains(':')
+        && !last.Any(char.IsWhiteSpace)
+            ? last
+            : null;
 
     public static string SocketName(string machine, string user) =>
         Prefix + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{machine.ToLowerInvariant()}\n{user}")))[..12] + Suffix;
 
     public static string Directory(Func<string, string?> env, string user) =>
-        env("XDG_RUNTIME_DIR") is { Length: > 0 } runtime && Path.Combine(runtime, Folder) is var preferred && ControlPaths.Fits(preferred)
+        env("XDG_RUNTIME_DIR") is { Length: > 0 } runtime && Path.Combine(runtime, FolderName) is var preferred && ControlPaths.Fits(preferred)
             ? preferred
-            : Path.Combine("/tmp", $"{Folder}-{user}");
+            : Path.Combine("/tmp", $"{FolderName}-{user}");
 
     public static string Default() => Directory(Environment.GetEnvironmentVariable, Environment.UserName);
 
     public static string Prepare(string name) =>
         "sh -c '"
-        + $"d=\"${{XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/{Folder}}}\"; "
-        + $"if [ -z \"$d\" ] || [ ${{#d}} -gt {ControlPaths.Longest} ]; then d=\"/tmp/{Folder}-$(id -un)\"; fi; "
+        + $"d=\"${{XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/{FolderName}}}\"; "
+        + $"if [ -z \"$d\" ] || [ ${{#d}} -gt {ControlPaths.Longest} ]; then d=\"/tmp/{FolderName}-$(id -un)\"; fi; "
         + $"mkdir -p \"$d\" && chmod 700 \"$d\" && rm -f \"$d/{name}\" && printf \"%s\\n\" \"$d\""
         + "'";
 

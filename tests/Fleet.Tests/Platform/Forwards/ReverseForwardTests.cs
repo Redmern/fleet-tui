@@ -245,6 +245,116 @@ public sealed class ReverseForwardTests
         Assert.Equal(ReverseForward.SocketName("laptop", "red"), pulse.Name);
     }
 
+    [Fact]
+    public void A_viewer_pulse_socket_with_a_colon_cannot_be_forwarded()
+    {
+        Assert.Null(ReverseForward.LocalPulse(n => n == "PULSE_SERVER" ? "unix:/odd:dir/native" : null, _ => true));
+        Assert.Null(ReverseForward.LocalPulse(n => n == "XDG_RUNTIME_DIR" ? "/run/a:b" : null, _ => true));
+    }
+
+    [Theory]
+    [InlineData("/run/user/1000/fleet-pulse\n", "/run/user/1000/fleet-pulse")]
+    [InlineData("Welcome to box!\nLast login: today\n/tmp/fleet-pulse-red\n\n", "/tmp/fleet-pulse-red")]
+    [InlineData("/tmp/fleet-pulse-red", "/tmp/fleet-pulse-red")]
+    [InlineData("", null)]
+    [InlineData("/tmp/fleet-pulse-red\nbye\n", null)]
+    [InlineData("relative/dir\n", null)]
+    [InlineData("/tmp/a:b\n", null)]
+    [InlineData("/tmp/a b\n", null)]
+    public void The_remote_folder_is_the_last_line_and_must_be_a_plain_absolute_path(string output, string? folder) =>
+        Assert.Equal(folder, ReverseForward.Folder(output));
+
+    [Fact]
+    public async Task Banner_noise_before_the_folder_is_ignored()
+    {
+        var ssh = new FakeSsh
+        {
+            Answer = args => args.Contains("-O") ? null : new SshResult(0, "Welcome!\n/run/user/1000/fleet-pulse\n", string.Empty),
+        };
+        var pulse = new ReverseForwardPulse("/l/native", "pulse-0123456789ab.sock", ssh.RunAsync, _ => { });
+
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None);
+
+        Assert.Equal(
+            SshControl.ForwardSocket("/run/f/cm-1", "box", "/run/user/1000/fleet-pulse/pulse-0123456789ab.sock", "/l/native"),
+            ssh.Calls[^1]);
+    }
+
+    [Fact]
+    public async Task A_prepare_that_prints_no_usable_folder_forwards_nothing()
+    {
+        var ssh = new FakeSsh { Answer = args => args.Contains("-O") ? null : new SshResult(0, "motd: hello there\n", string.Empty) };
+        var lines = new List<string>();
+        var pulse = new ReverseForwardPulse("/l/native", "pulse-0123456789ab.sock", ssh.RunAsync, lines.Add);
+
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None);
+
+        Assert.Single(ssh.Calls);
+        Assert.Contains(lines, l => l.Contains("motd: hello there"));
+    }
+
+    [Fact]
+    public async Task A_second_link_up_cancels_the_previous_forward_before_forwarding_again()
+    {
+        var ssh = new FakeSsh { Answer = args => args.Contains("-O") ? null : new SshResult(0, "/r\n", string.Empty) };
+        var pulse = new ReverseForwardPulse("/l/native", "pulse-0123456789ab.sock", ssh.RunAsync, _ => { });
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None);
+        ssh.Calls.Clear();
+
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None);
+
+        Assert.Equal(3, ssh.Calls.Count);
+        Assert.Equal(SshControl.CancelSocket("/run/f/cm-1", "box", "/r/pulse-0123456789ab.sock", "/l/native"), ssh.Calls[0]);
+        Assert.Equal(["box", ReverseForward.Prepare("pulse-0123456789ab.sock")], ssh.Calls[1].TakeLast(2));
+        Assert.Equal(SshControl.ForwardSocket("/run/f/cm-1", "box", "/r/pulse-0123456789ab.sock", "/l/native"), ssh.Calls[2]);
+    }
+
+    [Fact]
+    public async Task A_link_up_after_the_master_died_still_forwards_when_the_cancel_fails()
+    {
+        var dead = false;
+        var ssh = new FakeSsh
+        {
+            Answer = args => dead && args.Contains("cancel")
+                ? new SshResult(255, string.Empty, "Control socket connect(/run/f/cm-1): No such file or directory")
+                : args.Contains("-O") ? null : new SshResult(0, "/r\n", string.Empty),
+        };
+        var pulse = new ReverseForwardPulse("/l/native", "pulse-0123456789ab.sock", ssh.RunAsync, _ => { });
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None);
+        dead = true;
+        ssh.Calls.Clear();
+
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None);
+
+        Assert.Equal(3, ssh.Calls.Count);
+        Assert.Equal(SshControl.ForwardSocket("/run/f/cm-1", "box", "/r/pulse-0123456789ab.sock", "/l/native"), ssh.Calls[2]);
+    }
+
+    [Fact]
+    public async Task The_first_link_up_to_a_host_cancels_nothing()
+    {
+        var ssh = new FakeSsh { Answer = args => args.Contains("-O") ? null : new SshResult(0, "/r\n", string.Empty) };
+        var pulse = new ReverseForwardPulse("/l/native", "pulse-0123456789ab.sock", ssh.RunAsync, _ => { });
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None);
+
+        await pulse.OpenAsync("other", "/run/f/cm-2", CancellationToken.None);
+
+        Assert.DoesNotContain(ssh.Calls, c => c.Contains("cancel"));
+    }
+
+    [Fact]
+    public async Task A_hung_ssh_times_out_and_is_logged()
+    {
+        var hung = new TaskCompletionSource<SshResult>();
+        var lines = new List<string>();
+        var pulse = new ReverseForwardPulse(
+            "/l/native", "pulse-0123456789ab.sock", (_, _) => hung.Task, lines.Add, TimeSpan.FromMilliseconds(100));
+
+        await pulse.OpenAsync("box", "/run/f/cm-1", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Contains(lines, l => l.Contains("did not answer"));
+    }
+
     private static async Task<(int Exit, string Output)> ShAsync(string command, string runtime)
     {
         var start = new ProcessStartInfo("sh") { RedirectStandardOutput = true, UseShellExecute = false };
