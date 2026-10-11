@@ -16,6 +16,7 @@ public sealed class ReverseForwardLinkTests : IAsyncLifetime
     private readonly FakeSsh _ssh = new() { Listening = "LISTEN 0 511 127.0.0.1:5173 0.0.0.0:*\n" };
     private readonly ConcurrentQueue<Stream> _links = new();
     private readonly ConcurrentQueue<(string Host, string? ControlPath)> _ups = new();
+    private Func<Task> _linkUp = () => Task.CompletedTask;
     private int _nextLocal = 43000;
     private Endpoint _home = null!;
     private Endpoint _far = null!;
@@ -59,10 +60,11 @@ public sealed class ReverseForwardLinkTests : IAsyncLifetime
                 Healthy = (_, _) => Task.FromResult(true),
                 ScanEvery = TimeSpan.FromMilliseconds(50),
                 ReconnectAfter = TimeSpan.FromMilliseconds(100),
+                ForwardWithin = TimeSpan.FromMilliseconds(300),
                 LinkUp = (host, controlPath, _) =>
                 {
                     _ups.Enqueue((host, controlPath));
-                    return Task.CompletedTask;
+                    return _linkUp();
                 },
             },
         });
@@ -119,5 +121,54 @@ public sealed class ReverseForwardLinkTests : IAsyncLifetime
         await first.DisposeAsync();
 
         await Eventually(() => _ups.Count == 2);
+    }
+
+    private int Scans()
+    {
+        lock (_ssh.Calls)
+        {
+            return _ssh.Calls.Count(c => !c.Contains("-O"));
+        }
+    }
+
+    [Fact]
+    public async Task A_link_up_hook_that_throws_leaves_the_scan_running_and_is_retried()
+    {
+        _linkUp = () => throw new System.ComponentModel.Win32Exception("No such file or directory");
+        using var home = new EmbeddedDriver(_home);
+
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(() => _ups.Count >= 2);
+        var scans = Scans();
+
+        await Eventually(() => Scans() > scans + 2);
+    }
+
+    [Fact]
+    public async Task A_link_up_hook_that_hangs_times_out_and_the_scan_goes_on()
+    {
+        var hung = new TaskCompletionSource();
+        _linkUp = () => hung.Task;
+        using var home = new EmbeddedDriver(_home);
+
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(() => !_ups.IsEmpty);
+
+        await Eventually(() => Scans() > 2);
+        hung.TrySetResult();
+    }
+
+    [Fact]
+    public async Task A_link_up_hook_that_succeeds_after_a_failure_is_not_run_again_on_the_same_link()
+    {
+        var calls = 0;
+        _linkUp = () => Interlocked.Increment(ref calls) == 1 ? throw new IOException("first try fails") : Task.CompletedTask;
+        using var home = new EmbeddedDriver(_home);
+
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(() => Volatile.Read(ref calls) >= 2);
+        await Task.Delay(500);
+
+        Assert.Equal(2, Volatile.Read(ref calls));
     }
 }
