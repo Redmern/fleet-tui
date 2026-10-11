@@ -83,6 +83,15 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void The_todo_board_sits_in_the_main_menu_on_t()
+    {
+        Assert.Contains(FleetAction.TodoBoard, FleetMenus.Actions(FleetMenus.Main));
+        Assert.Equal("t", KeymapDefaults.Bindings[FleetAction.TodoBoard]);
+        Assert.Equal("Todo board", FleetMenus.Label(FleetAction.TodoBoard));
+        Assert.True(FleetMenus.OpensMore(FleetAction.TodoBoard));
+    }
+
+    [Fact]
     public void Open_editor_can_be_left_out_of_the_main_menu()
     {
         var without = FleetMenus.Actions(FleetMenus.Without(FleetMenus.Main, FleetAction.OpenEditor));

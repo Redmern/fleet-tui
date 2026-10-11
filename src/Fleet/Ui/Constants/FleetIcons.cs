@@ -106,6 +106,7 @@ public static class FleetIcons
         FleetAction.SwitchProject => "",
         FleetAction.ListAgents => "",
         FleetAction.OpenEditor => "",
+        FleetAction.TodoBoard => "",
         FleetAction.BrowseFiles => "",
         FleetAction.Notifications => "",
         FleetAction.OpenSettings => "",

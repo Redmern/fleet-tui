@@ -67,4 +67,5 @@ public enum FleetAction
     HideAllAgents,
     OpenWebApp,
     OpenPort,
+    TodoBoard,
 }

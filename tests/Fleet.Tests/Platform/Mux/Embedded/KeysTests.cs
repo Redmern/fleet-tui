@@ -161,6 +161,7 @@ public class KeysTests
             ["a e"] = "menu open-editor",
             ["a f"] = "menu browsefiles",
             ["a n"] = "menu notifications",
+            ["a t"] = "menu todo-board",
             ["g k"] = "menu keybinds",
             ["g K"] = "menu show-menu-keys",
             ["g t"] = "menu button-hints",
@@ -720,10 +721,11 @@ public class KeysTests
                 ("f", "file navigator"),
                 ("l", "list agents"),
                 ("n", "notifications"),
+                ("t", "todo board"),
             ],
             agents.Select(e => (e.Key, e.Label)));
         Assert.Equal(
-            ["menu browsefiles", "menu list-agents", "menu main-pane", "menu notifications", "menu open-editor"],
+            ["menu browsefiles", "menu list-agents", "menu main-pane", "menu notifications", "menu open-editor", "menu todo-board"],
             Group(keys, "a").Leaves.Select(b => b.Command).Order());
     }
 
@@ -745,7 +747,7 @@ public class KeysTests
             null);
 
         Assert.Equal(
-            ["e", "f", "l", "m", "n"],
+            ["e", "f", "l", "m", "n", "t"],
             Group(keys, "a").Leaves.Select(b => b.Chord.Label).Order());
         Assert.Equal("menu main-pane", Group(keys, "a").Leaves.Single(b => b.Chord.Label == "m").Command);
     }
