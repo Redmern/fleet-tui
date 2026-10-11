@@ -36,6 +36,7 @@ using Fleet.Ports.Releases;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
+using Fleet.Ports.Todos;
 using Fleet.Platform.Releases;
 using Fleet.Shared;
 using Fleet.Shared.Hooks;
@@ -171,6 +172,8 @@ public static class Adapters
     public static Ports.Forwards.IListenerProbe ListenerProbe() => new Platform.Forwards.TcpListenerProbe();
 
     public static IDispatchHistory History() => new FileDispatchHistory();
+
+    public static ITodoStore Todos() => new FileTodoStore();
 
     public static IIntentStore Intents() => new JsonIntentStore();
 
