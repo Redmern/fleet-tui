@@ -2,7 +2,7 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Ports.Forwards.Models;
 
-public sealed record ViewerForward(string? Viewer, string? SshConnection)
+public sealed record ViewerForward(string? Viewer, string? SshConnection, ViewerForwardResult? Result = null)
 {
     public bool Sent => Viewer is not null;
 

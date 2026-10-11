@@ -3,6 +3,7 @@ using Fleet.Features.Forwards.OpenPort.Enums;
 using Fleet.Features.Forwards.OpenPort.Models;
 using Fleet.Ports.Browser;
 using Fleet.Ports.Forwards;
+using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
 using Fleet.Ports.Mux.Exceptions;
 using Fleet.Shared.Results;
@@ -35,6 +36,14 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
 
         if (sent.Viewer is { } viewer)
         {
+            if (sent.Result is { } result)
+            {
+                lines.Add(Describe(viewer, port, result));
+                return new OpenPortOutcome(
+                    port, listening, OpenPortRoute.Viewer, lines,
+                    Failed: result.State is ViewerForwardState.Failed or ViewerForwardState.NoAnswer);
+            }
+
             if (!listening)
             {
                 lines.Add($"{viewer} forwards {port} once it listens; open {url} there then.");
@@ -56,6 +65,18 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
 
         return new OpenPortOutcome(port, listening, OpenPortRoute.Local, lines);
     }
+
+    private static string Describe(string viewer, int port, ViewerForwardResult result) =>
+        result.State switch
+        {
+            ViewerForwardState.Forwarded => $"{viewer} forwards {port}; it opened {result.Url} in its browser.",
+            ViewerForwardState.Pending => $"forward pending: {viewer} forwards {port} once it listens and opens {result.Url} then.",
+            ViewerForwardState.BrowserFailed =>
+                $"{viewer} forwards {port} but could not open its browser ({result.Reason}); open {result.Url} there.",
+            ViewerForwardState.NoAnswer =>
+                $"{viewer} did not answer within 20 s; see the fleet.log on {viewer} for what happened.",
+            _ => $"{viewer} could not forward {port}: {result.Reason ?? "no reason given"}",
+        };
 
     private async Task<ViewerForward> ViewerAsync(int port, CancellationToken ct)
     {

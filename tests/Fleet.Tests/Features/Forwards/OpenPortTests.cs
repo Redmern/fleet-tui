@@ -1,6 +1,7 @@
 using Fleet.Features.Forwards.OpenPort;
 using Fleet.Features.Forwards.OpenPort.Enums;
 using Fleet.Ports.Forwards;
+using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
 using Fleet.Ports.Mux.Exceptions;
 
@@ -76,6 +77,80 @@ public sealed class OpenPortTests
         Assert.Equal(OpenPortRoute.Viewer, outcome.Route);
         Assert.Contains(outcome.Lines, l => l.Contains("nothing listens on 127.0.0.1:3000", StringComparison.Ordinal));
         Assert.Contains(outcome.Lines, l => l.Contains("laptop", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_viewer_that_forwarded_says_so_and_names_the_local_url()
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null, new ViewerForwardResult(ViewerForwardState.Forwarded, "http://localhost:5272"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.Equal(OpenPortRoute.Viewer, outcome.Route);
+        Assert.False(outcome.Failed);
+        Assert.Contains(outcome.Lines, l => l.Contains("laptop forwards 5272", StringComparison.Ordinal)
+                                            && l.Contains("http://localhost:5272", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_viewer_that_forwarded_to_another_local_port_names_that_url()
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null, new ViewerForwardResult(ViewerForwardState.Forwarded, "http://localhost:41000"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.Contains(outcome.Lines, l => l.Contains("http://localhost:41000", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_viewer_whose_forward_failed_gives_the_reason()
+    {
+        _forwards.Viewer = new ViewerForward(
+            "laptop", null, new ViewerForwardResult(ViewerForwardState.Failed, "http://localhost:5272", "bind: Address already in use"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.True(outcome.Failed);
+        Assert.Contains(outcome.Lines, l => l.Contains("laptop could not forward 5272", StringComparison.Ordinal)
+                                            && l.Contains("bind: Address already in use", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_pending_viewer_forward_says_the_viewer_forwards_and_opens_once_the_port_listens()
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null, new ViewerForwardResult(ViewerForwardState.Pending, "http://localhost:3000"));
+
+        var outcome = await Handler().HandleAsync(3000);
+
+        Assert.False(outcome.Failed);
+        Assert.Contains(outcome.Lines, l => l.Contains("nothing listens on 127.0.0.1:3000", StringComparison.Ordinal));
+        Assert.Contains(outcome.Lines, l => l.Contains("pending", StringComparison.Ordinal)
+                                            && l.Contains("laptop forwards 3000 once it listens", StringComparison.Ordinal)
+                                            && l.Contains("http://localhost:3000", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_viewer_that_does_not_answer_points_to_its_fleet_log()
+    {
+        _forwards.Viewer = new ViewerForward("laptop", null, new ViewerForwardResult(ViewerForwardState.NoAnswer, "http://localhost:5272"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.True(outcome.Failed);
+        Assert.Contains(outcome.Lines, l => l.Contains("laptop did not answer", StringComparison.Ordinal)
+                                            && l.Contains("fleet.log", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_viewer_that_forwarded_but_could_not_open_its_browser_names_the_url()
+    {
+        _forwards.Viewer = new ViewerForward(
+            "laptop", null, new ViewerForwardResult(ViewerForwardState.BrowserFailed, "http://localhost:5272", "no xdg-open"));
+
+        var outcome = await Handler().HandleAsync(5272);
+
+        Assert.Contains(outcome.Lines, l => l.Contains("http://localhost:5272", StringComparison.Ordinal)
+                                            && l.Contains("laptop forwards 5272", StringComparison.Ordinal));
     }
 
     [Fact]
