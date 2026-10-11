@@ -767,6 +767,10 @@ public static class MenuCommand
                 ShowBoard(app, keymap, BoardScope.One(project.Name, project.Root));
                 break;
 
+            case FleetAction.TodoBoardAll:
+                ShowBoard(app, keymap, BoardScope.All(projects.List().Select(p => new BoardProject(p.Name, p.Root))));
+                break;
+
             case FleetAction.BrowseFiles:
                 if (!Adapters.OnPath(FileBrowser.Command))
                 {
