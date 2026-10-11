@@ -636,13 +636,20 @@ public static class MenuCommand
                         break;
                     }
 
-                    var opened = await new OpenPortHandler(
-                            Adapters.ListenerProbe(), Adapters.Forwards(), Adapters.Browser(), Environment.UserName)
-                        .HandleAsync(port.Value)
-                        .ConfigureAwait(false);
+                    var opening = new OpenPortHandler(
+                        Adapters.ListenerProbe(), Adapters.Forwards(), Adapters.Browser(), Environment.UserName);
+                    var opened = FleetDialog.Wait(
+                        app,
+                        $"{OpenPortHandler.Title} {port.Value}",
+                        [OpenPortHandler.Waiting(port.Value)],
+                        ct => opening.HandleAsync(port.Value, ct));
 
                     var openedTitle = $"{OpenPortHandler.Title} {opened.Port}";
-                    if (opened.Command is { } command)
+                    if (opened.Failed)
+                    {
+                        FleetDialog.Error(app, openedTitle, string.Join(' ', opened.Lines));
+                    }
+                    else if (opened.Command is { } command)
                     {
                         if (FleetDialog.Confirm(app, openedTitle, [.. opened.Lines, string.Empty, command], "Copy"))
                         {

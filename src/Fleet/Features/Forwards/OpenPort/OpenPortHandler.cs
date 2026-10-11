@@ -16,6 +16,9 @@ public sealed class OpenPortHandler(IListenerProbe probe, IPortForwards forwards
 
     public const string Question = "Port on this machine to open in your browser";
 
+    public static string Waiting(int port) =>
+        $"Opening port {port}; a fleet viewing this machine has up to 20 s to report its forward...";
+
     public static Result<int> Parse(string? typed) =>
         int.TryParse(typed?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port is >= 1 and <= 65535
             ? Result<int>.Ok(port)
