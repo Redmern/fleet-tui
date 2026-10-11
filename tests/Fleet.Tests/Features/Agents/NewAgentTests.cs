@@ -550,6 +550,20 @@ public sealed class NewAgentTests : IDisposable
         Assert.Equal(new RoleModel("opus", "high"), again.Value!.Model);
     }
 
+    [Fact]
+    public async Task An_auto_agent_that_does_not_run_claude_is_not_routed()
+    {
+        var directory = await RepositoryAsync();
+        var router = new FakeModelRouter(new RoleModel("opus", "high"));
+
+        var result = await Routed(AutoAgent, router).HandleAsync(
+            new NewAgentCommand("techweb", "backend", directory, "feat/x", string.Empty, AgentHarness.Nvim, Task: "fix it"));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Empty(router.Requests);
+        Assert.Null(result.Value!.Model);
+    }
+
     private sealed class FakeModelRouter(RoleModel? choice = null, bool throws = false) : IModelRouter
     {
         public List<ModelRoutingRequest> Requests { get; } = [];

@@ -77,7 +77,7 @@ public sealed class NewAgentHandler(
 
         var settings = models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models;
         var runsClaude = command.Claude ?? command.Owner.Length > 0;
-        var routed = settings.Agent.IsAuto
+        var routed = settings.Agent.IsAuto && (runsClaude || !AgentHarness.HostedInNvim(command.Harness))
             ? await RoutedModel(command, branch, ct).ConfigureAwait(false)
             : null;
         var stored = store.List(command.ProjectName)
