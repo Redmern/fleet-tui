@@ -279,6 +279,12 @@ public static class EmbeddedWiring
     {
         Stream stream;
 
+        if (sshHost is not null && SshControl.Refusal(sshHost) is { } refused)
+        {
+            await Console.Error.WriteLineAsync($"fleet: {refused}").ConfigureAwait(false);
+            return 2;
+        }
+
         if (sshHost is not null)
         {
             stream = Ssh(sshHost);
@@ -818,7 +824,7 @@ public static class EmbeddedWiring
         "-o", "ConnectTimeout=15",
         .. SshControl.LinkOptions,
         .. controlPath is null ? [] : SshControl.MasterOptions(controlPath),
-        host,
+        SshControl.Host(host),
         remoteFleet,
         "bridge",
     ];

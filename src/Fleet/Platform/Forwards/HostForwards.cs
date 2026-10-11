@@ -405,6 +405,12 @@ public sealed class HostForwards(
             }
         }
 
+        if (controlPath is null && SshControl.Refusal(host) is { } refused)
+        {
+            Fail(remote, refused);
+            return;
+        }
+
         int local;
         try
         {

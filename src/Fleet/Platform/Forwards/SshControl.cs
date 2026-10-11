@@ -35,7 +35,7 @@ public static class SshControl
         "-o", "ConnectTimeout=15",
         .. LinkOptions,
         "-L", Spec(local, target, remote),
-        host,
+        Host(host),
     ];
 
     public static IReadOnlyList<string> Check(string controlPath, string host) =>
@@ -46,6 +46,14 @@ public static class SshControl
 
     public static IReadOnlyList<string> Run(string controlPath, string host, string command) =>
         ["-S", controlPath, "-o", "ControlMaster=no", "-o", "BatchMode=yes", "-T", host, command];
+
+    public static string? Refusal(string host) =>
+        host.StartsWith('-')
+            ? $"'{host}' is not an ssh host: it starts with '-', which ssh would read as an option"
+            : null;
+
+    public static string Host(string host) =>
+        Refusal(host) is { } refused ? throw new InvalidOperationException(refused) : host;
 
     public static bool Prohibited(string text) =>
         text.Contains("administratively prohibited", StringComparison.OrdinalIgnoreCase);

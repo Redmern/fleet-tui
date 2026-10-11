@@ -351,6 +351,21 @@ public sealed class HostForwardsTunnelTests
         Assert.False(_locals.Holds(5173));
     }
 
+    [Fact]
+    public async Task A_host_that_ssh_would_read_as_an_option_fails_without_starting_ssh()
+    {
+        var forwards = new HostForwards(
+            "-oProxyCommand=calc", null, _locals, _ssh.RunAsync, _ => { }, new TunnelMode(_tunnels, _tunnels, TimeSpan.FromSeconds(2)));
+        forwards.Pin(5173, null);
+
+        await ScanAndReconcileAsync(forwards);
+
+        Assert.Empty(_tunnels.Started);
+        Assert.Equal(ForwardState.Failed, forwards.Row(5173).State);
+        Assert.Contains("starts with '-'", forwards.Row(5173).Error);
+        Assert.False(_locals.Holds(5173));
+    }
+
     private static async Task WaitUntil(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);

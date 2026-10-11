@@ -67,6 +67,16 @@ public sealed class SshControlTests
     }
 
     [Fact]
+    public void A_host_that_ssh_would_read_as_an_option_is_refused()
+    {
+        Assert.Null(SshControl.Refusal("red@box"));
+        Assert.Contains("starts with '-'", SshControl.Refusal("-oProxyCommand=calc"));
+
+        var refused = Assert.Throws<InvalidOperationException>(() => SshControl.Tunnel("-oProxyCommand=calc", 1, "localhost", 1));
+        Assert.Contains("-oProxyCommand=calc", refused.Message);
+    }
+
+    [Fact]
     public void A_refusing_sshd_is_recognised() =>
         Assert.True(SshControl.Prohibited("channel 3: open failed: administratively prohibited: open failed"));
 }
