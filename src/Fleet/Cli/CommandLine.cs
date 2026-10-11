@@ -83,6 +83,7 @@ public static class CommandLine
         "theme" => FleetVerb.Theme,
         "iso" => FleetVerb.Iso,
         "forward" => FleetVerb.Forward,
+        Features.Shim.ShimScripts.Verb => FleetVerb.Shim,
         Shared.Constants.AgentHarness.TitledVerb => FleetVerb.Titled,
         Shared.Constants.AgentHarness.WithEnvVerb => FleetVerb.WithEnv,
         "help" or "--help" or "-h" => FleetVerb.Help,

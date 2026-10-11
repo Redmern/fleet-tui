@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
+using Fleet.Features.Shim;
+using Fleet.Features.Shim.Enums;
 using Fleet.Platform.Clipboard;
 using Fleet.Platform.Forwards;
 using Fleet.Platform.Forwards.Models;
@@ -83,6 +85,7 @@ public static class EmbeddedWiring
             SessionFile = SessionFile(Environment.GetEnvironmentVariable(Endpoint.Variable)),
             WarmMenus = true,
             PaneEnv = cwd => PaneProfile.Env(cwd, Adapters.Projects().List(), Profiles()),
+            RemotePaneEnv = ServesRemoteViewers ? RemotePaneEnv(log) : null,
             Shell = () => DefaultShell.Resolve(
                 Environment.GetEnvironmentVariable,
                 Platform.Mux.Models.MuxEnvironment.OnPath,
@@ -108,6 +111,44 @@ public static class EmbeddedWiring
 
         await daemon.RunAsync().ConfigureAwait(false);
         return 0;
+    }
+
+    public static bool ServesRemoteViewers =>
+        !OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable(ShimFolder.RemoteDaemonVariable) == "1";
+
+    private static Action<IDictionary<string, string>>? RemotePaneEnv(IFleetLog log)
+    {
+        var shims = ShimFolder.Default;
+        if (!ShimFolder.Install(shims, Adapters.Executable, line => log.Write($"fleetd: {line}")))
+        {
+            return null;
+        }
+
+        log.Write($"fleetd: remote panes find the clipboard shims in {shims} first on PATH");
+        return env => env["PATH"] = ShimScripts.PathWith(
+            shims, env.TryGetValue("PATH", out var path) ? path : Environment.GetEnvironmentVariable("PATH"));
+    }
+
+    public static async Task<int> ShimAsync(IReadOnlyList<string> args)
+    {
+        if (args.Count == 0)
+        {
+            await Console.Error.WriteLineAsync($"usage: fleet shim <{string.Join('|', ClipboardShim.Tools)}> [arguments]")
+                .ConfigureAwait(false);
+            return 2;
+        }
+
+        var tool = args[0];
+        string[] rest = [.. args.Skip(1)];
+        var call = ClipboardShim.Parse(tool, rest);
+        if (call.Read == ShimRead.RealTool)
+        {
+            return await ShimFolder.RunRealToolAsync(tool, rest, ShimFolder.Default).ConfigureAwait(false);
+        }
+
+        using var stdout = Console.OpenStandardOutput();
+        var pane = new PaneClipboardImageSource(Endpoint.Default(), Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable));
+        return await ClipboardShim.RunAsync(call, pane, stdout, Console.Error).ConfigureAwait(false);
     }
 
     private static (DateTime Stamp, AccountProfiles? Profiles) _profiles;
@@ -729,6 +770,11 @@ public static class EmbeddedWiring
 
         start.UseShellExecute = false;
         start.CreateNoWindow = true;
+
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable)))
+        {
+            start.Environment[ShimFolder.RemoteDaemonVariable] = "1";
+        }
 
         foreach (var name in (string[])[BridgedHello.SshConnectionVariable, BridgedHello.SshClientVariable, "SSH_TTY"])
         {

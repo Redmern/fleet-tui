@@ -38,6 +38,7 @@ public static class Runner
         FleetVerb.Iso => IsoCommand.Run(invocation),
         FleetVerb.Help => HelpCommand.Run(),
         FleetVerb.Forward => await ForwardCommand.RunAsync(invocation).ConfigureAwait(false),
+        FleetVerb.Shim => await ShimCommand.RunAsync(invocation).ConfigureAwait(false),
         _ => HelpCommand.Unknown(invocation.Raw),
     };
 }

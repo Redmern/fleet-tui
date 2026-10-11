@@ -44,6 +44,8 @@ public sealed class DaemonOptions
 
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
 
+    public Action<IDictionary<string, string>>? RemotePaneEnv { get; init; }
+
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
@@ -2690,6 +2692,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             env[key] = value;
         }
+
+        options.RemotePaneEnv?.Invoke(env);
 
         env = new Dictionary<string, string>(env, StringComparer.OrdinalIgnoreCase)
         {

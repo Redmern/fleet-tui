@@ -32,5 +32,6 @@ public enum FleetVerb
     Iso,
     Help,
     Forward,
+    Shim,
     Unknown,
 }
