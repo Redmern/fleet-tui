@@ -487,7 +487,7 @@ public sealed class NewAgentTests : IDisposable
 
     [Theory]
     [MemberData(nameof(RouterFailures))]
-    public async Task A_router_that_fails_falls_back_to_inherit_logs_it_and_still_starts_the_agent(string failure)
+    public async Task A_router_that_fails_launches_on_inherit_logs_it_stores_no_model_and_still_starts_the_agent(string failure)
     {
         var directory = await RepositoryAsync();
         var router = failure switch
@@ -502,12 +502,13 @@ public sealed class NewAgentTests : IDisposable
 
         Assert.True(result.Succeeded, result.Error);
         Assert.Equal([AgentHarness.Claude, "--name", "techweb-backend-feat-x"], await AgentArgs());
-        Assert.Equal(SettingsDefaults.AgentModel, result.Value!.Model);
+        Assert.Null(result.Value!.Model);
+        Assert.Null(_store.Saved.Last().Agent.Model);
         Assert.Contains(_log.Lines, l => l.Contains("backend/feat/x") && l.Contains("inherit"));
     }
 
     [Fact]
-    public async Task An_auto_agent_without_a_task_is_not_routed_and_runs_on_inherit()
+    public async Task An_auto_agent_without_a_task_is_not_routed_runs_on_inherit_and_stores_no_model()
     {
         var directory = await RepositoryAsync();
         var router = new FakeModelRouter(new RoleModel("opus", "high"));
@@ -516,7 +517,7 @@ public sealed class NewAgentTests : IDisposable
 
         Assert.Empty(router.Requests);
         Assert.Equal([AgentHarness.Claude, "--name", "techweb-backend-feat-x"], await AgentArgs());
-        Assert.Equal(SettingsDefaults.AgentModel, result.Value!.Model);
+        Assert.Null(result.Value!.Model);
     }
 
     private sealed class FakeModelRouter(RoleModel? choice = null, bool throws = false) : IModelRouter

@@ -139,13 +139,13 @@ public sealed class NewAgentHandler(
         return Result<AgentRecord>.Ok(agent);
     }
 
-    private async Task<RoleModel> RoutedModel(NewAgentCommand command, string branch, CancellationToken ct)
+    private async Task<RoleModel?> RoutedModel(NewAgentCommand command, string branch, CancellationToken ct)
     {
         var task = command.Task.Trim();
 
         if (task.Length == 0)
         {
-            return SettingsDefaults.AgentModel;
+            return null;
         }
 
         var routed = await router
@@ -158,6 +158,7 @@ public sealed class NewAgentHandler(
         if (outcome.LogLine is not null)
         {
             log?.Write(outcome.LogLine);
+            return null;
         }
 
         return outcome.Model;
