@@ -133,9 +133,11 @@ public static class Adapters
         return new StdioMcpServer(Console.In, stdout, log);
     }
 
-    public static (string Text, string? Cwd) ReadHookPayload()
+    public static (string Text, string? Cwd) ReadHookPayload() => ReadHookPayload(Console.In);
+
+    public static (string Text, string? Cwd) ReadHookPayload(TextReader input)
     {
-        var payload = HookIo.Read(Console.In);
+        var payload = HookIo.Read(input);
 
         return (payload.Text, payload.Cwd);
     }

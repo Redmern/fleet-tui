@@ -11,9 +11,11 @@ namespace Fleet.Cli.Commands;
 
 public static class HookTodoCommand
 {
-    public static int Run(Invocation invocation)
+    public static int Run(Invocation invocation) => Run(invocation, Console.In, Console.Out, Console.Error);
+
+    public static int Run(Invocation invocation, TextReader input, TextWriter output, TextWriter error)
     {
-        var payload = Adapters.ReadHookPayload();
+        var payload = Adapters.ReadHookPayload(input);
         var active = Resolve(invocation.Project, payload.Cwd);
 
         var trigger = active is null
@@ -38,23 +40,23 @@ public static class HookTodoCommand
 
         Emit(HookNote.For(captured.Succeeded
             ? captured.Value.Note
-            : $"fleet: could not add the todo — {captured.Error}"));
+            : $"fleet: could not add the todo — {captured.Error}"), output, error);
 
         return 2;
     }
 
-    private static void Emit(string note)
+    private static void Emit(string note, TextWriter output, TextWriter error)
     {
         if (string.Equals(
                 Environment.GetEnvironmentVariable(HookDispatchCommand.JsonModeVariable),
                 "json",
                 StringComparison.OrdinalIgnoreCase))
         {
-            Console.Out.Write(Adapters.HookBlockJson(note));
+            output.Write(Adapters.HookBlockJson(note));
             return;
         }
 
-        Console.Error.Write(note);
+        error.Write(note);
     }
 
     private static Project? Resolve(string? name, string? cwd) =>

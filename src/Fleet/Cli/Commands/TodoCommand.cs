@@ -9,11 +9,13 @@ namespace Fleet.Cli.Commands;
 
 public static class TodoCommand
 {
-    public static int Run(Invocation invocation)
+    public static int Run(Invocation invocation) => Run(invocation, Console.Out, Console.Error);
+
+    public static int Run(Invocation invocation, TextWriter output, TextWriter error)
     {
         if (string.IsNullOrWhiteSpace(invocation.Text))
         {
-            Console.Error.WriteLine("fleet todo: the idea's text is required");
+            error.WriteLine("fleet todo: the idea's text is required");
             return 2;
         }
 
@@ -25,7 +27,7 @@ public static class TodoCommand
 
             if (active is null)
             {
-                Console.Error.WriteLine($"fleet todo: no project named '{named}'");
+                error.WriteLine($"fleet todo: no project named '{named}'");
                 return 2;
             }
         }
@@ -39,11 +41,11 @@ public static class TodoCommand
 
         if (!captured.Succeeded)
         {
-            Console.Error.WriteLine($"fleet todo: {captured.Error}");
+            error.WriteLine($"fleet todo: {captured.Error}");
             return 1;
         }
 
-        Console.WriteLine(captured.Value.Note);
+        output.WriteLine(captured.Value.Note);
         Adapters.Log().Write(LogTag.For(captured.Value.Project.Name, $"added todo {captured.Value.Ticket.Id}"));
         return 0;
     }
