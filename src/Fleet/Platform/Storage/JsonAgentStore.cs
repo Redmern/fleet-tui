@@ -3,6 +3,8 @@ using Fleet.Platform.Storage.Models;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Platform.Storage;
 
@@ -36,6 +38,8 @@ public sealed class JsonAgentStore : IAgentStore
                 InNvim = agent.InNvim,
                 Summary = agent.Summary,
                 ReportedAt = agent.ReportedAt,
+                Model = agent.Model?.Model,
+                Effort = agent.Model?.Effort,
             });
         });
     }
@@ -64,7 +68,8 @@ public sealed class JsonAgentStore : IAgentStore
                 a.Claude,
                 a.InNvim,
                 a.Summary,
-                a.ReportedAt))
+                a.ReportedAt,
+                a.Model is null ? null : new RoleModel(a.Model, a.Effort ?? ModelChoice.Inherit)))
             .OrderBy(a => a.Repository, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Branch, StringComparer.OrdinalIgnoreCase)
             .ToList();
