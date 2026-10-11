@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace Fleet.Platform.Forwards;
 
-public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher, IDisposable
+public sealed class TunnelProcesses(string program = "ssh", Action<string>? log = null) : ITunnelLauncher, IDisposable
 {
     public const int KeptErrorLines = 20;
 
@@ -65,7 +65,11 @@ public sealed class TunnelProcesses(string program = "ssh") : ITunnelLauncher, I
                 return new Ended(127, $"could not run {program}");
             }
 
-            KillOnCloseJob.Hold(process.Handle);
+            if (!KillOnCloseJob.Hold(process.Handle))
+            {
+                log?.Invoke($"could not put {program} (pid {process.Id}) in fleet's kill-on-close job; it may outlive fleetd");
+            }
+
             var running = new Running(process);
             _running.Add(running);
             _ = running.Exited.ContinueWith(_ => Forget(running), TaskScheduler.Default);

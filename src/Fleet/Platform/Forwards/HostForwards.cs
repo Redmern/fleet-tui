@@ -334,11 +334,12 @@ public sealed class HostForwards(
         }
     }
 
+    private bool RestartingLocked(int remote) => controlPath is null && _deaths.ContainsKey(remote);
+
     private void BackOffLocked(int remote, string why, bool lastedLong)
     {
         var deaths = _deaths[remote] = (lastedLong ? 0 : _deaths.GetValueOrDefault(remote)) + 1;
-        var wait = Mode.RestartAfter * Math.Pow(2, Math.Min(deaths - 1, 16));
-        wait = wait < Mode.RestartAtMost ? wait : Mode.RestartAtMost;
+        var wait = Backoff.After(Mode.RestartAfter, Mode.RestartAtMost, deaths);
         _retry[remote] = (Now + wait, why);
         log($"remote {host}: the ssh tunnel of {remote} exited ({why}); restarting in {wait.TotalSeconds:0}s");
     }
@@ -446,7 +447,7 @@ public sealed class HostForwards(
             locals.Release(local);
             lock (_gate)
             {
-                if (controlPath is null && _deaths.ContainsKey(remote) && !SshControl.Prohibited(why))
+                if (RestartingLocked(remote) && !SshControl.Prohibited(why))
                 {
                     BackOffLocked(remote, why, lastedLong: false);
                     return;
@@ -505,14 +506,24 @@ public sealed class HostForwards(
                     return (null, $"ssh did not open localhost:{local} within {mode.UpWithin.TotalSeconds:0}s");
                 }
 
-                await Task.WhenAny(tunnel.Exited, Task.Delay(TimeSpan.FromMilliseconds(200), ct)).ConfigureAwait(false);
-                ct.ThrowIfCancellationRequested();
+                await WaitAtMostAsync(tunnel.Exited, TimeSpan.FromMilliseconds(200), ct).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
             tunnel.Kill();
             throw;
+        }
+    }
+
+    private static async Task WaitAtMostAsync(Task task, TimeSpan most, CancellationToken ct)
+    {
+        try
+        {
+            await task.WaitAsync(most, ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
         }
     }
 
@@ -527,7 +538,7 @@ public sealed class HostForwards(
         if (active.Tunnel is { } tunnel)
         {
             tunnel.Kill();
-            await Task.WhenAny(tunnel.Exited, Task.Delay(TimeSpan.FromSeconds(2), ct)).ConfigureAwait(false);
+            await WaitAtMostAsync(tunnel.Exited, TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false);
         }
         else if (controlPath is not null)
         {

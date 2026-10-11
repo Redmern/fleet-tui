@@ -9,13 +9,8 @@ public static partial class KillOnCloseJob
 
     private static readonly Lazy<nint> Job = new(Create);
 
-    public static void Hold(nint process)
-    {
-        if (OperatingSystem.IsWindows() && Job.Value != 0)
-        {
-            AssignProcessToJobObject(Job.Value, process);
-        }
-    }
+    public static bool Hold(nint process) =>
+        !OperatingSystem.IsWindows() || (Job.Value != 0 && AssignProcessToJobObject(Job.Value, process));
 
     private static nint Create()
     {
@@ -65,14 +60,14 @@ public static partial class KillOnCloseJob
         public nuint PeakJobMemoryUsed;
     }
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("kernel32.dll")]
     private static partial nint CreateJobObjectW(nint attributes, nint name);
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetInformationJobObject(nint job, int infoClass, ref ExtendedLimit info, uint length);
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AssignProcessToJobObject(nint job, nint process);
 }
