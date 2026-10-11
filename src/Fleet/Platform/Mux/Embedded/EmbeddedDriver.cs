@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
@@ -222,11 +223,28 @@ public sealed class EmbeddedDriver(
     public Task<ViewerForward> ViewerUnforwardAsync(int port, CancellationToken ct = default) =>
         ToViewerAsync(ForwardHub.ViewerUnforwardOp, port, ct);
 
+    public static readonly TimeSpan ViewerAnswerWithin = TimeSpan.FromSeconds(30);
+
     private async Task<ViewerForward> ToViewerAsync(string op, int port, CancellationToken ct)
     {
-        var sent = await RequestAsync(new ControlRequest { Op = op, Port = port }, ct).ConfigureAwait(false);
-        return new ViewerForward(sent.Viewer, sent.Ssh);
+        var sent = await RequestAsync(new ControlRequest { Op = op, Port = port }, ct, ViewerAnswerWithin).ConfigureAwait(false);
+        return new ViewerForward(sent.Viewer, sent.Ssh, ViewerResult(sent.ForwardResult));
     }
+
+    public static ViewerForwardResult? ViewerResult(ForwardResultDto? result) =>
+        result is null
+            ? null
+            : new ViewerForwardResult(
+                result.State switch
+                {
+                    ForwardResults.Forwarded => ViewerForwardState.Forwarded,
+                    ForwardResults.Pending => ViewerForwardState.Pending,
+                    ForwardResults.BrowserFailed => ViewerForwardState.BrowserFailed,
+                    ForwardResults.NoAnswer => ViewerForwardState.NoAnswer,
+                    _ => ViewerForwardState.Failed,
+                },
+                result.Url,
+                result.Reason);
 
     public async Task<IReadOnlyList<RemoteDto>> RemotesAsync(CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "list-remotes" }, ct).ConfigureAwait(false)).Remotes ?? [];

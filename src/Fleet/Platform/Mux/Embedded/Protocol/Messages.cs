@@ -288,6 +288,31 @@ public sealed class HostEffect
 
     [JsonPropertyName("value")]
     public string? Value { get; set; }
+
+    [JsonPropertyName("reply")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Reply { get; set; }
+}
+
+public static class ForwardResults
+{
+    public const string Forwarded = "forwarded";
+    public const string Pending = "pending";
+    public const string Failed = "failed";
+    public const string BrowserFailed = "browser-failed";
+    public const string NoAnswer = "no-answer";
+}
+
+public sealed class ForwardResultDto
+{
+    [JsonPropertyName("state")]
+    public string State { get; set; } = string.Empty;
+
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
+
+    [JsonPropertyName("reason")]
+    public string? Reason { get; set; }
 }
 
 public sealed class ControlRequest
@@ -369,6 +394,12 @@ public sealed class ControlRequest
 
     [JsonPropertyName("forwards")]
     public List<ForwardDto>? Forwards { get; set; }
+
+    [JsonPropertyName("reply")]
+    public string? Reply { get; set; }
+
+    [JsonPropertyName("forwardResult")]
+    public ForwardResultDto? ForwardResult { get; set; }
 }
 
 public sealed class ForwardDto
@@ -543,6 +574,12 @@ public sealed class ControlResponse
 
     [JsonPropertyName("ssh")]
     public string? Ssh { get; set; }
+
+    [JsonPropertyName("forwardResult")]
+    public ForwardResultDto? ForwardResult { get; set; }
+
+    [JsonIgnore]
+    public string? AwaitingReply { get; set; }
 }
 
 public sealed class NoticeDto
