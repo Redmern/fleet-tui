@@ -48,6 +48,8 @@ public sealed class DaemonOptions
 
     public bool ServesBridge { get; init; }
 
+    public ClipboardImageLimit ClipboardImageLimit { get; init; } = new(Reads: 20, Per: TimeSpan.FromMinutes(1));
+
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
@@ -76,6 +78,8 @@ public sealed class DaemonOptions
 
     public Func<IReadOnlyList<ProjectConfigDto>> ProjectConfigs { get; init; } = () => [];
 }
+
+public sealed record ClipboardImageLimit(int Reads, TimeSpan Per);
 
 public sealed class FleetDaemon(DaemonOptions options)
 {
@@ -107,6 +111,8 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, (string Client, TaskCompletionSource<ClipboardImageResponse> Reply)> _clipboardAsks = new();
     private int _nextClipboardAsk;
     private volatile bool _servedBridge;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _paneTokens = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Queue<DateTimeOffset>> _clipboardReads = new(StringComparer.Ordinal);
 
     private bool ServesRemoteViewers => options.ServesBridge || _servedBridge;
 
@@ -725,7 +731,9 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private async Task AnswerClipboardImageAsync(Wire wire, ControlRequest request, CancellationToken ct)
     {
-        var response = await ClipboardImageForAsync(request.Pane, request.Op == ClipboardTypesOp, ct).ConfigureAwait(false);
+        var response = ClipboardCallerRefusal(request) is { } refused
+            ? new ControlResponse { Ok = false, Error = refused }
+            : await ClipboardImageForAsync(request.Pane, request.Op == ClipboardTypesOp, ct).ConfigureAwait(false);
         response.Id = request.Id;
 
         try
@@ -776,6 +784,40 @@ public sealed class FleetDaemon(DaemonOptions options)
             !answer.Ok ? new ClipboardImageResponse { Id = asked.Id, Error = answer.Error }
             : asked.Probe ? ClipboardImageResponse.Probed(asked.Id, answer.HasImage)
             : ClipboardImageResponse.For(asked.Id, answer.Data)).ConfigureAwait(false);
+    }
+
+    private string? ClipboardCallerRefusal(ControlRequest request)
+    {
+        if (request.Pane is not { Length: > 0 } pane
+            || !_paneTokens.TryGetValue(pane, out var expected)
+            || request.Token is not { Length: > 0 } token
+            || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(token)))
+        {
+            options.Log($"clipboard image for {request.Pane ?? "an unnamed pane"} refused: wrong or missing pane token");
+            return $"the pane token of {request.Pane} is wrong or missing";
+        }
+
+        var now = options.Clock.GetUtcNow();
+        var limit = options.ClipboardImageLimit;
+        lock (_clipboardReads)
+        {
+            var reads = _clipboardReads.TryGetValue(pane, out var seen) ? seen : _clipboardReads[pane] = new Queue<DateTimeOffset>();
+            while (reads.TryPeek(out var oldest) && now - oldest >= limit.Per)
+            {
+                reads.Dequeue();
+            }
+
+            if (reads.Count >= limit.Reads)
+            {
+                options.Log($"clipboard image for {pane} refused: more than {limit.Reads} reads in {limit.Per.TotalSeconds:0} s");
+                return $"too many clipboard reads from {pane}: at most {limit.Reads} per {limit.Per.TotalSeconds:0} s";
+            }
+
+            reads.Enqueue(now);
+        }
+
+        return null;
     }
 
     private AttachSession? FocusingViewer(string pane) =>
@@ -2750,6 +2792,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             ["TMUX"] = string.Empty,
         };
 
+        if (ServesRemoteViewers)
+        {
+            env[PaneTokenVariable] = _paneTokens.GetOrAdd(
+                pane.Id, _ => Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)));
+        }
+
         var cols = Math.Max(pane.Cols, 2);
         var rows = Math.Max(pane.Rows, 2);
         var pty = given ?? options.Pty();
@@ -2852,6 +2900,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 _warmed[closedMenuIn] = warmed with { AgainFrom = DateTimeOffset.MinValue };
             }
+        }
+
+        _paneTokens.TryRemove(id, out _);
+        lock (_clipboardReads)
+        {
+            _clipboardReads.Remove(id);
         }
 
         if (_runtimes.Remove(id, out var runtime))

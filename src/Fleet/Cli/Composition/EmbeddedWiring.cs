@@ -158,7 +158,10 @@ public static class EmbeddedWiring
         }
 
         using var stdout = Console.OpenStandardOutput();
-        var pane = new PaneClipboardImageSource(Endpoint.Default(), Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable));
+        var pane = new PaneClipboardImageSource(
+            Endpoint.Default(),
+            Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable),
+            Environment.GetEnvironmentVariable(FleetDaemon.PaneTokenVariable));
         return await ClipboardShim.RunAsync(call, pane, stdout, Console.Error).ConfigureAwait(false);
     }
 
@@ -398,7 +401,8 @@ public static class EmbeddedWiring
                     }
                 },
                 tunnels is null ? null : tunnels.Apply,
-                ClipboardImageSources.ForThisMachine(ClipboardImageResponse.MaxBytes))
+                ClipboardImageSources.ForThisMachine(ClipboardImageResponse.MaxBytes),
+                notice => Platform.Notifications.DesktopToast.Show("fleet", notice))
             .RunAsync()
             .ConfigureAwait(false);
 

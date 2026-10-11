@@ -359,6 +359,9 @@ public sealed class ControlRequest
     [JsonPropertyName("caller")]
     public string? Caller { get; set; }
 
+    [JsonPropertyName("token")]
+    public string? Token { get; set; }
+
     [JsonPropertyName("workspace")]
     public string? Workspace { get; set; }
 

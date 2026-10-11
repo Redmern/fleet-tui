@@ -51,6 +51,7 @@ public sealed class RemotePaneEnvTests : IAsyncLifetime
 
         Assert.Equal("/shims:/bin", pane.Env["PATH"]);
         Assert.False(string.IsNullOrEmpty(pane.Env[FleetDaemon.PaneVariable]));
+        Assert.False(string.IsNullOrEmpty(pane.Env[FleetDaemon.PaneTokenVariable]));
     }
 
     [Fact]

@@ -5,7 +5,7 @@ using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded.Client;
 
-public sealed class PaneClipboardImageSource(Endpoint endpoint, string? pane) : IClipboardImageSource
+public sealed class PaneClipboardImageSource(Endpoint endpoint, string? pane, string? token) : IClipboardImageSource
 {
     public static readonly TimeSpan ConnectWithin = TimeSpan.FromSeconds(3);
 
@@ -38,7 +38,7 @@ public sealed class PaneClipboardImageSource(Endpoint endpoint, string? pane) : 
 
             await wire.SendAsync(
                 MessageType.Request,
-                new ControlRequest { Id = 1, Op = op, Pane = caller },
+                new ControlRequest { Id = 1, Op = op, Pane = caller, Token = token },
                 WireJsonContext.Default.ControlRequest,
                 ct).ConfigureAwait(false);
 

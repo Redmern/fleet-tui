@@ -26,6 +26,8 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
             Endpoint = _endpoint,
             Pty = _panes.NewPty,
             Terminal = _panes.NewTerminal,
+            ServesBridge = true,
+            ClipboardImageLimit = new ClipboardImageLimit(Reads: 4, Per: TimeSpan.FromMinutes(1)),
         }).RunAsync(_stop.Token);
         return Task.CompletedTask;
     }
@@ -85,6 +87,83 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         Assert.NotEqual(shown, hidden);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("0123456789abcdef0123456789abcdef")]
+    public async Task A_caller_without_the_pane_token_is_refused_even_for_the_focused_pane(string? token)
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var clipboard = new FakeClipboardImageSource(Png);
+        await ViewAsync("techweb", clipboard);
+
+        var answer = await (await ControlAsync()).RequestAsync(
+            new ControlRequest { Op = FleetDaemon.ClipboardImageOp, Pane = pane, Token = token });
+
+        Assert.False(answer.Ok);
+        Assert.Null(answer.Data);
+        Assert.Contains("token", answer.Error);
+        Assert.Equal(0, clipboard.Reads);
+    }
+
+    [Fact]
+    public async Task Another_panes_token_does_not_open_the_focused_pane()
+    {
+        var focused = await SpawnAsync("techweb", "claude");
+        var other = await SpawnAsync("fleet", "agent");
+        var clipboard = new FakeClipboardImageSource(Png);
+        await ViewAsync("techweb", clipboard);
+
+        var answer = await AskAsync(focused, TokenOf(other));
+
+        Assert.False(answer.Ok);
+        Assert.Equal(0, clipboard.Reads);
+    }
+
+    [Fact]
+    public async Task Every_pane_gets_its_own_token()
+    {
+        var a = await SpawnAsync("techweb", "claude");
+        var b = await SpawnAsync("fleet", "agent");
+
+        Assert.NotEqual(TokenOf(a), TokenOf(b));
+        Assert.True(TokenOf(a).Length >= 32);
+    }
+
+    [Fact]
+    public async Task A_pane_asking_faster_than_the_limit_is_refused_until_the_window_passes()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var clipboard = new FakeClipboardImageSource(Png);
+        await ViewAsync("techweb", clipboard);
+
+        for (var i = 0; i < 4; i++)
+        {
+            Assert.True((await AskAsync(pane)).Ok);
+        }
+
+        var tripped = await AskAsync(pane);
+
+        Assert.False(tripped.Ok);
+        Assert.Contains("too many", tripped.Error);
+        Assert.Equal(4, clipboard.Reads);
+    }
+
+    [Fact]
+    public async Task The_viewer_shows_a_notice_when_a_pane_reads_its_clipboard_image_but_not_for_a_probe()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var viewer = await ViewAsync("techweb", new FakeClipboardImageSource(Png));
+
+        await ShimAsync(pane, "wl-paste", "--list-types");
+        Assert.Empty(viewer.Notices);
+        await ShimAsync(pane, "wl-paste", "--type", "image/png");
+
+        var notice = Assert.Single(viewer.Notices);
+        Assert.Contains(pane, notice);
+        Assert.Contains("clipboard image", notice);
+    }
+
     [Fact]
     public async Task Without_any_viewer_the_pane_is_refused()
     {
@@ -105,7 +184,7 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         var bridged = await DaemonTests.TestClient.ConnectAsync(_endpoint, ClientRoles.Control, 0, 0, null, bridged: true);
         _clients.Add(bridged);
 
-        var answer = await bridged.RequestAsync(new ControlRequest { Op = FleetDaemon.ClipboardImageOp, Pane = pane });
+        var answer = await bridged.RequestAsync(new ControlRequest { Op = FleetDaemon.ClipboardImageOp, Pane = pane, Token = TokenOf(pane) });
 
         Assert.False(answer.Ok);
         Assert.Null(answer.Data);
@@ -229,7 +308,7 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
     [Fact]
     public async Task A_shim_outside_any_fleet_pane_gets_no_image()
     {
-        var answer = await new PaneClipboardImageSource(_endpoint, null).ReadPngAsync();
+        var answer = await new PaneClipboardImageSource(_endpoint, null, null).ReadPngAsync();
 
         Assert.Null(answer.Png);
         Assert.NotNull(answer.Refused);
@@ -239,7 +318,7 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
     {
         var stdout = new MemoryStream();
         var stderr = new StringWriter();
-        var code = await ClipboardShim.RunAsync(ClipboardShim.Parse(tool, args), new PaneClipboardImageSource(_endpoint, pane), stdout, stderr);
+        var code = await ClipboardShim.RunAsync(ClipboardShim.Parse(tool, args), new PaneClipboardImageSource(_endpoint, pane, TokenOf(pane)), stdout, stderr);
         return (code, stdout.ToArray(), stderr.ToString());
     }
 
@@ -265,8 +344,11 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
         return spawned.Pane!;
     }
 
-    private async Task<ControlResponse> AskAsync(string pane) =>
-        await (await ControlAsync()).RequestAsync(new ControlRequest { Op = FleetDaemon.ClipboardImageOp, Pane = pane });
+    private async Task<ControlResponse> AskAsync(string pane, string? token = null) =>
+        await (await ControlAsync()).RequestAsync(new ControlRequest { Op = FleetDaemon.ClipboardImageOp, Pane = pane, Token = token ?? TokenOf(pane) });
+
+    private string TokenOf(string pane) =>
+        _panes.Started.Single(p => p.Env.GetValueOrDefault(FleetDaemon.PaneVariable) == pane).Env[FleetDaemon.PaneTokenVariable];
 
     private async Task<ClipboardViewer> ViewAsync(string workspace, IClipboardImageSource clipboard)
     {
@@ -332,6 +414,8 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
 
         public ConcurrentQueue<ClipboardImageRequest> Asked { get; } = new();
 
+        public ConcurrentQueue<string> Notices { get; } = new();
+
         public static async Task<ClipboardViewer> ConnectAsync(Endpoint endpoint, string workspace, IClipboardImageSource clipboard)
         {
             var wire = new Wire(await endpoint.ConnectAsync(TimeSpan.FromSeconds(5)));
@@ -373,7 +457,7 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
                     {
                         var request = Wire.Read(message.Payload, WireJsonContext.Default.ClipboardImageRequest);
                         Asked.Enqueue(request);
-                        var answer = await ClipboardImageAnswer.ForAsync(request, _clipboard);
+                        var answer = await ClipboardImageAnswer.ForAsync(request, _clipboard, Notices.Enqueue);
                         if (answer.Data is { Length: > 0 })
                         {
                             Interlocked.Increment(ref _shipped);

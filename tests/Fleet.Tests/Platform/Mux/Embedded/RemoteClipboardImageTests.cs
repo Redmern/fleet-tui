@@ -27,7 +27,7 @@ public sealed class RemoteClipboardImageTests : IAsyncLifetime
     {
         _home = NewEndpoint();
         _far = NewEndpoint();
-        _running.Add(new FleetDaemon(new DaemonOptions { Endpoint = _far, Pty = _farPanes.NewPty, Terminal = _farPanes.NewTerminal })
+        _running.Add(new FleetDaemon(new DaemonOptions { Endpoint = _far, Pty = _farPanes.NewPty, Terminal = _farPanes.NewTerminal, ServesBridge = true })
             .RunAsync(_stop.Token));
         _running.Add(new FleetDaemon(new DaemonOptions
         {
@@ -104,7 +104,12 @@ public sealed class RemoteClipboardImageTests : IAsyncLifetime
     }
 
     private async Task<ControlResponse> AskAsync(string pane) =>
-        await (await ControlAsync(_far)).RequestAsync(new ControlRequest { Op = FleetDaemon.ClipboardImageOp, Pane = pane });
+        await (await ControlAsync(_far)).RequestAsync(new ControlRequest
+        {
+            Op = FleetDaemon.ClipboardImageOp,
+            Pane = pane,
+            Token = _farPanes.Started.Single(p => p.Env.GetValueOrDefault(FleetDaemon.PaneVariable) == pane).Env[FleetDaemon.PaneTokenVariable],
+        });
 
     private async Task<DaemonTests.TestClient> ControlAsync(Endpoint endpoint)
     {

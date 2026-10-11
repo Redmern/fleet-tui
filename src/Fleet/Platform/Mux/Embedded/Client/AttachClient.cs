@@ -18,7 +18,8 @@ public sealed class AttachClient(
     Func<string, string, bool>? openRemote = null,
     Action<Hello>? furnish = null,
     Action<bool, int>? forwardPort = null,
-    IClipboardImageSource? clipboardImages = null)
+    IClipboardImageSource? clipboardImages = null,
+    Action<string>? clipboardNotice = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -323,7 +324,7 @@ public sealed class AttachClient(
     {
         var answer = clipboardImages is null
             ? ClipboardImageResponse.For(asked.Id, null)
-            : await ClipboardImageAnswer.ForAsync(asked, clipboardImages).ConfigureAwait(false);
+            : await ClipboardImageAnswer.ForAsync(asked, clipboardImages, clipboardNotice).ConfigureAwait(false);
         log($"clipboard image for {asked.Pane}: {(answer.Data is { } png ? $"{png.Length} bytes" : answer.Error ?? "no image")}");
         await Send(wire, MessageType.ClipboardImageResponse, answer, WireJsonContext.Default.ClipboardImageResponse).ConfigureAwait(false);
     }
