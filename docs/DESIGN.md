@@ -5906,6 +5906,17 @@ What the phases add up to:
   (`KillOnCloseJob`), so a crashed fleetd takes its tunnels with it. On Unix a crash can
   leave a tunnel behind; there the fallback is rare.
 
+- **`fleet attach --ssh` forwards too.** Without a control socket for the attach
+  (`ControlSocket(AttachSocketKey(host))` is null), the attach client builds `ViewerTunnels`
+  (a tunnel-mode `HostForwards` for the attached host, with its own 3 s restart check) and
+  says `forwards: true` in its `Hello`, with no label. fleetd counts such a client as a
+  viewer for `forward-port` / `unforward-port` (`_tunnelsItself`), so Open port and
+  `forward_port` send it the effect instead of the copy-this-command dialog; it stays out of
+  hand-backs, which only labelled fleet viewers apply. `AttachClient.Forward` hands the
+  effect to `ViewerTunnels.Apply`, which forwards, opens the local URL and logs failures.
+  The tunnels are disposed when the attach ends (and sit in the Windows job object). No
+  wire change: `Hello.forwards` existed; an old fleetd ignores it and sends the command.
+
 ## Open port: this machine's port in the viewer's browser, 2026-10-10
 
 - **The action.** `FleetAction.OpenPort` (menu section Session, `ctrl+s s o`) asks for one
@@ -5938,9 +5949,10 @@ What the phases add up to:
   (`BridgeSshArguments`: `-T`, `ConnectTimeout`, the ControlMaster options), and keeps its
   own terminal for password prompts. It masters its own socket (`AttachSocketKey`), not the
   link's: an attach that started first would otherwise carry fleetd's forwards and drop them
-  on detach. The attach client applies no
-  `forward-port` effects (it has no `ForwardHub`), so an attach-only viewer gets the ssh
-  command route; for one-step forwarding link the machine under Remote machines instead.
+  on detach. With a control socket the
+  attach client applies no `forward-port` effects (it has no `ForwardHub`), so it gets the
+  ssh command route; without one it forwards through its own tunnels (see "Background ssh
+  tunnels without control sockets").
 
 ## ISO mode, 2026-10-10
 
