@@ -12,6 +12,8 @@ public static class BoardRows
 {
     public const int TitleWidth = 48;
 
+    public const int FirstRow = 0;
+
     private const string NoEffort = "-";
 
     private const int EffortWidth = 3;

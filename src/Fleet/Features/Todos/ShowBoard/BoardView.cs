@@ -18,13 +18,13 @@ public static class BoardView
     public static void Show(
         IApplication app,
         Keymap keymap,
-        BoardScope scope,
+        BoardScopes scopes,
         BoardTickets board,
         Func<BoardProject, string, Task<Result>> open,
         Func<BoardProject, string, Task<Result<Ticket>>> launch,
         IReadOnlyList<BoardJira> jira)
     {
-        var window = FleetTheme.Overlay(scope.Title);
+        var window = FleetTheme.Overlay(scopes.Current.Title);
 
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
@@ -36,19 +36,20 @@ public static class BoardView
         var busy = false;
         var syncing = false;
         var closed = false;
+        var pulled = new HashSet<BoardProject>();
         using var stop = new CancellationTokenSource();
 
         BoardEntry? Selected() =>
             tickets.Count == 0 ? null : tickets[Math.Clamp(FleetRows.Selected(list), 0, tickets.Count - 1)];
 
-        IReadOnlyList<FleetRow> Rows(IReadOnlyList<BoardEntry> entries) => BoardRows.For(entries, scope.ShowsProject);
+        IReadOnlyList<FleetRow> Rows(IReadOnlyList<BoardEntry> entries) => BoardRows.For(entries, scopes.Current.ShowsProject);
 
-        void Fill(BoardEntry? keep = null, bool follow = true)
+        void Fill(BoardEntry? keep = null, bool follow = true, int? fallback = null)
         {
-            var at = FleetRows.Selected(list);
+            var at = fallback ?? FleetRows.Selected(list);
             keep = follow ? keep ?? Selected() : null;
 
-            tickets = board.List(scope.Projects);
+            tickets = board.List(scopes.Current.Projects);
 
             var rows = Rows(tickets);
             shown = string.Join('\n', rows.Select(r => r.Text));
@@ -66,7 +67,7 @@ public static class BoardView
         }
 
         bool Changed() =>
-            string.Join('\n', Rows(board.List(scope.Projects)).Select(r => r.Text)) != shown;
+            string.Join('\n', Rows(board.List(scopes.Current.Projects)).Select(r => r.Text)) != shown;
 
         void Apply(BoardProject project, Result<Ticket> result, Func<Ticket, string> message, bool follow)
         {
@@ -108,9 +109,9 @@ public static class BoardView
             }).ConfigureAwait(false);
         }
 
-        async Task SyncAsync()
+        async Task SyncAsync(IReadOnlyList<BoardJira> pulls, bool named)
         {
-            var pulled = await Task.Run(() => BoardPull.AllAsync(jira, stop.Token)).ConfigureAwait(false);
+            var results = await Task.Run(() => BoardPull.AllAsync(pulls, stop.Token)).ConfigureAwait(false);
 
             await FleetAsync.OnUi(app, () =>
             {
@@ -119,23 +120,49 @@ public static class BoardView
                 if (!closed)
                 {
                     Fill();
-                    status.Text = BoardRows.JiraSynced(pulled, scope.ShowsProject);
+                    status.Text = BoardRows.JiraSynced(results, named);
                 }
 
                 return true;
             }).ConfigureAwait(false);
         }
 
-        void Sync()
+        void Sync(bool again = true)
         {
-            if (jira.Count == 0 || syncing)
+            var pulls = BoardPull.In(jira, scopes.Current).Where(p => again || !pulled.Contains(p.Project)).ToList();
+
+            if (pulls.Count == 0 || syncing)
             {
                 return;
             }
 
             syncing = true;
+            pulled.UnionWith(pulls.Select(p => p.Project));
             status.Text = BoardRows.JiraSyncing;
-            _ = SyncAsync();
+            _ = SyncAsync(pulls, scopes.Current.ShowsProject);
+        }
+
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
+
+        void Hints() => bar.Show(
+        [
+            .. BoardKeys.Hints(keymap, scopes).Select(h => (h.Key, h.Label, (Action)(() => Run(h.Command)))),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                Quit();
+            }),
+        ]);
+
+        void SwitchScope()
+        {
+            var keep = Selected();
+            scopes = scopes.Switched();
+            window.Title = $" {scopes.Current.Title} ";
+            status.Text = string.Empty;
+            Fill(keep, fallback: BoardRows.FirstRow);
+            Hints();
+            Sync(again: false);
         }
 
         void Quit() => app.RequestStop(window);
@@ -145,6 +172,16 @@ public static class BoardView
             if (command == BoardCommand.Quit)
             {
                 Quit();
+                return;
+            }
+
+            if (command == BoardCommand.Scope)
+            {
+                if (!busy)
+                {
+                    SwitchScope();
+                }
+
                 return;
             }
 
@@ -217,17 +254,7 @@ public static class BoardView
             }
         };
 
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
-
-        bar.Show(
-        [
-            .. BoardKeys.Hints(keymap).Select(h => (h.Key, h.Label, (Action)(() => Run(h.Command)))),
-            ("bksp", FleetIcons.Back, () =>
-            {
-                FleetModal.Back();
-                Quit();
-            }),
-        ]);
+        Hints();
 
         var claim = FleetModal.Enter();
 

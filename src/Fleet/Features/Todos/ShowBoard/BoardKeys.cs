@@ -1,4 +1,5 @@
 using Fleet.Features.Todos.ShowBoard.Enums;
+using Fleet.Features.Todos.ShowBoard.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Terminal.Gui.Input;
@@ -12,6 +13,8 @@ public static class BoardKeys
     public static readonly Key Close = Key.X;
 
     public static readonly Key Launch = Key.L;
+
+    public static readonly Key Scope = Key.A;
 
     public static BoardCommand For(Key key, Keymap keymap)
     {
@@ -30,6 +33,11 @@ public static class BoardKeys
             return BoardCommand.Close;
         }
 
+        if (key == Scope)
+        {
+            return BoardCommand.Scope;
+        }
+
         if (key == keymap.KeyFor(FleetAction.Refresh))
         {
             return BoardCommand.Refresh;
@@ -38,12 +46,13 @@ public static class BoardKeys
         return key == keymap.KeyFor(FleetAction.Close) ? BoardCommand.Quit : BoardCommand.None;
     }
 
-    public static IReadOnlyList<(string Key, string Label, BoardCommand Command)> Hints(Keymap keymap) =>
+    public static IReadOnlyList<(string Key, string Label, BoardCommand Command)> Hints(Keymap keymap, BoardScopes scopes) =>
     [
         ("enter", "open", BoardCommand.Open),
         ("l", "launch", BoardCommand.Launch),
         ("e", "effort", BoardCommand.Effort),
         ("x", "close", BoardCommand.Close),
+        ("a", scopes.SwitchLabel, BoardCommand.Scope),
         (keymap.DisplayFor(FleetAction.Refresh), "refresh", BoardCommand.Refresh),
         (keymap.DisplayFor(FleetAction.Close), "quit", BoardCommand.Quit),
     ];
