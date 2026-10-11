@@ -8,7 +8,9 @@ public static class JiraSection
 
     public static string Replace(string body, string description)
     {
-        var text = description.Trim('\r', '\n', ' ', '\t');
+        var text = description
+            .Replace("<!-- jira:", "<!-- jira\u200b:", StringComparison.Ordinal)
+            .Trim('\r', '\n', ' ', '\t');
         var section = text.Length == 0 ? $"{Start}\n{End}" : $"{Start}\n{text}\n{End}";
 
         var start = body.IndexOf(Start, StringComparison.Ordinal);
@@ -17,6 +19,11 @@ public static class JiraSection
         if (end >= 0)
         {
             return body[..start] + section + body[(end + End.Length)..];
+        }
+
+        if (start >= 0)
+        {
+            return body[..start] + section + "\n";
         }
 
         return body.Trim().Length == 0 ? section + "\n" : section + "\n\n" + body;

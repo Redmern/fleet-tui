@@ -50,6 +50,22 @@ public class JiraTicketTests
     }
 
     [Fact]
+    public void Markers_inside_a_description_cannot_end_the_section_early()
+    {
+        var once = JiraSection.Replace("local\n", "see <!-- jira:end --> here");
+        var twice = JiraSection.Replace(once, "see <!-- jira:end --> here");
+
+        Assert.Equal(once, twice);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(twice, "<!-- jira:end -->"));
+    }
+
+    [Fact]
+    public void A_start_marker_without_an_end_is_replaced_to_the_end_of_the_body() =>
+        Assert.Equal(
+            "intro\n<!-- jira:start -->\nnew\n<!-- jira:end -->\n",
+            JiraSection.Replace("intro\n<!-- jira:start -->\nold text lost its end\n", "new"));
+
+    [Fact]
     public void An_empty_description_leaves_an_empty_section()
     {
         Assert.Equal("<!-- jira:start -->\n<!-- jira:end -->\n", JiraSection.Replace(string.Empty, "  \n"));
