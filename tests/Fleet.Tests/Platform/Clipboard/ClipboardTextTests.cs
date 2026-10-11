@@ -42,6 +42,32 @@ public class ClipboardTextTests
     }
 
     [Fact]
+    public async Task Copies_run_one_at_a_time_so_the_last_copy_wins()
+    {
+        var first = new TaskCompletionSource<int?>();
+        var fed = new List<string>();
+        var native = ClipboardText.Linux(Max, (_, _, input, _) =>
+        {
+            var text = Encoding.UTF8.GetString(input);
+            lock (fed)
+            {
+                fed.Add(text);
+            }
+
+            return text == "one" ? first.Task : Task.FromResult<int?>(0);
+        });
+
+        var one = native.CopyAsync("one");
+        var two = native.CopyAsync("two");
+        await Task.Delay(50);
+
+        Assert.Equal(["one"], fed);
+        first.SetResult(0);
+        await Task.WhenAll(one, two);
+        Assert.Equal(["one", "two"], fed);
+    }
+
+    [Fact]
     public async Task A_mac_copy_goes_to_pbcopy()
     {
         var tools = new FakeTools { Exits = { ["pbcopy"] = 0 } };

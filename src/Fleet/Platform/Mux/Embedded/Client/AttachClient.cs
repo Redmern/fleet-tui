@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Threading.Channels;
+using Fleet.Platform.Clipboard;
 using Fleet.Platform.Mux.Embedded.Host;
 using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Native;
@@ -21,7 +22,8 @@ public sealed class AttachClient(
     Action<Hello>? furnish = null,
     Action<bool, int>? forwardPort = null,
     IClipboardImageSource? clipboardImages = null,
-    Action<string>? clipboardNotice = null)
+    Action<string>? clipboardNotice = null,
+    ClipboardText? clipboardText = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -275,18 +277,25 @@ public sealed class AttachClient(
                 break;
 
             case HostEffects.Clipboard when effect.Value is { } text:
-                var done = OperatingSystem.IsWindows()
-                    ? HostEffectsOut.SetWindowsClipboard(text)
-                    : WriteAndReport(write, HostEffectsOut.ClipboardSequence(text));
-                log($"clipboard: {text.Length} chars {(done ? "set" : "NOT set")}");
+                if (OperatingSystem.IsWindows())
+                {
+                    log($"clipboard: {text.Length} chars {(HostEffectsOut.SetWindowsClipboard(text) ? "set" : "NOT set")}");
+                }
+                else
+                {
+                    _ = LogCopyAsync(text, HostEffectsOut.CopyTextAsync(text, write, clipboardText));
+                }
+
                 break;
         }
     }
 
-    private static bool WriteAndReport(Action<byte[]> write, string sequence)
+    private async Task LogCopyAsync(string text, Task<ClipboardTextCopy> copying)
     {
-        write(Encoding.UTF8.GetBytes(sequence));
-        return true;
+        var copied = await copying.ConfigureAwait(false);
+        log(copied.Done
+            ? $"clipboard: {text.Length} chars set with osc 52 and {copied.By}"
+            : $"clipboard: {text.Length} chars NOT set: osc 52 sent, but no wl-copy, xclip or pbcopy took it");
     }
 
     private async Task ReadFramesAsync(Wire wire, Action<byte[]> write)
@@ -760,7 +769,7 @@ public sealed class AttachClient(
 
     private async Task PasteClipboard(Wire wire)
     {
-        if (HostEffectsOut.ReadClipboard() is { Length: > 0 } text)
+        if (await HostEffectsOut.ReadTextAsync(clipboardText).ConfigureAwait(false) is { Length: > 0 } text)
         {
             await Send(wire, MessageType.Text, new TextMessage { Text = text, Paste = true },
                 WireJsonContext.Default.TextMessage).ConfigureAwait(false);

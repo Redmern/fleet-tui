@@ -11,6 +11,7 @@ public sealed class ClipboardText(
 {
     private readonly ClipboardFeed _feed = feed ?? ClipboardTextFeed.FeedAsync;
     private readonly ClipboardTool _run = run ?? ClipboardTools.RunAsync;
+    private readonly SemaphoreSlim _oneCopyAtATime = new(1, 1);
 
     public static ClipboardText? ForThisMachine(int maxBytes) =>
         OperatingSystem.IsMacOS() ? Mac(maxBytes)
@@ -31,15 +32,23 @@ public sealed class ClipboardText(
     public async Task<string?> CopyAsync(string text, CancellationToken ct = default)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
-        foreach (var (program, args) in writers)
+        await _oneCopyAtATime.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            if (await _feed(program, args, bytes, ct).ConfigureAwait(false) == 0)
+            foreach (var (program, args) in writers)
             {
-                return program;
+                if (await _feed(program, args, bytes, ct).ConfigureAwait(false) == 0)
+                {
+                    return program;
+                }
             }
-        }
 
-        return null;
+            return null;
+        }
+        finally
+        {
+            _oneCopyAtATime.Release();
+        }
     }
 
     public async Task<string?> ReadAsync(CancellationToken ct = default)
