@@ -281,7 +281,7 @@ public sealed class HostForwardsTunnelTests
     }
 
     [Fact]
-    public async Task Forwarding_by_hand_after_a_death_shows_the_real_failure()
+    public async Task Forwarding_a_restarting_port_by_hand_that_fails_keeps_restarting_with_the_real_reason()
     {
         var forwards = For();
         forwards.Pin(5173, null);
@@ -292,8 +292,45 @@ public sealed class HostForwardsTunnelTests
 
         var row = await forwards.ForwardNowAsync(5173, null, default);
 
+        Assert.Equal(ForwardState.Waiting, row.State);
+        Assert.Contains("red@box: Permission denied (publickey).", row.Error);
+        Assert.Contains("restarting in 10s", row.Error);
+    }
+
+    [Fact]
+    public async Task Pinning_a_port_again_after_unpinning_forgets_its_deaths()
+    {
+        var forwards = For();
+        forwards.Pin(5173, null);
+        await ScanAndReconcileAsync(forwards);
+        _tunnels.Started.Single().Exit(255, "gone");
+        await ScanAndReconcileAsync(forwards);
+        await forwards.UnforwardNowAsync(5173, default);
+        _tunnels.Exits = _ => (255, "red@box: Permission denied (publickey).");
+
+        var row = await forwards.ForwardNowAsync(5173, null, default);
+
         Assert.Equal(ForwardState.Failed, row.State);
         Assert.Equal("red@box: Permission denied (publickey).", row.Error);
+    }
+
+    [Fact]
+    public async Task Ports_still_queued_when_the_link_drops_start_no_tunnel()
+    {
+        var up = new TaskCompletionSource();
+        _tunnels.Up = up.Task;
+        var forwards = For();
+        forwards.Pin(5173, null);
+        forwards.Pin(9229, null);
+        var forwarding = ScanAndReconcileAsync(forwards);
+        await WaitUntil(() => _tunnels.Started.Count == 1);
+
+        forwards.Unlinked();
+        up.SetResult();
+        await forwarding;
+
+        Assert.All(_tunnels.Started, t => Assert.True(t.Killed));
+        Assert.DoesNotContain(forwards.Rows(), r => r.State == ForwardState.Forwarded);
     }
 
     private static async Task WaitUntil(Func<bool> condition)

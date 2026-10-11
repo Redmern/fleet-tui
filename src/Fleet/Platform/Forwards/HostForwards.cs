@@ -55,11 +55,15 @@ public sealed class HostForwards(
     {
         lock (_gate)
         {
+            if (!_pins.ContainsKey(remotePort))
+            {
+                _deaths.Remove(remotePort);
+            }
+
             _pins[remotePort] = localPort;
             _suppressed.Remove(remotePort);
             _failed.Remove(remotePort);
             _retry.Remove(remotePort);
-            _deaths.Remove(remotePort);
         }
     }
 
@@ -156,6 +160,7 @@ public sealed class HostForwards(
         {
             List<(int Remote, Active Active)> cancel;
             List<(int Remote, string Target, string? Project, int? Local)> add;
+            int epoch;
 
             lock (_gate)
             {
@@ -171,6 +176,7 @@ public sealed class HostForwards(
                 }
 
                 _linked = true;
+                epoch = _epoch;
                 _restore.Clear();
                 _listening = listening;
                 _allowed = allowed;
@@ -202,7 +208,7 @@ public sealed class HostForwards(
 
             foreach (var (remote, target, project, local) in add)
             {
-                await ForwardAsync(remote, target, project, local, ct).ConfigureAwait(false);
+                await ForwardAsync(remote, target, project, local, epoch, ct).ConfigureAwait(false);
             }
         }
         finally
@@ -388,12 +394,14 @@ public sealed class HostForwards(
         return new PortForward(host, remote, null, ForwardState.Detected, project);
     }
 
-    private async Task ForwardAsync(int remote, string target, string? project, int? wantedLocal, CancellationToken ct)
+    private async Task ForwardAsync(int remote, string target, string? project, int? wantedLocal, int epoch, CancellationToken ct)
     {
-        int epoch;
         lock (_gate)
         {
-            epoch = _epoch;
+            if (_closed || _epoch != epoch)
+            {
+                return;
+            }
         }
 
         int local;
