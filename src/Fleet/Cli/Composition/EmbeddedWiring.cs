@@ -134,6 +134,7 @@ public static class EmbeddedWiring
             return done;
         });
 
+        var voice = ReverseForward.Default();
         return env =>
         {
             if (installed.Value)
@@ -141,6 +142,8 @@ public static class EmbeddedWiring
                 env["PATH"] = ShimScripts.PathWith(
                     shims, env.TryGetValue("PATH", out var path) ? path : Environment.GetEnvironmentVariable("PATH"));
             }
+
+            ReverseForward.Apply(env, voice, ControlPaths.Answers);
         };
     }
 
@@ -945,7 +948,21 @@ public static class EmbeddedWiring
         }
 
         var browser = new SystemBrowser();
-        return new ForwardOptions { ControlPath = ControlSocket, Tunnels = new TunnelProcesses(log: log.Write), OpenBrowser = browser.Open };
+        var voice = ReverseForwardPulse.ForViewer(
+            Environment.GetEnvironmentVariable,
+            File.Exists,
+            ControlPaths.Supported,
+            Environment.MachineName,
+            Environment.UserName,
+            SshProcess.RunAsync,
+            line => log.Write($"fleetd: {line}"));
+        return new ForwardOptions
+        {
+            ControlPath = ControlSocket,
+            Tunnels = new TunnelProcesses(log: log.Write),
+            OpenBrowser = browser.Open,
+            LinkUp = voice is null ? null : voice.OpenAsync,
+        };
     }
 
     private static (DateTime At, IReadOnlyList<ProjectConfigDto> Configs) _configs = (DateTime.MinValue, []);
