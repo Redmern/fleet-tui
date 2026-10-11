@@ -778,7 +778,8 @@ public static class MenuCommand
                         id => boardMux.Unsupported is { } unsupported
                             ? Task.FromResult(Result<Ticket>.Fail(unsupported))
                             : new LaunchTicketHandler(Adapters.Todos(), Adapters.Dispatcher(boardMux.Driver))
-                                .HandleAsync(project.Name, project.Root, id));
+                                .HandleAsync(project.Name, project.Root, id),
+                        Adapters.JiraSync(project.Name, project.Root));
 
                     break;
                 }

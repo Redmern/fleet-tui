@@ -17,6 +17,8 @@ using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Models;
 using Fleet.Features.Themes.ManageThemes;
 using Fleet.Features.Todos.LaunchTicket;
+using Fleet.Features.Todos.SyncJira;
+using Fleet.Platform.Jira;
 using Fleet.Platform.Nvim;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Hooks;
@@ -42,6 +44,7 @@ using Fleet.Ports.Todos;
 using Fleet.Platform.Releases;
 using Fleet.Shared;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Results;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Themes;
@@ -178,6 +181,19 @@ public static class Adapters
     public static ITodoStore Todos() => new FileTodoStore();
 
     public static ITicketStatusSink TicketStatus() => new TicketFollowUp(Todos());
+
+    public static Func<Task<Result<int>>>? JiraSync(string project, string projectRoot)
+    {
+        if (Settings().Load(project).Jira is not { } jira)
+        {
+            return null;
+        }
+
+        JiraRestClient? client = null;
+        var sync = new SyncJiraHandler(Todos(), new FileJiraTokenStore(), () => client ??= new JiraRestClient());
+
+        return async () => await sync.HandleAsync(project, projectRoot, jira).ConfigureAwait(false) ?? Result<int>.Ok(0);
+    }
 
     public static IDispatcher Dispatcher(IMuxDriver mux) =>
         new SubDispatcher(new DispatchHandler(
