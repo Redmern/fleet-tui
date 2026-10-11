@@ -764,11 +764,11 @@ public static class MenuCommand
                 }
 
             case FleetAction.TodoBoard:
-                ShowBoard(app, keymap, BoardScope.One(project.Name, project.Root));
+                ShowBoard(app, keymap, project.Name, BoardScope.One(project.Name, project.Root));
                 break;
 
             case FleetAction.TodoBoardAll:
-                ShowBoard(app, keymap, BoardScope.All(projects.List().Select(p => new BoardProject(p.Name, p.Root))));
+                ShowBoard(app, keymap, project.Name, BoardScope.All(projects.List().Select(p => new BoardProject(p.Name, p.Root))));
                 break;
 
             case FleetAction.BrowseFiles:
@@ -890,7 +890,7 @@ public static class MenuCommand
     }
 
 
-    private static void ShowBoard(IApplication app, Keymap keymap, BoardScope scope)
+    private static void ShowBoard(IApplication app, Keymap keymap, string here, BoardScope scope)
     {
         var boardMux = Adapters.Mux(Adapters.Log());
 
@@ -901,7 +901,7 @@ public static class MenuCommand
             new BoardTickets(Adapters.Todos()),
             (owner, id) => boardMux.Unsupported is { } unsupported
                 ? Task.FromResult(Result.Fail(unsupported))
-                : new OpenTicketHandler(boardMux.Driver).HandleAsync(owner.Name, owner.Root, id),
+                : new OpenTicketHandler(boardMux.Driver).HandleAsync(here, owner.Root, id),
             (owner, id) => boardMux.Unsupported is { } unsupported
                 ? Task.FromResult(Result<Ticket>.Fail(unsupported))
                 : new LaunchTicketHandler(Adapters.Todos(), Adapters.Dispatcher(boardMux.Driver))
