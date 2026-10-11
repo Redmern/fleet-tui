@@ -88,4 +88,8 @@ public sealed class RemoteSshArgumentsTests
         Assert.False(attach.RedirectStandardError);
         Assert.False(attach.Environment.ContainsKey("SSH_ASKPASS"));
     }
+
+    [Fact]
+    public void A_host_that_ssh_would_read_as_an_option_is_refused() =>
+        Assert.Throws<InvalidOperationException>(() => EmbeddedWiring.RemoteSshArguments("-oProxyCommand=calc", null, "fleet"));
 }

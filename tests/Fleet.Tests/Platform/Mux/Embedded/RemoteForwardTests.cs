@@ -266,6 +266,69 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_ssh_attach_client_that_tunnels_itself_is_sent_the_forward_instead_of_the_command()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            {
+                hello.Forwards = true;
+                hello.Ssh = "10.0.0.5 52000 10.0.0.9 22";
+            });
+
+        var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
+
+        Assert.NotNull(sent.Viewer);
+        Assert.Null(sent.Ssh);
+        await Eventually(() => Task.FromResult(client.Effects.Any(e => e is { Kind: HostEffects.ForwardPort, Value: "5173" })));
+
+        await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerUnforwardOp, Port = 5173, Client = client.Id });
+        await Eventually(() => Task.FromResult(client.Effects.Any(e => e is { Kind: HostEffects.UnforwardPort, Value: "5173" })));
+    }
+
+    [Fact]
+    public async Task A_tunnelling_attach_client_showing_another_workspace_is_not_sent_the_callers_forward()
+    {
+        await using var control = await DaemonTests.TestClient.ConnectAsync(_far, ClientRoles.Control, 0, 0, null);
+        var caller = (await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "alpha", Cwd = ".", Args = ["claude"] })).Pane;
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "beta", Cwd = ".", Args = ["claude"] })).Ok);
+        await using var plain = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "alpha", furnish: hello => hello.Ssh = "10.0.0.5 52000 10.0.0.9 22");
+        await using var windows = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "beta", furnish: hello => hello.Forwards = true);
+
+        var sent = await control.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Caller = caller });
+
+        Assert.Null(sent.Viewer);
+        Assert.Equal("10.0.0.5 52000 10.0.0.9 22", sent.Ssh);
+        Assert.DoesNotContain(windows.Effects, e => e.Kind == HostEffects.ForwardPort);
+    }
+
+    [Fact]
+    public async Task A_tunnelling_attach_client_showing_the_callers_workspace_is_sent_its_forward()
+    {
+        await using var control = await DaemonTests.TestClient.ConnectAsync(_far, ClientRoles.Control, 0, 0, null);
+        var caller = (await control.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "alpha", Cwd = ".", Args = ["claude"] })).Pane;
+        await using var windows = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "alpha", furnish: hello => hello.Forwards = true);
+
+        var sent = await control.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Caller = caller });
+
+        Assert.NotNull(sent.Viewer);
+        await Eventually(() => Task.FromResult(windows.Effects.Any(e => e is { Kind: HostEffects.ForwardPort, Value: "5173" })));
+    }
+
+    [Fact]
+    public async Task An_unlabelled_attach_client_is_not_a_target_for_hand_backs_because_it_forwards()
+    {
+        await using var client = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Forwards = true);
+
+        var handed = await client.RequestAsync(new ControlRequest { Op = "hand-back", Text = FleetDaemon.HandedBack, Client = client.Id });
+
+        Assert.False(handed.Pending is true);
+    }
+
+    [Fact]
     public async Task A_viewer_without_ssh_control_sockets_is_not_sent_a_forward()
     {
         var windowsLike = NewEndpoint();
@@ -290,6 +353,120 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         var sent = await far.ViewerForwardAsync(5173);
 
         Assert.Null(sent.Viewer);
+    }
+
+    private Endpoint TunnellingViewer(FakeTunnels tunnels) => TunnellingViewer(tunnels, _stop.Token).Endpoint;
+
+    private (Endpoint Endpoint, Task Running) TunnellingViewer(FakeTunnels tunnels, CancellationToken stop)
+    {
+        var endpoint = NewEndpoint();
+        var running = new FleetDaemon(new DaemonOptions
+        {
+            Endpoint = endpoint,
+            Pty = _homePanes.NewPty,
+            Terminal = _homePanes.NewTerminal,
+            RemoteOpen = (_, _) =>
+            {
+                var stream = _far.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+                return new RemoteChannel(stream, null, stream);
+            },
+            Forwards = new ForwardOptions
+            {
+                Tunnels = tunnels,
+                TunnelProbe = tunnels,
+                Ssh = _ssh.RunAsync,
+                Locals = new LocalPorts(_ => true, () => Interlocked.Increment(ref _nextLocal)),
+                OpenBrowser = url =>
+                {
+                    _opened.Enqueue(url);
+                    return null;
+                },
+                ScanEvery = TimeSpan.FromMilliseconds(50),
+                ForwardWithin = TimeSpan.FromSeconds(5),
+                ReconnectAfter = TimeSpan.FromMilliseconds(100),
+            },
+        }).RunAsync(stop);
+        _running.Add(running);
+        return (endpoint, running);
+    }
+
+    [Fact]
+    public async Task Without_control_sockets_a_manual_forward_runs_a_background_tunnel_until_removed()
+    {
+        var tunnels = new FakeTunnels();
+        using var viewer = new EmbeddedDriver(TunnellingViewer(tunnels));
+
+        var added = await viewer.AddForwardAsync("red@far", 9229, 19229);
+
+        Assert.Equal(("forwarded", 19229), (added!.State, added.LocalPort));
+        Assert.Equal(SshControl.Tunnel("red@far", 19229, "localhost", 9229), tunnels.Started.Single().Arguments);
+        Assert.Empty(_ssh.Forwards("forward"));
+
+        await viewer.RemoveForwardAsync("red@far", 9229);
+        Assert.True(tunnels.Started.Single().Killed);
+        Assert.DoesNotContain(await viewer.ForwardsAsync(), f => f.RemotePort == 9229);
+    }
+
+    [Fact]
+    public async Task Without_control_sockets_a_tunnel_that_ssh_refuses_answers_at_once_with_what_ssh_said()
+    {
+        var tunnels = new FakeTunnels { Exits = _ => (255, "red@far: Permission denied (publickey).") };
+        using var viewer = new EmbeddedDriver(TunnellingViewer(tunnels));
+        var asked = System.Diagnostics.Stopwatch.StartNew();
+
+        var added = await viewer.AddForwardAsync("red@far", 9229, null);
+
+        Assert.True(asked.Elapsed < TimeSpan.FromSeconds(3), $"answered after {asked.Elapsed}");
+        Assert.Equal("waiting", added!.State);
+        Assert.Contains("red@far: Permission denied (publickey).", added.Error);
+    }
+
+    [Fact]
+    public async Task Stopping_fleetd_kills_its_background_tunnels()
+    {
+        var tunnels = new FakeTunnels();
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
+        var (endpoint, running) = TunnellingViewer(tunnels, stop.Token);
+        using (var viewer = new EmbeddedDriver(endpoint))
+        {
+            Assert.Equal("forwarded", (await viewer.AddForwardAsync("red@far", 9229, 19229))!.State);
+        }
+
+        await stop.CancelAsync();
+        await running;
+
+        Assert.True(tunnels.Started.Single().Killed);
+        Assert.True(tunnels.Disposed);
+    }
+
+    [Fact]
+    public async Task Without_control_sockets_a_tunnel_that_dies_is_started_again()
+    {
+        var tunnels = new FakeTunnels();
+        using var viewer = new EmbeddedDriver(TunnellingViewer(tunnels));
+        await viewer.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await viewer.RemotesAsync()).Any(r => r.State == RemoteLink.Connected));
+        Assert.Equal("forwarded", (await viewer.AddForwardAsync("red@far", 9229, 19229))!.State);
+
+        tunnels.Started.Single().Exit(255, "Connection reset by peer");
+
+        await Eventually(() => Task.FromResult(tunnels.Started.Count == 2));
+        await Eventually(async () => (await viewer.ForwardsAsync()).Any(f => f is { RemotePort: 9229, State: "forwarded", LocalPort: 19229 }));
+    }
+
+    [Fact]
+    public async Task Without_control_sockets_a_viewer_forward_tunnels_and_opens_the_port()
+    {
+        var tunnels = new FakeTunnels();
+        using var viewer = new EmbeddedDriver(TunnellingViewer(tunnels));
+        using var far = new EmbeddedDriver(_far);
+        await viewer.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await viewer.RemotesAsync()).Any(r => r.State == RemoteLink.Connected));
+
+        await Eventually(async () => (await far.ViewerForwardAsync(9229)).Viewer is not null);
+
+        await Eventually(() => Task.FromResult(_opened.Contains("http://localhost:9229")));
+        Assert.Contains("127.0.0.1:9229:localhost:9229", tunnels.Specs);
     }
 
     [Fact]

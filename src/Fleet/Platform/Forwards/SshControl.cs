@@ -27,6 +27,17 @@ public static class SshControl
     public static IReadOnlyList<string> Cancel(string controlPath, string host, int local, string target, int remote) =>
         ["-S", controlPath, "-O", "cancel", "-L", Spec(local, target, remote), host];
 
+    public static IReadOnlyList<string> Tunnel(string host, int local, string target, int remote) =>
+    [
+        "-N", "-T",
+        "-o", "ExitOnForwardFailure=yes",
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=15",
+        .. LinkOptions,
+        "-L", Spec(local, target, remote),
+        Host(host),
+    ];
+
     public static IReadOnlyList<string> Check(string controlPath, string host) =>
         ["-S", controlPath, "-O", "check", host];
 
@@ -35,6 +46,14 @@ public static class SshControl
 
     public static IReadOnlyList<string> Run(string controlPath, string host, string command) =>
         ["-S", controlPath, "-o", "ControlMaster=no", "-o", "BatchMode=yes", "-T", host, command];
+
+    public static string? Refusal(string host) =>
+        host.StartsWith('-')
+            ? $"'{host}' is not an ssh host: it starts with '-', which ssh would read as an option"
+            : null;
+
+    public static string Host(string host) =>
+        Refusal(host) is { } refused ? throw new InvalidOperationException(refused) : host;
 
     public static bool Prohibited(string text) =>
         text.Contains("administratively prohibited", StringComparison.OrdinalIgnoreCase);

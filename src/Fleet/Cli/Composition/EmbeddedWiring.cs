@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using Fleet.Features.Diagnostics.RunDoctor.Models;
 using Fleet.Platform.Forwards;
+using Fleet.Platform.Forwards.Models;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
@@ -278,6 +279,12 @@ public static class EmbeddedWiring
     {
         Stream stream;
 
+        if (sshHost is not null && SshControl.Refusal(sshHost) is { } refused)
+        {
+            await Console.Error.WriteLineAsync($"fleet: {refused}").ConfigureAwait(false);
+            return 2;
+        }
+
         if (sshHost is not null)
         {
             stream = Ssh(sshHost);
@@ -319,6 +326,7 @@ public static class EmbeddedWiring
         }
 
         var mouse = !string.Equals(Environment.GetEnvironmentVariable(MouseVariable), "off", StringComparison.OrdinalIgnoreCase);
+        using var tunnels = AttachTunnels(sshHost, log);
         var code = await new AttachClient(
                 stream, workspace, () => Keys(log), line => log.Write($"attach: {line}"), mouse,
                 project => OpenAttachWindow(project, sshHost, log),
@@ -326,11 +334,17 @@ public static class EmbeddedWiring
                 hello =>
                 {
                     hello.Ssh = sshHost is null ? Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable) : null;
+                    if (tunnels is not null)
+                    {
+                        hello.Forwards = true;
+                    }
+
                     if (session is not null)
                     {
                         Furnish(hello, session);
                     }
-                })
+                },
+                tunnels is null ? null : tunnels.Apply)
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -761,6 +775,18 @@ public static class EmbeddedWiring
         return start;
     }
 
+    private static ViewerTunnels? AttachTunnels(string? sshHost, IFleetLog log)
+    {
+        if (sshHost is null || ControlSocket(AttachSocketKey(sshHost)) is not null)
+        {
+            return null;
+        }
+
+        void Log(string line) => log.Write($"attach: {line}");
+        var mode = new TunnelMode(new TunnelProcesses(log: Log), new TcpListenerProbe(), TimeSpan.FromSeconds(20));
+        return new ViewerTunnels(sshHost, mode, LocalPorts.Loopback(), new SystemBrowser().Open, Log, TimeSpan.FromSeconds(3));
+    }
+
     public static ProcessStartInfo AttachSsh(string host)
     {
         var start = new ProcessStartInfo("ssh")
@@ -798,7 +824,7 @@ public static class EmbeddedWiring
         "-o", "ConnectTimeout=15",
         .. SshControl.LinkOptions,
         .. controlPath is null ? [] : SshControl.MasterOptions(controlPath),
-        host,
+        SshControl.Host(host),
         remoteFleet,
         "bridge",
     ];
@@ -834,7 +860,7 @@ public static class EmbeddedWiring
         }
 
         var browser = new SystemBrowser();
-        return new ForwardOptions { ControlPath = ControlSocket, OpenBrowser = browser.Open };
+        return new ForwardOptions { ControlPath = ControlSocket, Tunnels = new TunnelProcesses(log: log.Write), OpenBrowser = browser.Open };
     }
 
     private static (DateTime At, IReadOnlyList<ProjectConfigDto> Configs) _configs = (DateTime.MinValue, []);

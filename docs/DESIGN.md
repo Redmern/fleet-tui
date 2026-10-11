@@ -5846,7 +5846,8 @@ What the phases add up to:
   temp suffix and the socket limit is 104/108), `ControlPersist=no` and ServerAlive. A
   second `ssh -N -M` would ask for the password again; reusing the link's process keeps
   the one SSH_ASKPASS flow and dies with the link. Stale sockets (no listener) are deleted
-  when fleetd starts. Windows OpenSSH has no control sockets, so no forwards there.
+  when fleetd starts. Windows OpenSSH has no control sockets; there fleet falls back to
+  one background tunnel per port (see "Background ssh tunnels without control sockets").
 - **fleetd owns forwards** (`ForwardHub`, one `HostForwards` per host, kept across link
   restarts). Every 3 s it runs `ss -ltnHp || cat /proc/net/tcp*` over the master
   (`BatchMode`, never a prompt), and reconciles: wanted = allowlist of the remote's
@@ -5871,6 +5872,56 @@ What the phases add up to:
   forward; `stack-stop` kills that pane. fleet only remembers stacks it started.
 - Verified against a real user-level sshd on 127.0.0.1 (`RealSshTests`, run with
   `FLEET_SSH_IT_CONFIG`/`FLEET_SSH_IT_HOST`; skipped otherwise).
+
+## Background ssh tunnels without control sockets, 2026-10-10
+
+- **Why.** Windows OpenSSH has no ControlMaster, so `ForwardHub.For` returned null and every
+  forward failed with "needs OpenSSH control sockets"; Open port fell back to a command to
+  copy. Running that same command in the background is the fallback.
+- **Tunnel mode in `HostForwards`.** A host with no control path (`ControlSocket` is null:
+  Windows, or a socket path too long on Unix) gets `HostForwards(controlPath: null)` with a
+  `TunnelMode` (launcher, probe, `UpWithin`, restart backoff). The ControlMaster path is
+  untouched. `ForwardHub.For` still returns null when there is neither a control path nor a
+  launcher, which is what `new ForwardOptions()` means in tests.
+- **The tunnel.** `SshControl.Tunnel`: `-N -T -o ExitOnForwardFailure=yes -o BatchMode=yes
+  -o ConnectTimeout=15`, the link options (ServerAlive), `-L 127.0.0.1:<local>:localhost:<remote>
+  <host>`. `BatchMode` rather than askpass: a password host fails fast with ssh's own
+  error. `TunnelProcesses` starts it with `CreateNoWindow`, stdin closed, stdout drained,
+  stderr kept, and kills the process tree.
+- **Up means accepting.** After starting, `HostForwards` polls `127.0.0.1:<local>` with the
+  `IListenerProbe` (one short connection through the tunnel) until it accepts (`Forwarded`),
+  ssh exits (ssh's stderr) or `UpWithin` (20 s) passes (killed). Either way the port backs
+  off and retries like a restart (AC-11), shown as `Waiting` with the reason; forward
+  requests settle as soon as a port is retrying (`HostForwards.Retrying`). Only a busy
+  local port asked for by hand, a refusing sshd and a host starting with `-` are `Failed`.
+  `LocalPorts` picks the local port as before.
+- **No scan.** Without a master there is no `ss` over ssh, so `ScanAsync` reports the pins
+  as listening on `localhost`: only pinned ports are forwarded, `forwardPorts` are not
+  auto-forwarded. A remote app that is not up yet shows as forwarded and refuses at connect
+  time.
+- **Restarts.** Each reconcile reaps tunnels that exited: the port waits `RestartAfter`
+  (fleetd's `ReconnectAfter`, 5 s), doubling per death up to `RestartAtMost` (1 min); a
+  tunnel that stayed up that long starts the count again. A failed restart backs off again
+  instead of failing, and forwarding by hand (`Pin`) skips the wait; pinning a port that was
+  not pinned starts its count afresh. The local port is kept. `Backoff.After` is shared
+  with the link reconnect in `ForwardHub.Ended`.
+- **Shutdown.** fleetd's `Shutdown` calls `ForwardHub.Shutdown`: every `HostForwards.Close`s
+  (kills its tunnels, forwards nothing more) and the launcher is disposed, killing anything
+  it still runs. On Windows each tunnel is also put in a kill-on-close job object
+  (`KillOnCloseJob`), so a crashed fleetd takes its tunnels with it. On Unix a crash can
+  leave a tunnel behind; there the fallback is rare.
+
+- **`fleet attach --ssh` forwards too.** Without a control socket for the attach
+  (`ControlSocket(AttachSocketKey(host))` is null), the attach client builds `ViewerTunnels`
+  (a tunnel-mode `HostForwards` for the attached host, with its own 3 s restart check) and
+  says `forwards: true` in its `Hello`, with no label. fleetd counts such a client as a
+  viewer for `forward-port` / `unforward-port` (`_tunnelsItself`), so Open port and
+  `forward_port` send it the effect instead of the copy-this-command dialog; it stays out of
+  hand-backs, which only labelled fleet viewers apply. `AttachClient.Forward` hands the
+  effect to `ViewerTunnels.Apply`, which queues it on a single-reader channel so a quick
+  forward and unforward run in order, then forwards, opens the local URL and logs failures.
+  The tunnels are disposed when the attach ends (and sit in the Windows job object). No
+  wire change: `Hello.forwards` existed; an old fleetd ignores it and sends the command.
 
 ## Open port: this machine's port in the viewer's browser, 2026-10-10
 
@@ -5904,9 +5955,10 @@ What the phases add up to:
   (`BridgeSshArguments`: `-T`, `ConnectTimeout`, the ControlMaster options), and keeps its
   own terminal for password prompts. It masters its own socket (`AttachSocketKey`), not the
   link's: an attach that started first would otherwise carry fleetd's forwards and drop them
-  on detach. The attach client applies no
-  `forward-port` effects (it has no `ForwardHub`), so an attach-only viewer gets the ssh
-  command route; for one-step forwarding link the machine under Remote machines instead.
+  on detach. With a control socket the
+  attach client applies no `forward-port` effects (it has no `ForwardHub`), so it gets the
+  ssh command route; without one it forwards through its own tunnels (see "Background ssh
+  tunnels without control sockets").
 
 ## ISO mode, 2026-10-10
 
