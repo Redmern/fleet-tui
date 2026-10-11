@@ -23,6 +23,14 @@ public class HelpTextTests
         Assert.Contains("n notifications, t todo board", HelpCommand.Text, StringComparison.Ordinal);
 
     [Fact]
+    public void Fleet_help_documents_the_all_projects_todo_board_chord() =>
+        Assert.Contains("t todo board, T todo board of all projects", HelpCommand.Text, StringComparison.Ordinal);
+
+    [Fact]
+    public void Fleet_help_documents_the_todo_sigil() =>
+        Assert.Contains("a main-pane prompt starting with + (todoTrigger) does the same", HelpCommand.Text, StringComparison.Ordinal);
+
+    [Fact]
     public void Fleet_help_documents_the_todo_verb() =>
         Assert.Contains("fleet todo [--project <p>] \"<idea>\"", HelpCommand.Text, StringComparison.Ordinal);
 
