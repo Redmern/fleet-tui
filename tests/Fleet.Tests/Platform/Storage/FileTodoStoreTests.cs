@@ -57,6 +57,17 @@ public sealed class FileTodoStoreTests : IDisposable
     }
 
     [Fact]
+    public void Tickets_added_at_the_same_time_never_share_a_counter()
+    {
+        Parallel.For(0, 24, i => Assert.True(new FileTodoStore().Add(_root, Draft($"idea {i}")).Succeeded));
+
+        var counters = _store.List(_root).Select(t => TicketName.Counter(t.Id)).ToList();
+
+        Assert.Equal(24, counters.Count);
+        Assert.Equal(Enumerable.Range(1, 24).Cast<int?>(), counters.Order());
+    }
+
+    [Fact]
     public void Listing_reads_every_ticket_and_keeps_invalid_files_by_their_name()
     {
         _store.Add(_root, Draft("good one"));
