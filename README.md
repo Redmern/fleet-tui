@@ -380,7 +380,9 @@ reachable in the browser of the machine you are looking from:
 - **`fleet attach --ssh <host>` from a machine without control sockets (Windows):** the
   attach client forwards it itself with a background `ssh -N -L` to `<host>` and opens
   `http://localhost:<port>` (or the local port it had to pick). Unforwarding stops that
-  tunnel, and all of them end with the attach.
+  tunnel, and all of them end with the attach. These tunnels are not listed by
+  `list_forwards` or the dashboard, and a tunnel that fails (say, no key for `BatchMode`)
+  shows only in the attach log (`attach:` lines in the fleet log on your machine).
 - **a plain ssh login** (you ssh'd in and ran `fleet`, or `fleet attach --ssh` from a machine
   with control sockets): a dialog shows `ssh -N -L <port>:localhost:<port> <user>@<host>`,
   built from the `SSH_CONNECTION` the attach process was reached by. **Copy** puts it on
