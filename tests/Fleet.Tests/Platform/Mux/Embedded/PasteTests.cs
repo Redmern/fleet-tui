@@ -1,3 +1,5 @@
+using System.Text;
+using System.Threading.Channels;
 using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Host;
@@ -135,22 +137,28 @@ public class PasteTests
 
 public class BracketedPasteHostTests
 {
-    private static byte[] B(string s) => System.Text.Encoding.UTF8.GetBytes(s);
+    private static readonly TimeSpan T0 = TimeSpan.FromSeconds(10);
+
+    private static byte[] B(string s) => Encoding.UTF8.GetBytes(s);
 
     private static string Show(IEnumerable<PasteChunk> chunks) =>
-        string.Join("|", chunks.Select(c => (c.Pasted ? "P:" : "T:") + System.Text.Encoding.UTF8.GetString(c.Bytes)));
+        string.Join("|", chunks.Select(c => (c.Pasted ? "P:" : "T:") + Encoding.UTF8.GetString(c.Bytes)));
+
+    private static string Feed(PasteMarkers markers, string text, TimeSpan? at = null) => Show(markers.Feed(B(text), at ?? T0));
 
     [Fact]
-    public void Entering_the_host_on_unix_enables_bracketed_paste()
+    public void Entering_the_host_on_unix_enables_bracketed_paste_after_the_existing_modes()
     {
-        Assert.Contains("\e[?2004h", AttachClient.EnterSequence(windows: false, mouse: true), StringComparison.Ordinal);
-        Assert.Contains("\e[?2004h", AttachClient.EnterSequence(windows: false, mouse: false), StringComparison.Ordinal);
+        Assert.Equal("\e[22;0t\e[?1049h\e[H\e[2J" + SgrMouse.Enable + ModifiedKeys.Enable + "\e[?2004h",
+            AttachClient.EnterSequence(windows: false, mouse: true));
+        Assert.Equal("\e[22;0t\e[?1049h\e[H\e[2J" + ModifiedKeys.Enable + "\e[?2004h",
+            AttachClient.EnterSequence(windows: false, mouse: false));
     }
 
     [Fact]
-    public void Entering_the_host_on_windows_keeps_the_paste_burst_and_sends_no_bracketed_paste()
+    public void Entering_the_host_on_windows_sends_only_the_alternate_screen_so_the_paste_burst_stays_in_charge()
     {
-        Assert.DoesNotContain("\e[?2004h", AttachClient.EnterSequence(windows: true, mouse: true), StringComparison.Ordinal);
+        Assert.Equal("\e[?1049h\e[H\e[2J", AttachClient.EnterSequence(windows: true, mouse: true));
     }
 
     [Fact]
@@ -162,9 +170,7 @@ public class BracketedPasteHostTests
     [Fact]
     public void A_bracketed_paste_becomes_one_paste_chunk_between_typed_bytes()
     {
-        var markers = new PasteMarkers();
-
-        Assert.Equal("T:a|P:x\ry|T:b", Show(markers.Feed(B("a\e[200~x\ry\e[201~b"))));
+        Assert.Equal("T:a|P:x\ry|T:b", Feed(new PasteMarkers(), "a\e[200~x\ry\e[201~b"));
     }
 
     [Fact]
@@ -172,10 +178,10 @@ public class BracketedPasteHostTests
     {
         var markers = new PasteMarkers();
 
-        Assert.Equal("T:ls\r", Show(markers.Feed(B("ls\r"))));
-        Assert.Equal("T:\e", Show(markers.Feed(B("\e"))));
-        Assert.Equal("T:\e[", Show(markers.Feed(B("\e["))));
-        Assert.Equal("T:\e[A\e[<0;5;7M", Show(markers.Feed(B("\e[A\e[<0;5;7M"))));
+        Assert.Equal("T:ls\r", Feed(markers, "ls\r"));
+        Assert.Equal("T:\e[A\e[<0;5;7M", Feed(markers, "\e[A\e[<0;5;7M"));
+        Assert.Equal("T:\e[2~", Feed(markers, "\e[2~"));
+        Assert.Null(markers.Deadline);
     }
 
     [Fact]
@@ -183,20 +189,52 @@ public class BracketedPasteHostTests
     {
         var markers = new PasteMarkers();
 
-        Assert.Equal("T:a", Show(markers.Feed(B("a\e[200~hel"))));
-        Assert.Equal(string.Empty, Show(markers.Feed(B("lo wor"))));
-        Assert.Equal("P:hello world|T:z", Show(markers.Feed(B("ld\e[201~z"))));
+        Assert.Equal("T:a", Feed(markers, "a\e[200~hel"));
+        Assert.Equal(string.Empty, Feed(markers, "lo wor"));
+        Assert.Equal("P:hello world|T:z", Feed(markers, "ld\e[201~z"));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void A_start_marker_split_at_any_position_is_still_found(int at)
+    {
+        var markers = new PasteMarkers();
+        const string start = "\e[200~";
+
+        Assert.Equal(string.Empty, Feed(markers, start[..at]));
+        Assert.Equal(T0 + PasteMarkers.StartHold, markers.Deadline);
+        Assert.Equal(string.Empty, Feed(markers, start[at..] + "one"));
+        Assert.Equal("P:one", Feed(markers, "\e[201~"));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void An_end_marker_split_at_any_position_is_still_found(int at)
+    {
+        var markers = new PasteMarkers();
+        const string end = "\e[201~";
+
+        Assert.Equal(string.Empty, Feed(markers, "\e[200~one" + end[..at]));
+        Assert.Equal("P:one|T:x", Feed(markers, end[at..] + "x"));
     }
 
     [Fact]
-    public void Markers_split_inside_themselves_across_reads_are_still_found()
+    public void A_lone_escape_is_held_only_until_the_start_hold_runs_out()
     {
         var markers = new PasteMarkers();
 
-        Assert.Equal(string.Empty, Show(markers.Feed(B("\e[20"))));
-        Assert.Equal(string.Empty, Show(markers.Feed(B("0~one\e"))));
-        Assert.Equal(string.Empty, Show(markers.Feed(B("[201"))));
-        Assert.Equal("P:one|T:x", Show(markers.Feed(B("~x"))));
+        Assert.Equal(string.Empty, Feed(markers, "\e"));
+        Assert.Empty(markers.Expire(T0 + PasteMarkers.StartHold - TimeSpan.FromMilliseconds(1)));
+        Assert.Equal("T:\e", Show(markers.Expire(T0 + PasteMarkers.StartHold)));
+        Assert.Null(markers.Deadline);
     }
 
     [Fact]
@@ -204,16 +242,63 @@ public class BracketedPasteHostTests
     {
         var markers = new PasteMarkers();
 
-        Assert.Equal(string.Empty, Show(markers.Feed(B("\e[2"))));
-        Assert.Equal("T:\e[2~", Show(markers.Feed(B("~"))));
+        Assert.Equal(string.Empty, Feed(markers, "\e[2"));
+        Assert.Equal("T:\e[2~", Feed(markers, "~"));
+    }
+
+    [Fact]
+    public void A_paste_whose_end_marker_never_comes_is_flushed_after_it_goes_quiet()
+    {
+        var markers = new PasteMarkers();
+
+        Assert.Equal(string.Empty, Feed(markers, "\e[200~half a paste\e[20"));
+        Assert.Equal(T0 + PasteMarkers.PasteIdle, markers.Deadline);
+        Assert.Empty(markers.Expire(T0 + PasteMarkers.PasteIdle - TimeSpan.FromMilliseconds(1)));
+        Assert.Equal("P:half a paste\e[20", Show(markers.Expire(T0 + PasteMarkers.PasteIdle)));
+        Assert.Equal("T:typed again", Feed(markers, "typed again", T0 + TimeSpan.FromSeconds(3)));
+    }
+
+    [Fact]
+    public void A_paste_keeps_its_idle_clock_running_from_the_last_read()
+    {
+        var markers = new PasteMarkers();
+
+        Feed(markers, "\e[200~a", T0);
+        Feed(markers, "b", T0 + TimeSpan.FromSeconds(1.5));
+
+        Assert.Empty(markers.Expire(T0 + PasteMarkers.PasteIdle));
+        Assert.Equal("P:ab", Show(markers.Expire(T0 + TimeSpan.FromSeconds(1.5) + PasteMarkers.PasteIdle)));
+    }
+
+    [Fact]
+    public void A_paste_over_the_cap_is_flushed_and_the_rest_is_typed_without_the_late_end_marker()
+    {
+        var markers = new PasteMarkers(maxPaste: 4);
+
+        Assert.Equal("P:abcd|T:ef", Feed(markers, "\e[200~abcdef\e[201~"));
+        Assert.Null(markers.Deadline);
+    }
+
+    [Fact]
+    public void A_paste_reaching_the_cap_across_reads_is_flushed_at_the_cap()
+    {
+        var markers = new PasteMarkers(maxPaste: 4);
+
+        Assert.Equal(string.Empty, Feed(markers, "\e[200~ab"));
+        Assert.Equal("P:abcd|T:ef", Feed(markers, "cdef"));
+        Assert.Equal("T:g", Feed(markers, "\e[201~g"));
+    }
+
+    [Fact]
+    public void The_cap_leaves_room_for_the_wire_after_json_escaping()
+    {
+        Assert.True(PasteMarkers.MaxPaste * 6 < Wire.MaxMessage);
     }
 
     [Fact]
     public void A_mouse_sequence_inside_a_paste_stays_pasted_text()
     {
-        var markers = new PasteMarkers();
-
-        Assert.Equal("P:\e[<0;5;7M", Show(markers.Feed(B("\e[200~\e[<0;5;7M\e[201~"))));
+        Assert.Equal("P:\e[<0;5;7M", Feed(new PasteMarkers(), "\e[200~\e[<0;5;7M\e[201~"));
     }
 
     [Fact]
@@ -222,23 +307,112 @@ public class BracketedPasteHostTests
         var markers = new PasteMarkers();
         var smile = B("🙂");
 
-        Assert.Empty(markers.Feed([.. B("\e[200~"), .. smile[..2]]));
-        Assert.Equal("P:🙂", Show(markers.Feed([.. smile[2..], .. B("\e[201~")])));
+        Assert.Empty(markers.Feed([.. B("\e[200~"), .. smile[..2]], T0));
+        Assert.Equal("P:🙂", Show(markers.Feed([.. smile[2..], .. B("\e[201~")], T0)));
     }
 
     [Fact]
     public void An_empty_paste_sends_nothing()
     {
-        Assert.Empty(new PasteMarkers().Feed(B("\e[200~\e[201~")));
+        Assert.Empty(new PasteMarkers().Feed(B("\e[200~\e[201~"), T0));
     }
 
     [Fact]
     public void A_pasted_chunk_reaches_a_pane_without_bracketed_paste_as_plain_text()
     {
-        var chunk = new PasteMarkers().Feed(B("\e[200~alpha\rbravo\e[201~")).Single();
-        var paste = new TextMessage { Text = System.Text.Encoding.UTF8.GetString(chunk.Bytes), Paste = chunk.Pasted };
+        var chunk = new PasteMarkers().Feed(B("\e[200~alpha\rbravo\e[201~"), T0).Single();
+        var paste = new TextMessage { Text = Encoding.UTF8.GetString(chunk.Bytes), Paste = chunk.Pasted };
 
         Assert.Equal("alpha\rbravo", FleetDaemon.PasteBytes(paste, bracketed: false));
         Assert.Equal("\e[200~alpha\rbravo\e[201~", FleetDaemon.PasteBytes(paste, bracketed: true));
+    }
+
+    private static byte[] Prefix => MuxKeys.Defaults.Prefix.Bytes()!;
+
+    private static async Task<List<(MessageType Type, byte[] Payload)>> Stdin(Func<ChannelWriter<byte[]>, Task> type)
+    {
+        using var sent = new MemoryStream();
+        var wire = new Wire(sent);
+        var client = new AttachClient(Stream.Null, null, () => MuxKeys.Defaults, _ => { });
+        var reads = Channel.CreateUnbounded<byte[]>();
+
+        var loop = client.StdinAsync(wire, reads.Reader);
+        await type(reads.Writer);
+        reads.Writer.Complete();
+        await loop.WaitAsync(TimeSpan.FromSeconds(10));
+
+        sent.Position = 0;
+        var back = new Wire(sent);
+        var messages = new List<(MessageType, byte[])>();
+        while (await back.ReceiveAsync() is { } message)
+        {
+            messages.Add(message);
+        }
+
+        return messages;
+    }
+
+    private static Task<List<(MessageType Type, byte[] Payload)>> Stdin(params byte[][] chunks) =>
+        Stdin(writer =>
+        {
+            foreach (var chunk in chunks)
+            {
+                writer.TryWrite(chunk);
+            }
+
+            return Task.CompletedTask;
+        });
+
+    private static List<TextMessage> Texts(IEnumerable<(MessageType Type, byte[] Payload)> messages) =>
+        messages.Where(m => m.Type == MessageType.Text).Select(m => Wire.Read(m.Payload, WireJsonContext.Default.TextMessage)).ToList();
+
+    private static string Typed(TextMessage text) => Encoding.UTF8.GetString(Convert.FromBase64String(text.Bytes!));
+
+    [Fact]
+    public async Task Stdin_with_markers_is_sent_as_a_paste_and_a_mouse_sequence_inside_it_is_not_a_click()
+    {
+        var messages = await Stdin(B("a\e[200~x\e[<0;5;7My\ri"), B("s\e[201~\e[<0;2;3M"));
+
+        var texts = Texts(messages);
+        Assert.Equal(2, texts.Count);
+        Assert.Equal("a", Typed(texts[0]));
+        Assert.True(texts[1].Paste);
+        Assert.Equal("x\e[<0;5;7My\ris", texts[1].Text);
+        Assert.Single(messages, m => m.Type == MessageType.Mouse);
+        Assert.Equal(MessageType.Mouse, messages[^1].Type);
+    }
+
+    [Fact]
+    public async Task A_lone_escape_on_stdin_goes_out_on_its_own_without_waiting_for_the_next_key()
+    {
+        var messages = await Stdin(async writer =>
+        {
+            writer.TryWrite(B("\e"));
+            await Task.Delay(PasteMarkers.StartHold * 5);
+            writer.TryWrite(B("x"));
+        });
+
+        Assert.Equal(["\e", "x"], Texts(messages).Select(Typed));
+    }
+
+    [Fact]
+    public async Task A_paste_while_the_prefix_is_armed_disarms_it_and_reaches_the_pane_as_text()
+    {
+        var messages = await Stdin(Prefix, B("\e[200~xq\e[201~"), B("x"));
+
+        Assert.DoesNotContain(messages, m => m.Type == MessageType.Command);
+        var texts = Texts(messages);
+        Assert.True(texts[0].Paste);
+        Assert.Equal("xq", texts[0].Text);
+        Assert.Equal("x", Typed(texts[1]));
+    }
+
+    [Fact]
+    public async Task A_paste_in_the_kill_pane_confirm_is_dropped_so_a_pasted_y_cannot_close_the_pane()
+    {
+        var messages = await Stdin([.. Prefix, .. B("x")], B("\e[200~y\e[201~"));
+
+        Assert.DoesNotContain(messages, m => m.Type == MessageType.Command);
+        Assert.Empty(Texts(messages));
     }
 }
