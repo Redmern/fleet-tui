@@ -305,15 +305,15 @@ draws the buttons in a float's or the dashboard's frame.
   }
   ```
 
-  `baseUrl` and `email` are required; `jql` and `storyPointsField` default to the values
+  `baseUrl` (https) and `email` are required; `jql` and `storyPointsField` default to the values
   shown. When the board opens and on `r`, fleet pulls the matching issues in the background and
   writes each one to `.fleet/todos/<KEY>.md` (source jira); the status line says how many it
   synced or why the pull failed, and the cached tickets stay on the board. Jira owns the title
   and the text between `<!-- jira:start -->` and `<!-- jira:end -->`; effort, status, note and
   anything you write outside those markers are yours and survive every pull. Story points set
   the effort once, when the ticket is first pulled (1 XS, 2 S, 3-4 M, 5-7 L, 8+ XL). An issue
-  done in Jira, or no longer matched by the query, is closed (its file is kept) and opens again
-  if it comes back. fleet never writes to Jira, never logs the token, and without a `jira`
+  done in Jira, or no longer matched by the query, is closed with `jira-closed: done|query` (its
+  file is kept) and opens again if it comes back; a ticket you closed yourself stays closed. fleet never writes to Jira, never logs the token, and without a `jira`
   block it makes no network calls.
 
 ### Remote machines
