@@ -30,7 +30,7 @@ public sealed class JiraWiringTests : ConfigHomeFixture
             Path.Combine(ConfigHome, "settings", "techweb.json"),
             """{ "jira": { "baseUrl": "https://unreachable.invalid", "email": "me@acme.test" } }""");
 
-        var result = await Adapters.JiraSync("techweb", Path.Combine(ConfigHome, "root"))!();
+        var result = await Adapters.JiraSync("techweb", Path.Combine(ConfigHome, "root"))!(CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Contains("no Jira API token", result.Error);

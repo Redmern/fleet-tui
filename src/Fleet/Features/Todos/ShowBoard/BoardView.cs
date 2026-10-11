@@ -21,7 +21,7 @@ public static class BoardView
         BoardTickets board,
         Func<string, Task<Result>> open,
         Func<string, Task<Result<Ticket>>> launch,
-        Func<Task<Result<int>>>? syncJira = null)
+        Func<CancellationToken, Task<Result<int>>>? syncJira = null)
     {
         var window = FleetTheme.Overlay(BoardRows.Title(project));
 
@@ -35,6 +35,7 @@ public static class BoardView
         var busy = false;
         var syncing = false;
         var closed = false;
+        using var stop = new CancellationTokenSource();
 
         Ticket? Selected() =>
             tickets.Count == 0 ? null : tickets[Math.Clamp(FleetRows.Selected(list), 0, tickets.Count - 1)];
@@ -104,9 +105,9 @@ public static class BoardView
             }).ConfigureAwait(false);
         }
 
-        async Task SyncAsync(Func<Task<Result<int>>> sync)
+        async Task SyncAsync(Func<CancellationToken, Task<Result<int>>> sync)
         {
-            var pulled = await BoardRows.SafelyAsync(() => Task.Run(sync)).ConfigureAwait(false);
+            var pulled = await BoardRows.SafelyAsync(() => Task.Run(() => sync(stop.Token))).ConfigureAwait(false);
 
             await FleetAsync.OnUi(app, () =>
             {
@@ -281,6 +282,7 @@ public static class BoardView
         finally
         {
             closed = true;
+            stop.Cancel();
 
             if (timer is not null)
             {

@@ -182,7 +182,7 @@ public static class Adapters
 
     public static ITicketStatusSink TicketStatus() => new TicketFollowUp(Todos());
 
-    public static Func<Task<Result<int>>>? JiraSync(string project, string projectRoot)
+    public static Func<CancellationToken, Task<Result<int>>>? JiraSync(string project, string projectRoot)
     {
         if (Settings().Load(project).Jira is not { } jira)
         {
@@ -192,7 +192,7 @@ public static class Adapters
         JiraRestClient? client = null;
         var sync = new SyncJiraHandler(Todos(), new FileJiraTokenStore(), () => client ??= new JiraRestClient());
 
-        return async () => await sync.HandleAsync(project, projectRoot, jira).ConfigureAwait(false) ?? Result<int>.Ok(0);
+        return async ct => await sync.HandleAsync(project, projectRoot, jira, ct).ConfigureAwait(false) ?? Result<int>.Ok(0);
     }
 
     public static IDispatcher Dispatcher(IMuxDriver mux) =>
