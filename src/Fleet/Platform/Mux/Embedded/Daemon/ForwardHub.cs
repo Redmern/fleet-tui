@@ -34,6 +34,8 @@ public sealed class ForwardOptions
     public TimeSpan ReconnectAfter { get; init; } = TimeSpan.FromSeconds(5);
 
     public TimeSpan ReconnectAtMost { get; init; } = TimeSpan.FromMinutes(1);
+
+    public Func<string, string?, CancellationToken, Task>? LinkUp { get; init; }
 }
 
 public sealed class ForwardHub(ForwardOptions options, Action<string> log)
@@ -318,12 +320,19 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
 
     private async Task LoopAsync(RemoteLink link, HostForwards forwards, Func<RemoteLink, bool> current, CancellationToken stop)
     {
+        var up = false;
         while (!stop.IsCancellationRequested && current(link))
         {
             if (link.IsConnected)
             {
                 try
                 {
+                    if (!up && options.LinkUp is { } linkUp)
+                    {
+                        up = true;
+                        await linkUp(link.Host, forwards.ControlPath, stop).ConfigureAwait(false);
+                    }
+
                     if (await forwards.ScanAsync(stop).ConfigureAwait(false) is { } listening)
                     {
                         await forwards.ReconcileAsync(listening, Allowed(link), stop).ConfigureAwait(false);
@@ -343,6 +352,10 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
             else if (link.Snapshot().State == RemoteLink.Failed)
             {
                 return;
+            }
+            else
+            {
+                up = false;
             }
 
             try
