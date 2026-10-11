@@ -32,6 +32,13 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void Go_to_dashboard_is_d_in_the_fleet_menu()
+    {
+        Assert.Equal("d", KeymapDefaults.Bindings[FleetAction.FocusMain]);
+        Assert.Single(FleetMenus.Actions(FleetMenus.Main), a => KeymapDefaults.Bindings[a] == "d");
+    }
+
+    [Fact]
     public void Every_submenu_is_reachable_from_its_parent()
     {
         Assert.Contains(FleetAction.OpenSettings, FleetMenus.Actions(FleetMenus.Main));

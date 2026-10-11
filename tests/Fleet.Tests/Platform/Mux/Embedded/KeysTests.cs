@@ -156,7 +156,7 @@ public class KeysTests
             ["s d"] = "detach",
             ["s q"] = "detach",
             ["s r"] = "reload",
-            ["a m"] = "menu main-pane",
+            ["a d"] = "menu main-pane",
             ["a l"] = "menu list-agents",
             ["a e"] = "menu open-editor",
             ["a f"] = "menu browsefiles",
@@ -715,10 +715,10 @@ public class KeysTests
 
         Assert.Equal(
             [
+                ("d", "go to dashboard"),
                 ("e", "open editor here"),
                 ("f", "file navigator"),
                 ("l", "list agents"),
-                ("m", "go to dashboard"),
                 ("n", "notifications"),
             ],
             agents.Select(e => (e.Key, e.Label)));
@@ -741,13 +741,13 @@ public class KeysTests
     public void Embedded_keys_can_rebind_and_unbind_a_menu_action()
     {
         var keys = MuxKeys.From(
-            new MuxKeysFile { PrefixKeys = new() { ["a m"] = "none", ["a d"] = "menu main-pane" } },
+            new MuxKeysFile { PrefixKeys = new() { ["a d"] = "none", ["a m"] = "menu main-pane" } },
             null);
 
         Assert.Equal(
-            ["d", "e", "f", "l", "n"],
+            ["e", "f", "l", "m", "n"],
             Group(keys, "a").Leaves.Select(b => b.Chord.Label).Order());
-        Assert.Equal("menu main-pane", Group(keys, "a").Leaves.Single(b => b.Chord.Label == "d").Command);
+        Assert.Equal("menu main-pane", Group(keys, "a").Leaves.Single(b => b.Chord.Label == "m").Command);
     }
 
     [Fact]

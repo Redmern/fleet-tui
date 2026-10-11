@@ -36,7 +36,7 @@ public static class KeymapDefaults
             [FleetAction.PullRepository] = "p",
             [FleetAction.ManageRepository] = "m",
             [FleetAction.QuitFleet] = "Q",
-            [FleetAction.FocusMain] = "m",
+            [FleetAction.FocusMain] = "d",
             [FleetAction.ListAgents] = "l",
             [FleetAction.ViewLogs] = "l",
             [FleetAction.BrowseFiles] = "f",
