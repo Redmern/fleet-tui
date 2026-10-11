@@ -284,8 +284,11 @@ draws the buttons in a float's or the dashboard's frame.
   click) opens the ticket's markdown in an nvim pane with fleet's nvim config, focusing it when it
   is already open and splitting beside an open ticket otherwise; `e` cycles the effort
   (XS, S, M, L, XL, unset) and `x` closes the ticket, both saved straight to its file, which is
-  never deleted. `r` re-reads the folder; the board also picks up edits made on disk every two
-  seconds.
+  never deleted. `l` launches an open ticket: its body goes to a new sub-orchestrator as the
+  task, and the ticket turns in-progress with `orchestration: <slug>` in its file. When that
+  sub-orchestrator reports done the ticket is done; when it reports failed the ticket is open
+  again with a `note`. Tickets that aren't open don't launch, and the status line says why. `r`
+  re-reads the folder; the board also picks up edits made on disk every two seconds.
 
 ### Remote machines
 
