@@ -48,6 +48,8 @@ public sealed class DaemonOptions
 
     public bool ServesBridge { get; init; }
 
+    public Func<byte[], string?>? DropClipboardImage { get; init; }
+
     public ClipboardImageLimit ClipboardImageLimit { get; init; } = new(Reads: 20, Per: TimeSpan.FromMinutes(1));
 
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
@@ -820,6 +822,46 @@ public sealed class FleetDaemon(DaemonOptions options)
         return null;
     }
 
+    public const string PasteImageCommand = "paste-image";
+
+    private async Task PasteClipboardImageAsync(AttachSession session)
+    {
+        PaneRuntime? target;
+        lock (_gate)
+        {
+            _model.Touch(session.Client);
+            target = FocusedRuntime(session.Client);
+        }
+
+        if (target is null || options.DropClipboardImage is not { } drop)
+        {
+            return;
+        }
+
+        var answer = await AskClipboardImageAsync(session, target.Id, probe: false, ClipboardImageWithin, _stop.Token).ConfigureAwait(false);
+        if (answer.Error is not null || answer.Data is not { Length: > 0 } png)
+        {
+            options.Log($"paste image into {target.Id}: {answer.Error ?? "no image on the viewer clipboard"}");
+            return;
+        }
+
+        if (png.Length > ClipboardImageResponse.MaxBytes || drop(png) is not { } typed)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (!_runtimes.ContainsKey(target.Id))
+            {
+                return;
+            }
+        }
+
+        FollowOutput(target);
+        target.Send(Encoding.UTF8.GetBytes(PasteBytes(new TextMessage { Text = typed, Paste = true }, target.Modes.BracketedPaste)));
+    }
+
     private AttachSession? FocusingViewer(string pane) =>
         _sessions.Values
             .Where(s => _model.View(s.Client)?.Focused == pane)
@@ -1542,6 +1584,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                 return;
             case "newline":
                 Newline(session, command);
+                return;
+            case PasteImageCommand:
+                _ = Task.Run(() => PasteClipboardImageAsync(session), CancellationToken.None);
                 return;
         }
 

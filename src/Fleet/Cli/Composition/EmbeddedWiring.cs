@@ -5,6 +5,7 @@ using Fleet.Features.Shim.Mac;
 using Fleet.Features.Shim.Mac.Enums;
 using Fleet.Features.Shim.ServeClipboard;
 using Fleet.Features.Shim.ServeClipboard.Enums;
+using Fleet.Features.Shim.WindowsFallback;
 using Fleet.Platform.Clipboard;
 using Fleet.Platform.Forwards;
 using Fleet.Platform.Forwards.Models;
@@ -89,6 +90,8 @@ public static class EmbeddedWiring
             PaneEnv = cwd => PaneProfile.Env(cwd, Adapters.Projects().List(), Profiles()),
             ServesBridge = StartedForBridge,
             RemotePaneEnv = OperatingSystem.IsWindows() ? null : RemotePaneEnv(log),
+            DropClipboardImage = png => ClipboardImageDrop.Drop(
+                png, ClipboardImageDrop.Folder, DateTimeOffset.UtcNow, line => log.Write($"fleetd: {line}")),
             Shell = () => DefaultShell.Resolve(
                 Environment.GetEnvironmentVariable,
                 Platform.Mux.Models.MuxEnvironment.OnPath,
