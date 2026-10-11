@@ -3,10 +3,12 @@ using Fleet.Ports.Browser;
 
 namespace Fleet.Platform.Forwards;
 
-public sealed class SystemBrowser(Func<ProcessStartInfo, Process?> start) : IBrowserLauncher
+public sealed class SystemBrowser(Func<ProcessStartInfo, Process?> start, TimeSpan exitWithin) : IBrowserLauncher
 {
+    public static readonly TimeSpan OpenerExitWithin = TimeSpan.FromSeconds(2);
+
     public SystemBrowser()
-        : this(Process.Start)
+        : this(Process.Start, OpenerExitWithin)
     {
     }
 
@@ -16,13 +18,16 @@ public sealed class SystemBrowser(Func<ProcessStartInfo, Process?> start) : IBro
             ? new ProcessStartInfo("cmd") { ArgumentList = { "/c", "start", string.Empty, url.Replace("&", "^&", StringComparison.Ordinal) } }
             : new ProcessStartInfo("sh")
             {
-                ArgumentList = { "-c", $"exec {(OperatingSystem.IsMacOS() ? "open" : "xdg-open")} \"$1\" </dev/null >/dev/null 2>&1", "sh", url },
+                ArgumentList = { "-c", $"exec {Opener} \"$1\" </dev/null >/dev/null 2>&1", "sh", url },
             };
 
         info.UseShellExecute = false;
         info.CreateNoWindow = true;
         return info;
     }
+
+    private static string Opener =>
+        OperatingSystem.IsWindows() ? "start" : OperatingSystem.IsMacOS() ? "open" : "xdg-open";
 
     public string? Open(string url)
     {
@@ -34,7 +39,14 @@ public sealed class SystemBrowser(Func<ProcessStartInfo, Process?> start) : IBro
         try
         {
             using var process = start(For(parsed.AbsoluteUri));
-            return process is null ? $"could not open {url}" : null;
+            if (process is null)
+            {
+                return $"could not open {url}";
+            }
+
+            return process.WaitForExit(exitWithin) && process.ExitCode != 0
+                ? $"could not open {url}: {Opener} failed with exit code {process.ExitCode}"
+                : null;
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
