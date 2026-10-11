@@ -34,7 +34,7 @@ public static class FleetRows
         }
 
         list.SelectedItem = source.Items == 0
-            ? 0
+            ? null
             : source.IndexOf(Math.Clamp(item, 0, source.Items - 1));
     }
 
