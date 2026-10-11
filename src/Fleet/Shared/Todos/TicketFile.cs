@@ -91,7 +91,7 @@ public static class TicketFile
                 return new Frontmatter(fields, text[position..]);
             }
 
-            if (line.Trim().Length == 0)
+            if (line.Trim().Length == 0 || line.TrimStart().StartsWith('#') || char.IsWhiteSpace(line[0]) || line[0] == '-')
             {
                 continue;
             }
@@ -99,7 +99,7 @@ public static class TicketFile
             var colon = line.IndexOf(':', StringComparison.Ordinal);
             var key = colon > 0 ? line[..colon].Trim() : string.Empty;
 
-            if (key.Length == 0 || !key.All(char.IsAsciiLetterLower))
+            if (key.Length == 0 || !key.All(IsKeyChar))
             {
                 return null;
             }
@@ -109,6 +109,8 @@ public static class TicketFile
 
         return null;
     }
+
+    private static bool IsKeyChar(char c) => char.IsAsciiLetterOrDigit(c) || c is '_' or '-';
 
     private static string NextLine(string text, ref int position)
     {
@@ -159,6 +161,11 @@ public static class TicketFile
 
     private static string Unquoted(string value)
     {
+        if (value.Length >= 2 && value[0] == '\'' && value[^1] == '\'')
+        {
+            return value[1..^1].Replace("''", "'", StringComparison.Ordinal);
+        }
+
         if (value.Length < 2 || value[0] != '"' || value[^1] != '"')
         {
             return value;

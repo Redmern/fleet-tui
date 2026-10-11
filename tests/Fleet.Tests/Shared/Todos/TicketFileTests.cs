@@ -82,6 +82,18 @@ public class TicketFileTests
     }
 
     [Fact]
+    public void Extra_hand_written_fields_comments_and_lists_do_not_invalidate_the_ticket()
+    {
+        const string text = "---\n# mine\ntitle: 'Kept'\nstory_points: 3\ntags:\n  - a\n  - b\nstatus: done\n---\nbody\n";
+
+        var parsed = TicketFile.Parse("0004-kept", text);
+
+        Assert.True(TicketFile.IsValid(text));
+        Assert.Equal("Kept", parsed.Title);
+        Assert.Equal(TicketStatus.Done, parsed.Status);
+    }
+
+    [Fact]
     public void Unknown_values_fall_back_without_failing()
     {
         var parsed = TicketFile.Parse("0002-x", "---\ntitle: x\neffort: huge\nstatus: someday\nsource: email\ncreated: soon\n---\n");
