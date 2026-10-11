@@ -44,6 +44,8 @@ public sealed class FileTodoStore : ITodoStore
         }
     }
 
+    public bool Exists(string projectRoot, string id) => File.Exists(TodoPaths.File(projectRoot, id));
+
     public Result<Ticket> Add(string projectRoot, Ticket draft)
     {
         var folder = TodoPaths.Folder(projectRoot);

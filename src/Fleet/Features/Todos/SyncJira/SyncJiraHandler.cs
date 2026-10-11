@@ -54,12 +54,22 @@ public sealed class SyncJiraHandler(
         foreach (var issue in pulled)
         {
             var current = store.Get(projectRoot, issue.Key);
+
+            if (current is null && store.Exists(projectRoot, issue.Key))
+            {
+                failures.Add($"{issue.Key} could not be read, so it was left alone");
+                continue;
+            }
+
             Keep(projectRoot, current, current is null ? Created(issue, now) : Updated(current, issue), failures);
         }
 
-        foreach (var gone in store.List(projectRoot).Where(t => IsPulled(t) && !keys.Contains(t.Id)))
+        foreach (var listed in store.List(projectRoot).Where(t => IsPulled(t) && !keys.Contains(t.Id)))
         {
-            Keep(projectRoot, gone, Closed(gone, NotInQuery), failures);
+            if (store.Get(projectRoot, listed.Id) is { } gone && IsPulled(gone))
+            {
+                Keep(projectRoot, gone, Closed(gone, NotInQuery), failures);
+            }
         }
 
         return failures.Count == 0

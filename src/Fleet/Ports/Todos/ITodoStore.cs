@@ -9,6 +9,8 @@ public interface ITodoStore
 
     Ticket? Get(string projectRoot, string id);
 
+    bool Exists(string projectRoot, string id) => Get(projectRoot, id) is not null;
+
     Result<Ticket> Add(string projectRoot, Ticket draft);
 
     Result Save(string projectRoot, Ticket ticket);

@@ -237,6 +237,19 @@ public class SyncJiraTests
     }
 
     [Fact]
+    public async Task A_ticket_file_that_exists_but_cannot_be_read_is_not_overwritten()
+    {
+        _store.Unreadable.Add("WEB-12");
+        _client.Issues = [Issue("WEB-12"), Issue("WEB-13")];
+
+        var result = await Pull();
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("WEB-12", result.Error);
+        Assert.Equal(["WEB-13"], _store.Saved.Select(t => t.Id));
+    }
+
+    [Fact]
     public async Task A_failed_search_changes_no_ticket_and_returns_the_error()
     {
         _store.Put(new Ticket("WEB-12", "Fix login", null, TicketStatus.Open, TicketSource.Jira, Day, "x\n") { Jira = "WEB-12" });
@@ -328,6 +341,10 @@ public class SyncJiraTests
         private readonly Dictionary<string, Ticket> _tickets = [];
 
         public List<Ticket> Saved { get; } = [];
+
+        public HashSet<string> Unreadable { get; } = [];
+
+        public bool Exists(string projectRoot, string id) => Unreadable.Contains(id) || _tickets.ContainsKey(id);
 
         public void Put(params Ticket[] tickets)
         {
