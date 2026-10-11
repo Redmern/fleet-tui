@@ -19,6 +19,10 @@ public class HelpTextTests
         Assert.Contains(text, HelpCommand.Text, StringComparison.Ordinal);
 
     [Fact]
+    public void Fleet_help_documents_the_todo_board_chord() =>
+        Assert.Contains("n notifications, t todo board", HelpCommand.Text, StringComparison.Ordinal);
+
+    [Fact]
     public void Fleet_help_documents_the_todo_verb() =>
         Assert.Contains("fleet todo [--project <p>] \"<idea>\"", HelpCommand.Text, StringComparison.Ordinal);
 

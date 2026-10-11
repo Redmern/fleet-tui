@@ -233,6 +233,7 @@ typed and only goes back once the field is empty; the key-capture dialog in **Ke
 │     d     Dashboard                  │
 │     p     Switch                     │
 │     l     List agents                │
+│     t     Todo board   ›             │
 │     f     Files                      │
 │     s     Settings     ›             │
 │                                      │
@@ -277,6 +278,14 @@ draws the buttons in a float's or the dashboard's frame.
 - **Notifications** (`n`) opens the notification center: an **All** tab and one tab per
   project, switched with `h`/`l` or the arrows. `enter` goes to the agent, `d` dismisses the selected notice, `D` all shown ones,
   `b` turns the terminal bell on or off and `t` the desktop toasts.
+- **Todo board** (`t`, or `ctrl+s a t` from any pane) lists the project's tickets from
+  `.fleet/todos`: id, title, effort, status and source, open ones first, then in-progress, done
+  and closed, newest first within each. `enter` (or a click on the selected row, or a double
+  click) opens the ticket's markdown in an nvim pane with fleet's nvim config, focusing it when it
+  is already open and splitting beside an open ticket otherwise; `e` cycles the effort
+  (XS, S, M, L, XL, unset) and `x` closes the ticket, both saved straight to its file, which is
+  never deleted. `r` re-reads the folder; the board also picks up edits made on disk every two
+  seconds.
 
 ### Remote machines
 
@@ -644,7 +653,7 @@ the floats). Every fleet menu action has a key there:
 | Group | Keys |
 |---|---|
 | top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
-| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications |
+| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board |
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
