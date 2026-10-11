@@ -18,6 +18,8 @@ public enum MessageType : byte
     Bye = 22,
     Request = 30,
     Response = 31,
+    ClipboardImageRequest = 40,
+    ClipboardImageResponse = 41,
 }
 
 public static class ClientRoles
@@ -290,6 +292,47 @@ public sealed class HostEffect
     public string? Value { get; set; }
 }
 
+public sealed class ClipboardImageRequest
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("pane")]
+    public string Pane { get; set; } = string.Empty;
+}
+
+public sealed class ClipboardImageResponse
+{
+    public const string Png = "image/png";
+
+    public const int MaxBytes = (Wire.MaxMessage - (64 * 1024)) / 4 * 3;
+
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("mime")]
+    public string? Mime { get; set; }
+
+    [JsonPropertyName("data")]
+    public byte[]? Data { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    public static ClipboardImageResponse For(int id, byte[]? png) => png switch
+    {
+        null or [] => new ClipboardImageResponse { Id = id },
+        { Length: > MaxBytes } => new ClipboardImageResponse { Id = id, Error = TooLarge(png.Length) },
+        _ => new ClipboardImageResponse { Id = id, Mime = Png, Data = png },
+    };
+
+    public static string TooLarge(long bytes) =>
+        $"the clipboard image is too large: {Mib(bytes)} MiB, the limit is {Mib(MaxBytes)} MiB";
+
+    private static string Mib(long bytes) =>
+        (bytes / (1024.0 * 1024.0)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+}
+
 public sealed class ControlRequest
 {
     [JsonPropertyName("id")]
@@ -543,6 +586,12 @@ public sealed class ControlResponse
 
     [JsonPropertyName("ssh")]
     public string? Ssh { get; set; }
+
+    [JsonPropertyName("mime")]
+    public string? Mime { get; set; }
+
+    [JsonPropertyName("data")]
+    public byte[]? Data { get; set; }
 }
 
 public sealed class NoticeDto
