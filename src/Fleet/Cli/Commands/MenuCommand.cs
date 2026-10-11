@@ -893,6 +893,7 @@ public static class MenuCommand
     private static void ShowBoard(IApplication app, Keymap keymap, string here, BoardScope scope)
     {
         var boardMux = Adapters.Mux(Adapters.Log());
+        using var pulls = new JiraPulls();
 
         BoardView.Show(
             app,
@@ -908,7 +909,7 @@ public static class MenuCommand
                     .HandleAsync(owner.Name, owner.Root, id),
             [
                 .. scope.Projects
-                    .Select(p => Adapters.JiraSync(p.Name, p.Root) is { } pull ? new BoardJira(p, pull) : null)
+                    .Select(p => pulls.For(p.Name, p.Root) is { } pull ? new BoardJira(p, pull) : null)
                     .OfType<BoardJira>(),
             ]);
     }
