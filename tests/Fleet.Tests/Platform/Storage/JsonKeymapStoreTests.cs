@@ -20,6 +20,18 @@ public sealed class JsonKeymapStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_binding_for_the_retired_all_projects_board_is_ignored()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(FleetPaths.KeymapFile, """{ "version": 1, "bindings": { "TodoBoardAll": "T", "TodoBoard": "F9" } }""");
+
+        var config = Store.Load();
+
+        Assert.Equal("F9", config.Bindings[FleetAction.TodoBoard]);
+        Assert.DoesNotContain(config.Bindings, b => b.Value == "T" && b.Key.ToString().StartsWith("Todo", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Save_then_Load_round_trips_a_custom_binding()
     {
         Store.Save(KeymapConfig.Default.With(FleetAction.OpenProject, "F2"));

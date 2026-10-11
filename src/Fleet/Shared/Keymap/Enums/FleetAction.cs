@@ -68,5 +68,4 @@ public enum FleetAction
     OpenWebApp,
     OpenPort,
     TodoBoard,
-    TodoBoardAll,
 }

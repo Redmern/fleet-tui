@@ -18,6 +18,16 @@ public class KeybindDefaultsTests
     }
 
     [Fact]
+    public void The_todo_board_has_one_keybind_per_target_and_no_all_projects_twin()
+    {
+        Assert.DoesNotContain(Set.Entries, e => e.Action.Contains("todo-board-all", StringComparison.Ordinal));
+        Assert.DoesNotContain(Set.Entries, e => e.Id.Contains("todo-board-all", StringComparison.Ordinal));
+        Assert.Equal("a t", Assert.Single(Set.Entries, e => e.Action == "menu todo-board").Chord);
+        Assert.Equal("t", Assert.Single(Set.Entries, e => e.Action == "todo-board").Chord);
+        Assert.DoesNotContain(Set.For(KeybindTarget.Mux), b => b.Chord == "a T");
+    }
+
+    [Fact]
     public void Ids_are_unique()
     {
         var duplicates = Set.Entries.GroupBy(e => e.Id).Where(g => g.Count() > 1).Select(g => g.Key);
