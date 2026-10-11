@@ -51,9 +51,11 @@ public class ModelRowsTests
     [Fact]
     public void The_pickers_start_on_the_current_choice()
     {
-        Assert.Equal(0, ModelRows.ModelIndex(RoleModel.Inherit));
-        Assert.Equal(1, ModelRows.ModelIndex(new RoleModel("sonnet", "medium")));
-        Assert.Equal(ModelRows.OtherIndex, ModelRows.ModelIndex(new RoleModel("claude-opus-5-5", "low")));
+        var main = FleetAction.EditMainModel;
+
+        Assert.Equal(0, ModelRows.ModelIndex(main, RoleModel.Inherit));
+        Assert.Equal(1, ModelRows.ModelIndex(main, new RoleModel("sonnet", "medium")));
+        Assert.Equal(ModelRows.OtherIndex(main), ModelRows.ModelIndex(main, new RoleModel("claude-opus-5-5", "low")));
         Assert.Equal(0, ModelRows.EffortIndex(RoleModel.Inherit));
         Assert.Equal("medium", ModelRows.EffortAt(ModelRows.EffortIndex(new RoleModel("sonnet", "medium"))));
     }
@@ -61,9 +63,11 @@ public class ModelRowsTests
     [Fact]
     public void Every_picker_row_maps_back_to_a_value()
     {
-        Assert.Equal(ModelChoice.Inherit, ModelRows.ModelAt(0));
-        Assert.Equal(["sonnet", "opus", "haiku", "fable"], Enumerable.Range(1, 4).Select(ModelRows.ModelAt));
-        Assert.Null(ModelRows.ModelAt(ModelRows.OtherIndex));
+        var main = FleetAction.EditMainModel;
+
+        Assert.Equal(ModelChoice.Inherit, ModelRows.ModelAt(main, 0));
+        Assert.Equal(["sonnet", "opus", "haiku", "fable"], Enumerable.Range(1, 4).Select(i => ModelRows.ModelAt(main, i)));
+        Assert.Null(ModelRows.ModelAt(main, ModelRows.OtherIndex(main)));
         Assert.Equal(
             [ModelChoice.Inherit, .. ModelChoice.Efforts],
             Enumerable.Range(0, ModelRows.EffortEntries.Count).Select(ModelRows.EffortAt));
@@ -77,7 +81,40 @@ public class ModelRowsTests
     [InlineData("", null)]
     public void A_typed_model_is_accepted_only_when_fleet_can_pass_it(string typed, string? expected)
     {
-        Assert.Equal(expected, ModelRows.Typed(typed));
+        Assert.Equal(expected, ModelRows.Typed(FleetAction.EditSubModel, typed));
+    }
+
+    [Theory]
+    [InlineData(FleetAction.EditSubModel)]
+    [InlineData(FleetAction.EditAgentModel)]
+    public void The_sub_and_agent_rows_offer_auto(FleetAction action)
+    {
+        var models = ModelRows.ModelEntries(action).Select(e => e.Label).ToList();
+
+        Assert.Contains(ModelChoice.Auto, models);
+        Assert.Equal(ModelChoice.Auto, ModelRows.ModelAt(action, models.IndexOf(ModelChoice.Auto)));
+        Assert.Equal(models.IndexOf(ModelChoice.Auto), ModelRows.ModelIndex(action, new RoleModel("AUTO", ModelChoice.Inherit)));
+        Assert.Equal(ModelChoice.Auto, ModelRows.Typed(action, " Auto "));
+        Assert.True(ModelRows.Routes(action, ModelChoice.Auto));
+    }
+
+    [Theory]
+    [InlineData(FleetAction.EditHeadModel)]
+    [InlineData(FleetAction.EditMainModel)]
+    public void The_head_and_main_rows_do_not_offer_auto(FleetAction action)
+    {
+        Assert.DoesNotContain(ModelChoice.Auto, ModelRows.ModelEntries(action).Select(e => e.Label));
+        Assert.Null(ModelRows.Typed(action, "auto"));
+        Assert.False(ModelRows.Routes(action, ModelChoice.Auto));
+    }
+
+    [Fact]
+    public void An_auto_row_shows_auto_without_an_effort()
+    {
+        var settings = SettingsConfig.Default.WithModels(
+            SettingsDefaults.Models with { Sub = new RoleModel(ModelChoice.Auto, ModelChoice.Inherit) });
+
+        Assert.Equal("[auto]", FleetMenus.Value(FleetAction.EditSubModel, settings));
     }
 
     [Fact]
