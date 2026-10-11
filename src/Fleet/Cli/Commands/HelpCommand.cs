@@ -16,6 +16,8 @@ public static class HelpCommand
               fleet setup                 first run: check what is missing
               fleet dispatch --project <p> "<task>"
                                           spin up a hidden sub-orchestrator for a task
+              fleet todo [--project <p>] "<idea>"
+                                          file an idea as a ticket in <project>/.fleet/todos
               fleet apply-keybinds        write the keybinds: nvim and Claude
                 [--target nvim|claude]    only that target
                 [--dry-run]               show what would change, write nothing
