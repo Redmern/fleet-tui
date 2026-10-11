@@ -141,7 +141,7 @@ public class SyncJiraTests
 
         var gone = _store.Get(Root, "WEB-12")!;
         Assert.Equal(TicketStatus.Closed, gone.Status);
-        Assert.Equal(SyncJiraHandler.NotInQuery, gone.Note);
+        Assert.Equal(SyncJiraHandler.NotInQuery, gone.JiraClosed);
         Assert.Equal(TicketStatus.Open, _store.Get(Root, "WEB-13")!.Status);
     }
 
@@ -167,7 +167,7 @@ public class SyncJiraTests
 
         var ticket = _store.Get(Root, "WEB-12")!;
         Assert.Equal(TicketStatus.Closed, ticket.Status);
-        Assert.Equal(SyncJiraHandler.ClosedInJira, ticket.Note);
+        Assert.Equal(SyncJiraHandler.ClosedInJira, ticket.JiraClosed);
     }
 
     [Fact]
@@ -193,7 +193,24 @@ public class SyncJiraTests
 
         var ticket = _store.Get(Root, "WEB-12")!;
         Assert.Equal(TicketStatus.Open, ticket.Status);
-        Assert.Equal(string.Empty, ticket.Note);
+        Assert.Equal(string.Empty, ticket.JiraClosed);
+    }
+
+    [Fact]
+    public async Task Closing_and_reopening_by_sync_keeps_the_local_note()
+    {
+        _client.Issues = [Issue("WEB-12")];
+        await Pull();
+        _store.Put(_store.Get(Root, "WEB-12")! with { Note = "blocked on infra" });
+
+        _client.Issues = [];
+        await Pull();
+        Assert.Equal("blocked on infra", _store.Get(Root, "WEB-12")!.Note);
+
+        _client.Issues = [Issue("WEB-12")];
+        await Pull();
+        Assert.Equal("blocked on infra", _store.Get(Root, "WEB-12")!.Note);
+        Assert.Equal(TicketStatus.Open, _store.Get(Root, "WEB-12")!.Status);
     }
 
     [Fact]

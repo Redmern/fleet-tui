@@ -11,9 +11,9 @@ namespace Fleet.Features.Todos.SyncJira;
 public sealed class SyncJiraHandler(
     ITodoStore store, IJiraTokenStore tokens, Func<IJiraClient> client, TimeProvider? clock = null)
 {
-    public const string ClosedInJira = "closed in Jira";
+    public const string ClosedInJira = "done";
 
-    public const string NotInQuery = "no longer in the Jira query";
+    public const string NotInQuery = "query";
 
     public async Task<Result<int>?> HandleAsync(
         string project, string projectRoot, JiraSettings? settings, CancellationToken ct = default)
@@ -117,13 +117,13 @@ public sealed class SyncJiraHandler(
             return Closed(ticket, ClosedInJira);
         }
 
-        return ticket.Status == TicketStatus.Closed && ticket.Note is ClosedInJira or NotInQuery
-            ? ticket with { Status = TicketStatus.Open, Note = string.Empty }
-            : ticket;
+        return ticket.Status == TicketStatus.Closed && ticket.JiraClosed.Length > 0
+            ? ticket with { Status = TicketStatus.Open, JiraClosed = string.Empty }
+            : ticket with { JiraClosed = string.Empty };
     }
 
     private static Ticket Closed(Ticket ticket, string why) =>
-        ticket.Status == TicketStatus.Closed ? ticket : ticket with { Status = TicketStatus.Closed, Note = why };
+        ticket.Status == TicketStatus.Closed ? ticket : ticket with { Status = TicketStatus.Closed, JiraClosed = why };
 
     private static string Title(JiraIssue issue) =>
         string.IsNullOrWhiteSpace(issue.Summary) ? issue.Key : issue.Summary.Trim();

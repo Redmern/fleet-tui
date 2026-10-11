@@ -114,4 +114,19 @@ public class TicketFileTests
 
         Assert.Equal("first second", TicketFile.Parse("0001-a", TicketFile.Format(ticket)).Note);
     }
+
+    [Fact]
+    public void The_jira_closed_marker_round_trips()
+    {
+        var ticket = new Ticket("WEB-1", "t", null, TicketStatus.Closed, TicketSource.Jira, new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), "b\n")
+        {
+            Jira = "WEB-1",
+            JiraClosed = "query",
+        };
+
+        var text = TicketFile.Format(ticket);
+
+        Assert.Contains("jira-closed: query", text);
+        Assert.Equal(ticket, TicketFile.Parse("WEB-1", text));
+    }
 }

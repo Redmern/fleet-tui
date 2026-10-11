@@ -13,6 +13,8 @@ public sealed record Ticket(
 {
     public string Jira { get; init; } = string.Empty;
 
+    public string JiraClosed { get; init; } = string.Empty;
+
     public string Orchestration { get; init; } = string.Empty;
 
     public string Note { get; init; } = string.Empty;

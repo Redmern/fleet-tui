@@ -23,6 +23,7 @@ public static class TicketFile
         Field(text, "source", TicketWords.Of(ticket.Source));
         Field(text, "created", ticket.Created.ToUniversalTime().ToString(CreatedFormat, CultureInfo.InvariantCulture));
         Optional(text, "jira", ticket.Jira);
+        Optional(text, "jira-closed", ticket.JiraClosed);
         Optional(text, "orchestration", ticket.Orchestration);
         Optional(text, "note", Quoted(ticket.Note));
         text.Append(Fence).Append('\n').Append('\n');
@@ -52,6 +53,7 @@ public static class TicketFile
             read.Body)
         {
             Jira = Value(fields, "jira"),
+            JiraClosed = Value(fields, "jira-closed"),
             Orchestration = Value(fields, "orchestration"),
             Note = Value(fields, "note"),
         };
