@@ -230,9 +230,10 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             return McpResult.Error($"this fleet cannot add {HeadTools.Repositories} to a new project.");
         }
 
-        if (!interactive
-            && await _gate.CheckWithoutProjectAsync(HarnessTool.CreateProject, Detail(CreationFor(request)), ct)
-                .ConfigureAwait(false) is { } denied)
+        if ((interactive
+                ? _gate.ForbiddenOnThisMachine(HarnessTool.CreateProject)
+                : await _gate.CheckWithoutProjectAsync(HarnessTool.CreateProject, Detail(CreationFor(request)), ct)
+                    .ConfigureAwait(false)) is { } denied)
         {
             return McpResult.Error(denied);
         }

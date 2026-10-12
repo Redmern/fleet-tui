@@ -47,13 +47,21 @@ public sealed class HeadGate(HeadDeps deps)
 
         var id = HarnessToolIds.For(tool);
 
-        return deps.Settings.Load(string.Empty).MergedOverDefaults().RuleFor(tool).Policy switch
+        return MachinePolicy(tool) switch
         {
             ActionPolicy.Allow => null,
-            ActionPolicy.Forbid => $"fleet does not allow {id}.",
+            ActionPolicy.Forbid => Forbidden(tool),
             _ => $"{id} needs approval in an open fleet dashboard, and no project is open; open a project first.",
         };
     }
+
+    public string? ForbiddenOnThisMachine(HarnessTool tool) =>
+        MachinePolicy(tool) == ActionPolicy.Forbid ? Forbidden(tool) : null;
+
+    private ActionPolicy MachinePolicy(HarnessTool tool) =>
+        deps.Settings.Load(string.Empty).MergedOverDefaults().RuleFor(tool).Policy;
+
+    private static string Forbidden(HarnessTool tool) => $"fleet does not allow {HarnessToolIds.For(tool)}.";
 
     private async Task<string?> ApproverAsync(CancellationToken ct)
     {

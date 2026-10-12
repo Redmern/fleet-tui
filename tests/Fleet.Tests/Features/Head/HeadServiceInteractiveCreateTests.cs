@@ -3,6 +3,8 @@ using Fleet.Ports.Approvals.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Head;
 
@@ -82,5 +84,43 @@ public sealed partial class HeadServiceTests
         var create = HeadTools.All.Single(t => t.Name == HeadTools.CreateProject);
 
         Assert.DoesNotContain(create.Params, p => p.Name.Contains("interactive", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task An_interactive_create_still_honours_a_forbid_rule()
+    {
+        Open(Web, Idle);
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Forbid);
+
+        var result = await Service().ServeCreateProjectAsync(
+            new RemoteProjectRequest("shop", "/srv/shop", false, true, Interactive: true));
+
+        Assert.True(result.IsError);
+        Assert.Equal("fleet does not allow create_project.", result.Text);
+        Assert.Empty(_created);
+        Assert.Empty(_approvals.Asked);
+    }
+
+    [Fact]
+    public async Task An_interactive_create_follows_an_allow_rule()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Allow);
+
+        var result = await Service().ServeCreateProjectAsync(
+            new RemoteProjectRequest("shop", "/srv/shop", false, true, Interactive: true));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Single(_created);
+    }
+
+    [Fact]
+    public async Task A_non_interactive_create_still_honours_a_forbid_rule()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Forbid);
+
+        var result = await Service().ServeCreateProjectAsync(new RemoteProjectRequest("shop", "/srv/shop", false, true));
+
+        Assert.True(result.IsError);
+        Assert.Equal("fleet does not allow create_project.", result.Text);
     }
 }
