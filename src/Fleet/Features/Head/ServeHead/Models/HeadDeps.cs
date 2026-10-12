@@ -7,6 +7,7 @@ using Fleet.Ports.Forwards;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Relay;
 using Fleet.Ports.Remotes;
 using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
@@ -37,7 +38,8 @@ public sealed record HeadDeps(
     string User = "",
     Func<ProjectCreation, Result<Project>>? CreateProject = null,
     Func<Project, string, CancellationToken, Task<Result>>? AddRepository = null,
-    Func<Project, CancellationToken, Task<string?>>? CloseProject = null);
+    Func<Project, CancellationToken, Task<string?>>? CloseProject = null,
+    IRelayQueueStore? RelayQueue = null);
 
 public sealed record HeadTiming(
     TimeSpan Poll,
@@ -47,6 +49,8 @@ public sealed record HeadTiming(
     TimeSpan QueueTimeout)
 {
     public TimeSpan ConnectTimeout { get; init; } = TimeSpan.FromSeconds(60);
+
+    public TimeSpan SlowPoll { get; init; } = TimeSpan.FromSeconds(15);
 
     public static HeadTiming Default => new(
         TimeSpan.FromSeconds(2),

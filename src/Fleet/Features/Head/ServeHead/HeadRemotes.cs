@@ -70,7 +70,7 @@ public sealed class HeadRemotes(HeadDeps deps, HeadTiming timing)
 
         if (request.Tool == HeadTools.ListProjects)
         {
-            return ListProjects(machine!, label);
+            return ListProjects(machine!, label, await QueuedAsync(remote.Host, ct).ConfigureAwait(false));
         }
 
         var name = request.Value(HeadTools.Project).Trim();
@@ -87,7 +87,7 @@ public sealed class HeadRemotes(HeadDeps deps, HeadTiming timing)
                     + (machine.Projects.Count == 0 ? "none" : string.Join(", ", machine.Projects)) + ".");
             }
         }
-        else if (request.Tool != HeadTools.ListAgents)
+        else if (request.Tool is not (HeadTools.ListAgents or HeadTools.ListQueued))
         {
             return McpResult.Error($"'{HeadTools.Project}' is required for {request.Tool}.");
         }
@@ -163,12 +163,46 @@ public sealed class HeadRemotes(HeadDeps deps, HeadTiming timing)
     private static McpResult On(string label, McpResult result) =>
         result with { Text = $"on {label}: {result.Text}" };
 
-    private static McpResult ListProjects(RemoteMachine machine, string label) =>
+    private static McpResult ListProjects(RemoteMachine machine, string label, IReadOnlyDictionary<string, int> queued) =>
         machine.Projects.Count == 0
             ? McpResult.Ok($"{label} has no fleet projects.")
             : McpResult.Ok(string.Join('\n', machine.Projects
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
-                .Select(p => $"{p}  {(machine.IsRunning(p) ? "open" : "closed")}  on {label}")));
+                .Select(p => $"{p}  {(machine.IsRunning(p) ? "open" : "closed")}  on {label}"
+                    + (queued.GetValueOrDefault(p) is > 0 and var n ? $"  {n} prompt(s) queued" : string.Empty))));
+
+    private async Task<IReadOnlyDictionary<string, int>> QueuedAsync(string host, CancellationToken ct)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var listed = await deps.Remotes.HeadAsync(
+                host, new McpRequest(HeadTools.ListQueued, new Dictionary<string, string>()), ct).ConfigureAwait(false);
+
+            if (listed.IsError)
+            {
+                return counts;
+            }
+
+            foreach (var line in listed.Text.Split('\n'))
+            {
+                var parts = line.Split("  ", 3);
+
+                if (parts.Length == 3 && int.TryParse(parts[1], CultureInfo.InvariantCulture, out _))
+                {
+                    counts[parts[0]] = counts.GetValueOrDefault(parts[0]) + 1;
+                }
+            }
+        }
+        catch (Exception e) when (e is MuxUnavailableException or IOException or InvalidOperationException
+            or TimeoutException)
+        {
+            deps.Log.Swallowed(e);
+        }
+
+        return counts;
+    }
 
     private async Task<(RemoteMachine? Machine, string? Failed)> ConnectedAsync(KnownRemote remote, CancellationToken ct)
     {

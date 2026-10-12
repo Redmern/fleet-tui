@@ -20,6 +20,12 @@ public static class HeadTools
 
     public const string Tell = "tell";
 
+    public const string ListQueued = "list_queued";
+
+    public const string DropQueued = "drop_queued";
+
+    public const string Number = "number";
+
     public const string ShowAgent = "show_agent";
 
     public const string HideAgent = "hide_agent";
@@ -161,7 +167,8 @@ public static class HeadTools
             "Pass a plain message to a project's main orchestrator: a question (\"what is the status?\"), a "
             + "follow-up or an instruction. Types the prompt as-is into its Claude as if the user typed it, never "
             + "as a dispatch. Use this for everything except an explicit dispatch. Opens the project if it is "
-            + "closed; queues the prompt if its Claude is busy. When that Claude takes cross-session messages, "
+            + "closed; queues the prompt if its Claude is busy or fleet sees no pane for it yet, and says how to "
+            + "unblock it (list_queued and drop_queued show and drop the queue). When that Claude takes cross-session messages, "
             + "types nothing and answers with an address: send the message there with SendMessage.",
             [ProjectParam, new(Prompt, "string", "The message for the orchestrator, as the user worded it.", true), RemoteParam]),
         new(
@@ -169,9 +176,25 @@ public static class HeadTools
             "Have a project's main orchestrator dispatch a new sub-orchestrator: types the prompt, with the "
             + "project's dispatch trigger in front, into its Claude. Use only when the user explicitly asks to "
             + "dispatch a task; use tell for anything else. Opens the project if it is closed; queues the prompt "
-            + "if its Claude is busy. When that Claude takes cross-session messages, types nothing and answers "
+            + "if its Claude is busy or has no pane yet (see list_queued and drop_queued). When that Claude takes cross-session messages, types nothing and answers "
             + "with an address and a dispatch request: send it there with SendMessage.",
             [ProjectParam, new(Prompt, "string", "The task for the orchestrator to dispatch.", true), RemoteParam]),
+        new(
+            ListQueued,
+            "List the prompts tell and relay queued for a project's main orchestrator and that are not typed in "
+            + "yet, numbered in delivery order with when each was queued. Leave out the project for every project "
+            + "with queued prompts.",
+            [new(Project, "string", "The project; leave out for every project with queued prompts.", false), RemoteParam]),
+        new(
+            DropQueued,
+            "Drop queued prompts of a project so they are never typed in: one by its list_queued number, or all of "
+            + "them. Use it to replace a stale queued prompt instead of queueing a duplicate; answers with the "
+            + "text of each dropped prompt.",
+            [
+                ProjectParam,
+                new(Number, "string", "The prompt's number as list_queued shows it; leave out to drop them all.", false),
+                RemoteParam,
+            ]),
         new(
             ShowAgent,
             "Show the pane of one agent or sub-orchestrator in its project's window, by name. Starts it if it is "

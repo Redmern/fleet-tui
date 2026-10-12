@@ -1,8 +1,11 @@
 using Fleet.Features.Head.ServeHead.Enums;
 using Fleet.Features.Head.ServeHead.Models;
 using Fleet.Ports.Mcp.Models;
+using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Relay;
+using Fleet.Ports.Relay.Models;
 using Fleet.Shared;
 using Fleet.Shared.Messaging;
 using Fleet.Shared.Settings.Enums;
@@ -13,17 +16,56 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 {
     private readonly Lock _lock = new();
 
-    private readonly Dictionary<string, Queue<string>> _queues = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IRelayQueueStore _queue = deps.RelayQueue ?? new MemoryRelayQueue();
 
     private readonly Dictionary<string, Task> _pumps = new(StringComparer.OrdinalIgnoreCase);
 
     private readonly SemaphoreSlim _typing = new(1, 1);
 
-    public int Pending(string project)
+    public int Pending(string project) => Queued(project).Count;
+
+    public IReadOnlyList<QueuedPrompt> Queued(string project)
     {
         lock (_lock)
         {
-            return _queues.TryGetValue(project, out var queue) ? queue.Count : 0;
+            return _queue.Load(project);
+        }
+    }
+
+    public IReadOnlyList<QueuedPrompt> Drop(string project, int? number)
+    {
+        lock (_lock)
+        {
+            var queued = _queue.Load(project).ToList();
+
+            if (number is not { } n)
+            {
+                _queue.Save(project, []);
+                return queued;
+            }
+
+            if (n < 1 || n > queued.Count)
+            {
+                return [];
+            }
+
+            var dropped = queued[n - 1];
+            queued.RemoveAt(n - 1);
+            _queue.Save(project, queued);
+
+            return [dropped];
+        }
+    }
+
+    public void Resume()
+    {
+        foreach (var name in _queue.Projects())
+        {
+            if (deps.Projects.List().FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                is { } project)
+            {
+                Pump(project);
+            }
         }
     }
 
@@ -114,7 +156,9 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
         return McpResult.Ok(
             $"{lead}{project.Name}'s orchestrator is {Why(pane, readiness)}, so the prompt is queued "
-            + $"({waiting} waiting). fleet types it in as soon as that Claude is idle: {text}");
+            + $"({waiting} waiting). fleet types it in, in order, as soon as that Claude is idle, and says it "
+            + $"arrives late. {Unblock(project, pane, readiness)} {HeadTools.ListQueued} shows the queue and "
+            + $"{HeadTools.DropQueued} drops a stale prompt instead of queueing a duplicate. Queued: {text}");
     }
 
     private async Task<string?> InboxAsync(Project project, CancellationToken ct)
@@ -126,7 +170,7 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
         var panes = await deps.Mux.ListPanesAsync(ct).ConfigureAwait(false);
 
-        return MainPane.Find(panes, project.Root, deps.DashPane(project.Name)) is null
+        return MainPane.Find(panes, project.Root, project.Name, deps.DashPane(project.Name)) is null
             ? null
             : await inboxes.AddressAsync(project.Root, ct).ConfigureAwait(false);
     }
@@ -147,82 +191,109 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
     private int Enqueue(Project project, string text)
     {
+        int count;
+
         lock (_lock)
         {
-            if (!_queues.TryGetValue(project.Name, out var queue))
-            {
-                queue = new Queue<string>();
-                _queues[project.Name] = queue;
-            }
+            var queued = _queue.Load(project.Name).ToList();
+            queued.Add(new QueuedPrompt(text, DateTimeOffset.Now));
+            _queue.Save(project.Name, queued);
+            count = queued.Count;
+        }
 
-            queue.Enqueue(text);
+        Pump(project);
 
+        return count;
+    }
+
+    private void Pump(Project project)
+    {
+        lock (_lock)
+        {
             if (!_pumps.TryGetValue(project.Name, out var pump) || pump.IsCompleted)
             {
                 _pumps[project.Name] = Task.Run(() => PumpAsync(project));
             }
-
-            return queue.Count;
         }
     }
 
     private async Task PumpAsync(Project project)
     {
-        var deadline = DateTime.UtcNow + timing.QueueTimeout;
+        var fastUntil = DateTime.UtcNow + timing.QueueTimeout;
 
         while (true)
         {
-            string? next;
-
-            lock (_lock)
+            try
             {
-                next = _queues.TryGetValue(project.Name, out var queue) && queue.Count > 0 ? queue.Peek() : null;
-            }
-
-            if (next is null)
-            {
-                return;
-            }
-
-            if (DateTime.UtcNow > deadline)
-            {
-                var dropped = Clear(project.Name);
-                Log(project.Name, $"head gave up on {dropped} queued prompt(s): the orchestrator never went idle");
-                return;
-            }
-
-            var (pane, readiness) = await ProbeAsync(project, CancellationToken.None).ConfigureAwait(false);
-
-            if (pane is { } target && readiness == Readiness.Ready)
-            {
-                await TypeAsync(project.Name, target.Id, next, CancellationToken.None).ConfigureAwait(false);
-                Log(project.Name, $"head delivered a queued prompt to the orchestrator: {next}");
-
-                lock (_lock)
+                if (Queued(project.Name).FirstOrDefault() is not { } next)
                 {
-                    _queues[project.Name].Dequeue();
+                    return;
                 }
 
-                deadline = DateTime.UtcNow + timing.QueueTimeout;
-            }
+                if (await DeliverQueuedAsync(project, next).ConfigureAwait(false))
+                {
+                    fastUntil = DateTime.UtcNow + timing.QueueTimeout;
+                }
 
-            await Task.Delay(timing.Poll).ConfigureAwait(false);
+                await Task.Delay(DateTime.UtcNow > fastUntil ? timing.SlowPoll : timing.Poll).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is MuxUnavailableException or IOException or UnauthorizedAccessException
+                or InvalidOperationException)
+            {
+                Log(project.Name, $"head keeps its queued prompts and tries again: {e.Message}");
+                await Task.Delay(timing.SlowPoll).ConfigureAwait(false);
+            }
         }
     }
 
-    private int Clear(string project)
+    private async Task<bool> DeliverQueuedAsync(Project project, QueuedPrompt next)
     {
-        lock (_lock)
+        var (pane, readiness) = await ProbeAsync(project, CancellationToken.None).ConfigureAwait(false);
+
+        if (pane is not { } target || readiness != Readiness.Ready)
         {
-            if (!_queues.TryGetValue(project, out var queue))
+            return false;
+        }
+
+        await _typing.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            lock (_lock)
             {
-                return 0;
+                var queued = _queue.Load(project.Name).ToList();
+
+                if (queued.Count == 0 || queued[0] != next)
+                {
+                    return false;
+                }
+
+                queued.RemoveAt(0);
+                _queue.Save(project.Name, queued);
             }
 
-            var count = queue.Count;
-            queue.Clear();
-            return count;
+            try
+            {
+                await SendAsync(project.Name, target.Id, RelayText.Late(next.Text, next.QueuedAt), CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is MuxUnavailableException or IOException or InvalidOperationException)
+            {
+                lock (_lock)
+                {
+                    _queue.Save(project.Name, [next, .. _queue.Load(project.Name)]);
+                }
+
+                throw;
+            }
         }
+        finally
+        {
+            _typing.Release();
+        }
+
+        Log(project.Name, $"head delivered a queued prompt to the orchestrator late: {next.Text}");
+        return true;
     }
 
     private async Task<(Pane? Pane, Readiness Readiness)> WaitForReadyAsync(
@@ -246,7 +317,7 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
     private async Task<(Pane? Pane, Readiness Readiness)> ProbeAsync(Project project, CancellationToken ct)
     {
         var panes = await deps.Mux.ListPanesAsync(ct).ConfigureAwait(false);
-        var pane = MainPane.Find(panes, project.Root, deps.DashPane(project.Name));
+        var pane = MainPane.Find(panes, project.Root, project.Name, deps.DashPane(project.Name));
 
         if (pane is null)
         {
@@ -266,17 +337,32 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
         try
         {
-            var keys = RelayText.Keys(text, deps.Settings.Load(project).MainOrchestratorInNvim);
-
-            await deps.Mux.SendTextAsync(pane, keys, ct).ConfigureAwait(false);
-            await Task.Delay(timing.KeyDelay, ct).ConfigureAwait(false);
-            await deps.Mux.SendTextAsync(pane, RelayText.Submit, ct).ConfigureAwait(false);
+            await SendAsync(project, pane, text, ct).ConfigureAwait(false);
         }
         finally
         {
             _typing.Release();
         }
     }
+
+    private async Task SendAsync(string project, PaneId pane, string text, CancellationToken ct)
+    {
+        var keys = RelayText.Keys(text, deps.Settings.Load(project).MainOrchestratorInNvim);
+
+        await deps.Mux.SendTextAsync(pane, keys, ct).ConfigureAwait(false);
+        await Task.Delay(timing.KeyDelay, ct).ConfigureAwait(false);
+        await deps.Mux.SendTextAsync(pane, RelayText.Submit, ct).ConfigureAwait(false);
+    }
+
+    private static string Unblock(Project project, Pane? pane, Readiness readiness) =>
+        pane is null
+            ? $"fleet finds no pane started in {project.Root} and no orchestrator in the dash tab of the "
+              + $"'{project.Name}' workspace. To unblock it, run {HeadTools.SwitchProject} on {project.Name}; if the "
+              + "prompt still waits, ask the user to close the project in fleet and open it again, which starts its "
+              + $"orchestrator in {project.Root}."
+            : readiness == Readiness.Waiting
+                ? $"To unblock it, the user answers that prompt in {project.Name} ({HeadTools.SwitchProject} shows it)."
+                : "Nothing to do but wait.";
 
     private static string Why(Pane? pane, Readiness readiness) =>
         pane is null

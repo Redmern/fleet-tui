@@ -52,7 +52,7 @@ public sealed class CreateProjectHandler(IProjectStore store)
         string full;
         try
         {
-            full = Path.GetFullPath(root);
+            full = Path.GetFullPath(HomePath.Expand(root));
         }
         catch (Exception e)
             when (e is ArgumentException or NotSupportedException or PathTooLongException)

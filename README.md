@@ -1109,6 +1109,8 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 | `project_structure` | one project's full structure: its repositories, each sub-orchestrator with the agents it started indented under it (status and last report), and the agents under no sub-orchestrator |
 | `tell` | types a plain message into a project's main orchestrator; never dispatches |
 | `relay` | types a dispatch prompt into a project's main orchestrator |
+| `list_queued` | the prompts `tell` and `relay` queued for a project (or every project) that are not typed in yet, numbered, with when each was queued |
+| `drop_queued` | drops one queued prompt by its number, or all of a project's, and answers with their text |
 | `show_agent` | shows one agent's or sub-orchestrator's pane in its project's window, by name, starting it if it is not running |
 | `hide_agent` | hides one agent's or sub-orchestrator's pane by name, without stopping it |
 
@@ -1126,8 +1128,12 @@ into that project's orchestrator, so the orchestrator's own hook dispatches a
 sub-orchestrator exactly as if you had typed it. If the project is closed, the head opens
 it and waits up to 90 seconds for its Claude. If that Claude is busy (a spinner, or a
 question or permission prompt on screen), the prompt is **queued** and the head is told
-so; fleet types it in as soon as the orchestrator is idle, in order, for up to an hour.
-The queue lives in the head's MCP server, so it is lost if the head's Claude exits.
+so, with what would unblock it; fleet types it in as soon as the orchestrator is idle, in
+order, with a note that it was queued and arrives late. The queue is kept on disk on the
+machine whose orchestrator it waits for, so it survives the head's Claude, the project or
+fleet restarting, and nothing drops a prompt except `drop_queued`. `list_projects` shows how
+many prompts wait for each project, on a remote too; `list_queued` lists them, and
+`drop_queued` replaces a stale one instead of queueing a duplicate.
 
 **Telling.** `tell` is the head's tool for everything that is not a dispatch: asking the
 orchestrator for a status update, a follow-up, an answer to its question. It types the
@@ -1158,13 +1164,13 @@ links (as **Remote machines** shows them) and `remotes.json`. It never opens an 
 connection, so a machine that is not connected is listed with its state and no projects.
 
 `list_projects`, `create_project`, `switch_project`, `menu_action`, `list_agents`,
-`project_structure`, `tell`, `relay`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from
+`project_structure`, `tell`, `relay`, `list_queued`, `drop_queued`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from
 `remotes.json` (never an ssh host). Leave it out, or pass `local`, for the machine fleet was
 opened on. A remote that is not connected is connected first, the same way **Remote
 machines** does; if ssh asks a question (a password, a host key), the head says so and you
 answer it there. `switch_project` shows the remote project in this window; `create_project`,
 `relay`, `tell`,
-`list_agents`, `project_structure`, `menu_action`, `show_agent` and `hide_agent` run on the
+`list_queued`, `drop_queued`, `list_agents`, `project_structure`, `menu_action`, `show_agent` and `hide_agent` run on the
 remote's own fleet over the existing ssh
 link, so that project's permissions apply there exactly as they do locally. A remote fleet
 never opens ssh to another remote: everything goes through the origin.

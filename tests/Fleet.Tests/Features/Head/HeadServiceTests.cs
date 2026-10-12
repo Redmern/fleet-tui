@@ -8,9 +8,11 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Approvals;
 using Fleet.Ports.Approvals.Models;
 using Fleet.Ports.Mcp.Models;
+using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Relay;
 using Fleet.Ports.Remotes;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
@@ -72,10 +74,11 @@ public sealed partial class HeadServiceTests
             SubSummary.Unowned(agents, a => a.Open)));
     }
 
-    private HeadService Service(IAgentInboxes? inboxes = null) => new(
+    private HeadService Service(
+        IAgentInboxes? inboxes = null, IRelayQueueStore? queue = null, IMuxDriver? mux = null, HeadTiming? timing = null) => new(
         new HeadDeps(
             _projects,
-            _mux,
+            mux ?? _mux,
             _settings,
             _approvals,
             _agents,
@@ -102,8 +105,9 @@ public sealed partial class HeadServiceTests
             Iso: _iso,
             CreateProject: Create,
             AddRepository: _addsWithoutDep ? null : AddRepository,
-            CloseProject: Close),
-        Fast);
+            CloseProject: Close,
+            RelayQueue: queue),
+        timing ?? Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
     {
@@ -175,7 +179,11 @@ public sealed partial class HeadServiceTests
         await service.Relay.Drained("web").WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(0, service.Relay.Pending("web"));
-        Assert.Equal([RelayText.IntoNvimTerminal + ", ship it", RelayText.Submit], _mux.SentTo(main));
+        var sent = _mux.SentTo(main);
+        Assert.Equal(2, sent.Count);
+        Assert.StartsWith(RelayText.IntoNvimTerminal + ", ship it\n\n(fleet: the head queued this at ", sent[0]);
+        Assert.Contains("delivered late", sent[0]);
+        Assert.Equal(RelayText.Submit, sent[1]);
     }
 
     [Fact]
@@ -193,7 +201,9 @@ public sealed partial class HeadServiceTests
         await service.Relay.Drained("web").WaitAsync(TimeSpan.FromSeconds(5));
 
         var typed = _mux.SentTo(main).Where(t => t != RelayText.Submit).ToList();
-        Assert.Equal([RelayText.IntoNvimTerminal + ", first", RelayText.IntoNvimTerminal + ", second"], typed);
+        Assert.Equal(2, typed.Count);
+        Assert.StartsWith(RelayText.IntoNvimTerminal + ", first\n\n", typed[0]);
+        Assert.StartsWith(RelayText.IntoNvimTerminal + ", second\n\n", typed[1]);
     }
 
     [Fact]
@@ -379,7 +389,9 @@ public sealed partial class HeadServiceTests
         _mux.SetText(main, Idle);
         await service.Relay.Drained("web").WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Equal([RelayText.IntoNvimTerminal + "status?", RelayText.Submit], _mux.SentTo(main));
+        var sent = _mux.SentTo(main);
+        Assert.StartsWith(RelayText.IntoNvimTerminal + "status?\n\n(fleet: the head queued this", sent[0]);
+        Assert.Equal(RelayText.Submit, sent[1]);
     }
 
     [Fact]

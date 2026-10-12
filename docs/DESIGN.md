@@ -4957,7 +4957,7 @@ One Claude above every project's orchestrator, opened by a global chord.
   continue) it starts fresh.
 - **`fleet mcp --head`** is a second tool set on the same `fleet` server name, in its own
   slice (`Features/Head/ServeHead`): `list_projects`, `switch_project`, `menu_action`,
-  `list_agents`, `relay`, `tell`, `show_agent`, `hide_agent`. Opening, switching and
+  `list_agents`, `relay`, `tell`, `list_queued`, `drop_queued`, `show_agent`, `hide_agent`. Opening, switching and
   dashboard handover reuse
   `ProjectOpener`, `LocateProjectHandler` and `fleet request`'s store through the
   composition root. On WezTerm, switching focuses the project's dashboard pane and asks for
@@ -4969,7 +4969,11 @@ One Claude above every project's orchestrator, opened by a global chord.
   head's Claude has one permission rule per tool, not per project, so Claude's own prompt
   could not honour X's choice. Navigation needs no permission.
 - **Relay.** The main orchestrator is the pane in X's root that is not the dashboard
-  (`DashPaneMarker`), not hidden and not in `fleet-head`. The relay sends the prompt with
+  (`DashPaneMarker`), not hidden and not in `fleet-head`. When no pane started in X's root
+  (the root was re-saved, or typed with a `~` the create form used to take literally, while
+  the workspace stayed open), the head adopts the first pane of the `dash` tab in X's own
+  workspace, the same key `IsOpen` trusts; before that, the project counted as open but its
+  orchestrator was never found, and prompts queued forever. The relay sends the prompt with
   X's trigger in front, and after 400 ms Enter, as raw keys (`send-text --no-paste`). When
   X's *Main orchestrator in nvim* setting is on, `Ctrl-\ Ctrl-N` then `i` go first, to take
   nvim from any mode into its Claude terminal; when it is off, Claude gets the keys directly.
@@ -4980,10 +4984,15 @@ One Claude above every project's orchestrator, opened by a global chord.
   prompt. *Ready* is read from the screen: two samples a second apart that are identical,
   with no spinner (`esc to interrupt`), no question or permission prompt, and a Claude
   input marker (`? for shortcuts`, `shift+tab to cycle`, `❯`, `> `). A closed project is
-  opened and waited on for up to 90 s. A busy one gets the prompt queued in the MCP
-  server, per project and in order, and a pump delivers it when idle (polling every 2 s,
-  giving up after an hour without progress). The queue is in memory: it dies with the
-  head's Claude.
+  opened and waited on for up to 90 s. A busy one gets the prompt queued, per project and
+  in order, and a pump delivers it when idle (polling every 2 s, then every 15 s after an
+  hour without progress; it never drops a prompt on its own). The queue is a file per project
+  under `relay-queue/<owner>` in the config folder (`head` for the head's MCP server,
+  `origin` for prompts a remote fleet holds for the origin's head), so it survives the head's
+  Claude or fleetd restarting; fleetd resumes it 10 s after it starts. A prompt typed from
+  the queue carries a note that it was queued and arrives late. `list_queued` and
+  `drop_queued` let the head see and replace stale prompts, and `list_projects` shows the
+  count, for a remote too.
 
 **On the built-in multiplexer, a float that moves.** fleetd has floats, but a float
 belongs to one workspace. Panes are global to the model, though, and a float is only a

@@ -14,6 +14,8 @@ public static class FleetPaths
 
     public static string Requests => Path.Combine(Config, "requests");
 
+    public static string RelayQueue => Path.Combine(Config, "relay-queue");
+
     public static string LogFile => Path.Combine(Config, "fleet.log");
 
     public static string KeymapFile => Path.Combine(Config, "keybinds.json");

@@ -174,6 +174,27 @@ public sealed class CreateProjectTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_root_under_home_typed_with_a_tilde_is_expanded_not_taken_as_a_folder_named_tilde()
+    {
+        var reply = Handler().Handle(new CreateProjectCommand("web", "~"));
+
+        Assert.Equal(CreateProjectStatus.Created, reply.Status);
+        Assert.Equal(
+            Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+            Path.TrimEndingDirectorySeparator(reply.Project!.Root));
+        Assert.DoesNotContain("~", reply.Project.Root);
+    }
+
+    [Fact]
+    public void Create_as_the_head_and_a_remote_use_it_expands_a_tilde_root_too()
+    {
+        var created = Handler().Create(new CreateProjectCommand("home", "~"));
+
+        Assert.True(created.Succeeded, created.Error);
+        Assert.DoesNotContain("~", created.Value.Root);
+    }
+
+    [Fact]
     public void A_name_that_is_already_a_project_is_refused_and_the_existing_project_is_untouched()
     {
         var first = ARoot("first");

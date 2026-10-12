@@ -26,6 +26,12 @@ public static class HeadWiring
 {
     private static readonly TimeSpan QuickExit = TimeSpan.FromSeconds(5);
 
+    private static readonly TimeSpan ResumeAfter = TimeSpan.FromSeconds(10);
+
+    private const string HeadQueue = "head";
+
+    private const string OriginQueue = "origin";
+
     public static string Folder => Path.Combine(Adapters.ConfigDirectory, "head");
 
     public static async Task<int> RunMcpAsync(CancellationToken ct)
@@ -33,7 +39,9 @@ public static class HeadWiring
         var log = Adapters.Log();
         var mux = Adapters.Mux(log).Driver;
 
-        var service = new HeadService(Deps(mux, log) with { Inboxes = Adapters.AgentInboxes() });
+        var service = new HeadService(
+            Deps(mux, log) with { Inboxes = Adapters.AgentInboxes(), RelayQueue = Adapters.RelayQueue(HeadQueue) });
+        service.Relay.Resume();
 
         var serving = new McpServing(McpServerId.ServerName, ToolInfos(), service.HandleAsync);
 
@@ -45,7 +53,22 @@ public static class HeadWiring
     public static Func<string, IReadOnlyDictionary<string, string>, CancellationToken, Task<(string Text, bool Failed)>>
         ServeOrigin(Func<IMuxDriver> mux, Ports.IFleetLog log)
     {
-        var service = new Lazy<HeadService>(() => new HeadService(Deps(mux(), log)));
+        var service = new Lazy<HeadService>(() =>
+            new HeadService(Deps(mux(), log) with { RelayQueue = Adapters.RelayQueue(OriginQueue) }));
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(ResumeAfter).ConfigureAwait(false);
+
+            try
+            {
+                service.Value.Relay.Resume();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                log.Swallowed(e);
+            }
+        });
 
         return async (tool, arguments, ct) =>
         {
