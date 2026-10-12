@@ -9,7 +9,7 @@ using Fleet.Ui.Models;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
-public sealed class RemoteLinkTests : IAsyncLifetime
+public sealed partial class RemoteLinkTests : IAsyncLifetime
 {
     private readonly CancellationTokenSource _stop = new();
     private readonly List<Task> _running = [];
