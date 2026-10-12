@@ -15,4 +15,6 @@ namespace Fleet.Platform.Mux.Embedded.Protocol;
 [JsonSerializable(typeof(HostEffect))]
 [JsonSerializable(typeof(ControlRequest))]
 [JsonSerializable(typeof(ControlResponse))]
+[JsonSerializable(typeof(ClipboardImageRequest))]
+[JsonSerializable(typeof(ClipboardImageResponse))]
 public partial class WireJsonContext : JsonSerializerContext;

@@ -59,7 +59,6 @@ public static class FleetActionIds
         FleetAction.OpenWebApp => "open-web-app",
         FleetAction.OpenPort => "open-port",
         FleetAction.TodoBoard => "todo-board",
-        FleetAction.TodoBoardAll => "todo-board-all",
         _ => action.ToString().ToLowerInvariant(),
     };
 
@@ -116,7 +115,6 @@ public static class FleetActionIds
         "open-web-app" => FleetAction.OpenWebApp,
         "open-port" => FleetAction.OpenPort,
         "todo-board" => FleetAction.TodoBoard,
-        "todo-board-all" => FleetAction.TodoBoardAll,
         "close" => FleetAction.Close,
         var other => Enum.GetValues<FleetAction>().FirstOrDefault(a => For(a) == other),
     };

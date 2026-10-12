@@ -92,14 +92,13 @@ public class FleetMenusTests
     }
 
     [Fact]
-    public void The_all_projects_todo_board_sits_next_to_the_todo_board_on_capital_t()
+    public void The_main_menu_lists_one_todo_board_and_no_all_todos()
     {
-        var main = FleetMenus.Actions(FleetMenus.Main);
+        var labels = FleetMenus.Actions(FleetMenus.Main).Select(FleetMenus.Label).ToList();
 
-        Assert.Equal(main.ToList().IndexOf(FleetAction.TodoBoard) + 1, main.ToList().IndexOf(FleetAction.TodoBoardAll));
-        Assert.Equal("T", KeymapDefaults.Bindings[FleetAction.TodoBoardAll]);
-        Assert.Equal("All todos", FleetMenus.Label(FleetAction.TodoBoardAll));
-        Assert.True(FleetMenus.OpensMore(FleetAction.TodoBoardAll));
+        Assert.Single(labels, l => l.Contains("todo", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("All todos", labels);
+        Assert.DoesNotContain("T", FleetMenus.Actions(FleetMenus.Main).Select(a => KeymapDefaults.Bindings.GetValueOrDefault(a)));
     }
 
     [Fact]

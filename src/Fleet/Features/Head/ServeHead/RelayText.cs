@@ -8,13 +8,15 @@ public static class RelayText
 
     public static string Keys(string text, bool inNvim) => inNvim ? IntoNvimTerminal + text : text;
 
+    public const string AfterTrigger = " ";
+
     public static string Dispatch(string prompt, string trigger)
     {
-        var text = prompt.Trim().ReplaceLineEndings("\n");
+        var task = Plain(prompt, trigger);
 
-        return trigger.Length == 0 || text.StartsWith(trigger, StringComparison.Ordinal)
-            ? text
-            : trigger + text;
+        return trigger.Length == 0 || task.Length == 0
+            ? task
+            : trigger + AfterTrigger + task;
     }
 
     public static string Plain(string prompt, string trigger)

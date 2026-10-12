@@ -4,6 +4,15 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.17 (2026-10-11)
+
+- **Open port** through a laptop fleet linked under Remote machines waits for the laptop's answer and says what happened: forwarded, pending until the port listens, or the reason it failed; a failed browser opener shows the URL to open yourself, and a silent or older laptop fleet gets a log pointer, a restart hint or the ssh command.
+- The **todo board** no longer crashes on open, and there is one board: `a` in the board switches to all projects and back (the separate `T` all-projects action is gone).
+- **Images paste into Claude Code on a remote**: `ctrl+v` in a remote pane fetches the image from your own clipboard; on a Windows remote, `prefix i` saves it there and types its path.
+- Pastes arrive as one bracketed paste on Linux and macOS, `prefix ]` pastes your clipboard text, and a copy in a pane also goes through `wl-copy`, `xclip` or `pbcopy` when the terminal drops OSC 52.
+- **Experimental**, opt-in voice for a remote: `FLEET_VOICE_FORWARD=1` forwards your PulseAudio/PipeWire socket so `/voice` there can use your microphone; untested end to end.
+- A prompt relayed from the head reaches a project's orchestrator as `, task` (trigger, space, task), the same form you type.
+
 ## 0.7.16 (2026-10-11)
 
 - **Go to dashboard** moved from `m` to `d` (`d` in the fleet menu, `ctrl+s a d` in the popup; your own rebinds stay) and leaves the keyboard focus on the dashboard instead of the main orchestrator's claude pane.

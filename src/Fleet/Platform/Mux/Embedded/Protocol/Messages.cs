@@ -18,6 +18,8 @@ public enum MessageType : byte
     Bye = 22,
     Request = 30,
     Response = 31,
+    ClipboardImageRequest = 40,
+    ClipboardImageResponse = 41,
 }
 
 public static class ClientRoles
@@ -288,6 +290,85 @@ public sealed class HostEffect
 
     [JsonPropertyName("value")]
     public string? Value { get; set; }
+
+    [JsonPropertyName("reply")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Reply { get; set; }
+}
+
+public static class ForwardResults
+{
+    public const string Forwarded = "forwarded";
+    public const string Pending = "pending";
+    public const string Failed = "failed";
+    public const string BrowserFailed = "browser-failed";
+    public const string NoAnswer = "no-answer";
+    public const string Unsupported = "unsupported";
+}
+
+public sealed class ForwardResultDto
+{
+    [JsonPropertyName("state")]
+    public string State { get; set; } = string.Empty;
+
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
+
+    [JsonPropertyName("reason")]
+    public string? Reason { get; set; }
+}
+
+public sealed class ClipboardImageRequest
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("pane")]
+    public string Pane { get; set; } = string.Empty;
+
+    [JsonPropertyName("probe")]
+    public bool Probe { get; set; }
+
+    [JsonPropertyName("paste")]
+    public bool Paste { get; set; }
+}
+
+public sealed class ClipboardImageResponse
+{
+    public const string Png = "image/png";
+
+    public const int MaxBytes = (Wire.MaxMessage - (64 * 1024)) / 4 * 3;
+
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("mime")]
+    public string? Mime { get; set; }
+
+    [JsonPropertyName("data")]
+    public byte[]? Data { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+
+    [JsonPropertyName("has")]
+    public bool HasImage { get; set; }
+
+    public static ClipboardImageResponse For(int id, byte[]? png) => png switch
+    {
+        null or [] => new ClipboardImageResponse { Id = id },
+        { Length: > MaxBytes } => new ClipboardImageResponse { Id = id, Error = TooLarge(png.Length) },
+        _ => new ClipboardImageResponse { Id = id, Mime = Png, Data = png, HasImage = true },
+    };
+
+    public static ClipboardImageResponse Probed(int id, bool hasImage) =>
+        new() { Id = id, Mime = hasImage ? Png : null, HasImage = hasImage };
+
+    public static string TooLarge(long bytes) =>
+        $"the clipboard image is too large: {Mib(bytes)} MiB, the limit is {Mib(MaxBytes)} MiB";
+
+    private static string Mib(long bytes) =>
+        (bytes / (1024.0 * 1024.0)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
 }
 
 public sealed class ControlRequest
@@ -306,6 +387,9 @@ public sealed class ControlRequest
 
     [JsonPropertyName("caller")]
     public string? Caller { get; set; }
+
+    [JsonPropertyName("token")]
+    public string? Token { get; set; }
 
     [JsonPropertyName("workspace")]
     public string? Workspace { get; set; }
@@ -369,6 +453,12 @@ public sealed class ControlRequest
 
     [JsonPropertyName("forwards")]
     public List<ForwardDto>? Forwards { get; set; }
+
+    [JsonPropertyName("reply")]
+    public string? Reply { get; set; }
+
+    [JsonPropertyName("forwardResult")]
+    public ForwardResultDto? ForwardResult { get; set; }
 }
 
 public sealed class ForwardDto
@@ -543,6 +633,21 @@ public sealed class ControlResponse
 
     [JsonPropertyName("ssh")]
     public string? Ssh { get; set; }
+
+    [JsonPropertyName("forwardResult")]
+    public ForwardResultDto? ForwardResult { get; set; }
+
+    [JsonIgnore]
+    public string? AwaitingReply { get; set; }
+
+    [JsonPropertyName("mime")]
+    public string? Mime { get; set; }
+
+    [JsonPropertyName("data")]
+    public byte[]? Data { get; set; }
+
+    [JsonPropertyName("hasImage")]
+    public bool HasImage { get; set; }
 }
 
 public sealed class NoticeDto

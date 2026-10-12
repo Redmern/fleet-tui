@@ -1,5 +1,6 @@
 using Fleet.Features.Todos.ShowBoard;
 using Fleet.Features.Todos.ShowBoard.Enums;
+using Fleet.Features.Todos.ShowBoard.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
@@ -11,6 +12,8 @@ namespace Fleet.Tests.Features.Todos;
 public class BoardKeysTests
 {
     private static readonly Keymap Keys = Keymap.Default;
+
+    private static readonly BoardScopes Scopes = new(BoardScope.One("alpha", "/a"), BoardScope.All([new BoardProject("alpha", "/a")]));
 
     [Fact]
     public void E_cycles_effort_x_closes_r_refreshes_and_q_quits()
@@ -55,8 +58,36 @@ public class BoardKeysTests
     [Fact]
     public void The_action_bar_names_every_board_key()
     {
-        var hints = BoardKeys.Hints(Keys).Select(h => h.Key).ToList();
+        var hints = BoardKeys.Hints(Keys, Scopes).Select(h => h.Key).ToList();
 
-        Assert.Equal(["enter", "l", "e", "x", "r", "q"], hints);
+        Assert.Equal(["enter", "l", "e", "x", "a", "r", "q"], hints);
+    }
+
+    [Fact]
+    public void A_switches_the_scope()
+    {
+        Assert.Equal(BoardCommand.Scope, BoardKeys.For(Key.A, Keys));
+    }
+
+    [Fact]
+    public void The_scope_key_takes_no_default_board_or_list_key()
+    {
+        FleetAction[] taken =
+        [
+            FleetAction.MoveDown, FleetAction.MoveUp, FleetAction.MoveFirst, FleetAction.MoveLast,
+            FleetAction.PageDown, FleetAction.PageUp, FleetAction.Refresh, FleetAction.Close,
+        ];
+
+        Assert.All(taken, a => Assert.NotEqual(BoardKeys.Scope, Keys.KeyFor(a)));
+        Assert.DoesNotContain(BoardKeys.Scope, new[] { BoardKeys.Effort, BoardKeys.Close, BoardKeys.Launch });
+    }
+
+    [Fact]
+    public void The_scope_hint_names_the_scope_the_key_switches_to()
+    {
+        string Label(BoardScopes scopes) => BoardKeys.Hints(Keys, scopes).Single(h => h.Command == BoardCommand.Scope).Label;
+
+        Assert.Equal("all projects", Label(Scopes));
+        Assert.Equal("this project", Label(Scopes.Switched()));
     }
 }

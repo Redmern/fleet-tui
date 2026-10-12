@@ -3,6 +3,7 @@ using Fleet.Features.Head.ServeHead.Enums;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Hooks;
 using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Head;
@@ -29,13 +30,29 @@ public sealed class HeadPiecesTests
     }
 
     [Theory]
-    [InlineData("do it", ",", ",do it")]
-    [InlineData(",do it", ",", ",do it")]
-    [InlineData("  two\r\nlines ", ",", ",two\nlines")]
+    [InlineData("do it", ",", ", do it")]
+    [InlineData(",do it", ",", ", do it")]
+    [InlineData(", do it", ",", ", do it")]
+    [InlineData("  , ,do it", ",", ", do it")]
+    [InlineData("  two\r\nlines ", ",", ", two\nlines")]
+    [InlineData("go", ";;", ";; go")]
     [InlineData("plain", "", "plain")]
-    public void The_dispatch_text_carries_the_trigger_once(string prompt, string trigger, string expected)
+    public void The_dispatch_text_is_the_trigger_once_then_a_space_then_the_task(
+        string prompt, string trigger, string expected)
     {
         Assert.Equal(expected, RelayText.Dispatch(prompt, trigger));
+    }
+
+    [Theory]
+    [InlineData("fix the double scrollbar", ",")]
+    [InlineData(",fix the double scrollbar", ",")]
+    [InlineData("fix the double scrollbar", ";")]
+    public void A_relayed_dispatch_is_taken_by_the_receiving_dispatch_hook(string prompt, string trigger)
+    {
+        var decision = HookPrompt.Intercepted(RelayText.Dispatch(prompt, trigger), trigger);
+
+        Assert.True(decision.Take);
+        Assert.Equal("fix the double scrollbar", decision.Task);
     }
 
     [Theory]

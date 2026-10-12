@@ -60,7 +60,7 @@ public static class HelpCommand
               space menu, [ copy, ] paste, d detach, Q quit fleet; ctrl+s again sends ctrl+s
               groups (ctrl+s, then the group key, then the key):
                 a agents       d dashboard, l list agents, e open editor, f files,
-                               n notifications, t todo board, T todo board of all projects
+                               n notifications, t todo board (a in the board switches to all projects)
                                (dashboard was m; keys you rebound yourself are kept)
                 s session      p switch project, w save session, R remotes, o open port, d/q detach, r reload keys
                 t tabs         c new, n next, p previous, 1-9 go to tab, x close tab

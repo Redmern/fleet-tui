@@ -27,6 +27,12 @@ public static class SshControl
     public static IReadOnlyList<string> Cancel(string controlPath, string host, int local, string target, int remote) =>
         ["-S", controlPath, "-O", "cancel", "-L", Spec(local, target, remote), host];
 
+    public static IReadOnlyList<string> ForwardSocket(string controlPath, string host, string remoteSocket, string localSocket) =>
+        ["-S", controlPath, "-O", "forward", "-R", $"{remoteSocket}:{localSocket}", host];
+
+    public static IReadOnlyList<string> CancelSocket(string controlPath, string host, string remoteSocket, string localSocket) =>
+        ["-S", controlPath, "-O", "cancel", "-R", $"{remoteSocket}:{localSocket}", host];
+
     public static IReadOnlyList<string> Tunnel(string host, int local, string target, int remote) =>
     [
         "-N", "-T",

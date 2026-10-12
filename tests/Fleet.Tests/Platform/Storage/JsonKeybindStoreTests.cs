@@ -53,6 +53,30 @@ public sealed class JsonKeybindStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_keybinds_file_from_before_the_board_was_unified_still_loads()
+    {
+        File.WriteAllText(
+            FleetPaths.KeymapFile,
+            """
+            {
+              "version": 1,
+              "bindings": { "TodoBoardAll": "T" },
+              "keybinds": {
+                "fleet-ui.todo-board-all": { "chord": "T" },
+                "mux.menu-todo-board-all": { "chord": "a T" }
+              }
+            }
+            """);
+
+        var set = Load();
+
+        Assert.Null(set.Find("fleet-ui.todo-board-all"));
+        Assert.Null(set.Find("mux.menu-todo-board-all"));
+        Assert.DoesNotContain(set.Entries, e => e.Action.Contains("todo-board-all", StringComparison.Ordinal));
+        Assert.Equal("a t", set.Find("mux.menu-todo-board")!.Chord);
+    }
+
+    [Fact]
     public void A_corrupt_mux_file_is_logged_and_skipped()
     {
         File.WriteAllText(JsonKeybindStore.MuxKeysFile, "{ not json");

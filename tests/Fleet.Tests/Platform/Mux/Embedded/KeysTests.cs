@@ -128,6 +128,7 @@ public class KeysTests
             ["space"] = "menu",
             ["["] = "copy-mode",
             ["]"] = "paste",
+            ["i"] = "paste-image",
             ["d"] = "detach",
             ["Q"] = "menu quit",
             ["f f"] = "float-new",
@@ -162,7 +163,6 @@ public class KeysTests
             ["a f"] = "menu browsefiles",
             ["a n"] = "menu notifications",
             ["a t"] = "menu todo-board",
-            ["a T"] = "menu todo-board-all",
             ["g k"] = "menu keybinds",
             ["g K"] = "menu show-menu-keys",
             ["g t"] = "menu button-hints",
@@ -722,12 +722,11 @@ public class KeysTests
                 ("f", "file navigator"),
                 ("l", "list agents"),
                 ("n", "notifications"),
-                ("T", "todo board of all projects"),
                 ("t", "todo board"),
             ],
             agents.Select(e => (e.Key, e.Label)));
         Assert.Equal(
-            ["menu browsefiles", "menu list-agents", "menu main-pane", "menu notifications", "menu open-editor", "menu todo-board", "menu todo-board-all"],
+            ["menu browsefiles", "menu list-agents", "menu main-pane", "menu notifications", "menu open-editor", "menu todo-board"],
             Group(keys, "a").Leaves.Select(b => b.Command).Order());
     }
 
@@ -749,7 +748,7 @@ public class KeysTests
             null);
 
         Assert.Equal(
-            ["e", "f", "l", "m", "n", "t", "T"],
+            ["e", "f", "l", "m", "n", "t"],
             Group(keys, "a").Leaves.Select(b => b.Chord.Label).Order());
         Assert.Equal("menu main-pane", Group(keys, "a").Leaves.Single(b => b.Chord.Label == "m").Command);
     }

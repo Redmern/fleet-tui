@@ -234,7 +234,6 @@ typed and only goes back once the field is empty; the key-capture dialog in **Ke
 │     p     Switch                     │
 │     l     List agents                │
 │     t     Todo board   ›             │
-│     T     All todos    ›             │
 │     f     Files                      │
 │     s     Settings     ›             │
 │                                      │
@@ -290,10 +289,12 @@ draws the buttons in a float's or the dashboard's frame.
   sub-orchestrator reports done the ticket is done; when it reports failed the ticket is open
   again with a `note`. Tickets that aren't open don't launch, and the status line says why. `r`
   re-reads the folder; the board also picks up edits made on disk every two seconds.
-- **All todos** (`T`, or `ctrl+s a T` from any pane) is the same board over every project fleet
-  knows, with a project column in front of the id. `enter`, `e`, `x` and `l` act on the ticket in
-  its own project (`l` dispatches into that project), and `r` (and opening the board) pulls Jira
-  for each project that has a `jira` block, one after the other; the status line lists each
+  `a` switches the board between this project and all projects: every project fleet knows, with a
+  project column in front of the id, and the title and the `a` hint follow the scope. The selected
+  ticket stays selected when the other scope has it, otherwise the cursor goes to the first row.
+  `enter`, `e`, `x` and `l` act on the ticket in its own project (`l` dispatches into that
+  project). Opening the board, switching to a scope for the first time and `r` pull Jira for each
+  project in the scope that has a `jira` block, one after the other; the status line lists each
   project's count or error. Projects without Jira make no network calls.
 - **Jira** (experimental: optional, Jira Cloud, pull only, and not yet tested against a real Jira instance): give a project a `jira` block in
   `~/.config/fleet/settings/<project>.json` and put an
@@ -364,6 +365,36 @@ Notifications always opens this machine's center, whether from the remote's menu
 click on the remote's notice pill, the same way Switch project and the head stay here; only
 fleet used directly on the remote machine opens the remote's own center.
 
+#### Clipboard, image paste and voice on a remote machine
+
+These work only through fleet's own remote connection (`fleet bridge`, as above), not in a
+plain `ssh host` session. The viewer, the machine you sit at, may be Linux, macOS or Windows.
+
+- **Pasting an image into Claude Code on a remote.** Copy an image here and press `ctrl+v`
+  in Claude Code on the remote as usual. In remote panes fleet puts its own `xclip` and
+  `wl-paste` (plus `osascript` and `pngpaste` on a macOS remote) first on `PATH`;
+  when Claude Code calls them, fleet fetches the image from this machine's clipboard.
+  Local panes are untouched.
+- **Windows remote:** Claude Code on Windows reads the clipboard through PowerShell, which
+  fleet cannot stand in for. Press `prefix i` instead: fleet saves this machine's clipboard
+  image to a private temp folder on the remote and types the file's path into the pane.
+- **Consent.** Only the pane you are focused on can get your clipboard, only an image (never
+  text), at most 20 times a minute, and each read shows a notice here naming the pane. A
+  pane still cannot read your clipboard with OSC 52. Images are limited to about 12 MiB.
+- **Paste and copy.** On Linux and macOS fleet now turns on bracketed paste, so a pasted
+  block reaches Claude Code as one paste instead of typed lines. A copy in a pane is sent as
+  OSC 52 and, on Linux and macOS, also through `wl-copy`, `xclip` or `pbcopy`, so it works
+  where the terminal drops OSC 52; the log says when no way worked. `prefix ]` pastes this
+  machine's clipboard text into the focused pane.
+- **Voice (experimental).** With `FLEET_VOICE_FORWARD=1` set for fleet on a Linux or macOS
+  viewer, fleet forwards this machine's PulseAudio/PipeWire socket to the remote and sets
+  `PULSE_SERVER` in new remote panes, so `/voice` there could record your microphone. This
+  is **untested end to end**: see [docs/voice-over-ssh.md](docs/voice-over-ssh.md).
+
+Tested with automated tests and fakes only: the Windows and macOS clipboard readers, the
+macOS shims, the Windows `prefix i` path and voice have not been run on real Windows or
+macOS machines or on a real headless remote yet.
+
 #### Web apps on a remote machine
 
 While a machine is connected, fleet forwards the web apps its projects run to `localhost`
@@ -426,7 +457,13 @@ reachable in the browser of the machine you are looking from:
 - **fleet on your laptop, linked under Remote machines:** the remote fleet sends
   `viewer-forward` to your laptop's fleet, which pins the port, forwards it over the link's
   ssh (`-O forward -L`, or a background `ssh -N -L` on Windows) and opens
-  `http://localhost:<port>` (or the local port it had to pick).
+  `http://localhost:<port>` (or the local port it had to pick). The dialog waits up to 20 s
+  for your laptop's answer and then says what happened: forwarded, pending (it opens the
+  browser once the port listens), the reason the forward failed, or the URL to open yourself
+  when the browser would not start. If your laptop does not answer, the dialog points to its
+  fleet log, and when it runs an older fleet, says to restart its fleetd (`fleet daemon
+  stop`, then `fleet attach`). A laptop fleet that tells this one it cannot forward makes the
+  dialog fall back to the ssh command below. Opening a port whose forward failed tries it again.
 - **`fleet attach --ssh <host>` from a machine without control sockets (Windows):** the
   attach client forwards it itself with a background `ssh -N -L` to `<host>` and opens
   `http://localhost:<port>` (or the local port it had to pick). Unforwarding stops that
@@ -687,8 +724,8 @@ the floats). Every fleet menu action has a key there:
 
 | Group | Keys |
 |---|---|
-| top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `space` menu, `d` detach, `Q` quit fleet |
-| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board, `T` todo board of all projects |
+| top level | `h/j/k/l` focus, arrows resize, `%` `"` split, `x` close pane, `z` zoom, `o` next pane, `[` copy, `]` paste, `i` paste image, `space` menu, `d` detach, `Q` quit fleet |
+| `a` agents | `d` dashboard, `l` list agents, `e` open editor, `f` files, `n` notifications, `t` todo board |
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |

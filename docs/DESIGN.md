@@ -2961,8 +2961,10 @@ arrives as a burst.
   for bracketed paste, and `ESC[201~` inside the text is removed so a paste
   cannot close its bracket early. A pane that did not ask gets the text as
   typed, Enters included, which is what a terminal does too.
-- **Linux clients** are unchanged: their paste arrives as raw bytes, already
-  bracketed if the host terminal does it.
+- **Linux and macOS clients** did not bracket at first: the client never sent
+  `?2004h` to its host terminal, so a paste arrived as plain raw bytes. Since
+  2026-10-11 the client turns bracketed paste on and parses the markers itself
+  (see *Window title and clipboard* › *Bracketed paste on Linux and macOS*).
 
 Rejected along the way:
 - **Reading the host as VT input** and asking it for `?9001h`/`?2004h`, as
@@ -3108,9 +3110,12 @@ sequences passed through.
   - natively on Windows (`SetClipboardData`), which works in conhost, Windows
     Terminal and WezTerm alike;
   - as OSC 52 to its host terminal on Unix, which also works when the client
-    is on the far side of SSH.
+    is on the far side of SSH, and then through a native tool as a fallback
+    (see *Copy fallback on Linux and macOS* below).
 - **Clipboard reads** (OSC 52 `?`) stay refused. A program in a pane never
-  reads the user's clipboard.
+  reads the user's clipboard *text*. The one exception, added 2026-10-11, is
+  an *image*, pulled on demand only for the pane the user is focused on (see
+  *Clipboard images over a remote* below).
 - **Titles are sanitised** (control characters removed, 256 characters
   maximum), so a pane cannot put escape sequences onto the host through its
   title.
@@ -3132,7 +3137,160 @@ sequences passed through.
 - **Whether each host terminal honours OSC 52 writes.** Ghostty, kitty,
   WezTerm and Windows Terminal do by default; others may need a setting. On
   Windows this does not matter, because the client sets the clipboard
-  natively.
+  natively. On Linux and macOS the native fallback below now covers a
+  terminal that drops OSC 52.
+
+### Clipboard images, paste and voice over a remote, 2026-10-11
+
+Working on a remote through `fleet bridge`, image paste, copy and Claude Code
+`/voice` did not work: Claude Code reads clipboard images with `xclip`,
+`wl-paste`, `osascript` or PowerShell *on the machine it runs on*, the remote
+has no clipboard, fleet never shipped the viewer's, Linux and macOS pastes were
+not bracketed, copies relied on OSC 52 alone, and no audio was forwarded. The
+spec is `docs/specs/ssh-clipboard-voice-forwarding.md`. Scope: the `fleet
+bridge` path only. Plain `ssh host; claude` without fleet is out of scope.
+
+#### Consent rule
+
+A pane may pull **one thing** from the viewer: the clipboard **image**, and
+only while that pane is the **focused pane of a viewer**. Concretely:
+
+- **Focused pane only.** The daemon that owns the pane sends the request to the
+  viewer client focusing that pane. No viewer focuses it → refused, and no
+  clipboard is read at all.
+- **Per-pane token.** A remote pane gets `FLEET_PANE` and a random
+  `FLEET_PANE_TOKEN` in its env. The daemon compares the token in constant time
+  and refuses a missing or wrong one, so another same-user process on the
+  remote cannot simply claim a pane id. It can still read the token from the
+  pane's environment; the token narrows the hole, it does not close it.
+- **Rate limit.** 20 image reads per pane per minute.
+- **Viewer notice.** Each image actually shipped shows a notice on the viewer,
+  `remote pane <id> read your clipboard image (<n> KiB)`. Type probes
+  (`TARGETS`, `--list-types`) are answered without shipping the PNG and show
+  nothing.
+- **No text, no OSC 52 read.** OSC 52 `?` stays refused, and there is no text
+  read for panes. Text is the risky part of a clipboard (passwords, tokens),
+  and a terminal escape gives the pane no user action to hang consent on. An
+  image read at least comes from a program the user just asked to paste.
+  Kitty's OSC 5522 was rejected too: only kitty implements it.
+
+The rule lives in the daemon, not in the shim, so a hand-made request gets the
+same answer as the shim.
+
+#### Clipboard images over a remote
+
+- **Wire.** daemon → client `ClipboardImageRequest { id, pane, probe, paste }`,
+  client → daemon `ClipboardImageResponse { id, mime, data | error, has }`,
+  both registered in `WireJsonContext`. A remote pane shown in a local window
+  is relayed: the remote daemon asks over the `RemoteLink`, the local daemon
+  asks the viewer focusing that window, and the answer goes back the same way.
+  Deadlines: 20 s for a direct ask, 15 s for a relayed one.
+- **Size limit ~12 MiB.** A wire message is at most 16 MiB and the PNG travels
+  as base64 (4/3 larger) inside JSON, so the image limit is 12,533,760 bytes
+  ((16 MiB − 64 KiB) × 3/4).
+  A larger image is refused with `the clipboard image is too large: … MiB`; readers stop at the
+  limit + 1 byte rather than buffering the whole image.
+- **Viewer readers** (`IClipboardImageSource`, picked by OS in
+  `ClipboardImageSources.ForThisMachine`): Linux `wl-paste --type image/png`
+  then `xclip -selection clipboard -t image/png -o`; macOS `pngpaste -`, then
+  `osascript` (PNG class); Windows the clipboard API directly (PNG format, else
+  CF_DIBV5/CF_DIB converted to PNG; 24- and 32-bit DIBs only, which is what
+  Windows synthesises for image copies). No reader or no image → "no image",
+  never an error.
+- **Shims on the remote, remote panes only.** `fleet shim <tool>` is a
+  multi-call entry; `<fleet config>/shims` holds `sh` scripts that exec it,
+  named `xclip` and `wl-paste` on every Unix remote, plus `osascript` and
+  `pngpaste` on a macOS remote. That folder goes first on `PATH`, and the pane
+  gets its token, only in panes of a daemon that serves a bridged viewer:
+  started for one (`FLEET_REMOTE_DAEMON=1`, set by `fleet bridge`) or attached
+  by one since. Never on a Windows daemon. A local pane's env and clipboard
+  are untouched. A shim answers the image-read
+  calls Claude Code makes (`-t TARGETS -o`, `-t image/png -o`, `--list-types`,
+  `--type image/png`, the osascript clipboard-class and PNG reads, `pngpaste -`)
+  and execs the real tool, skipping the shim folder, for anything else; when
+  no real tool exists it exits 127. "No image" exits the way the native tool
+  does, with empty output, so Claude Code says there is no image.
+- **Windows remote: `prefix i`** (`mux.paste-image`). PowerShell cannot be
+  shimmed through `PATH`, so on a Windows remote the user asks for the image:
+  `prefix i` pulls the viewer's image for the focused pane and writes it to
+  `<temp>/fleet-clipboard` on the remote (mode 0700 on Unix; if that folder is
+  a symlink, not private or not listable, fleet logs it and uses a fresh
+  private `fleet-clipboard-<random>` folder instead; Windows gets no mode
+  check). Files are named `clipboard-<UTC time>-<16 hex>.png` and pruned after
+  a day. The path is typed into the pane, quoted for its shell when it holds
+  whitespace or shell-special characters (POSIX or PowerShell single quotes,
+  curly quotes included). No image or too
+  large shows a notice. The chord works on local panes too; it is a user
+  action, so it does not bend the local-pane rule.
+
+#### Bracketed paste on Linux and macOS
+
+- On Unix the client's enter sequence sends `?2004h` (`PasteMarkers.Enable`);
+  `RestoreHost` sends `?2004l`.
+- The Unix input path (`PasteMarkers`) turns `ESC[200~ … ESC[201~` into one
+  `Text { paste: true }`, which fleetd brackets again for a pane that asked for
+  2004 and sends as plain text to one that did not.
+- Bounds: a paste is capped at **1 MiB** (JSON can grow text up to 6× inside
+  the 16 MiB wire limit); at the cap it is flushed and a late `201~` dropped.
+  An unfinished paste is flushed after **2 s** idle. A read ending in a prefix
+  of the start marker is held for **40 ms** in case the rest follows.
+- A paste while the fleet prefix is armed disarms it and goes in as text. A
+  paste during a sticky mode (copy mode, a kill-pane confirm) is dropped and
+  logged, so a pasted `y` cannot confirm a kill.
+
+#### Copy fallback on Linux and macOS
+
+- OSC 52 is sent first (a copy over 1 MiB is not sent at all). Then the client tries native tools in order and
+  stops at the first that exits 0: `wl-copy` (only with `WAYLAND_DISPLAY`),
+  `xclip -selection clipboard` (only with `DISPLAY`) on Linux, `pbcopy` on
+  macOS. Text goes over stdin, never argv. "Clipboard NOT set" is logged only
+  when every tool fails or is missing; a tool that forks (xclip, wl-copy) is
+  fine, since only the parent's exit counts.
+- Copies are **latest-only**: one in flight, one
+  waiting, older waiting copies are dropped.
+- Windows is unchanged (`SetClipboardData`).
+- **Text read for `prefix ]`** (paste the clipboard into the focused pane): the
+  client reads its own clipboard with `wl-paste`, `xclip -o` or `pbpaste`
+  (1 MiB cap) and sends it as a paste. This is the user pasting, not a pane
+  reading.
+
+#### Voice (spike, unproven)
+
+Opt-in with `FLEET_VOICE_FORWARD=1` in the viewer's fleetd environment (Linux
+or macOS viewer). On each link-up fleetd reverse-forwards the viewer's
+PulseAudio/PipeWire socket over the existing ssh ControlMaster
+(`ssh -O forward -R <remote>/fleet-pulse/pulse-<id>.sock:<viewer socket>`, in
+a 0700 folder) and the remote daemon sets `PULSE_SERVER=unix:<socket>` in new
+remote panes when that socket answers. Windows viewers have no ControlMaster
+and get nothing. Anyone who can open the socket on the remote (that user and
+root) can listen to the microphone. Whether Claude Code `/voice` actually
+records through it on a headless host is **not proven**; details, findings
+from the Claude Code binary and the open steps are in
+[`docs/voice-over-ssh.md`](voice-over-ssh.md).
+
+#### Verified
+
+- Unit and integration tests with fakes (3762 passing at the merge of all
+  units): focused-pane routing and refusal, the token and the rate limit, the
+  relay through `RemoteLink`, the end-to-end xclip shim against a fake viewer,
+  probe answers, the size limit, OSC 52 read still refused, the Windows/macOS
+  readers behind fake clipboards, DIB → PNG, the `prefix i` temp folder and
+  quoting, the paste marker parser and its timers, the copy queue, and a real
+  forking child for the copy fallback. The voice forward is tested with a fake
+  `ssh`.
+
+#### Not verified
+
+- **No real Windows or macOS machine** ran any of this: the Windows clipboard
+  P/Invoke reader, the macOS `osascript`/`pngpaste` readers and shims, and the
+  `prefix i` chord on a real Windows remote are tested with fakes only.
+- **No real headless remote** ran Claude Code with the shims and a real
+  viewer clipboard; the claim that Claude Code finds the shims first on `PATH`
+  rests on it calling the tools by name.
+- **Bracketed paste and the copy fallback** were not tried against a wide
+  range of real terminals and multiplexers.
+- **Voice:** no real `ssh -R` forward through a ControlMaster, no `/voice` on a
+  headless host, no macOS viewer.
 
 ## Floating panes, 2026-09-28
 
@@ -5938,6 +6096,26 @@ What the phases add up to:
   settle, open the mapped URL. `viewer-unforward` / `unforward-port` unpin and cancel.
   A caller without a client (an agent's MCP call) goes to the fleet viewer showing the
   caller's workspace, else one that reports forwards, else any.
+- **The viewer answers.** A `forward-port` effect to a fleet viewer carries a `reply` id, and
+  fleetd holds the `viewer-forward` response until the viewer's fleetd sends `viewer-forwarded`
+  with that id and a `ForwardResultDto` (`forwarded`, `pending`, `failed` with ssh's trimmed
+  stderr, `browser-failed` with the URL, `unsupported`), or `ViewerAnswerWithin` (20 s)
+  passes and it answers `no-answer` itself (`AnswerViewerForwardAsync`, off the control loop).
+  The menu shows a wait dialog meanwhile (`FleetDialog.Wait`) and then the outcome, so Open
+  port is never silent: a failure is an error dialog with the reason, a browser that would not
+  open names the URL to open by hand, a pending forward says the viewer opens it once the port
+  listens (`OpenWhenListeningAsync`, up to 10 minutes). Any exception in the viewer's effect
+  task is logged and answered as `failed`.
+- **Loud failures.** The viewer's fleetd logs an effect kind it does not handle ("ignored the
+  ... effect") instead of dropping it, and when it carries a reply answers `unsupported`; the
+  remote then adds that viewer to `_cannotForward` and returns the ssh command instead, so a
+  newer remote falls back on its own. An older viewer that drops `forward-port` without a
+  word ends in `no-answer`; fleetd keeps each client's `Hello.build`, names both builds in
+  the reason when they differ, and the dialog says to restart the viewer's fleetd
+  (`fleet daemon stop`, then `fleet attach`), since fleetd outlives the binary it came from.
+  `HostForwards.Pin` clears a port's failure, so opening a failed port again retries it, and
+  `SystemBrowser` waits up to 2 s for `xdg-open` / `open` / `start` and reports a non-zero
+  exit (xdg-open without a display) instead of success once `sh` started.
 - **Plain ssh.** Without a fleet viewer the reply carries the `SSH_CONNECTION` that client
   came in by, and the menu shows `ssh -N -L p:localhost:p user@<server address>` (`-p` when
   sshd is not on 22) with a **Copy** button. fleetd strips `SSH_*` from its own environment
