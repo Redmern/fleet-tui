@@ -29,6 +29,11 @@ public sealed class CreateProjectHandler(IProjectStore store)
                 $"'{name}' contains no usable characters for a project name.");
         }
 
+        if (store.List().Any(p => string.Equals(p.Name, sanitized, StringComparison.OrdinalIgnoreCase)))
+        {
+            return CreateProjectReply.Rejected($"A project named '{sanitized}' already exists.");
+        }
+
         string full;
         try
         {
@@ -38,6 +43,11 @@ public sealed class CreateProjectHandler(IProjectStore store)
             when (e is ArgumentException or NotSupportedException or PathTooLongException)
         {
             return CreateProjectReply.Rejected($"'{root}' is not a valid path.");
+        }
+
+        if (File.Exists(full))
+        {
+            return CreateProjectReply.Rejected($"{full} is a file, not a directory.");
         }
 
         if (!Directory.Exists(full))
