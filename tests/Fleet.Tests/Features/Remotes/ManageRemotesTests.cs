@@ -110,4 +110,22 @@ public sealed class ManageRemotesTests
     {
         Assert.Equal(ManageRemotesView.EmptyHint, Assert.Single(ManageRemotesView.Rows([])).Text);
     }
+
+    [Fact]
+    public void New_on_a_connected_machine_creates_a_project_there()
+    {
+        var connected = Assert.Single(RemoteEntry.Merge([Homelab], []));
+
+        Assert.True(ManageRemotesView.CreatesProject(connected));
+    }
+
+    [Fact]
+    public void New_anywhere_else_connects_a_machine()
+    {
+        var asking = Homelab with { State = RemoteState.Asking };
+
+        Assert.False(ManageRemotesView.CreatesProject(null));
+        Assert.False(ManageRemotesView.CreatesProject(new RemoteEntry("pi@garage", null, new KnownRemote("pi@garage", null, Monday))));
+        Assert.False(ManageRemotesView.CreatesProject(Assert.Single(RemoteEntry.Merge([asking], []))));
+    }
 }
