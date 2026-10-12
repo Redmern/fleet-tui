@@ -172,7 +172,7 @@ public static class Adapters
     public static Ports.Remotes.IKnownRemoteStore KnownRemotes() => new JsonKnownRemoteStore();
 
     public static Ports.Relay.IRelayQueueStore RelayQueue(string owner) =>
-        new JsonRelayQueueStore(Path.Combine(FleetPaths.RelayQueue, owner));
+        new JsonRelayQueueStore(Path.Combine(FleetPaths.RelayQueue, owner), Log());
 
     public static Ports.Forwards.IPortForwards Forwards() =>
         new Platform.Mux.Embedded.EmbeddedForwards(() => new Platform.Mux.Embedded.EmbeddedDriver(Platform.Mux.Embedded.Daemon.Endpoint.Default()));
