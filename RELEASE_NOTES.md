@@ -4,6 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.18 (2026-10-12)
+
+- The head can **create projects** with the new `create_project` tool, on this machine or on a connected remote: name, path, `create_directory` for a missing root, `open: false` to skip opening, and `repositories` to add after opening (removed again if one fails).
+- `create_project` has its own permission rule (Settings › Fleet config › Permissions), *ask* by default, checked and asked on the machine where the project is made; with no project open there, *ask* refuses.
+- **Remote machines**: `n` on a connected machine asks for a Name and Path here and creates and opens the project there; `c` connects a machine (it used to be `n`).
+- **+ New project...** on a remote's Switch project tab opens the same Name + Path dialog on this machine instead of the remote's own form.
+- The New project form refuses a name that is already a project.
+
 ## 0.7.17 (2026-10-11)
 
 - **Open port** through a laptop fleet linked under Remote machines waits for the laptop's answer and says what happened: forwarded, pending until the port listens, or the reason it failed; a failed browser opener shows the URL to open yourself, and a silent or older laptop fleet gets a log pointer, a restart hint or the ssh command.
