@@ -172,4 +172,16 @@ public sealed class CreateProjectTests : ConfigHomeFixture
         Assert.Equal(typed, typed.Browsed(null));
         Assert.Equal(typed, typed.Browsed(string.Empty));
     }
+
+    [Fact]
+    public void A_root_under_home_typed_with_a_tilde_is_expanded_not_taken_as_a_folder_named_tilde()
+    {
+        var reply = Handler().Handle(new CreateProjectCommand("web", "~"));
+
+        Assert.Equal(CreateProjectStatus.Created, reply.Status);
+        Assert.Equal(
+            Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+            Path.TrimEndingDirectorySeparator(reply.Project!.Root));
+        Assert.DoesNotContain("~", reply.Project.Root);
+    }
 }
