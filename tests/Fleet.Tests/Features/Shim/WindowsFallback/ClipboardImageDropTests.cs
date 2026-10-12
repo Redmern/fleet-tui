@@ -166,10 +166,13 @@ public sealed class ClipboardImageDropTests : IDisposable
     [Fact]
     public void Drop_saves_and_answers_the_text_to_type()
     {
-        var typed = ClipboardImageDrop.Drop(Png, Folder, Now, windowsHost: false, _ => { });
+        var windowsHost = OperatingSystem.IsWindows();
 
-        Assert.NotNull(typed);
-        Assert.Equal(Png, File.ReadAllBytes(typed));
+        var typed = ClipboardImageDrop.Drop(Png, Folder, Now, windowsHost, _ => { });
+
+        var saved = Assert.Single(Directory.GetFiles(Folder, "*.png"));
+        Assert.Equal(Png, File.ReadAllBytes(saved));
+        Assert.Equal(ClipboardImageDrop.Typed(saved, windowsHost), typed);
     }
 
     [UnixFact]

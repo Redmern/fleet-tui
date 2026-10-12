@@ -126,7 +126,7 @@ public sealed class MacClipboardShimTests : IDisposable
         Assert.Equal(0, clipboard.Reads);
     }
 
-    [Fact]
+    [UnixFact]
     public async Task Osascript_save_writes_the_viewer_png_to_the_file()
     {
         var file = Path.Combine(_folder, "claude_cli_latest_screenshot.png");
@@ -241,6 +241,17 @@ public sealed class MacClipboardShimTests : IDisposable
         {
             Reads++;
             return Task.FromResult(image);
+        }
+    }
+
+    private sealed class UnixFactAttribute : FactAttribute
+    {
+        public UnixFactAttribute()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Skip = "osascript takes a POSIX file path, where a Windows path's backslashes are escapes; the shim only runs on a mac pane";
+            }
         }
     }
 }

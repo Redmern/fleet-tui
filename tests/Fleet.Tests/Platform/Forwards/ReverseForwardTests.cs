@@ -29,6 +29,11 @@ public sealed class ReverseForwardTests
     [Fact]
     public void The_viewer_pulse_socket_comes_from_pulse_server_or_the_runtime_dir_and_must_exist()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         string? Env(string name) => name switch
         {
             "XDG_RUNTIME_DIR" => "/run/user/1000",
@@ -223,6 +228,11 @@ public sealed class ReverseForwardTests
     [Fact]
     public void A_viewer_forwards_voice_only_when_opted_in_on_a_unix_machine_with_a_pulse_socket()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         var ssh = new FakeSsh();
         var lines = new List<string>();
         string? On(string name) => name switch

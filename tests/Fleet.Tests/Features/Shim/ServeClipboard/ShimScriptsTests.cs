@@ -13,7 +13,7 @@ public class ShimScriptsTests
         Assert.Contains("exec '/opt/my fleet/it'\\''s/fleet' shim xclip \"$@\"\n", script);
     }
 
-    [Theory]
+    [UnixTheory]
     [InlineData("/usr/bin:/bin", "/shims:/usr/bin:/bin")]
     [InlineData("/shims:/usr/bin", "/shims:/usr/bin")]
     [InlineData("/usr/bin:/shims", "/shims:/usr/bin")]
@@ -22,12 +22,36 @@ public class ShimScriptsTests
     public void The_shim_folder_goes_first_on_path_once(string? inherited, string expected) =>
         Assert.Equal(expected, ShimScripts.PathWith("/shims", inherited));
 
-    [Fact]
+    [UnixFact]
     public void The_real_tool_is_the_first_on_path_outside_the_shim_folder()
     {
         var found = ShimScripts.RealTool("xclip", "/shims:/usr/local/bin:/usr/bin", "/shims", p => p is "/shims/xclip" or "/usr/bin/xclip");
 
         Assert.Equal("/usr/bin/xclip", found);
         Assert.Null(ShimScripts.RealTool("wl-paste", "/shims:/usr/bin", "/shims", p => p == "/shims/wl-paste"));
+    }
+
+    private const string UnixOnly = "the shims are sh scripts on a unix pane's PATH, and Windows panes get none";
+
+    private sealed class UnixFactAttribute : FactAttribute
+    {
+        public UnixFactAttribute()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Skip = UnixOnly;
+            }
+        }
+    }
+
+    private sealed class UnixTheoryAttribute : TheoryAttribute
+    {
+        public UnixTheoryAttribute()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Skip = UnixOnly;
+            }
+        }
     }
 }
