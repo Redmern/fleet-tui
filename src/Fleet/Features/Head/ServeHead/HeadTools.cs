@@ -131,7 +131,8 @@ public static class HeadTools
                 new(
                     Repositories,
                     "string",
-                    "Repositories to add after opening, separated by commas; same forms as add_repository.",
+                    "Repositories to add after opening, separated by commas, so a name cannot hold a comma; same "
+                    + "forms as add_repository. Needs open. If one cannot be added, the new project is removed again.",
                     false),
             ]),
         new(

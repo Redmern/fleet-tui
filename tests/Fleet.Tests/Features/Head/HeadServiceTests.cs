@@ -74,7 +74,7 @@ public sealed partial class HeadServiceTests
 
     private HeadService Service(IAgentInboxes? inboxes = null) => new(
         new HeadDeps(
-            new Projects(Web, Api),
+            _projects,
             _mux,
             _settings,
             _approvals,
@@ -100,7 +100,9 @@ public sealed partial class HeadServiceTests
             Structure,
             Inboxes: inboxes,
             Iso: _iso,
-            CreateProject: Create),
+            CreateProject: Create,
+            AddRepository: _addsWithoutDep ? null : AddRepository,
+            CloseProject: Close),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
@@ -954,7 +956,8 @@ public sealed partial class HeadServiceTests
     private sealed class Projects(params Project[] projects) : IProjectStore
     {
         public Project? Load(string name) =>
-            projects.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            projects.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?? (Stuck && Removed.Contains(name) ? new Project(name, "/srv/" + name) : null);
 
         public IReadOnlyList<Project> List() => projects;
 
@@ -962,9 +965,11 @@ public sealed partial class HeadServiceTests
         {
         }
 
-        public void Remove(string name)
-        {
-        }
+        public bool Stuck { get; set; }
+
+        public List<string> Removed { get; } = [];
+
+        public void Remove(string name) => Removed.Add(name);
     }
 
     private sealed class Settings : ISettingsStore

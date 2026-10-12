@@ -8,6 +8,10 @@ public static class ProjectCreationWire
 
     public const string Open = "open";
 
+    public const string Repositories = "repositories";
+
+    private const char RepositorySeparator = '\n';
+
     public static ControlRequest Request(string op, string? host, RemoteProjectRequest creation) =>
         new()
         {
@@ -15,11 +19,7 @@ public static class ProjectCreationWire
             Host = host,
             Text = creation.Name,
             Cwd = creation.Path,
-            Env = new Dictionary<string, string>
-            {
-                [CreateDirectory] = Flag(creation.CreateDirectory),
-                [Open] = Flag(creation.Open),
-            },
+            Env = Env(creation),
         };
 
     public static RemoteProjectRequest Creation(ControlRequest request) =>
@@ -27,7 +27,31 @@ public static class ProjectCreationWire
             request.Text ?? string.Empty,
             request.Cwd ?? string.Empty,
             IsSet(request, CreateDirectory, fallback: false),
-            IsSet(request, Open, fallback: true));
+            IsSet(request, Open, fallback: true),
+            RepositoriesIn(request));
+
+    private static Dictionary<string, string> Env(RemoteProjectRequest creation)
+    {
+        var env = new Dictionary<string, string>
+        {
+            [CreateDirectory] = Flag(creation.CreateDirectory),
+            [Open] = Flag(creation.Open),
+        };
+
+        if (creation.Repositories is { Count: > 0 } repositories)
+        {
+            env[Repositories] = string.Join(RepositorySeparator, repositories);
+        }
+
+        return env;
+    }
+
+    private static IReadOnlyList<string>? RepositoriesIn(ControlRequest request) =>
+        request.Env?.GetValueOrDefault(Repositories)
+                ?.Split(RepositorySeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            is { Length: > 0 } repositories
+            ? repositories
+            : null;
 
     private static string Flag(bool on) => on ? "true" : "false";
 
