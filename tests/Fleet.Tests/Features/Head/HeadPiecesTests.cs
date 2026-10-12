@@ -156,6 +156,23 @@ public sealed class HeadPiecesTests
         Assert.All(HeadTools.Names, n => Assert.Contains($"`{n}`", HeadBrief.Text));
     }
 
+    [Fact]
+    public void A_project_whose_orchestrator_started_in_another_root_is_adopted_from_its_own_dashboard_tab()
+    {
+        IReadOnlyList<Pane> panes =
+        [
+            Pane("p1", "/home/red/~/repos/web", "web", "dash"),
+            Pane("p2", "/home/red/~/repos/web", "web", "dash"),
+            Pane("p3", "/srv/api", "api", "dash"),
+        ];
+
+        Assert.Equal("p1", MainPane.Find(panes, "/home/red/repos/web", "web", "p2")?.Id.Value);
+        Assert.Null(MainPane.Find(panes, "/home/red/repos/web", "web", null));
+        Assert.Null(MainPane.Find(panes, "/home/red/repos/web", "web", "p9"));
+        Assert.Null(MainPane.Find(panes, "/srv/other", "api", "p3"));
+        Assert.Null(MainPane.Find(panes, "/home/red/repos/shop", "shop", null));
+    }
+
     private static Pane Pane(string id, string cwd, string session, string title) =>
         new(new PaneId(id), "w1", "t1", session, title, cwd, false);
 }
