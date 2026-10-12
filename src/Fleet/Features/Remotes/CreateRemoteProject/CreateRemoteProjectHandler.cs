@@ -9,7 +9,24 @@ public sealed class CreateRemoteProjectHandler(IRemoteMachines remotes)
 {
     public const string MissingDirectorySuffix = " does not exist; nothing was created.";
 
+    public const string DirectoryDeclined = "Cancelled — the directory was not created.";
+
     private const string CreatedMark = " created";
+
+    public async Task<RemoteProjectReply> SubmitAsync(
+        string host, string name, string path, Func<string, Task<bool>> confirmDirectory, CancellationToken ct = default)
+    {
+        var reply = await HandleAsync(host, name, path, createDirectory: false, ct).ConfigureAwait(false);
+
+        if (reply is not { DirectoryToCreate: { } directory })
+        {
+            return reply;
+        }
+
+        return await confirmDirectory(directory).ConfigureAwait(false)
+            ? await HandleAsync(host, name, path, createDirectory: true, ct).ConfigureAwait(false)
+            : RemoteProjectReply.Rejected(DirectoryDeclined);
+    }
 
     public async Task<RemoteProjectReply> HandleAsync(
         string host, string name, string path, bool createDirectory, CancellationToken ct = default)

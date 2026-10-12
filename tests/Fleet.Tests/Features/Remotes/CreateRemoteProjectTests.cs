@@ -90,12 +90,54 @@ public sealed class CreateRemoteProjectTests : ConfigHomeFixture
     [Fact]
     public async Task A_thrown_failure_is_rejected_with_its_message()
     {
-        var remotes = new FakeRemotes(null);
+        var remotes = new FakeRemotes((McpResult?)null);
 
         var reply = await new CreateRemoteProjectHandler(remotes).HandleAsync(Host, "shop", "/srv/shop", createDirectory: false);
 
         Assert.Equal(RemoteProjectStatus.Rejected, reply.Status);
         Assert.Equal("fleetd is not running", reply.Error);
+    }
+
+    [Fact]
+    public async Task Submit_asks_about_a_missing_directory_and_retries_creating_it()
+    {
+        var remotes = new FakeRemotes(
+            McpResult.Error("/srv/shop does not exist; nothing was created."),
+            McpResult.Ok("shop created and opened; its root is /srv/shop."));
+        string? asked = null;
+
+        var reply = await new CreateRemoteProjectHandler(remotes).SubmitAsync(
+            Host, "shop", "/srv/shop", dir => { asked = dir; return Task.FromResult(true); });
+
+        Assert.Equal("/srv/shop", asked);
+        Assert.Equal(RemoteProjectStatus.Created, reply.Status);
+        Assert.Equal([false, true], remotes.Calls.Select(c => c.Request.CreateDirectory));
+    }
+
+    [Fact]
+    public async Task Submit_declining_the_directory_creates_nothing()
+    {
+        var remotes = new FakeRemotes(McpResult.Error("/srv/shop does not exist; nothing was created."));
+
+        var reply = await new CreateRemoteProjectHandler(remotes).SubmitAsync(
+            Host, "shop", "/srv/shop", _ => Task.FromResult(false));
+
+        Assert.Equal(RemoteProjectStatus.Rejected, reply.Status);
+        Assert.Equal(CreateRemoteProjectHandler.DirectoryDeclined, reply.Error);
+        Assert.Single(remotes.Calls);
+    }
+
+    [Fact]
+    public async Task Submit_does_not_ask_when_the_directory_exists()
+    {
+        var remotes = new FakeRemotes(McpResult.Ok("shop created and opened; its root is /srv/shop."));
+        var asked = false;
+
+        var reply = await new CreateRemoteProjectHandler(remotes).SubmitAsync(
+            Host, "shop", "/srv/shop", _ => { asked = true; return Task.FromResult(true); });
+
+        Assert.False(asked);
+        Assert.Equal("shop", reply.Project);
     }
 
     [Fact]
@@ -110,13 +152,14 @@ public sealed class CreateRemoteProjectTests : ConfigHomeFixture
         Assert.Equal(missing, created.Error![..^CreateRemoteProjectHandler.MissingDirectorySuffix.Length]);
     }
 
-    private sealed class FakeRemotes(McpResult? answer) : IRemoteMachines
+    private sealed class FakeRemotes(params McpResult?[] answers) : IRemoteMachines
     {
         public List<(string Host, RemoteProjectRequest Request)> Calls { get; } = [];
 
         public Task<McpResult> CreateProjectAsync(string host, RemoteProjectRequest request, CancellationToken ct = default)
         {
             Calls.Add((host, request));
+            var answer = answers[Math.Min(Calls.Count, answers.Length) - 1];
             return answer is null
                 ? throw new Fleet.Ports.Mux.Exceptions.MuxUnavailableException("fleetd is not running")
                 : Task.FromResult(answer);
