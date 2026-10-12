@@ -6,11 +6,12 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 
 ## 0.7.18 (2026-10-12)
 
-- The head can **create projects** with the new `create_project` tool, on this machine or on a connected remote: name, path, `create_directory` for a missing root, `open: false` to skip opening, and `repositories` to add after opening (removed again if one fails).
+- The head can **create projects** with the new `create_project` tool, on this machine or on a connected remote: name, path (`~` is expanded), `create_directory` for a missing root, `open: false` to skip opening, and `repositories` to add after opening (removed again if one fails).
 - `create_project` has its own permission rule (Settings › Fleet config › Permissions), *ask* by default, checked and asked on the machine where the project is made; with no project open there, *ask* refuses.
-- **Remote machines**: `n` on a connected machine asks for a Name and Path here and creates and opens the project there; `c` connects a machine (it used to be `n`).
-- **+ New project...** on a remote's Switch project tab opens the same Name + Path dialog on this machine instead of the remote's own form.
-- The New project form refuses a name that is already a project.
+- **Remote machines**: `n` on a connected machine, and **+ New project...** on a remote's Switch project tab, ask for a Name and Path here and create and open the project there; `c` connects a machine (it used to be `n`). The New project form refuses a name that is already a project.
+- A `tell` or relayed prompt from the head now finds a project's orchestrator in its dashboard tab even when the pane's folder differs from the saved root; before, it queued forever, notably on a remote.
+- **Queued prompts** are kept on disk across a fleet or project restart, never dropped on a timer, and delivered in order with a note that they arrived late; a queued result says how to unblock it.
+- New head tools `list_queued` and `drop_queued` (also on remotes), and `list_projects` shows a remote project's waiting count.
 
 ## 0.7.17 (2026-10-11)
 
