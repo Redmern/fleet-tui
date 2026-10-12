@@ -55,7 +55,11 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
                     ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
                     : await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
             HeadTools.CreateProject when !HeadRemotes.IsLocal(remote) =>
-                McpResult.Error($"remote {HeadTools.CreateProject} is not available yet."),
+                deps.Iso?.Load() is { On: true }
+                    ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
+                    : CreateProjectError(request) is { } invalid
+                        ? McpResult.Error(invalid)
+                        : await _remotes.CreateProjectAsync(remote, CreationFor(request), ct).ConfigureAwait(false),
             HeadTools.CreateProject => await CreateProjectAsync(request, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
@@ -194,21 +198,28 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             _ => "connecting",
         };
 
+    public Task<McpResult> ServeCreateProjectAsync(RemoteProjectRequest creation, CancellationToken ct = default) =>
+        CreateProjectAsync(
+            new McpRequest(
+                HeadTools.CreateProject,
+                new Dictionary<string, string>
+                {
+                    [HeadTools.Name] = creation.Name,
+                    [HeadTools.Path] = creation.Path,
+                    [HeadTools.CreateDirectory] = creation.CreateDirectory ? "true" : "false",
+                    [HeadTools.Open] = creation.Open ? "true" : "false",
+                }),
+            ct);
+
     private async Task<McpResult> CreateProjectAsync(McpRequest request, CancellationToken ct)
     {
+        if (CreateProjectError(request) is { } invalid)
+        {
+            return McpResult.Error(invalid);
+        }
+
         var name = request.Value(HeadTools.Name).Trim();
         var path = request.Value(HeadTools.Path).Trim();
-
-        if (name.Length == 0 || path.Length == 0)
-        {
-            return McpResult.Error(
-                $"'{(name.Length == 0 ? HeadTools.Name : HeadTools.Path)}' is required for {HeadTools.CreateProject}.");
-        }
-
-        if (request.Value(HeadTools.Repositories).Trim().Length > 0)
-        {
-            return McpResult.Error($"{HeadTools.Repositories} are not supported yet.");
-        }
 
         if (deps.CreateProject is not { } create)
         {
@@ -230,7 +241,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
         var project = created.Value;
 
-        if (request.Value(HeadTools.Open).Trim().Length > 0 && !request.Flag(HeadTools.Open))
+        if (!CreationFor(request).Open)
         {
             return McpResult.Ok($"{project.Name} created, not opened; its root is {project.Root}.");
         }
@@ -241,6 +252,28 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             ? $"{project.Name} created and opened; its root is {project.Root}."
             : $"{project.Name} created, not opened: {failed}");
     }
+
+    private static string? CreateProjectError(McpRequest request)
+    {
+        var name = request.Value(HeadTools.Name).Trim();
+        var path = request.Value(HeadTools.Path).Trim();
+
+        if (name.Length == 0 || path.Length == 0)
+        {
+            return $"'{(name.Length == 0 ? HeadTools.Name : HeadTools.Path)}' is required for {HeadTools.CreateProject}.";
+        }
+
+        return request.Value(HeadTools.Repositories).Trim().Length > 0
+            ? $"{HeadTools.Repositories} are not supported yet."
+            : null;
+    }
+
+    private static RemoteProjectRequest CreationFor(McpRequest request) =>
+        new(
+            request.Value(HeadTools.Name).Trim(),
+            request.Value(HeadTools.Path).Trim(),
+            request.Flag(HeadTools.CreateDirectory),
+            request.Value(HeadTools.Open).Trim().Length == 0 || request.Flag(HeadTools.Open));
 
     private async Task<McpResult> SwitchAsync(Project project, CancellationToken ct)
     {

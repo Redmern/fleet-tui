@@ -12,6 +12,7 @@ using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Mcp;
 
@@ -46,6 +47,19 @@ public static class HeadWiring
         {
             log.Write($"fleetd: the origin's head runs {tool} here");
             var result = await service.Value.ServeOriginAsync(new McpRequest(tool, arguments), ct).ConfigureAwait(false);
+            return (result.Text, result.IsError);
+        };
+    }
+
+    public static Func<RemoteProjectRequest, CancellationToken, Task<(string Text, bool Failed)>>
+        ServeCreateProject(Func<IMuxDriver> mux, Ports.IFleetLog log)
+    {
+        var service = new Lazy<HeadService>(() => new HeadService(Deps(mux(), log)));
+
+        return async (creation, ct) =>
+        {
+            log.Write($"fleetd: the origin creates project {creation.Name} here");
+            var result = await service.Value.ServeCreateProjectAsync(creation, ct).ConfigureAwait(false);
             return (result.Text, result.IsError);
         };
     }

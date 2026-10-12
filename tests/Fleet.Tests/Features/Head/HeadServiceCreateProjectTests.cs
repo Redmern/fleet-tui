@@ -119,16 +119,6 @@ public sealed partial class HeadServiceTests
     }
 
     [Fact]
-    public async Task Create_project_on_a_remote_is_not_available_yet()
-    {
-        var result = await Service().HandleAsync(CreateCall((HeadTools.Remote, "hostinger")));
-
-        Assert.True(result.IsError);
-        Assert.Contains("remote create_project is not available yet", result.Text);
-        Assert.Empty(_created);
-    }
-
-    [Fact]
     public async Task Create_project_with_repositories_is_not_supported_yet()
     {
         Open(Web, Idle);
