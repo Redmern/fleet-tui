@@ -10,6 +10,8 @@ public static class ProjectCreationWire
 
     public const string Repositories = "repositories";
 
+    public const string Interactive = "interactive";
+
     private const char RepositorySeparator = '\n';
 
     public static ControlRequest Request(string op, string? host, RemoteProjectRequest creation) =>
@@ -28,7 +30,8 @@ public static class ProjectCreationWire
             request.Cwd ?? string.Empty,
             IsSet(request, CreateDirectory, fallback: false),
             IsSet(request, Open, fallback: true),
-            RepositoriesIn(request));
+            RepositoriesIn(request),
+            IsSet(request, Interactive, fallback: false));
 
     private static Dictionary<string, string> Env(RemoteProjectRequest creation)
     {
@@ -41,6 +44,11 @@ public static class ProjectCreationWire
         if (creation.Repositories is { Count: > 0 } repositories)
         {
             env[Repositories] = string.Join(RepositorySeparator, repositories);
+        }
+
+        if (creation.Interactive)
+        {
+            env[Interactive] = Flag(true);
         }
 
         return env;

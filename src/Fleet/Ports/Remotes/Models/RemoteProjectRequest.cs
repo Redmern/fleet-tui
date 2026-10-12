@@ -5,4 +5,5 @@ public sealed record RemoteProjectRequest(
     string Path,
     bool CreateDirectory,
     bool Open,
-    IReadOnlyList<string>? Repositories = null);
+    IReadOnlyList<string>? Repositories = null,
+    bool Interactive = false);
