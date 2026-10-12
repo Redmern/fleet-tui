@@ -262,23 +262,17 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         if (failed is not null)
         {
             return McpResult.Error(
-                $"could not open {project.Name} to add its repositories: {failed}. "
-                + RolledBack(project, closeFailed: null));
+                $"could not open {project.Name} to add its repositories: {Sentence(failed)} "
+                + await RollBackAsync(project).ConfigureAwait(false));
         }
 
         foreach (var repository in repositories)
         {
-            var added = await deps.AddRepository!(project, repository, ct).ConfigureAwait(false);
-
-            if (!added.Succeeded)
+            if (await AddAsync(project, repository, ct).ConfigureAwait(false) is { } addFailed)
             {
-                var closeFailed = deps.CloseProject is { } close
-                    ? await close(project, ct).ConfigureAwait(false)
-                    : "this fleet cannot close it";
-
                 return McpResult.Error(
-                    $"could not add repository '{repository}' to {project.Name}: {added.Error} "
-                    + RolledBack(project, closeFailed));
+                    $"could not add repository '{repository}' to {project.Name}: {Sentence(addFailed)} "
+                    + await RollBackAsync(project).ConfigureAwait(false));
             }
         }
 
@@ -286,14 +280,52 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             $"{project.Name} created and opened with {string.Join(", ", repositories)}; its root is {project.Root}.");
     }
 
+    private async Task<string?> AddAsync(Project project, string repository, CancellationToken ct)
+    {
+        try
+        {
+            var added = await deps.AddRepository!(project, repository, ct).ConfigureAwait(false);
+            return added.Succeeded ? null : added.Error ?? "it failed";
+        }
+        catch (Exception e) when (IsAddOrCloseFailure(e))
+        {
+            return e.Message;
+        }
+    }
+
+    private async Task<string?> CloseAsync(Project project)
+    {
+        if (deps.CloseProject is not { } close)
+        {
+            return "this fleet cannot close it";
+        }
+
+        try
+        {
+            return await close(project, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception e) when (IsAddOrCloseFailure(e))
+        {
+            return e.Message;
+        }
+    }
+
+    private static bool IsAddOrCloseFailure(Exception e) =>
+        e is IOException or UnauthorizedAccessException or InvalidOperationException
+            or OperationCanceledException or System.ComponentModel.Win32Exception;
+
+    private static string Sentence(string text) => text.TrimEnd().TrimEnd('.') + ".";
+
     private static string Detail(RemoteProjectRequest creation) =>
         $"{creation.Name} in {creation.Path}"
         + (creation.Repositories is { Count: > 0 } repositories
             ? $" with {string.Join(", ", repositories)}"
             : string.Empty);
 
-    private string RolledBack(Project project, string? closeFailed)
+    private async Task<string> RollBackAsync(Project project)
     {
+        var closeFailed = await CloseAsync(project).ConfigureAwait(false);
+
         deps.Projects.Remove(project.Name);
 
         var removed = deps.Projects.Load(project.Name) is null
@@ -321,7 +353,9 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
     private static IReadOnlyList<string> RepositoriesIn(McpRequest request) =>
         request.Value(HeadTools.Repositories)
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static RemoteProjectRequest CreationFor(McpRequest request) =>
         new(

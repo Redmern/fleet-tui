@@ -101,7 +101,7 @@ public sealed partial class HeadServiceTests
             Inboxes: inboxes,
             Iso: _iso,
             CreateProject: Create,
-            AddRepository: AddRepository,
+            AddRepository: _addsWithoutDep ? null : AddRepository,
             CloseProject: Close),
         Fast);
 
@@ -956,13 +956,16 @@ public sealed partial class HeadServiceTests
     private sealed class Projects(params Project[] projects) : IProjectStore
     {
         public Project? Load(string name) =>
-            projects.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            projects.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?? (Stuck && Removed.Contains(name) ? new Project(name, "/srv/" + name) : null);
 
         public IReadOnlyList<Project> List() => projects;
 
         public void Save(Project project)
         {
         }
+
+        public bool Stuck { get; set; }
 
         public List<string> Removed { get; } = [];
 

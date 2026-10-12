@@ -15,6 +15,8 @@ public sealed partial class HeadServiceTests
 
     private Func<string, Result> _adds = _ => Result.Ok();
 
+    private bool _addsWithoutDep;
+
     private string? _closeFails;
 
     private Task<Result> AddRepository(Project project, string repository, CancellationToken ct)
@@ -23,10 +25,12 @@ public sealed partial class HeadServiceTests
         return Task.FromResult(_adds(repository));
     }
 
+    private bool _closeThrows;
+
     private Task<string?> Close(Project project, CancellationToken ct)
     {
         _closed.Add(project.Name);
-        return Task.FromResult(_closeFails);
+        return _closeThrows ? throw new IOException("mux gone") : Task.FromResult(_closeFails);
     }
 
     [Fact]
@@ -107,7 +111,7 @@ public sealed partial class HeadServiceTests
         Assert.Contains("no terminal", result.Text);
         Assert.Empty(_added);
         Assert.Equal(["shop"], _projects.Removed);
-        Assert.Empty(_closed);
+        Assert.Equal(["shop"], _closed);
     }
 
     [Fact]
@@ -188,6 +192,108 @@ public sealed partial class HeadServiceTests
             new RemoteProjectRequest("shop", "/srv/shop", false, true, ["api"]));
 
         Assert.True(result.IsError);
+        Assert.Equal(["shop"], _projects.Removed);
+    }
+
+    [Fact]
+    public async Task Create_project_says_the_project_was_removed_and_the_root_left_in_place()
+    {
+        Open(Web, Idle);
+        _adds = _ => Result.Fail("boom");
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
+
+        Assert.Contains("Removed the project shop again", result.Text);
+        Assert.Contains("/srv/shop and anything added there were left in place", result.Text);
+    }
+
+    [Fact]
+    public async Task Create_project_says_when_the_rolled_back_project_file_could_not_be_removed()
+    {
+        Open(Web, Idle);
+        _adds = _ => Result.Fail("boom");
+        _projects.Stuck = true;
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("Could not remove the project shop", result.Text);
+    }
+
+    [Fact]
+    public async Task Create_project_rolls_back_when_adding_a_repository_throws()
+    {
+        Open(Web, Idle);
+        _adds = _ => throw new IOException("disk full");
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("api", result.Text);
+        Assert.Contains("disk full", result.Text);
+        Assert.Equal(["shop"], _projects.Removed);
+        Assert.Equal(["shop"], _closed);
+    }
+
+    [Fact]
+    public async Task Create_project_rolls_back_when_adding_a_repository_is_cancelled()
+    {
+        Open(Web, Idle);
+        _adds = _ => throw new OperationCanceledException();
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
+
+        Assert.True(result.IsError);
+        Assert.Equal(["shop"], _projects.Removed);
+        Assert.Equal(["shop"], _closed);
+    }
+
+    [Fact]
+    public async Task Create_project_closes_what_it_partly_opened_when_opening_fails()
+    {
+        Open(Web, Idle);
+        _openFails = _ => Task.FromResult<string?>("no terminal.");
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
+
+        Assert.Equal(["shop"], _closed);
+        Assert.DoesNotContain("..", result.Text);
+    }
+
+    [Fact]
+    public async Task Create_project_adds_a_repository_named_twice_once()
+    {
+        Open(Web, Idle);
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api,API,web")));
+
+        Assert.False(result.IsError, result.Text);
+        Assert.Equal(["api", "web"], _added.Select(a => a.Repository));
+    }
+
+    [Fact]
+    public async Task Create_project_refuses_repositories_before_creating_when_this_fleet_cannot_add_them()
+    {
+        Open(Web, Idle);
+        _addsWithoutDep = true;
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
+
+        Assert.True(result.IsError);
+        Assert.Empty(_created);
+    }
+
+    [Fact]
+    public async Task Create_project_still_removes_the_project_when_closing_it_throws()
+    {
+        Open(Web, Idle);
+        _adds = _ => Result.Fail("boom");
+        _closeThrows = true;
+
+        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
+
+        Assert.True(result.IsError);
+        Assert.Contains("mux gone", result.Text);
         Assert.Equal(["shop"], _projects.Removed);
     }
 }

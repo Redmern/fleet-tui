@@ -4,7 +4,6 @@ using Fleet.Features.Head.ServeHead.Models;
 using Fleet.Features.Projects.CreateProject;
 using Fleet.Features.Projects.CreateProject.Models;
 using Fleet.Features.Projects.LocateProject;
-using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Platform.Claude;
@@ -14,6 +13,7 @@ using Fleet.Platform.Storage;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
@@ -105,12 +105,15 @@ public static class HeadWiring
 
     private static async Task<string?> CloseProjectAsync(IMuxDriver mux, Project project, CancellationToken ct)
     {
-        var agents = Adapters.Agents();
-        var closed = await new QuitProjectHandler(mux, agents)
-            .HandleAsync(project.Name, project.Root, agents.List(project.Name), ct)
-            .ConfigureAwait(false);
+        if (!mux.Caps.HasFlag(MuxCaps.Workspaces))
+        {
+            return "this terminal has no workspace to close it by";
+        }
 
-        return closed.Succeeded ? null : closed.Error;
+        await mux.CloseWorkspaceAsync(project.Name, ct).ConfigureAwait(false);
+        await mux.CloseWorkspaceAsync(FleetWorkspaces.HiddenFor(project.Name), ct).ConfigureAwait(false);
+
+        return null;
     }
 
     public static int Launch(bool voice)
