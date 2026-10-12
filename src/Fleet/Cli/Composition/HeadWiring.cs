@@ -1,7 +1,11 @@
 using System.Diagnostics;
 using Fleet.Features.Head.ServeHead;
 using Fleet.Features.Head.ServeHead.Models;
+using Fleet.Features.Projects.CreateProject;
+using Fleet.Features.Projects.CreateProject.Models;
 using Fleet.Features.Projects.LocateProject;
+using Fleet.Features.Repositories.AddRepository;
+using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Platform.Claude;
 using Fleet.Platform.Mcp;
 using Fleet.Platform.Mux.Embedded.Pty;
@@ -9,9 +13,12 @@ using Fleet.Platform.Storage;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Projects.Models;
+using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Mcp;
+using Fleet.Shared.Results;
 
 namespace Fleet.Cli.Composition;
 
@@ -48,6 +55,19 @@ public static class HeadWiring
         };
     }
 
+    public static Func<RemoteProjectRequest, CancellationToken, Task<(string Text, bool Failed)>>
+        ServeCreateProject(Func<IMuxDriver> mux, Ports.IFleetLog log)
+    {
+        var service = new Lazy<HeadService>(() => new HeadService(Deps(mux(), log)));
+
+        return async (creation, ct) =>
+        {
+            log.Write($"fleetd: the origin creates project {creation.Name} here");
+            var result = await service.Value.ServeCreateProjectAsync(creation, ct).ConfigureAwait(false);
+            return (result.Text, result.IsError);
+        };
+    }
+
     public static HeadDeps Deps(IMuxDriver mux, Ports.IFleetLog log) =>
         new(
             Adapters.Projects(),
@@ -68,7 +88,33 @@ public static class HeadWiring
             Iso: Adapters.Iso(),
             Forwards: Adapters.Forwards(),
             Browser: Adapters.Browser(),
-            User: Environment.UserName);
+            User: Environment.UserName,
+            CreateProject: creation => new CreateProjectHandler(Adapters.Projects())
+                .Create(new CreateProjectCommand(creation.Name, creation.Path, creation.CreateDirectory)),
+            AddRepository: AddRepositoryAsync,
+            CloseProject: (project, ct) => CloseProjectAsync(mux, project, ct));
+
+    private static async Task<Result> AddRepositoryAsync(Project project, string repository, CancellationToken ct)
+    {
+        var added = await new AddRepositoryHandler(Adapters.Git())
+            .HandleAsync(AddRepositoryCommand.CreateNew(project.Root, repository, "main"), ct)
+            .ConfigureAwait(false);
+
+        return added.Succeeded ? Result.Ok() : Result.Fail(added.Error!);
+    }
+
+    private static async Task<string?> CloseProjectAsync(IMuxDriver mux, Project project, CancellationToken ct)
+    {
+        if (!mux.Caps.HasFlag(MuxCaps.Workspaces))
+        {
+            return "this terminal has no workspace to close it by";
+        }
+
+        await mux.CloseWorkspaceAsync(project.Name, ct).ConfigureAwait(false);
+        await mux.CloseWorkspaceAsync(FleetWorkspaces.HiddenFor(project.Name), ct).ConfigureAwait(false);
+
+        return null;
+    }
 
     public static int Launch(bool voice)
     {

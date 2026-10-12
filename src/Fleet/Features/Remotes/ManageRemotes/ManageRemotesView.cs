@@ -16,19 +16,22 @@ namespace Fleet.Features.Remotes.ManageRemotes;
 
 public static class ManageRemotesView
 {
-    public const string EmptyHint = "(no remote machines yet; n connects one and fleet remembers it)";
+    public const string EmptyHint = "(no remote machines yet; c connects one and fleet remembers it)";
 
     public const string KnownDetail = "known · not connected";
 
     public static readonly TimeSpan Patience = TimeSpan.FromMinutes(3);
 
-    public static void Show(
+    public static bool CreatesProject(RemoteEntry? selected) => selected is { Live.State: RemoteState.Connected };
+
+    public static CreatedRemoteProject? Show(
         IApplication app,
         Keymap keymap,
         IRemoteMachines remotes,
         IKnownRemoteStore known,
         IPortForwards? forwards = null,
-        IBrowserLauncher? browser = null)
+        IBrowserLauncher? browser = null,
+        Func<string, string, string?>? createProject = null)
     {
         var window = FleetTheme.Overlay("remote machines", 90, 16 + FleetCorners.Rows);
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
@@ -39,6 +42,7 @@ public static class ManageRemotesView
         IReadOnlyList<RemoteEntry> shown = [];
         IReadOnlyList<PortForward> ports = [];
         var busy = 0;
+        CreatedRemoteProject? created = null;
 
         void Fill(IReadOnlyList<RemoteEntry> entries)
         {
@@ -104,6 +108,25 @@ public static class ManageRemotesView
             }
 
             ConnectTo(host.Trim());
+        }
+
+        void New()
+        {
+            var entry = Selected();
+
+            if (createProject is null || !CreatesProject(entry))
+            {
+                Connect();
+                return;
+            }
+
+            if (createProject(entry!.Host, entry.Label) is not { } project)
+            {
+                return;
+            }
+
+            created = new CreatedRemoteProject(entry.Host, project);
+            app.RequestStop(window);
         }
 
         void ConnectTo(string host)
@@ -200,7 +223,7 @@ public static class ManageRemotesView
             }
 
             string[] lines = entry.Live is null
-                ? ["fleet stops listing it here; n connects it again."]
+                ? ["fleet stops listing it here; c connects it again."]
                 : ["fleet stops remembering it; it stays connected until you disconnect it."];
             if (!FleetDialog.Confirm(app, $"Forget {entry.Described}?", lines, "Forget"))
             {
@@ -220,7 +243,8 @@ public static class ManageRemotesView
 
         bar.Show(
         [
-            ("n", FleetIcons.Connect, Connect),
+            ("n", FleetIcons.NewProject, New),
+            ("c", FleetIcons.Connect, Connect),
             ("enter", FleetIcons.Answer, Answer),
             ("e", FleetIcons.Rename, Rename),
             ("x", FleetIcons.Forget, Forget),
@@ -250,6 +274,10 @@ public static class ManageRemotesView
                 app.RequestStop(window);
             }
             else if (key == Key.N)
+            {
+                New();
+            }
+            else if (key == Key.C)
             {
                 Connect();
             }
@@ -304,6 +332,8 @@ public static class ManageRemotesView
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();
         }
+
+        return created;
     }
 
     public static IReadOnlyList<string> ConnectAll(

@@ -5123,6 +5123,8 @@ machine tab was empty and the startup picker's *New project* only works on this 
   `new-project`, as if typed there. The remote runs `fleet menu --action new-project`,
   which now opens the New project form straight away (cancel falls back to its picker).
   The project, its folder and its orchestrator all live on the remote.
+  Superseded 2026-10-12: the remote entry now opens the origin's Name + Path dialog and
+  sends `create-project` (see *Creating projects on a remote*).
 
 ## The head shows a project's structure, 2026-10-04
 
@@ -6182,6 +6184,41 @@ What the phases add up to:
   isolation on purpose.
 - **Limits, stated.** An agent's own network use and the model API are outside fleet's
   reach; the README gives an nftables egress example instead of claiming more.
+
+## Creating projects on a remote, 2026-10-12
+
+The head could open, switch to and fill projects on a remote but not create one, and
+**+ New project...** on a remote opened the remote's own form, so nothing was asked on the
+origin.
+
+- **One creation core.** `CreateProjectHandler` checks the name (sanitised, then refused when
+  a project of that name exists, case-insensitive) and the path (a file is refused; a missing
+  path needs `CreateRoot`). The local form, the head's `create_project` and the remote op all
+  go through it, so the local form gained the duplicate check too.
+- **Its own op, not `head`.** The origin's fleetd takes `remote-create-project` and the link
+  sends the remote `create-project` (name in `Text`, path in `Cwd`, flags and repositories in
+  `Env`, `ProjectCreationWire`). Reusing the `head` op would have made an old remote answer
+  "<tool> is not served to another machine", a tool failure only text matching could tell
+  apart; a new op gets "unknown operation", which the origin rewrites to "the fleet on X is
+  too old to create projects; update fleet there". The link waits `HeadWithin` (10 minutes),
+  long enough for someone to answer the ask there. ISO mode refuses both ops.
+- **Gate without a project.** `create_project` is a `HarnessTool` with a machine-wide rule
+  (default Ask, not served by a project's MCP server). `HeadGate.CheckWithoutProjectAsync`
+  reads the machine's settings, not a project's, on the machine that creates, and asks in the
+  dashboard of the first open project there (by name); with none open, Ask refuses with "open
+  a project first" rather than hang. Forbid always refuses.
+- **Interactive flag.** The origin's Name + Path dialog (`n` under Remote machines, and the
+  switcher's **+ New project...** on a remote tab) sends `interactive`: the user is present, so
+  the remote skips the Ask and checks only Forbid (`HeadGate.ForbiddenOnThisMachine`). The
+  head never sets it. The flag is trusted from whoever holds the link, as every bridged op is.
+- **Remote machines keys.** `n` on a connected row opens the dialog and returns the created
+  project so the menu shows it; on any other row it connects. `c` always connects (it was
+  `n`). `IRemoteMachines.NewProjectAsync` is no longer used by the switcher.
+- **Repositories and rollback.** `repositories` is added after opening (rejected with `open:
+  false` before anything is made). When one fails, the head closes the project and removes it
+  from the project store; the root directory and anything added there are left in place
+  (non-destructive), as are per-project agent and session state files. A failed open without
+  repositories keeps the project and says "created, not opened: <reason>".
 
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a

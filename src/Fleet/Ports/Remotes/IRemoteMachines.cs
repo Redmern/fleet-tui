@@ -20,4 +20,6 @@ public interface IRemoteMachines
     Task NewProjectAsync(string host, CancellationToken ct = default);
 
     Task<McpResult> HeadAsync(string host, McpRequest request, CancellationToken ct = default);
+
+    Task<McpResult> CreateProjectAsync(string host, RemoteProjectRequest request, CancellationToken ct = default);
 }

@@ -9,7 +9,7 @@ using Fleet.Ui.Models;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
-public sealed class RemoteLinkTests : IAsyncLifetime
+public sealed partial class RemoteLinkTests : IAsyncLifetime
 {
     private readonly CancellationTokenSource _stop = new();
     private readonly List<Task> _running = [];
@@ -32,7 +32,10 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         return new Endpoint(OperatingSystem.IsWindows() ? name : Path.Combine(Path.GetTempPath(), name + ".sock"));
     }
 
-    private FleetDaemon Start(Endpoint endpoint, FakePanes panes, Func<string, string, RemoteChannel>? open = null)
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(string Machine, RemoteProjectRequest Creation)> _creations = new();
+
+    private FleetDaemon Start(
+        Endpoint endpoint, FakePanes panes, Func<string, string, RemoteChannel>? open = null, bool createsProjects = true)
     {
         var daemon = new FleetDaemon(new DaemonOptions
         {
@@ -50,6 +53,15 @@ public sealed class RemoteLinkTests : IAsyncLifetime
                 _headCalls.Enqueue((endpoint == _far ? "far" : "home", tool, arguments));
                 return Task.FromResult((tool == "relay" ? "relayed" : "refused", tool != "relay"));
             },
+            CreateProject = createsProjects
+                ? (creation, _) =>
+                {
+                    _creations.Enqueue((endpoint == _far ? "far" : "home", creation));
+                    return Task.FromResult(creation.Name == "homelab"
+                        ? ("A project named 'homelab' already exists.", true)
+                        : ($"{creation.Name} created and opened; its root is {creation.Path}.", false));
+                }
+            : null,
             SavedProjects = () => ["homelab", "dormant"],
             OpenProject = async name =>
             {
@@ -354,6 +366,57 @@ public sealed class RemoteLinkTests : IAsyncLifetime
         Assert.Equal("go", _headCalls.First().Arguments["prompt"]);
         await Assert.ThrowsAsync<Fleet.Ports.Mux.Exceptions.MuxUnavailableException>(
             () => home.RemoteHeadAsync("red@nowhere", "relay", new Dictionary<string, string>()));
+    }
+
+    private async Task<EmbeddedDriver> ConnectedHomeAsync()
+    {
+        var home = new EmbeddedDriver(_home);
+        await home.ConnectRemoteAsync("red@far");
+        await Eventually(async () => (await RemotesAsync()).SingleOrDefault() is { State: RemoteLink.Connected });
+        return home;
+    }
+
+    [Fact]
+    public async Task A_project_created_for_a_remote_is_made_by_that_remotes_fleet_with_its_flags()
+    {
+        using var home = await ConnectedHomeAsync();
+        var remotes = new EmbeddedRemotes(() => new EmbeddedDriver(_home));
+
+        var made = await remotes.CreateProjectAsync("red@far", new RemoteProjectRequest("shop", "/srv/shop", true, false));
+        var taken = await remotes.CreateProjectAsync("red@far", new RemoteProjectRequest("homelab", "/srv/homelab", false, true));
+
+        Assert.Equal((false, "shop created and opened; its root is /srv/shop."), (made.IsError, made.Text));
+        Assert.Equal((true, "A project named 'homelab' already exists."), (taken.IsError, taken.Text));
+        Assert.Equal(
+            [("far", new RemoteProjectRequest("shop", "/srv/shop", true, false)), ("far", new RemoteProjectRequest("homelab", "/srv/homelab", false, true))],
+            _creations);
+    }
+
+    [Fact]
+    public async Task Creating_a_project_on_a_remote_that_is_not_connected_names_it_and_creates_nothing()
+    {
+        var remotes = new EmbeddedRemotes(() => new EmbeddedDriver(_home));
+
+        var result = await remotes.CreateProjectAsync("red@nowhere", new RemoteProjectRequest("shop", "/srv/shop", false, true));
+
+        Assert.True(result.IsError);
+        Assert.Contains("red@nowhere", result.Text);
+        Assert.Empty(_creations);
+    }
+
+    [Fact]
+    public async Task Creating_a_project_on_a_remote_with_an_older_fleet_says_to_update_it_and_creates_nothing()
+    {
+        _far = NewEndpoint();
+        _farDaemon = Start(_far, _farPanes, createsProjects: false);
+        using var home = await ConnectedHomeAsync();
+        var remotes = new EmbeddedRemotes(() => new EmbeddedDriver(_home));
+
+        var result = await remotes.CreateProjectAsync("red@far", new RemoteProjectRequest("shop", "/srv/shop", false, true));
+
+        Assert.True(result.IsError);
+        Assert.Contains($"the fleet on {Environment.MachineName} is too old to create projects; update fleet there", result.Text);
+        Assert.Empty(_creations);
     }
 
     [Fact]

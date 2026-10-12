@@ -8,6 +8,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Embedded;
@@ -286,6 +287,13 @@ public sealed class EmbeddedDriver(
         string host, string tool, IReadOnlyDictionary<string, string> arguments, CancellationToken ct = default) =>
         RequestAsync(
             new ControlRequest { Op = "remote-head", Host = host, Text = tool, Env = new Dictionary<string, string>(arguments) },
+            ct,
+            RemoteLink.HeadWithin + AnswerWithin);
+
+    public Task<ControlResponse> RemoteCreateProjectAsync(
+        string host, RemoteProjectRequest creation, CancellationToken ct = default) =>
+        RequestAsync(
+            ProjectCreationWire.Request(FleetDaemon.RemoteCreateProjectOp, host, creation),
             ct,
             RemoteLink.HeadWithin + AnswerWithin);
 

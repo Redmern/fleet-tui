@@ -1,12 +1,27 @@
 using Fleet.Features.Projects.CreateProject.Models;
 using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
+using Fleet.Features.Projects.CreateProject.Enums;
 using Fleet.Shared;
+using Fleet.Shared.Results;
 
 namespace Fleet.Features.Projects.CreateProject;
 
 public sealed class CreateProjectHandler(IProjectStore store)
 {
+    public Result<Project> Create(CreateProjectCommand command)
+    {
+        var reply = Handle(command);
+
+        return reply.Status switch
+        {
+            CreateProjectStatus.Created when reply.Project is { } project => Result<Project>.Ok(project),
+            CreateProjectStatus.NeedsRootConfirmation =>
+                Result<Project>.Fail($"{reply.RootToCreate} does not exist; nothing was created."),
+            _ => Result<Project>.Fail(reply.Error ?? "The project could not be created."),
+        };
+    }
+
     public CreateProjectReply Handle(CreateProjectCommand command)
     {
         var name = command.Name.Trim();
@@ -29,6 +44,11 @@ public sealed class CreateProjectHandler(IProjectStore store)
                 $"'{name}' contains no usable characters for a project name.");
         }
 
+        if (store.List().Any(p => string.Equals(p.Name, sanitized, StringComparison.OrdinalIgnoreCase)))
+        {
+            return CreateProjectReply.Rejected($"A project named '{sanitized}' already exists.");
+        }
+
         string full;
         try
         {
@@ -38,6 +58,11 @@ public sealed class CreateProjectHandler(IProjectStore store)
             when (e is ArgumentException or NotSupportedException or PathTooLongException)
         {
             return CreateProjectReply.Rejected($"'{root}' is not a valid path.");
+        }
+
+        if (File.Exists(full))
+        {
+            return CreateProjectReply.Rejected($"{full} is a file, not a directory.");
         }
 
         if (!Directory.Exists(full))

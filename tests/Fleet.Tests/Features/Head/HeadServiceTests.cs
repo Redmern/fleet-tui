@@ -74,7 +74,7 @@ public sealed partial class HeadServiceTests
 
     private HeadService Service(IAgentInboxes? inboxes = null) => new(
         new HeadDeps(
-            new Projects(Web, Api),
+            _projects,
             _mux,
             _settings,
             _approvals,
@@ -84,6 +84,11 @@ public sealed partial class HeadServiceTests
             (p, _) => Task.FromResult(_open.ContainsKey(p.Name)),
             p =>
             {
+                if (_openFails is { } fails)
+                {
+                    return fails(p);
+                }
+
                 _opened.Add(p.Name);
                 Open(p, Idle);
                 return Task.FromResult<string?>(null);
@@ -94,7 +99,10 @@ public sealed partial class HeadServiceTests
             _known,
             Structure,
             Inboxes: inboxes,
-            Iso: _iso),
+            Iso: _iso,
+            CreateProject: Create,
+            AddRepository: _addsWithoutDep ? null : AddRepository,
+            CloseProject: Close),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
@@ -948,7 +956,8 @@ public sealed partial class HeadServiceTests
     private sealed class Projects(params Project[] projects) : IProjectStore
     {
         public Project? Load(string name) =>
-            projects.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            projects.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?? (Stuck && Removed.Contains(name) ? new Project(name, "/srv/" + name) : null);
 
         public IReadOnlyList<Project> List() => projects;
 
@@ -956,9 +965,11 @@ public sealed partial class HeadServiceTests
         {
         }
 
-        public void Remove(string name)
-        {
-        }
+        public bool Stuck { get; set; }
+
+        public List<string> Removed { get; } = [];
+
+        public void Remove(string name) => Removed.Add(name);
     }
 
     private sealed class Settings : ISettingsStore
@@ -1072,6 +1083,16 @@ public sealed partial class HeadServiceTests
         {
             Forwarded.Add((host, request));
             return Task.FromResult(Reply);
+        }
+
+        public List<(string Host, RemoteProjectRequest Request)> Creations { get; } = [];
+
+        public McpResult CreateReply { get; set; } = McpResult.Ok("shop created and opened; its root is /srv/shop.");
+
+        public Task<McpResult> CreateProjectAsync(string host, RemoteProjectRequest request, CancellationToken ct = default)
+        {
+            Creations.Add((host, request));
+            return Task.FromResult(CreateReply);
         }
     }
 

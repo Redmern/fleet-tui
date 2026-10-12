@@ -11,12 +11,12 @@ public class TodoBoardDocsTests
 
     private static string Readme => File.ReadAllText(Path.Combine(RepoRoot, "README.md"));
 
-    private static string LatestNotes
+    private static string ScopeSwitchNotes
     {
         get
         {
             var notes = File.ReadAllText(Path.Combine(RepoRoot, "RELEASE_NOTES.md"));
-            var start = notes.IndexOf("\n## ", StringComparison.Ordinal);
+            var start = notes.IndexOf("\n## 0.7.17 ", StringComparison.Ordinal);
             var end = notes.IndexOf("\n## ", start + 1, StringComparison.Ordinal);
 
             return notes[start..end];
@@ -35,9 +35,9 @@ public class TodoBoardDocsTests
         Assert.Contains("`a` switches the board between this project and all projects", Readme, StringComparison.Ordinal);
 
     [Fact]
-    public void The_latest_release_notes_describe_the_scope_switch_and_not_capital_t()
+    public void The_0_7_17_release_notes_describe_the_scope_switch_and_not_capital_t()
     {
-        Assert.DoesNotContain("ctrl+s a T", LatestNotes, StringComparison.Ordinal);
-        Assert.Contains("`a` in the board switches to all projects", LatestNotes, StringComparison.Ordinal);
+        Assert.DoesNotContain("ctrl+s a T", ScopeSwitchNotes, StringComparison.Ordinal);
+        Assert.Contains("`a` in the board switches to all projects", ScopeSwitchNotes, StringComparison.Ordinal);
     }
 }

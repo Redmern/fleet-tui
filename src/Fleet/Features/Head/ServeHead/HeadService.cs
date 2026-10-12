@@ -54,6 +54,13 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
                 deps.Iso?.Load() is { On: true }
                     ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
                     : await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
+            HeadTools.CreateProject when !HeadRemotes.IsLocal(remote) =>
+                deps.Iso?.Load() is { On: true }
+                    ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
+                    : CreateProjectError(request) is { } invalid
+                        ? McpResult.Error(invalid)
+                        : await _remotes.CreateProjectAsync(remote, CreationFor(request), ct).ConfigureAwait(false),
+            HeadTools.CreateProject => await CreateProjectAsync(request, interactive: false, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
     }
@@ -190,6 +197,176 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             RemoteState.Failed => "failed" + (machine.Error is { Length: > 0 } error ? $": {error}" : string.Empty),
             _ => "connecting",
         };
+
+    public Task<McpResult> ServeCreateProjectAsync(RemoteProjectRequest creation, CancellationToken ct = default) =>
+        CreateProjectAsync(
+            new McpRequest(
+                HeadTools.CreateProject,
+                new Dictionary<string, string>
+                {
+                    [HeadTools.Name] = creation.Name,
+                    [HeadTools.Path] = creation.Path,
+                    [HeadTools.CreateDirectory] = creation.CreateDirectory ? "true" : "false",
+                    [HeadTools.Open] = creation.Open ? "true" : "false",
+                    [HeadTools.Repositories] = string.Join(',', creation.Repositories ?? []),
+                }),
+            creation.Interactive,
+            ct);
+
+    private async Task<McpResult> CreateProjectAsync(McpRequest request, bool interactive, CancellationToken ct)
+    {
+        if (CreateProjectError(request) is { } invalid)
+        {
+            return McpResult.Error(invalid);
+        }
+
+        if (deps.CreateProject is not { } create)
+        {
+            return McpResult.Error($"this fleet cannot {HeadTools.CreateProject}.");
+        }
+
+        if (RepositoriesIn(request).Count > 0 && deps.AddRepository is null)
+        {
+            return McpResult.Error($"this fleet cannot add {HeadTools.Repositories} to a new project.");
+        }
+
+        if ((interactive
+                ? _gate.ForbiddenOnThisMachine(HarnessTool.CreateProject)
+                : await _gate.CheckWithoutProjectAsync(HarnessTool.CreateProject, Detail(CreationFor(request)), ct)
+                    .ConfigureAwait(false)) is { } denied)
+        {
+            return McpResult.Error(denied);
+        }
+
+        var creation = CreationFor(request);
+        var created = create(new ProjectCreation(creation.Name, creation.Path, creation.CreateDirectory));
+
+        if (!created.Succeeded)
+        {
+            return McpResult.Error(created.Error ?? $"could not create {creation.Name}.");
+        }
+
+        var project = created.Value;
+
+        if (!creation.Open)
+        {
+            return McpResult.Ok($"{project.Name} created, not opened; its root is {project.Root}.");
+        }
+
+        var failed = await deps.EnsureOpen(project).ConfigureAwait(false);
+
+        if (creation.Repositories is not { Count: > 0 } repositories)
+        {
+            return McpResult.Ok(failed is null
+                ? $"{project.Name} created and opened; its root is {project.Root}."
+                : $"{project.Name} created, not opened: {failed}");
+        }
+
+        if (failed is not null)
+        {
+            return McpResult.Error(
+                $"could not open {project.Name} to add its repositories: {Sentence(failed)} "
+                + await RollBackAsync(project).ConfigureAwait(false));
+        }
+
+        foreach (var repository in repositories)
+        {
+            if (await AddAsync(project, repository, ct).ConfigureAwait(false) is { } addFailed)
+            {
+                return McpResult.Error(
+                    $"could not add repository '{repository}' to {project.Name}: {Sentence(addFailed)} "
+                    + await RollBackAsync(project).ConfigureAwait(false));
+            }
+        }
+
+        return McpResult.Ok(
+            $"{project.Name} created and opened with {string.Join(", ", repositories)}; its root is {project.Root}.");
+    }
+
+    private async Task<string?> AddAsync(Project project, string repository, CancellationToken ct)
+    {
+        try
+        {
+            var added = await deps.AddRepository!(project, repository, ct).ConfigureAwait(false);
+            return added.Succeeded ? null : added.Error ?? "it failed";
+        }
+        catch (Exception e) when (IsAddOrCloseFailure(e))
+        {
+            return e.Message;
+        }
+    }
+
+    private async Task<string?> CloseAsync(Project project)
+    {
+        if (deps.CloseProject is not { } close)
+        {
+            return "this fleet cannot close it";
+        }
+
+        try
+        {
+            return await close(project, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception e) when (IsAddOrCloseFailure(e))
+        {
+            return e.Message;
+        }
+    }
+
+    private static bool IsAddOrCloseFailure(Exception e) =>
+        e is IOException or UnauthorizedAccessException or InvalidOperationException
+            or OperationCanceledException or System.ComponentModel.Win32Exception;
+
+    private static string Sentence(string text) => text.TrimEnd().TrimEnd('.') + ".";
+
+    private static string Detail(RemoteProjectRequest creation) =>
+        $"{creation.Name} in {creation.Path}"
+        + (creation.Repositories is { Count: > 0 } repositories
+            ? $" with {string.Join(", ", repositories)}"
+            : string.Empty);
+
+    private async Task<string> RollBackAsync(Project project)
+    {
+        var closeFailed = await CloseAsync(project).ConfigureAwait(false);
+
+        deps.Projects.Remove(project.Name);
+
+        var removed = deps.Projects.Load(project.Name) is null
+            ? $"Removed the project {project.Name} again"
+            : $"Could not remove the project {project.Name}; remove it yourself";
+
+        return $"{removed}; its root {project.Root} and anything added there were left in place."
+            + (closeFailed is null ? string.Empty : $" It could not be closed ({closeFailed}); close it yourself.");
+    }
+
+    private static string? CreateProjectError(McpRequest request)
+    {
+        var name = request.Value(HeadTools.Name).Trim();
+        var path = request.Value(HeadTools.Path).Trim();
+
+        if (name.Length == 0 || path.Length == 0)
+        {
+            return $"'{(name.Length == 0 ? HeadTools.Name : HeadTools.Path)}' is required for {HeadTools.CreateProject}.";
+        }
+
+        return RepositoriesIn(request).Count > 0 && !CreationFor(request).Open
+            ? $"'{HeadTools.Repositories}' needs the project opened; leave out '{HeadTools.Open}' or set it to true."
+            : null;
+    }
+
+    private static IReadOnlyList<string> RepositoriesIn(McpRequest request) =>
+        request.Value(HeadTools.Repositories)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static RemoteProjectRequest CreationFor(McpRequest request) =>
+        new(
+            request.Value(HeadTools.Name).Trim(),
+            request.Value(HeadTools.Path).Trim(),
+            request.Flag(HeadTools.CreateDirectory),
+            request.Value(HeadTools.Open).Trim().Length == 0 || request.Flag(HeadTools.Open),
+            RepositoriesIn(request) is { Count: > 0 } repositories ? repositories : null);
 
     private async Task<McpResult> SwitchAsync(Project project, CancellationToken ct)
     {
