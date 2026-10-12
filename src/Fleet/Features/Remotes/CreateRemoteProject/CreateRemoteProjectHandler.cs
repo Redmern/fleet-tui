@@ -47,7 +47,7 @@ public sealed class CreateRemoteProjectHandler(IRemoteMachines remotes)
         try
         {
             var result = await remotes
-                .CreateProjectAsync(host, new RemoteProjectRequest(name, path, createDirectory, Open: true), ct)
+                .CreateProjectAsync(host, new RemoteProjectRequest(name, path, createDirectory, Open: true, Interactive: true), ct)
                 .ConfigureAwait(false);
 
             if (!result.IsError)

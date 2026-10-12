@@ -25,7 +25,7 @@ public sealed class CreateRemoteProjectTests : ConfigHomeFixture
         Assert.Equal("shop", reply.Project);
         var (host, request) = Assert.Single(remotes.Calls);
         Assert.Equal(Host, host);
-        Assert.Equal(new RemoteProjectRequest("shop", "/srv/shop", CreateDirectory: false, Open: true), request);
+        Assert.Equal(new RemoteProjectRequest("shop", "/srv/shop", CreateDirectory: false, Open: true, Interactive: true), request);
     }
 
     [Fact]
