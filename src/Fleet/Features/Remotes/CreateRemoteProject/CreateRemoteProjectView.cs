@@ -15,6 +15,8 @@ public static class CreateRemoteProjectView
         string? created = null;
         var busy = 0;
         var open = true;
+        var closing = new CancellationTokenSource();
+        var token = closing.Token;
 
         var window = FleetTheme.Overlay($"New project on {label}");
 
@@ -41,7 +43,7 @@ public static class CreateRemoteProjectView
                         host,
                         name,
                         path,
-                        directory => FleetAsync.OnUi(app, () => FleetDialog.Confirm(
+                        directory => !open ? Task.FromResult(false) : FleetAsync.OnUi(app, () => open && FleetDialog.Confirm(
                             app,
                             "Create directory?",
                             [
@@ -50,7 +52,8 @@ public static class CreateRemoteProjectView
                                 $"does not exist on {label}. Create it?",
                                 "Any missing parent directories are created too.",
                             ],
-                            confirmText: "Create"))).ConfigureAwait(false);
+                            confirmText: "Create")),
+                        token).ConfigureAwait(false);
 
                     app.Invoke(() =>
                     {
@@ -67,6 +70,16 @@ public static class CreateRemoteProjectView
                         }
 
                         error.Text = reply.Error ?? "Unknown error.";
+                    });
+                }
+                catch (Exception e)
+                {
+                    app.Invoke(() =>
+                    {
+                        if (open)
+                        {
+                            error.Text = e.Message;
+                        }
                     });
                 }
                 finally
@@ -122,6 +135,7 @@ public static class CreateRemoteProjectView
         finally
         {
             open = false;
+            closing.Cancel();
             FleetModal.Leave();
             window.Dispose();
         }
