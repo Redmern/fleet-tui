@@ -95,6 +95,36 @@ public sealed class SimulatedLinkStreamTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Bytes_a_coarse_timer_delivers_late_count_as_held_past_due()
+    {
+        var coarse = new CoarseTimers(_clock, TimeSpan.FromMilliseconds(15));
+        await using var near = new SimulatedLinkStream(new MemoryStream("pong"u8.ToArray()), OneWay, coarse);
+        await Eventually(() => near.InFlight > 0);
+        var start = _clock.GetUtcNow();
+        var arriving = ReadAsync(near, 4);
+
+        await StepUntil(arriving);
+        Assert.Equal("pong", await arriving);
+        Assert.True(_clock.GetUtcNow() - start >= OneWay + TimeSpan.FromMilliseconds(15));
+        // At least the overshoot; stepping the clock can add a few ms after the timer fires.
+        Assert.True(near.HeldPastDue >= TimeSpan.FromMilliseconds(15), $"{near.HeldPastDue}");
+    }
+
+    [Fact]
+    public async Task A_reader_that_comes_late_is_not_held_past_due()
+    {
+        await _far.WriteAsync("pong"u8.ToArray());
+        await _far.FlushAsync();
+        await Eventually(() => _near.InFlight > 0);
+
+        _clock.Advance(OneWay * 3);
+        var read = await ReadAsync(_near, 4).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("pong", read);
+        Assert.Equal(TimeSpan.Zero, _near.HeldPastDue);
+    }
+
+    [Fact]
     public async Task A_closed_far_end_ends_the_near_reads()
     {
         await _far.DisposeAsync();
@@ -124,5 +154,19 @@ public sealed class SimulatedLinkStreamTests : IAsyncLifetime
         }
 
         Assert.True(condition());
+    }
+
+    // Timers that fire a fixed overshoot after their due time, like the ~15.6 ms OS timer
+    // tick on Windows.
+    private sealed class CoarseTimers(TimeProvider clock, TimeSpan overshoot) : TimeProvider
+    {
+        public override long TimestampFrequency => clock.TimestampFrequency;
+
+        public override long GetTimestamp() => clock.GetTimestamp();
+
+        public override DateTimeOffset GetUtcNow() => clock.GetUtcNow();
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            clock.CreateTimer(callback, state, dueTime == Timeout.InfiniteTimeSpan ? dueTime : dueTime + overshoot, period);
     }
 }
