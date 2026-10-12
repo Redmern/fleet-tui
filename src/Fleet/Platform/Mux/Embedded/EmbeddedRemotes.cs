@@ -72,6 +72,20 @@ public sealed class EmbeddedRemotes(Func<EmbeddedDriver> driver) : IRemoteMachin
         }
     }
 
+    public async Task<McpResult> CreateProjectAsync(string host, RemoteProjectRequest request, CancellationToken ct = default)
+    {
+        using var fleetd = driver();
+        try
+        {
+            var reply = await fleetd.RemoteCreateProjectAsync(host, request, ct).ConfigureAwait(false);
+            return reply.ToolFailed ? McpResult.Error(reply.Text ?? string.Empty) : McpResult.Ok(reply.Text ?? string.Empty);
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+        {
+            return McpResult.Error(e.Message);
+        }
+    }
+
     public static RemoteMachine ToMachine(RemoteDto dto) =>
         new(
             dto.Host,

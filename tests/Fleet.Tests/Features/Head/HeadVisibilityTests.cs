@@ -582,6 +582,9 @@ public sealed class HeadVisibilityTests
             Forwarded.Add((host, request));
             return Task.FromResult(Reply);
         }
+
+        public Task<McpResult> CreateProjectAsync(string host, RemoteProjectRequest request, CancellationToken ct = default) =>
+            Task.FromResult(McpResult.Error("not used here"));
     }
 
     private sealed class Known : IKnownRemoteStore

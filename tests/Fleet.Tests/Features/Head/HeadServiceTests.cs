@@ -1079,6 +1079,16 @@ public sealed partial class HeadServiceTests
             Forwarded.Add((host, request));
             return Task.FromResult(Reply);
         }
+
+        public List<(string Host, RemoteProjectRequest Request)> Creations { get; } = [];
+
+        public McpResult CreateReply { get; set; } = McpResult.Ok("shop created and opened; its root is /srv/shop.");
+
+        public Task<McpResult> CreateProjectAsync(string host, RemoteProjectRequest request, CancellationToken ct = default)
+        {
+            Creations.Add((host, request));
+            return Task.FromResult(CreateReply);
+        }
     }
 
     private sealed class Known : IKnownRemoteStore

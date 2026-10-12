@@ -6,6 +6,7 @@ using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Mux.Embedded.Render;
+using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
@@ -69,6 +70,8 @@ public sealed class DaemonOptions
     public Action<string, string> Toast { get; init; } = (_, _) => { };
 
     public Func<string, IReadOnlyDictionary<string, string>, CancellationToken, Task<(string Text, bool Failed)>>? Head { get; init; }
+
+    public Func<RemoteProjectRequest, CancellationToken, Task<(string Text, bool Failed)>>? CreateProject { get; init; }
 
     public Func<IsoConfig> Iso { get; init; } = () => IsoConfig.Off;
 
@@ -638,6 +641,14 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
                     }
 
+                    if ((request.Op == RemoteLink.CreateProjectOp && options.CreateProject is not null)
+                        || (request.Op == RemoteCreateProjectOp && !iso.On))
+                    {
+                        var refuse = request.Op == RemoteLink.CreateProjectOp && bridged && iso.On;
+                        _ = Task.Run(() => AnswerCreateProjectAsync(wire, request, refuse, ct), CancellationToken.None);
+                        break;
+                    }
+
                     if (request.Op == MenuWaitOp && !bridged)
                     {
                         _ = Task.Run(() => AnswerMenuWaitAsync(wire, request, gone, ct), CancellationToken.None);
@@ -922,13 +933,15 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string RemoteHeadOp = "remote-head";
 
+    public const string RemoteCreateProjectOp = "remote-create-project";
+
     private static bool RunsForward(string op, IsoConfig iso, bool bridged) =>
         ForwardHub.SlowOps.Contains(op)
         && (!iso.On || (!bridged && op is ForwardHub.RemoveOp or ForwardHub.StackStopOp));
 
     private static string? IsoRefusal(string op, IsoConfig iso) =>
         !iso.On ? null
-        : op == RemoteHeadOp ? IsoProjection.Refused
+        : op is RemoteHeadOp or RemoteCreateProjectOp ? IsoProjection.Refused
         : ForwardHub.SlowOps.Contains(op) ? IsoGuard.Refusal(IsoGuard.Forward)
         : null;
 
@@ -1207,6 +1220,58 @@ public sealed class FleetDaemon(DaemonOptions options)
         catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
         {
             options.Log($"could not answer {request.Op} {tool}: {e.Message}");
+        }
+    }
+
+    private async Task AnswerCreateProjectAsync(Wire wire, ControlRequest request, bool refuse, CancellationToken ct)
+    {
+        var creation = ProjectCreationWire.Creation(request);
+        ControlResponse response;
+
+        try
+        {
+            if (refuse)
+            {
+                response = new ControlResponse { Ok = false, Error = IsoProjection.Refused };
+            }
+            else if (request.Op == RemoteCreateProjectOp)
+            {
+                RemoteLink link;
+                lock (_gate)
+                {
+                    link = RemoteFor(request.Host);
+                }
+
+                response = link.IsConnected
+                    ? await link.CreateProjectAsync(creation).ConfigureAwait(false)
+                    : new ControlResponse { Ok = false, Error = $"{request.Host} is not connected" };
+
+                if (!response.Ok && response.Error?.StartsWith("unknown operation", StringComparison.Ordinal) == true)
+                {
+                    response.Error = $"the fleet on {link.Name} is too old to create projects; update fleet there";
+                }
+            }
+            else
+            {
+                var (text, failed) = await options.CreateProject!(creation, ct).ConfigureAwait(false);
+                response = new ControlResponse { Ok = true, Text = text, ToolFailed = failed };
+            }
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or OperationCanceledException)
+        {
+            response = new ControlResponse { Ok = false, Error = e.Message };
+        }
+
+        response.Id = request.Id;
+
+        try
+        {
+            await wire.SendAsync(MessageType.Response, response, WireJsonContext.Default.ControlResponse, ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            options.Log($"could not answer {request.Op} {creation.Name}: {e.Message}");
         }
     }
 
