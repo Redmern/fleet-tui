@@ -11,7 +11,7 @@ public sealed class McpToolsTests
     {
         var exposed = McpTools.All.Select(s => s.Tool).ToHashSet();
 
-        foreach (var tool in SettingsDefaults.Configurable.Where(t => t != HarnessTool.DeleteWorktree))
+        foreach (var tool in SettingsDefaults.Configurable.Where(SettingsDefaults.ServedByProjectMcp))
         {
             Assert.Contains(tool, exposed);
         }

@@ -41,6 +41,7 @@ public static class HarnessToolIds
         HarnessTool.StopStack => "stop_stack",
         HarnessTool.SyncToRemote => "sync_to_remote",
         HarnessTool.TodoAdd => "todo_add",
+        HarnessTool.CreateProject => "create_project",
         _ => string.Empty,
     };
 
