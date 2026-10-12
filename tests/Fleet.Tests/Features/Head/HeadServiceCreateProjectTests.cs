@@ -119,18 +119,6 @@ public sealed partial class HeadServiceTests
     }
 
     [Fact]
-    public async Task Create_project_with_repositories_is_not_supported_yet()
-    {
-        Open(Web, Idle);
-
-        var result = await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api")));
-
-        Assert.True(result.IsError);
-        Assert.Contains("repositories are not supported yet", result.Text);
-        Assert.Empty(_created);
-    }
-
-    [Fact]
     public async Task Create_project_asks_an_open_dashboard_by_default()
     {
         Open(Web, Idle);

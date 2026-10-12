@@ -74,7 +74,7 @@ public sealed partial class HeadServiceTests
 
     private HeadService Service(IAgentInboxes? inboxes = null) => new(
         new HeadDeps(
-            new Projects(Web, Api),
+            _projects,
             _mux,
             _settings,
             _approvals,
@@ -100,7 +100,9 @@ public sealed partial class HeadServiceTests
             Structure,
             Inboxes: inboxes,
             Iso: _iso,
-            CreateProject: Create),
+            CreateProject: Create,
+            AddRepository: AddRepository,
+            CloseProject: Close),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
@@ -962,9 +964,9 @@ public sealed partial class HeadServiceTests
         {
         }
 
-        public void Remove(string name)
-        {
-        }
+        public List<string> Removed { get; } = [];
+
+        public void Remove(string name) => Removed.Add(name);
     }
 
     private sealed class Settings : ISettingsStore
