@@ -22,6 +22,10 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
     private readonly SemaphoreSlim _typing = new(1, 1);
 
+    private readonly CancellationTokenSource _stop = new();
+
+    public void Stop() => _stop.Cancel();
+
     public int Pending(string project) => Queued(project).Count;
 
     public IReadOnlyList<QueuedPrompt> Queued(string project)
@@ -221,7 +225,7 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
     {
         var fastUntil = DateTime.UtcNow + timing.QueueTimeout;
 
-        while (true)
+        while (!_stop.IsCancellationRequested)
         {
             try
             {
@@ -235,13 +239,22 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
                     fastUntil = DateTime.UtcNow + timing.QueueTimeout;
                 }
 
-                await Task.Delay(DateTime.UtcNow > fastUntil ? timing.SlowPoll : timing.Poll).ConfigureAwait(false);
+                await Task.Delay(DateTime.UtcNow > fastUntil ? timing.SlowPoll : timing.Poll, _stop.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+            {
+                return;
             }
             catch (Exception e) when (e is MuxUnavailableException or IOException or UnauthorizedAccessException
                 or InvalidOperationException)
             {
                 Log(project.Name, $"head keeps its queued prompts and tries again: {e.Message}");
-                await Task.Delay(timing.SlowPoll).ConfigureAwait(false);
+
+                if (await Task.Delay(timing.SlowPoll, _stop.Token).ContinueWith(_ => _stop.IsCancellationRequested, TaskScheduler.Default)
+                    .ConfigureAwait(false))
+                {
+                    return;
+                }
             }
         }
     }
