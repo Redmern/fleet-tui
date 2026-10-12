@@ -54,6 +54,9 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
                 deps.Iso?.Load() is { On: true }
                     ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
                     : await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
+            HeadTools.CreateProject when !HeadRemotes.IsLocal(remote) =>
+                McpResult.Error($"remote {HeadTools.CreateProject} is not available yet."),
+            HeadTools.CreateProject => await CreateProjectAsync(request, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
     }
@@ -190,6 +193,54 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             RemoteState.Failed => "failed" + (machine.Error is { Length: > 0 } error ? $": {error}" : string.Empty),
             _ => "connecting",
         };
+
+    private async Task<McpResult> CreateProjectAsync(McpRequest request, CancellationToken ct)
+    {
+        var name = request.Value(HeadTools.Name).Trim();
+        var path = request.Value(HeadTools.Path).Trim();
+
+        if (name.Length == 0 || path.Length == 0)
+        {
+            return McpResult.Error(
+                $"'{(name.Length == 0 ? HeadTools.Name : HeadTools.Path)}' is required for {HeadTools.CreateProject}.");
+        }
+
+        if (request.Value(HeadTools.Repositories).Trim().Length > 0)
+        {
+            return McpResult.Error($"{HeadTools.Repositories} are not supported yet.");
+        }
+
+        if (deps.CreateProject is not { } create)
+        {
+            return McpResult.Error($"this fleet cannot {HeadTools.CreateProject}.");
+        }
+
+        if (await _gate.CheckWithoutProjectAsync(HarnessTool.CreateProject, $"{name} in {path}", ct)
+                .ConfigureAwait(false) is { } denied)
+        {
+            return McpResult.Error(denied);
+        }
+
+        var created = create(new ProjectCreation(name, path, request.Flag(HeadTools.CreateDirectory)));
+
+        if (!created.Succeeded)
+        {
+            return McpResult.Error(created.Error ?? $"could not create {name}.");
+        }
+
+        var project = created.Value;
+
+        if (request.Value(HeadTools.Open).Trim().Length > 0 && !request.Flag(HeadTools.Open))
+        {
+            return McpResult.Ok($"{project.Name} created, not opened; its root is {project.Root}.");
+        }
+
+        var failed = await deps.EnsureOpen(project).ConfigureAwait(false);
+
+        return McpResult.Ok(failed is null
+            ? $"{project.Name} created and opened; its root is {project.Root}."
+            : $"{project.Name} created, not opened: {failed}");
+    }
 
     private async Task<McpResult> SwitchAsync(Project project, CancellationToken ct)
     {

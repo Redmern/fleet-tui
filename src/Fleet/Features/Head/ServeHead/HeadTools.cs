@@ -60,6 +60,16 @@ public static class HeadTools
 
     public const string Open = "open";
 
+    public const string CreateProject = "create_project";
+
+    public const string Name = "name";
+
+    public const string Path = "path";
+
+    public const string CreateDirectory = "create_directory";
+
+    public const string Repositories = "repositories";
+
     private static readonly HeadToolParam ForwardRemoteParam =
         new(Remote, "string", "The remote machine's nickname, as list_remotes shows it (or its ssh host).", true);
 
@@ -104,6 +114,26 @@ public static class HeadTools
             + "(nickname and ssh host, and whether it is connected), with each project's name and whether it is "
             + "open. A remote that is not connected is listed without projects.",
             []),
+        new(
+            CreateProject,
+            "Create a new fleet project on one machine, with the same name rules as the New project form, and open "
+            + "it there. Refuses a name that is already a project and a path that is not a directory.",
+            [
+                new(Name, "string", "The new project's name; characters fleet cannot use in a name are dropped.", true),
+                new(Path, "string", "The project's root directory on that machine.", true),
+                RemoteParam,
+                new(
+                    CreateDirectory,
+                    "boolean",
+                    "true to create the root directory (and missing parents) when it does not exist.",
+                    false),
+                new(Open, "boolean", "false to create the project without opening it; opens it by default.", false),
+                new(
+                    Repositories,
+                    "string",
+                    "Repositories to add after opening, separated by commas; same forms as add_repository.",
+                    false),
+            ]),
         new(
             SwitchProject,
             "Show a project in the terminal, opening it first if it is not running. Hides the head.",

@@ -84,6 +84,11 @@ public sealed partial class HeadServiceTests
             (p, _) => Task.FromResult(_open.ContainsKey(p.Name)),
             p =>
             {
+                if (_openFails is { } fails)
+                {
+                    return fails(p);
+                }
+
                 _opened.Add(p.Name);
                 Open(p, Idle);
                 return Task.FromResult<string?>(null);
@@ -94,7 +99,8 @@ public sealed partial class HeadServiceTests
             _known,
             Structure,
             Inboxes: inboxes,
-            Iso: _iso),
+            Iso: _iso,
+            CreateProject: Create),
         Fast);
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)

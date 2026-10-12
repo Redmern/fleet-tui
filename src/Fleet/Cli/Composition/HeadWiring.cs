@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Fleet.Features.Head.ServeHead;
 using Fleet.Features.Head.ServeHead.Models;
+using Fleet.Features.Projects.CreateProject;
+using Fleet.Features.Projects.CreateProject.Models;
 using Fleet.Features.Projects.LocateProject;
 using Fleet.Platform.Claude;
 using Fleet.Platform.Mcp;
@@ -68,7 +70,9 @@ public static class HeadWiring
             Iso: Adapters.Iso(),
             Forwards: Adapters.Forwards(),
             Browser: Adapters.Browser(),
-            User: Environment.UserName);
+            User: Environment.UserName,
+            CreateProject: creation => new CreateProjectHandler(Adapters.Projects())
+                .Create(new CreateProjectCommand(creation.Name, creation.Path, creation.CreateDirectory)));
 
     public static int Launch(bool voice)
     {

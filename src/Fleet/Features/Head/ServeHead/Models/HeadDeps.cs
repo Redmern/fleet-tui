@@ -34,7 +34,8 @@ public sealed record HeadDeps(
     IIsoMode? Iso = null,
     IPortForwards? Forwards = null,
     IBrowserLauncher? Browser = null,
-    string User = "");
+    string User = "",
+    Func<ProjectCreation, Result<Project>>? CreateProject = null);
 
 public sealed record HeadTiming(
     TimeSpan Poll,

@@ -28,6 +28,7 @@ public static class HeadBrief
         | `list_remotes` | the machines you can act on: `local` first, then each remote's nickname, ssh host, last connection and whether it is connected now |
         | `list_projects` | the projects of one machine (`remote`, default `local`), whether each is open, and how many relayed prompts wait for it |
         | `list_remote_projects` | the projects of every machine: this machine first, then each remote machine (nickname and ssh host, connected or not), each project open or closed |
+        | `create_project` | create a new project on this machine (`name`, `path`; `create_directory: true` makes a missing root, `open: false` skips opening it); refuses a name that is already a project; asks for approval first |
         | `switch_project` | show a project in the terminal, opening it if it is closed; this hides you |
         | `menu_action` | run a fleet menu action (new-agent, add-repository, keybinds, ...) in a project's dashboard and show it |
         | `list_agents` | the agents of one project, or of every open project, as a flat list |
