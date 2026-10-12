@@ -220,4 +220,37 @@ public sealed class CreateProjectTests : ConfigHomeFixture
         Assert.Contains("not a directory", reply.Error);
         Assert.Empty(new JsonProjectStore().List());
     }
+
+    [Fact]
+    public void Create_returns_the_saved_project()
+    {
+        var created = Handler().Create(new CreateProjectCommand("shop", ARoot()));
+
+        Assert.True(created.Succeeded, created.Error);
+        Assert.Equal("shop", created.Value.Name);
+    }
+
+    [Fact]
+    public void Create_reports_a_missing_root_as_a_path_error_and_creates_nothing()
+    {
+        var missing = AMissingRoot();
+
+        var created = Handler().Create(new CreateProjectCommand("shop", missing));
+
+        Assert.False(created.Succeeded);
+        Assert.Contains("does not exist", created.Error);
+        Assert.False(Directory.Exists(missing));
+        Assert.Empty(new JsonProjectStore().List());
+    }
+
+    [Fact]
+    public void Create_passes_on_a_rejection()
+    {
+        Handler().Create(new CreateProjectCommand("shop", ARoot()));
+
+        var created = Handler().Create(new CreateProjectCommand("shop", ARoot("other")));
+
+        Assert.False(created.Succeeded);
+        Assert.Contains("already exists", created.Error);
+    }
 }
