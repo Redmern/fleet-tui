@@ -75,7 +75,7 @@ public sealed partial class HeadServiceTests
     }
 
     private HeadService Service(
-        IAgentInboxes? inboxes = null, IRelayQueueStore? queue = null, IMuxDriver? mux = null, HeadTiming? timing = null) => new(
+        IAgentInboxes? inboxes = null, IRelayQueueStore? queue = null, IMuxDriver? mux = null, HeadTiming? timing = null) => Tracked(new(
         new HeadDeps(
             _projects,
             mux ?? _mux,
@@ -107,7 +107,7 @@ public sealed partial class HeadServiceTests
             AddRepository: _addsWithoutDep ? null : AddRepository,
             CloseProject: Close,
             RelayQueue: queue),
-        timing ?? Fast);
+        timing ?? Fast));
 
     private (PaneId Main, PaneId Dash) Open(Project project, string text)
     {

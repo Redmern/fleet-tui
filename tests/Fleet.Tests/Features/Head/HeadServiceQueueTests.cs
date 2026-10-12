@@ -8,8 +8,24 @@ using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Head;
 
-public sealed partial class HeadServiceTests
+public sealed partial class HeadServiceTests : IDisposable
 {
+    private readonly List<HeadService> _services = [];
+
+    private HeadService Tracked(HeadService service)
+    {
+        _services.Add(service);
+        return service;
+    }
+
+    public void Dispose()
+    {
+        foreach (var service in _services)
+        {
+            service.Relay.Stop();
+        }
+    }
+
     private static readonly HeadTiming ShortQueue = new(
         TimeSpan.FromMilliseconds(5),
         TimeSpan.Zero,
@@ -231,11 +247,16 @@ public sealed partial class HeadServiceTests
         _mux.SetText(other, Idle);
         _open["web"] = (PaneId.None, PaneId.None);
 
-        var result = await Service().HandleAsync(
+        var service = Service();
+        var result = await service.HandleAsync(
             Call(HeadTools.Tell, (HeadTools.Project, "web"), (HeadTools.Prompt, "status?")));
 
         Assert.False(result.IsError, result.Text);
         Assert.Contains("queued (1 waiting)", result.Text);
+
+        service.Relay.Stop();
+        await service.Relay.Drained("web").WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, service.Relay.Pending("web"));
         Assert.Contains("C:/p/web", result.Text);
         Assert.Contains(HeadTools.SwitchProject, result.Text);
         Assert.Contains(HeadTools.DropQueued, result.Text);
