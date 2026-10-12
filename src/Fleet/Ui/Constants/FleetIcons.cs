@@ -48,6 +48,8 @@ public static class FleetIcons
 
     public const string Connect = "";
 
+    public const string NewProject = "";
+
     public const string Answer = "";
 
     public const string Rename = "";
@@ -84,6 +86,7 @@ public static class FleetIcons
         [ToastsOn] = "toasts on",
         [ToastsOff] = "toasts off",
         [Connect] = "connect",
+        [NewProject] = "new project",
         [Answer] = "answer",
         [Rename] = "rename",
         [Forget] = "forget",

@@ -20,6 +20,19 @@ public sealed class NicknamedRemotesTests
         Assert.Equal(["homelab-01", "garage"], machines.Select(m => m.Name));
     }
 
+    [Fact]
+    public async Task Create_project_goes_to_the_inner_machines_unchanged()
+    {
+        var inner = new FakeRemotes([]);
+        var remotes = new NicknamedRemotes(inner, new FakeKnown([]));
+        var request = new RemoteProjectRequest("shop", "/srv/shop", true, false);
+
+        var result = await remotes.CreateProjectAsync("user@homelab", request);
+
+        Assert.Equal("created", result.Text);
+        Assert.Equal(("user@homelab", request), Assert.Single(inner.Creations));
+    }
+
     private sealed class FakeRemotes(IReadOnlyList<RemoteMachine> machines) : IRemoteMachines
     {
         public Task<IReadOnlyList<RemoteMachine>> ListAsync(CancellationToken ct = default) => Task.FromResult(machines);
@@ -39,6 +52,15 @@ public sealed class NicknamedRemotesTests
         public Task<Fleet.Ports.Mcp.Models.McpResult> HeadAsync(
             string host, Fleet.Ports.Mcp.Models.McpRequest request, CancellationToken ct = default) =>
             Task.FromResult(Fleet.Ports.Mcp.Models.McpResult.Ok(string.Empty));
+
+        public List<(string Host, RemoteProjectRequest Request)> Creations { get; } = [];
+
+        public Task<Fleet.Ports.Mcp.Models.McpResult> CreateProjectAsync(
+            string host, RemoteProjectRequest request, CancellationToken ct = default)
+        {
+            Creations.Add((host, request));
+            return Task.FromResult(Fleet.Ports.Mcp.Models.McpResult.Ok("created"));
+        }
     }
 
     private sealed class FakeKnown(IReadOnlyList<KnownRemote> known) : IKnownRemoteStore

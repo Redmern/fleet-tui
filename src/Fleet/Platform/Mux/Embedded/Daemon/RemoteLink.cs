@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Pty;
+using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
@@ -458,6 +459,28 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
     }
 
     public const string HeadOp = "head";
+
+    public const string CreateProjectOp = "create-project";
+
+    public async Task<ControlResponse> CreateProjectAsync(RemoteProjectRequest creation)
+    {
+        try
+        {
+            return await RequestAsync(
+                ProjectCreationWire.Request(CreateProjectOp, null, creation),
+                _stop.Token,
+                HeadWithin,
+                raw: true).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return new ControlResponse
+            {
+                Ok = false,
+                Error = $"{Name} did not answer creating {creation.Name} within {HeadWithin.TotalMinutes:0} minutes",
+            };
+        }
+    }
 
     public static readonly TimeSpan HeadWithin = TimeSpan.FromMinutes(10);
 

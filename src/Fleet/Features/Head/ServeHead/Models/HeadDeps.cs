@@ -36,6 +36,9 @@ public sealed record HeadDeps(
     IPortForwards? Forwards = null,
     IBrowserLauncher? Browser = null,
     string User = "",
+    Func<ProjectCreation, Result<Project>>? CreateProject = null,
+    Func<Project, string, CancellationToken, Task<Result>>? AddRepository = null,
+    Func<Project, CancellationToken, Task<string?>>? CloseProject = null,
     IRelayQueueStore? RelayQueue = null);
 
 public sealed record HeadTiming(

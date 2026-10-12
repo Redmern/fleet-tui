@@ -28,6 +28,7 @@ public static class HeadBrief
         | `list_remotes` | the machines you can act on: `local` first, then each remote's nickname, ssh host, last connection and whether it is connected now |
         | `list_projects` | the projects of one machine (`remote`, default `local`), whether each is open, and how many relayed prompts wait for it |
         | `list_remote_projects` | the projects of every machine: this machine first, then each remote machine (nickname and ssh host, connected or not), each project open or closed |
+        | `create_project` | create a new project on this machine or on a connected remote (`name`, `path`, optional `remote`; `create_directory: true` makes a missing root, `open: false` skips opening it, `repositories` adds comma-separated repositories after opening); refuses a name that is already a project there; asks for approval first |
         | `switch_project` | show a project in the terminal, opening it if it is closed; this hides you |
         | `menu_action` | run a fleet menu action (new-agent, add-repository, keybinds, ...) in a project's dashboard and show it |
         | `list_agents` | the agents of one project, or of every open project, as a flat list |
@@ -50,10 +51,18 @@ public static class HeadBrief
         names are the ones `list_agents` and `project_structure` print. Showing a visible pane or hiding a
         hidden one succeeds and changes nothing.
 
-        `list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell`, `relay`,
-        `list_queued`, `drop_queued`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from `list_remotes`. Leave it out
-        (or pass `local`) for the origin. fleet connects a
+        `list_projects`, `create_project`, `switch_project`, `menu_action`, `list_agents`, `project_structure`,
+        `tell`, `relay`, `list_queued`, `drop_queued`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from
+        `list_remotes`. Leave it out (or pass `local`) for the origin. fleet connects a
         remote that is not connected yet, the same way the Remote machines screen does.
+
+        `create_project` takes the path as it is on that machine. It refuses a missing path unless
+        `create_directory` is true, and a path that is a file. It opens the project unless `open` is false
+        and says "created and opened" or "created, not opened: <reason>"; a project that did not open still
+        exists. `repositories` takes the same forms as `add_repository` and needs `open`. When one cannot be
+        added, fleet removes the new project again (its root folder stays) and the error names that
+        repository. A remote on an older fleet answers that it is too old to create projects; tell the user
+        to update fleet there.
 
         ## How to act
 
@@ -106,5 +115,10 @@ public static class HeadBrief
         be started first. An "ask" shows an Allow/Deny dialog in that project's dashboard; a refusal comes back as the
         tool's error. Report it and do not work around it. Switching projects and opening menus are always
         allowed.
+
+        `create_project` has its own `create_project` rule (ask by default), checked on the machine where the
+        project is made. Its Allow/Deny dialog shows in an open project's dashboard on that machine, so for a
+        remote the user has to answer it there, and fleet waits up to 10 minutes. With no project open on
+        that machine, an "ask" refuses with "open a project first".
         """;
 }

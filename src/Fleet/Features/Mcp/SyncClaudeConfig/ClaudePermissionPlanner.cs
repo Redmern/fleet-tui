@@ -21,7 +21,7 @@ public static class ClaudePermissionPlanner
 
         foreach (var tool in SettingsDefaults.Configurable)
         {
-            if (tool == HarnessTool.DeleteWorktree)
+            if (!SettingsDefaults.ServedByProjectMcp(tool))
             {
                 continue;
             }

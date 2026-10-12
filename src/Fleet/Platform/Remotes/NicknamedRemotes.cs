@@ -37,4 +37,7 @@ public sealed class NicknamedRemotes(IRemoteMachines inner, IKnownRemoteStore kn
 
     public Task<McpResult> HeadAsync(string host, McpRequest request, CancellationToken ct = default) =>
         inner.HeadAsync(host, request, ct);
+
+    public Task<McpResult> CreateProjectAsync(string host, RemoteProjectRequest request, CancellationToken ct = default) =>
+        inner.CreateProjectAsync(host, request, ct);
 }

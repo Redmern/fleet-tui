@@ -35,4 +35,5 @@ public enum HarnessTool
     StopStack,
     SyncToRemote,
     TodoAdd,
+    CreateProject,
 }

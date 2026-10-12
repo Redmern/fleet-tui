@@ -34,27 +34,31 @@ public sealed class HeadRemotes(HeadDeps deps, HeadTiming timing)
         return McpResult.Ok(string.Join('\n', lines));
     }
 
+    public async Task<McpResult> CreateProjectAsync(string nickname, RemoteProjectRequest creation, CancellationToken ct)
+    {
+        var (remote, unknown) = Resolve(nickname);
+
+        if (remote is null)
+        {
+            return McpResult.Error(unknown!);
+        }
+
+        var (_, failed) = await ConnectedAsync(remote, ct).ConfigureAwait(false);
+
+        return failed is not null
+            ? McpResult.Error(failed)
+            : On(remote.Nickname!, await deps.Remotes.CreateProjectAsync(remote.Host, creation, ct).ConfigureAwait(false));
+    }
+
     public async Task<McpResult> HandleAsync(string nickname, McpRequest request, CancellationToken ct)
     {
-        var matches = deps.KnownRemotes.Load()
-            .Where(k => string.Equals(k.Nickname, nickname, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var (remote, unknown) = Resolve(nickname);
 
-        if (matches.Count == 0)
+        if (remote is null)
         {
-            return McpResult.Error(
-                $"no remote machine is nicknamed '{nickname}'. Machines: "
-                + string.Join(", ", [HeadTools.Local, .. Nicknames()]) + ".");
+            return McpResult.Error(unknown!);
         }
 
-        if (matches.Count > 1)
-        {
-            return McpResult.Error(
-                $"more than one remote machine is nicknamed '{nickname}' ({string.Join(", ", matches.Select(m => m.Host))}); "
-                + "rename one under Remote machines.");
-        }
-
-        var remote = matches[0];
         var (machine, failed) = await ConnectedAsync(remote, ct).ConfigureAwait(false);
 
         if (failed is not null)
@@ -94,6 +98,24 @@ public sealed class HeadRemotes(HeadDeps deps, HeadTiming timing)
                 .ConfigureAwait(false),
             HeadTools.MenuAction => await MenuAsync(remote.Host, label, project!, request, ct).ConfigureAwait(false),
             _ => On(label, await deps.Remotes.HeadAsync(remote.Host, Forwarded(request, project), ct).ConfigureAwait(false)),
+        };
+    }
+
+    private (KnownRemote? Remote, string? Error) Resolve(string nickname)
+    {
+        var matches = deps.KnownRemotes.Load()
+            .Where(k => string.Equals(k.Nickname, nickname, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return matches.Count switch
+        {
+            0 => (null,
+                $"no remote machine is nicknamed '{nickname}'. Machines: "
+                + string.Join(", ", [HeadTools.Local, .. Nicknames()]) + "."),
+            > 1 => (null,
+                $"more than one remote machine is nicknamed '{nickname}' ({string.Join(", ", matches.Select(m => m.Host))}); "
+                + "rename one under Remote machines."),
+            _ => (matches[0], null),
         };
     }
 

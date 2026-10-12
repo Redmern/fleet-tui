@@ -184,4 +184,94 @@ public sealed class CreateProjectTests : ConfigHomeFixture
             Path.TrimEndingDirectorySeparator(reply.Project!.Root));
         Assert.DoesNotContain("~", reply.Project.Root);
     }
+
+    [Fact]
+    public void Create_as_the_head_and_a_remote_use_it_expands_a_tilde_root_too()
+    {
+        var created = Handler().Create(new CreateProjectCommand("home", "~"));
+
+        Assert.True(created.Succeeded, created.Error);
+        Assert.DoesNotContain("~", created.Value.Root);
+    }
+
+    [Fact]
+    public void A_name_that_is_already_a_project_is_refused_and_the_existing_project_is_untouched()
+    {
+        var first = ARoot("first");
+        Handler().Handle(new CreateProjectCommand("backend", first));
+
+        var reply = Handler().Handle(new CreateProjectCommand("backend", ARoot("second")));
+
+        Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
+        Assert.Contains("already exists", reply.Error);
+        Assert.Equal(Path.GetFullPath(first), new JsonProjectStore().Load("backend")!.Root);
+    }
+
+    [Fact]
+    public void The_duplicate_check_compares_the_sanitised_name_ignoring_case()
+    {
+        Handler().Handle(new CreateProjectCommand("MyBackend", ARoot("first")));
+
+        var reply = Handler().Handle(new CreateProjectCommand("my backend", ARoot("second")));
+
+        Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
+        Assert.Contains("already exists", reply.Error);
+    }
+
+    [Fact]
+    public void A_duplicate_name_creates_no_directory()
+    {
+        Handler().Handle(new CreateProjectCommand("backend", ARoot()));
+        var missing = AMissingRoot();
+
+        Handler().Handle(new CreateProjectCommand("backend", missing, CreateRoot: true));
+
+        Assert.False(Directory.Exists(missing));
+    }
+
+    [Fact]
+    public void A_root_that_is_a_file_is_refused_as_not_a_directory()
+    {
+        var file = Path.Combine(ConfigHome, "a-file");
+        File.WriteAllText(file, "x");
+
+        var reply = Handler().Handle(new CreateProjectCommand("backend", file, CreateRoot: true));
+
+        Assert.Equal(CreateProjectStatus.Rejected, reply.Status);
+        Assert.Contains("not a directory", reply.Error);
+        Assert.Empty(new JsonProjectStore().List());
+    }
+
+    [Fact]
+    public void Create_returns_the_saved_project()
+    {
+        var created = Handler().Create(new CreateProjectCommand("shop", ARoot()));
+
+        Assert.True(created.Succeeded, created.Error);
+        Assert.Equal("shop", created.Value.Name);
+    }
+
+    [Fact]
+    public void Create_reports_a_missing_root_as_a_path_error_and_creates_nothing()
+    {
+        var missing = AMissingRoot();
+
+        var created = Handler().Create(new CreateProjectCommand("shop", missing));
+
+        Assert.False(created.Succeeded);
+        Assert.Contains("does not exist", created.Error);
+        Assert.False(Directory.Exists(missing));
+        Assert.Empty(new JsonProjectStore().List());
+    }
+
+    [Fact]
+    public void Create_passes_on_a_rejection()
+    {
+        Handler().Create(new CreateProjectCommand("shop", ARoot()));
+
+        var created = Handler().Create(new CreateProjectCommand("shop", ARoot("other")));
+
+        Assert.False(created.Succeeded);
+        Assert.Contains("already exists", created.Error);
+    }
 }

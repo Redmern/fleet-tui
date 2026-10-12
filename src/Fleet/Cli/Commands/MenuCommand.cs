@@ -27,6 +27,7 @@ using Fleet.Features.Projects.QuitProject;
 using Fleet.Features.Projects.ResolveProject;
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Features.Projects.SwitchProject;
+using Fleet.Features.Remotes.CreateRemoteProject;
 using Fleet.Features.Remotes.ManageRemotes;
 using Fleet.Features.Sessions.SaveSession;
 using Fleet.Features.Updates.ShowVersion;
@@ -665,8 +666,22 @@ public static class MenuCommand
                 }
 
             case FleetAction.Remotes:
-                ManageRemotesView.Show(app, keymap, Adapters.Remotes(), Adapters.KnownRemotes(), Adapters.Forwards(), Adapters.Browser());
-                break;
+                {
+                    var remotes = Adapters.Remotes();
+                    if (ManageRemotesView.Show(
+                        app,
+                        keymap,
+                        remotes,
+                        Adapters.KnownRemotes(),
+                        Adapters.Forwards(),
+                        Adapters.Browser(),
+                        (host, label) => CreateRemoteProjectView.Show(app, new CreateRemoteProjectHandler(remotes), host, label)) is { } made)
+                    {
+                        await ShowRemoteProject(app, remotes, made.Host, made.Project, newWindow: false).ConfigureAwait(false);
+                    }
+
+                    break;
+                }
 
             case FleetAction.Notifications when EmbeddedWiring.HandBack(FleetActionIds.For(FleetAction.Notifications)):
                 break;
@@ -1040,7 +1055,8 @@ public static class MenuCommand
 
         if (tabbed is var (newTab, newIndex, newInWindow) && tabs.Targets[newTab][newIndex] is { IsNew: true } fresh)
         {
-            await NewProjectFrom(app, switchMux.Driver, remotes, fresh.Host, newInWindow).ConfigureAwait(false);
+            var freshLabel = machines.FirstOrDefault(m => string.Equals(m.Host, fresh.Host, StringComparison.OrdinalIgnoreCase))?.Label;
+            await NewProjectFrom(app, switchMux.Driver, remotes, fresh.Host, freshLabel, newInWindow).ConfigureAwait(false);
             switchLog.Write($"switch {from} -> new project{(fresh.Host is null ? string.Empty : " on " + fresh.Host)}");
             return;
         }
@@ -1094,17 +1110,13 @@ public static class MenuCommand
     }
 
     private static async Task NewProjectFrom(
-        IApplication app, IMuxDriver mux, Ports.Remotes.IRemoteMachines remotes, string? host, bool newWindow)
+        IApplication app, IMuxDriver mux, Ports.Remotes.IRemoteMachines remotes, string? host, string? label, bool newWindow)
     {
         if (host is not null)
         {
-            try
+            if (CreateRemoteProjectView.Show(app, new CreateRemoteProjectHandler(remotes), host, label ?? host) is { } project)
             {
-                await remotes.NewProjectAsync(host).ConfigureAwait(false);
-            }
-            catch (Ports.Mux.Exceptions.MuxUnavailableException e)
-            {
-                FleetDialog.Error(app, "New project", e.Message);
+                await ShowRemoteProject(app, remotes, host, project, newWindow).ConfigureAwait(false);
             }
 
             return;
@@ -1122,6 +1134,26 @@ public static class MenuCommand
         if (opened is not null)
         {
             FleetDialog.Error(app, "New project", opened);
+        }
+    }
+
+    private static async Task ShowRemoteProject(
+        IApplication app, Ports.Remotes.IRemoteMachines remotes, string host, string project, bool newWindow)
+    {
+        try
+        {
+            if (newWindow)
+            {
+                await remotes.OpenInNewWindowAsync(host, project).ConfigureAwait(false);
+            }
+            else
+            {
+                await remotes.ShowHereAsync(host, project).ConfigureAwait(false);
+            }
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException e)
+        {
+            FleetDialog.Error(app, "New project", e.Message);
         }
     }
 

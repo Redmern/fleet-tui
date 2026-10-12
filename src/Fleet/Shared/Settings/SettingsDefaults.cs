@@ -100,6 +100,7 @@ public static class SettingsDefaults
         HarnessTool.StartStack,
         HarnessTool.StopStack,
         HarnessTool.TodoAdd,
+        HarnessTool.CreateProject,
     ];
 
     public static ToolRule RuleFor(HarnessTool tool)
@@ -111,6 +112,9 @@ public static class SettingsDefaults
 
         return AllowedByDefault(tool) ? ToolRule.Allow : ToolRule.Ask;
     }
+
+    public static bool ServedByProjectMcp(HarnessTool tool) =>
+        tool is not (HarnessTool.DeleteWorktree or HarnessTool.CreateProject);
 
     public static bool IsRead(HarnessTool tool) => tool
         is HarnessTool.ListAgents
@@ -166,6 +170,7 @@ public static class SettingsDefaults
         HarnessTool.StopStack => "Stop a remote project's stack",
         HarnessTool.SyncToRemote => "Send work to another machine",
         HarnessTool.TodoAdd => "Add a todo ticket",
+        HarnessTool.CreateProject => "Create a project",
         _ => tool.ToString(),
     };
 }

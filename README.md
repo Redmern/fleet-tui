@@ -326,11 +326,20 @@ draws the buttons in a float's or the dashboard's frame.
 ### Remote machines
 
 **Remote machines** (`r` in the fleet menu's Settings) connects this fleet to fleet on another
-machine over ssh. `n` asks for the ssh host (for example `user@homelab`); fleet runs
+machine over ssh. `c` asks for the ssh host (for example `user@homelab`); fleet runs
 `ssh <host> fleet bridge` itself and, when ssh wants a password or asks to trust a new
 host key, shows the question in a small dialog. `d` disconnects, and `enter` answers or
 retries a connection. The remote needs this fleet on its PATH, or name it with
 `FLEET_REMOTE_COMMAND`.
+
+`n` on a connected machine creates a project there: a small dialog asks for its **Name** and
+**Path** (the path as it is on that machine) and, when the path does not exist, whether to
+create the directory. fleet creates and opens the project on that machine and shows it here;
+an error (a name that is already a project there, a path that is a file) stays in the dialog
+so you can fix it. On a machine that is not connected, `n` connects, like `c`. This create
+skips the remote's `create_project` *ask* because you are the one asking, but a *forbid* rule
+there still refuses it. A remote on an older fleet answers that it is too old to create
+projects; update fleet there.
 
 A machine that connected once is remembered (`remotes.json` in the fleet config folder)
 and stays in the list after a disconnect or a restart, muted as `known · not connected`;
@@ -346,8 +355,9 @@ in this window; `SHIFT` opens it in a new window attached over ssh.
 
 **this machine** and every machine's tab end with **+ New project...** (`n`). On this
 machine it opens the same New project form as the startup picker and then opens the new
-project. On a remote it shows that machine here and opens the remote's own New project
-form, so the project and its folder are made there; a machine with no projects yet still
+project. On a remote it opens the same Name + Path dialog as `n` under **Remote machines**,
+here on this machine, and then shows the new project (in a new window on `SHIFT`); the
+project and its folder are made on the remote. A machine with no projects yet still
 has this entry, so its tab is never empty.
 
 A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar
@@ -961,7 +971,9 @@ default branch, and materialises that branch's worktree immediately — includin
 the initial commit a fresh bare repository needs before `git worktree add` will
 work.
 
-Creating a project whose root does not exist asks before creating the directory.
+Creating a project whose root does not exist asks before creating the directory, and a
+name that is already a project (case-insensitive) is refused. The head's `create_project`
+and the Name + Path dialog for a remote machine use the same rules.
 
 ## The orchestrator
 
@@ -1090,6 +1102,7 @@ tools) and registers `fleet mcp --head` as its MCP server every time it starts. 
 | `list_remotes` | the machines the head can act on: `local` (the machine fleet was opened on) first, then each remote's nickname, ssh host, last connection and whether it is connected now |
 | `list_projects` | the projects of one machine (`remote`, default `local`), open or closed, and how many relayed prompts wait for it |
 | `list_remote_projects` | the projects per machine: this machine first, then every remote machine fleet knows (nickname and ssh host, `connected` or `known · not connected`), each project `open` or `closed` |
+| `create_project` | creates a project on this machine or a connected remote (`name`, `path`, `remote`, `create_directory`, `open`, `repositories`) and opens it |
 | `switch_project` | shows a project, opening it first if it is closed |
 | `menu_action` | hands a dashboard action (`new-agent`, `add-repository`, `keybinds`, ...) to a project's dashboard and shows it |
 | `list_agents` | the agents of one project, or of every open project, as a flat list |
@@ -1150,16 +1163,31 @@ to its owner's session (its sub-orchestrator, or the project's main orchestrator
 links (as **Remote machines** shows them) and `remotes.json`. It never opens an ssh
 connection, so a machine that is not connected is listed with its state and no projects.
 
-`list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell`,
-`relay`, `list_queued`, `drop_queued`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from
+`list_projects`, `create_project`, `switch_project`, `menu_action`, `list_agents`,
+`project_structure`, `tell`, `relay`, `list_queued`, `drop_queued`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from
 `remotes.json` (never an ssh host). Leave it out, or pass `local`, for the machine fleet was
 opened on. A remote that is not connected is connected first, the same way **Remote
 machines** does; if ssh asks a question (a password, a host key), the head says so and you
-answer it there. `switch_project` shows the remote project in this window; `relay`, `tell`,
+answer it there. `switch_project` shows the remote project in this window; `create_project`,
+`relay`, `tell`,
 `list_queued`, `drop_queued`, `list_agents`, `project_structure`, `menu_action`, `show_agent` and `hide_agent` run on the
 remote's own fleet over the existing ssh
 link, so that project's permissions apply there exactly as they do locally. A remote fleet
 never opens ssh to another remote: everything goes through the origin.
+
+**Creating projects.** `create_project(name, path, remote?, repositories?, create_directory?, open?)`
+makes a project with the same name rules as the New project form, on this machine or on a
+connected remote (`path` is a path on that machine). It refuses a name that is already a
+project there (case-insensitive), a path that is a file, and a path that does not exist
+unless `create_directory` is `true`. It opens the project by default and answers
+`created and opened`, or `created, not opened: <reason>` when opening fails (the project
+stays); `open: false` only creates it. `repositories` is a comma-separated list in the same
+forms as `add_repository`, added after the project opens, so it is rejected with
+`open: false`. If one cannot be added, fleet removes the project again and the error names
+the repository; the root folder and anything added there stay in place, as do the
+project's agent and session state files. An unknown, ambiguous or unconnected `remote`, or
+ISO mode with a remote, is a clear error and creates nothing. A remote on an older fleet
+answers `the fleet on <machine> is too old to create projects; update fleet there`.
 
 **One head.** The head always runs on the origin. Pressing its chord while you look at a
 project on a remote machine shows the origin's head over it, not a head on that machine.
@@ -1173,6 +1201,15 @@ when the agent has to be started. *Forbid* refuses; *ask* shows the Allow/Deny d
 that project's dashboard, whichever channel the rule names, because the head's own Claude
 cannot tell projects apart. Switching projects, opening menus and showing or hiding the
 head are navigation and always allowed.
+
+`create_project` belongs to no project yet, so it has its own machine-wide rule,
+`create_project` (**Create a project**, *ask* by default), checked on the machine where the
+project is made, with that machine's settings. Its Allow/Deny dialog shows in a dashboard of
+a project open on that machine: for a remote you answer it there, not on this machine, and
+the head waits up to 10 minutes. With no project open on that machine, *ask* refuses with
+"open a project first"; *forbid* always refuses. A create from the Name + Path dialog (`n`
+under **Remote machines** or **+ New project...**) skips the *ask*, because you are
+present, and still honours *forbid*.
 
 ## Configuration
 

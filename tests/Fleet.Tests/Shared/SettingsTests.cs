@@ -31,6 +31,24 @@ public class SettingsTests
     }
 
     [Fact]
+    public void Creating_a_project_has_its_own_rule_that_asks_by_default_and_shows_in_the_settings_table()
+    {
+        Assert.Equal("create_project", HarnessToolIds.For(HarnessTool.CreateProject));
+        Assert.Equal(HarnessTool.CreateProject, HarnessToolIds.Parse("create_project"));
+        Assert.Equal(ActionPolicy.Ask, SettingsConfig.Default.RuleFor(HarnessTool.CreateProject).Policy);
+        Assert.Contains(HarnessTool.CreateProject, SettingsDefaults.Configurable);
+        Assert.Equal("Create a project", SettingsDefaults.Describe(HarnessTool.CreateProject));
+    }
+
+    [Fact]
+    public void Creating_a_project_is_a_head_tool_not_a_fleet_mcp_tool()
+    {
+        Assert.False(SettingsDefaults.ServedByProjectMcp(HarnessTool.CreateProject));
+        Assert.False(SettingsDefaults.ServedByProjectMcp(HarnessTool.DeleteWorktree));
+        Assert.True(SettingsDefaults.ServedByProjectMcp(HarnessTool.NewAgent));
+    }
+
+    [Fact]
     public void The_trigger_defaults_to_a_comma()
     {
         Assert.Equal(",", SettingsConfig.Default.Trigger);
