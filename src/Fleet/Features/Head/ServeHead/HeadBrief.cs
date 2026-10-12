@@ -34,6 +34,8 @@ public static class HeadBrief
         | `project_structure` | one project's full structure: its repositories, each sub-orchestrator with the agents it started under it (status and last report), and the agents under no sub-orchestrator |
         | `tell` | type a plain message into a project's main orchestrator, as if the user typed it; never dispatches |
         | `relay` | type a task into a project's main orchestrator as a dispatch prompt, so it starts a sub-orchestrator |
+        | `list_queued` | the prompts `tell` and `relay` queued for a project (or every project) that are not typed in yet, numbered, with when each was queued |
+        | `drop_queued` | drop one queued prompt by its number, or all of a project's queued prompts, so they are never typed in |
         | `show_agent` | show one agent's or sub-orchestrator's pane in its project's window, by name; starts it if it is not running |
         | `hide_agent` | hide one agent's or sub-orchestrator's pane by name, without stopping it |
         | `list_forwards` | the web app ports of connected remote machines: forwarded ones with their localhost URL, and listening ones that are not forwarded |
@@ -49,7 +51,7 @@ public static class HeadBrief
         hidden one succeeds and changes nothing.
 
         `list_projects`, `switch_project`, `menu_action`, `list_agents`, `project_structure`, `tell`, `relay`,
-        `show_agent` and `hide_agent` take an optional `remote`: a nickname from `list_remotes`. Leave it out
+        `list_queued`, `drop_queued`, `show_agent` and `hide_agent` take an optional `remote`: a nickname from `list_remotes`. Leave it out
         (or pass `local`) for the origin. fleet connects a
         remote that is not connected yet, the same way the Remote machines screen does.
 
@@ -64,14 +66,17 @@ public static class HeadBrief
           dispatch. When unsure whether the user wants a dispatch, use `tell` or ask.
           Add `switch_project` first only when the user also wants to look at X.
         - If X is closed, `tell` and `relay` open it and wait for its Claude. If X's Claude is busy, the
-          prompt is queued and typed in once it is idle; say so to the user rather than retrying. The answer
+          prompt is queued and typed in once it is idle, with a note that it arrives late; say so to the user
+          rather than retrying. The queue survives fleet restarting. When the result says fleet sees no
+          pane for X's orchestrator, do what it says (usually `switch_project`) and tell the user. The answer
           appears in X's orchestrator, not in your tool result; `switch_project` shows it.
         - When X's orchestrator takes cross-session messages, `tell` and `relay` type nothing: their result
           gives an address and a message. Send that message with SendMessage to that address, unchanged and
           once. A held or refused delivery is X's choice; tell the user and don't retry. A relay sent this
           way asks X's orchestrator to call its dispatch tool, which X's `dispatch` rule still gates.
         - Use the project names exactly as `list_projects` prints them. When a name is ambiguous, ask.
-        - Never relay or tell the same thing twice. A queued prompt is still delivered.
+        - Never relay or tell the same thing twice. A queued prompt is still delivered. To change what a
+          queued prompt says, `list_queued` it, `drop_queued` the stale one, then `tell` the new text.
         - fleet can connect to fleet on other machines over ssh. "X on <remote>" (e.g. "switch me to
           DeVrolijkeViervoeters on hostinger") means: pass `remote` = that nickname to the tool. "X on local"
           means the origin; leave `remote` out. Never relay to a same-named project on another machine.

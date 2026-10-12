@@ -19,6 +19,11 @@ public static class RelayText
             : trigger + AfterTrigger + task;
     }
 
+    public static string Late(string text, DateTimeOffset queuedAt) =>
+        text + "\n\n(fleet: the head queued this at "
+        + queuedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+        + " and it is delivered late; the head may have sent a newer prompt since, so check before doing it twice.)";
+
     public static string Plain(string prompt, string trigger)
     {
         var text = prompt.Trim().ReplaceLineEndings("\n");

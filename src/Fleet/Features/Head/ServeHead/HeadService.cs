@@ -50,7 +50,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
                 or HeadTools.StartStack or HeadTools.StopStack => await _forwards.HandleAsync(request, ct).ConfigureAwait(false),
             HeadTools.ListProjects or HeadTools.SwitchProject or HeadTools.MenuAction or HeadTools.ListAgents
                 or HeadTools.ProjectStructure or HeadTools.Relay or HeadTools.Tell or HeadTools.ShowAgent
-                or HeadTools.HideAgent when !HeadRemotes.IsLocal(remote) =>
+                or HeadTools.HideAgent or HeadTools.ListQueued or HeadTools.DropQueued when !HeadRemotes.IsLocal(remote) =>
                 deps.Iso?.Load() is { On: true }
                     ? McpResult.Error(IsoGuard.Refusal(IsoGuard.Ssh))
                     : await _remotes.HandleAsync(remote, request, ct).ConfigureAwait(false),
@@ -73,6 +73,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
         return request.Tool is HeadTools.MenuAction or HeadTools.ListAgents or HeadTools.ProjectStructure
                 or HeadTools.Relay or HeadTools.Tell or HeadTools.ShowAgent or HeadTools.HideAgent
+                or HeadTools.ListQueued or HeadTools.DropQueued
             ? await HandleHereAsync(request, show: false, ct).ConfigureAwait(false)
             : McpResult.Error($"{request.Tool} is not served to another machine.");
     }
@@ -90,6 +91,9 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             HeadTools.ShowAgent => await WithProject(request, p => _visibility.SetAsync(p, request, visible: true, ct))
                 .ConfigureAwait(false),
             HeadTools.HideAgent => await WithProject(request, p => _visibility.SetAsync(p, request, visible: false, ct))
+                .ConfigureAwait(false),
+            HeadTools.ListQueued => ListQueued(request),
+            HeadTools.DropQueued => await WithProject(request, p => Task.FromResult(DropQueued(p, request)))
                 .ConfigureAwait(false),
             _ => McpResult.Error($"the head has no tool named '{request.Tool}'."),
         };
@@ -318,6 +322,70 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
         return McpResult.Ok(string.Join('\n', lines));
     }
 
+    private McpResult ListQueued(McpRequest request)
+    {
+        var name = request.Value(HeadTools.Project).Trim();
+
+        if (name.Length > 0 && Find(name) is null)
+        {
+            return Unknown(name);
+        }
+
+        var projects = name.Length > 0
+            ? [Find(name)!]
+            : deps.Projects.List().OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
+        var lines = new List<string>();
+
+        foreach (var project in projects)
+        {
+            var queued = Relay.Queued(project.Name);
+
+            lines.AddRange(queued.Select((q, i) => $"{project.Name}  {i + 1}  queued {Stamp(q.QueuedAt)}  {OneLine(q.Text)}"));
+        }
+
+        return McpResult.Ok(lines.Count > 0
+            ? string.Join('\n', lines)
+            : name.Length > 0 ? $"no prompts are queued for {Find(name)!.Name}." : "no prompts are queued.");
+    }
+
+    private McpResult DropQueued(Project project, McpRequest request)
+    {
+        var raw = request.Value(HeadTools.Number).Trim();
+        int? number = null;
+
+        if (raw.Length > 0)
+        {
+            if (!int.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n))
+            {
+                return McpResult.Error($"'{HeadTools.Number}' must be a number as {HeadTools.ListQueued} shows it.");
+            }
+
+            number = n;
+        }
+
+        var waiting = Relay.Pending(project.Name);
+        var dropped = Relay.Drop(project.Name, number);
+
+        if (dropped.Count == 0)
+        {
+            return waiting == 0
+                ? McpResult.Ok($"no prompts are queued for {project.Name}.")
+                : McpResult.Error($"{project.Name} has {waiting} queued prompt(s); there is no number {raw}.");
+        }
+
+        deps.Log.Write(Fleet.Shared.LogTag.For(project.Name, $"head dropped {dropped.Count} queued prompt(s)"));
+
+        return McpResult.Ok(
+            $"dropped {dropped.Count} queued prompt(s) for {project.Name}; they will not be typed in:\n"
+            + string.Join('\n', dropped.Select(d => $"queued {Stamp(d.QueuedAt)}  {OneLine(d.Text)}")));
+    }
+
+    private static string OneLine(string text) => text.ReplaceLineEndings(" ⏎ ");
+
+    private static string Stamp(DateTimeOffset at) =>
+        at.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+
     private async Task<McpResult> RelayAsync(Project project, McpRequest request, CancellationToken ct)
     {
         var prompt = request.Value(HeadTools.Prompt).Trim();
@@ -358,7 +426,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
 
         var panes = await deps.Mux.ListPanesAsync(ct).ConfigureAwait(false);
         var target = MainPane.Dashboard(panes, deps.DashPane(project.Name))
-            ?? MainPane.Find(panes, project.Root, null);
+            ?? MainPane.Find(panes, project.Root, project.Name, null);
 
         if (target is null)
         {
