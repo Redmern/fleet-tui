@@ -38,6 +38,18 @@ public sealed class CreateRemoteProjectTests : ConfigHomeFixture
         Assert.Equal("MyShop", reply.Project);
     }
 
+    [Theory]
+    [InlineData("created created and opened; its root is /srv/shop.", "created")]
+    [InlineData("shop created, not opened: the window is busy", "shop")]
+    public async Task Names_the_project_from_the_full_success_wording(string text, string project)
+    {
+        var remotes = new FakeRemotes(McpResult.Ok(text));
+
+        var reply = await new CreateRemoteProjectHandler(remotes).HandleAsync(Host, "typed", "/srv/shop", createDirectory: false);
+
+        Assert.Equal(project, reply.Project);
+    }
+
     [Fact]
     public async Task A_missing_directory_asks_to_create_it()
     {

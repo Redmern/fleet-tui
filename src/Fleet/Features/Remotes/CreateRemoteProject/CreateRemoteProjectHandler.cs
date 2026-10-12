@@ -11,7 +11,7 @@ public sealed class CreateRemoteProjectHandler(IRemoteMachines remotes)
 
     public const string DirectoryDeclined = "Cancelled — the directory was not created.";
 
-    private const string CreatedMark = " created";
+    private static readonly string[] CreatedMarks = [" created and opened;", " created, not opened"];
 
     public async Task<RemoteProjectReply> SubmitAsync(
         string host, string name, string path, Func<string, Task<bool>> confirmDirectory, CancellationToken ct = default)
@@ -67,7 +67,11 @@ public sealed class CreateRemoteProjectHandler(IRemoteMachines remotes)
 
     private static string CreatedName(string text, string typed)
     {
-        var at = text.IndexOf(CreatedMark, StringComparison.Ordinal);
+        var at = CreatedMarks
+            .Select(mark => text.IndexOf(mark, StringComparison.Ordinal))
+            .Where(i => i > 0)
+            .DefaultIfEmpty(-1)
+            .Min();
         return at > 0 ? text[..at] : typed;
     }
 }
