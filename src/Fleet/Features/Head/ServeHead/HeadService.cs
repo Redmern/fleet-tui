@@ -60,7 +60,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
                     : CreateProjectError(request) is { } invalid
                         ? McpResult.Error(invalid)
                         : await _remotes.CreateProjectAsync(remote, CreationFor(request), ct).ConfigureAwait(false),
-            HeadTools.CreateProject => await CreateProjectAsync(request, ct).ConfigureAwait(false),
+            HeadTools.CreateProject => await CreateProjectAsync(request, interactive: false, ct).ConfigureAwait(false),
             _ => await HandleHereAsync(request, show: true, ct).ConfigureAwait(false),
         };
     }
@@ -210,9 +210,10 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
                     [HeadTools.Open] = creation.Open ? "true" : "false",
                     [HeadTools.Repositories] = string.Join(',', creation.Repositories ?? []),
                 }),
+            creation.Interactive,
             ct);
 
-    private async Task<McpResult> CreateProjectAsync(McpRequest request, CancellationToken ct)
+    private async Task<McpResult> CreateProjectAsync(McpRequest request, bool interactive, CancellationToken ct)
     {
         if (CreateProjectError(request) is { } invalid)
         {
@@ -229,7 +230,8 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
             return McpResult.Error($"this fleet cannot add {HeadTools.Repositories} to a new project.");
         }
 
-        if (await _gate.CheckWithoutProjectAsync(HarnessTool.CreateProject, Detail(CreationFor(request)), ct)
+        if (!interactive
+            && await _gate.CheckWithoutProjectAsync(HarnessTool.CreateProject, Detail(CreationFor(request)), ct)
                 .ConfigureAwait(false) is { } denied)
         {
             return McpResult.Error(denied);
