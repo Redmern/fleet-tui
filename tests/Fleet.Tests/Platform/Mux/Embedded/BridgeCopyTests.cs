@@ -90,6 +90,23 @@ public sealed class BridgeCopyTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_mouse_drag_over_a_remote_pane_reaches_the_clipboard_of_the_local_viewer()
+    {
+        var (farPane, viewer) = await ShowRemotePaneAsync();
+        var far = _farPanes.Started.Single(p => p.Env.GetValueOrDefault(FleetDaemon.PaneVariable) == farPane);
+        far.Terminal.MouseTracking = false;
+        far.Emit("alpha beta\ngamma delta");
+        await Eventually(() => far.Terminal.PlainText().Contains("gamma", StringComparison.Ordinal));
+
+        await viewer.SendMouseAsync(0, 1, MouseButtons.Left, MouseActions.Press, held: true);
+        await viewer.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Motion, held: true);
+        await viewer.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Release);
+
+        await Eventually(() => viewer.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "alpha beta\ngamma"));
+        Assert.Equal(string.Empty, far.Written);
+    }
+
+    [Fact]
     public async Task A_copy_in_a_remote_pane_reaches_a_direct_bridged_viewer_when_the_local_link_shows_something_else()
     {
         var (farPane, viewer) = await ShowRemotePaneAsync();
