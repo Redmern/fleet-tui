@@ -1534,7 +1534,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                 if (capture.Selecting)
                 {
-                    redraw |= DragSelection(session, capture.Pane!, mouse);
+                    redraw |= !wheel && DragSelection(session, capture.Pane!, mouse);
                 }
                 else if (capture.Kind == MouseHitKind.None)
                 {
@@ -1629,6 +1629,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                             }
 
                             if (mouse.Button == MouseButtons.Left
+                                && session.Copy is null or { Dragged: true }
                                 && StartSelection(hit.Pane!, mouse, hit.X, hit.Y, out encoded) is { } selection)
                             {
                                 session.Copy = selection;
@@ -1715,7 +1716,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             copy.DragTo(new TextPoint(runtime.Terminal.Viewport.Top + y, x));
             runtime.Dirty = true;
 
-            if (mouse.Action == MouseActions.Release)
+            if (mouse.Action == MouseActions.Release && !mouse.Held)
             {
                 if (copy.Selected(runtime.Terminal) is { Length: > 0 } text)
                 {

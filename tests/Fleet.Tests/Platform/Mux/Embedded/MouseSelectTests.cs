@@ -58,6 +58,7 @@ public sealed class MouseSelectTests : IAsyncLifetime
         await DragAsync(client, (0, 1), (4, 2));
 
         await Eventually(() => shell.Written.EndsWith("a1 4,1>", StringComparison.Ordinal));
+        await Task.Delay(300);
         Assert.StartsWith("<mouse b1 a0 0,0>", shell.Written, StringComparison.Ordinal);
         Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Clipboard);
     }
@@ -112,6 +113,34 @@ public sealed class MouseSelectTests : IAsyncLifetime
 
         await client.WaitForAsync(CopyMode.NothingSelected);
         Assert.Single(client.Effects, e => e.Kind == HostEffects.Clipboard);
+    }
+
+    [Fact]
+    public async Task A_drag_while_in_keyboard_copy_mode_leaves_the_copy_mode_session_alone()
+    {
+        var (client, _) = await ShellAsync(tracking: false);
+
+        await client.SendCommandAsync("copy-mode");
+        await DragAsync(client, (0, 1), (4, 1));
+        await client.SendCommandAsync(CopyMode.Command, "yank");
+
+        await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "gamma delta"));
+        Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Clipboard && e.Value == "alpha");
+    }
+
+    [Fact]
+    public async Task Releasing_another_button_mid_drag_copies_nothing_until_the_left_button_is_released()
+    {
+        var (client, _) = await ShellAsync(tracking: false);
+
+        await client.SendMouseAsync(0, 1, MouseButtons.Left, MouseActions.Press, held: true);
+        await client.SendMouseAsync(2, 1, MouseButtons.Left, MouseActions.Motion, held: true);
+        await client.SendMouseAsync(2, 1, MouseButtons.Right, MouseActions.Release, held: true);
+        await client.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Motion, held: true);
+        await client.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Release);
+
+        await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.Clipboard));
+        Assert.Equal("alpha beta\ngamma", client.Effects.Single(e => e.Kind == HostEffects.Clipboard).Value);
     }
 
     [Fact]
