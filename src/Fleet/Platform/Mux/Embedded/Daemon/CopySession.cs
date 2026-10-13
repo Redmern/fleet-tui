@@ -7,6 +7,8 @@ public sealed class CopySession(string pane, TextPoint cursor)
 {
     public string Pane { get; } = pane;
 
+    public bool Dragged { get; private init; }
+
     public TextPoint Cursor { get; private set; } = cursor;
 
     public TextPoint? Anchor { get; private set; }
@@ -21,6 +23,15 @@ public sealed class CopySession(string pane, TextPoint cursor)
             ? new CopySession(pane, new TextPoint(viewport.Top + screen.CursorY, screen.CursorX))
             : new CopySession(pane, new TextPoint(viewport.Top + Math.Max(0, viewport.Rows - 1), 0));
     }
+
+    public static CopySession Drag(string pane, TextPoint at) => new(pane, at) { Anchor = at, Dragged = true };
+
+    public bool Empty => Anchor is not { } anchor || anchor == Cursor;
+
+    public void DragTo(TextPoint at) => Cursor = at;
+
+    public string? Selected(IPaneTerminal terminal) =>
+        Empty ? null : terminal.Text(Anchor!.Value, Cursor);
 
     public string? Apply(string step, IPaneTerminal terminal, int cols)
     {

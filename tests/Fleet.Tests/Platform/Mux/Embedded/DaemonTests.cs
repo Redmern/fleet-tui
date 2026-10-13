@@ -1419,10 +1419,10 @@ public sealed class DaemonTests : IAsyncLifetime
         public Task SendKeyAsync(string text) =>
             _wire.SendAsync(MessageType.Key, new KeyMessage { Text = text, Action = 1 }, WireJsonContext.Default.KeyMessage);
 
-        public Task SendMouseAsync(int x, int y, int button, int action, bool held = false) =>
+        public Task SendMouseAsync(int x, int y, int button, int action, bool held = false, int mods = 0) =>
             _wire.SendAsync(
                 MessageType.Mouse,
-                new MouseMessage { X = x, Y = y, Button = button, Action = action, Held = held },
+                new MouseMessage { X = x, Y = y, Button = button, Action = action, Held = held, Mods = mods },
                 WireJsonContext.Default.MouseMessage);
 
         public Task SendCommandAsync(string name, string? arg = null) =>
