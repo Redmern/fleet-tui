@@ -1371,7 +1371,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             _model.Touch(session.Client);
             target = FocusedRuntime(session.Client);
-            unhovered = session.Hover is not null;
+            unhovered = session.Hover is not null | DropNotice(session);
             session.Hover = null;
         }
 
@@ -1432,10 +1432,17 @@ public sealed class FleetDaemon(DaemonOptions options)
     private void Route(AttachSession session, TextMessage text)
     {
         PaneRuntime? target;
+        bool dropped;
         lock (_gate)
         {
             _model.Touch(session.Client);
             target = FocusedRuntime(session.Client);
+            dropped = DropNotice(session);
+        }
+
+        if (dropped)
+        {
+            _wake.Release();
         }
 
         if (target is null)
@@ -1876,8 +1883,30 @@ public sealed class FleetDaemon(DaemonOptions options)
         _wake.Release();
     }
 
+    private static bool DropNotice(AttachSession session)
+    {
+        if (session.Badge != Input.CopyMode.NothingSelected)
+        {
+            return false;
+        }
+
+        session.Badge = null;
+        return true;
+    }
+
     private void CopyStep(AttachSession session, string step)
     {
+        if (step == Input.CopyMode.Selection)
+        {
+            if (session.Copy is null)
+            {
+                session.Badge = Input.CopyMode.NothingSelected;
+                return;
+            }
+
+            step = "yank";
+        }
+
         if (session.Copy is not { } copy || !_runtimes.TryGetValue(copy.Pane, out var pane))
         {
             session.Copy = null;

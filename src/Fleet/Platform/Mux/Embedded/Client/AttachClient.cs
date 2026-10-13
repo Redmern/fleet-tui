@@ -478,7 +478,7 @@ public sealed class AttachClient(
                 else
                 {
                     _swallowed.Add(step.VirtualKey);
-                    await ModeStep(wire, mode, mode.OnKey(step.Key, step.Mods, step.Utf8)).ConfigureAwait(false);
+                    await ModeStep(wire, mode, StickyKey(mode, step.Key, step.Mods, step.Utf8)).ConfigureAwait(false);
                 }
             }
 
@@ -671,7 +671,7 @@ public sealed class AttachClient(
             if (Sticky is { } mode)
             {
                 await Flush(wire, pending).ConfigureAwait(false);
-                i += mode.OnBytes(bytes.AsSpan(i), out var step);
+                i += StickyBytes(mode, bytes.AsSpan(i), out var step);
                 await ModeStep(wire, mode, step).ConfigureAwait(false);
                 continue;
             }
@@ -778,6 +778,10 @@ public sealed class AttachClient(
             case "paste":
                 await PasteClipboard(wire).ConfigureAwait(false);
                 return;
+            case CopyMode.Command:
+                await Send(wire, MessageType.Command, new CommandMessage { Name = CopyMode.Command, Arg = CopyMode.Selection },
+                    WireJsonContext.Default.CommandMessage).ConfigureAwait(false);
+                return;
             case "reload":
                 _keys = loadKeys();
                 _prefixState = null;
@@ -818,6 +822,22 @@ public sealed class AttachClient(
                 Keys = WhichKey.For(PrefixState.Node ?? _keys.Root, _keys.Prefix, _keys.ShowIcons),
             },
             WireJsonContext.Default.BadgeMessage);
+
+    private CommandMessage? StickyKey(IStickyMode mode, Key key, Mods mods, string? text) =>
+        mode == _copyMode && _keys.DirectCommand(key, mods, text) == CopyMode.Command
+            ? _copyMode.Yank()
+            : mode.OnKey(key, mods, text);
+
+    private int StickyBytes(IStickyMode mode, ReadOnlySpan<byte> bytes, out CommandMessage? step)
+    {
+        if (mode == _copyMode && _keys.DirectBytes(bytes) is { Command: CopyMode.Command, Length: > 0 and var length })
+        {
+            step = _copyMode.Yank();
+            return length;
+        }
+
+        return mode.OnBytes(bytes, out step);
+    }
 
     private IStickyMode? Sticky =>
         _floatMode.Active ? _floatMode : _copyMode.Active ? _copyMode : _confirm.Active ? _confirm : null;
