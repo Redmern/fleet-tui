@@ -119,16 +119,35 @@ public sealed class BridgeCopyTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_remote_copy_no_local_window_shows_is_logged_with_the_reason()
+    public async Task A_remote_copy_no_local_window_shows_goes_to_the_most_recently_active_local_window()
     {
         var (farPane, viewer) = await ShowRemotePaneAsync();
+        var other = await DaemonTests.TestClient.ConnectAsync(_home, ClientRoles.Attach, 60, 12, "local");
+        _clients.Add(other);
+        await Eventually(() => other.FrameCount > 0);
         await viewer.SendCommandAsync("show", "local");
         await Task.Delay(300);
+        await viewer.SendKeyAsync("x");
+        await Task.Delay(100);
 
         FarTerminal(farPane).Copy("remote yank");
 
-        await Eventually(() => _homeLog.Any(l => l.Contains("copy of 11 chars dropped: no window shows @", StringComparison.Ordinal)));
-        Assert.DoesNotContain(viewer.Effects, e => e.Kind == HostEffects.Clipboard);
+        await Eventually(() => viewer.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "remote yank"));
+        Assert.DoesNotContain(other.Effects, e => e.Kind == HostEffects.Clipboard);
+        Assert.Contains(_homeLog, l => l.Contains($"copy of 11 chars rerouted to {viewer.Id}: no window shows @", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_remote_copy_with_no_local_window_at_all_is_logged_as_dropped()
+    {
+        var (farPane, viewer) = await ShowRemotePaneAsync();
+        await viewer.DisposeAsync();
+        _clients.Remove(viewer);
+        await Eventually(() => _homeLog.Any(l => l.Contains("detached", StringComparison.Ordinal)));
+
+        FarTerminal(farPane).Copy("remote yank");
+
+        await Eventually(() => _homeLog.Any(l => l.Contains("copy of 11 chars dropped: no local window to take it", StringComparison.Ordinal)));
     }
 
     private FakePanes.FakeTerminal FarTerminal(string pane) =>

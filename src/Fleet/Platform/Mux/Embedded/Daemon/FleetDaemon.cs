@@ -2371,7 +2371,16 @@ public sealed class FleetDaemon(DaemonOptions options)
             var viewers = _sessions.Values.Where(s => _model.Client(s.Client)?.Showing == workspace).ToList();
             if (effect.Kind == HostEffects.Clipboard && viewers.Count == 0)
             {
-                options.Log($"remote {link.Host}: copy of {effect.Value?.Length ?? 0} chars dropped: no window shows {workspace}");
+                var chars = effect.Value?.Length ?? 0;
+                if (_sessions.Values.OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0).FirstOrDefault() is { } latest)
+                {
+                    viewers.Add(latest);
+                    options.Log($"remote {link.Host}: copy of {chars} chars rerouted to {latest.Client}: no window shows {workspace}");
+                }
+                else
+                {
+                    options.Log($"remote {link.Host}: copy of {chars} chars dropped: no local window to take it");
+                }
             }
 
             foreach (var session in viewers)
