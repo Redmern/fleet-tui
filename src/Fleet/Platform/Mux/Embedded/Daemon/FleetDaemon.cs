@@ -2478,7 +2478,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             if (effect.Kind == HostEffects.Clipboard && viewers.Count == 0)
             {
                 var chars = effect.Value?.Length ?? 0;
-                if (_sessions.Values.OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0).FirstOrDefault() is { } latest)
+                if (_sessions.Values.Where(s => s.Welcomed).OrderByDescending(s => _model.Client(s.Client)?.LastActive ?? 0).FirstOrDefault() is { } latest)
                 {
                     viewers.Add(latest);
                     options.Log($"remote {link.Host}: copy of {chars} chars rerouted to {latest.Client}: no window shows {workspace}");
