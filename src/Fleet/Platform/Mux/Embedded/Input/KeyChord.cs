@@ -90,6 +90,11 @@ public readonly record struct KeyChord(Mods Mods, Key Key, string? Text)
             return Encoding.ASCII.GetBytes(special);
         }
 
+        if (ctrl && shift && Key is >= Key.A and <= Key.Z)
+        {
+            return Encoding.ASCII.GetBytes(ModifiedKeys.Report(modifier, 'A' + (Key - Key.A)));
+        }
+
         var basic = Key switch
         {
             Key.Enter when ctrl || shift => ModifiedKeys.Report(modifier, 13),

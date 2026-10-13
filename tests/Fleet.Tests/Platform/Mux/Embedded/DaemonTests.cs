@@ -6,6 +6,7 @@ using Fleet.Features.Projects.OpenProject.Models;
 using Fleet.Features.Projects.SwitchProject;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
+using Fleet.Platform.Mux.Embedded.Input;
 using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Render;
@@ -839,6 +840,44 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.True(shell.Terminal.Viewport.AtBottom);
         Assert.Equal(string.Empty, shell.Written);
     }
+    [Fact]
+    public async Task Copying_the_selection_in_copy_mode_yanks_like_y()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "shell");
+        var client = await AttachAsync(cols: 30, rows: 8, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var shell = _panes.ByProgram("shell")!;
+        shell.Emit(string.Join('\n', Enumerable.Range(1, 40).Select(i => $"line {i}")));
+
+        await client.SendCommandAsync("copy-mode");
+        foreach (var step in Enumerable.Repeat("up", 10))
+        {
+            await client.SendCommandAsync("copy", step);
+        }
+
+        await Eventually(() => !shell.Terminal.Viewport.AtBottom);
+        await client.SendCommandAsync(CopyMode.Command, CopyMode.Selection);
+
+        await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "line 30"));
+        Assert.True(shell.Terminal.Viewport.AtBottom);
+    }
+
+    [Fact]
+    public async Task Copying_with_nothing_selected_copies_nothing_and_says_so()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "shell");
+        var client = await AttachAsync(cols: 40, rows: 8, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+
+        await client.SendCommandAsync(CopyMode.Command, CopyMode.Selection);
+
+        await client.WaitForAsync(CopyMode.NothingSelected);
+        Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Clipboard);
+        Assert.Equal(string.Empty, _panes.ByProgram("shell")!.Written);
+    }
+
     [Fact]
     public async Task A_float_asked_for_from_a_pane_opens_in_that_panes_workspace_as_an_ordinary_float()
     {

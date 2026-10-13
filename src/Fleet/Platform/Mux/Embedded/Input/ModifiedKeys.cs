@@ -20,8 +20,19 @@ public static partial class ModifiedKeys
         }
 
         var text = Encoding.ASCII.GetString(bytes);
-        var normalized = CsiU().Replace(text, m => Report(int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture), int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)));
+        var normalized = CsiU().Replace(text, m => Canonical(Number(m.Groups[2]), Number(m.Groups[1])));
+        normalized = Xterm().Replace(normalized, m => Canonical(Number(m.Groups[1]), Number(m.Groups[2])));
         return normalized == text ? bytes : Encoding.ASCII.GetBytes(normalized);
+    }
+
+    private static int Number(Group group) => int.Parse(group.Value, CultureInfo.InvariantCulture);
+
+    private static string Canonical(int modifier, int code)
+    {
+        var bits = modifier - 1;
+        var ctrlShift = (bits & 1) != 0 && (bits & 4) != 0;
+
+        return Report(modifier, ctrlShift && code is >= 'a' and <= 'z' ? code - ('a' - 'A') : code);
     }
 
     public static (int Modifier, int Code, int Length)? Parse(ReadOnlySpan<byte> bytes)
@@ -66,6 +77,9 @@ public static partial class ModifiedKeys
 
     [GeneratedRegex(@"\x1b\[(\d+);(\d+)u")]
     private static partial Regex CsiU();
+
+    [GeneratedRegex(@"\x1b\[27;(\d+);(\d+)~")]
+    private static partial Regex Xterm();
 
     [GeneratedRegex(@"^\x1b\[27;(\d+);(\d+)~$")]
     private static partial Regex Reported();
