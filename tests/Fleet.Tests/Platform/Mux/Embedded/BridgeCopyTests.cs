@@ -143,7 +143,7 @@ public sealed class BridgeCopyTests : IAsyncLifetime
         var (farPane, viewer) = await ShowRemotePaneAsync();
         await viewer.DisposeAsync();
         _clients.Remove(viewer);
-        await Eventually(() => _homeLog.Any(l => l.Contains("detached", StringComparison.Ordinal)));
+        await Eventually(() => _homeLog.Any(l => l.Contains($"client {viewer.Id} detached", StringComparison.Ordinal)));
 
         FarTerminal(farPane).Copy("remote yank");
 
