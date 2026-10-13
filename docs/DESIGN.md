@@ -349,7 +349,9 @@ chords (`Alt+h` to `<A-h>`, `Shift+Enter` to `<S-CR>`, `<` to `<lt>`).
   terminals whose command is `claude`. The scroll maps replay `M.wheel_ticks` (3) mouse-wheel
   events over the centre of the window with `nvim_input_mouse`: the wheel is the one input that
   scrolls both fullscreen Claude (mouse tracking) and classic Claude (nvim's scrollback);
-  PageUp/PageDown did nothing. They share Alt+k/j with `resize-up`/`resize-down` on purpose and
+  PageUp/PageDown did nothing. Classic Claude leaves terminal mode on the first tick (as a real
+  wheel does), and in normal mode fullscreen Claude has no scrollback, so there only the `t` map
+  scrolls. They share Alt+k/j with `resize-up`/`resize-down` on purpose and
   shadow them only in that buffer. fleetd's direct Alt+j/k is `smart-resize`, which forwards the
   key to a focused nvim pane instead of resizing, so the keystroke reaches these maps.
 - Terminal-mode Ctrl+h/j/k/l with the `fleet cli` handoff at nvim's edges stays where it

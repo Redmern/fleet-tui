@@ -698,6 +698,8 @@ So `ctrl+h/j/k/l` moves focus and `alt+h/j/k/l` resizes, the same in the multipl
 nvim (also in nvim's terminals), and `alt+n` takes a Claude terminal in nvim to normal mode.
 Inside a Claude terminal in nvim, `alt+k`/`alt+j` scroll Claude's output up/down instead of
 resizing (they replay mouse-wheel ticks, so they work for both fullscreen and classic Claude).
+In classic Claude, like a real wheel, the first tick drops the terminal to normal mode; press
+`i` to type again.
 A test fails when this table no longer matches the model.
 
 To change one, add a `keybinds` section to `keybinds.json` in the fleet config folder. It
