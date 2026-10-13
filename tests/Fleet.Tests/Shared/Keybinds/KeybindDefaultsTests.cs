@@ -42,7 +42,7 @@ public class KeybindDefaultsTests
     [InlineData("l", "right")]
     public void Alt_hjkl_resizes_and_Ctrl_hjkl_focuses_in_the_mux_and_nvim(string key, string direction)
     {
-        var resize = Assert.Single(Set.Entries, e => e.Chord == $"Alt+{key}");
+        var resize = Assert.Single(Set.Entries, e => e.Chord == $"Alt+{key}" && e.Targets.ContainsKey(KeybindTarget.Mux));
         var focus = Assert.Single(Set.Entries, e => e.Chord == $"Ctrl+{key}");
 
         Assert.Equal($"resize-{direction}", resize.Action);
@@ -61,6 +61,20 @@ public class KeybindDefaultsTests
 
         Assert.Equal("Alt+n", entry.Chord);
         Assert.Equal(["t"], entry.Contexts);
+    }
+
+    // They share Alt+k/j with resize-up/down on purpose: attach_claude maps them buffer-locally
+    // in the Claude terminal, where they shadow the global resize maps.
+    [Theory]
+    [InlineData("claude-scroll-up", "Alt+k")]
+    [InlineData("claude-scroll-down", "Alt+j")]
+    public void Alt_k_and_j_scroll_the_claude_terminal_in_nvim_only(string action, string chord)
+    {
+        var entry = Assert.Single(Set.Entries, e => e.Action == action);
+
+        Assert.Equal(chord, entry.Chord);
+        Assert.Equal([KeybindTarget.Nvim], entry.Targets.Keys);
+        Assert.Equal(["t", "n"], entry.Targets[KeybindTarget.Nvim]);
     }
 
     [Fact]

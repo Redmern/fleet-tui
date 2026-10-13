@@ -689,11 +689,15 @@ itself; the cell is the mode or context each target binds them in:
 | `Alt+k` | `resize-up` | direct | n, t | - |
 | `Alt+l` | `resize-right` | direct | n, t | - |
 | `Alt+n` | `claude-normal-mode` | - | t | - |
+| `Alt+k` | `claude-scroll-up` | - | t, n | - |
+| `Alt+j` | `claude-scroll-down` | - | t, n | - |
 | `Shift+Enter` | `newline` | direct | - | Chat |
 <!-- keybinds:end -->
 
 So `ctrl+h/j/k/l` moves focus and `alt+h/j/k/l` resizes, the same in the multiplexer and in
 nvim (also in nvim's terminals), and `alt+n` takes a Claude terminal in nvim to normal mode.
+Inside a Claude terminal in nvim, `alt+k`/`alt+j` scroll Claude's output up/down instead of
+resizing (they replay mouse-wheel ticks, so they work for both fullscreen and classic Claude).
 A test fails when this table no longer matches the model.
 
 To change one, add a `keybinds` section to `keybinds.json` in the fleet config folder. It

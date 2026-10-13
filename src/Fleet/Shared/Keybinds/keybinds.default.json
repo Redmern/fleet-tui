@@ -10,6 +10,8 @@
     "resize-up": { "action": "resize-up", "chord": "Alt+k", "targets": { "mux": ["direct"], "nvim": ["n", "t"] } },
     "resize-right": { "action": "resize-right", "chord": "Alt+l", "targets": { "mux": ["direct"], "nvim": ["n", "t"] } },
     "claude-normal-mode": { "action": "claude-normal-mode", "chord": "Alt+n", "targets": { "nvim": ["t"] } },
+    "claude-scroll-up": { "action": "claude-scroll-up", "chord": "Alt+k", "targets": { "nvim": ["t", "n"] } },
+    "claude-scroll-down": { "action": "claude-scroll-down", "chord": "Alt+j", "targets": { "nvim": ["t", "n"] } },
     "newline": { "action": "newline", "chord": "Shift+Enter", "targets": { "mux": ["direct"], "claude": ["Chat"] } },
     "fleet-ui.prefix": { "action": "prefix", "chord": "Ctrl+Enter", "targets": { "fleet-ui": ["leader"] } },
     "fleet-ui.open-menu": { "action": "open-menu", "chord": "Space", "targets": { "fleet-ui": [] } },

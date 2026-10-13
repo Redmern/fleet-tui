@@ -29,6 +29,8 @@ public sealed class NvimKeybindsTests : IDisposable
         Assert.Contains("  { id = \"resize-left\", action = \"resize-left\", lhs = \"<A-h>\", modes = { \"n\", \"t\" } },\n", lua);
         Assert.Contains("  { id = \"resize-right\", action = \"resize-right\", lhs = \"<A-l>\", modes = { \"n\", \"t\" } },\n", lua);
         Assert.Contains("  { id = \"claude-normal-mode\", action = \"claude-normal-mode\", lhs = \"<A-n>\", modes = { \"t\" } },\n", lua);
+        Assert.Contains("  { id = \"claude-scroll-up\", action = \"claude-scroll-up\", lhs = \"<A-k>\", modes = { \"t\", \"n\" } },\n", lua);
+        Assert.Contains("  { id = \"claude-scroll-down\", action = \"claude-scroll-down\", lhs = \"<A-j>\", modes = { \"t\", \"n\" } },\n", lua);
         Assert.EndsWith("return M\n", lua);
         Assert.DoesNotContain("\r", lua);
     }
@@ -51,6 +53,30 @@ public sealed class NvimKeybindsTests : IDisposable
         Assert.Contains("'<C-\\\\><C-n>', { buffer = buf", lua);
         Assert.Contains("vim.api.nvim_create_autocmd('TermOpen'", lua);
         Assert.Contains("if claude_terminal(ev.buf) then", lua);
+    }
+
+    [Fact]
+    public void Alt_k_and_j_replay_the_mouse_wheel_only_in_claude_terminal_buffers()
+    {
+        var lua = NvimKeybinds.Generate(Shipped);
+        var attach = lua[lua.IndexOf("function M.attach_claude", StringComparison.Ordinal)..lua.IndexOf("function M.setup", StringComparison.Ordinal)];
+        var setup = lua[lua.IndexOf("function M.setup", StringComparison.Ordinal)..];
+
+        Assert.Contains("local scrolls = { ['claude-scroll-up'] = 'up', ['claude-scroll-down'] = 'down' }", lua);
+        Assert.Contains("vim.api.nvim_input_mouse('wheel', dir, '', 0, row, col)", lua);
+        Assert.Contains("for _ = 1, M.wheel_ticks do", lua);
+        Assert.Contains("map(b.modes, b.lhs, wheel(scrolls[b.action]), { buffer = buf", attach);
+        Assert.DoesNotContain("scrolls", setup);
+        Assert.DoesNotContain("wheel", setup);
+    }
+
+    [Fact]
+    public void Attach_claude_honours_the_skip_table_for_every_claude_keybind()
+    {
+        var lua = NvimKeybinds.Generate(Shipped);
+        var attach = lua[lua.IndexOf("function M.attach_claude", StringComparison.Ordinal)..lua.IndexOf("function M.setup", StringComparison.Ordinal)];
+
+        Assert.Contains("if skip[b.id] == false then\n    elseif b.action == 'claude-normal-mode' then", attach);
     }
 
     [Fact]

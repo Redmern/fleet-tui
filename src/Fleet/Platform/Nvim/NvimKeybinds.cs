@@ -33,6 +33,8 @@ public static class NvimKeybinds
 
             M.resize_step = 3
 
+            M.wheel_ticks = 3
+
             M.bindings = {
             {{rows}}}
 
@@ -66,11 +68,28 @@ public static class NvimKeybinds
           vim.cmd((vertical and 'vertical ' or '') .. 'resize ' .. (grow and '+' or '-') .. M.resize_step)
         end
 
+        local scrolls = { ['claude-scroll-up'] = 'up', ['claude-scroll-down'] = 'down' }
+
+        local function wheel(dir)
+          return function()
+            local win = vim.api.nvim_get_current_win()
+            local row, col = unpack(vim.api.nvim_win_get_position(win))
+            row = row + math.floor(vim.api.nvim_win_get_height(win) / 2)
+            col = col + math.floor(vim.api.nvim_win_get_width(win) / 2)
+            for _ = 1, M.wheel_ticks do
+              vim.api.nvim_input_mouse('wheel', dir, '', 0, row, col)
+            end
+          end
+        end
+
         function M.attach_claude(buf, skip)
           skip = skip or {}
           for _, b in ipairs(M.bindings) do
-            if b.action == 'claude-normal-mode' and skip[b.id] ~= false then
+            if skip[b.id] == false then
+            elseif b.action == 'claude-normal-mode' then
               map(b.modes, b.lhs, '<C-\\><C-n>', { buffer = buf, desc = 'Leave terminal mode' })
+            elseif scrolls[b.action] then
+              map(b.modes, b.lhs, wheel(scrolls[b.action]), { buffer = buf, desc = 'Scroll Claude ' .. scrolls[b.action] })
             end
           end
         end
