@@ -78,6 +78,11 @@ public static unsafe partial class HostEffectsOut
     public static string? SetWindowsClipboard(string text)
     {
         var owner = CreateWindowExW(0, "STATIC", null, 0, 0, 0, 0, 0, MessageOnly, 0, 0, 0);
+        if (owner == 0)
+        {
+            return LastError("CreateWindowExW");
+        }
+
         try
         {
             string? failed = null;
@@ -96,10 +101,7 @@ public static unsafe partial class HostEffectsOut
         }
         finally
         {
-            if (owner != 0)
-            {
-                DestroyWindow(owner);
-            }
+            DestroyWindow(owner);
         }
     }
 
@@ -207,7 +209,7 @@ public static unsafe partial class HostEffectsOut
     [LibraryImport("user32.dll", SetLastError = true)]
     private static partial nint SetClipboardData(uint format, nint memory);
 
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     private static partial nint CreateWindowExW(
         uint exStyle, string className, string? windowName, uint style, int x, int y, int width, int height,
         nint parent, nint menu, nint instance, nint param);
