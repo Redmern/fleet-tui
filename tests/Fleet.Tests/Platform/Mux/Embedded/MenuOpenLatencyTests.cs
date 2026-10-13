@@ -11,11 +11,17 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 // AC-9 end to end: a home fleetd linked to a far fleetd with warm menus over a simulated
 // 100 ms round-trip link. The menu is opened through the real "menu" command, and the home
 // fleetd's own menu timing (FLEET_MENU_TIMING) is the measurement. Real clock: the daemons
-// run their render loops on wall time, so the bound keeps the 50 ms budget and no more.
+// run their render loops on wall time, so the bound keeps the 50 ms budget and no more. What
+// the simulated link itself held past its latency (coarse timers, a busy runner's thread
+// pool) is taken off both the rtt and each open, so the test measures fleet, not the runner.
 public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAsyncLifetime
 {
     private static readonly TimeSpan OneWay = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan Budget = TimeSpan.FromMilliseconds(50);
+
+    // A few hops of coarse timer overshoot fit well under this. More than this held by the
+    // link means a starved thread pool, which the daemons share, so it is not credited.
+    private static readonly TimeSpan MostCredit = TimeSpan.FromMilliseconds(100);
     private const int Opens = 3;
 
     private readonly CancellationTokenSource _stop = new();
@@ -24,9 +30,11 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
     private readonly FakePanes _farPanes = new();
     private readonly ConcurrentQueue<string> _homeLog = new();
     private readonly ConcurrentQueue<string> _farLog = new();
+    private readonly ConcurrentQueue<(long At, string Line)> _homeTimed = new();
     private readonly List<DaemonTests.TestClient> _clients = [];
     private Endpoint _home = null!;
     private Endpoint _far = null!;
+    private SimulatedLinkStream? _link;
 
     private static Endpoint NewEndpoint()
     {
@@ -55,10 +63,15 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
             Terminal = SimulatedLinkTerminal.Over(_homePanes),
             FleetExecutable = "fleet",
             TimeMenus = true,
-            Log = _homeLog.Enqueue,
+            Log = line =>
+            {
+                _homeTimed.Enqueue((Stopwatch.GetTimestamp(), line));
+                _homeLog.Enqueue(line);
+            },
             RemoteOpen = (_, _) =>
             {
                 var link = new SimulatedLinkStream(_far.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult(), OneWay);
+                _link = link;
                 return new RemoteChannel(link, null, link);
             },
         }).RunAsync(_stop.Token));
@@ -92,10 +105,12 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
 
     // The link's round trip as a client sees it: a control request answered by the far
     // fleetd through a second simulated link with the same one-way latency. Best of five.
+    // The link is disposed asynchronously: a blocking dispose would hold a thread-pool thread
+    // while it waits for the link's pumps, which need the pool to finish.
     private async Task<double> MeasureRttAsync()
     {
-        var link = new SimulatedLinkStream(await _far.ConnectAsync(TimeSpan.FromSeconds(5)), OneWay);
-        using var wire = new Wire(link);
+        await using var link = new SimulatedLinkStream(await _far.ConnectAsync(TimeSpan.FromSeconds(5)), OneWay);
+        var wire = new Wire(link);
         await wire.SendAsync(
             MessageType.Hello,
             new Hello { Version = Wire.Version, Role = ClientRoles.Control, Os = "test" },
@@ -105,13 +120,14 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
         var best = double.MaxValue;
         for (var i = 1; i <= 5; i++)
         {
-            var watch = Stopwatch.StartNew();
+            var start = Stopwatch.GetTimestamp();
             await wire.SendAsync(MessageType.Request, new ControlRequest { Id = i, Op = "status" }, WireJsonContext.Default.ControlRequest);
             while (await wire.ReceiveAsync() is { } message && message.Type != MessageType.Response)
             {
             }
 
-            best = Math.Min(best, watch.Elapsed.TotalMilliseconds);
+            var end = Stopwatch.GetTimestamp();
+            best = Math.Min(best, (Stopwatch.GetElapsedTime(start, end) - link.HeldBetween(start, end)).TotalMilliseconds);
         }
 
         return best;
@@ -155,6 +171,7 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
         Assert.True((await home.RequestAsync(new ControlRequest { Op = "show-remote", Client = window.Id, Host = "red@far", Workspace = "homelab" })).Ok);
         await window.WaitForAsync("REMOTE-SCREEN");
 
+        var link = _link!;
         var rtt = await MeasureRttAsync();
         output.WriteLine($"measured link rtt {rtt:0.0} ms (one way {OneWay.TotalMilliseconds} ms)");
 
@@ -175,10 +192,19 @@ public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAs
             Assert.True(match.Success, line);
             Assert.Equal("warm", match.Groups[1].Value);
             var first = int.Parse(match.Groups[2].Value);
-            Assert.True(first <= rtt + Budget.TotalMilliseconds, $"{line}; bound {rtt + Budget.TotalMilliseconds:0} ms");
+            var framedAt = _homeTimed.Last(t => t.Line == line).At;
+            var begunAt = framedAt - (long)(first / 1000.0 * Stopwatch.Frequency);
+            var held = link.HeldBetween(begunAt, framedAt).TotalMilliseconds;
+            output.WriteLine($"the link held {held:0} ms past its latency");
+            Assert.True(held <= MostCredit.TotalMilliseconds, $"{line}; the link held {held:0} ms: a starved thread pool, not a coarse timer");
+            Assert.True(
+                first - held <= rtt + Budget.TotalMilliseconds,
+                $"{line}; {held:0} ms held by the link; bound {rtt + Budget.TotalMilliseconds:0} ms");
 
             warm.Exit();
         }
+
+        Assert.Same(link, _link);
 
         foreach (var farLine in _farLog.Where(l => l.StartsWith("menu timing ", StringComparison.Ordinal)))
         {
