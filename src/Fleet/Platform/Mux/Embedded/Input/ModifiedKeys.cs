@@ -10,6 +10,8 @@ public static partial class ModifiedKeys
 
     public const string Disable = "\e[>4;0m";
 
+    private const int CtrlShift = 6;
+
     public static string Report(int modifier, int code) => $"\e[27;{modifier};{code}~";
 
     public static byte[] Normalize(byte[] bytes)
@@ -20,9 +22,21 @@ public static partial class ModifiedKeys
         }
 
         var text = Encoding.ASCII.GetString(bytes);
-        var normalized = CsiU().Replace(text, m => Report(int.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture), int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)));
+        var normalized = CsiU().Replace(text, m => Canonical(m, m.Groups[2], m.Groups[1]));
+        normalized = Xterm().Replace(normalized, m => Canonical(m, m.Groups[1], m.Groups[2]));
         return normalized == text ? bytes : Encoding.ASCII.GetBytes(normalized);
     }
+
+    private static int? Number(Group group) =>
+        int.TryParse(group.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : null;
+
+    public static bool IsClipboardChord(int modifier, int code) =>
+        modifier == CtrlShift && code is 'C' or 'V' or 'c' or 'v';
+
+    private static string Canonical(Match match, Group modifierGroup, Group codeGroup) =>
+        (Number(modifierGroup), Number(codeGroup)) is (int modifier, int code)
+            ? Report(modifier, IsClipboardChord(modifier, code) && code is >= 'a' and <= 'z' ? code - ('a' - 'A') : code)
+            : match.Value;
 
     public static (int Modifier, int Code, int Length)? Parse(ReadOnlySpan<byte> bytes)
     {
@@ -38,8 +52,8 @@ public static partial class ModifiedKeys
         }
 
         var match = Reported().Match(Encoding.ASCII.GetString(bytes[..(end + 1)]));
-        return match.Success
-            ? (int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture), int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture), end + 1)
+        return match.Success && (Number(match.Groups[1]), Number(match.Groups[2])) is (int modifier, int code)
+            ? (modifier, code, end + 1)
             : null;
     }
 
@@ -66,6 +80,9 @@ public static partial class ModifiedKeys
 
     [GeneratedRegex(@"\x1b\[(\d+);(\d+)u")]
     private static partial Regex CsiU();
+
+    [GeneratedRegex(@"\x1b\[27;(\d+);(\d+)~")]
+    private static partial Regex Xterm();
 
     [GeneratedRegex(@"^\x1b\[27;(\d+);(\d+)~$")]
     private static partial Regex Reported();
