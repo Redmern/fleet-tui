@@ -2368,7 +2368,13 @@ public sealed class FleetDaemon(DaemonOptions options)
         lock (_gate)
         {
             var workspace = RemoteWorkspace(link.Name);
-            foreach (var session in _sessions.Values.Where(s => _model.Client(s.Client)?.Showing == workspace))
+            var viewers = _sessions.Values.Where(s => _model.Client(s.Client)?.Showing == workspace).ToList();
+            if (effect.Kind == HostEffects.Clipboard && viewers.Count == 0)
+            {
+                options.Log($"remote {link.Host}: copy of {effect.Value?.Length ?? 0} chars dropped: no window shows {workspace}");
+            }
+
+            foreach (var session in viewers)
             {
                 if (effect.Kind == HostEffects.HandBack)
                 {
@@ -3250,6 +3256,10 @@ public sealed class FleetDaemon(DaemonOptions options)
                     {
                         effects.Add((target, new HostEffect { Kind = HostEffects.Clipboard, Value = copy.Text }));
                         options.Log($"{copy.Pane} copied {copy.Text.Length} chars to {target.Client}'s clipboard");
+                    }
+                    else
+                    {
+                        options.Log($"{copy.Pane} copy of {copy.Text.Length} chars dropped: no client is attached to take it");
                     }
                 }
 

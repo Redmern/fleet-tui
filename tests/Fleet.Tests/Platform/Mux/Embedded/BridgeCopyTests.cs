@@ -12,6 +12,7 @@ public sealed class BridgeCopyTests : IAsyncLifetime
     private readonly FakePanes _homePanes = new();
     private readonly FakePanes _farPanes = new();
     private readonly ConcurrentQueue<string> _farLog = new();
+    private readonly ConcurrentQueue<string> _homeLog = new();
     private readonly List<IAsyncDisposable> _clients = [];
     private Endpoint _home = null!;
     private Endpoint _far = null!;
@@ -39,6 +40,7 @@ public sealed class BridgeCopyTests : IAsyncLifetime
             Endpoint = _home,
             Pty = _homePanes.NewPty,
             Terminal = _homePanes.NewTerminal,
+            Log = _homeLog.Enqueue,
             RemoteOpen = (_, _) =>
             {
                 var stream = _far.ConnectAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
@@ -102,6 +104,31 @@ public sealed class BridgeCopyTests : IAsyncLifetime
         FarTerminal(farPane).Copy("remote yank");
 
         await Eventually(() => direct.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "remote yank"));
+    }
+
+    [Fact]
+    public async Task A_copy_with_no_viewer_to_take_it_is_logged_with_the_reason()
+    {
+        var far = await ControlAsync(_far);
+        var spawned = await far.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "homelab", Cwd = ".", Args = ["remote-claude"] });
+        Assert.True(spawned.Ok, spawned.Error);
+
+        FarTerminal(spawned.Pane!).Copy("nobody sees this");
+
+        await Eventually(() => _farLog.Any(l => l.Contains($"{spawned.Pane} copy of 16 chars dropped: no client is attached", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task A_remote_copy_no_local_window_shows_is_logged_with_the_reason()
+    {
+        var (farPane, viewer) = await ShowRemotePaneAsync();
+        await viewer.SendCommandAsync("show", "local");
+        await Task.Delay(300);
+
+        FarTerminal(farPane).Copy("remote yank");
+
+        await Eventually(() => _homeLog.Any(l => l.Contains("copy of 11 chars dropped: no window shows @", StringComparison.Ordinal)));
+        Assert.DoesNotContain(viewer.Effects, e => e.Kind == HostEffects.Clipboard);
     }
 
     private FakePanes.FakeTerminal FarTerminal(string pane) =>
