@@ -203,6 +203,8 @@ public class KeysTests
             ["ctrl+shift+tab"] = "prev-tab",
             ["ctrl+enter"] = "menu",
             ["shift+enter"] = "newline",
+            ["ctrl+shift+c"] = "copy",
+            ["ctrl+shift+v"] = "paste",
         };
 
         Assert.Equal("ctrl+s", MuxKeys.DefaultPrefix);
