@@ -11,6 +11,7 @@ public static unsafe partial class HostEffectsOut
 
     private const uint UnicodeText = 13;
     private const uint Moveable = 0x0002;
+    private const nint MessageOnly = -3;
 
     public static string TitleSequence(string title) => $"\e]0;{Sanitize(title)}\a";
 
@@ -74,42 +75,85 @@ public static unsafe partial class HostEffectsOut
         }
     }
 
-    public static bool SetWindowsClipboard(string text)
+    public static string? SetWindowsClipboard(string text)
     {
-        for (var attempt = 0; attempt < 5; attempt++)
+        var owner = CreateWindowExW(0, "STATIC", null, 0, 0, 0, 0, 0, MessageOnly, 0, 0, 0);
+        try
         {
-            if (OpenClipboard(0))
+            string? failed = null;
+            for (var attempt = 0; attempt < 5; attempt++)
             {
-                try
+                failed = PutOnClipboard(owner, text);
+                if (failed is null)
                 {
-                    EmptyClipboard();
-                    var bytes = (text.Length + 1) * sizeof(char);
-                    var memory = GlobalAlloc(Moveable, (nuint)bytes);
-                    if (memory == 0)
-                    {
-                        return false;
-                    }
-
-                    var target = GlobalLock(memory);
-                    fixed (char* source = text + "\0")
-                    {
-                        System.Buffer.MemoryCopy(source, (void*)target, bytes, bytes);
-                    }
-
-                    GlobalUnlock(memory);
-                    return SetClipboardData(UnicodeText, memory) != 0;
+                    return null;
                 }
-                finally
-                {
-                    CloseClipboard();
-                }
+
+                Thread.Sleep(20);
             }
 
-            Thread.Sleep(20);
+            return failed;
+        }
+        finally
+        {
+            if (owner != 0)
+            {
+                DestroyWindow(owner);
+            }
+        }
+    }
+
+    private static string? PutOnClipboard(nint owner, string text)
+    {
+        if (!OpenClipboard(owner))
+        {
+            return LastError("OpenClipboard");
         }
 
-        return false;
+        try
+        {
+            if (!EmptyClipboard())
+            {
+                return LastError("EmptyClipboard");
+            }
+
+            var bytes = (text.Length + 1) * sizeof(char);
+            var memory = GlobalAlloc(Moveable, (nuint)bytes);
+            if (memory == 0)
+            {
+                return LastError("GlobalAlloc");
+            }
+
+            var target = GlobalLock(memory);
+            if (target == 0)
+            {
+                var locked = LastError("GlobalLock");
+                GlobalFree(memory);
+                return locked;
+            }
+
+            fixed (char* source = text + "\0")
+            {
+                System.Buffer.MemoryCopy(source, (void*)target, bytes, bytes);
+            }
+
+            GlobalUnlock(memory);
+            if (SetClipboardData(UnicodeText, memory) == 0)
+            {
+                var refused = LastError("SetClipboardData");
+                GlobalFree(memory);
+                return refused;
+            }
+
+            return null;
+        }
+        finally
+        {
+            CloseClipboard();
+        }
     }
+
+    private static string LastError(string call) => $"{call} failed (error {Marshal.GetLastPInvokeError()})";
 
     public static string? ReadClipboard()
     {
@@ -152,26 +196,38 @@ public static unsafe partial class HostEffectsOut
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool SetConsoleTitleW(string title);
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool OpenClipboard(nint owner);
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool EmptyClipboard();
 
-    [LibraryImport("user32.dll")]
+    [LibraryImport("user32.dll", SetLastError = true)]
     private static partial nint SetClipboardData(uint format, nint memory);
+
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial nint CreateWindowExW(
+        uint exStyle, string className, string? windowName, uint style, int x, int y, int width, int height,
+        nint parent, nint menu, nint instance, nint param);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyWindow(nint window);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool CloseClipboard();
 
-    [LibraryImport("kernel32.dll")]
+    [LibraryImport("kernel32.dll", SetLastError = true)]
     private static partial nint GlobalAlloc(uint flags, nuint bytes);
 
-    [LibraryImport("kernel32.dll")]
+    [LibraryImport("kernel32.dll", SetLastError = true)]
     private static partial nint GlobalLock(nint memory);
+
+    [LibraryImport("kernel32.dll")]
+    private static partial nint GlobalFree(nint memory);
 
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

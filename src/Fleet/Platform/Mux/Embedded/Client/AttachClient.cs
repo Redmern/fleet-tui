@@ -279,7 +279,7 @@ public sealed class AttachClient(
             case HostEffects.Clipboard when effect.Value is { } text:
                 if (OperatingSystem.IsWindows())
                 {
-                    log($"clipboard: {text.Length} chars {(HostEffectsOut.SetWindowsClipboard(text) ? "set" : "NOT set")}");
+                    CopyOnWindows(text, HostEffectsOut.SetWindowsClipboard, write, log, clipboardNotice);
                 }
                 else
                 {
@@ -288,6 +288,27 @@ public sealed class AttachClient(
 
                 break;
         }
+    }
+
+    public static void CopyOnWindows(
+        string text, Func<string, string?> setClipboard, Action<byte[]> write, Action<string> log, Action<string>? notice)
+    {
+        if (setClipboard(text) is not { } failed)
+        {
+            log($"clipboard: {text.Length} chars set");
+            return;
+        }
+
+        var fallback = Encoding.UTF8.GetByteCount(text) <= GhosttyTerminal.MaxClipboard;
+        if (fallback)
+        {
+            write(Encoding.UTF8.GetBytes(HostEffectsOut.ClipboardSequence(text)));
+        }
+
+        log($"clipboard: {text.Length} chars NOT set: {failed}{(fallback ? "; sent osc 52 instead" : string.Empty)}");
+        notice?.Invoke(fallback
+            ? $"The copy did not reach the Windows clipboard ({failed}); fleet asked the terminal to set it instead."
+            : $"The copy did not reach the Windows clipboard ({failed}).");
     }
 
     private async Task LogCopyAsync(string text, Task<ClipboardTextCopy> copying)
