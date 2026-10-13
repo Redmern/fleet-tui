@@ -100,4 +100,15 @@ public class ClipboardKeysTests
     {
         Assert.Equal(normalized, Encoding.ASCII.GetString(ModifiedKeys.Normalize(Encoding.ASCII.GetBytes(typed))));
     }
+
+    [Theory]
+    [InlineData("\e[99999999999;6u")]
+    [InlineData("\e[27;6;99999999999~")]
+    public void A_report_with_an_oversized_number_is_left_alone(string typed)
+    {
+        var normalized = ModifiedKeys.Normalize(Encoding.ASCII.GetBytes(typed));
+
+        Assert.Equal(typed, Encoding.ASCII.GetString(normalized));
+        Assert.Null(ModifiedKeys.Parse(normalized));
+    }
 }
