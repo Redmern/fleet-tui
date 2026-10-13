@@ -879,6 +879,32 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_nothing_selected_notice_clears_on_the_next_key()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "techweb", "shell");
+        var client = await AttachAsync(cols: 40, rows: 8, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        await client.SendCommandAsync(CopyMode.Command, CopyMode.Selection);
+        await client.WaitForAsync(CopyMode.NothingSelected);
+
+        Assert.Contains(CopyMode.NothingSelected, await RedrawnAsync(client));
+
+        await client.SendKeyAsync("x");
+        await Eventually(() => _panes.ByProgram("shell")!.Written == "x");
+
+        Assert.DoesNotContain(CopyMode.NothingSelected, await RedrawnAsync(client));
+    }
+
+    private static async Task<string> RedrawnAsync(TestClient client)
+    {
+        var before = client.FrameCount;
+        await client.SendCommandAsync("redraw");
+        await client.WaitForFramesAsync(before + 1);
+        return string.Concat(client.Frames.Skip(before));
+    }
+
+    [Fact]
     public async Task A_float_asked_for_from_a_pane_opens_in_that_panes_workspace_as_an_ordinary_float()
     {
         var control = await ControlAsync();
