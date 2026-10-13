@@ -10,6 +10,8 @@ public static partial class ModifiedKeys
 
     public const string Disable = "\e[>4;0m";
 
+    private const int CtrlShift = 6;
+
     public static string Report(int modifier, int code) => $"\e[27;{modifier};{code}~";
 
     public static byte[] Normalize(byte[] bytes)
@@ -27,13 +29,11 @@ public static partial class ModifiedKeys
 
     private static int Number(Group group) => int.Parse(group.Value, CultureInfo.InvariantCulture);
 
-    private static string Canonical(int modifier, int code)
-    {
-        var bits = modifier - 1;
-        var ctrlShift = (bits & 1) != 0 && (bits & 4) != 0;
+    public static bool IsClipboardChord(int modifier, int code) =>
+        modifier == CtrlShift && code is 'C' or 'V' or 'c' or 'v';
 
-        return Report(modifier, ctrlShift && code is >= 'a' and <= 'z' ? code - ('a' - 'A') : code);
-    }
+    private static string Canonical(int modifier, int code) =>
+        Report(modifier, IsClipboardChord(modifier, code) && code is >= 'a' and <= 'z' ? code - ('a' - 'A') : code);
 
     public static (int Modifier, int Code, int Length)? Parse(ReadOnlySpan<byte> bytes)
     {

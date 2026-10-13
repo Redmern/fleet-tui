@@ -78,4 +78,26 @@ public class ClipboardKeysTests
         Assert.Equal("copy", keys.DirectCommand(Key.C, Mods.Ctrl | Mods.Alt, null));
         Assert.Equal("paste", Direct(keys, Windows('V', LeftCtrl | Shift)));
     }
+
+    [Theory]
+    [InlineData("ctrl+shift+t", "\u0014")]
+    [InlineData("ctrl+shift+a", "\u0001")]
+    [InlineData("ctrl+alt+shift+t", "\e\u0014")]
+    [InlineData("ctrl+shift+c", "\e[27;6;67~")]
+    [InlineData("ctrl+shift+v", "\e[27;6;86~")]
+    public void Only_ctrl_shift_c_and_v_get_their_own_bytes(string spec, string bytes)
+    {
+        Assert.Equal(Encoding.ASCII.GetBytes(bytes), KeyChord.Parse(spec)!.Value.Bytes());
+    }
+
+    [Theory]
+    [InlineData("\e[116;6u", "\e[27;6;116~")]
+    [InlineData("\e[27;6;116~", "\e[27;6;116~")]
+    [InlineData("\e[27;6;84~", "\e[27;6;84~")]
+    [InlineData("\e[99;6u", "\e[27;6;67~")]
+    [InlineData("\e[27;6;118~", "\e[27;6;86~")]
+    public void Only_ctrl_shift_c_and_v_reports_are_folded_to_one_case(string typed, string normalized)
+    {
+        Assert.Equal(normalized, Encoding.ASCII.GetString(ModifiedKeys.Normalize(Encoding.ASCII.GetBytes(typed))));
+    }
 }
