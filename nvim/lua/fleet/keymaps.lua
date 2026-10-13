@@ -6,7 +6,8 @@ map('n', '<leader>cf', '<cmd>ClaudeCodeFocus<cr>', { desc = 'Focus Claude Code' 
 map('n', '<leader>ca', '<cmd>ClaudeCodeAdd %<cr>', { desc = 'Add current file to Claude' })
 map('v', '<leader>cs', ':ClaudeCodeSend<cr>', { silent = true, desc = 'Send selection to Claude' })
 
--- Ctrl+h/j/k/l (windows), Alt+h/j/k/l (resize) and Alt+n (leave Claude's terminal mode) come
+-- Ctrl+h/j/k/l (windows), Alt+h/j/k/l (resize), Alt+n (leave Claude's terminal mode) and Alt+k/j
+-- (scroll Claude, shadowing resize in Claude terminals) come
 -- from fleet's keybinds: fleet writes keybinds.generated.lua next to this file when it installs
 -- this config. Without it (an older fleet), fall back to plain window moves.
 local generated = loadfile(vim.fn.stdpath('config') .. '/lua/fleet/keybinds.generated.lua')
