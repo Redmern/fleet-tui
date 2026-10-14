@@ -156,6 +156,8 @@
     "mux.next-tab-alt-right": { "action": "next-tab", "chord": "Alt+Right", "targets": { "mux": ["direct"] } },
     "mux.next-tab-ctrl-tab": { "action": "next-tab", "chord": "Ctrl+Tab", "targets": { "mux": ["direct"] } },
     "mux.prev-tab-ctrl-shift-tab": { "action": "prev-tab", "chord": "Ctrl+Shift+Tab", "targets": { "mux": ["direct"] } },
-    "mux.menu-ctrl-enter": { "action": "menu", "chord": "Ctrl+Enter", "targets": { "mux": ["direct"] } }
+    "mux.menu-ctrl-enter": { "action": "menu", "chord": "Ctrl+Enter", "targets": { "mux": ["direct"] } },
+    "mux.copy-ctrl-shift-c": { "action": "copy", "chord": "Ctrl+Shift+c", "targets": { "mux": ["direct"] } },
+    "mux.paste-ctrl-shift-v": { "action": "paste", "chord": "Ctrl+Shift+v", "targets": { "mux": ["direct"] } }
   }
 }

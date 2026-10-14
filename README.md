@@ -394,7 +394,7 @@ plain `ssh host` session. The viewer, the machine you sit at, may be Linux, macO
 - **Paste and copy.** On Linux and macOS fleet now turns on bracketed paste, so a pasted
   block reaches Claude Code as one paste instead of typed lines. A copy in a pane is sent as
   OSC 52 and, on Linux and macOS, also through `wl-copy`, `xclip` or `pbcopy`, so it works
-  where the terminal drops OSC 52; the log says when no way worked. `prefix ]` pastes this
+  where the terminal drops OSC 52; the log says when no way worked. `prefix ]` or `ctrl+shift+v` pastes this
   machine's clipboard text into the focused pane.
 - **Voice (experimental).** With `FLEET_VOICE_FORWARD=1` set for fleet on a Linux or macOS
   viewer, fleet forwards this machine's PulseAudio/PipeWire socket to the remote and sets
@@ -761,6 +761,17 @@ key as a single key (`"f": "float-new"`) gives you the old flat key back. Groups
 the focus / resize / tab rows show Nerd Font icons; `icons` changes a group's icon
 (`"none"` removes it) and `"showIcons": false` turns them off. See
 `docs/DESIGN.md` › *Keys* for the full table and the rules.
+
+Without the prefix, `ctrl+shift+c` copies the selection (in copy mode, the same as `y`; with
+nothing selected it says so and copies nothing) and `ctrl+shift+v` pastes this machine's
+clipboard into the focused pane as one bracketed paste, remote panes included. `ctrl+c` and
+`ctrl+v` still go to the pane unchanged. Rebind or unbind them in `embedded-keys.json`
+(`{ "keys": { "ctrl+shift+c": "none", "ctrl+alt+c": "copy" } }`). Windows Terminal takes
+`ctrl+shift+c` / `ctrl+shift+v` for its own copy and paste, so fleet only sees them once you
+unbind them there (Settings › Actions, or remove the `copy` / `paste` entries from
+`actions` in `settings.json`). On Linux and macOS the terminal has to report the keys
+distinctly (xterm `modifyOtherKeys`, which fleet turns on, or the kitty keyboard protocol);
+a terminal that sends plain `ctrl+c` for `ctrl+shift+c` cannot be told apart.
 
 ## The dashboard
 

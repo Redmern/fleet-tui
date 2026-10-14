@@ -7,9 +7,17 @@ public sealed class CopyMode : IStickyMode
 {
     public const string Badge = "copy: hjkl move, v select, y copy, q quit";
 
+    public const string Command = "copy";
+
+    public const string Selection = "selection";
+
+    public const string NothingSelected = "copy: nothing selected";
+
     public bool Active { get; private set; }
 
     public void Enter() => Active = true;
+
+    public CommandMessage Yank() => Step("yank");
 
     public CommandMessage? OnKey(Key key, Mods mods, string? text = null)
     {
@@ -122,6 +130,6 @@ public sealed class CopyMode : IStickyMode
             Active = false;
         }
 
-        return new CommandMessage { Name = "copy", Arg = step };
+        return new CommandMessage { Name = Command, Arg = step };
     }
 }

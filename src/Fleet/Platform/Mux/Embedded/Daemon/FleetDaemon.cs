@@ -1371,7 +1371,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             _model.Touch(session.Client);
             target = FocusedRuntime(session.Client);
-            unhovered = session.Hover is not null;
+            unhovered = session.Hover is not null | DropNotice(session);
             session.Hover = null;
         }
 
@@ -1432,10 +1432,17 @@ public sealed class FleetDaemon(DaemonOptions options)
     private void Route(AttachSession session, TextMessage text)
     {
         PaneRuntime? target;
+        bool dropped;
         lock (_gate)
         {
             _model.Touch(session.Client);
             target = FocusedRuntime(session.Client);
+            dropped = DropNotice(session);
+        }
+
+        if (dropped)
+        {
+            _wake.Release();
         }
 
         if (target is null)
@@ -1488,6 +1495,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     {
         PaneRuntime? target = null;
         (PaneRuntime Pane, string Send)? clicked = null;
+        byte[]? encoded = null;
         var x = 0;
         var y = 0;
         var redraw = false;
@@ -1510,6 +1518,13 @@ public sealed class FleetDaemon(DaemonOptions options)
                 redraw = true;
             }
 
+            if (press && session.Copy is { Dragged: true } stale)
+            {
+                session.Copy = null;
+                _runtimes.GetValueOrDefault(stale.Pane)?.Dirty = true;
+                redraw = true;
+            }
+
             if (session.Capture is { } capture && !press)
             {
                 if (mouse.Action == MouseActions.Release && !mouse.Held)
@@ -1517,7 +1532,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                     session.Capture = null;
                 }
 
-                if (capture.Kind == MouseHitKind.None)
+                if (capture.Selecting)
+                {
+                    redraw |= !wheel && DragSelection(session, capture.Pane!, mouse);
+                }
+                else if (capture.Kind == MouseHitKind.None)
                 {
                 }
                 else if (capture.Kind is MouseHitKind.FloatMove or MouseHitKind.FloatResize)
@@ -1608,6 +1627,16 @@ public sealed class FleetDaemon(DaemonOptions options)
                             {
                                 redraw = true;
                             }
+
+                            if (mouse.Button == MouseButtons.Left
+                                && session.Copy is null or { Dragged: true }
+                                && StartSelection(hit.Pane!, mouse, hit.X, hit.Y, out encoded) is { } selection)
+                            {
+                                session.Copy = selection;
+                                session.Capture = session.Capture with { Selecting = true };
+                                redraw = true;
+                                break;
+                            }
                         }
 
                         target = _runtimes.GetValueOrDefault(hit.Pane!);
@@ -1627,7 +1656,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             byte[] bytes;
             lock (target.Gate)
             {
-                bytes = target.Terminal.EncodeMouse(mouse, x, y);
+                bytes = encoded ?? target.Terminal.EncodeMouse(mouse, x, y);
 
                 if (bytes.Length == 0 && mouse.Button >= MouseButtons.WheelUp && mouse.Action == MouseActions.Press)
                 {
@@ -1646,6 +1675,62 @@ public sealed class FleetDaemon(DaemonOptions options)
     }
 
     public const int WheelLines = 3;
+
+    private CopySession? StartSelection(string pane, MouseMessage mouse, int x, int y, out byte[]? encoded)
+    {
+        encoded = null;
+        if (_runtimes.GetValueOrDefault(pane) is not { } runtime)
+        {
+            return null;
+        }
+
+        lock (runtime.Gate)
+        {
+            if ((mouse.Mods & (int)Mods.Shift) == 0)
+            {
+                encoded = runtime.Terminal.EncodeMouse(mouse, x, y);
+                if (encoded.Length > 0)
+                {
+                    return null;
+                }
+            }
+
+            encoded = null;
+            runtime.Dirty = true;
+            return CopySession.Drag(pane, new TextPoint(runtime.Terminal.Viewport.Top + y, x));
+        }
+    }
+
+    private bool DragSelection(AttachSession session, string pane, MouseMessage mouse)
+    {
+        if (session.Copy is not { Dragged: true } copy
+            || copy.Pane != pane
+            || !_runtimes.TryGetValue(pane, out var runtime)
+            || _model.Relative(session.Client, pane, mouse.X, mouse.Y) is not var (x, y))
+        {
+            return false;
+        }
+
+        lock (runtime.Gate)
+        {
+            copy.DragTo(new TextPoint(runtime.Terminal.Viewport.Top + y, x));
+            runtime.Dirty = true;
+
+            if (mouse.Action == MouseActions.Release && !mouse.Held)
+            {
+                if (copy.Selected(runtime.Terminal) is { Length: > 0 } text)
+                {
+                    _copies.Enqueue((pane, text));
+                }
+                else
+                {
+                    session.Copy = null;
+                }
+            }
+        }
+
+        return true;
+    }
 
     private static void Press(PaneRuntime pane, string send)
     {
@@ -1876,8 +1961,30 @@ public sealed class FleetDaemon(DaemonOptions options)
         _wake.Release();
     }
 
+    private static bool DropNotice(AttachSession session)
+    {
+        if (session.Badge != Input.CopyMode.NothingSelected)
+        {
+            return false;
+        }
+
+        session.Badge = null;
+        return true;
+    }
+
     private void CopyStep(AttachSession session, string step)
     {
+        if (step == Input.CopyMode.Selection)
+        {
+            if (session.Copy is null)
+            {
+                session.Badge = Input.CopyMode.NothingSelected;
+                return;
+            }
+
+            step = "yank";
+        }
+
         if (session.Copy is not { } copy || !_runtimes.TryGetValue(copy.Pane, out var pane))
         {
             session.Copy = null;
@@ -3575,5 +3682,6 @@ public sealed class FleetDaemon(DaemonOptions options)
         MouseHitKind Kind = MouseHitKind.Pane,
         Rect Start = default,
         int FromX = 0,
-        int FromY = 0);
+        int FromY = 0,
+        bool Selecting = false);
 }
