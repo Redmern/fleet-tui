@@ -4,6 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.19 (2026-10-14)
+
+- **Copies from a remote pane** over `ssh -T host fleet bridge` now reach your local clipboard: a copy that no open window shows goes to the most recently active window, and every dropped copy is logged with its reason.
+- On Windows, a copy the clipboard refuses is logged with the failing call and its error code, falls back to OSC 52 (when it fits), and shows a notice.
+- New keys: `ctrl+shift+c` copies the selection (or says nothing is selected) and `ctrl+shift+v` pastes; `ctrl+c` / `ctrl+v` still reach the pane. Rebind them in `embedded-keys.json`. Windows Terminal keeps these two for itself until you unbind them in its settings.
+- **Mouse drag-select** copies on release in a pane whose app does not use the mouse.
+- In nvim, `alt+k` / `alt+j` **scroll a Claude terminal** (fullscreen and classic; in classic the first tick leaves terminal mode, press `i` to type again); elsewhere they still resize.
+
 ## 0.7.18 (2026-10-12)
 
 - The head can **create projects** with the new `create_project` tool, on this machine or on a connected remote: name, path (`~` is expanded), `create_directory` for a missing root, `open: false` to skip opening, and `repositories` to add after opening (removed again if one fails).
