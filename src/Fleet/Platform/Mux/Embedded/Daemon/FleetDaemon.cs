@@ -1459,6 +1459,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         if (text.Bytes is { } raw)
         {
+            _keyTiming?.Key(session.Client, target.Id);
             target.Send(Convert.FromBase64String(raw));
             return;
         }

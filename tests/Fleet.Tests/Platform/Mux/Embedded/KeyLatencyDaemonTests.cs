@@ -82,6 +82,20 @@ public sealed partial class KeyLatencyDaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Raw_bytes_typed_on_a_unix_terminal_are_timed_like_keys()
+    {
+        var (client, pane) = await StartAsync(timeKeys: true);
+
+        await client.SendBytesAsync("\e[B");
+        await Eventually(() => pane.Written == "\e[B");
+        pane.Emit("MOVED");
+        await client.WaitForAsync("MOVED");
+        await Eventually(() => Timings.Length == 1);
+
+        Assert.Matches(KeyLine(), Assert.Single(Timings));
+    }
+
+    [Fact]
     public async Task Without_the_switch_keys_log_no_timing()
     {
         var (client, pane) = await StartAsync(timeKeys: false);
