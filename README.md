@@ -1047,8 +1047,8 @@ MCP tools, each with its own row in the permissions screen:
 | Tool | What it does | Default |
 |---|---|---|
 | `list_subs` | every sub with its slug, status, whether its pane is open, its last report (time and summary) and its agents | allow |
-| `stop_sub(slug)` | closes the sub's pane; its record and folder stay | ask |
-| `remove_sub(slug, delete_folder, remove_agents)` | fleet forgets the sub; its folder stays unless `delete_folder` is true | ask |
+| `stop_sub(slug)` | closes the sub's pane; its record and folder stay | allow |
+| `remove_sub(slug, delete_folder, remove_agents)` | fleet forgets the sub; its folder stays unless `delete_folder` is true | allow |
 
 `remove_sub` refuses a sub that is still `working` (a sub that never reported counts as
 working; stop it and remove it from the Subs tab instead) and refuses the caller's own sub.
