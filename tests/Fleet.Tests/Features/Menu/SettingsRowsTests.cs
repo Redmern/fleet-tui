@@ -75,4 +75,100 @@ public class SettingsRowsTests
         Assert.Equal(["a", "s", "f"], SettingsRows.PolicyEntries().Select(e => e.Key));
         Assert.Equal(["b", "d", "c"], SettingsRows.ChannelEntries().Select(e => e.Key));
     }
+
+    private static int RowOf(HarnessTool tool) => SettingsRows.Tools.ToList().IndexOf(tool) + 1;
+
+    [Theory]
+    [InlineData(ActionPolicy.Allow, ActionPolicy.Ask)]
+    [InlineData(ActionPolicy.Ask, ActionPolicy.Forbid)]
+    [InlineData(ActionPolicy.Forbid, ActionPolicy.Allow)]
+    public void Enter_on_a_tool_row_cycles_its_policy_in_place(ActionPolicy from, ActionPolicy to)
+    {
+        var config = SettingsConfig.Default.With(HarnessTool.NewAgent, from);
+
+        var next = SettingsRows.Cycled(config, RowOf(HarnessTool.NewAgent));
+
+        Assert.Equal(to, next.RuleFor(HarnessTool.NewAgent).Policy);
+    }
+
+    [Fact]
+    public void Cycling_to_ask_leaves_the_channel_alone()
+    {
+        var config = SettingsConfig.Default
+            .With(HarnessTool.NewAgent, ActionPolicy.Allow)
+            .With(HarnessTool.NewAgent, AskChannel.FleetDialog);
+
+        var next = SettingsRows.Cycled(config, RowOf(HarnessTool.NewAgent));
+
+        Assert.Equal(ActionPolicy.Ask, next.RuleFor(HarnessTool.NewAgent).Policy);
+        Assert.Equal(AskChannel.FleetDialog, next.RuleFor(HarnessTool.NewAgent).Channel);
+    }
+
+    [Fact]
+    public void Cycling_to_ask_keeps_the_default_channel_both()
+    {
+        var config = SettingsConfig.Default.With(HarnessTool.ListAgents, ActionPolicy.Allow);
+
+        var next = SettingsRows.Cycled(config, RowOf(HarnessTool.ListAgents));
+
+        Assert.Equal(AskChannel.Both, next.RuleFor(HarnessTool.ListAgents).Channel);
+    }
+
+    [Theory]
+    [InlineData("a", ActionPolicy.Allow)]
+    [InlineData("s", ActionPolicy.Ask)]
+    [InlineData("f", ActionPolicy.Forbid)]
+    public void The_policy_keys_set_a_tool_row_directly(string key, ActionPolicy expected)
+    {
+        var start = expected == ActionPolicy.Forbid ? ActionPolicy.Allow : ActionPolicy.Forbid;
+        var config = SettingsConfig.Default.With(HarnessTool.NewAgent, start);
+
+        var policy = SettingsRows.PolicyForKey(key);
+        var next = SettingsRows.WithPolicy(config, RowOf(HarnessTool.NewAgent), policy!.Value);
+
+        Assert.Equal(expected, next.RuleFor(HarnessTool.NewAgent).Policy);
+    }
+
+    [Fact]
+    public void Other_keys_are_not_policy_keys()
+    {
+        Assert.Null(SettingsRows.PolicyForKey("c"));
+        Assert.Null(SettingsRows.PolicyForKey("r"));
+    }
+
+    [Fact]
+    public void Enter_on_a_git_gate_cycles_auto_ask_no()
+    {
+        var commit = SettingsRows.Count - 4;
+        var push = SettingsRows.Count - 3;
+        var merge = SettingsRows.Count - 2;
+        var config = SettingsConfig.Default
+            .WithCommit(ActionPolicy.Allow)
+            .WithPush(ActionPolicy.Ask)
+            .WithMerge(ActionPolicy.Forbid);
+
+        var next = SettingsRows.Cycled(SettingsRows.Cycled(SettingsRows.Cycled(config, commit), push), merge);
+
+        Assert.Equal(ActionPolicy.Ask, next.Commit);
+        Assert.Equal(ActionPolicy.Forbid, next.Push);
+        Assert.Equal(ActionPolicy.Allow, next.Merge);
+    }
+
+    [Fact]
+    public void Enter_on_the_status_hooks_row_toggles_it()
+    {
+        var hooks = SettingsRows.Count - 1;
+        var config = SettingsConfig.Default.WithStatusHooks(true);
+
+        Assert.False(SettingsRows.Cycled(config, hooks).StatusHooks);
+        Assert.True(SettingsRows.Cycled(config.WithStatusHooks(false), hooks).StatusHooks);
+    }
+
+    [Fact]
+    public void The_trigger_row_does_not_cycle()
+    {
+        var config = SettingsConfig.Default;
+
+        Assert.Equal(config, SettingsRows.Cycled(config, 0));
+    }
 }

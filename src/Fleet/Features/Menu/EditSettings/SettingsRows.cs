@@ -72,6 +72,76 @@ public static class SettingsRows
         new("no", "never", "f"),
     ];
 
+    public static ActionPolicy NextPolicy(ActionPolicy policy) => policy switch
+    {
+        ActionPolicy.Allow => ActionPolicy.Ask,
+        ActionPolicy.Ask => ActionPolicy.Forbid,
+        _ => ActionPolicy.Allow,
+    };
+
+    public static ActionPolicy? PolicyForKey(string key) =>
+        PolicyEntries()
+            .Select((entry, index) => (entry, index))
+            .Where(p => string.Equals(p.entry.Key, key, StringComparison.OrdinalIgnoreCase))
+            .Select(p => (ActionPolicy?)p.index)
+            .FirstOrDefault();
+
+    public static SettingsConfig Cycled(SettingsConfig config, int index)
+    {
+        if (IsStatusHooksRow(index))
+        {
+            return config.WithStatusHooks(!config.StatusHooks);
+        }
+
+        return PolicyAt(config, index) is { } current
+            ? WithPolicy(config, index, NextPolicy(current))
+            : config;
+    }
+
+    public static SettingsConfig WithPolicy(SettingsConfig config, int index, ActionPolicy policy)
+    {
+        if (IsCommitRow(index))
+        {
+            return config.WithCommit(policy);
+        }
+
+        if (IsPushRow(index))
+        {
+            return config.WithPush(policy);
+        }
+
+        if (IsMergeRow(index))
+        {
+            return config.WithMerge(policy);
+        }
+
+        var tool = ToolAt(index);
+
+        return tool == HarnessTool.None ? config : config.With(tool, policy);
+    }
+
+    private static ActionPolicy? PolicyAt(SettingsConfig config, int index)
+    {
+        if (IsCommitRow(index))
+        {
+            return config.Commit;
+        }
+
+        if (IsPushRow(index))
+        {
+            return config.Push;
+        }
+
+        if (IsMergeRow(index))
+        {
+            return config.Merge;
+        }
+
+        var tool = ToolAt(index);
+
+        return tool == HarnessTool.None ? null : config.RuleFor(tool).Policy;
+    }
+
     private static FleetRow GateRow(string label, ActionPolicy policy, int labelWidth) =>
         new(
             [FleetSpan.Plain(label.PadRight(labelWidth))],
