@@ -2,6 +2,8 @@ using Fleet.Features.Head.ServeHead;
 using Fleet.Ports.Projects.Models;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Head;
 
@@ -51,6 +53,7 @@ public sealed partial class HeadServiceTests
     [Fact]
     public async Task Create_project_names_the_repositories_when_it_asks()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         Open(Web, Idle);
 
         await Service().HandleAsync(CreateCall((HeadTools.Repositories, "api,web")));

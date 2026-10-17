@@ -6220,7 +6220,7 @@ origin.
   too old to create projects; update fleet there". The link waits `HeadWithin` (10 minutes),
   long enough for someone to answer the ask there. ISO mode refuses both ops.
 - **Gate without a project.** `create_project` is a `HarnessTool` with a machine-wide rule
-  (default Ask, not served by a project's MCP server). `HeadGate.CheckWithoutProjectAsync`
+  (default Allow, not served by a project's MCP server). `HeadGate.CheckWithoutProjectAsync`
   reads the machine's settings, not a project's, on the machine that creates, and asks in the
   dashboard of the first open project there (by name); with none open, Ask refuses with "open
   a project first" rather than hang. Forbid always refuses.

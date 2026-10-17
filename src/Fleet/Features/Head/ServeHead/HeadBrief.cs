@@ -28,7 +28,7 @@ public static class HeadBrief
         | `list_remotes` | the machines you can act on: `local` first, then each remote's nickname, ssh host, last connection and whether it is connected now |
         | `list_projects` | the projects of one machine (`remote`, default `local`), whether each is open, and how many relayed prompts wait for it |
         | `list_remote_projects` | the projects of every machine: this machine first, then each remote machine (nickname and ssh host, connected or not), each project open or closed |
-        | `create_project` | create a new project on this machine or on a connected remote (`name`, `path`, optional `remote`; `create_directory: true` makes a missing root, `open: false` skips opening it, `repositories` adds comma-separated repositories after opening); refuses a name that is already a project there; asks for approval first |
+        | `create_project` | create a new project on this machine or on a connected remote (`name`, `path`, optional `remote`; `create_directory: true` makes a missing root, `open: false` skips opening it, `repositories` adds comma-separated repositories after opening); refuses a name that is already a project there; asks for approval first when its rule asks |
         | `switch_project` | show a project in the terminal, opening it if it is closed; this hides you |
         | `menu_action` | run a fleet menu action (new-agent, add-repository, keybinds, ...) in a project's dashboard and show it |
         | `list_agents` | the agents of one project, or of every open project, as a flat list |
@@ -116,7 +116,7 @@ public static class HeadBrief
         tool's error. Report it and do not work around it. Switching projects and opening menus are always
         allowed.
 
-        `create_project` has its own `create_project` rule (ask by default), checked on the machine where the
+        `create_project` has its own `create_project` rule (allow by default), checked on the machine where the
         project is made. Its Allow/Deny dialog shows in an open project's dashboard on that machine, so for a
         remote the user has to answer it there, and fleet waits up to 10 minutes. With no project open on
         that machine, an "ask" refuses with "open a project first".

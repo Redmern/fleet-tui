@@ -50,6 +50,7 @@ public sealed partial class HeadServiceTests
     [Fact]
     public async Task A_non_interactive_create_from_another_machine_is_still_asked()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         Open(Web, Idle);
 
         await Service().ServeCreateProjectAsync(new RemoteProjectRequest("shop", "/srv/shop", false, true));
@@ -60,6 +61,7 @@ public sealed partial class HeadServiceTests
     [Fact]
     public async Task The_head_tool_cannot_make_a_local_create_interactive()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         var result = await Service().HandleAsync(CreateCall(("interactive", "true")));
 
         Assert.True(result.IsError);
