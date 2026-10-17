@@ -140,3 +140,86 @@ public sealed class MenuTiming(TimeProvider clock)
         public long OutputsAtReport { get; set; }
     }
 }
+
+public sealed record KeyFrameRecord(string Client, string Pane, double OutputMs, double FrameMs)
+{
+    public string Line =>
+        $"key timing {Client} {Pane}: output {Ms(OutputMs)} ms, frame {Ms(FrameMs)} ms";
+
+    private static string Ms(double ms) => ms.ToString("0.#", CultureInfo.InvariantCulture);
+}
+
+public sealed class KeyLatency(TimeProvider clock)
+{
+    public const string Variable = "FLEET_KEY_TIMING";
+
+    public const int MaxPending = 256;
+
+    private readonly Lock _gate = new();
+    private readonly List<Press> _pending = [];
+
+    public static bool On(string? value) => MenuTiming.On(value);
+
+    public void Key(string client, string pane)
+    {
+        lock (_gate)
+        {
+            if (_pending.Count(p => p.Client == client) >= MaxPending)
+            {
+                _pending.Remove(_pending.First(p => p.Client == client));
+            }
+
+            _pending.Add(new Press(client, pane, clock.GetTimestamp()));
+        }
+    }
+
+    public void Output(string pane)
+    {
+        lock (_gate)
+        {
+            if (_pending.Count == 0)
+            {
+                return;
+            }
+
+            var now = clock.GetTimestamp();
+            foreach (var press in _pending.Where(p => p.Pane == pane && p.AnsweredAt is null))
+            {
+                press.AnsweredAt = now;
+            }
+        }
+    }
+
+    public IReadOnlyList<KeyFrameRecord> Framed(string client)
+    {
+        lock (_gate)
+        {
+            if (_pending.Count == 0)
+            {
+                return [];
+            }
+
+            var now = clock.GetTimestamp();
+            var done = _pending.Where(p => p.Client == client && p.AnsweredAt is not null).ToList();
+            foreach (var press in done)
+            {
+                _pending.Remove(press);
+            }
+
+            return [.. done.Select(p => new KeyFrameRecord(p.Client, p.Pane, Ms(p.PressedAt, p.AnsweredAt!.Value), Ms(p.PressedAt, now)))];
+        }
+    }
+
+    private double Ms(long from, long to) => clock.GetElapsedTime(from, to).TotalMilliseconds;
+
+    private sealed class Press(string client, string pane, long pressedAt)
+    {
+        public string Client { get; } = client;
+
+        public string Pane { get; } = pane;
+
+        public long PressedAt { get; } = pressedAt;
+
+        public long? AnsweredAt { get; set; }
+    }
+}

@@ -43,6 +43,8 @@ public sealed class DaemonOptions
 
     public bool TimeMenus { get; init; } = MenuTiming.On(Environment.GetEnvironmentVariable(MenuTiming.Variable));
 
+    public bool TimeKeys { get; init; } = KeyLatency.On(Environment.GetEnvironmentVariable(KeyLatency.Variable));
+
     public Func<string, IReadOnlyDictionary<string, string>?> PaneEnv { get; init; } = _ => null;
 
     public Action<IDictionary<string, string>>? RemotePaneEnv { get; init; }
@@ -109,6 +111,8 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly HashSet<string> _tunnelsItself = new(StringComparer.Ordinal);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ViewerAnswer> _viewerAnswers = new(StringComparer.Ordinal);
     private readonly MenuTiming? _timing = options.TimeMenus ? new MenuTiming(options.Clock) : null;
+
+    private readonly KeyLatency? _keyTiming = options.TimeKeys ? new KeyLatency(options.Clock) : null;
     private DateTime _lastBusy = DateTime.UtcNow;
     private DateTime _lastSave = DateTime.MinValue;
     private string? _savedSession;
@@ -1416,6 +1420,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
         }
 
+        _keyTiming?.Key(session.Client, target.Id);
         target.Send(bytes);
     }
 
@@ -3168,6 +3173,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         pty.Output += (buffer, count) =>
         {
+            _keyTiming?.Output(pane.Id);
             if (runtime.Feed(buffer, count))
             {
                 options.Log($"{pane.Id} modes: {runtime.ModeSummary}");
@@ -3424,6 +3430,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                     sends.Add((session, ++session.Seq, full, FrameEncoder.Encode(session.Shown, frame), session.Switching));
                     session.Shown = frame;
                     session.Switching = null;
+
+                    foreach (var keyed in _keyTiming?.Framed(session.Client) ?? [])
+                    {
+                        options.Log(keyed.Line);
+                    }
 
                     if (_timing?.Framed(session.Client, MenuShown, RemoteOutputs) is { } timed)
                     {
