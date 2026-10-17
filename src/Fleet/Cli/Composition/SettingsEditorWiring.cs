@@ -1,6 +1,5 @@
 using Fleet.Features.Menu.EditSettings;
 using Fleet.Platform.Storage;
-using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Constants;
@@ -13,6 +12,8 @@ public static class SettingsEditorWiring
     private const string PaneTitle = "fleet settings";
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
+
+    private static readonly TimeSpan Patience = TimeSpan.FromMinutes(10);
 
     public static OpenSettingsInEditor For(Project project, Func<SettingsConfig, string?> resync)
     {
@@ -59,16 +60,25 @@ public static class SettingsEditorWiring
         mux.SetTitleAsync(pane, PaneTitle).GetAwaiter().GetResult();
         mux.FocusPaneAsync(pane).GetAwaiter().GetResult();
 
-        _ = Task.Run(() => WaitForExitAsync(mux, pane, exited));
+        _ = Task.Run(() => WaitForExitAsync(() => mux.ListPanesAsync(), pane, exited, PollInterval, Patience));
 
         return null;
     }
 
-    private static async Task WaitForExitAsync(IMuxDriver mux, PaneId pane, Action exited)
+    public static async Task WaitForExitAsync(
+        Func<Task<IReadOnlyList<Pane>>> panes, PaneId pane, Action exited, TimeSpan interval, TimeSpan patience)
     {
-        while ((await mux.ListPanesAsync().ConfigureAwait(false)).Any(p => p.Id == pane))
+        var deadline = DateTime.UtcNow + patience;
+
+        try
         {
-            await Task.Delay(PollInterval).ConfigureAwait(false);
+            while (DateTime.UtcNow < deadline && (await panes().ConfigureAwait(false)).Any(p => p.Id == pane))
+            {
+                await Task.Delay(interval).ConfigureAwait(false);
+            }
+        }
+        catch (Exception)
+        {
         }
 
         exited();
