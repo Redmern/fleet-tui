@@ -79,5 +79,16 @@ class TerminalQueries(unittest.TestCase):
         self.assertTrue(kl.answer('DA1', 100, 30).startswith(b'\x1b[?'))
 
 
+class Heartbeats(unittest.TestCase):
+    def test_cursor_only_writes_are_a_heartbeat(self):
+        self.assertTrue(kl.is_heartbeat(b'\x1b[?25l\x1b[1;1H'))
+        self.assertTrue(kl.is_heartbeat(b'\x1b[1;1H'))
+        self.assertTrue(kl.is_heartbeat(b'\x1b[?25l\x1b[12;4H\x1b[?25h'))
+
+    def test_drawing_is_not_a_heartbeat(self):
+        self.assertFalse(kl.is_heartbeat(b'\x1b[3;1H> demo2'))
+        self.assertFalse(kl.is_heartbeat(b''))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -155,6 +155,8 @@ public sealed class KeyLatency(TimeProvider clock)
 
     public const int MaxPending = 256;
 
+    public static readonly TimeSpan Expiry = TimeSpan.FromSeconds(5);
+
     private readonly Lock _gate = new();
     private readonly List<Press> _pending = [];
 
@@ -164,12 +166,15 @@ public sealed class KeyLatency(TimeProvider clock)
     {
         lock (_gate)
         {
+            var now = clock.GetTimestamp();
+            _pending.RemoveAll(p => clock.GetElapsedTime(p.PressedAt, now) > Expiry);
+
             if (_pending.Count(p => p.Client == client) >= MaxPending)
             {
                 _pending.Remove(_pending.First(p => p.Client == client));
             }
 
-            _pending.Add(new Press(client, pane, clock.GetTimestamp()));
+            _pending.Add(new Press(client, pane, now));
         }
     }
 
@@ -194,7 +199,10 @@ public sealed class KeyLatency(TimeProvider clock)
     {
         lock (_gate)
         {
-            _pending.RemoveAll(p => p.Client == client && p.AnsweredAt is not null && held?.Invoke(p.Pane) != true);
+            foreach (var press in _pending.Where(p => p.Client == client && held?.Invoke(p.Pane) != true))
+            {
+                press.AnsweredAt = null;
+            }
         }
     }
 

@@ -92,7 +92,7 @@ public sealed class KeyLatencyTests
     }
 
     [Fact]
-    public void An_answered_key_that_changed_nothing_on_screen_is_not_timed_by_a_later_frame()
+    public void Output_that_changes_nothing_on_screen_does_not_answer_the_key()
     {
         var timing = new KeyLatency(_clock);
 
@@ -100,9 +100,25 @@ public sealed class KeyLatencyTests
         Wait(10);
         timing.Output("p7");
         timing.Unchanged("c1");
-        Wait(500);
+        Wait(20);
+        timing.Output("p7");
+        Wait(5);
 
-        Assert.Empty(timing.Framed("c1"));
+        Assert.Equal([new KeyFrameRecord("c1", "p7", 30, 35)], timing.Framed("c1"));
+    }
+
+    [Fact]
+    public void A_key_that_never_changes_the_screen_expires()
+    {
+        var timing = new KeyLatency(_clock);
+
+        timing.Key("c1", "p7");
+        Wait((int)KeyLatency.Expiry.TotalMilliseconds + 1);
+        timing.Key("c1", "p7");
+        Wait(10);
+        timing.Output("p7");
+
+        Assert.Equal([new KeyFrameRecord("c1", "p7", 10, 10)], timing.Framed("c1"));
     }
 
     [Fact]

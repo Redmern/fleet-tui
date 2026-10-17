@@ -52,6 +52,13 @@ QUERIES = [
 ]
 
 
+HEARTBEAT = re.compile(rb'(?:\x1b\[\?25[lh]|\x1b\[\d*(?:;\d*)?H)+')
+
+
+def is_heartbeat(data):
+    return bool(data) and HEARTBEAT.fullmatch(data) is not None
+
+
 def percentile(values, p):
     if not values:
         return None
@@ -140,6 +147,7 @@ class Terminal:
         self.cols, self.rows, self.answers = cols, rows, answers
         self.chunks = []
         self.queries = []
+        self.beats = []
         self.lock = threading.Lock()
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
@@ -161,7 +169,10 @@ class Terminal:
                 return
             now = time.monotonic()
             with self.lock:
-                self.chunks.append((now, data))
+                if is_heartbeat(data):
+                    self.beats.append(now)
+                else:
+                    self.chunks.append((now, data))
             for name in terminal_queries(data):
                 self.queries.append((now, name))
                 if self.answers == 'all' or (self.answers == 'fleetd' and name == 'size-18t'):
@@ -240,7 +251,7 @@ DOWN, UP, PREFIX, ESC = b'\x1b[B', b'\x1b[A', b'\x13', b'\x1b'
 
 
 class Fleet:
-    def __init__(self, binary, root, busy):
+    def __init__(self, binary, root, busy, driver=None):
         self.root = root
         shutil.rmtree(root, ignore_errors=True)
         for d in ['bin', 'cfg/projects', 'demo1', 'demo2', 'stand']:
@@ -268,6 +279,8 @@ class Fleet:
             'FLEET_KEY_TIMING': '1',
             'FLEET_MENU_TIMING': '1',
         })
+        if driver:
+            self.env['FLEET_TUI_DRIVER'] = driver
         for v in ['TMUX', 'FLEET_PANE', 'FLEET_FLOAT', 'FLEET_FRAMED']:
             self.env.pop(v, None)
         self.busy = busy
@@ -330,7 +343,7 @@ def measure(term, keys, presses):
 
 def run(args):
     root = args.root
-    fleet = Fleet(args.binary, root, args.busy)
+    fleet = Fleet(args.binary, root, args.busy, args.driver)
     results = []
     notes = []
     log_mark = 0
@@ -398,11 +411,15 @@ def run(args):
         for answers in ['all', 'fleetd']:
             menu = Terminal([os.path.join(root, 'bin/fleet'), 'menu'], fleet.env, 80, 24, answers=answers)
             try:
+                menu.wait_for(b'fleet', 0, 20)
                 menu.wait_quiet(1.0, 20)
+                beats_from = len(menu.beats)
+                time.sleep(2)
+                beat_rate = (len(menu.beats) - beats_from) / 2
                 m = measure(menu, [DOWN, UP], args.presses)
                 held = [menu.hold(DOWN, args.hold) for _ in range(3)]
                 asked = sorted({n for _, n in menu.queries})
-                direct.append((answers, m, held, asked))
+                direct.append((answers, m, held, asked, beat_rate))
             finally:
                 menu.close()
     fleet.stop()
@@ -416,7 +433,8 @@ def run(args):
 
 
 def report(args, results, opens, direct, events, notes):
-    out = [f'## key -> frame, {args.presses} presses per screen, busy panes: {args.busy}', '']
+    out = [f'## key -> frame, {args.presses} presses per screen, busy panes: {args.busy}, '
+           f'driver: {args.driver or "default"}', '']
     out.append('End to end (harness pty: key written -> first byte / last byte of the redraw), ms')
     out.append('')
     out.append('| screen / measure | n | p50 | p95 | max |')
@@ -448,12 +466,13 @@ def report(args, results, opens, direct, events, notes):
         out.append('')
         out.append('| queries answered / measure | n | p50 | p95 | max |')
         out.append('|---|---|---|---|---|')
-        for answers, m, held, asked in direct:
+        for answers, m, held, asked, _ in direct:
             out.append(row(f'{answers}: key -> first byte', m['first']))
             out.append(row(f'{answers}: key -> frame done', m['last']))
             out.append(row(f'{answers}: held key, last press -> quiet', held))
         out.append('')
         out.append('terminal queries `fleet menu` wrote: ' + ', '.join(direct[0][3] or ['none']))
+        out.append(f'idle cursor-only heartbeat writes from `fleet menu`: {direct[0][4]:.0f}/s')
     theme = [e for e in events if 'theme' in e.lower()]
     out.append('')
     out.append(f'inotify on the config dir during the run: {len(events)} events, {len(theme)} on theme files')
@@ -483,6 +502,7 @@ def main():
     r.add_argument('--hold', type=int, default=25)
     r.add_argument('--busy', type=int, default=0)
     r.add_argument('--direct', action='store_true')
+    r.add_argument('--driver', help='force a Terminal.Gui driver (ansi, dotnet) via FLEET_TUI_DRIVER')
     r.add_argument('--cols', type=int, default=120)
     r.add_argument('--rows', type=int, default=35)
     r.add_argument('--step', type=float, default=0.8, help='seconds between keys that open a screen')
