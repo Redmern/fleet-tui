@@ -1,7 +1,7 @@
 # Spec — Linux menu navigation lag
 
 ## Problem
-On Linux (local Ghostty, embedded `fleetd` mux) the fleet menu opens fine but navigating inside it (keypress → redraw) is very slow. On Windows it is fast. Root cause is unknown: static reading shows only ~50-60 ms of fixed delays (Terminal.Gui Unix input poll ~20 ms, iteration cap ~25 ms, daemon frame delay 4 ms), which does not explain "very slow". See discover.md.
+On Linux (local Ghostty, embedded `fleetd` mux) the fleet menu opens fine but navigating inside it (keypress → redraw) is very slow. On Windows it is fast. Root cause is unknown: static reading shows only ~50-60 ms of fixed delays (Terminal.Gui Unix input poll ~20 ms, iteration cap ~25 ms, daemon frame delay 4 ms), which does not explain "very slow". Measured results: `docs/perf/linux-menu-latency.md` (baseline, U1), `-u4.md` and `-u2.md`.
 
 ## Scope
 - Measure key→frame latency on Linux and identify the real cause(s).
