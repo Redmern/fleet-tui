@@ -14,6 +14,7 @@ public static class FleetUi
     {
         Pace(Environment.GetEnvironmentVariable(IterationsVariable));
         var app = Application.Create().Init(ForcedDriver());
+        CursorHeartbeat.Quiet(app);
         FleetTheme.Use(Adapters.Themes().Active());
         Follow(app);
         FleetKeyHints.Attach(app, () => new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
