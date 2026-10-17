@@ -3,6 +3,7 @@ using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui.Constants;
+using Terminal.Gui.Input;
 
 namespace Fleet.Tests.Features.Menu;
 
@@ -70,9 +71,8 @@ public class SettingsRowsTests
     }
 
     [Fact]
-    public void Its_policy_keys_read_as_mnemonics()
+    public void Its_channel_keys_read_as_mnemonics()
     {
-        Assert.Equal(["a", "s", "f"], SettingsRows.PolicyEntries().Select(e => e.Key));
         Assert.Equal(["b", "d", "c"], SettingsRows.ChannelEntries().Select(e => e.Key));
     }
 
@@ -114,11 +114,16 @@ public class SettingsRowsTests
         Assert.Equal(AskChannel.Both, next.RuleFor(HarnessTool.ListAgents).Channel);
     }
 
+    public static TheoryData<Key, ActionPolicy> PolicyKeys => new()
+    {
+        { Key.A, ActionPolicy.Allow },
+        { Key.S, ActionPolicy.Ask },
+        { Key.F, ActionPolicy.Forbid },
+    };
+
     [Theory]
-    [InlineData("a", ActionPolicy.Allow)]
-    [InlineData("s", ActionPolicy.Ask)]
-    [InlineData("f", ActionPolicy.Forbid)]
-    public void The_policy_keys_set_a_tool_row_directly(string key, ActionPolicy expected)
+    [MemberData(nameof(PolicyKeys))]
+    public void The_policy_keys_set_a_tool_row_directly(Key key, ActionPolicy expected)
     {
         var start = expected == ActionPolicy.Forbid ? ActionPolicy.Allow : ActionPolicy.Forbid;
         var config = SettingsConfig.Default.With(HarnessTool.NewAgent, start);
@@ -132,8 +137,9 @@ public class SettingsRowsTests
     [Fact]
     public void Other_keys_are_not_policy_keys()
     {
-        Assert.Null(SettingsRows.PolicyForKey("c"));
-        Assert.Null(SettingsRows.PolicyForKey("r"));
+        Assert.Null(SettingsRows.PolicyForKey(Key.C));
+        Assert.Null(SettingsRows.PolicyForKey(Key.R));
+        Assert.Null(SettingsRows.PolicyForKey(Key.A.WithCtrl));
     }
 
     [Fact]

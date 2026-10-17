@@ -3,6 +3,7 @@ using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
+using Terminal.Gui.Input;
 
 namespace Fleet.Features.Menu.EditSettings;
 
@@ -58,13 +59,6 @@ public static class SettingsRows
         return rows;
     }
 
-    public static IReadOnlyList<PickerEntry> PolicyEntries() =>
-    [
-        new("allow", "let the harness do it", "a"),
-        new("ask", "ask before doing it", "s"),
-        new("forbid", "never", "f"),
-    ];
-
     public static ActionPolicy NextPolicy(ActionPolicy policy) => policy switch
     {
         ActionPolicy.Allow => ActionPolicy.Ask,
@@ -72,12 +66,25 @@ public static class SettingsRows
         _ => ActionPolicy.Allow,
     };
 
-    public static ActionPolicy? PolicyForKey(string key) =>
-        PolicyEntries()
-            .Select((entry, index) => (entry, index))
-            .Where(p => string.Equals(p.entry.Key, key, StringComparison.OrdinalIgnoreCase))
-            .Select(p => (ActionPolicy?)p.index)
-            .FirstOrDefault();
+    public static ActionPolicy? PolicyForKey(Key key)
+    {
+        if (key == Key.A)
+        {
+            return ActionPolicy.Allow;
+        }
+
+        if (key == Key.S)
+        {
+            return ActionPolicy.Ask;
+        }
+
+        if (key == Key.F)
+        {
+            return ActionPolicy.Forbid;
+        }
+
+        return null;
+    }
 
     public static SettingsConfig Cycled(SettingsConfig config, int index)
     {
