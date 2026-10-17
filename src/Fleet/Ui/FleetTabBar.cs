@@ -118,7 +118,7 @@ public sealed class FleetTabBar
 
     public void Retitle(int index, string title)
     {
-        if (index < 0 || index >= _titles.Length)
+        if (index < 0 || index >= _titles.Length || _titles[index] == title)
         {
             return;
         }

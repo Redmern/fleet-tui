@@ -121,6 +121,8 @@ public sealed class FleetActionBar
 
         private int _hovered = -1;
 
+        private string? _builtPinned;
+
         public ChipStrip()
         {
             MousePositionTracking = true;
@@ -137,8 +139,14 @@ public sealed class FleetActionBar
 
         public void Show(IReadOnlyList<(string Key, string Label, Action Run)> items)
         {
+            var same = Pinned == _builtPinned
+                && items.Select(i => (i.Key, i.Label)).SequenceEqual(_items.Select(i => (i.Key, i.Label)));
             _items = items;
-            Rebuild();
+
+            if (!same)
+            {
+                Rebuild();
+            }
         }
 
         protected override void Dispose(bool disposing)
@@ -153,6 +161,7 @@ public sealed class FleetActionBar
         private void Rebuild()
         {
             _chips = Chips(_items, FleetKeyHints.Shown, Pinned, FleetButtonHints.Mode);
+            _builtPinned = Pinned;
 
             Hover(-1);
             SetNeedsLayout();
