@@ -239,7 +239,7 @@ public class SettingsRowsTests
         var hint = SettingsRows.Explain(config, RowOf(HarnessTool.NewAgent));
 
         Assert.Contains(mentions, hint);
-        Assert.Contains("c", hint);
+        Assert.Contains("Press c to change where it asks.", hint);
     }
 
     [Fact]
