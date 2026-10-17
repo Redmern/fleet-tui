@@ -145,9 +145,10 @@ public class SettingsRowsTests
     [Fact]
     public void Enter_on_a_git_gate_cycles_auto_ask_no()
     {
-        var commit = SettingsRows.Count - 4;
-        var push = SettingsRows.Count - 3;
-        var merge = SettingsRows.Count - 2;
+        var rows = Enumerable.Range(0, SettingsRows.Count).ToList();
+        var commit = rows.Single(SettingsRows.IsCommitRow);
+        var push = rows.Single(SettingsRows.IsPushRow);
+        var merge = rows.Single(SettingsRows.IsMergeRow);
         var config = SettingsConfig.Default
             .WithCommit(ActionPolicy.Allow)
             .WithPush(ActionPolicy.Ask)
@@ -163,7 +164,7 @@ public class SettingsRowsTests
     [Fact]
     public void Enter_on_the_status_hooks_row_toggles_it()
     {
-        var hooks = SettingsRows.Count - 1;
+        var hooks = Enumerable.Range(0, SettingsRows.Count).Single(SettingsRows.IsStatusHooksRow);
         var config = SettingsConfig.Default.WithStatusHooks(true);
 
         Assert.False(SettingsRows.Cycled(config, hooks).StatusHooks);
