@@ -13,9 +13,12 @@ Measured on 2026-10-17 on the maintainer's Linux box (24 cores, Omarchy, kernel 
 - That pacing is two fixed waits: the 40 ms main loop (`MaximumIterationsPerSecond = 25`) and the 20 ms input poll.
   A keypress waits for the next tick, which gives 20–60 ms of uniform delay. With iterations raised to 100/s
   (experiment only), menu p95 drops from 56 ms to 28 ms.
-- **The dashboard has real UI-thread stalls.** In every run a few keys took 1.5–4 s (max 1556, 3213, 4026 ms).
-  Under load (280×75, 6 busy panes, 8 extra dashboards) the app-hop p95 rises to 100–205 ms (max 690 ms) while
-  fleetd's render hop stays below 10 ms.
+- **The dashboard's 1.5–4 s app-hop maxima are a harness artifact, not UI-thread stalls.** The opener keys
+  `C-s` and space are recorded against the focused dashboard pane, but fleetd consumes them to open the menu.
+  They stay pending until that pane's next output, the redraw for the first measured `l`. U2 confirmed this with
+  a stall probe: the dashboard's UI thread never gapped more than 150 ms, idle or loaded
+  (`docs/perf/linux-menu-latency-u2.md`, on `perf/menu-ui-thread`). The loaded app-hop p95 of 100–205 ms is the
+  same kind of misattribution under `--busy`. Loaded e2e first-byte stays at p95 ≈ 50–60 ms.
 - **Idle Terminal.Gui apps never go quiet.** Every loop iteration writes `ESC[?25l ESC[1;1H` (hide cursor,
   home) even when nothing changed, plus `ESC[18t` every 500 ms. In the user's real fleet, the 2 dashboards make
   ≈ 300 write syscalls/s and the warm menu ≈ 53/s, idle. Each write wakes fleetd's render loop (snapshot and
@@ -24,7 +27,7 @@ Measured on 2026-10-17 on the maintainer's Linux box (24 cores, Omarchy, kernel 
   through.
 - I could not reproduce "very slow" (hundreds of ms on every key) in an isolated fleetd. The worst sustained
   number is the loaded dashboard (p95 ≈ 200 ms). If users still see it, the likely sources are the dashboard
-  stalls, load on the app process, and the 60 ms worst case felt on every key of a held arrow. See the open
+  load on the app process and the 60 ms worst case felt on every key of a held arrow. See the open
   questions.
 
 ## Results
@@ -68,8 +71,10 @@ in one iteration.
 
 ### Outliers worth chasing
 
-- **Dashboard:** the app hop has a max of 1556–4026 ms in every run, idle included. It is one or two keys per run
-  of 40 `l`/`h` tab switches, so something on the dashboard's UI thread blocks for seconds.
+- **Dashboard:** the app hop has a max of 1556–4026 ms in every run, idle included. This is not a stall. The
+  menu opener keys (`C-s`, space) are timed against the dashboard pane, which never answers them, so they
+  resolve only with the first measured `l`. The e2e max for the same presses is ≈ 60 ms, and U2's stall probe
+  found no UI-thread gap over 150 ms. To read the dashboard app hop, skip the opener keys or read e2e beside it.
 - **Picker:** the render hop has a single ≈ 420–470 ms max in every run. That is fleetd holding the freshly
   opened float back (reveal gating) while the first key arrives. It happens once per open, not per key.
 
@@ -101,7 +106,7 @@ default. With it off, the only change on the product path is a null-conditional 
 | 4 | The theme watcher redraws repeatedly | **disproven** | inotify saw 4 theme-file events per run, all at startup. `ThemeWiring.Follow` redraws only when the theme text changes. |
 | 5 | libghostty snapshot/lock contention | **disproven** at this scale | Same render-hop evidence as #3. |
 | — | **Terminal.Gui loop pacing (40 ms iteration + 20 ms input poll)** | **proven, the main share** | App hop spreads evenly over 0–40 ms with a bump at ≈ 55 ms. 100 iterations/s halves p50 and p95. Source: `ApplicationMainLoop.Iteration` sleeps the rest of the 40 ms; `InputImpl` polls, then `Task.Delay(20)`. |
-| — | **Dashboard UI-thread stalls and load sensitivity** | **proven** | Seconds-long app-hop outliers in every run, and p95 205 ms under load. |
+| — | **Dashboard UI-thread stalls** | **disproven** (harness artifact) | The seconds-long app-hop outliers are the menu opener keys, pending until the dashboard's next output. e2e max ≈ 60 ms for the same presses. U2's stall probe saw no UI-thread gap over 150 ms, idle or loaded. |
 | — | **Idle cursor heartbeat** | **proven** (CPU, wakeups) | `ApplicationNavigation.UpdateCursor` runs every iteration: `GetCursorNeedsUpdate()` is never reset, and `AnsiOutput.SetCursor` writes hide plus `1;1H` without comparing to the last state. |
 
 ## Recommendation: what to run next
@@ -115,8 +120,9 @@ default. With it off, the only change on the product path is a null-conditional 
      and fleetd wakeups.
    - Consider `Driver.SizeDetection = Polling` to drop the 500 ms `ESC[18t`.
    - Expected gain: p95 55–60 ms → under 30 ms on every screen, which the experiment shows.
-2. **U2, UI-thread per-key work and redraws.** Find the dashboard's 1.5–4 s stalls on tab switches and its load
-   sensitivity (p95 205 ms loaded). Re-measure with `--dashes`/`--busy` after U4.
+2. **U2, UI-thread per-key work and redraws.** Confirm no fleet-side work runs per key and look for redraws
+   that change nothing. The dashboard's 1.5–4 s app-hop maxima turned out to be a harness artifact (see the
+   outliers above), not stalls. Re-measure with `--dashes`/`--busy` after U4.
 3. **U3, daemon render loop. Last.** The render hop is a flat ≈ 4 ms (`FrameDelay`) and does not grow with load
    here. Its only measured cost is waking on every heartbeat write, which U4 removes at the source.
    - Optional: lower `FrameDelay`, or ignore output that leaves a pane's screen unchanged.
