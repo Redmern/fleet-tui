@@ -17,7 +17,7 @@ Measured on 2026-10-17 on the maintainer's Linux box (24 cores, Omarchy, kernel 
   `C-s` and space are recorded against the focused dashboard pane, but fleetd consumes them to open the menu.
   They stay pending until that pane's next output, the redraw for the first measured `l`. U2 confirmed this with
   a stall probe: the dashboard's UI thread never gapped more than 150 ms, idle or loaded
-  (`docs/perf/linux-menu-latency-u2.md`, on `perf/menu-ui-thread`). The loaded app-hop p95 of 100–205 ms is the
+  (`docs/perf/linux-menu-latency-u2.md`; the probe was throwaway, not committed). The loaded app-hop p95 of ≈ 100–200 ms is the
   same kind of misattribution under `--busy`. Loaded e2e first-byte stays at p95 ≈ 50–60 ms.
 - **Idle Terminal.Gui apps never go quiet.** Every loop iteration writes `ESC[?25l ESC[1;1H` (hide cursor,
   home) even when nothing changed, plus `ESC[18t` every 500 ms. In the user's real fleet, the 2 dashboards make
