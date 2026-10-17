@@ -16,6 +16,7 @@ terminal queries it asks and once answering none of them. `--busy N` adds N hidd
 """
 import argparse
 import json
+import random
 import os
 import re
 import shutil
@@ -210,6 +211,7 @@ class Terminal:
     def press(self, key, timeout=2.0, settle=0.1):
         """Write one key; return (first output, last output) in ms after it, or None if nothing came."""
         self.wait_quiet()
+        time.sleep(random.uniform(0, 0.06))
         start = time.monotonic()
         self.write(key)
         deadline = start + timeout
@@ -368,8 +370,11 @@ def run(args):
         for i in range(args.busy):
             fleet.control('spawn', session='demo1', newWindow=True, cwd=root,
                           args=['sh', '-c', 'while :; do date; sleep 0.01; done'])
-        if args.busy:
-            time.sleep(1)
+        for i in range(args.dashes):
+            fleet.control('spawn', session='demo2', newWindow=True, cwd=os.path.join(root, 'demo2'),
+                          args=[os.path.join(root, 'bin/fleet'), 'dash', '--project', 'demo2'])
+        if args.busy or args.dashes:
+            time.sleep(3)
 
         def screen(name, opener, keys, closer):
             nonlocal log_mark
@@ -433,8 +438,8 @@ def run(args):
 
 
 def report(args, results, opens, direct, events, notes):
-    out = [f'## key -> frame, {args.presses} presses per screen, busy panes: {args.busy}, '
-           f'driver: {args.driver or "default"}', '']
+    out = [f'## key -> frame, {args.presses} presses per screen, {args.cols}x{args.rows}, busy panes: {args.busy}, '
+           f'extra dashboards: {args.dashes}, driver: {args.driver or "default"}', '']
     out.append('End to end (harness pty: key written -> first byte / last byte of the redraw), ms')
     out.append('')
     out.append('| screen / measure | n | p50 | p95 | max |')
@@ -502,6 +507,7 @@ def main():
     r.add_argument('--hold', type=int, default=25)
     r.add_argument('--busy', type=int, default=0)
     r.add_argument('--direct', action='store_true')
+    r.add_argument('--dashes', type=int, default=0, help='extra hidden `fleet dash` panes (idle Terminal.Gui apps)')
     r.add_argument('--driver', help='force a Terminal.Gui driver (ansi, dotnet) via FLEET_TUI_DRIVER')
     r.add_argument('--cols', type=int, default=120)
     r.add_argument('--rows', type=int, default=35)
