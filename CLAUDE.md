@@ -62,8 +62,9 @@ Breaking one fails `dotnet test`, so check these before you write code:
   push a `vX.Y.Z` tag; `release.yml` builds and publishes both platforms. The same commit adds a
   `## X.Y.Z (yyyy-mm-dd)` entry with 2-6 plain bullets to the top of `RELEASE_NOTES.md`: it becomes the
   GitHub release text and Settings › What's new, and both `dotnet test` and `release.yml` fail without it.
-- On headless Linux, `git push` fails with the default credential store (secretservice needs a GUI); push with
-  `git -c credential.helper= -c credential.helper='!gh auth git-credential' push ...` (the empty
-  `credential.helper=` clears the failing default first).
+- GitHub pushes authenticate through `gh` (`credential.https://github.com.helper=!gh auth git-credential` in the
+  global git config), so a plain `git push` works headless. If a push fails with `invalid credential line: mise ...`
+  / `could not read Username`, a `~/.local/bin` mise wrapper is printing to stdout: add `--quiet` or `>&2` to its
+  `mise use -g` line.
 - A project hook (`.claude/settings.json`) whitespace-formats every `.cs` file Claude edits
   (`dotnet format whitespace --folder`, ~2 s). It needs `pwsh` on `PATH`.
