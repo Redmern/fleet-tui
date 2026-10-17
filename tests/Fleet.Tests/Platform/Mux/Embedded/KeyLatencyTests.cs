@@ -92,6 +92,47 @@ public sealed class KeyLatencyTests
     }
 
     [Fact]
+    public void An_answered_key_that_changed_nothing_on_screen_is_not_timed_by_a_later_frame()
+    {
+        var timing = new KeyLatency(_clock);
+
+        timing.Key("c1", "p7");
+        Wait(10);
+        timing.Output("p7");
+        timing.Unchanged("c1");
+        Wait(500);
+
+        Assert.Empty(timing.Framed("c1"));
+    }
+
+    [Fact]
+    public void An_unchanged_frame_keeps_keys_the_pane_has_not_answered_yet()
+    {
+        var timing = new KeyLatency(_clock);
+
+        timing.Key("c1", "p7");
+        timing.Unchanged("c1");
+        Wait(10);
+        timing.Output("p7");
+
+        Assert.Single(timing.Framed("c1"));
+    }
+
+    [Fact]
+    public void An_unchanged_frame_keeps_keys_for_a_pane_whose_output_is_still_held_back()
+    {
+        var timing = new KeyLatency(_clock);
+
+        timing.Key("c1", "p7");
+        Wait(10);
+        timing.Output("p7");
+        timing.Unchanged("c1", held: pane => pane == "p7");
+        Wait(90);
+
+        Assert.Equal([new KeyFrameRecord("c1", "p7", 10, 100)], timing.Framed("c1"));
+    }
+
+    [Fact]
     public void Keys_that_never_get_an_answer_are_capped()
     {
         var timing = new KeyLatency(_clock);

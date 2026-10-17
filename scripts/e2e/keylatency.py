@@ -368,7 +368,11 @@ def run(args):
             term.wait_quiet(0.5, 10)
             panes = float_pane(fleet) if name != 'dashboard' else None
             m = measure(term, keys, args.presses)
-            held = [term.hold(DOWN, args.hold) for _ in range(3)]
+            shown = term.text_since(opened)
+            with open(os.path.join(root, f'screen-{name}.txt'), 'w') as f:
+                f.write(re.sub(r'\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b[\]P][^\x07\x1b]*(\x07|\x1b\\)?|\x1b.', ' ',
+                               shown.decode('utf-8', 'replace')))
+            held = [term.hold(keys[0], args.hold) for _ in range(3)]
             lines = fleet.log_lines()[log_mark:]
             timings = parse_key_timings(lines)
             if panes is None:

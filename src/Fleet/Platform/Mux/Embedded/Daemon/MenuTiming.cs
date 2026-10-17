@@ -190,6 +190,14 @@ public sealed class KeyLatency(TimeProvider clock)
         }
     }
 
+    public void Unchanged(string client, Func<string, bool>? held = null)
+    {
+        lock (_gate)
+        {
+            _pending.RemoveAll(p => p.Client == client && p.AnsweredAt is not null && held?.Invoke(p.Pane) != true);
+        }
+    }
+
     public IReadOnlyList<KeyFrameRecord> Framed(string client)
     {
         lock (_gate)

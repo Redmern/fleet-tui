@@ -3422,6 +3422,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         view, id => _runtimes.GetValueOrDefault(id)?.Screen, session.Badge, copying, session.WhichKey, HoverTip(session, view));
                     if (session.Shown is not null && Same(session.Shown, frame))
                     {
+                        _keyTiming?.Unchanged(session.Client, pane => _model.Float(pane) is { Held: not null });
                         continue;
                     }
 
