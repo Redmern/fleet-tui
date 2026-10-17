@@ -17,7 +17,8 @@ public static class EditSettingsView
         Keymap keymap,
         string project,
         SettingsConfig config,
-        Func<SettingsConfig, string?> save)
+        Func<SettingsConfig, string?> save,
+        OpenSettingsInEditor editor)
     {
         var window = FleetTheme.Overlay(SettingsRows.Title(project));
 
@@ -221,6 +222,27 @@ public static class EditSettingsView
             }
         }
 
+        var showing = true;
+
+        void OpenInNvim()
+        {
+            var trouble = editor.Open(config, () => app.Invoke(() =>
+            {
+                var reloaded = editor.Reload(config);
+
+                if (!showing)
+                {
+                    return;
+                }
+
+                config = reloaded.Config;
+                Refill(Current());
+                status.Text = reloaded.Message;
+            }));
+
+            status.Text = trouble ?? OpenSettingsInEditor.Opened;
+        }
+
         list.Accepting += (_, e) =>
         {
             Change();
@@ -237,6 +259,7 @@ public static class EditSettingsView
             ("f", "forbid", () => SetPolicy(ActionPolicy.Forbid)),
             ("c", SettingsRows.ChannelChip, Channel),
             ("r", "default", Reset),
+            ("e", "open in nvim", OpenInNvim),
             ("bksp", FleetIcons.Back, () =>
             {
                 FleetModal.Back();
@@ -300,6 +323,13 @@ public static class EditSettingsView
             {
                 Reset();
                 key.Handled = true;
+                return;
+            }
+
+            if (key == Key.E)
+            {
+                OpenInNvim();
+                key.Handled = true;
             }
         }
 
@@ -314,6 +344,7 @@ public static class EditSettingsView
         }
         finally
         {
+            showing = false;
             FleetModal.Leave();
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();
