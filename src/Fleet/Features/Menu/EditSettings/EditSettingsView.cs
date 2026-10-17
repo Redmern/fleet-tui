@@ -268,9 +268,7 @@ public static class EditSettingsView
                 return;
             }
 
-            var typed = key == Key.A ? "a" : key == Key.S ? "s" : key == Key.F ? "f" : string.Empty;
-
-            if (SettingsRows.PolicyForKey(typed) is { } policy)
+            if (SettingsRows.PolicyForKey(key) is { } policy)
             {
                 SetPolicy(policy);
                 key.Handled = true;

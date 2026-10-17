@@ -3,6 +3,7 @@ using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui.Constants;
+using Terminal.Gui.Input;
 
 namespace Fleet.Tests.Features.Menu;
 
@@ -69,12 +70,6 @@ public class SettingsRowsTests
         Assert.Contains("off", SettingsRows.For(SettingsConfig.Default.WithStatusHooks(false))[last].Text);
     }
 
-    [Fact]
-    public void Its_policy_keys_read_as_mnemonics()
-    {
-        Assert.Equal(["a", "s", "f"], SettingsRows.PolicyEntries().Select(e => e.Key));
-    }
-
     private static int RowOf(HarnessTool tool) => SettingsRows.Tools.ToList().IndexOf(tool) + 1;
 
     [Theory]
@@ -113,11 +108,16 @@ public class SettingsRowsTests
         Assert.Equal(AskChannel.Both, next.RuleFor(HarnessTool.ListAgents).Channel);
     }
 
+    public static TheoryData<Key, ActionPolicy> PolicyKeys => new()
+    {
+        { Key.A, ActionPolicy.Allow },
+        { Key.S, ActionPolicy.Ask },
+        { Key.F, ActionPolicy.Forbid },
+    };
+
     [Theory]
-    [InlineData("a", ActionPolicy.Allow)]
-    [InlineData("s", ActionPolicy.Ask)]
-    [InlineData("f", ActionPolicy.Forbid)]
-    public void The_policy_keys_set_a_tool_row_directly(string key, ActionPolicy expected)
+    [MemberData(nameof(PolicyKeys))]
+    public void The_policy_keys_set_a_tool_row_directly(Key key, ActionPolicy expected)
     {
         var start = expected == ActionPolicy.Forbid ? ActionPolicy.Allow : ActionPolicy.Forbid;
         var config = SettingsConfig.Default.With(HarnessTool.NewAgent, start);
@@ -131,16 +131,18 @@ public class SettingsRowsTests
     [Fact]
     public void Other_keys_are_not_policy_keys()
     {
-        Assert.Null(SettingsRows.PolicyForKey("c"));
-        Assert.Null(SettingsRows.PolicyForKey("r"));
+        Assert.Null(SettingsRows.PolicyForKey(Key.C));
+        Assert.Null(SettingsRows.PolicyForKey(Key.R));
+        Assert.Null(SettingsRows.PolicyForKey(Key.A.WithCtrl));
     }
 
     [Fact]
     public void Enter_on_a_git_gate_cycles_auto_ask_no()
     {
-        var commit = SettingsRows.Count - 4;
-        var push = SettingsRows.Count - 3;
-        var merge = SettingsRows.Count - 2;
+        var rows = Enumerable.Range(0, SettingsRows.Count).ToList();
+        var commit = rows.Single(SettingsRows.IsCommitRow);
+        var push = rows.Single(SettingsRows.IsPushRow);
+        var merge = rows.Single(SettingsRows.IsMergeRow);
         var config = SettingsConfig.Default
             .WithCommit(ActionPolicy.Allow)
             .WithPush(ActionPolicy.Ask)
@@ -156,7 +158,7 @@ public class SettingsRowsTests
     [Fact]
     public void Enter_on_the_status_hooks_row_toggles_it()
     {
-        var hooks = SettingsRows.Count - 1;
+        var hooks = Enumerable.Range(0, SettingsRows.Count).Single(SettingsRows.IsStatusHooksRow);
         var config = SettingsConfig.Default.WithStatusHooks(true);
 
         Assert.False(SettingsRows.Cycled(config, hooks).StatusHooks);
