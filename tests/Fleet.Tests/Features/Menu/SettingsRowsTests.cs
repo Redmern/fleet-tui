@@ -73,7 +73,6 @@ public class SettingsRowsTests
     public void Its_policy_keys_read_as_mnemonics()
     {
         Assert.Equal(["a", "s", "f"], SettingsRows.PolicyEntries().Select(e => e.Key));
-        Assert.Equal(["b", "d", "c"], SettingsRows.ChannelEntries().Select(e => e.Key));
     }
 
     private static int RowOf(HarnessTool tool) => SettingsRows.Tools.ToList().IndexOf(tool) + 1;
@@ -170,5 +169,89 @@ public class SettingsRowsTests
         var config = SettingsConfig.Default;
 
         Assert.Equal(config, SettingsRows.Cycled(config, 0));
+    }
+
+    [Theory]
+    [InlineData(AskChannel.Both, AskChannel.FleetDialog)]
+    [InlineData(AskChannel.FleetDialog, AskChannel.ClaudePermission)]
+    [InlineData(AskChannel.ClaudePermission, AskChannel.Both)]
+    public void The_channel_cycles_both_fleet_dialog_claude(AskChannel from, AskChannel to)
+    {
+        Assert.Equal(to, SettingsRows.NextChannel(from));
+    }
+
+    [Fact]
+    public void C_on_an_ask_row_cycles_and_keeps_its_channel()
+    {
+        var config = SettingsConfig.Default
+            .With(HarnessTool.NewAgent, ActionPolicy.Ask)
+            .With(HarnessTool.NewAgent, AskChannel.Both);
+
+        var next = SettingsRows.WithNextChannel(config, RowOf(HarnessTool.NewAgent));
+
+        Assert.Equal(AskChannel.FleetDialog, next.RuleFor(HarnessTool.NewAgent).Channel);
+        Assert.Equal(ActionPolicy.Ask, next.RuleFor(HarnessTool.NewAgent).Policy);
+    }
+
+    [Theory]
+    [InlineData(ActionPolicy.Allow)]
+    [InlineData(ActionPolicy.Forbid)]
+    public void C_on_a_non_ask_row_changes_nothing_and_says_why(ActionPolicy policy)
+    {
+        var config = SettingsConfig.Default.With(HarnessTool.NewAgent, policy);
+
+        Assert.Equal(config, SettingsRows.WithNextChannel(config, RowOf(HarnessTool.NewAgent)));
+        Assert.Equal(
+            "The channel only matters when the policy is ask.",
+            SettingsRows.ChannelRefusal(config, RowOf(HarnessTool.NewAgent)));
+    }
+
+    [Fact]
+    public void C_on_an_ask_row_is_not_refused()
+    {
+        var config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+
+        Assert.Null(SettingsRows.ChannelRefusal(config, RowOf(HarnessTool.NewAgent)));
+    }
+
+    [Fact]
+    public void C_on_a_gate_row_changes_nothing()
+    {
+        var commit = SettingsRows.Count - 4;
+        var config = SettingsConfig.Default.WithCommit(ActionPolicy.Ask);
+
+        Assert.Equal(config, SettingsRows.WithNextChannel(config, commit));
+        Assert.NotNull(SettingsRows.ChannelRefusal(config, commit));
+    }
+
+    [Theory]
+    [InlineData(AskChannel.Both, "fleet")]
+    [InlineData(AskChannel.FleetDialog, "fleet")]
+    [InlineData(AskChannel.ClaudePermission, "Claude")]
+    public void Focusing_an_ask_row_explains_where_it_asks(AskChannel channel, string mentions)
+    {
+        var config = SettingsConfig.Default
+            .With(HarnessTool.NewAgent, ActionPolicy.Ask)
+            .With(HarnessTool.NewAgent, channel);
+
+        var hint = SettingsRows.Explain(config, RowOf(HarnessTool.NewAgent));
+
+        Assert.Contains(mentions, hint);
+        Assert.Contains("c", hint);
+    }
+
+    [Fact]
+    public void Focusing_a_non_ask_row_explains_nothing()
+    {
+        var config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Allow);
+
+        Assert.Equal(string.Empty, SettingsRows.Explain(config, RowOf(HarnessTool.NewAgent)));
+        Assert.Equal(string.Empty, SettingsRows.Explain(config, 0));
+    }
+
+    [Fact]
+    public void The_channel_chip_is_labelled_ask_where()
+    {
+        Assert.Equal("ask where", SettingsRows.ChannelChip);
     }
 }

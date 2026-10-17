@@ -1,3 +1,4 @@
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
@@ -20,25 +21,65 @@ public static class EditSettingsView
     {
         var window = FleetTheme.Overlay(SettingsRows.Title(project));
 
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
+        var tabBar = FleetTheme.TabBar(1, 0, SettingsTabs.Titles);
+        var list = FleetTheme.Rows(1, Pos.Bottom(tabBar.Root), Dim.Fill(2));
         var status = FleetTheme.Caption(1, Pos.AnchorEnd(2), string.Empty);
+        var tab = SettingsTabs.All;
+        IReadOnlyList<int> visible = [];
 
-        FleetRows.Fill(list, SettingsRows.For(config));
         FleetKeys.ApplyMotions(list, keymap);
+
+        int Current()
+        {
+            var position = FleetRows.Selected(list);
+
+            return position >= 0 && position < visible.Count ? visible[position] : -1;
+        }
+
+        void Explain()
+        {
+            var index = Current();
+
+            status.Text = index >= 0
+                ? SettingsRows.Explain(config, index)
+                : $"No tool asks through the {SettingsTabs.Titles[tab].ToLowerInvariant()}.";
+        }
 
         void Refill(int index)
         {
-            FleetRows.Fill(list, SettingsRows.For(config), index);
+            var position = visible.ToList().IndexOf(index);
+
+            visible = SettingsTabs.Visible(tab, config);
+
+            var all = SettingsRows.For(config);
+            var landed = visible.ToList().IndexOf(index);
+
+            FleetRows.Fill(list, [.. visible.Select(i => all[i])], landed >= 0 ? landed : Math.Max(0, position));
         }
 
-        void Persist(SettingsConfig next, string message)
+        void Persist(SettingsConfig next, string message, int index)
         {
             config = next;
 
             var trouble = save(config);
 
+            Refill(index);
             status.Text = trouble is { Length: > 0 } ? trouble : message;
         }
+
+        void SwitchTo(int next)
+        {
+            var index = Current();
+
+            tab = next;
+            tabBar.Select(tab);
+            Refill(index);
+            Explain();
+        }
+
+        tabBar.Chosen += SwitchTo;
+        list.ValueChanged += (_, _) => Explain();
+        Refill(0);
 
         void EditTrigger()
         {
@@ -64,37 +105,17 @@ public static class EditSettingsView
                 return;
             }
 
-            Persist(config.WithTrigger(trigger), $"The dispatch trigger is now '{trigger}'.");
-            Refill(0);
-        }
-
-        void EditChannel(HarnessTool tool, int index)
-        {
-            if (config.RuleFor(tool).Policy != ActionPolicy.Ask)
-            {
-                status.Text = "The channel only matters when the policy is ask.";
-                return;
-            }
-
-            var picked = FleetPicker.Choose(
-                app,
-                $"{SettingsDefaults.Describe(tool)} — channel",
-                SettingsRows.ChannelEntries(),
-                keymap,
-                (int)config.RuleFor(tool).Channel);
-
-            if (picked is null)
-            {
-                return;
-            }
-
-            Persist(config.With(tool, (AskChannel)picked.Value), "Saved.");
-            Refill(index);
+            Persist(config.WithTrigger(trigger), $"The dispatch trigger is now '{trigger}'.", 0);
         }
 
         void Change()
         {
-            var index = FleetRows.Selected(list);
+            var index = Current();
+
+            if (index < 0)
+            {
+                return;
+            }
 
             if (SettingsRows.IsTriggerRow(index))
             {
@@ -115,13 +136,12 @@ public static class EditSettingsView
                     : "Status hooks off: fleet reads the panes instead."
                 : "Saved.";
 
-            Persist(next, message);
-            Refill(index);
+            Persist(next, message, index);
         }
 
         void SetPolicy(ActionPolicy policy)
         {
-            var index = FleetRows.Selected(list);
+            var index = Current();
             var next = SettingsRows.WithPolicy(config, index, policy);
 
             if (next == config)
@@ -129,57 +149,65 @@ public static class EditSettingsView
                 return;
             }
 
-            Persist(next, "Saved.");
-            Refill(index);
+            Persist(next, "Saved.", index);
         }
 
         void Channel()
         {
-            var index = FleetRows.Selected(list);
-            var tool = SettingsRows.ToolAt(index);
+            var index = Current();
 
-            if (tool != HarnessTool.None)
+            if (index < 0)
             {
-                EditChannel(tool, index);
+                return;
             }
+
+            if (SettingsRows.ChannelRefusal(config, index) is { } refusal)
+            {
+                status.Text = refusal;
+                return;
+            }
+
+            var next = SettingsRows.WithNextChannel(config, index);
+
+            Persist(next, SettingsRows.Explain(next, index), index);
         }
 
         void Reset()
         {
-            var index = FleetRows.Selected(list);
+            var index = Current();
+
+            if (index < 0)
+            {
+                return;
+            }
 
             if (SettingsRows.IsTriggerRow(index))
             {
-                Persist(config.WithTrigger(SettingsDefaults.Trigger), "Reset to the default.");
-                Refill(index);
+                Persist(config.WithTrigger(SettingsDefaults.Trigger), "Reset to the default.", index);
                 return;
             }
 
             if (SettingsRows.IsCommitRow(index))
             {
-                Persist(config.WithCommit(SettingsDefaults.Commit), "Reset to the default.");
-                Refill(index);
+                Persist(config.WithCommit(SettingsDefaults.Commit), "Reset to the default.", index);
                 return;
             }
 
             if (SettingsRows.IsPushRow(index))
             {
-                Persist(config.WithPush(SettingsDefaults.Push), "Reset to the default.");
-                Refill(index);
+                Persist(config.WithPush(SettingsDefaults.Push), "Reset to the default.", index);
                 return;
             }
 
             if (SettingsRows.IsMergeRow(index))
             {
-                Persist(config.WithMerge(SettingsDefaults.Merge), "Reset to the default.");
-                Refill(index);
+                Persist(config.WithMerge(SettingsDefaults.Merge), "Reset to the default.", index);
                 return;
             }
 
             if (SettingsRows.IsStatusHooksRow(index))
             {
-                Persist(config.WithStatusHooks(SettingsDefaults.StatusHooks), "Reset to the default.");
-                Refill(index);
+                Persist(config.WithStatusHooks(SettingsDefaults.StatusHooks), "Reset to the default.", index);
                 return;
             }
 
@@ -189,8 +217,7 @@ public static class EditSettingsView
             {
                 var rule = SettingsDefaults.RuleFor(tool);
 
-                Persist(config.With(tool, rule.Policy).With(tool, rule.Channel), "Reset to the default.");
-                Refill(index);
+                Persist(config.With(tool, rule.Policy).With(tool, rule.Channel), "Reset to the default.", index);
             }
         }
 
@@ -208,7 +235,7 @@ public static class EditSettingsView
             ("a", "allow", () => SetPolicy(ActionPolicy.Allow)),
             ("s", "ask", () => SetPolicy(ActionPolicy.Ask)),
             ("f", "forbid", () => SetPolicy(ActionPolicy.Forbid)),
-            ("c", "channel", Channel),
+            ("c", SettingsRows.ChannelChip, Channel),
             ("r", "default", Reset),
             ("bksp", FleetIcons.Back, () =>
             {
@@ -250,6 +277,20 @@ public static class EditSettingsView
                 return;
             }
 
+            if (key == Key.Tab || key == Key.CursorRight || key == keymap.KeyFor(FleetAction.NextTab))
+            {
+                SwitchTo(SettingsTabs.Next(tab));
+                key.Handled = true;
+                return;
+            }
+
+            if (key == Key.Tab.WithShift || key == Key.CursorLeft || key == keymap.KeyFor(FleetAction.PrevTab))
+            {
+                SwitchTo(SettingsTabs.Previous(tab));
+                key.Handled = true;
+                return;
+            }
+
             if (key == Key.C)
             {
                 Channel();
@@ -266,7 +307,7 @@ public static class EditSettingsView
 
         app.Keyboard.KeyDown += Keys;
 
-        window.Add(list, status, bar.Root);
+        window.Add(tabBar.Root, list, status, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try

@@ -159,18 +159,68 @@ public static class SettingsRows
         _ => "no",
     };
 
-    public static IReadOnlyList<PickerEntry> ChannelEntries() =>
-    [
-        new("both", "fleet and claude ask", "b"),
-        new("fleetDialog", "only the fleet dashboard asks", "d"),
-        new("claudePermission", "only claude asks", "c"),
-    ];
+    public const string ChannelChip = "ask where";
+
+    public const string ChannelOnlyForAsk = "The channel only matters when the policy is ask.";
+
+    public static AskChannel NextChannel(AskChannel channel) => channel switch
+    {
+        AskChannel.Both => AskChannel.FleetDialog,
+        AskChannel.FleetDialog => AskChannel.ClaudePermission,
+        _ => AskChannel.Both,
+    };
+
+    public static string? ChannelRefusal(SettingsConfig config, int index) =>
+        AsksAt(config, index) ? null : ChannelOnlyForAsk;
+
+    public static SettingsConfig WithNextChannel(SettingsConfig config, int index)
+    {
+        if (!AsksAt(config, index))
+        {
+            return config;
+        }
+
+        var tool = ToolAt(index);
+
+        return config.With(tool, NextChannel(config.RuleFor(tool).Channel));
+    }
+
+    public static string Explain(SettingsConfig config, int index)
+    {
+        if (!AsksAt(config, index))
+        {
+            return string.Empty;
+        }
+
+        var where = config.RuleFor(ToolAt(index)).Channel switch
+        {
+            AskChannel.Both => "Asks in the fleet dialog and in Claude.",
+            AskChannel.FleetDialog => "Asks only in the fleet dialog.",
+            _ => "Only Claude asks; the fleet dialog stays out of it.",
+        };
+
+        return $"{where} Press c to change where it asks.";
+    }
+
+    private static bool AsksAt(SettingsConfig config, int index)
+    {
+        var tool = ToolAt(index);
+
+        return tool != HarnessTool.None && config.RuleFor(tool).Policy == ActionPolicy.Ask;
+    }
+
+    private static string ChannelWord(AskChannel channel) => channel switch
+    {
+        AskChannel.Both => "both",
+        AskChannel.FleetDialog => "fleet dialog",
+        _ => "claude",
+    };
 
     private static FleetRow Row(HarnessTool tool, ToolRule rule, int labelWidth)
     {
         var policy = rule.Policy.ToString().ToLowerInvariant();
         var channel = rule.Policy == ActionPolicy.Ask
-            ? rule.Channel.ToString().ToLowerInvariant()
+            ? ChannelWord(rule.Channel)
             : "—";
 
         return new FleetRow(
