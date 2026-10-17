@@ -1004,9 +1004,9 @@ trust in `~/.claude.json` for every folder it opens, so there is no `/mcp` step.
 `fleet doctor` reports whether each project is registered and enabled.)
 
 **Permissions.** Press `s`, `c`, then `p` in the menu (Settings, Fleet config, then Permissions) to say, per project and per tool, whether the
-orchestrator may do the action, must ask, or can't. Reads are allowed by default;
-writes ask. An "ask" can prompt in the fleet dashboard, in Claude's own permission
-prompt, or both. When the prompt lives in the dashboard, the running dashboard shows
+orchestrator may do the action, must ask, or can't. Every tool is allowed by default
+except `remove_repository`, which is forbidden. An "ask" can prompt in the fleet
+dashboard, in Claude's own permission prompt, or both. When the prompt lives in the dashboard, the running dashboard shows
 an Allow/Deny dialog — even though the MCP call is a separate process — and the
 answer travels back over the filesystem. If no dashboard is running, the tool fails
 fast with a clear error instead of hanging.
@@ -1014,8 +1014,7 @@ fast with a clear error instead of hanging.
 The same screen has three git gates that fleet writes as Claude permission rules into
 every orchestrator and agent folder: **Agents commit changes** (`git commit`), **Agents
 push changes** (`git push`) and **Agents merge pull requests** (`gh pr merge`, in Bash and
-PowerShell). Each is `auto`, `ask` or `no`; commit and push ask by default, merge is
-`auto`.
+PowerShell). Each is `auto`, `ask` or `no`, and all three are `auto` by default.
 
 **Dispatch.** Type a prompt in the main pane beginning with the dispatch trigger — a
 comma by default, configurable in the permissions screen — and instead of answering,
@@ -1220,7 +1219,7 @@ cannot tell projects apart. Switching projects, opening menus and showing or hid
 head are navigation and always allowed.
 
 `create_project` belongs to no project yet, so it has its own machine-wide rule,
-`create_project` (**Create a project**, *ask* by default), checked on the machine where the
+`create_project` (**Create a project**, *allow* by default), checked on the machine where the
 project is made, with that machine's settings. Its Allow/Deny dialog shows in a dashboard of
 a project open on that machine: for a remote you answer it there, not on this machine, and
 the head waits up to 10 minutes. With no project open on that machine, *ask* refuses with
