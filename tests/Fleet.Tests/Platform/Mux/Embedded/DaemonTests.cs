@@ -1445,6 +1445,12 @@ public sealed class DaemonTests : IAsyncLifetime
         public Task SendKeyAsync(string text) =>
             _wire.SendAsync(MessageType.Key, new KeyMessage { Text = text, Action = 1 }, WireJsonContext.Default.KeyMessage);
 
+        public Task SendBytesAsync(string typed) =>
+            _wire.SendAsync(
+                MessageType.Text,
+                new TextMessage { Bytes = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(typed)) },
+                WireJsonContext.Default.TextMessage);
+
         public Task SendMouseAsync(int x, int y, int button, int action, bool held = false, int mods = 0) =>
             _wire.SendAsync(
                 MessageType.Mouse,

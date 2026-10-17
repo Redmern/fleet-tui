@@ -12,7 +12,9 @@ public static class FleetUi
 {
     public static IApplication Start()
     {
-        var app = Application.Create().Init();
+        Pace(Environment.GetEnvironmentVariable(IterationsVariable));
+        var app = Application.Create().Init(ForcedDriver());
+        CursorHeartbeat.Quiet(app);
         FleetTheme.Use(Adapters.Themes().Active());
         Follow(app);
         FleetKeyHints.Attach(app, () => new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
@@ -31,6 +33,21 @@ public static class FleetUi
 
         return app;
     }
+
+    public const string DriverVariable = "FLEET_TUI_DRIVER";
+
+    public const string IterationsVariable = "FLEET_TUI_ITERATIONS";
+
+    public const ushort IterationsPerSecond = 100;
+
+    public static void Pace(string? iterations) =>
+        Application.MaximumIterationsPerSecond = Iterations(iterations);
+
+    public static ushort Iterations(string? value) =>
+        ushort.TryParse(value?.Trim(), out var rate) && rate > 0 ? rate : IterationsPerSecond;
+
+    private static string? ForcedDriver() =>
+        Environment.GetEnvironmentVariable(DriverVariable) is { Length: > 0 } driver ? driver : null;
 
     private static IApplication? _themed;
 
