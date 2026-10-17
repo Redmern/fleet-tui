@@ -92,7 +92,7 @@ iterations/s main loop (U4). Data that really changes still redraws: `Filling_ch
 
 Bytes and write syscalls per key for the real pane process under fleetd (`/proc/<pid>/io`, 12 keys, median):
 
-| key | 120×35 before | 120×35 after | 280×75 after |
+| key | 120×35 before | 120×35 after | 280×75 (same before and after) |
 |---|---|---|---|
 | menu Down/Up (float) | 4971 B, 566 writes | 4973 B, 566 writes | 4974 B, 567 writes |
 | dashboard `l`/`h` | 2945 B, 98 writes (max 8834 / 292 when a refresh landed) | 2945 B, 98 writes (max 2968 / 100) | 11553 B, 218 writes |
