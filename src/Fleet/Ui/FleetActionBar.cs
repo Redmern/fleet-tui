@@ -143,7 +143,11 @@ public sealed class FleetActionBar
                 && items.Select(i => (i.Key, i.Label)).SequenceEqual(_items.Select(i => (i.Key, i.Label)));
             _items = items;
 
-            if (!same)
+            if (same)
+            {
+                _chips = [.. _chips.Select((chip, i) => chip with { Run = items[i].Run })];
+            }
+            else
             {
                 Rebuild();
             }

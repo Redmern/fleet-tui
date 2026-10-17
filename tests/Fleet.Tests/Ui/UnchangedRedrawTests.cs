@@ -2,6 +2,7 @@ using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
+using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
@@ -113,6 +114,23 @@ public sealed class UnchangedRedrawTests : IDisposable
 
         hints.Show([("n", FleetIcons.Back, () => ran = "new")]);
         hints.Items[0].Run();
+
+        Assert.Equal("new", ran);
+    }
+
+    [Fact]
+    public void Clicking_a_chip_after_showing_the_same_actions_runs_the_newest_callback()
+    {
+        using var host = new View { Width = 40, Height = 1 };
+        var bar = new FleetActionBar(0);
+        var ran = string.Empty;
+        host.Add(bar.Root);
+        bar.Show([("n", FleetIcons.Back, () => ran = "old")]);
+        host.Layout();
+
+        bar.Show([("n", FleetIcons.Back, () => ran = "new")]);
+        var start = bar.Root.Viewport.Width - FleetActionBar.Measure(bar.Items);
+        bar.Root.NewMouseEvent(new Mouse { Flags = MouseFlags.LeftButtonClicked, Position = new(start, 0) });
 
         Assert.Equal("new", ran);
     }
