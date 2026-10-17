@@ -15,7 +15,10 @@ public static class FleetRows
     {
         var source = new FleetRowSource(rows, gapsAfter, spaced, headersBefore);
 
-        list.Source = source;
+        if (list.Source is not FleetRowSource shown || !shown.Shows(source))
+        {
+            list.Source = source;
+        }
 
         Select(list, item);
     }
