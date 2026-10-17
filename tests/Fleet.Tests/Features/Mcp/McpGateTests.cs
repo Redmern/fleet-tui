@@ -56,10 +56,16 @@ public sealed class McpGateTests
     [Fact]
     public void A_sub_orchestrator_may_create_and_manage_agents_without_asking()
     {
-        Assert.True(McpGate.Decide(HarnessTool.NewAgent, SettingsConfig.Default, isSub: true).Allowed);
-        Assert.True(McpGate.Decide(HarnessTool.TellAgent, SettingsConfig.Default, isSub: true).Allowed);
-        Assert.True(McpGate.Decide(HarnessTool.OpenAgent, SettingsConfig.Default, isSub: true).Allowed);
-        Assert.True(McpGate.Decide(HarnessTool.StopAgent, SettingsConfig.Default, isSub: true).Allowed);
+        var settings = SettingsConfig.Default
+            .With(HarnessTool.NewAgent, ActionPolicy.Ask)
+            .With(HarnessTool.TellAgent, ActionPolicy.Ask)
+            .With(HarnessTool.OpenAgent, ActionPolicy.Ask)
+            .With(HarnessTool.StopAgent, ActionPolicy.Ask);
+
+        Assert.True(McpGate.Decide(HarnessTool.NewAgent, settings, isSub: true).Allowed);
+        Assert.True(McpGate.Decide(HarnessTool.TellAgent, settings, isSub: true).Allowed);
+        Assert.True(McpGate.Decide(HarnessTool.OpenAgent, settings, isSub: true).Allowed);
+        Assert.True(McpGate.Decide(HarnessTool.StopAgent, settings, isSub: true).Allowed);
     }
 
     [Fact]
