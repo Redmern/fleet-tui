@@ -65,13 +65,6 @@ public static class SettingsRows
         new("forbid", "never", "f"),
     ];
 
-    public static IReadOnlyList<PickerEntry> GatePolicyEntries() =>
-    [
-        new("auto", "do it without asking", "a"),
-        new("ask", "ask for permission", "s"),
-        new("no", "never", "f"),
-    ];
-
     public static ActionPolicy NextPolicy(ActionPolicy policy) => policy switch
     {
         ActionPolicy.Allow => ActionPolicy.Ask,
