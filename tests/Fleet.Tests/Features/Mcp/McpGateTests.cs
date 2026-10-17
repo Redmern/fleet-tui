@@ -26,9 +26,9 @@ public sealed class McpGateTests
     }
 
     [Fact]
-    public void Write_tools_ask_by_default()
+    public void A_tool_set_to_ask_asks()
     {
-        var decision = McpGate.Decide(HarnessTool.StopAgent, SettingsConfig.Default);
+        var decision = McpGate.Decide(HarnessTool.StopAgent, With(HarnessTool.StopAgent, ActionPolicy.Ask, AskChannel.Both));
 
         Assert.False(decision.Allowed);
         Assert.False(decision.Forbidden);
@@ -65,7 +65,7 @@ public sealed class McpGateTests
     [Fact]
     public void The_main_orchestrator_is_still_asked_before_an_ask_tool()
     {
-        Assert.False(McpGate.Decide(HarnessTool.StopAgent, SettingsConfig.Default, isSub: false).Allowed);
+        Assert.False(McpGate.Decide(HarnessTool.StopAgent, With(HarnessTool.StopAgent, ActionPolicy.Ask, AskChannel.Both), isSub: false).Allowed);
     }
 
     [Fact]
@@ -79,7 +79,8 @@ public sealed class McpGateTests
     [Fact]
     public void A_sub_still_asks_before_destructive_tools_it_is_not_trusted_with()
     {
-        var decision = McpGate.Decide(HarnessTool.RemoveAgent, SettingsConfig.Default, isSub: true);
+        var decision = McpGate.Decide(
+            HarnessTool.RemoveAgent, With(HarnessTool.RemoveAgent, ActionPolicy.Ask, AskChannel.Both), isSub: true);
 
         Assert.False(decision.Allowed);
         Assert.False(decision.Forbidden);
@@ -104,11 +105,15 @@ public sealed class McpGateTests
     }
 
     [Fact]
-    public void Stopping_or_removing_a_sub_asks_by_default_even_for_a_sub()
+    public void Stopping_or_removing_a_sub_set_to_ask_asks_even_for_a_sub()
     {
-        Assert.False(McpGate.Decide(HarnessTool.StopSub, SettingsConfig.Default).Allowed);
-        Assert.False(McpGate.Decide(HarnessTool.StopSub, SettingsConfig.Default, isSub: true).Allowed);
-        Assert.False(McpGate.Decide(HarnessTool.RemoveSub, SettingsConfig.Default, isSub: true).Allowed);
+        var settings = SettingsConfig.Default
+            .With(HarnessTool.StopSub, ActionPolicy.Ask)
+            .With(HarnessTool.RemoveSub, ActionPolicy.Ask);
+
+        Assert.False(McpGate.Decide(HarnessTool.StopSub, settings).Allowed);
+        Assert.False(McpGate.Decide(HarnessTool.StopSub, settings, isSub: true).Allowed);
+        Assert.False(McpGate.Decide(HarnessTool.RemoveSub, settings, isSub: true).Allowed);
     }
 
     [Fact]

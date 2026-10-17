@@ -123,12 +123,12 @@ public sealed class SshSyncEgressTests
     }
 
     [Fact]
-    public void Sync_to_remote_is_a_tool_that_asks_by_default()
+    public void Sync_to_remote_is_a_tool_that_is_allowed_by_default()
     {
         Assert.Equal("sync_to_remote", HarnessToolIds.For(HarnessTool.SyncToRemote));
         Assert.Equal(HarnessTool.SyncToRemote, HarnessToolIds.Parse("sync_to_remote"));
-        Assert.Equal(ActionPolicy.Ask, SettingsConfig.Default.RuleFor(HarnessTool.SyncToRemote).Policy);
-        Assert.Equal(ActionPolicy.Ask, SettingsConfig.Default.MergedOverDefaults().RuleFor(HarnessTool.SyncToRemote).Policy);
+        Assert.Equal(ActionPolicy.Allow, SettingsConfig.Default.RuleFor(HarnessTool.SyncToRemote).Policy);
+        Assert.Equal(ActionPolicy.Allow, SettingsConfig.Default.MergedOverDefaults().RuleFor(HarnessTool.SyncToRemote).Policy);
     }
 
     [Fact]

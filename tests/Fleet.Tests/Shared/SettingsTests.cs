@@ -18,24 +18,36 @@ public class SettingsTests
         Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.TellAgent).Policy);
         Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.Dispatch).Policy);
 
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.StopAgent).Policy);
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.DeleteWorktree).Policy);
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.PullRepository).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.StopAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.DeleteWorktree).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.PullRepository).Policy);
 
         Assert.Equal(ActionPolicy.Forbid, config.RuleFor(HarnessTool.RemoveRepository).Policy);
 
-        Assert.Equal(ActionPolicy.Ask, config.Commit);
-        Assert.Equal(ActionPolicy.Ask, config.Push);
+        Assert.Equal(ActionPolicy.Allow, config.Commit);
+        Assert.Equal(ActionPolicy.Allow, config.Push);
         Assert.Equal(ActionPolicy.Allow, config.Merge);
         Assert.Equal(AidlcMode.Off, config.Aidlc.Mode);
     }
 
     [Fact]
-    public void Creating_a_project_has_its_own_rule_that_asks_by_default_and_shows_in_the_settings_table()
+    public void Every_tool_but_removing_a_repository_is_allowed_by_default()
+    {
+        foreach (var tool in HarnessToolIds.All)
+        {
+            var expected = tool == HarnessTool.RemoveRepository ? ActionPolicy.Forbid : ActionPolicy.Allow;
+
+            Assert.Equal(expected, SettingsDefaults.RuleFor(tool).Policy);
+            Assert.Equal(AskChannel.Both, SettingsDefaults.RuleFor(tool).Channel);
+        }
+    }
+
+    [Fact]
+    public void Creating_a_project_has_its_own_rule_that_allows_by_default_and_shows_in_the_settings_table()
     {
         Assert.Equal("create_project", HarnessToolIds.For(HarnessTool.CreateProject));
         Assert.Equal(HarnessTool.CreateProject, HarnessToolIds.Parse("create_project"));
-        Assert.Equal(ActionPolicy.Ask, SettingsConfig.Default.RuleFor(HarnessTool.CreateProject).Policy);
+        Assert.Equal(ActionPolicy.Allow, SettingsConfig.Default.RuleFor(HarnessTool.CreateProject).Policy);
         Assert.Contains(HarnessTool.CreateProject, SettingsDefaults.Configurable);
         Assert.Equal("Create a project", SettingsDefaults.Describe(HarnessTool.CreateProject));
     }
@@ -59,6 +71,7 @@ public class SettingsTests
     {
         var config = SettingsConfig.Default
             .With(HarnessTool.NewAgent, ActionPolicy.Forbid)
+            .With(HarnessTool.StopAgent, ActionPolicy.Ask)
             .With(HarnessTool.StopAgent, AskChannel.FleetDialog);
 
         Assert.Equal(ActionPolicy.Forbid, config.RuleFor(HarnessTool.NewAgent).Policy);

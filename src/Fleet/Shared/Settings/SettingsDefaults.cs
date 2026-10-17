@@ -13,9 +13,9 @@ public static class SettingsDefaults
 
     public const string JiraStoryPointsField = "customfield_10016";
 
-    public const ActionPolicy Commit = ActionPolicy.Ask;
+    public const ActionPolicy Commit = ActionPolicy.Allow;
 
-    public const ActionPolicy Push = ActionPolicy.Ask;
+    public const ActionPolicy Push = ActionPolicy.Allow;
 
     public const ActionPolicy Merge = ActionPolicy.Allow;
 
@@ -103,38 +103,11 @@ public static class SettingsDefaults
         HarnessTool.CreateProject,
     ];
 
-    public static ToolRule RuleFor(HarnessTool tool)
-    {
-        if (tool == HarnessTool.RemoveRepository)
-        {
-            return new ToolRule(ActionPolicy.Forbid, AskChannel.Both);
-        }
-
-        return AllowedByDefault(tool) ? ToolRule.Allow : ToolRule.Ask;
-    }
+    public static ToolRule RuleFor(HarnessTool tool) =>
+        tool == HarnessTool.RemoveRepository ? new ToolRule(ActionPolicy.Forbid, AskChannel.Both) : ToolRule.Allow;
 
     public static bool ServedByProjectMcp(HarnessTool tool) =>
         tool is not (HarnessTool.DeleteWorktree or HarnessTool.CreateProject);
-
-    public static bool IsRead(HarnessTool tool) => tool
-        is HarnessTool.ListAgents
-        or HarnessTool.ListRepositories
-        or HarnessTool.ListBranches
-        or HarnessTool.AgentStatus
-        or HarnessTool.RepositoryStatus
-        or HarnessTool.LogTail
-        or HarnessTool.ListSubs
-        or HarnessTool.Report;
-
-    private static bool AllowedByDefault(HarnessTool tool) =>
-        IsRead(tool)
-        || tool is HarnessTool.NewAgent
-            or HarnessTool.OpenAgent
-            or HarnessTool.SetAgentVisible
-            or HarnessTool.TellAgent
-            or HarnessTool.DistributeSecrets
-            or HarnessTool.Dispatch
-            or HarnessTool.TodoAdd;
 
     public static string Describe(HarnessTool tool) => tool switch
     {

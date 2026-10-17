@@ -19,7 +19,7 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
         Assert.Equal(",", config.Trigger);
         Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.ListAgents).Policy);
         Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.NewAgent).Policy);
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.StopAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.StopAgent).Policy);
     }
 
     [Fact]
@@ -68,12 +68,12 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
-    public void The_commit_and_push_gates_default_to_ask()
+    public void The_commit_and_push_gates_default_to_allow()
     {
         var config = Store.Load("techweb");
 
-        Assert.Equal(ActionPolicy.Ask, config.Commit);
-        Assert.Equal(ActionPolicy.Ask, config.Push);
+        Assert.Equal(ActionPolicy.Allow, config.Commit);
+        Assert.Equal(ActionPolicy.Allow, config.Push);
     }
 
     [Fact]
@@ -87,6 +87,42 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
 
         Assert.Equal(ActionPolicy.Allow, loaded.Commit);
         Assert.Equal(ActionPolicy.Forbid, loaded.Push);
+    }
+
+    [Fact]
+    public void Saving_values_equal_to_the_new_defaults_writes_nothing_for_them()
+    {
+        Store.Save(
+            "techweb",
+            SettingsConfig.Default
+                .WithCommit(ActionPolicy.Allow)
+                .WithPush(ActionPolicy.Allow)
+                .With(HarnessTool.StopAgent, ActionPolicy.Allow));
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"commit\": \"\"", raw);
+        Assert.Contains("\"push\": \"\"", raw);
+        Assert.DoesNotContain("stop_agent", raw);
+    }
+
+    [Fact]
+    public void A_file_customised_under_the_old_ask_defaults_keeps_its_explicit_values()
+    {
+        Directory.CreateDirectory(FleetPaths.Settings);
+        var file = Path.Combine(FleetPaths.Settings, "techweb.json");
+        File.WriteAllText(
+            file,
+            """{"version":1,"commit":"ask","push":"ask","tools":{"stop_agent":{"policy":"ask"}}}""");
+
+        var loaded = Store.Load("techweb");
+        Store.Save("techweb", loaded);
+        var reloaded = Store.Load("techweb");
+
+        Assert.Equal(ActionPolicy.Ask, reloaded.Commit);
+        Assert.Equal(ActionPolicy.Ask, reloaded.Push);
+        Assert.Equal(ActionPolicy.Ask, reloaded.RuleFor(HarnessTool.StopAgent).Policy);
+        Assert.Contains("\"commit\": \"ask\"", File.ReadAllText(file));
     }
 
     [Fact]

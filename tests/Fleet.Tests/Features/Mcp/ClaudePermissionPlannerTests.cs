@@ -99,12 +99,14 @@ public sealed class ClaudePermissionPlannerTests
     }
 
     [Fact]
-    public void Committing_and_pushing_ask_by_default()
+    public void Committing_and_pushing_are_allowed_by_default()
     {
         var plan = ClaudePermissionPlanner.Plan(SettingsConfig.Default);
 
-        Assert.Contains(GitGates.CommitRule, plan.Ask);
-        Assert.Contains(GitGates.PushRule, plan.Ask);
+        Assert.Contains(GitGates.CommitRule, plan.Allow);
+        Assert.Contains(GitGates.PushRule, plan.Allow);
+        Assert.DoesNotContain(GitGates.CommitRule, plan.Ask);
+        Assert.DoesNotContain(GitGates.PushRule, plan.Ask);
     }
 
     [Fact]

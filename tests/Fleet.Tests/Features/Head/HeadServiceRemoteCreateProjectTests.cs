@@ -4,6 +4,8 @@ using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
+using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Head;
 
@@ -136,6 +138,7 @@ public sealed partial class HeadServiceTests
     [Fact]
     public async Task Create_project_asked_by_another_machine_creates_it_here_behind_this_machines_rule()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         Open(Web, Idle);
 
         var result = await Service().ServeCreateProjectAsync(new RemoteProjectRequest("shop", "/srv/shop", true, true));
@@ -161,6 +164,7 @@ public sealed partial class HeadServiceTests
     [Fact]
     public async Task Create_project_asked_by_another_machine_with_no_open_project_is_refused()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         var result = await Service().ServeCreateProjectAsync(new RemoteProjectRequest("shop", "/srv/shop", false, true));
 
         Assert.True(result.IsError);

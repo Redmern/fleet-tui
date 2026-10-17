@@ -41,7 +41,7 @@ public class SettingsRowsTests
         var config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Allow);
 
         var allow = SettingsRows.For(config)[SettingsRows.Tools.ToList().IndexOf(HarnessTool.NewAgent) + 1];
-        var ask = SettingsRows.For(SettingsConfig.Default)[SettingsRows.Tools.ToList().IndexOf(HarnessTool.StopAgent) + 1];
+        var ask = SettingsRows.For(SettingsConfig.Default.With(HarnessTool.StopAgent, ActionPolicy.Ask))[SettingsRows.Tools.ToList().IndexOf(HarnessTool.StopAgent) + 1];
 
         Assert.Contains("—", allow.Text);
         Assert.Contains("both", ask.Text);

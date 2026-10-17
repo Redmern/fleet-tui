@@ -119,8 +119,9 @@ public sealed partial class HeadServiceTests
     }
 
     [Fact]
-    public async Task Create_project_asks_an_open_dashboard_by_default()
+    public async Task Create_project_asks_an_open_dashboard_when_its_rule_asks()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         Open(Web, Idle);
 
         await Service().HandleAsync(CreateCall());
@@ -134,6 +135,7 @@ public sealed partial class HeadServiceTests
     [Fact]
     public async Task Create_project_creates_nothing_when_the_ask_is_denied()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         Open(Web, Idle);
         _approvals.Answer = ApprovalOutcome.Deny("not now");
 
@@ -172,6 +174,7 @@ public sealed partial class HeadServiceTests
     [Fact]
     public async Task Create_project_refuses_when_no_dashboard_is_open_to_ask()
     {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.CreateProject, ActionPolicy.Ask);
         var result = await Service().HandleAsync(CreateCall());
 
         Assert.True(result.IsError);
