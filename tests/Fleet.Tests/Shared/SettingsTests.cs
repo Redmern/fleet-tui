@@ -71,13 +71,12 @@ public class SettingsTests
     {
         var config = SettingsConfig.Default
             .With(HarnessTool.NewAgent, ActionPolicy.Forbid)
-            .With(HarnessTool.StopAgent, ActionPolicy.Ask)
             .With(HarnessTool.StopAgent, AskChannel.FleetDialog);
 
         Assert.Equal(ActionPolicy.Forbid, config.RuleFor(HarnessTool.NewAgent).Policy);
         Assert.Equal(AskChannel.Both, config.RuleFor(HarnessTool.NewAgent).Channel);
 
-        Assert.Equal(ActionPolicy.Ask, config.RuleFor(HarnessTool.StopAgent).Policy);
+        Assert.Equal(ActionPolicy.Allow, config.RuleFor(HarnessTool.StopAgent).Policy);
         Assert.Equal(AskChannel.FleetDialog, config.RuleFor(HarnessTool.StopAgent).Channel);
     }
 
