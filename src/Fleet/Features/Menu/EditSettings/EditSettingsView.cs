@@ -92,49 +92,6 @@ public static class EditSettingsView
             Refill(index);
         }
 
-        void EditPolicy(HarnessTool tool, int index)
-        {
-            var picked = FleetPicker.Choose(
-                app,
-                $"{SettingsDefaults.Describe(tool)} — policy",
-                SettingsRows.PolicyEntries(),
-                keymap,
-                (int)config.RuleFor(tool).Policy);
-
-            if (picked is null)
-            {
-                return;
-            }
-
-            Persist(config.With(tool, (ActionPolicy)picked.Value), "Saved.");
-            Refill(index);
-
-            if ((ActionPolicy)picked.Value == ActionPolicy.Ask)
-            {
-                EditChannel(tool, index);
-            }
-        }
-
-        void EditGate(string label, ActionPolicy current, Func<ActionPolicy, SettingsConfig> with, int index)
-        {
-            var picked = FleetPicker.Choose(
-                app,
-                $"{label} — permission",
-                SettingsRows.GatePolicyEntries(),
-                keymap,
-                (int)current);
-
-            if (picked is null)
-            {
-                return;
-            }
-
-            var policy = (ActionPolicy)picked.Value;
-
-            Persist(with(policy), "Saved.");
-            Refill(index);
-        }
-
         void Change()
         {
             var index = FleetRows.Selected(list);
@@ -145,41 +102,35 @@ public static class EditSettingsView
                 return;
             }
 
-            if (SettingsRows.IsCommitRow(index))
+            var next = SettingsRows.Cycled(config, index);
+
+            if (next == config)
             {
-                EditGate(SettingsDefaults.CommitLabel, config.Commit, config.WithCommit, index);
                 return;
             }
 
-            if (SettingsRows.IsPushRow(index))
+            var message = SettingsRows.IsStatusHooksRow(index)
+                ? next.StatusHooks
+                    ? "Status hooks on: agents report their status through Claude hooks."
+                    : "Status hooks off: fleet reads the panes instead."
+                : "Saved.";
+
+            Persist(next, message);
+            Refill(index);
+        }
+
+        void SetPolicy(ActionPolicy policy)
+        {
+            var index = FleetRows.Selected(list);
+            var next = SettingsRows.WithPolicy(config, index, policy);
+
+            if (next == config)
             {
-                EditGate(SettingsDefaults.PushLabel, config.Push, config.WithPush, index);
                 return;
             }
 
-            if (SettingsRows.IsMergeRow(index))
-            {
-                EditGate(SettingsDefaults.MergeLabel, config.Merge, config.WithMerge, index);
-                return;
-            }
-
-            if (SettingsRows.IsStatusHooksRow(index))
-            {
-                Persist(
-                    config.WithStatusHooks(!config.StatusHooks),
-                    config.StatusHooks
-                        ? "Status hooks off: fleet reads the panes instead."
-                        : "Status hooks on: agents report their status through Claude hooks.");
-                Refill(index);
-                return;
-            }
-
-            var tool = SettingsRows.ToolAt(index);
-
-            if (tool != HarnessTool.None)
-            {
-                EditPolicy(tool, index);
-            }
+            Persist(next, "Saved.");
+            Refill(index);
         }
 
         void Channel()
@@ -254,6 +205,9 @@ public static class EditSettingsView
         bar.Show(
         [
             ("enter", "change", Change),
+            ("a", "allow", () => SetPolicy(ActionPolicy.Allow)),
+            ("s", "ask", () => SetPolicy(ActionPolicy.Ask)),
+            ("f", "forbid", () => SetPolicy(ActionPolicy.Forbid)),
             ("c", "channel", Channel),
             ("r", "default", Reset),
             ("bksp", FleetIcons.Back, () =>
@@ -283,6 +237,15 @@ public static class EditSettingsView
             if (key == FleetKeys.Cancel)
             {
                 app.RequestStop(window);
+                key.Handled = true;
+                return;
+            }
+
+            var typed = key == Key.A ? "a" : key == Key.S ? "s" : key == Key.F ? "f" : string.Empty;
+
+            if (SettingsRows.PolicyForKey(typed) is { } policy)
+            {
+                SetPolicy(policy);
                 key.Handled = true;
                 return;
             }
