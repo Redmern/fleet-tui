@@ -15,7 +15,16 @@ public sealed class JsonSettingsStore : ISettingsStore
     public SettingsConfig Load(string project) =>
         LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints(), Nvim = LoadNvim() };
 
-    private static SettingsConfig LoadProject(string project)
+    public SettingsConfig? Reload(string project) =>
+        ReadProject(project) is { } read
+            ? read with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints(), Nvim = LoadNvim() }
+            : null;
+
+    public bool Exists(string project) => FileFor(project) is { } file && File.Exists(file);
+
+    private static SettingsConfig LoadProject(string project) => ReadProject(project) ?? SettingsConfig.Default;
+
+    private static SettingsConfig? ReadProject(string project)
     {
         var file = FileFor(project);
 
@@ -31,7 +40,7 @@ public sealed class JsonSettingsStore : ISettingsStore
 
             if (stored is null)
             {
-                return SettingsConfig.Default;
+                return null;
             }
 
             var rules = new Dictionary<HarnessTool, ToolRule>();
@@ -84,7 +93,7 @@ public sealed class JsonSettingsStore : ISettingsStore
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
         {
-            return SettingsConfig.Default;
+            return null;
         }
     }
 
@@ -344,7 +353,7 @@ public sealed class JsonSettingsStore : ISettingsStore
     private static string OnOffAgainstDefault(bool value, bool fallback) =>
         value == fallback ? string.Empty : value ? "on" : "off";
 
-    private static string? FileFor(string project)
+    public static string? FileFor(string project)
     {
         var name = ProjectName.Sanitize(project);
 

@@ -424,6 +424,34 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void Reloading_a_corrupt_file_yields_nothing_instead_of_the_defaults()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(Path.Combine(FleetPaths.Settings, "techweb.json"), "{ this is not json");
+
+        Assert.Null(Store.Reload("techweb"));
+    }
+
+    [Fact]
+    public void Reloading_a_saved_file_reads_it_back()
+    {
+        Store.Save("techweb", SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Forbid));
+
+        Assert.Equal(ActionPolicy.Forbid, Store.Reload("techweb")!.RuleFor(HarnessTool.NewAgent).Policy);
+    }
+
+    [Fact]
+    public void The_settings_file_exists_only_once_saved()
+    {
+        Assert.False(Store.Exists("techweb"));
+
+        Store.Save("techweb", SettingsConfig.Default);
+
+        Assert.True(Store.Exists("techweb"));
+        Assert.Equal(Path.Combine(FleetPaths.Settings, "techweb.json"), JsonSettingsStore.FileFor("techweb"));
+    }
+
+    [Fact]
     public void An_unknown_tool_or_policy_word_is_skipped()
     {
         FleetPaths.EnsureDirs();
