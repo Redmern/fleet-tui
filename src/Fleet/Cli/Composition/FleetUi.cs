@@ -12,7 +12,7 @@ public static class FleetUi
 {
     public static IApplication Start()
     {
-        var app = Application.Create().Init();
+        var app = Application.Create().Init(ForcedDriver());
         FleetTheme.Use(Adapters.Themes().Active());
         Follow(app);
         FleetKeyHints.Attach(app, () => new Keymap(Adapters.Keymaps().Load()), Adapters.ShowMenuKeys);
@@ -31,6 +31,11 @@ public static class FleetUi
 
         return app;
     }
+
+    public const string DriverVariable = "FLEET_TUI_DRIVER";
+
+    private static string? ForcedDriver() =>
+        Environment.GetEnvironmentVariable(DriverVariable) is { Length: > 0 } driver ? driver : null;
 
     private static IApplication? _themed;
 
