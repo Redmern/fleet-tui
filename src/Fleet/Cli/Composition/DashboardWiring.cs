@@ -59,6 +59,7 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Status;
 using Fleet.Shared.Status.Models;
 using Fleet.Ui;
@@ -740,6 +741,13 @@ public static class DashboardWiring
         var webForwards = Adapters.Forwards();
         var webBrowser = Adapters.Browser();
 
+        string? ResyncTrouble(SettingsConfig next)
+        {
+            var synced = settingsSync.Resync(project.Name, project.Root, next);
+
+            return synced.Succeeded ? null : $"claude's permissions could not be updated: {synced.Error}";
+        }
+
         return new DashboardCallbacks(
             LoadRepositories: async () =>
             {
@@ -793,11 +801,10 @@ public static class DashboardWiring
                 next =>
                 {
                     settings.Save(project.Name, next);
-                    var synced = settingsSync.Resync(project.Name, project.Root, next);
-                    return synced.Succeeded
-                        ? null
-                        : $"Saved, but claude's permissions could not be updated: {synced.Error}";
-                }),
+                    return ResyncTrouble(next) is { } trouble ? $"Saved, but {trouble}" : null;
+                },
+                SettingsEditorWiring.For(
+                    project, next => ResyncTrouble(next) is { } trouble ? $"Reloaded, but {trouble}" : null)),
 
             BrowseFiles: () => Adapters.OnPath(FileBrowser.Command)
                 ? Noted(

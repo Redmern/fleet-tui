@@ -3,6 +3,7 @@ using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
+using Terminal.Gui.Input;
 
 namespace Fleet.Features.Menu.EditSettings;
 
@@ -58,19 +59,88 @@ public static class SettingsRows
         return rows;
     }
 
-    public static IReadOnlyList<PickerEntry> PolicyEntries() =>
-    [
-        new("allow", "let the harness do it", "a"),
-        new("ask", "ask before doing it", "s"),
-        new("forbid", "never", "f"),
-    ];
+    public static ActionPolicy NextPolicy(ActionPolicy policy) => policy switch
+    {
+        ActionPolicy.Allow => ActionPolicy.Ask,
+        ActionPolicy.Ask => ActionPolicy.Forbid,
+        _ => ActionPolicy.Allow,
+    };
 
-    public static IReadOnlyList<PickerEntry> GatePolicyEntries() =>
-    [
-        new("auto", "do it without asking", "a"),
-        new("ask", "ask for permission", "s"),
-        new("no", "never", "f"),
-    ];
+    public static ActionPolicy? PolicyForKey(Key key)
+    {
+        if (key == Key.A)
+        {
+            return ActionPolicy.Allow;
+        }
+
+        if (key == Key.S)
+        {
+            return ActionPolicy.Ask;
+        }
+
+        if (key == Key.F)
+        {
+            return ActionPolicy.Forbid;
+        }
+
+        return null;
+    }
+
+    public static SettingsConfig Cycled(SettingsConfig config, int index)
+    {
+        if (IsStatusHooksRow(index))
+        {
+            return config.WithStatusHooks(!config.StatusHooks);
+        }
+
+        return PolicyAt(config, index) is { } current
+            ? WithPolicy(config, index, NextPolicy(current))
+            : config;
+    }
+
+    public static SettingsConfig WithPolicy(SettingsConfig config, int index, ActionPolicy policy)
+    {
+        if (IsCommitRow(index))
+        {
+            return config.WithCommit(policy);
+        }
+
+        if (IsPushRow(index))
+        {
+            return config.WithPush(policy);
+        }
+
+        if (IsMergeRow(index))
+        {
+            return config.WithMerge(policy);
+        }
+
+        var tool = ToolAt(index);
+
+        return tool == HarnessTool.None ? config : config.With(tool, policy);
+    }
+
+    private static ActionPolicy? PolicyAt(SettingsConfig config, int index)
+    {
+        if (IsCommitRow(index))
+        {
+            return config.Commit;
+        }
+
+        if (IsPushRow(index))
+        {
+            return config.Push;
+        }
+
+        if (IsMergeRow(index))
+        {
+            return config.Merge;
+        }
+
+        var tool = ToolAt(index);
+
+        return tool == HarnessTool.None ? null : config.RuleFor(tool).Policy;
+    }
 
     private static FleetRow GateRow(string label, ActionPolicy policy, int labelWidth) =>
         new(
@@ -89,18 +159,68 @@ public static class SettingsRows
         _ => "no",
     };
 
-    public static IReadOnlyList<PickerEntry> ChannelEntries() =>
-    [
-        new("both", "fleet and claude ask", "b"),
-        new("fleetDialog", "only the fleet dashboard asks", "d"),
-        new("claudePermission", "only claude asks", "c"),
-    ];
+    public const string ChannelChip = "ask where";
+
+    public const string ChannelOnlyForAsk = "The channel only matters when the policy is ask.";
+
+    public static AskChannel NextChannel(AskChannel channel) => channel switch
+    {
+        AskChannel.Both => AskChannel.FleetDialog,
+        AskChannel.FleetDialog => AskChannel.ClaudePermission,
+        _ => AskChannel.Both,
+    };
+
+    public static string? ChannelRefusal(SettingsConfig config, int index) =>
+        AsksAt(config, index) ? null : ChannelOnlyForAsk;
+
+    public static SettingsConfig WithNextChannel(SettingsConfig config, int index)
+    {
+        if (!AsksAt(config, index))
+        {
+            return config;
+        }
+
+        var tool = ToolAt(index);
+
+        return config.With(tool, NextChannel(config.RuleFor(tool).Channel));
+    }
+
+    public static string Explain(SettingsConfig config, int index)
+    {
+        if (!AsksAt(config, index))
+        {
+            return string.Empty;
+        }
+
+        var where = config.RuleFor(ToolAt(index)).Channel switch
+        {
+            AskChannel.Both => "Asks in the fleet dialog and in Claude.",
+            AskChannel.FleetDialog => "Asks only in the fleet dialog.",
+            _ => "Only Claude asks; the fleet dialog stays out of it.",
+        };
+
+        return $"{where} Press c to change where it asks.";
+    }
+
+    private static bool AsksAt(SettingsConfig config, int index)
+    {
+        var tool = ToolAt(index);
+
+        return tool != HarnessTool.None && config.RuleFor(tool).Policy == ActionPolicy.Ask;
+    }
+
+    private static string ChannelWord(AskChannel channel) => channel switch
+    {
+        AskChannel.Both => "both",
+        AskChannel.FleetDialog => "fleet dialog",
+        _ => "claude",
+    };
 
     private static FleetRow Row(HarnessTool tool, ToolRule rule, int labelWidth)
     {
         var policy = rule.Policy.ToString().ToLowerInvariant();
         var channel = rule.Policy == ActionPolicy.Ask
-            ? rule.Channel.ToString().ToLowerInvariant()
+            ? ChannelWord(rule.Channel)
             : "—";
 
         return new FleetRow(

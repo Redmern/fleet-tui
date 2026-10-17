@@ -1,0 +1,40 @@
+using Fleet.Features.Menu.EditSettings.Models;
+using Fleet.Shared.Settings.Models;
+
+namespace Fleet.Features.Menu.EditSettings;
+
+public sealed class OpenSettingsInEditor(
+    Func<bool> exists,
+    Action<SettingsConfig> save,
+    Func<Action, string?> spawn,
+    Func<SettingsConfig?> reload,
+    Func<SettingsConfig, string?> resync)
+{
+    public const string Opened = "Opened in nvim; the list reloads when you quit it.";
+
+    public const string Reloaded = "Reloaded from disk.";
+
+    public const string Unparsable = "The settings file could not be read; kept the previous settings.";
+
+    public static string? NoResync(SettingsConfig config) => null;
+
+    public string? Open(SettingsConfig current, Action exited)
+    {
+        if (!exists())
+        {
+            save(current);
+        }
+
+        return spawn(exited);
+    }
+
+    public SettingsReload Reload(SettingsConfig previous)
+    {
+        if (reload() is not { } loaded)
+        {
+            return new SettingsReload(previous, Unparsable);
+        }
+
+        return new SettingsReload(loaded, resync(loaded) is { Length: > 0 } trouble ? trouble : Reloaded);
+    }
+}

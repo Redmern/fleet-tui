@@ -452,7 +452,8 @@ public static class MenuCommand
                     {
                         settings.Save(project.Name, next);
                         return null;
-                    });
+                    },
+                    SettingsEditorWiring.For(project, OpenSettingsInEditor.NoResync));
 
                 break;
 
