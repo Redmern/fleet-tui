@@ -9,6 +9,7 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 
 // Warm menus on a frozen SimulatedLinkClock: time only moves when a test advances it, so a
 // warm menu that starts without the clock moving proves it skipped WarmAgainAfter.
+[Collection(WallClockCollection.Name)]
 public sealed class WarmMenuSpeedTests : IAsyncLifetime
 {
     private readonly FakePanes _panes = new();

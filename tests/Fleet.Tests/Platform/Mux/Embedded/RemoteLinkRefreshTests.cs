@@ -10,9 +10,15 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 // A RemoteLink talking to a scripted remote fleetd across a SimulatedLinkStream: the remote
 // notes when each message reaches it, so a test can tell how many round trips a refresh costs
 // and where a key lands among the refresh's requests.
+[Collection(WallClockCollection.Name)]
 public sealed class RemoteLinkRefreshTests : IAsyncDisposable
 {
-    private static readonly TimeSpan OneWay = TimeSpan.FromMilliseconds(150);
+    // The bounds below sit halfway between one round trip and the next: four requests sent
+    // one after another would reach the remote two one-way hops apart, and a refresh that
+    // took a second round trip would finish three hops after its first request, not one.
+    // So the runner gets a whole one-way hop of slack; 300 ms of it covers a Windows runner's
+    // coarse timers and a busy thread pool, where 150 ms did not.
+    private static readonly TimeSpan OneWay = TimeSpan.FromMilliseconds(300);
 
     private static readonly string[] RefreshOps = ["list-workspaces", "list-projects", RemoteLink.ProjectConfigsOp, "list-notices"];
 

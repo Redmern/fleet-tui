@@ -8,6 +8,7 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 
 // A home fleetd linked to a far fleetd through a SimulatedLinkStream, both timing menus.
 // Later units reuse this shape to prove their gains on a slow link.
+[Collection(WallClockCollection.Name)]
 public sealed partial class MenuTimingLinkedTests : IAsyncLifetime
 {
     private static readonly TimeSpan OneWay = TimeSpan.FromMilliseconds(100);
@@ -100,7 +101,8 @@ public sealed partial class MenuTimingLinkedTests : IAsyncLifetime
         await window.SendCommandAsync("menu");
         await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is not null));
         var menu = _farPanes.ByProgram("fleet")!;
-        Assert.True((await far.RequestAsync(new ControlRequest { Op = "fit", Caller = menu.Env[FleetDaemon.PaneVariable], Cols = 40, Rows = 8 })).Ok);
+        var pane = menu.Env[FleetDaemon.PaneVariable];
+        Assert.True((await far.RequestAsync(new ControlRequest { Op = "fit", Caller = pane, Cols = 40, Rows = 8 })).Ok);
         await Task.Delay(100);
         menu.Emit("FAR-MENU\nitems\n");
 
@@ -112,7 +114,11 @@ public sealed partial class MenuTimingLinkedTests : IAsyncLifetime
         Assert.True(match.Success, line);
         Assert.Equal("cold", match.Groups[1].Value);
         var (first, settle, link) = (int.Parse(match.Groups[2].Value), int.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value));
-        Assert.True(settle is >= 60 and < 1000, line);
+        // The settle covers the 100 ms between fit and draw above, so it can only come out longer.
+        // How long it took past that is the runner's business; that the draw, not the
+        // RevealAfterFit fallback, revealed the menu is fleet's, and the far fleetd logs which.
+        Assert.True(settle >= 60, line);
+        Assert.Contains($"{pane} revealed after drawing", _farLog);
         Assert.True(link >= 2 * OneWay.TotalMilliseconds - 10, line);
         Assert.True(first + 2 >= settle + link, line);
         Assert.Contains(Timings(_farLog), l => l.Contains(": cold, first frame", StringComparison.Ordinal) && !l.Contains("link", StringComparison.Ordinal));

@@ -14,6 +14,7 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 // run their render loops on wall time, so the bound keeps the 50 ms budget and no more. What
 // the simulated link itself held past its latency (coarse timers, a busy runner's thread
 // pool) is taken off both the rtt and each open, so the test measures fleet, not the runner.
+[Collection(WallClockCollection.Name)]
 public sealed partial class MenuOpenLatencyTests(ITestOutputHelper output) : IAsyncLifetime
 {
     private static readonly TimeSpan OneWay = TimeSpan.FromMilliseconds(50);
