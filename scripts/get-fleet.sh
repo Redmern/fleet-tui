@@ -201,7 +201,11 @@ check_deps() {
     if [ -n "$DEPS_CMD" ]; then
         if [ "$WITH_DEPS" = 1 ] || { deps_interactive && deps_ask; }; then
             ok "running: $DEPS_CMD"
-            if eval "$DEPS_CMD"; then
+            deps_stdin=/dev/null
+            if (: </dev/tty) 2>/dev/null; then
+                deps_stdin=/dev/tty
+            fi
+            if eval "$DEPS_CMD" <"$deps_stdin"; then
                 ok "installed with $DEPS_PM"
             else
                 ok "$DEPS_PM could not install everything - run it yourself: $DEPS_CMD"

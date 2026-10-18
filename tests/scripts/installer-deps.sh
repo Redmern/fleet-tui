@@ -37,7 +37,7 @@ make_bin() {
     FAKEBIN="$WORK/bin.$$.$RANDOM_ID"
     RANDOM_ID=$((RANDOM_ID + 1))
     mkdir -p "$FAKEBIN"
-    printf '#!%s\nprintf "%%s\\n" "${FAKE_UNAME:-Linux}"\n' "$REAL_SH" >"$FAKEBIN/uname"
+    printf '#!%s\nif [ "${1:-}" = -m ]; then printf "x86_64\\n"; else printf "%%s\\n" "${FAKE_UNAME:-Linux}"; fi\n' "$REAL_SH" >"$FAKEBIN/uname"
     printf '#!%s\nprintf "1000\\n"\n' "$REAL_SH" >"$FAKEBIN/id"
     for tool in "$@"; do
         case "$tool" in
@@ -48,7 +48,7 @@ make_bin() {
                 printf '#!%s\nprintf "sudo %%s\\n" "$*" >>"$LOG"\nexec "$@"\n' "$REAL_SH" >"$FAKEBIN/sudo"
                 ;;
             *)
-                printf '#!%s\nprintf "%s %%s\\n" "$*" >>"$LOG"\n[ -z "${FAKE_FAIL:-}" ]\n' "$REAL_SH" "$tool" >"$FAKEBIN/$tool"
+                printf '#!%s\nprintf "%s %%s\\n" "$*" >>"$LOG"\n[ -z "${FAKE_READ_STDIN:-}" ] || while read -r _; do :; done\n[ -z "${FAKE_FAIL:-}" ]\n' "$REAL_SH" "$tool" >"$FAKEBIN/$tool"
                 ;;
         esac
     done
@@ -189,6 +189,19 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
     elif ! has 'after check_deps'; then fail 'did not continue'
     else pass; fi
 
+    CASE="$NAME: under 'curl | sh' the package manager cannot read the piped script (AC-11)"
+    make_bin git pacman sudo
+    : >"$LOG"
+    OUT="$WORK/out"
+    FAKE_READ_STDIN=1
+    export FAKE_READ_STDIN
+    printf 'FLEET_INSTALLER_LIB=1\n. "%s"\nWITH_DEPS=1\nPATH="%s"\ncheck_deps\nprintf "after check_deps\\n"\n' "$SCRIPT" "$FAKEBIN" |
+        "$REAL_SH" >"$OUT" 2>&1
+    unset FAKE_READ_STDIN
+    if ! called 'pacman'; then fail 'did not install'
+    elif ! has 'after check_deps'; then fail 'the package manager swallowed the rest of the script'
+    else pass; fi
+
     CASE="$NAME: CI env prints the command only (AC-5)"
     make_bin git pacman sudo
     if command -v script >/dev/null 2>&1; then
@@ -224,7 +237,9 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
         CASE="$NAME: interactive no installs nothing (AC-4)"
         make_bin git pacman sudo
         run_tty "$SCRIPT" n
-        if ! no_calls; then fail 'installed'; else pass; fi
+        if ! has '[y/N]'; then fail 'no prompt'
+        elif ! no_calls; then fail 'installed'
+        else pass; fi
 
         CASE="$NAME: FLEET_NO_DEPS_PROMPT skips the prompt (AC-3)"
         make_bin git pacman sudo
@@ -242,6 +257,69 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
         printf 'skip interactive cases: no script(1)\n'
     fi
 done
+
+# End to end: the real scripts, so the check_deps call sites are covered too.
+# No dotnet on PATH stops install.sh before it builds; curl is fake.
+with_utils() {
+    for util in sh cat dirname mktemp mkdir chmod mv rm grep tail ls; do
+        ln -s "$(command -v "$util")" "$FAKEBIN/$util"
+    done
+    printf '#!%s\nurl=; out=\nwhile [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; http*) url="$1" ;; esac; shift; done\ncase "$url" in\n    *install.sh) cat "%s/install.sh" >"$out" ;;\n    *) printf "#!%s\\nprintf \\"fleet %%%%s\\\\\\\\n\\" \\"\\$*\\" >>\\"\\$LOG\\"\\n" >"$out" ;;\nesac\n' \
+        "$REAL_SH" "$ROOT" "$REAL_SH" >"$FAKEBIN/curl"
+    chmod +x "$FAKEBIN/curl"
+}
+
+run_real() {
+    OUT="$WORK/out"
+    LOG="$WORK/log"
+    : >"$LOG"
+    export LOG
+    rm -rf "${WORK:?}/home"
+    mkdir -p "$WORK/home"
+    env -u FLEET_INSTALLER_LIB HOME="$WORK/home" XDG_CONFIG_HOME="$WORK/home/.config" \
+        FLEET_BIN_DIR="$WORK/home/bin" PATH="$FAKEBIN" "$REAL_SH" "$@" >"$OUT" 2>&1 </dev/null
+    RC=$?
+}
+
+CASE="install.sh: a plain run checks deps before the build (AC-1, AC-5)"
+make_bin git pacman sudo
+with_utils
+run_real "$ROOT/install.sh" --no-path
+if ! has 'missing: nvim, yazi'; then fail 'no deps check'
+elif ! has 'install them with: sudo pacman -S --needed --noconfirm neovim yazi'; then fail 'command'
+elif ! has '.NET SDK is required'; then fail 'did not reach the dotnet check'
+elif ! no_calls; then fail 'installed'
+else pass; fi
+
+CASE="install.sh: --deps-only installs the missing tools and stops (AC-6)"
+make_bin git pacman sudo
+with_utils
+run_real "$ROOT/install.sh" --deps-only
+if [ "$RC" != 0 ]; then fail "exit $RC"
+elif ! called 'pacman -S --needed --noconfirm neovim yazi'; then fail 'pacman call'
+elif has '.NET SDK'; then fail 'went on to build'
+else pass; fi
+
+CASE="get-fleet.sh: a plain run checks deps, then installs fleet (AC-5, AC-11)"
+make_bin git pacman sudo
+with_utils
+run_real "$ROOT/scripts/get-fleet.sh" --no-path
+if [ "$RC" != 0 ]; then fail "exit $RC"
+elif ! has '==> Checking dependencies' || ! has 'missing: nvim, yazi'; then fail 'no deps check'
+elif ! has 'install them with: sudo pacman -S --needed --noconfirm neovim yazi'; then fail 'command'
+elif called 'pacman'; then fail 'installed'
+elif ! called 'fleet setup'; then fail 'did not install fleet'
+else pass; fi
+
+CASE="get-fleet.sh: --with-deps delegates to install.sh and installs (AC-6, AC-11)"
+make_bin git pacman sudo
+with_utils
+run_real "$ROOT/scripts/get-fleet.sh" --with-deps --no-path
+if [ "$RC" != 0 ]; then fail "exit $RC"
+elif ! has 'Fetching the dependency installer'; then fail 'did not delegate'
+elif ! called 'pacman -S --needed --noconfirm neovim yazi'; then fail 'pacman call'
+elif ! called 'fleet setup'; then fail 'did not install fleet'
+else pass; fi
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
