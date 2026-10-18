@@ -162,7 +162,7 @@ if ($WithDeps -or $DepsMissing) {
         Invoke-FleetDepsOffer -WithDeps:$WithDeps -NvimConfig $NvimConfig
     }
     catch {
-        Write-Host "    could not fetch $depsUrl ($($_.Exception.Message))" -ForegroundColor Yellow
+        Write-Host "    could not run the dependency check from $depsUrl ($($_.Exception.Message))" -ForegroundColor Yellow
         if ($DepsMissing) {
             Write-Host "    missing: $($DepsMissing -join ', ') - install them with winget or by hand" -ForegroundColor Yellow
         }

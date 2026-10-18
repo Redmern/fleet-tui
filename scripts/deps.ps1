@@ -73,7 +73,7 @@ function Invoke-FleetDepsOffer {
     )
 
     try {
-        $missing = Get-MissingFleetDeps
+        $missing = @(Get-MissingFleetDeps)
 
         Write-Host '==> Checking git, nvim and yazi' -ForegroundColor Cyan
 
