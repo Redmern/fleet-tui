@@ -17,7 +17,10 @@
     With -Uninstall, also delete %APPDATA%\fleet.
 
 .PARAMETER WithDeps
-    Install Neovim, yazi and git through winget when they are missing.
+    Install Neovim, yazi and git through winget when they are missing, without
+    asking. Without it the installer still checks for them: on an interactive
+    console it asks y/N, anywhere else (or with FLEET_NO_DEPS_PROMPT set) it prints
+    the winget commands.
     fleet's own Neovim config ships inside the binary; 'fleet setup' (run at the end)
     writes it to %LOCALAPPDATA%\fleet-nvim.
 
@@ -196,10 +199,10 @@ if ($Uninstall) {
 # Install
 # ---------------------------------------------------------------------------
 
-if ($WithDeps) {
-    . (Join-Path $RepoRoot 'scripts\deps.ps1')
-    Install-FleetDeps -NvimConfig $NvimConfig
-}
+# Offered before the prerequisite check so a missing git can be installed first:
+# -WithDeps installs, an interactive console asks y/N, anything else prints the commands.
+. (Join-Path $RepoRoot 'scripts\deps.ps1')
+Invoke-FleetDepsOffer -WithDeps:$WithDeps -NvimConfig $NvimConfig
 
 Write-Step 'Checking prerequisites'
 
