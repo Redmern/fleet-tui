@@ -104,6 +104,17 @@ public sealed class FleetRowSource : IListDataSource
     public int IndexOf(int item) =>
         item >= 0 && item < _indexOf.Count ? _indexOf[item] : -1;
 
+    public bool Shows(FleetRowSource other) =>
+        Items == other.Items
+        && _rows.Count == other._rows.Count
+        && _headers.SetEquals(other._headers)
+        && _rows.Zip(other._rows).All(pair => Same(pair.First, pair.Second));
+
+    private static bool Same(FleetRow? left, FleetRow? right) =>
+        left is null || right is null
+            ? left is null && right is null
+            : left.Spans.SequenceEqual(right.Spans) && (left.Trailing ?? []).SequenceEqual(right.Trailing ?? []);
+
     public void Replace(int item, FleetRow row)
     {
         var index = IndexOf(item);
