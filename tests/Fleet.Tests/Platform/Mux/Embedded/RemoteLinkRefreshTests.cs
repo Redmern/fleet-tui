@@ -10,6 +10,7 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 // A RemoteLink talking to a scripted remote fleetd across a SimulatedLinkStream: the remote
 // notes when each message reaches it, so a test can tell how many round trips a refresh costs
 // and where a key lands among the refresh's requests.
+[Collection(WallClockCollection.Name)]
 public sealed class RemoteLinkRefreshTests : IAsyncDisposable
 {
     private static readonly TimeSpan OneWay = TimeSpan.FromMilliseconds(150);

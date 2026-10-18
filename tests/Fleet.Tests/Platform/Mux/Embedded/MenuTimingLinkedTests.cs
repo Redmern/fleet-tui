@@ -8,6 +8,7 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 
 // A home fleetd linked to a far fleetd through a SimulatedLinkStream, both timing menus.
 // Later units reuse this shape to prove their gains on a slow link.
+[Collection(WallClockCollection.Name)]
 public sealed partial class MenuTimingLinkedTests : IAsyncLifetime
 {
     private static readonly TimeSpan OneWay = TimeSpan.FromMilliseconds(100);
