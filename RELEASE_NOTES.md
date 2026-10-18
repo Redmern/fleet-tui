@@ -4,6 +4,13 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.21 (2026-10-18)
+
+- **Shorter `fleet update --list`**: it shows the installed release, the latest one and the newest 10; add `--all` to see every release, prereleases included.
+- **The installers check for git, nvim and yazi** on every install and say which are missing. On an interactive terminal they ask (y/N) before installing them with the package manager they find (winget on Windows, brew on macOS).
+- When not run interactively (`curl | sh`, CI) the installers install nothing and print the exact install commands instead; `--with-deps` / `-WithDeps` still installs without asking, and `FLEET_NO_DEPS_PROMPT=1` turns the question off.
+- A failed or impossible dependency install (no package manager, no winget) only warns, with manual install guidance; the fleet install itself carries on.
+
 ## 0.7.20 (2026-10-18)
 
 - **Looser default permissions**: every fleet tool is now allowed by default except `remove_repository`, which stays forbidden, and fleet may commit and push without asking (as it already could merge). Settings you saved yourself are kept.
