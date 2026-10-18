@@ -10,7 +10,10 @@
     install from a fork instead.
 
 .PARAMETER WithDeps
-    Install Neovim, yazi and git through winget when missing. fleet's own
+    Install Neovim, yazi and git through winget when missing, without asking.
+    Without it the installer still checks for them: on an interactive console it
+    asks y/N, anywhere else (or with FLEET_NO_DEPS_PROMPT set) it prints the winget
+    commands. fleet's own
     Neovim config ships inside the binary. The dependency script is downloaded
     from the same repository, so this works through 'irm | iex' too.
 
@@ -50,7 +53,8 @@ $BinPath    = Join-Path $InstallDir 'fleet.exe'
 $script:Fancy = -not ($env:FLEET_NO_ANIMATION -or $env:NO_COLOR -or $env:CI -or $env:TERM -eq 'dumb' -or
     $Host.Name -ne 'ConsoleHost' -or [Console]::IsOutputRedirected)
 $script:StepCount = 0
-$script:StepTotal = if ($WithDeps) { 4 } else { 3 }
+$DepsMissing = @('git', 'nvim', 'yazi' | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
+$script:StepTotal = if ($WithDeps -or $DepsMissing) { 4 } else { 3 }
 
 function Format-Bar([double]$fraction, [int]$width = 24) {
     $filled = [int][Math]::Floor([Math]::Max(0.0, [Math]::Min(1.0, $fraction)) * $width)
@@ -142,17 +146,33 @@ function Save-Download($Uri, $Path) {
     }
 }
 
-if ($WithDeps) {
+# The dependency script is only fetched when something is missing or -WithDeps asks
+# for it. -WithDeps installs, an interactive console asks y/N, anything else prints
+# the commands. Nothing here can fail the fleet install.
+if ($WithDeps -or $DepsMissing) {
     $depsUrl = "https://raw.githubusercontent.com/$Repo/main/scripts/deps.ps1"
     $depsFile = Join-Path $env:TEMP "fleet-deps-$([guid]::NewGuid().ToString('N')).ps1"
 
     Write-Step 'Fetching the dependency installer'
-    Invoke-WebRequest -Uri $depsUrl -OutFile $depsFile -UseBasicParsing
-    Write-Ok $depsUrl
+    try {
+        Invoke-WebRequest -Uri $depsUrl -OutFile $depsFile -UseBasicParsing
+        Write-Ok $depsUrl
 
-    . $depsFile
-    Install-FleetDeps -NvimConfig $NvimConfig
-    Remove-Item $depsFile -Force -ErrorAction SilentlyContinue
+        . $depsFile
+        Invoke-FleetDepsOffer -WithDeps:$WithDeps -NvimConfig $NvimConfig
+    }
+    catch {
+        Write-Host "    could not fetch $depsUrl ($($_.Exception.Message))" -ForegroundColor Yellow
+        if ($DepsMissing) {
+            Write-Host "    missing: $($DepsMissing -join ', ') - install them with winget or by hand" -ForegroundColor Yellow
+        }
+    }
+    finally {
+        Remove-Item $depsFile -Force -ErrorAction SilentlyContinue
+    }
+}
+else {
+    Write-Ok 'git, nvim and yazi are installed'
 }
 
 $url = if ($Version -eq 'latest') {

@@ -180,6 +180,18 @@ finally {
 $redirected = & $shell -NoProfile -Command ". '$(Join-Path $repo 'scripts/deps.ps1')'; Test-FleetDepsInteractive" 2>&1 | Out-String
 Check 'deps: a redirected run is not interactive' ($redirected.Trim() -eq 'False')
 
+# Both installers run the offer on every install, not only under -WithDeps.
+foreach ($installer in 'install.ps1', 'scripts/get-fleet.ps1') {
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repo $installer), [ref]$null, [ref]$null)
+    $offers = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-FleetDepsOffer' }, $true))
+    $guarded = @($offers | Where-Object {
+        $p = $_.Parent
+        while ($p -and -not ($p -is [System.Management.Automation.Language.IfStatementAst] -and $p.Clauses[0].Item1.Extent.Text -eq '$WithDeps')) { $p = $p.Parent }
+        $p
+    })
+    Check "$installer offers the deps on every install" ($offers.Count -eq 1 -and $guarded.Count -eq 0 -and $offers[0].Extent.Text -match '-WithDeps:\$WithDeps')
+}
+
 $sh = Get-Command sh -ErrorAction SilentlyContinue
 if ($sh) {
     $bin = Join-Path ([IO.Path]::GetTempPath()) "fleet-installer-bin-$([guid]::NewGuid().ToString('N'))"
