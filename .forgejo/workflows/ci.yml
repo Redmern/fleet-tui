@@ -1,0 +1,47 @@
+name: ci
+
+# Linux build and test on the home Forgejo runners. They are small (about 2 cores
+# and 2-3 GiB), so this is the light half of .github/workflows/ci.yml, which the
+# push mirror still runs on GitHub for both platforms. Skipped here:
+# - the Windows leg (win-x64)
+# - building libghostty-vt (a Zig toolchain and several minutes cold); the tests
+#   don't call into it and Fleet.csproj links it only when it exists
+# - the NativeAOT publish and its smoke test (clang, and too much memory)
+# - the installer output check (needs pwsh)
+# - uploading build artifacts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+  # Workstation GC keeps the test host's heap small on a 2-3 GiB runner.
+  DOTNET_gcServer: '0'
+
+jobs:
+  build:
+    name: linux-x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: https://github.com/actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build Fleet.slnx --nologo -v minimal -maxcpucount:2
+
+      - name: Test
+        run: dotnet test Fleet.slnx --no-build --nologo -v minimal
