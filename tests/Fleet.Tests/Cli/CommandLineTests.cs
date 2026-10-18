@@ -252,4 +252,21 @@ public class CommandLineTests
     {
         Assert.Null(CommandLine.Parse(["dispatch", "--project", "p", "--list"]).Text);
     }
+
+    [Fact]
+    public void The_all_flag_asks_for_every_release()
+    {
+        Assert.True(CommandLine.Parse(["update", "--list", "--all"]).AllVersions);
+        Assert.False(CommandLine.Parse(["update", "--list"]).AllVersions);
+    }
+
+    [Fact]
+    public void The_all_flag_is_not_mistaken_for_a_version()
+    {
+        Assert.Null(CommandLine.Parse(["update", "--all", "--list"]).Version);
+    }
+
+    [Fact]
+    public void The_help_documents_the_all_flag() =>
+        Assert.Contains("fleet update --list --all", Fleet.Cli.Commands.HelpCommand.Text, StringComparison.Ordinal);
 }

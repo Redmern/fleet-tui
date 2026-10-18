@@ -23,6 +23,8 @@ public static class CommandLine
 
     public const string ListShortFlag = "-l";
 
+    public const string AllFlag = "--all";
+
     public const string SshFlag = "--ssh";
 
     public const string AskPassVariable = "FLEET_ASKPASS";
@@ -30,7 +32,7 @@ public static class CommandLine
     private static readonly string[] ValueFlags =
         [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag, SshFlag];
 
-    private static readonly string[] BoolFlags = [ListFlag, ListShortFlag];
+    private static readonly string[] BoolFlags = [ListFlag, ListShortFlag, AllFlag];
 
     public static Invocation Parse(IReadOnlyList<string> args)
     {
@@ -52,7 +54,8 @@ public static class CommandLine
                 ?? (verb == FleetVerb.Update ? TextOf(options) : null),
             HasFlag(options, ListFlag, ListShortFlag),
             ValueOf(options, SshFlag),
-            options);
+            options,
+            HasFlag(options, AllFlag));
     }
 
     private static FleetVerb VerbFor(string verb) => verb switch

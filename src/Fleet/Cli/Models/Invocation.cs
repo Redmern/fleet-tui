@@ -15,4 +15,5 @@ public sealed record Invocation(
     string? Version = null,
     bool ListVersions = false,
     string? Ssh = null,
-    IReadOnlyList<string>? Arguments = null);
+    IReadOnlyList<string>? Arguments = null,
+    bool AllVersions = false);
