@@ -3,7 +3,7 @@
 # install.ps1; for a machine without the .NET SDK use scripts/get-fleet.sh.
 #
 #   ./install.sh                build, install, run 'fleet setup'
-#   ./install.sh --with-deps    install neovim and yazi first
+#   ./install.sh --with-deps    install missing git, neovim and yazi first, without asking
 #   ./install.sh --deps-only    install only those dependencies
 #   ./install.sh --uninstall    remove the binary and the PATH line (configuration is kept)
 #   ./install.sh --no-path      don't add the bin folder to PATH in a shell startup file
@@ -13,6 +13,9 @@
 # 'ssh host fleet bridge' finds it), ~/.zshenv, fish's conf.d or ~/.profile.
 # FLEET_NO_PATH=1 does the same as --no-path.
 #
+# Without --with-deps a missing git, nvim or yazi is listed; on a terminal it asks
+# y/N before installing (CI or FLEET_NO_DEPS_PROMPT=1 only print the command).
+# Package managers: brew (macOS), pacman, dnf, apt-get (no yazi there).
 # --with-deps uses the package manager it can find. fleet's own neovim config ships
 # inside the binary and 'fleet setup' writes it to ~/.config/fleet-nvim; set
 # FLEET_NVIM_CONFIG to a git URL to also clone a config into ~/.config/nvim
@@ -190,21 +193,109 @@ remove_from_path() {
     done
 }
 
+# git, nvim and yazi: list the missing ones, then install them (--with-deps), ask
+# first (a terminal, no CI or FLEET_NO_DEPS_PROMPT) or print the command. Never fatal.
+deps_missing() {
+    DEPS_MISSING=
+    for tool in git nvim yazi; do
+        command -v "$tool" >/dev/null 2>&1 || DEPS_MISSING="$DEPS_MISSING $tool"
+    done
+    DEPS_MISSING="${DEPS_MISSING# }"
+}
+
+deps_manager() {
+    if [ "$(uname -s 2>/dev/null || true)" = Darwin ] && command -v brew >/dev/null 2>&1; then
+        echo brew
+    elif command -v pacman >/dev/null 2>&1; then
+        echo pacman
+    elif command -v dnf >/dev/null 2>&1; then
+        echo dnf
+    elif command -v apt-get >/dev/null 2>&1; then
+        echo apt-get
+    fi
+}
+
+deps_plan() {
+    DEPS_PM="$(deps_manager)"
+    DEPS_CMD=
+    DEPS_HINT=
+    sudo='sudo '
+    if [ "$(id -u 2>/dev/null || echo 1)" = 0 ]; then
+        sudo=
+    fi
+    pkgs=
+    for tool in $DEPS_MISSING; do
+        case "$tool" in
+            nvim) pkgs="$pkgs neovim" ;;
+            yazi) [ "$DEPS_PM" = apt-get ] || pkgs="$pkgs yazi" ;;
+            *) pkgs="$pkgs $tool" ;;
+        esac
+    done
+    case "$DEPS_PM" in
+        brew) DEPS_CMD="brew install$pkgs" ;;
+        pacman) DEPS_CMD="${sudo}pacman -S --needed --noconfirm$pkgs" ;;
+        dnf) DEPS_CMD="${sudo}dnf install -y$pkgs" ;;
+        apt-get)
+            if [ -n "$pkgs" ]; then
+                DEPS_CMD="${sudo}apt-get update && ${sudo}apt-get install -y$pkgs"
+            fi
+            case " $DEPS_MISSING " in
+                *' yazi '*) DEPS_HINT='yazi is not packaged for apt: see https://yazi-rs.github.io/docs/installation' ;;
+            esac
+            ;;
+        *)
+            DEPS_HINT='no known package manager - install them yourself: git https://git-scm.com/downloads, neovim https://neovim.io, yazi https://yazi-rs.github.io/docs/installation'
+            ;;
+    esac
+}
+
+deps_interactive() {
+    [ -t 1 ] && [ -z "${CI:-}" ] && [ -z "${FLEET_NO_DEPS_PROMPT:-}" ] &&
+        (: </dev/tty) 2>/dev/null
+}
+
+deps_ask() {
+    printf '    install them with %s? [y/N] ' "$DEPS_PM"
+    answer=
+    read -r answer </dev/tty || answer=
+    case "$answer" in
+        [yY] | [yY][eE][sS]) return 0 ;;
+    esac
+    return 1
+}
+
+check_deps() {
+    deps_missing
+    if [ -z "$DEPS_MISSING" ]; then
+        return 0
+    fi
+    list=
+    for tool in $DEPS_MISSING; do
+        list="${list:+$list, }$tool"
+    done
+    ok "missing: $list"
+    deps_plan
+    if [ -n "$DEPS_CMD" ]; then
+        if [ "$WITH_DEPS" = 1 ] || { deps_interactive && deps_ask; }; then
+            ok "running: $DEPS_CMD"
+            if eval "$DEPS_CMD"; then
+                ok "installed with $DEPS_PM"
+            else
+                ok "$DEPS_PM could not install everything - run it yourself: $DEPS_CMD"
+            fi
+        else
+            ok "install them with: $DEPS_CMD"
+        fi
+    fi
+    if [ -n "$DEPS_HINT" ]; then
+        ok "$DEPS_HINT"
+    fi
+}
+
 install_deps() {
     step 'Installing dependencies'
 
-    if command -v pacman >/dev/null 2>&1; then
-        sudo pacman -S --needed --noconfirm git neovim yazi || ok 'pacman could not install everything'
-    elif command -v dnf >/dev/null 2>&1; then
-        sudo dnf install -y git neovim yazi || ok 'dnf could not install everything'
-    elif command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get update
-        sudo apt-get install -y git neovim || ok 'apt could not install everything'
-        # yazi is not packaged for Debian or Ubuntu either.
-        command -v yazi >/dev/null 2>&1 || ok 'yazi: see https://yazi-rs.github.io/docs/installation'
-    else
-        ok 'no known package manager - install git, neovim and yazi yourself'
-    fi
+    check_deps
 
     url="${FLEET_NVIM_CONFIG:-}"
     target="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
@@ -233,6 +324,10 @@ install_deps() {
     fi
 }
 
+if [ -n "${FLEET_INSTALLER_LIB:-}" ]; then
+    return 0
+fi
+
 if [ "${1:-}" = "--uninstall" ]; then
     STEPS=1
     step 'Uninstalling'
@@ -260,6 +355,10 @@ if [ "$DEPS_ONLY" = 1 ]; then
 fi
 
 step 'Checking prerequisites'
+
+if [ "$WITH_DEPS" = 0 ]; then
+    check_deps
+fi
 
 if ! command -v dotnet >/dev/null 2>&1; then
     echo "fleet: the .NET SDK is required to build from source." >&2

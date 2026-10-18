@@ -9,6 +9,10 @@
 #   curl -fsSL https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-fleet.sh | sh
 #   FLEET_REPO=<owner>/fleet sh get-fleet.sh
 #
+# A missing git, nvim or yazi is listed; on a terminal it asks y/N (reading the
+# terminal, so it works under 'curl | sh'), --with-deps installs without asking,
+# and CI or FLEET_NO_DEPS_PROMPT=1 only print the install command.
+#
 # When the bin folder isn't on PATH, a marked line adding it goes into the startup
 # file of $SHELL (see install.sh). --no-path or FLEET_NO_PATH=1 only prints the hint;
 # ./install.sh --uninstall removes the line again.
@@ -40,10 +44,7 @@ if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ] &&
     FANCY=1
 fi
 STEP=0
-STEPS=3
-if [ "$WITH_DEPS" = 1 ]; then
-    STEPS=4
-fi
+STEPS=4
 
 bar() {
     filled=$(($1 * 24 / $2))
@@ -115,6 +116,109 @@ add_to_path() {
     ok "open a new shell, or run: . $rc"
 }
 
+# git, nvim and yazi: list the missing ones, then install them (--with-deps), ask
+# first (a terminal, no CI or FLEET_NO_DEPS_PROMPT) or print the command. Never fatal.
+deps_missing() {
+    DEPS_MISSING=
+    for tool in git nvim yazi; do
+        command -v "$tool" >/dev/null 2>&1 || DEPS_MISSING="$DEPS_MISSING $tool"
+    done
+    DEPS_MISSING="${DEPS_MISSING# }"
+}
+
+deps_manager() {
+    if [ "$(uname -s 2>/dev/null || true)" = Darwin ] && command -v brew >/dev/null 2>&1; then
+        echo brew
+    elif command -v pacman >/dev/null 2>&1; then
+        echo pacman
+    elif command -v dnf >/dev/null 2>&1; then
+        echo dnf
+    elif command -v apt-get >/dev/null 2>&1; then
+        echo apt-get
+    fi
+}
+
+deps_plan() {
+    DEPS_PM="$(deps_manager)"
+    DEPS_CMD=
+    DEPS_HINT=
+    sudo='sudo '
+    if [ "$(id -u 2>/dev/null || echo 1)" = 0 ]; then
+        sudo=
+    fi
+    pkgs=
+    for tool in $DEPS_MISSING; do
+        case "$tool" in
+            nvim) pkgs="$pkgs neovim" ;;
+            yazi) [ "$DEPS_PM" = apt-get ] || pkgs="$pkgs yazi" ;;
+            *) pkgs="$pkgs $tool" ;;
+        esac
+    done
+    case "$DEPS_PM" in
+        brew) DEPS_CMD="brew install$pkgs" ;;
+        pacman) DEPS_CMD="${sudo}pacman -S --needed --noconfirm$pkgs" ;;
+        dnf) DEPS_CMD="${sudo}dnf install -y$pkgs" ;;
+        apt-get)
+            if [ -n "$pkgs" ]; then
+                DEPS_CMD="${sudo}apt-get update && ${sudo}apt-get install -y$pkgs"
+            fi
+            case " $DEPS_MISSING " in
+                *' yazi '*) DEPS_HINT='yazi is not packaged for apt: see https://yazi-rs.github.io/docs/installation' ;;
+            esac
+            ;;
+        *)
+            DEPS_HINT='no known package manager - install them yourself: git https://git-scm.com/downloads, neovim https://neovim.io, yazi https://yazi-rs.github.io/docs/installation'
+            ;;
+    esac
+}
+
+deps_interactive() {
+    [ -t 1 ] && [ -z "${CI:-}" ] && [ -z "${FLEET_NO_DEPS_PROMPT:-}" ] &&
+        (: </dev/tty) 2>/dev/null
+}
+
+deps_ask() {
+    printf '    install them with %s? [y/N] ' "$DEPS_PM"
+    answer=
+    read -r answer </dev/tty || answer=
+    case "$answer" in
+        [yY] | [yY][eE][sS]) return 0 ;;
+    esac
+    return 1
+}
+
+check_deps() {
+    deps_missing
+    if [ -z "$DEPS_MISSING" ]; then
+        return 0
+    fi
+    list=
+    for tool in $DEPS_MISSING; do
+        list="${list:+$list, }$tool"
+    done
+    ok "missing: $list"
+    deps_plan
+    if [ -n "$DEPS_CMD" ]; then
+        if [ "$WITH_DEPS" = 1 ] || { deps_interactive && deps_ask; }; then
+            ok "running: $DEPS_CMD"
+            if eval "$DEPS_CMD"; then
+                ok "installed with $DEPS_PM"
+            else
+                ok "$DEPS_PM could not install everything - run it yourself: $DEPS_CMD"
+            fi
+        else
+            ok "install them with: $DEPS_CMD"
+        fi
+    fi
+    if [ -n "$DEPS_HINT" ]; then
+        ok "$DEPS_HINT"
+    fi
+}
+
+if [ -n "${FLEET_INSTALLER_LIB:-}" ]; then
+    return 0
+fi
+
 REPO="${REPO_ARG:-${FLEET_REPO:-$DEFAULT_REPO}}"
 VERSION="${FLEET_VERSION:-latest}"
 BIN_DIR="${FLEET_BIN_DIR:-$HOME/.local/bin}"
@@ -140,6 +244,9 @@ if [ "$WITH_DEPS" = 1 ]; then
     # install.sh carries the dependency logic; --deps-only stops before building.
     sh "$DEPS" --with-deps --deps-only || true
     rm -f "$DEPS"
+else
+    step 'Checking dependencies'
+    check_deps
 fi
 
 step "Downloading $ASSET"
