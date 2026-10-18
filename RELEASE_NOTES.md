@@ -6,10 +6,10 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 
 ## 0.7.21 (2026-10-18)
 
-- **Shorter `fleet update --list`**: it shows the installed release, the latest one and the newest 10; add `--all` to see every release, prereleases included.
-- **The installers check for git, nvim and yazi** on every install and say which are missing. On an interactive terminal they ask (y/N) before installing them with the package manager they find (winget on Windows, brew on macOS).
-- When not run interactively (`curl | sh`, CI) the installers install nothing and print the exact install commands instead; `--with-deps` / `-WithDeps` still installs without asking, and `FLEET_NO_DEPS_PROMPT=1` turns the question off.
-- A failed or impossible dependency install (no package manager, no winget) only warns, with manual install guidance; the fleet install itself carries on.
+- **Shorter `fleet update --list`**: it shows the installed and latest versions and the newest 10 stable releases, with a `... N older, use --all` line; add `--all` to see every release, prereleases included.
+- **The installers check for git, nvim and yazi** on every install and say which are missing. On a terminal they ask (y/N) before installing them: winget on Windows; brew (macOS), pacman, dnf or apt-get otherwise. `curl | sh` still asks, reading the answer from the terminal.
+- In CI, with `FLEET_NO_DEPS_PROMPT=1`, or with no terminal, the installers install nothing and print the exact install command instead. `--with-deps` / `-WithDeps` still installs the missing tools without asking.
+- A failed dependency install, or no package manager, only warns and points to manual install links; the fleet install itself carries on. On apt, yazi is not packaged, so you get its install link.
 
 ## 0.7.20 (2026-10-18)
 
