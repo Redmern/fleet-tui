@@ -9,9 +9,9 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 - **Looser default permissions**: every fleet tool is now allowed by default except `remove_repository`, which stays forbidden, and fleet may commit and push without asking (as it already could merge). Settings you saved yourself are kept.
 - **Change a permission with one key** (Settings › Fleet config › Permissions): Enter or a click steps a tool through allow, ask and forbid, and `a` / `s` / `f` pick one directly. No extra menu opens.
 - New **All / Fleet dialog / Claude** tabs show where each question is asked, and `c` switches it between both, the fleet dialog and Claude.
-- Press `e` to **edit the settings file in nvim**; the list reloads when you close nvim, and a file with a mistake in it is ignored.
+- Press `e` to **edit the settings file in nvim**; the list reloads when you close nvim, and if the file has a mistake, fleet keeps your previous settings.
 - **Faster menus on Linux**: keys in the menu and pickers answer in about half the time (~30 ms instead of ~57 ms).
-- An idle fleet window no longer redraws the screen many times a second, so it uses less CPU.
+- An idle fleet window no longer redraws the screen many times a second: about 2 screen writes a second instead of 60.
 
 ## 0.7.19 (2026-10-14)
 
