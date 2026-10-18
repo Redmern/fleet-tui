@@ -4,14 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
-## 0.7.20 (2026-10-17)
+## 0.7.20 (2026-10-18)
 
-- **Looser default permissions**: every fleet tool now defaults to *allow* except `remove_repository`, which stays *forbid*, and the git gates `commit` and `push` default to *auto* like merge. Values you saved explicitly keep working; an unsaved *ask* default moves to *allow*.
-- **One-action permissions** (Settings › Fleet config › Permissions): Enter or a click cycles a tool between allow, ask and forbid in place, `a` / `s` / `f` set it directly, Enter cycles a git gate auto / ask / no, and no picker opens.
-- New **All / Fleet dialog / Claude** tabs show where each ask goes, `c` cycles an ask row's channel (both, fleet dialog, claude), and the old `channel` chip now reads "ask where".
-- `e` (or **open in nvim**) opens the settings file in nvim in its own pane; the list reloads when nvim quits, and a file that no longer parses keeps the previous settings.
-- **Faster menus on Linux**: the Terminal.Gui loop runs at 100 iterations a second and no longer rewrites an unchanged cursor every iteration, so menu and picker keys answer in ~30 ms at p95 (was ~57 ms).
-- An idle dashboard skips redraws when a refresh changes nothing: 2 screen writes a second instead of 60.
+- **Looser default permissions**: every fleet tool is now allowed by default except `remove_repository`, which stays forbidden, and fleet may commit and push without asking (as it already could merge). Settings you saved yourself are kept.
+- **Change a permission with one key** (Settings › Fleet config › Permissions): Enter or a click steps a tool through allow, ask and forbid, and `a` / `s` / `f` pick one directly. No extra menu opens.
+- New **All / Fleet dialog / Claude** tabs show where each question is asked, and `c` switches it between both, the fleet dialog and Claude.
+- Press `e` to **edit the settings file in nvim**; the list reloads when you close nvim, and a file with a mistake in it is ignored.
+- **Faster menus on Linux**: keys in the menu and pickers answer in about half the time (~30 ms instead of ~57 ms).
+- An idle fleet window no longer redraws the screen many times a second, so it uses less CPU.
 
 ## 0.7.19 (2026-10-14)
 
