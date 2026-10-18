@@ -3,8 +3,15 @@
     Install what fleet needs on Windows: Neovim, git and yazi.
 
 .DESCRIPTION
-    Dot-source this and call Install-FleetDeps. Both installers use it, which is
-    why it defines a function and does nothing on its own.
+    Dot-source this and call Invoke-FleetDepsOffer (or Install-FleetDeps directly).
+    Both installers use it, which is why it defines functions and does nothing on
+    its own.
+
+    Invoke-FleetDepsOffer checks which of git, nvim and yazi are missing from PATH.
+    With -WithDeps it installs them; on an interactive console it asks first
+    (y/N); anywhere else (redirected, -NonInteractive, CI, FLEET_NO_DEPS_PROMPT)
+    it prints the winget commands and installs nothing. A failed install only
+    warns, so the fleet install carries on.
 
     Everything is skipped when it is already there, so re-running is harmless.
 
@@ -13,9 +20,100 @@
     unless you ask for one with -NvimConfig or FLEET_NVIM_CONFIG.
 
 .NOTES
-    Package installs go through winget. Without winget the function reports what
-    is missing and leaves the machine alone.
+    Package installs go through winget. Without winget the functions report what
+    is missing, with where to get it, and leave the machine alone.
 #>
+
+function Get-FleetDepTools {
+    @(
+        [pscustomobject]@{ Name = 'nvim'; Id = 'Neovim.Neovim'; Url = 'https://neovim.io (or https://github.com/neovim/neovim/releases)' },
+        [pscustomobject]@{ Name = 'git'; Id = 'Git.Git'; Url = 'https://git-scm.com/download/win' },
+        [pscustomobject]@{ Name = 'yazi'; Id = 'sxyazi.yazi'; Url = 'https://yazi-rs.github.io/docs/installation' }
+    )
+}
+
+function Get-MissingFleetDeps {
+    @(Get-FleetDepTools | Where-Object { -not (Get-Command $_.Name -ErrorAction SilentlyContinue) })
+}
+
+# Whether a y/N question can be asked: a real console on both ends, not
+# -NonInteractive, not CI, and not opted out with FLEET_NO_DEPS_PROMPT.
+function Test-FleetDepsInteractive {
+    if ($env:CI -or $env:FLEET_NO_DEPS_PROMPT) { return $false }
+    if (-not [Environment]::UserInteractive) { return $false }
+    if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) { return $false }
+    if (@([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-noni' }).Count -gt 0) { return $false }
+    $true
+}
+
+function Write-FleetDepsManual($missing) {
+    Write-Host '    winget is not available - install these by hand:' -ForegroundColor Yellow
+    foreach ($tool in $missing) {
+        Write-Host "      $($tool.Name): $($tool.Url)" -ForegroundColor Yellow
+    }
+}
+
+function Write-FleetDepsCommands($missing) {
+    Write-Host '    to install them, run:' -ForegroundColor Yellow
+    foreach ($tool in $missing) {
+        Write-Host "      winget install --id $($tool.Id) -e" -ForegroundColor Yellow
+    }
+}
+
+# The installers' entry point. Interactive and ReadAnswer exist for the tests:
+# leave them out and the console is detected and asked through Read-Host.
+function Invoke-FleetDepsOffer {
+    [CmdletBinding()]
+    param(
+        [switch]$WithDeps,
+        [string]$NvimConfig,
+        [switch]$SkipConfig,
+        [object]$Interactive = $null,
+        [scriptblock]$ReadAnswer = { Read-Host '    install them with winget now? [y/N]' }
+    )
+
+    try {
+        $missing = Get-MissingFleetDeps
+
+        Write-Host '==> Checking git, nvim and yazi' -ForegroundColor Cyan
+
+        if ($missing.Count -eq 0) {
+            Write-Host '    git, nvim and yazi are installed' -ForegroundColor Green
+        }
+        else {
+            Write-Host "    missing: $(($missing | ForEach-Object Name) -join ', ')" -ForegroundColor Yellow
+        }
+
+        if ($WithDeps) {
+            Install-FleetDeps -NvimConfig $NvimConfig -SkipConfig:$SkipConfig
+            return
+        }
+
+        if ($missing.Count -eq 0) {
+            return
+        }
+
+        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Write-FleetDepsManual $missing
+            return
+        }
+
+        $ask = if ($null -eq $Interactive) { Test-FleetDepsInteractive } else { [bool]$Interactive }
+
+        if ($ask -and ("$(& $ReadAnswer)".Trim() -match '^(y|yes)$')) {
+            Install-FleetDeps -SkipConfig
+            return
+        }
+
+        Write-FleetDepsCommands $missing
+        if (-not $ask) {
+            Write-Host '    or re-run the installer with -WithDeps' -ForegroundColor Yellow
+        }
+    }
+    catch {
+        Write-Host "    could not check or install git, nvim and yazi: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
 
 function Install-FleetDeps {
     [CmdletBinding()]
@@ -30,45 +128,50 @@ function Install-FleetDeps {
 
     $winget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
 
-    $tools = @(
-        @{ Name = 'nvim'; Id = 'Neovim.Neovim' },
-        @{ Name = 'git'; Id = 'Git.Git' },
-        @{ Name = 'yazi'; Id = 'sxyazi.yazi' }
-    )
-
     Step 'Installing dependencies'
 
-    foreach ($tool in $tools) {
+    $missing = @()
+
+    foreach ($tool in Get-FleetDepTools) {
         if (Get-Command $tool.Name -ErrorAction SilentlyContinue) {
             Ok "$($tool.Name) already installed"
             continue
         }
 
         if (-not $winget) {
-            Warn "$($tool.Name) is missing and winget is not available - install it by hand"
+            $missing += $tool
             continue
         }
 
         Write-Host "    winget install $($tool.Id)" -ForegroundColor DarkGray
 
-        winget install --id $tool.Id --exact --silent `
-            --accept-source-agreements --accept-package-agreements
+        try {
+            winget install --id $tool.Id --exact --silent `
+                --accept-source-agreements --accept-package-agreements
 
-        if ($LASTEXITCODE -eq 0) {
-            Ok "installed $($tool.Name)"
+            if ($LASTEXITCODE -eq 0) {
+                Ok "installed $($tool.Name)"
+            }
+            else {
+                Warn "winget could not install $($tool.Name) (exit $LASTEXITCODE)"
+            }
         }
-        else {
-            Warn "winget could not install $($tool.Name) (exit $LASTEXITCODE)"
+        catch {
+            Warn "winget could not install $($tool.Name): $($_.Exception.Message)"
         }
+    }
+
+    if ($missing.Count -gt 0) {
+        Write-FleetDepsManual $missing
     }
 
     # winget puts new tools on the machine PATH, which this process does not see
     # until it restarts. Add the usual locations so 'fleet setup' can find them.
     foreach ($dir in @(
-            (Join-Path $env:ProgramFiles 'Neovim\bin'),
-            (Join-Path $env:ProgramFiles 'Git\cmd'),
-            (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'))) {
-        if ((Test-Path $dir) -and (($env:PATH -split ';') -notcontains $dir)) {
+            "$env:ProgramFiles\Neovim\bin",
+            "$env:ProgramFiles\Git\cmd",
+            "$env:LOCALAPPDATA\Microsoft\WinGet\Links")) {
+        if ($dir -notmatch '^\\' -and (Test-Path $dir) -and (($env:PATH -split ';') -notcontains $dir)) {
             $env:PATH = "$dir;$env:PATH"
         }
     }
