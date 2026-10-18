@@ -17,8 +17,8 @@ public class ReleaseListFormatterTests
     {
         var lines = ReleaseListFormatter.Lines([Pre("v0.8.0-rc.1"), Stable("v0.7.20"), Stable("v0.7.19")], "0.7.19", all: false);
 
-        Assert.Equal("Installed  v0.7.19", lines[0]);
-        Assert.Equal("Latest     v0.7.20", lines[1]);
+        Assert.Equal("  Installed  v0.7.19", lines[0]);
+        Assert.Equal("  Latest     v0.7.20", lines[1]);
     }
 
     [Fact]
@@ -26,7 +26,7 @@ public class ReleaseListFormatterTests
     {
         var lines = ReleaseListFormatter.Lines([Pre("v0.8.0-rc.1")], "0.7.19", all: false);
 
-        Assert.Equal("Latest     unknown", lines[1]);
+        Assert.Equal("  Latest     unknown", lines[1]);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class ReleaseListFormatterTests
     {
         var lines = ReleaseListFormatter.Lines(StableRun(15), "0.7.1", all: false);
 
-        Assert.Equal("Installed  v0.7.1", lines[0]);
+        Assert.Equal("  Installed  v0.7.1", lines[0]);
         Assert.DoesNotContain(lines, l => l.Contains("installed", StringComparison.Ordinal));
     }
 

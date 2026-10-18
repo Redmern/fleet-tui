@@ -37,7 +37,8 @@ public static class HelpCommand
               fleet update                download and install the latest release
               fleet update <v>            install a specific release instead of latest
               fleet update --version <v>  the same, as a flag (-v)
-              fleet update --list         list every published release (-l)
+              fleet update --list         the installed, latest and newest 10 releases (-l)
+              fleet update --list --all   every release, prereleases included
 
             embedded multiplexer:
               fleet attach [--project <p>] attach this terminal to fleetd (a picker when it runs several projects)

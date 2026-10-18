@@ -16,7 +16,7 @@ public static class UpdateCommand
 
         if (invocation.ListVersions)
         {
-            return await ListAsync(repo).ConfigureAwait(false);
+            return await ListAsync(repo, invocation.AllVersions).ConfigureAwait(false);
         }
 
         Console.WriteLine(invocation.Version is null
@@ -42,7 +42,7 @@ public static class UpdateCommand
         return 0;
     }
 
-    private static async Task<int> ListAsync(string repo)
+    private static async Task<int> ListAsync(string repo, bool all)
     {
         Console.WriteLine($"fleet: releases at github.com/{repo}/releases");
 
@@ -57,14 +57,9 @@ public static class UpdateCommand
             return 1;
         }
 
-        foreach (var release in releases)
+        foreach (var line in ReleaseListFormatter.Lines(releases, FleetVersion.Current, all))
         {
-            var current = VersionCompare.AreEqual(release.Tag, FleetVersion.Current)
-                ? " (installed)"
-                : string.Empty;
-            var prerelease = release.Prerelease ? " (prerelease)" : string.Empty;
-
-            Console.WriteLine($"  {release.Tag}{current}{prerelease}");
+            Console.WriteLine(line);
         }
 
         return 0;

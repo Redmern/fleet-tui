@@ -23,8 +23,8 @@ public static class ReleaseListFormatter
 
         return
         [
-            $"Installed  v{installed.TrimStart('v', 'V')}",
-            $"Latest     {latest ?? "unknown"}",
+            $"{Indent}Installed  v{installed.TrimStart('v', 'V')}",
+            $"{Indent}Latest     {latest ?? "unknown"}",
             string.Empty,
             .. shown.Select(r => $"{Indent}{r.Tag.PadRight(width)}  {Notes(r, installed, latest)}".TrimEnd()),
             .. hidden > 0 ? [$"{Indent}... {hidden} older, use --all"] : Array.Empty<string>(),
