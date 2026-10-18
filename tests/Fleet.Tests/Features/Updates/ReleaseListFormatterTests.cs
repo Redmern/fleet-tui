@@ -61,13 +61,23 @@ public class ReleaseListFormatterTests
     }
 
     [Fact]
-    public void A_footer_counts_the_releases_left_out()
+    public void A_footer_counts_the_releases_older_than_the_last_row()
     {
-        var releases = StableRun(13).Prepend(Pre("v0.8.0-rc.1")).ToList();
+        var releases = StableRun(13).Prepend(Pre("v0.8.0-rc.1")).Append(Pre("v0.7.0-rc.1")).ToList();
 
         var lines = ReleaseListFormatter.Lines(releases, "0.7.13", all: false);
 
         Assert.Equal("  ... 4 older, use --all", lines[^1]);
+    }
+
+    [Fact]
+    public void A_newer_prerelease_left_out_is_not_counted_as_older()
+    {
+        var releases = StableRun(10).Prepend(Pre("v0.8.0-rc.1")).ToList();
+
+        var lines = ReleaseListFormatter.Lines(releases, "0.7.10", all: false);
+
+        Assert.DoesNotContain(lines, l => l.Contains("--all", StringComparison.Ordinal));
     }
 
     [Fact]

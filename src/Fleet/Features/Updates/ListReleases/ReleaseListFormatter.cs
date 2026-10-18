@@ -7,7 +7,7 @@ public static class ReleaseListFormatter
 {
     public const int ShownByDefault = 10;
 
-    public const string Indent = "  ";
+    private const string Indent = "  ";
 
     public static IReadOnlyList<string> Lines(IReadOnlyList<ReleaseInfo> releases, string installed, bool all)
     {
@@ -18,7 +18,7 @@ public static class ReleaseListFormatter
 
         var latest = releases.FirstOrDefault(r => !r.Prerelease)?.Tag;
         var shown = all ? releases : [.. releases.Where(r => !r.Prerelease).Take(ShownByDefault)];
-        var hidden = releases.Count - shown.Count;
+        var older = shown.Count == 0 ? 0 : releases.Count - 1 - LastIndexOf(releases, shown[^1]);
         var width = shown.Count == 0 ? 0 : shown.Max(r => r.Tag.Length);
 
         return
@@ -27,8 +27,21 @@ public static class ReleaseListFormatter
             $"{Indent}Latest     {latest ?? "unknown"}",
             string.Empty,
             .. shown.Select(r => $"{Indent}{r.Tag.PadRight(width)}  {Notes(r, installed, latest)}".TrimEnd()),
-            .. hidden > 0 ? [$"{Indent}... {hidden} older, use --all"] : Array.Empty<string>(),
+            .. older > 0 ? [$"{Indent}... {older} older, use --all"] : Array.Empty<string>(),
         ];
+    }
+
+    private static int LastIndexOf(IReadOnlyList<ReleaseInfo> releases, ReleaseInfo release)
+    {
+        for (var i = releases.Count - 1; i >= 0; i--)
+        {
+            if (ReferenceEquals(releases[i], release))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     private static string Notes(ReleaseInfo release, string installed, string? latest) =>
