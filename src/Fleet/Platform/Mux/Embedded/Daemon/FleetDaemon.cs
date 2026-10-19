@@ -1823,6 +1823,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             case "newline":
                 Newline(session, command);
                 return;
+            case "copy" when command.Arg == Input.CopyMode.Selection:
+                CopySelection(session, command);
+                return;
             case PasteImageCommand:
                 _ = Task.Run(() => PasteClipboardImageAsync(session), CancellationToken.None);
                 return;
@@ -1969,7 +1972,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private static bool DropNotice(AttachSession session)
     {
-        if (session.Badge != Input.CopyMode.NothingSelected)
+        if (session.Badge is not (Input.CopyMode.NothingSelected or Input.CopyMode.SentToApp or Input.CopyMode.AppOwnsMouse))
         {
             return false;
         }
@@ -1978,19 +1981,96 @@ public sealed class FleetDaemon(DaemonOptions options)
         return true;
     }
 
-    private void CopyStep(AttachSession session, string step)
+    private void CopySelection(AttachSession session, CommandMessage command)
     {
-        if (step == Input.CopyMode.Selection)
+        PaneRuntime? app = null;
+        byte[]? chord = null;
+
+        lock (_gate)
         {
-            if (session.Copy is null)
+            _model.Touch(session.Client);
+
+            if (session.Copy is { Dragged: true } kept && _runtimes.TryGetValue(kept.Pane, out var dragged))
+            {
+                string? text;
+                lock (dragged.Gate)
+                {
+                    text = kept.Selected(dragged.Terminal);
+                }
+
+                if (text is { Length: > 0 })
+                {
+                    _copies.Enqueue((dragged.Id, text));
+                }
+            }
+            else if (session.Copy is not null)
+            {
+                CopyStep(session, "yank");
+            }
+            else if (FocusedRuntime(session.Client) is { } focused && OwnsMouse(focused))
+            {
+                chord = DistinctCopyChord(focused, command);
+                app = chord is null ? null : focused;
+                session.Badge = chord is null ? Input.CopyMode.AppOwnsMouse : Input.CopyMode.SentToApp;
+            }
+            else
             {
                 session.Badge = Input.CopyMode.NothingSelected;
-                return;
             }
-
-            step = "yank";
         }
 
+        if (app is not null && chord is not null)
+        {
+            FollowOutput(app);
+            app.Send(chord);
+        }
+
+        _wake.Release();
+    }
+
+    private static bool OwnsMouse(PaneRuntime pane)
+    {
+        var probe = new MouseMessage { Button = MouseButtons.Left, Action = MouseActions.Press, Held = true };
+
+        lock (pane.Gate)
+        {
+            return pane.Terminal.EncodeMouse(probe, 0, 0).Length > 0;
+        }
+    }
+
+    private static byte[]? DistinctCopyChord(PaneRuntime pane, CommandMessage command)
+    {
+        if (pane.Modes.Win32Input || CopyChord(command) is not { } key)
+        {
+            return null;
+        }
+
+        byte[] bytes;
+        lock (pane.Gate)
+        {
+            bytes = pane.Terminal.Encode(key);
+        }
+
+        return bytes.Length > 0 && bytes.All(b => b is (>= 0x20 and not 0x7f) or 0x1b) ? bytes : null;
+    }
+
+    private static KeyMessage? CopyChord(CommandMessage command)
+    {
+        if (command.Key is { } key)
+        {
+            return new KeyMessage { Key = key.Key, Mods = key.Mods, Consumed = key.Consumed, Text = key.Text, Unshifted = key.Unshifted };
+        }
+
+        return command.Bytes is { } raw
+               && Input.ModifiedKeys.Parse(Input.ModifiedKeys.Normalize(Convert.FromBase64String(raw))) is var (modifier, code, _)
+               && code is 'c' or 'C'
+               && Input.ModifiedKeys.IsClipboardChord(modifier, code)
+            ? new KeyMessage { Key = (int)Key.C, Mods = (int)(Mods.Ctrl | Mods.Shift), Unshifted = 'c' }
+            : null;
+    }
+
+    private void CopyStep(AttachSession session, string step)
+    {
         if (session.Copy is not { } copy || !_runtimes.TryGetValue(copy.Pane, out var pane))
         {
             session.Copy = null;

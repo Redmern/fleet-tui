@@ -762,8 +762,18 @@ the focus / resize / tab rows show Nerd Font icons; `icons` changes a group's ic
 (`"none"` removes it) and `"showIcons": false` turns them off. See
 `docs/DESIGN.md` › *Keys* for the full table and the rules.
 
-Without the prefix, `ctrl+shift+c` copies the selection (in copy mode, the same as `y`; with
-nothing selected it says so and copies nothing) and `ctrl+shift+v` pastes this machine's
+Without the prefix, `ctrl+shift+c` copies the selection: the text you last dragged over (it
+stays selected, so the key copies it again until you click), or in copy mode the same as `y`.
+When the pane's program has the mouse (Claude Code, `nvim` with `mouse=a`), a drag goes to
+that program and what you see highlighted is its own selection, not fleet's. With nothing
+selected in fleet, the key is then passed on to the program, but only if the program reads
+modified keys (kitty keyboard protocol or `modifyOtherKeys`); otherwise it would arrive as
+`ctrl+c`, so fleet keeps it and says the app has the mouse. Whether the program copies on that
+key is up to the program; a copy it makes through OSC 52 reaches your clipboard through fleet.
+With no program holding the mouse, fleet says nothing is selected and copies nothing.
+Shift+drag is taken by the terminal itself (Ghostty, kitty, WezTerm, Windows Terminal) for its
+native selection, which fleet cannot read; copy that with the terminal's own key, or select in
+fleet with copy mode (`prefix [`). `ctrl+shift+v` pastes this machine's
 clipboard into the focused pane as one bracketed paste, remote panes included. `ctrl+c` and
 `ctrl+v` still go to the pane unchanged. Rebind or unbind them in `embedded-keys.json`
 (`{ "keys": { "ctrl+shift+c": "none", "ctrl+alt+c": "copy" } }`). Windows Terminal takes

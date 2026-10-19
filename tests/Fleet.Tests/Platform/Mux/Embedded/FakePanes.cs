@@ -165,7 +165,22 @@ public sealed class FakePanes
             return true;
         }
 
-        public byte[] Encode(KeyMessage key) => Encoding.UTF8.GetBytes(key.Text ?? $"<key {(Key)key.Key}>");
+        public bool DistinctModifiers { get; set; }
+
+        public byte[] Encode(KeyMessage key)
+        {
+            if (key.Text is not null || (key.Mods & (int)Mods.Ctrl) == 0 || ((Key)key.Key).ToString() is not [var letter])
+            {
+                return Encoding.UTF8.GetBytes(key.Text ?? $"<key {(Key)key.Key}>");
+            }
+
+            return DistinctModifiers
+                ? Encoding.ASCII.GetBytes($"\e[{(int)char.ToLowerInvariant(letter)};{1 + Modifier(key.Mods)}u")
+                : [(byte)(char.ToUpperInvariant(letter) - 'A' + 1)];
+        }
+
+        private static int Modifier(int mods) =>
+            ((mods & (int)Mods.Shift) != 0 ? 1 : 0) | ((mods & (int)Mods.Alt) != 0 ? 2 : 0) | ((mods & (int)Mods.Ctrl) != 0 ? 4 : 0);
 
         public byte[] EncodeMouse(MouseMessage mouse, int x, int y) =>
             MouseTracking ? Encoding.UTF8.GetBytes($"<mouse b{mouse.Button} a{mouse.Action} {x},{y}>") : [];
