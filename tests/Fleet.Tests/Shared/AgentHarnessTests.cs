@@ -48,4 +48,44 @@ public class AgentHarnessTests
                 AgentHarness.SpawnEnv(harness, orchestratorInNvim: false));
         }
     }
+
+    public static TheoryData<string> Startups => new()
+    {
+        AgentHarness.NvimStartup,
+        AgentHarness.NvimStartupWithClaude(string.Empty),
+        AgentHarness.NvimStartupClaudeOnly(string.Empty),
+    };
+
+    [Theory]
+    [MemberData(nameof(Startups))]
+    public void Every_nvim_startup_sets_up_the_remote_clipboard(string startup) =>
+        Assert.Contains(AgentHarness.RemoteClipboard, startup, StringComparison.Ordinal);
+
+    [Fact]
+    public void The_remote_clipboard_only_acts_in_a_remote_pane_and_leaves_a_user_clipboard_alone()
+    {
+        Assert.Contains($"vim.env.{AgentHarness.RemotePaneVariable}=='1'", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.Contains("vim.g.clipboard~=nil", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.Contains("VimEnter", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.Contains("vim.o.clipboard='unnamedplus'", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_remote_clipboard_never_asks_the_terminal_for_its_clipboard()
+    {
+        Assert.Contains("vim.ui.clipboard.osc52", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.DoesNotContain(".paste(", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.DoesNotContain("'?'", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_remote_pane_is_marked_for_nvim()
+    {
+        var env = new Dictionary<string, string> { ["PATH"] = "/bin" };
+
+        AgentHarness.MarkRemotePane(env);
+
+        Assert.Equal("1", env[AgentHarness.RemotePaneVariable]);
+        Assert.Equal("/bin", env["PATH"]);
+    }
 }
