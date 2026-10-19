@@ -779,7 +779,13 @@ public sealed class AttachClient(
                 await PasteClipboard(wire).ConfigureAwait(false);
                 return;
             case CopyMode.Command:
-                await Send(wire, MessageType.Command, new CommandMessage { Name = CopyMode.Command, Arg = CopyMode.Selection },
+                await Send(wire, MessageType.Command, new CommandMessage
+                {
+                    Name = CopyMode.Command,
+                    Arg = CopyMode.Selection,
+                    Key = key,
+                    Bytes = bytes is null ? null : Convert.ToBase64String(bytes),
+                },
                     WireJsonContext.Default.CommandMessage).ConfigureAwait(false);
                 return;
             case "reload":

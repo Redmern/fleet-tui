@@ -1823,6 +1823,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             case "newline":
                 Newline(session, command);
                 return;
+            case "copy" when command.Arg == Input.CopyMode.Selection:
+                CopySelection(session, command);
+                return;
             case PasteImageCommand:
                 _ = Task.Run(() => PasteClipboardImageAsync(session), CancellationToken.None);
                 return;
@@ -1969,7 +1972,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private static bool DropNotice(AttachSession session)
     {
-        if (session.Badge != Input.CopyMode.NothingSelected)
+        if (session.Badge is not (Input.CopyMode.NothingSelected or Input.CopyMode.SentToApp))
         {
             return false;
         }
@@ -1978,19 +1981,66 @@ public sealed class FleetDaemon(DaemonOptions options)
         return true;
     }
 
-    private void CopyStep(AttachSession session, string step)
+    private void CopySelection(AttachSession session, CommandMessage command)
     {
-        if (step == Input.CopyMode.Selection)
+        var toApp = false;
+
+        lock (_gate)
         {
-            if (session.Copy is null)
+            _model.Touch(session.Client);
+
+            if (session.Copy is { Dragged: true } kept && _runtimes.TryGetValue(kept.Pane, out var dragged))
+            {
+                string? text;
+                lock (dragged.Gate)
+                {
+                    text = kept.Selected(dragged.Terminal);
+                }
+
+                if (text is { Length: > 0 })
+                {
+                    _copies.Enqueue((dragged.Id, text));
+                }
+            }
+            else if (session.Copy is not null)
+            {
+                CopyStep(session, "yank");
+            }
+            else if (FocusedRuntime(session.Client) is { } focused && OwnsMouse(focused))
+            {
+                toApp = true;
+            }
+            else
             {
                 session.Badge = Input.CopyMode.NothingSelected;
-                return;
             }
-
-            step = "yank";
         }
 
+        if (toApp)
+        {
+            Forward(session, command);
+
+            lock (_gate)
+            {
+                session.Badge = Input.CopyMode.SentToApp;
+            }
+        }
+
+        _wake.Release();
+    }
+
+    private static bool OwnsMouse(PaneRuntime pane)
+    {
+        var probe = new MouseMessage { Button = MouseButtons.Left, Action = MouseActions.Press, Held = true };
+
+        lock (pane.Gate)
+        {
+            return pane.Terminal.EncodeMouse(probe, 0, 0).Length > 0;
+        }
+    }
+
+    private void CopyStep(AttachSession session, string step)
+    {
         if (session.Copy is not { } copy || !_runtimes.TryGetValue(copy.Pane, out var pane))
         {
             session.Copy = null;

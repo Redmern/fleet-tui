@@ -870,6 +870,7 @@ public sealed class DaemonTests : IAsyncLifetime
         await SpawnAsync(control, "techweb", "shell");
         var client = await AttachAsync(cols: 40, rows: 8, workspace: "techweb");
         await client.WaitForFramesAsync(1);
+        _panes.ByProgram("shell")!.Terminal.MouseTracking = false;
 
         await client.SendCommandAsync(CopyMode.Command, CopyMode.Selection);
 
@@ -885,6 +886,7 @@ public sealed class DaemonTests : IAsyncLifetime
         await SpawnAsync(control, "techweb", "shell");
         var client = await AttachAsync(cols: 40, rows: 8, workspace: "techweb");
         await client.WaitForFramesAsync(1);
+        _panes.ByProgram("shell")!.Terminal.MouseTracking = false;
         await client.SendCommandAsync(CopyMode.Command, CopyMode.Selection);
         await client.WaitForAsync(CopyMode.NothingSelected);
 

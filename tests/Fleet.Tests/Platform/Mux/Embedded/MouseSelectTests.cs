@@ -1,6 +1,7 @@
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Input;
+using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using static Fleet.Tests.Platform.Mux.Embedded.DaemonTests;
 
@@ -77,7 +78,7 @@ public sealed class MouseSelectTests : IAsyncLifetime
     [Fact]
     public async Task A_click_without_a_drag_copies_nothing_and_leaves_nothing_selected()
     {
-        var (client, shell) = await ShellAsync(tracking: false);
+        var (client, shell) = await ShellAsync(tracking: false, cols: 60);
 
         await client.SendMouseAsync(3, 1, MouseButtons.Left, MouseActions.Press, held: true);
         await client.SendMouseAsync(3, 1, MouseButtons.Left, MouseActions.Release);
@@ -101,9 +102,80 @@ public sealed class MouseSelectTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_copy_key_copies_the_kept_selection_every_time_it_is_pressed()
+    {
+        var (client, shell) = await ShellAsync(tracking: false);
+
+        await DragAsync(client, (0, 1), (4, 1));
+        await Eventually(() => client.Effects.Count(e => e.Kind == HostEffects.Clipboard) == 1);
+        await client.SendCommandAsync(CopyKey);
+        await client.SendCommandAsync(CopyKey);
+        await client.SendCommandAsync(CopyKey);
+
+        await Eventually(() => client.Effects.Count(e => e.Kind == HostEffects.Clipboard && e.Value == "alpha") == 4);
+        Assert.Equal(string.Empty, shell.Written);
+    }
+
+    [Fact]
+    public async Task The_copy_key_copies_a_kept_selection_in_scrollback_without_scrolling_away_from_it()
+    {
+        var (client, shell) = await ShellAsync(tracking: false);
+        shell.Emit(string.Concat(Enumerable.Range(3, 20).Select(n => $"\nline {n}")));
+        await Eventually(() => shell.Terminal.Viewport.Total > 20);
+        shell.Terminal.Scroll(ScrollTo.Top);
+        Assert.False(shell.Terminal.Viewport.AtBottom);
+
+        await DragAsync(client, (0, 1), (4, 1));
+        await Eventually(() => client.Effects.Count(e => e.Kind == HostEffects.Clipboard) == 1);
+        await client.SendCommandAsync(CopyKey);
+
+        await Eventually(() => client.Effects.Count(e => e.Kind == HostEffects.Clipboard && e.Value == "alpha") == 2);
+        Assert.False(shell.Terminal.Viewport.AtBottom);
+    }
+
+    [Fact]
+    public async Task The_copy_key_goes_to_a_pane_that_owns_the_mouse_when_fleet_has_nothing_selected()
+    {
+        var (client, shell) = await ShellAsync(tracking: true, cols: 60);
+
+        await DragAsync(client, (0, 1), (4, 2));
+        await Eventually(() => shell.Written.EndsWith("a1 4,1>", StringComparison.Ordinal));
+        await client.SendCommandAsync(CopyKey);
+
+        await Eventually(() => shell.Written.EndsWith("<key C>", StringComparison.Ordinal));
+        await client.WaitForAsync(CopyMode.SentToApp);
+        Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Clipboard);
+    }
+
+    [Fact]
+    public async Task The_copy_key_with_nothing_selected_in_a_pane_without_the_mouse_says_so_and_sends_nothing()
+    {
+        var (client, shell) = await ShellAsync(tracking: false, cols: 60);
+
+        await client.SendCommandAsync(CopyKey);
+
+        await client.WaitForAsync(CopyMode.NothingSelected);
+        Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Clipboard);
+        Assert.Equal(string.Empty, shell.Written);
+    }
+
+    [Fact]
+    public async Task A_kept_selection_wins_over_the_app_even_in_a_pane_that_owns_the_mouse()
+    {
+        var (client, shell) = await ShellAsync(tracking: true);
+
+        await DragAsync(client, (0, 1), (4, 1), mods: 1);
+        await Eventually(() => client.Effects.Count(e => e.Kind == HostEffects.Clipboard) == 1);
+        await client.SendCommandAsync(CopyKey);
+
+        await Eventually(() => client.Effects.Count(e => e.Kind == HostEffects.Clipboard && e.Value == "alpha") == 2);
+        Assert.Equal(string.Empty, shell.Written);
+    }
+
+    [Fact]
     public async Task A_new_click_clears_the_selection()
     {
-        var (client, _) = await ShellAsync(tracking: false);
+        var (client, _) = await ShellAsync(tracking: false, cols: 60);
 
         await DragAsync(client, (0, 1), (4, 1));
         await Eventually(() => client.Effects.Any(e => e.Kind == HostEffects.Clipboard));
@@ -183,6 +255,13 @@ public sealed class MouseSelectTests : IAsyncLifetime
         Assert.Equal(string.Empty, _panes.ByProgram("tile")!.Written);
     }
 
+    private static readonly CommandMessage CopyKey = new()
+    {
+        Name = CopyMode.Command,
+        Arg = CopyMode.Selection,
+        Key = new KeyMessage { Key = (int)Key.C, Mods = (int)(Mods.Ctrl | Mods.Shift) },
+    };
+
     private static async Task DragAsync(TestClient client, (int X, int Y) from, (int X, int Y) to, int mods = 0)
     {
         await client.SendMouseAsync(from.X, from.Y, MouseButtons.Left, MouseActions.Press, held: true, mods: mods);
@@ -197,11 +276,11 @@ public sealed class MouseSelectTests : IAsyncLifetime
         return spawned.Pane!;
     }
 
-    private async Task<(TestClient Client, FakePanes.FakePty Shell)> ShellAsync(bool tracking)
+    private async Task<(TestClient Client, FakePanes.FakePty Shell)> ShellAsync(bool tracking, int cols = 30)
     {
         var control = await ConnectAsync(ClientRoles.Control, 0, 0, null);
         await SpawnAsync(control, "shell");
-        var client = await ConnectAsync(ClientRoles.Attach, 30, 8, "techweb");
+        var client = await ConnectAsync(ClientRoles.Attach, cols, 8, "techweb");
         await client.WaitForFramesAsync(1);
         var shell = _panes.ByProgram("shell")!;
         shell.Terminal.MouseTracking = tracking;

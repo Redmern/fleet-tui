@@ -11,7 +11,9 @@ public sealed class CopyMode : IStickyMode
 
     public const string Selection = "selection";
 
-    public const string NothingSelected = "copy: nothing selected";
+    public const string NothingSelected = "copy: nothing selected (prefix [)";
+
+    public const string SentToApp = "copy: sent to app (prefix [)";
 
     public bool Active { get; private set; }
 
