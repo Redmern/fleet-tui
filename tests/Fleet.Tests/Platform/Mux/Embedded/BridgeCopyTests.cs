@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
+using Fleet.Platform.Mux.Embedded.Input;
+using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
@@ -107,6 +109,44 @@ public sealed class BridgeCopyTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_copy_key_copies_a_kept_selection_in_a_remote_pane_every_time_it_is_pressed()
+    {
+        var (farPane, viewer) = await ShowRemotePaneAsync();
+        var far = _farPanes.Started.Single(p => p.Env.GetValueOrDefault(FleetDaemon.PaneVariable) == farPane);
+        far.Terminal.MouseTracking = false;
+        far.Emit("alpha beta\ngamma delta");
+        await Eventually(() => far.Terminal.PlainText().Contains("gamma", StringComparison.Ordinal));
+
+        await viewer.SendMouseAsync(0, 1, MouseButtons.Left, MouseActions.Press, held: true);
+        await viewer.SendMouseAsync(4, 1, MouseButtons.Left, MouseActions.Motion, held: true);
+        await viewer.SendMouseAsync(4, 1, MouseButtons.Left, MouseActions.Release);
+        await Eventually(() => viewer.Effects.Count(e => e.Kind == HostEffects.Clipboard) == 1);
+        await viewer.SendCommandAsync(CopyKey);
+        await viewer.SendCommandAsync(CopyKey);
+
+        await Eventually(() => viewer.Effects.Count(e => e.Kind == HostEffects.Clipboard && e.Value == "alpha") == 3);
+        Assert.Equal(string.Empty, far.Written);
+    }
+
+    [Fact]
+    public async Task The_copy_key_goes_to_a_remote_pane_that_owns_the_mouse_when_nothing_is_selected_in_fleet()
+    {
+        var (farPane, viewer) = await ShowRemotePaneAsync();
+        var far = _farPanes.Started.Single(p => p.Env.GetValueOrDefault(FleetDaemon.PaneVariable) == farPane);
+        far.Terminal.MouseTracking = true;
+
+        await viewer.SendMouseAsync(0, 1, MouseButtons.Left, MouseActions.Press, held: true);
+        await viewer.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Motion, held: true);
+        await viewer.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Release);
+        await Eventually(() => far.Written.Contains("<mouse", StringComparison.Ordinal));
+        await viewer.SendCommandAsync(CopyKey);
+
+        await Eventually(() => far.Written.EndsWith("<key C>", StringComparison.Ordinal));
+        Assert.DoesNotContain(viewer.Effects, e => e.Kind == HostEffects.Clipboard);
+        Assert.Equal(string.Empty, _homePanes.ByProgram("shell")!.Written);
+    }
+
+    [Fact]
     public async Task A_copy_in_a_remote_pane_reaches_a_direct_bridged_viewer_when_the_local_link_shows_something_else()
     {
         var (farPane, viewer) = await ShowRemotePaneAsync();
@@ -166,6 +206,13 @@ public sealed class BridgeCopyTests : IAsyncLifetime
 
         await Eventually(() => _homeLog.Any(l => l.Contains("copy of 11 chars dropped: no local window to take it", StringComparison.Ordinal)));
     }
+
+    private static readonly CommandMessage CopyKey = new()
+    {
+        Name = CopyMode.Command,
+        Arg = CopyMode.Selection,
+        Key = new KeyMessage { Key = (int)Key.C, Mods = (int)(Mods.Ctrl | Mods.Shift) },
+    };
 
     private FakePanes.FakeTerminal FarTerminal(string pane) =>
         _farPanes.Started.Single(p => p.Env.GetValueOrDefault(FleetDaemon.PaneVariable) == pane).Terminal;
