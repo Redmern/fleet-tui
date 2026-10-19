@@ -402,6 +402,11 @@ plain `ssh host` session. The viewer, the machine you sit at, may be Linux, macO
   OSC 52 provider, but only when your config leaves `vim.g.clipboard` unset; set it to keep
   your own. `"+p` pastes nvim's last yank and never asks the terminal for its clipboard.
   Needs nvim 0.10 or newer; local panes are untouched.
+- **Copy tools on a remote.** In remote panes `wl-copy`, `xclip -i` (any selection), `xsel -i`
+  and `pbcopy` send their stdin to this machine's clipboard, with the same limits as OSC 52:
+  UTF-8 text, at most 1 MiB. `xclip -f` also echoes stdin. Other modes and image types run the
+  real tool when the remote has it, so a remote with `$DISPLAY` set and no real `xclip` still
+  copies nvim yanks here.
 - **Voice (experimental).** With `FLEET_VOICE_FORWARD=1` set for fleet on a Linux or macOS
   viewer, fleet forwards this machine's PulseAudio/PipeWire socket to the remote and sets
   `PULSE_SERVER` in new remote panes, so `/voice` there could record your microphone. This
