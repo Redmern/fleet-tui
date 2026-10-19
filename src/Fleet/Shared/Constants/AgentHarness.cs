@@ -53,7 +53,11 @@ public static class AgentHarness
         + "local function paste(r) return function() return held[r] or {} end end "
         + "vim.g.clipboard={name='fleet-osc52',copy={['+']=copy('+'),['*']=copy('*')},"
         + "paste={['+']=paste('+'),['*']=paste('*')}} "
-        + "vim.o.clipboard='unnamedplus' end "
+        + "vim.api.nvim_create_autocmd('TextYankPost',{callback=function() local e=vim.v.event "
+        + "if e.operator~='y' or e.regname=='+' or e.regname=='*' "
+        + "or (e.regname=='' and vim.o.clipboard:find('unnamed')) then return end "
+        + "local lines=vim.list_slice(e.regcontents) if e.regtype=='V' then table.insert(lines,'') end "
+        + "vim.g.clipboard.copy['+'](lines,e.regtype) end}) end "
         + "if vim.env." + RemotePaneVariable + "=='1' then "
         + "if vim.v.vim_did_enter==1 then fleet_clipboard() "
         + "else vim.api.nvim_create_autocmd('VimEnter',{once=true,callback=fleet_clipboard}) end end ";

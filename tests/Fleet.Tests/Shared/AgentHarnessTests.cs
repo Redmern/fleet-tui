@@ -67,7 +67,8 @@ public class AgentHarnessTests
         Assert.Contains($"vim.env.{AgentHarness.RemotePaneVariable}=='1'", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
         Assert.Contains("vim.g.clipboard~=nil", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
         Assert.Contains("VimEnter", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
-        Assert.Contains("vim.o.clipboard='unnamedplus'", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.Contains("TextYankPost", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.DoesNotContain("vim.o.clipboard=", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
     }
 
     [Fact]
