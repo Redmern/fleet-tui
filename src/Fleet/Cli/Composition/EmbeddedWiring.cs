@@ -145,10 +145,11 @@ public static class EmbeddedWiring
             }
 
             ReverseForward.Apply(env, voice, ControlPaths.Answers);
+            AgentHarness.MarkRemotePane(env);
         };
     }
 
-    private static IReadOnlyList<string> ShimTools =>
+    public static IReadOnlyList<string> ShimTools =>
         OperatingSystem.IsMacOS() ? [.. ClipboardShim.Tools, .. MacClipboardShim.Tools] : ClipboardShim.Tools;
 
     public static async Task<int> ShimAsync(IReadOnlyList<string> args)
@@ -176,6 +177,12 @@ public static class EmbeddedWiring
             Endpoint.Default(),
             Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable),
             Environment.GetEnvironmentVariable(FleetDaemon.PaneTokenVariable));
+        if (mac is null && call.Read == ShimRead.Copy)
+        {
+            using var stdin = Console.OpenStandardInput();
+            return await ClipboardShim.CopyAsync(call, stdin, pane, Console.Error, stdout).ConfigureAwait(false);
+        }
+
         return mac is not null
             ? await MacClipboardShim.RunAsync(mac, pane, stdout, Console.Error).ConfigureAwait(false)
             : await ClipboardShim.RunAsync(call, pane, stdout, Console.Error).ConfigureAwait(false);

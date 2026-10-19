@@ -37,7 +37,26 @@ public static class AgentHarness
         + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) "
         + "pcall(vim.fn.writefile,{tostring(m)},seenf) return end end end end "
         + "local fleet_timer=(vim.uv or vim.loop).new_timer() "
-        + "fleet_timer:start(3000, 3000, vim.schedule_wrap(fleet_pump)) ";
+        + "fleet_timer:start(3000, 3000, vim.schedule_wrap(fleet_pump)) "
+        + RemoteClipboard;
+
+    public const string RemotePaneVariable = "FLEET_REMOTE_PANE";
+
+    public static void MarkRemotePane(IDictionary<string, string> env) => env[RemotePaneVariable] = "1";
+
+    public const string RemoteClipboard =
+        "local function fleet_clipboard() if vim.g.clipboard~=nil then return end "
+        + "local ok,osc52=pcall(require,'vim.ui.clipboard.osc52') if not ok then return end "
+        + "local held={} "
+        + "local function copy(r) local send=osc52.copy(r) "
+        + "return function(lines,regtype) held[r]={lines,regtype} send(lines) end end "
+        + "local function paste(r) return function() return held[r] or {} end end "
+        + "vim.g.clipboard={name='fleet-osc52',copy={['+']=copy('+'),['*']=copy('*')},"
+        + "paste={['+']=paste('+'),['*']=paste('*')}} "
+        + "vim.o.clipboard='unnamedplus' end "
+        + "if vim.env." + RemotePaneVariable + "=='1' then "
+        + "if vim.v.vim_did_enter==1 then fleet_clipboard() "
+        + "else vim.api.nvim_create_autocmd('VimEnter',{once=true,callback=fleet_clipboard}) end end ";
 
     public const string NvimStartup =
         NvimBoot + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('stopinsert') end)";

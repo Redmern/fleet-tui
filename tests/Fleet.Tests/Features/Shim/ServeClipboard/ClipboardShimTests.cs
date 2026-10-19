@@ -30,7 +30,6 @@ public class ClipboardShimTests
     [InlineData("xclip", "-t image/png -o")]
     [InlineData("xclip", "-selection primary -t image/png -o")]
     [InlineData("xclip", "-selection clipboard -t image/png -i shot.png")]
-    [InlineData("xclip", "-selection clipboard")]
     [InlineData("wl-paste", "")]
     [InlineData("wl-paste", "--type text/plain")]
     [InlineData("wl-paste", "--primary --type image/png")]

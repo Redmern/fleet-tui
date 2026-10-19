@@ -6,4 +6,5 @@ public enum ShimRead
     Png,
     Types,
     OtherImage,
+    Copy,
 }
