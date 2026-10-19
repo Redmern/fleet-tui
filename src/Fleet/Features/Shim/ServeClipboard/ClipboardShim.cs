@@ -13,19 +13,25 @@ public static class ClipboardShim
 
     public const string WlCopy = "wl-copy";
 
+    public const string Xsel = "xsel";
+
+    public const string Pbcopy = "pbcopy";
+
     public const string PlainText = "text/plain";
 
     public const string Png = "image/png";
 
     public const string Targets = "TARGETS";
 
-    public static IReadOnlyList<string> Tools { get; } = [Xclip, WlPaste, WlCopy];
+    public static IReadOnlyList<string> Tools { get; } = [Xclip, WlPaste, WlCopy, Xsel, Pbcopy];
 
     public static ShimCall Parse(string tool, IReadOnlyList<string> args) => tool switch
     {
         Xclip => ParseXclip(args),
         WlPaste => ParseWlPaste(args),
         WlCopy => ParseWlCopy(args),
+        Xsel => ParseXsel(args),
+        Pbcopy => ParsePbcopy(args),
         _ => new ShimCall(tool, ShimRead.RealTool),
     };
 
@@ -243,6 +249,48 @@ public static class ClipboardShim
         }
 
         return new ShimCall(WlCopy, ShimRead.Copy, PlainText, trim);
+    }
+
+    private static ShimCall ParseXsel(IReadOnlyList<string> args)
+    {
+        var input = false;
+
+        foreach (var arg in args)
+        {
+            var flags = arg switch
+            {
+                "--input" => "i",
+                "--clipboard" => "b",
+                "--primary" => "p",
+                "--secondary" => "s",
+                "--nodetach" => "n",
+                "--verbose" => "v",
+                ['-', not '-', ..] => arg[1..],
+                _ => null,
+            };
+            if (flags is null || flags.Any(f => f is not ('i' or 'b' or 'p' or 's' or 'n' or 'v')))
+            {
+                return new ShimCall(Xsel, ShimRead.RealTool);
+            }
+
+            input |= flags.Contains('i');
+        }
+
+        return input ? new ShimCall(Xsel, ShimRead.Copy, PlainText) : new ShimCall(Xsel, ShimRead.RealTool);
+    }
+
+    private static ShimCall ParsePbcopy(IReadOnlyList<string> args)
+    {
+        for (var i = 0; i < args.Count; i++)
+        {
+            var served = (args[i], i + 1 < args.Count ? args[++i] : null) is ("-pboard", "general") or ("-Prefer", "txt");
+            if (!served)
+            {
+                return new ShimCall(Pbcopy, ShimRead.RealTool);
+            }
+        }
+
+        return new ShimCall(Pbcopy, ShimRead.Copy, PlainText);
     }
 
     private static ShimRead Classify(string mime) => mime switch

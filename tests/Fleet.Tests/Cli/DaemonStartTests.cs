@@ -20,6 +20,8 @@ public sealed class DaemonStartTests
     [InlineData("xclip")]
     [InlineData("wl-paste")]
     [InlineData("wl-copy")]
+    [InlineData("xsel")]
+    [InlineData("pbcopy")]
     public void Remote_panes_get_a_shim_script_for_each_clipboard_tool(string tool) =>
         Assert.Contains(tool, EmbeddedWiring.ShimTools);
 
@@ -38,7 +40,7 @@ public sealed class DaemonStartTests
 
             Assert.True(ShimFolder.Install(folder, scripts, _ => { }));
 
-            foreach (var tool in (string[])["wl-copy", "xclip"])
+            foreach (var tool in (string[])["wl-copy", "xclip", "xsel", "pbcopy"])
             {
                 Assert.Contains($" shim {tool} ", File.ReadAllText(Path.Combine(folder, tool)));
             }

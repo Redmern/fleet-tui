@@ -41,6 +41,8 @@ public class ClipboardCopyShimTests
     [Theory]
     [InlineData("wl-copy")]
     [InlineData("xclip")]
+    [InlineData("xsel")]
+    [InlineData("pbcopy")]
     public void Every_copy_tool_is_a_shimmed_tool(string tool) =>
         Assert.Contains(tool, ClipboardShim.Tools);
 
@@ -98,8 +100,71 @@ public class ClipboardCopyShimTests
         Assert.Equal(expected, ClipboardShim.Parse("xclip", Split(args)).Read);
 
     [Theory]
+    [InlineData("-i")]
+    [InlineData("--input")]
+    [InlineData("-ib")]
+    [InlineData("-bi")]
+    [InlineData("-i -b")]
+    [InlineData("--clipboard --input")]
+    [InlineData("-ip")]
+    [InlineData("--primary --input")]
+    [InlineData("-is")]
+    [InlineData("--secondary -i")]
+    [InlineData("--nodetach -i -b")]
+    [InlineData("-n -ib")]
+    [InlineData("-v -ib")]
+    public void Xsel_input_of_text_from_stdin_is_served(string args) =>
+        Assert.Equal(ShimRead.Copy, ClipboardShim.Parse("xsel", Split(args)).Read);
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("-b")]
+    [InlineData("-o")]
+    [InlineData("-ob")]
+    [InlineData("--output --clipboard")]
+    [InlineData("-c")]
+    [InlineData("--clear -b")]
+    [InlineData("-d")]
+    [InlineData("--delete")]
+    [InlineData("-a -b")]
+    [InlineData("-ab")]
+    [InlineData("--append -i")]
+    [InlineData("-x")]
+    [InlineData("--exchange")]
+    [InlineData("-i -o")]
+    [InlineData("-f -i")]
+    [InlineData("--follow")]
+    [InlineData("-k")]
+    [InlineData("--help")]
+    [InlineData("-ib notes.txt")]
+    public void Every_other_xsel_call_goes_to_the_real_tool(string args) =>
+        Assert.Equal(ShimRead.RealTool, ClipboardShim.Parse("xsel", Split(args)).Read);
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("-pboard general")]
+    [InlineData("-Prefer txt")]
+    [InlineData("-pboard general -Prefer txt")]
+    public void Pbcopy_of_text_from_stdin_is_served(string args) =>
+        Assert.Equal(ShimRead.Copy, ClipboardShim.Parse("pbcopy", Split(args)).Read);
+
+    [Theory]
+    [InlineData("-pboard find")]
+    [InlineData("-pboard font")]
+    [InlineData("-pboard")]
+    [InlineData("-Prefer rtf")]
+    [InlineData("-Prefer ps")]
+    [InlineData("-help")]
+    [InlineData("notes.txt")]
+    public void Every_other_pbcopy_call_goes_to_the_real_tool(string args) =>
+        Assert.Equal(ShimRead.RealTool, ClipboardShim.Parse("pbcopy", Split(args)).Read);
+
+    [Theory]
     [InlineData("xclip", "-quiet -i -selection clipboard")]
     [InlineData("xclip", "-quiet -i -selection primary")]
+    [InlineData("xsel", "--nodetach -i -b")]
+    [InlineData("xsel", "--nodetach -i -p")]
+    [InlineData("pbcopy", "")]
     public async Task The_copies_nvim_makes_reach_the_viewer_without_the_real_tool(string tool, string args)
     {
         var (code, sink, stdout, stderr) = await ToolCopyAsync(tool, args, "yanked\n");
@@ -161,6 +226,24 @@ public class ClipboardCopyShimTests
 
         Assert.Empty(stdout);
     }
+
+    [Fact]
+    public async Task Xsel_and_pbcopy_over_the_cap_fail_without_asking_fleetd()
+    {
+        foreach (var tool in (string[])["xsel -ib", "pbcopy"])
+        {
+            var parts = tool.Split(' ', 2);
+            var (code, sink, _, stderr) = await ToolCopyAsync(parts[0], parts.Length > 1 ? parts[1] : "", new string('a', ClipboardCopy.MaxBytes + 1));
+
+            Assert.NotEqual(0, code);
+            Assert.Empty(sink.Copied);
+            Assert.Contains("too large", stderr);
+        }
+    }
+
+    [Fact]
+    public void The_copy_cap_is_the_osc_52_cap() =>
+        Assert.Equal(GhosttyTerminal.MaxClipboard, ClipboardCopy.MaxBytes);
 
     [Fact]
     public async Task Stdin_is_copied_to_the_viewer_as_is()
