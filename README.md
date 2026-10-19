@@ -398,9 +398,10 @@ plain `ssh host` session. The viewer, the machine you sit at, may be Linux, macO
   machine's clipboard text into the focused pane.
 - **Yanking in nvim on a remote.** In remote panes (marked with `FLEET_REMOTE_PANE=1`) fleet's
   nvim copies every yank (`y`, `yy`, visual `y`, `"+y`) to this machine's clipboard through
-  OSC 52, with your own nvim config too. It sets `clipboard=unnamedplus` and a copy-only
-  OSC 52 provider, but only when your config leaves `vim.g.clipboard` unset; set it to keep
-  your own. `"+p` pastes nvim's last yank and never asks the terminal for its clipboard.
+  OSC 52, with your own nvim config too. It sets a copy-only OSC 52 provider, but only when
+  your config leaves `vim.g.clipboard` unset; set it to keep your own. Deletes and changes
+  (`dd`, `x`, `c`) stay in nvim, and your `clipboard` option is left as you set it.
+  `"+p` pastes nvim's last yank and never asks the terminal for its clipboard.
   Needs nvim 0.10 or newer; local panes are untouched.
 - **Copy tools on a remote.** In remote panes `wl-copy`, `xclip -i` (any selection), `xsel -i`
   and `pbcopy` send their stdin to this machine's clipboard, with the same limits as OSC 52:
