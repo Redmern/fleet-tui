@@ -1399,6 +1399,15 @@ dotnet run --project src/Fleet -- doctor
 `FakeMuxDriver`; repository behaviour runs against real git in temp directories,
 because the plumbing is the point.
 
+Development happens on a self-hosted Forgejo (`git.home.redmonet.nl`), which
+push-mirrors every branch and tag to GitHub. Pull requests are opened on Forgejo
+(with `git push origin <branch>:refs/for/main -o topic=<branch>`, Forgejo's AGit
+flow, or `tea pr create --base main --head <branch>`), where
+`.forgejo/workflows/ci.yml` builds and tests on Linux; the mirrored branches still
+run the full Windows and Linux CI on GitHub. A release is a `vX.Y.Z` tag pushed to
+Forgejo: the mirror carries it to GitHub, where `release.yml` builds and publishes
+the release that `fleet update` downloads.
+
 `spikes/` holds throwaway experiments kept as evidence — they proved which PTY
 libraries survive NativeAOT and what owning a pane would actually cost. See
 `docs/DESIGN.md`.
