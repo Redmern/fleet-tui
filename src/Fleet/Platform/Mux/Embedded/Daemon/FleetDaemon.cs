@@ -55,6 +55,8 @@ public sealed class DaemonOptions
 
     public ClipboardImageLimit ClipboardImageLimit { get; init; } = new(Reads: 20, Per: TimeSpan.FromMinutes(1));
 
+    public ClipboardImageLimit ClipboardCopyLimit { get; init; } = new(Reads: 120, Per: TimeSpan.FromMinutes(1));
+
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
@@ -123,6 +125,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private volatile bool _servedBridge;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _paneTokens = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Queue<DateTimeOffset>> _clipboardReads = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Queue<DateTimeOffset>> _clipboardCopies = new(StringComparer.Ordinal);
 
     private bool ServesRemoteViewers => options.ServesBridge || _servedBridge;
 
@@ -659,6 +662,17 @@ public sealed class FleetDaemon(DaemonOptions options)
                         break;
                     }
 
+                    if (request.Op == ClipboardCopyOp)
+                    {
+                        var copied = bridged
+                            ? new ControlResponse { Ok = false, Error = "clipboard copies are only taken from local panes" }
+                            : CopyToViewer(request);
+                        copied.Id = request.Id;
+                        await wire.SendAsync(MessageType.Response, copied, WireJsonContext.Default.ControlResponse, ct)
+                            .ConfigureAwait(false);
+                        break;
+                    }
+
                     if (request.Op is ClipboardImageOp or ClipboardTypesOp)
                     {
                         if (bridged)
@@ -764,6 +778,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string ClipboardTypesOp = "clipboard-types";
 
+    public const string ClipboardCopyOp = "clipboard-copy";
+
     public static readonly TimeSpan ClipboardImageWithin = TimeSpan.FromSeconds(20);
 
     public static readonly TimeSpan RelayedClipboardImageWithin = TimeSpan.FromSeconds(15);
@@ -825,7 +841,46 @@ public sealed class FleetDaemon(DaemonOptions options)
             : ClipboardImageResponse.For(asked.Id, answer.Data)).ConfigureAwait(false);
     }
 
-    private string? ClipboardCallerRefusal(ControlRequest request)
+    private string? ClipboardCallerRefusal(ControlRequest request) =>
+        PaneCallerRefusal(request, $"clipboard image for {request.Pane ?? "an unnamed pane"}", "reads", _clipboardReads, options.ClipboardImageLimit);
+
+    private ControlResponse CopyToViewer(ControlRequest request)
+    {
+        var what = $"clipboard copy from {request.Pane ?? "an unnamed pane"}";
+        if (PaneCallerRefusal(request, what, "copies", _clipboardCopies, options.ClipboardCopyLimit) is { } refused)
+        {
+            return new ControlResponse { Ok = false, Error = refused };
+        }
+
+        if (request.Text is not { } text)
+        {
+            options.Log($"{what} refused: no text");
+            return new ControlResponse { Ok = false, Error = "no text to copy" };
+        }
+
+        var bytes = Encoding.UTF8.GetByteCount(text);
+        if (bytes > GhosttyTerminal.MaxClipboard)
+        {
+            options.Log($"{what} refused: {bytes} bytes is over the {GhosttyTerminal.MaxClipboard} byte limit");
+            return new ControlResponse { Ok = false, Error = $"the text is too large to copy: {bytes} bytes, at most {GhosttyTerminal.MaxClipboard}" };
+        }
+
+        lock (_gate)
+        {
+            if (CopyTarget(request.Pane!) is null)
+            {
+                options.Log($"{request.Pane} copy of {text.Length} chars dropped: no client is attached to take it");
+                return new ControlResponse { Ok = false, Error = "no viewer is attached to take the copy" };
+            }
+        }
+
+        _copies.Enqueue((request.Pane!, text));
+        _wake.Release();
+        return new ControlResponse { Ok = true };
+    }
+
+    private string? PaneCallerRefusal(
+        ControlRequest request, string what, string uses, Dictionary<string, Queue<DateTimeOffset>> window, ClipboardImageLimit limit)
     {
         if (request.Pane is not { Length: > 0 } pane
             || !_paneTokens.TryGetValue(pane, out var expected)
@@ -833,27 +888,26 @@ public sealed class FleetDaemon(DaemonOptions options)
             || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(token)))
         {
-            options.Log($"clipboard image for {request.Pane ?? "an unnamed pane"} refused: wrong or missing pane token");
+            options.Log($"{what} refused: wrong or missing pane token");
             return $"the pane token of {request.Pane} is wrong or missing";
         }
 
         var now = options.Clock.GetUtcNow();
-        var limit = options.ClipboardImageLimit;
-        lock (_clipboardReads)
+        lock (window)
         {
-            var reads = _clipboardReads.TryGetValue(pane, out var seen) ? seen : _clipboardReads[pane] = new Queue<DateTimeOffset>();
-            while (reads.TryPeek(out var oldest) && now - oldest >= limit.Per)
+            var seen = window.TryGetValue(pane, out var queue) ? queue : window[pane] = new Queue<DateTimeOffset>();
+            while (seen.TryPeek(out var oldest) && now - oldest >= limit.Per)
             {
-                reads.Dequeue();
+                seen.Dequeue();
             }
 
-            if (reads.Count >= limit.Reads)
+            if (seen.Count >= limit.Reads)
             {
-                options.Log($"clipboard image for {pane} refused: more than {limit.Reads} reads in {limit.Per.TotalSeconds:0} s");
-                return $"too many clipboard reads from {pane}: at most {limit.Reads} per {limit.Per.TotalSeconds:0} s";
+                options.Log($"{what} refused: more than {limit.Reads} {uses} in {limit.Per.TotalSeconds:0} s");
+                return $"too many clipboard {uses} from {pane}: at most {limit.Reads} per {limit.Per.TotalSeconds:0} s";
             }
 
-            reads.Enqueue(now);
+            seen.Enqueue(now);
         }
 
         return null;
