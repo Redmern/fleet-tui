@@ -180,7 +180,7 @@ public static class EmbeddedWiring
         if (mac is null && call.Read == ShimRead.Copy)
         {
             using var stdin = Console.OpenStandardInput();
-            return await ClipboardShim.CopyAsync(call, stdin, pane, Console.Error).ConfigureAwait(false);
+            return await ClipboardShim.CopyAsync(call, stdin, pane, Console.Error, stdout).ConfigureAwait(false);
         }
 
         return mac is not null

@@ -38,13 +38,129 @@ public class ClipboardCopyShimTests
     public void Every_other_wl_copy_call_goes_to_the_real_tool(string args) =>
         Assert.Equal(ShimRead.RealTool, ClipboardShim.Parse("wl-copy", Split(args)).Read);
 
-    [Fact]
-    public void Wl_copy_is_a_shimmed_tool() =>
-        Assert.Contains("wl-copy", ClipboardShim.Tools);
+    [Theory]
+    [InlineData("wl-copy")]
+    [InlineData("xclip")]
+    public void Every_copy_tool_is_a_shimmed_tool(string tool) =>
+        Assert.Contains(tool, ClipboardShim.Tools);
+
+    [Theory]
+    [InlineData("-i")]
+    [InlineData("-in")]
+    [InlineData("")]
+    [InlineData("-selection clipboard")]
+    [InlineData("-selection clipboard -i")]
+    [InlineData("-sel clip -in")]
+    [InlineData("-selection c -i")]
+    [InlineData("-selection primary -i")]
+    [InlineData("-selection p")]
+    [InlineData("-selection secondary -i")]
+    [InlineData("-sel s -i")]
+    [InlineData("-quiet -i -selection clipboard")]
+    [InlineData("-quiet -i -selection primary")]
+    [InlineData("-silent -noutf8 -i")]
+    [InlineData("-i -display :0 -selection clipboard")]
+    [InlineData("-i -loops 1 -verbose")]
+    [InlineData("-selection clipboard -t text/plain -i")]
+    [InlineData("-selection clipboard -t text/plain;charset=utf-8 -i")]
+    [InlineData("-selection clipboard -target UTF8_STRING -i")]
+    [InlineData("-t STRING")]
+    [InlineData("-t TEXT")]
+    [InlineData("-f -selection clipboard")]
+    [InlineData("-filter -i")]
+    [InlineData("-rmlastnl -i")]
+    public void Xclip_input_of_text_from_stdin_is_served(string args) =>
+        Assert.Equal(ShimRead.Copy, ClipboardShim.Parse("xclip", Split(args)).Read);
+
+    [Theory]
+    [InlineData("-selection clipboard -t image/png -i")]
+    [InlineData("-selection clipboard -t image/png -i shot.png")]
+    [InlineData("-i notes.txt")]
+    [InlineData("-selection clipboard -t text/html -i")]
+    [InlineData("-selection bogus -i")]
+    [InlineData("-selection")]
+    [InlineData("-t")]
+    [InlineData("-loops")]
+    [InlineData("-version")]
+    [InlineData("-help")]
+    [InlineData("-selection clipboard -o")]
+    [InlineData("-selection primary -o")]
+    [InlineData("-selection clipboard -t UTF8_STRING -o")]
+    public void Every_other_xclip_call_goes_to_the_real_tool(string args) =>
+        Assert.Equal(ShimRead.RealTool, ClipboardShim.Parse("xclip", Split(args)).Read);
+
+    [Theory]
+    [InlineData("-selection clipboard -t image/png -o", ShimRead.Png)]
+    [InlineData("-o -selection c -target image/png", ShimRead.Png)]
+    [InlineData("-selection clipboard -t TARGETS -o", ShimRead.Types)]
+    [InlineData("-selection clipboard -t image/jpeg -o", ShimRead.OtherImage)]
+    public void Xclip_image_reads_are_unchanged(string args, ShimRead expected) =>
+        Assert.Equal(expected, ClipboardShim.Parse("xclip", Split(args)).Read);
+
+    [Theory]
+    [InlineData("xclip", "-quiet -i -selection clipboard")]
+    [InlineData("xclip", "-quiet -i -selection primary")]
+    public async Task The_copies_nvim_makes_reach_the_viewer_without_the_real_tool(string tool, string args)
+    {
+        var (code, sink, stdout, stderr) = await ToolCopyAsync(tool, args, "yanked\n");
+
+        Assert.Equal(0, code);
+        Assert.Equal(["yanked\n"], sink.Copied);
+        Assert.Empty(stdout);
+        Assert.Empty(stderr);
+    }
 
     [Fact]
-    public void The_copy_cap_is_the_osc_52_cap() =>
-        Assert.Equal(GhosttyTerminal.MaxClipboard, ClipboardCopy.MaxBytes);
+    public async Task Xclip_rmlastnl_drops_one_trailing_newline()
+    {
+        var (code, sink, _, _) = await ToolCopyAsync("xclip", "-rmlastnl -i", "text\n\n");
+
+        Assert.Equal(0, code);
+        Assert.Equal(["text\n"], sink.Copied);
+    }
+
+    [Theory]
+    [InlineData("-f")]
+    [InlineData("-filter -selection clipboard")]
+    public async Task Xclip_filter_copies_and_echoes_stdin(string args)
+    {
+        var (code, sink, stdout, _) = await ToolCopyAsync("xclip", args, "piped\n");
+
+        Assert.Equal(0, code);
+        Assert.Equal(["piped\n"], sink.Copied);
+        Assert.Equal("piped\n", stdout);
+    }
+
+    [Fact]
+    public async Task Xclip_filter_still_echoes_stdin_when_the_copy_is_refused()
+    {
+        var (code, _, stdout, stderr) = await ToolCopyAsync("xclip", "-f", "piped\n", refusal: "no viewer is attached to take the copy");
+
+        Assert.Equal(1, code);
+        Assert.Equal("piped\n", stdout);
+        Assert.Contains("no viewer", stderr);
+    }
+
+    [Fact]
+    public async Task Xclip_filter_echoes_all_of_stdin_over_the_cap()
+    {
+        var text = new string('a', ClipboardCopy.MaxBytes + 10);
+
+        var (code, sink, stdout, stderr) = await ToolCopyAsync("xclip", "-f", text);
+
+        Assert.NotEqual(0, code);
+        Assert.Empty(sink.Copied);
+        Assert.Equal(text.Length, stdout.Length);
+        Assert.Contains("too large", stderr);
+    }
+
+    [Fact]
+    public async Task Without_filter_nothing_is_echoed()
+    {
+        var (_, _, stdout, _) = await ToolCopyAsync("xclip", "-i", "quiet\n");
+
+        Assert.Empty(stdout);
+    }
 
     [Fact]
     public async Task Stdin_is_copied_to_the_viewer_as_is()
@@ -108,6 +224,17 @@ public class ClipboardCopyShimTests
 
         Assert.Equal(1, code);
         Assert.Contains("no viewer", stderr);
+    }
+
+    private static async Task<(int Code, RecordingSink Sink, string Stdout, string Stderr)> ToolCopyAsync(
+        string tool, string args, string stdin, string? refusal = null)
+    {
+        var sink = new RecordingSink(refusal);
+        var stdout = new MemoryStream();
+        var stderr = new StringWriter();
+        var code = await ClipboardShim.CopyAsync(
+            ClipboardShim.Parse(tool, Split(args)), new MemoryStream(Encoding.UTF8.GetBytes(stdin)), sink, stderr, stdout);
+        return (code, sink, Encoding.UTF8.GetString(stdout.ToArray()), stderr.ToString());
     }
 
     private static async Task<(int Code, RecordingSink Sink, string Stderr)> CopyAsync(string args, string stdin, string? refusal = null)
