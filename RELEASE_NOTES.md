@@ -4,6 +4,12 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.23 (2026-10-19)
+
+- **Yanks in nvim on a remote reach your clipboard**: in a remote pane, `y`, `yy`, visual `y` and `"+y` copy to the machine you sit at through OSC 52, with fleet's nvim config or your own (nvim 0.10 or newer). Deletes and changes stay in nvim, and local panes are untouched.
+- **Copy tools on a remote** copy to your clipboard too: in remote panes `wl-copy`, `xclip -i`, `xsel -i` and `pbcopy` send their text to the machine you sit at (UTF-8 text, up to 1 MiB).
+- Both machines need 0.7.23: the remote runs the shims and nvim setup, and your fleet receives the copies.
+
 ## 0.7.22 (2026-10-19)
 
 - **`ctrl+shift+c` copies what you dragged over**: the selection stays after you let go of the mouse, and the key copies it on every press until you click. It no longer answers "nothing selected" every time.
