@@ -134,16 +134,47 @@ public sealed class MouseSelectTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_copy_key_goes_to_a_pane_that_owns_the_mouse_when_fleet_has_nothing_selected()
+    public async Task The_copy_key_goes_to_a_pane_that_owns_the_mouse_and_reads_modified_keys_when_fleet_has_nothing_selected()
     {
         var (client, shell) = await ShellAsync(tracking: true, cols: 60);
+        shell.Terminal.DistinctModifiers = true;
 
         await DragAsync(client, (0, 1), (4, 2));
         await Eventually(() => shell.Written.EndsWith("a1 4,1>", StringComparison.Ordinal));
         await client.SendCommandAsync(CopyKey);
 
-        await Eventually(() => shell.Written.EndsWith("<key C>", StringComparison.Ordinal));
+        await Eventually(() => shell.Written.EndsWith("\e[99;6u", StringComparison.Ordinal));
         await client.WaitForAsync(CopyMode.SentToApp);
+        Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Clipboard);
+    }
+
+    [Fact]
+    public async Task The_copy_key_as_raw_bytes_goes_to_a_pane_that_owns_the_mouse_and_reads_modified_keys()
+    {
+        var (client, shell) = await ShellAsync(tracking: true, cols: 60);
+        shell.Terminal.DistinctModifiers = true;
+
+        await client.SendCommandAsync(CopyBytes);
+
+        await Eventually(() => shell.Written == "\e[99;6u");
+        await client.WaitForAsync(CopyMode.SentToApp);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_copy_key_is_not_sent_to_a_mouse_owning_pane_that_would_read_it_as_ctrl_c(bool raw)
+    {
+        var (client, shell) = await ShellAsync(tracking: true, cols: 60);
+
+        await DragAsync(client, (0, 1), (4, 2));
+        await Eventually(() => shell.Written.EndsWith("a1 4,1>", StringComparison.Ordinal));
+        var before = shell.Written;
+        await client.SendCommandAsync(raw ? CopyBytes : CopyKey);
+
+        await client.WaitForAsync(CopyMode.AppOwnsMouse);
+        Assert.Equal(before, shell.Written);
+        Assert.DoesNotContain('\x03', shell.Written);
         Assert.DoesNotContain(client.Effects, e => e.Kind == HostEffects.Clipboard);
     }
 
@@ -260,6 +291,13 @@ public sealed class MouseSelectTests : IAsyncLifetime
         Name = CopyMode.Command,
         Arg = CopyMode.Selection,
         Key = new KeyMessage { Key = (int)Key.C, Mods = (int)(Mods.Ctrl | Mods.Shift) },
+    };
+
+    private static readonly CommandMessage CopyBytes = new()
+    {
+        Name = CopyMode.Command,
+        Arg = CopyMode.Selection,
+        Bytes = Convert.ToBase64String("\e[27;6;99~"u8.ToArray()),
     };
 
     private static async Task DragAsync(TestClient client, (int X, int Y) from, (int X, int Y) to, int mods = 0)

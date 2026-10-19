@@ -15,6 +15,8 @@ public sealed class CopyMode : IStickyMode
 
     public const string SentToApp = "copy: sent to app (prefix [)";
 
+    public const string AppOwnsMouse = "copy: app has the mouse (prefix [)";
+
     public bool Active { get; private set; }
 
     public void Enter() => Active = true;

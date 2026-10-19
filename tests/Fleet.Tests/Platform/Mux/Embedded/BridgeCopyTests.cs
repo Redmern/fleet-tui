@@ -128,20 +128,27 @@ public sealed class BridgeCopyTests : IAsyncLifetime
         Assert.Equal(string.Empty, far.Written);
     }
 
-    [Fact]
-    public async Task The_copy_key_goes_to_a_remote_pane_that_owns_the_mouse_when_nothing_is_selected_in_fleet()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_copy_key_goes_to_a_remote_pane_that_owns_the_mouse_only_when_it_can_tell_it_from_ctrl_c(bool distinct)
     {
         var (farPane, viewer) = await ShowRemotePaneAsync();
         var far = _farPanes.Started.Single(p => p.Env.GetValueOrDefault(FleetDaemon.PaneVariable) == farPane);
         far.Terminal.MouseTracking = true;
+        far.Terminal.DistinctModifiers = distinct;
 
         await viewer.SendMouseAsync(0, 1, MouseButtons.Left, MouseActions.Press, held: true);
         await viewer.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Motion, held: true);
         await viewer.SendMouseAsync(4, 2, MouseButtons.Left, MouseActions.Release);
-        await Eventually(() => far.Written.Contains("<mouse", StringComparison.Ordinal));
+        await Eventually(() => far.Written.Contains("a1 ", StringComparison.Ordinal));
+        var before = far.Written;
         await viewer.SendCommandAsync(CopyKey);
+        await viewer.SendKeyAsync("x");
 
-        await Eventually(() => far.Written.EndsWith("<key C>", StringComparison.Ordinal));
+        await Eventually(() => far.Written.EndsWith('x'));
+        Assert.Equal(before + (distinct ? "\e[99;6u" : string.Empty) + "x", far.Written);
+        Assert.DoesNotContain('\x03', far.Written);
         Assert.DoesNotContain(viewer.Effects, e => e.Kind == HostEffects.Clipboard);
         Assert.Equal(string.Empty, _homePanes.ByProgram("shell")!.Written);
     }

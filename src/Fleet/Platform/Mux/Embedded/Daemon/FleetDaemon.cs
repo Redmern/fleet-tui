@@ -1972,7 +1972,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private static bool DropNotice(AttachSession session)
     {
-        if (session.Badge is not (Input.CopyMode.NothingSelected or Input.CopyMode.SentToApp))
+        if (session.Badge is not (Input.CopyMode.NothingSelected or Input.CopyMode.SentToApp or Input.CopyMode.AppOwnsMouse))
         {
             return false;
         }
@@ -1983,7 +1983,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private void CopySelection(AttachSession session, CommandMessage command)
     {
-        var toApp = false;
+        PaneRuntime? app = null;
+        byte[]? chord = null;
 
         lock (_gate)
         {
@@ -2008,7 +2009,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
             else if (FocusedRuntime(session.Client) is { } focused && OwnsMouse(focused))
             {
-                toApp = true;
+                chord = DistinctCopyChord(focused, command);
+                app = chord is null ? null : focused;
+                session.Badge = chord is null ? Input.CopyMode.AppOwnsMouse : Input.CopyMode.SentToApp;
             }
             else
             {
@@ -2016,14 +2019,10 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
         }
 
-        if (toApp)
+        if (app is not null && chord is not null)
         {
-            Forward(session, command);
-
-            lock (_gate)
-            {
-                session.Badge = Input.CopyMode.SentToApp;
-            }
+            FollowOutput(app);
+            app.Send(chord);
         }
 
         _wake.Release();
@@ -2037,6 +2036,37 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             return pane.Terminal.EncodeMouse(probe, 0, 0).Length > 0;
         }
+    }
+
+    private static byte[]? DistinctCopyChord(PaneRuntime pane, CommandMessage command)
+    {
+        if (pane.Modes.Win32Input || CopyChord(command) is not { } key)
+        {
+            return null;
+        }
+
+        byte[] bytes;
+        lock (pane.Gate)
+        {
+            bytes = pane.Terminal.Encode(key);
+        }
+
+        return bytes.Length > 0 && bytes.All(b => b is (>= 0x20 and not 0x7f) or 0x1b) ? bytes : null;
+    }
+
+    private static KeyMessage? CopyChord(CommandMessage command)
+    {
+        if (command.Key is { } key)
+        {
+            return new KeyMessage { Key = key.Key, Mods = key.Mods, Consumed = key.Consumed, Text = key.Text, Unshifted = key.Unshifted };
+        }
+
+        return command.Bytes is { } raw
+               && Input.ModifiedKeys.Parse(Input.ModifiedKeys.Normalize(Convert.FromBase64String(raw))) is var (modifier, code, _)
+               && code is 'c' or 'C'
+               && Input.ModifiedKeys.IsClipboardChord(modifier, code)
+            ? new KeyMessage { Key = (int)Key.C, Mods = (int)(Mods.Ctrl | Mods.Shift), Unshifted = 'c' }
+            : null;
     }
 
     private void CopyStep(AttachSession session, string step)
