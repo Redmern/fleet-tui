@@ -58,10 +58,12 @@ Breaking one fails `dotnet test`, so check these before you write code:
 
 - Conventional commits, lower case: `feat:`, `fix:`, `docs:`, `chore:`, `perf:`, `refactor:` (in that order of
   frequency). One change per commit.
-- The main repository is the self-hosted Forgejo at `git.home.redmonet.nl` (`origin`, over SSH). It push-mirrors
-  every branch and tag to `github.com/Redmern/fleet-tui`, so never push to GitHub directly: the mirror force-pushes
-  and deletes refs that exist only there. The `github` remote is fetch-only. Open pull requests on Forgejo, e.g.
-  `tea pr create --base main --head <branch>`; `.forgejo/workflows/ci.yml` runs a Linux-only build and test on
+- The main repository is `redmer/fleet-tui` on the self-hosted Forgejo (`git.home.redmonet.nl`; `origin` is
+  `git@192.168.0.213:redmer/fleet-tui.git`). It push-mirrors every branch and tag to `github.com/Redmern/fleet-tui`,
+  so never push to GitHub directly: the mirror force-pushes and deletes refs that exist only there. The `github`
+  remote is fetch-only. Open pull requests on Forgejo, without a token through AGit
+  (`git push origin <branch>:refs/for/main -o topic=<branch> -o title="..." -o description="..."`) or with
+  `tea pr create --base main --head <branch>`. `.forgejo/workflows/ci.yml` runs a Linux-only build and test on
   them, and the mirrored branch still runs the full `.github/workflows/ci.yml` on GitHub.
 - Releases: bump `<Version>` in `src/Fleet/Fleet.csproj` in its own `chore: bump version to X.Y.Z` commit, then
   push a `vX.Y.Z` tag to Forgejo; the mirror carries it to GitHub, where `release.yml` builds and publishes both
