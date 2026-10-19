@@ -15,6 +15,13 @@ public sealed class DaemonStartTests
         Assert.False(local.Environment.ContainsKey(ShimFolder.RemoteDaemonVariable));
     }
 
+    [Theory]
+    [InlineData("xclip")]
+    [InlineData("wl-paste")]
+    [InlineData("wl-copy")]
+    public void Remote_panes_get_a_shim_script_for_each_clipboard_tool(string tool) =>
+        Assert.Contains(tool, EmbeddedWiring.ShimTools);
+
     [Fact]
     public void A_daemon_never_inherits_the_ssh_session_it_was_started_from()
     {

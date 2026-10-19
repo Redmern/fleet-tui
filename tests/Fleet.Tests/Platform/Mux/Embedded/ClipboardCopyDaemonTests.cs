@@ -1,4 +1,7 @@
 using System.Collections.Concurrent;
+using System.Text;
+using Fleet.Features.Shim.ServeClipboard;
+using Fleet.Platform.Mux.Embedded.Client;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
@@ -167,6 +170,51 @@ public sealed class ClipboardCopyDaemonTests : IAsyncLifetime
         Assert.False(tripped.Ok);
         Assert.Contains("too many", tripped.Error);
         Assert.Contains(_log, line => line.Contains($"clipboard copy from {pane} refused: more than 3", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task End_to_end_wl_copy_in_the_pane_puts_its_stdin_on_the_viewer_clipboard()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        var viewer = await ViewAsync("techweb");
+
+        var (code, stderr) = await WlCopyAsync(pane, TokenOf(pane), "yanked\n", "-n");
+
+        Assert.Equal(0, code);
+        Assert.Empty(stderr);
+        await ClipboardImageDaemonTests.Eventually(() =>
+            viewer.Effects.Any(e => e.Kind == HostEffects.Clipboard && e.Value == "yanked"));
+    }
+
+    [Fact]
+    public async Task End_to_end_wl_copy_with_a_wrong_token_fails_with_the_reason()
+    {
+        var pane = await SpawnAsync("techweb", "claude");
+        await ViewAsync("techweb");
+
+        var (code, stderr) = await WlCopyAsync(pane, "not-the-token", "text");
+
+        Assert.Equal(1, code);
+        Assert.Contains("token", stderr);
+    }
+
+    [Fact]
+    public async Task End_to_end_wl_copy_outside_any_fleet_pane_fails()
+    {
+        var copied = await new PaneClipboardImageSource(_endpoint, null, null).CopyAsync("text");
+
+        Assert.NotNull(copied.Refused);
+    }
+
+    private async Task<(int Code, string Stderr)> WlCopyAsync(string pane, string token, string stdin, params string[] args)
+    {
+        var stderr = new StringWriter();
+        var code = await ClipboardShim.CopyAsync(
+            ClipboardShim.Parse(ClipboardShim.WlCopy, args),
+            new MemoryStream(Encoding.UTF8.GetBytes(stdin)),
+            new PaneClipboardImageSource(_endpoint, pane, token),
+            stderr);
+        return (code, stderr.ToString());
     }
 
     private async Task<ControlResponse> CopyAsync(string pane, string text) =>

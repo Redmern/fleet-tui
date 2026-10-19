@@ -11,16 +11,21 @@ public static class ClipboardShim
 
     public const string WlPaste = "wl-paste";
 
+    public const string WlCopy = "wl-copy";
+
+    public const string PlainText = "text/plain";
+
     public const string Png = "image/png";
 
     public const string Targets = "TARGETS";
 
-    public static IReadOnlyList<string> Tools { get; } = [Xclip, WlPaste];
+    public static IReadOnlyList<string> Tools { get; } = [Xclip, WlPaste, WlCopy];
 
     public static ShimCall Parse(string tool, IReadOnlyList<string> args) => tool switch
     {
         Xclip => ParseXclip(args),
         WlPaste => ParseWlPaste(args),
+        WlCopy => ParseWlCopy(args),
         _ => new ShimCall(tool, ShimRead.RealTool),
     };
 
@@ -50,6 +55,55 @@ public static class ClipboardShim
         await stdout.WriteAsync(output, ct).ConfigureAwait(false);
         await stdout.FlushAsync(ct).ConfigureAwait(false);
         return 0;
+    }
+
+    public static async Task<int> CopyAsync(
+        ShimCall call, Stream stdin, IClipboardTextSink clipboard, TextWriter stderr, CancellationToken ct = default)
+    {
+        var bytes = await ReadCappedAsync(stdin, ClipboardCopy.MaxBytes + 1, ct).ConfigureAwait(false);
+        if (bytes.Length > ClipboardCopy.MaxBytes)
+        {
+            await stderr.WriteLineAsync($"fleet: cannot copy: the text is too large, at most {ClipboardCopy.MaxBytes} bytes")
+                .ConfigureAwait(false);
+            return 1;
+        }
+
+        string text;
+        try
+        {
+            text = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            await stderr.WriteLineAsync("fleet: cannot copy: stdin is not UTF-8 text").ConfigureAwait(false);
+            return 1;
+        }
+
+        if (call.TrimNewline && text.EndsWith('\n'))
+        {
+            text = text[..^1];
+        }
+
+        var copied = await clipboard.CopyAsync(text, ct).ConfigureAwait(false);
+        if (copied.Refused is { } refused)
+        {
+            await stderr.WriteLineAsync($"fleet: cannot copy: {refused}").ConfigureAwait(false);
+            return 1;
+        }
+
+        return 0;
+    }
+
+    private static async Task<byte[]> ReadCappedAsync(Stream stdin, int cap, CancellationToken ct)
+    {
+        var buffer = new byte[cap];
+        var read = 0;
+        while (read < cap && await stdin.ReadAsync(buffer.AsMemory(read, cap - read), ct).ConfigureAwait(false) is > 0 and var n)
+        {
+            read += n;
+        }
+
+        return buffer[..read];
     }
 
     private static string Listed(string tool) => tool == Xclip ? $"{Targets}\n{Png}\n" : $"{Png}\n";
@@ -130,6 +184,36 @@ public static class ClipboardShim
             (false, { } mime) => new ShimCall(WlPaste, Classify(mime), mime),
             _ => new ShimCall(WlPaste, ShimRead.RealTool),
         };
+    }
+
+    private static ShimCall ParseWlCopy(IReadOnlyList<string> args)
+    {
+        var trim = false;
+
+        for (var i = 0; i < args.Count; i++)
+        {
+            var arg = args[i];
+            var type = arg is "-t" or "--type" && i + 1 < args.Count ? args[++i]
+                : arg.StartsWith("--type=", StringComparison.Ordinal) ? arg["--type=".Length..]
+                : null;
+            if (arg is "-n" or "--trim-newline")
+            {
+                trim = true;
+            }
+            else if (type is not null)
+            {
+                if (!type.StartsWith(PlainText, StringComparison.Ordinal))
+                {
+                    return new ShimCall(WlCopy, ShimRead.RealTool);
+                }
+            }
+            else if (arg is not ("-f" or "--foreground"))
+            {
+                return new ShimCall(WlCopy, ShimRead.RealTool);
+            }
+        }
+
+        return new ShimCall(WlCopy, ShimRead.Copy, PlainText, trim);
     }
 
     private static ShimRead Classify(string mime) => mime switch
