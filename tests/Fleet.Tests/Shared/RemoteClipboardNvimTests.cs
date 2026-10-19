@@ -40,6 +40,32 @@ public sealed class RemoteClipboardNvimTests : IDisposable
     }
 
     [NvimFact]
+    public async Task Deletes_and_changes_in_a_remote_pane_stay_off_the_viewer_clipboard()
+    {
+        var run = await RunAsync(remote: true, keys: "ddxcwz");
+
+        Assert.Empty(run.Osc52Writes);
+    }
+
+    [NvimFact]
+    public async Task A_remote_pane_leaves_the_clipboard_option_alone()
+    {
+        var run = await RunAsync(remote: true, keys: "yy");
+
+        Assert.Equal(string.Empty, run.ClipboardOption);
+        Assert.Equal([Osc52("hello world\n")], run.Osc52Writes);
+    }
+
+    [NvimFact]
+    public async Task A_clipboard_option_the_user_sets_keeps_working_through_the_provider_once()
+    {
+        var run = await RunAsync(remote: true, keys: "yy", userConfig: "vim.o.clipboard='unnamedplus'");
+
+        Assert.Equal("unnamedplus", run.ClipboardOption);
+        Assert.Equal([Osc52("hello world\n")], run.Osc52Writes);
+    }
+
+    [NvimFact]
     public async Task A_clipboard_the_user_config_sets_is_left_alone()
     {
         var run = await RunAsync(remote: true, keys: "yy", userConfig: "vim.g.clipboard=false");
@@ -57,7 +83,7 @@ public sealed class RemoteClipboardNvimTests : IDisposable
 
     private static string Osc52(string text) => "\e]52;c;" + Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
 
-    private sealed record Run(string Output, IReadOnlyList<string> Osc52Writes, IReadOnlyList<string> Lines);
+    private sealed record Run(string Output, IReadOnlyList<string> Osc52Writes, IReadOnlyList<string> Lines, string? ClipboardOption);
 
     private async Task<Run> RunAsync(bool remote, string keys, string? userConfig = null)
     {
@@ -70,7 +96,8 @@ public sealed class RemoteClipboardNvimTests : IDisposable
             Path.Combine(_dir, "drive.lua"),
             "vim.api.nvim_create_autocmd('UIEnter',{once=true,callback=function() vim.schedule(function() "
             + $"vim.api.nvim_feedkeys([[{keys}]],'nx',false) "
-            + "vim.cmd('silent! w! result.txt') vim.cmd('qa!') end) end})");
+            + "vim.cmd('silent! w! result.txt') vim.fn.writefile({vim.o.clipboard},'clipboard.txt') "
+            + "vim.cmd('qa!') end) end})");
 
         var start = new ProcessStartInfo("script")
         {
@@ -98,7 +125,9 @@ public sealed class RemoteClipboardNvimTests : IDisposable
             .Select(chunk => "\e]52;" + chunk[..chunk.IndexOfAny(['\e', '\a'])])
             .ToList();
         var lines = File.Exists(result) ? await File.ReadAllLinesAsync(result) : [];
-        return new Run(text, writes, lines);
+        var option = Path.Combine(_dir, "clipboard.txt");
+        var clipboard = File.Exists(option) ? (await File.ReadAllLinesAsync(option)).FirstOrDefault() : null;
+        return new Run(text, writes, lines, clipboard);
     }
 
     private sealed class NvimFactAttribute : FactAttribute

@@ -3247,11 +3247,37 @@ public sealed class FleetDaemon(DaemonOptions options)
     private string? CallerWorkspace(string? caller) =>
         caller is null ? null : _model.ListPanes().FirstOrDefault(p => p.Id.Value == caller)?.SessionName;
 
+    private bool ForRemoteViewer(PaneState pane, IReadOnlyDictionary<string, string>? requested)
+    {
+        if (requested is not null && requested.TryGetValue(AgentHarness.RemotePaneVariable, out var marked))
+        {
+            return marked == "1";
+        }
+
+        if (requested is not null && requested.TryGetValue(ClientVariable, out var client) && _bridged.ContainsKey(client))
+        {
+            return true;
+        }
+
+        var workspace = CallerWorkspace(pane.Id);
+        return workspace is not null && _bridged.Keys
+            .Select(_model.Client)
+            .Any(c => c is not null && (SameWorkspace(c.Showing, workspace) || c.Projects.Any(p => SameWorkspace(p, workspace))));
+    }
+
+    private static bool SameWorkspace(string? a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
     private void Start(PaneState pane, IReadOnlyDictionary<string, string>? requested, IPanePty? given = null)
     {
-        pane.Env = (requested ?? new Dictionary<string, string>())
+        var kept = (requested ?? new Dictionary<string, string>())
             .Where(e => e.Key != ClientVariable)
             .ToDictionary(e => e.Key, e => e.Value);
+        if (ServesRemoteViewers && ForRemoteViewer(pane, requested))
+        {
+            AgentHarness.MarkRemotePane(kept);
+        }
+
+        pane.Env = kept;
 
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (key, value) in ProfileEnv(pane.Cwd))
@@ -3267,6 +3293,12 @@ public sealed class FleetDaemon(DaemonOptions options)
         if (ServesRemoteViewers)
         {
             options.RemotePaneEnv?.Invoke(env);
+        }
+
+        env.Remove(AgentHarness.RemotePaneVariable);
+        if (ServesRemoteViewers && kept.ContainsKey(AgentHarness.RemotePaneVariable))
+        {
+            AgentHarness.MarkRemotePane(env);
         }
 
         env = new Dictionary<string, string>(env, StringComparer.OrdinalIgnoreCase)

@@ -145,7 +145,6 @@ public static class EmbeddedWiring
             }
 
             ReverseForward.Apply(env, voice, ControlPaths.Answers);
-            AgentHarness.MarkRemotePane(env);
         };
     }
 

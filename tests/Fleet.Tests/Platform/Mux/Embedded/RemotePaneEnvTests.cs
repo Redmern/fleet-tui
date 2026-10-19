@@ -1,5 +1,6 @@
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
@@ -89,20 +90,59 @@ public sealed class RemotePaneEnvTests : IAsyncLifetime
         Assert.False(pane.Env.ContainsKey("PATH"));
     }
 
-    private async Task<DaemonTests.TestClient> ConnectAsync(string role, bool bridged)
+    [Fact]
+    public async Task Only_panes_in_a_workspace_a_remote_viewer_has_open_are_marked_remote()
     {
-        var client = await DaemonTests.TestClient.ConnectAsync(_endpoint, role, 60, 12, null, bridged);
+        Start(servesBridge: false, Shims);
+        var first = await SpawnAsync("first", "rib-remote");
+        await ConnectAsync(ClientRoles.Attach, bridged: true, workspace: "rib-remote");
+
+        var local = await SpawnAsync("local", "rib-local");
+        var remote = await SpawnAsync("remote", "rib-remote");
+
+        Assert.False(first.Env.ContainsKey(AgentHarness.RemotePaneVariable));
+        Assert.False(local.Env.ContainsKey(AgentHarness.RemotePaneVariable));
+        Assert.Equal("/shims:/bin", local.Env["PATH"]);
+        Assert.Equal("1", remote.Env[AgentHarness.RemotePaneVariable]);
+    }
+
+    [Fact]
+    public async Task A_daemon_started_for_a_bridge_does_not_mark_a_pane_no_remote_viewer_has_open()
+    {
+        Start(servesBridge: true, Shims);
+        await ConnectAsync(ClientRoles.Attach, bridged: false, workspace: null);
+
+        var pane = await SpawnAsync("claude");
+
+        Assert.False(pane.Env.ContainsKey(AgentHarness.RemotePaneVariable));
+    }
+
+    [Fact]
+    public async Task A_pane_env_asking_for_the_remote_marker_keeps_it_only_on_a_daemon_serving_remote_viewers()
+    {
+        Start(servesBridge: false, Shims);
+
+        var pane = await SpawnAsync("claude", env: new Dictionary<string, string> { [AgentHarness.RemotePaneVariable] = "1" });
+
+        Assert.False(pane.Env.ContainsKey(AgentHarness.RemotePaneVariable));
+    }
+
+    private async Task<DaemonTests.TestClient> ConnectAsync(string role, bool bridged, string? workspace = null)
+    {
+        var client = await DaemonTests.TestClient.ConnectAsync(_endpoint, role, 60, 12, workspace, bridged);
         _clients.Add(client);
         return client;
     }
 
-    private async Task<FakePanes.FakePty> SpawnAsync(string program)
+    private async Task<FakePanes.FakePty> SpawnAsync(
+        string program, string? session = null, Dictionary<string, string>? env = null)
     {
         var control = await ConnectAsync(ClientRoles.Control, bridged: false);
         var spawned = await control.RequestAsync(new ControlRequest
         {
             Op = "spawn",
-            Session = "rib-" + program,
+            Session = session ?? "rib-" + program,
+            Env = env,
             NewWindow = true,
             Cwd = ".",
             Args = [program],
