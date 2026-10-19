@@ -4,6 +4,12 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.22 (2026-10-19)
+
+- **`ctrl+shift+c` copies what you dragged over**: the selection stays after you let go of the mouse, and the key copies it on every press until you click. It no longer answers "nothing selected" every time.
+- In a pane whose program has the mouse (Claude Code, nvim with `mouse=a`), the key is passed to that program only when it can tell it apart from `ctrl+c`, so it never interrupts a Claude turn. Otherwise fleet says the app has the mouse and points to copy mode (`prefix [`).
+- fleet development moved to a self-hosted Forgejo that mirrors to GitHub; releases and `fleet update` work as before.
+
 ## 0.7.21 (2026-10-18)
 
 - **Shorter `fleet update --list`**: it shows the installed and latest versions and the newest 10 stable releases, with a `... N older, use --all` line; add `--all` to see every release, prereleases included.
