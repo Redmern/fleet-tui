@@ -523,15 +523,22 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
             }
 
             var (index, dropped) = PickText(offered);
-            if (index >= 0)
+            try
             {
-                var data = write->Contents[index].Data;
-                self.Copied?.Invoke(data.Ptr == null ? string.Empty : Encoding.UTF8.GetString(data.Ptr, (int)data.Len));
-                result = 0;
+                if (index >= 0)
+                {
+                    var data = write->Contents[index].Data;
+                    self.Copied?.Invoke(data.Ptr == null ? string.Empty : Encoding.UTF8.GetString(data.Ptr, (int)data.Len));
+                    result = 0;
+                }
+                else
+                {
+                    self.CopyDropped?.Invoke(dropped!);
+                }
             }
-            else
+            catch (Exception)
             {
-                self.CopyDropped?.Invoke(dropped!);
+                result = 1;
             }
         }
 

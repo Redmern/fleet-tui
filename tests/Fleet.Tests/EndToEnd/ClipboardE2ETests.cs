@@ -48,11 +48,6 @@ public sealed class ClipboardE2ETests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        foreach (var client in _clients)
-        {
-            await client.DisposeAsync();
-        }
-
         foreach (var process in _processes)
         {
             try
@@ -67,11 +62,22 @@ public sealed class ClipboardE2ETests : IAsyncLifetime
             process.Dispose();
         }
 
+        foreach (var client in _clients)
+        {
+            try
+            {
+                await client.DisposeAsync();
+            }
+            catch (Exception e) when (e is IOException or ObjectDisposedException or OperationCanceledException)
+            {
+            }
+        }
+
         try
         {
             Directory.Delete(_root, recursive: true);
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
     }
@@ -113,10 +119,28 @@ public sealed class ClipboardE2ETests : IAsyncLifetime
             TimeSpan.FromSeconds(10));
     }
 
-    private List<string> SinkTexts() =>
-        File.Exists(Sink)
-            ? [.. File.ReadAllLines(Sink).Select(l => JsonDocument.Parse(l).RootElement.GetProperty("text").GetString() ?? string.Empty)]
-            : [];
+    // The viewer may be halfway through appending a line, so one that does not parse yet is skipped, not fatal.
+    private List<string> SinkTexts()
+    {
+        if (!File.Exists(Sink))
+        {
+            return [];
+        }
+
+        List<string> texts = [];
+        foreach (var line in File.ReadAllLines(Sink))
+        {
+            try
+            {
+                texts.Add(JsonDocument.Parse(line).RootElement.GetProperty("text").GetString() ?? string.Empty);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return texts;
+    }
 
     private Dictionary<string, string> EnvOf(string pane)
     {

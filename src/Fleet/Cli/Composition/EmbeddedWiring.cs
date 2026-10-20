@@ -144,6 +144,7 @@ public static class EmbeddedWiring
             {
                 env["PATH"] = ShimScripts.PathWith(
                     shims, env.TryGetValue("PATH", out var path) ? path : Environment.GetEnvironmentVariable("PATH"));
+                env[AgentHarness.ShimDirVariable] = shims;
             }
 
             ReverseForward.Apply(env, voice, ControlPaths.Answers);

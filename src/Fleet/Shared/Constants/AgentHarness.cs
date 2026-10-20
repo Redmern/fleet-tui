@@ -48,6 +48,8 @@ public static class AgentHarness
 
     public const string ClipboardTraceVariable = "FLEET_CLIPBOARD_TRACE";
 
+    public const string ShimDirVariable = "FLEET_SHIM_DIR";
+
     public const string RemoteClipboard =
         "local function fleet_clipboard() if vim.g.clipboard~=nil then return end "
         + "local ok,osc52=pcall(require,'vim.ui.clipboard.osc52') if not ok then return end "
@@ -56,10 +58,11 @@ public static class AgentHarness
         + "local f=io.open(path,'a') if not f then return end local sec,usec=(vim.uv or vim.loop).gettimeofday() "
         + "f:write(vim.json.encode({ts=sec*1000+math.floor(usec/1000),hop='nvim-yank',"
         + "sha256=vim.fn.sha256(text),bytes=#text,pane=vim.env.FLEET_PANE})..'\\n') f:close() end "
-        + "local armed=vim.env." + RemotePaneVariable + "=='1' local shimmed=false "
-        + "if not armed then local found,exe=pcall(vim.fn['provider#clipboard#Executable']) "
-        + "armed=not found or exe=='' or exe=='OSC 52' "
-        + "shimmed=found and exe~='' and vim.fs.normalize(vim.fn.exepath(exe)):find('/fleet/shims/',1,true)~=nil end "
+        + "local marked=vim.env." + RemotePaneVariable + "=='1' "
+        + "local found,exe=pcall(vim.fn['provider#clipboard#Executable']) "
+        + "local armed=not found or exe=='' or exe=='OSC 52' local shims=vim.env." + ShimDirVariable + " "
+        + "local shimmed=not armed and shims~=nil and shims~='' "
+        + "and vim.startswith(vim.fs.normalize(vim.fn.exepath(exe)),vim.fs.normalize(shims)..'/') "
         + "if armed then local held={} "
         + "local function copy(r) local send=osc52.copy(r) "
         + "return function(lines,regtype) held[r]={lines,regtype} trace(lines) send(lines) end end "
@@ -75,7 +78,7 @@ public static class AgentHarness
         + "if armed then if not clip then vim.g.clipboard.copy['+'](lines,e.regtype) end return end "
         + "if clip and shimmed then return end "
         + "local bridged=vim.env." + BridgedFileVariable + " "
-        + "if bridged and bridged~='' and vim.fn.filereadable(bridged)==1 then trace(lines) osc52.copy('+')(lines) end "
+        + "if marked or (bridged and bridged~='' and vim.fn.filereadable(bridged)==1) then trace(lines) osc52.copy('+')(lines) end "
         + "end}) end "
         + "if vim.v.vim_did_enter==1 then fleet_clipboard() "
         + "else vim.api.nvim_create_autocmd('VimEnter',{once=true,callback=fleet_clipboard}) end ";

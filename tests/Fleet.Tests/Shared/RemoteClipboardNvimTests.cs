@@ -83,6 +83,24 @@ public sealed class RemoteClipboardNvimTests : IDisposable
     }
 
     [NvimFact]
+    public async Task A_marked_pane_with_a_clipboard_tool_keeps_the_tool_and_also_sends_yanks_as_osc_52()
+    {
+        var run = await RunAsync(remote: true, keys: "yy\"+yy", provider: true);
+
+        Assert.Equal([Osc52("hello world\n"), Osc52("hello world\n")], run.Osc52Writes);
+        Assert.Equal("hello world\n", run.ProviderCopies);
+    }
+
+    [NvimFact]
+    public async Task A_marked_pane_whose_clipboard_tool_is_a_fleet_shim_sends_a_clipboard_yank_only_through_the_shim()
+    {
+        var run = await RunAsync(remote: true, keys: "yy\"+yy", provider: true, shimmed: true);
+
+        Assert.Equal([Osc52("hello world\n")], run.Osc52Writes);
+        Assert.Equal("hello world\n", run.ProviderCopies);
+    }
+
+    [NvimFact]
     public async Task An_unmarked_pane_without_a_clipboard_tool_writes_a_yank_as_osc_52()
     {
         var run = await RunAsync(remote: false, keys: "yyjyy");
@@ -147,7 +165,8 @@ public sealed class RemoteClipboardNvimTests : IDisposable
         string Output, IReadOnlyList<string> Osc52Writes, IReadOnlyList<string> Lines, string? ClipboardOption, string? ProviderCopies);
 
     private async Task<Run> RunAsync(
-        bool remote, string keys, string? userConfig = null, bool provider = false, string? bridged = null, string? trace = null)
+        bool remote, string keys, string? userConfig = null, bool provider = false, string? bridged = null, string? trace = null,
+        bool shimmed = false)
     {
         var file = Path.Combine(_dir, "f.txt");
         var result = Path.Combine(_dir, "result.txt");
@@ -180,6 +199,7 @@ public sealed class RemoteClipboardNvimTests : IDisposable
         start.Environment.Remove("TMUX");
         start.Environment.Remove(AgentHarness.BridgedFileVariable);
         start.Environment.Remove(AgentHarness.ClipboardTraceVariable);
+        start.Environment.Remove(AgentHarness.ShimDirVariable);
         var copies = Path.Combine(_dir, "provider.txt");
         if (provider && !OperatingSystem.IsWindows())
         {
@@ -188,6 +208,10 @@ public sealed class RemoteClipboardNvimTests : IDisposable
             WriteTool(Path.Combine(tools, "wl-paste"), "true");
             start.Environment["WAYLAND_DISPLAY"] = "wayland-test";
             start.Environment["PATH"] = tools + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
+            if (shimmed)
+            {
+                start.Environment[AgentHarness.ShimDirVariable] = tools;
+            }
         }
 
         if (bridged is not null)
