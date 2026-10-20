@@ -4,6 +4,13 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.24 (2026-10-20)
+
+- **Yanks in remote nvim panes now reach your clipboard**: 0.7.23 missed panes opened together with a project, panes started by sub-orchestrators and panes started before you connected; nvim answered "clipboard: no provider". Every nvim pane on a remote now copies while you are connected, without a restart.
+- When nvim has no clipboard tool, fleet sets up an OSC 52 one; a `vim.g.clipboard` you set yourself is left alone.
+- fleet logs why it dropped a copy (`osc 52 copy dropped: <reason>`), which makes a missing copy easier to track down.
+- Both machines need 0.7.24.
+
 ## 0.7.23 (2026-10-19)
 
 - **Yanks in nvim on a remote reach your clipboard**: in a remote pane, `y`, `yy`, visual `y` and `"+y` copy to the machine you sit at through OSC 52, with fleet's nvim config or your own (nvim 0.10 or newer). Deletes and changes stay in nvim, and local panes are untouched.
