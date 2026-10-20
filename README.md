@@ -397,15 +397,15 @@ plain `ssh host` session. The viewer, the machine you sit at, may be Linux, macO
   where the terminal drops OSC 52; the log says when no way worked. `prefix ]` or `ctrl+shift+v` pastes this
   machine's clipboard text into the focused pane.
 - **Yanking in nvim on a remote.** fleetd marks every pane it starts while a remote viewer is
-  attached with `FLEET_REMOTE_PANE=1`, whether you, MCP or a dispatch started it. In those panes,
-  and in any pane where nvim finds no clipboard tool (a headless remote has none), fleet's nvim
-  copies every yank (`y`, `yy`, visual `y`, `"+y`) to this machine's clipboard through
-  OSC 52, with your own nvim config too. It sets a copy-only OSC 52 provider, but only when
-  your config leaves `vim.g.clipboard` unset; set it to keep your own. Deletes and changes
-  (`dd`, `x`, `c`) stay in nvim, and your `clipboard` option is left as you set it.
-  `"+p` pastes nvim's last yank and never asks the terminal for its clipboard. A pane that was
-  already running with a working clipboard tool also sends its yanks here once a remote viewer
-  attaches, without a restart. Needs nvim 0.10 or newer; local panes with a clipboard tool keep it.
+  attached with `FLEET_REMOTE_PANE=1`, whether you, MCP or a dispatch started it. fleet's nvim
+  copies every yank (`y`, `yy`, visual `y`, `"+y`) in those panes to this machine's clipboard
+  through OSC 52, with your own nvim config too. Where nvim finds no clipboard tool (a headless
+  remote has none) it sets a copy-only OSC 52 provider, so `"+p` pastes nvim's last yank and never
+  asks the terminal for its clipboard; where it finds one, the tool stays and yanks also go out as
+  OSC 52. A pane that was already running also sends its yanks here once a remote viewer attaches,
+  without a restart. All of this only when your config leaves `vim.g.clipboard` unset; set it to
+  keep your own. Deletes and changes (`dd`, `x`, `c`) stay in nvim, and your `clipboard` option is
+  left as you set it. Needs nvim 0.10 or newer; local panes with a clipboard tool keep it.
 - **Tracing a copy.** With `FLEET_CLIPBOARD_TRACE=<file>` set for fleet (viewer and remote), each
   hop of a copy (nvim, pane, shim, copy target, remote relay, viewer) appends a JSON line with the
   sha256 of the text; fleetd also logs why it drops an OSC 52 copy. For tests,
