@@ -28,6 +28,8 @@ public interface IPaneTerminal : IDisposable
     event Action? TitleChanged;
 
     event Action<string>? Copied;
+
+    event Action<string>? CopyDropped;
 }
 
 public delegate IPaneTerminal PaneTerminalFactory(int cols, int rows, Action<byte[]> reply);

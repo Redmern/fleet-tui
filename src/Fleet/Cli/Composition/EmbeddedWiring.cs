@@ -77,9 +77,10 @@ public static class EmbeddedWiring
         Composer.Use(Adapters.Themes().Active());
         using var themeWatch = ThemeWiring.Follow(Composer.Use);
 
+        var endpoint = Endpoint.Default();
         var daemon = new FleetDaemon(new DaemonOptions
         {
-            Endpoint = Endpoint.Default(),
+            Endpoint = endpoint,
             Pty = IPanePty.Create,
             Terminal = GhosttyTerminal.Create,
             Log = line => log.Write($"fleetd: {line}"),
@@ -89,6 +90,7 @@ public static class EmbeddedWiring
             WarmMenus = true,
             PaneEnv = cwd => PaneProfile.Env(cwd, Adapters.Projects().List(), Profiles()),
             ServesBridge = StartedForBridge,
+            BridgedFile = OperatingSystem.IsWindows() ? null : endpoint.Address + ".bridged",
             RemotePaneEnv = OperatingSystem.IsWindows() ? null : RemotePaneEnv(log),
             DropClipboardImage = png => ClipboardImageDrop.Drop(
                 png, ClipboardImageDrop.Folder, DateTimeOffset.UtcNow, OperatingSystem.IsWindows(), line => log.Write($"fleetd: {line}")),
@@ -142,6 +144,7 @@ public static class EmbeddedWiring
             {
                 env["PATH"] = ShimScripts.PathWith(
                     shims, env.TryGetValue("PATH", out var path) ? path : Environment.GetEnvironmentVariable("PATH"));
+                env[AgentHarness.ShimDirVariable] = shims;
             }
 
             ReverseForward.Apply(env, voice, ControlPaths.Answers);
@@ -425,7 +428,9 @@ public static class EmbeddedWiring
                 tunnels is null ? null : tunnels.Apply,
                 ClipboardImageSources.ForThisMachine(ClipboardImageResponse.MaxBytes),
                 notice => Platform.Notifications.DesktopToast.Show("fleet", notice),
-                ClipboardText.ForThisMachine(PasteMarkers.MaxPaste))
+                ClipboardText.ForThisMachine(PasteMarkers.MaxPaste),
+                ClipboardSink.FromEnvironment(),
+                ClipboardTrace.FromEnvironment())
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -847,7 +852,37 @@ public static class EmbeddedWiring
         }
     }
 
-    public static ProcessStartInfo RemoteSsh(string host, string token, Endpoint home)
+    public const string BridgeCommandVariable = "FLEET_BRIDGE_COMMAND";
+
+    public const string BridgeHostVariable = "FLEET_BRIDGE_HOST";
+
+    public static ProcessStartInfo RemoteSsh(string host, string token, Endpoint home) =>
+        RemoteSsh(host, token, home, Environment.GetEnvironmentVariable(BridgeCommandVariable));
+
+    public static ProcessStartInfo RemoteSsh(string host, string token, Endpoint home, string? bridgeCommand) =>
+        bridgeCommand is { Length: > 0 } command ? BridgeCommand(command, host, OperatingSystem.IsWindows()) : Ssh(host, token, home);
+
+    public static ProcessStartInfo BridgeCommand(string command, string host, bool windows)
+    {
+        var start = new ProcessStartInfo(windows ? "cmd.exe" : "/bin/sh")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        foreach (var arg in windows ? (string[])["/d", "/s", "/c", command] : ["-c", command])
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        start.Environment[BridgeHostVariable] = host;
+        return start;
+    }
+
+    private static ProcessStartInfo Ssh(string host, string token, Endpoint home)
     {
         var start = new ProcessStartInfo("ssh")
         {

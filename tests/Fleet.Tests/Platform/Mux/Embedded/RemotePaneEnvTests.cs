@@ -91,19 +91,72 @@ public sealed class RemotePaneEnvTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Only_panes_in_a_workspace_a_remote_viewer_has_open_are_marked_remote()
+    public async Task While_a_remote_viewer_is_attached_every_new_pane_is_marked_remote_whatever_started_it()
     {
         Start(servesBridge: false, Shims);
-        var first = await SpawnAsync("first", "rib-remote");
+        var before = await SpawnAsync("before", "rib-remote");
         await ConnectAsync(ClientRoles.Attach, bridged: true, workspace: "rib-remote");
 
-        var local = await SpawnAsync("local", "rib-local");
-        var remote = await SpawnAsync("remote", "rib-remote");
+        var elsewhere = await SpawnAsync("dispatched", "rib-hidden-sub");
+        var shown = await SpawnAsync("shown", "rib-remote");
+        var opened = await SpawnAsync("opened", "rib-not-shown-yet");
 
-        Assert.False(first.Env.ContainsKey(AgentHarness.RemotePaneVariable));
-        Assert.False(local.Env.ContainsKey(AgentHarness.RemotePaneVariable));
-        Assert.Equal("/shims:/bin", local.Env["PATH"]);
-        Assert.Equal("1", remote.Env[AgentHarness.RemotePaneVariable]);
+        Assert.False(before.Env.ContainsKey(AgentHarness.RemotePaneVariable));
+        Assert.Equal("1", elsewhere.Env[AgentHarness.RemotePaneVariable]);
+        Assert.Equal("1", shown.Env[AgentHarness.RemotePaneVariable]);
+        Assert.Equal("1", opened.Env[AgentHarness.RemotePaneVariable]);
+        Assert.Equal("/shims:/bin", elsewhere.Env["PATH"]);
+    }
+
+    [Fact]
+    public async Task Once_the_last_remote_viewer_detaches_new_panes_are_no_longer_marked_remote()
+    {
+        Start(servesBridge: false, Shims);
+        var viewer = await ConnectAsync(ClientRoles.Attach, bridged: true);
+        var during = await SpawnAsync("during");
+        _clients.Remove(viewer);
+        await viewer.DisposeAsync();
+        var tries = 0;
+        await Eventually(async () => !(await SpawnAsync($"after{tries++}")).Env.ContainsKey(AgentHarness.RemotePaneVariable));
+
+        Assert.Equal("1", during.Env[AgentHarness.RemotePaneVariable]);
+    }
+
+    [Fact]
+    public async Task A_pane_explicitly_spawned_unmarked_stays_unmarked_while_a_remote_viewer_is_attached()
+    {
+        Start(servesBridge: false, Shims);
+        await ConnectAsync(ClientRoles.Attach, bridged: true);
+
+        var pane = await SpawnAsync("claude", env: new Dictionary<string, string> { [AgentHarness.RemotePaneVariable] = "0" });
+
+        Assert.False(pane.Env.ContainsKey(AgentHarness.RemotePaneVariable));
+    }
+
+    [Fact]
+    public async Task The_bridged_file_exists_exactly_while_a_remote_viewer_is_attached_and_every_pane_knows_it()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"fleet-bridged-{Guid.NewGuid():N}");
+        await File.WriteAllTextAsync(file, "stale");
+        _running = new FleetDaemon(new DaemonOptions
+        {
+            Endpoint = _endpoint,
+            Pty = _panes.NewPty,
+            Terminal = _panes.NewTerminal,
+            RemotePaneEnv = Shims,
+            BridgedFile = file,
+        }).RunAsync(_stop.Token);
+
+        var before = await SpawnAsync("before");
+        Assert.False(File.Exists(file));
+        var viewer = await ConnectAsync(ClientRoles.Attach, bridged: true);
+        await Eventually(() => Task.FromResult(File.Exists(file)));
+        await ConnectAsync(ClientRoles.Attach, bridged: false);
+        _clients.Remove(viewer);
+        await viewer.DisposeAsync();
+
+        await Eventually(() => Task.FromResult(!File.Exists(file)));
+        Assert.Equal(file, before.Env[AgentHarness.BridgedFileVariable]);
     }
 
     [Fact]
@@ -149,5 +202,20 @@ public sealed class RemotePaneEnvTests : IAsyncLifetime
         });
         Assert.True(spawned.Ok, spawned.Error);
         return _panes.ByProgram(program)!;
+    }
+
+    private static async Task Eventually(Func<Task<bool>> condition)
+    {
+        for (var i = 0; i < 100; i++)
+        {
+            if (await condition())
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.Fail("the condition never held");
     }
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using Fleet.Platform.Clipboard;
 using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
@@ -50,6 +51,10 @@ public sealed class DaemonOptions
     public Action<IDictionary<string, string>>? RemotePaneEnv { get; init; }
 
     public bool ServesBridge { get; init; }
+
+    public string? BridgedFile { get; init; }
+
+    public ClipboardTrace ClipboardTrace { get; init; } = ClipboardTrace.FromEnvironment();
 
     public Func<byte[], string?>? DropClipboardImage { get; init; }
 
@@ -141,6 +146,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         using var listener = options.Endpoint.Listen();
         options.Log($"fleetd listening on {options.Endpoint.Address}");
 
+        MarkBridged(false);
         RestoreSession();
 
         var render = Task.Run(() => RenderLoopAsync(token), CancellationToken.None);
@@ -506,6 +512,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     {
                         _servedBridge = true;
                         _bridged[client.Id] = hello;
+                        MarkBridged(true);
                     }
 
                     if (hello.Ssh is { Length: > 0 } ssh)
@@ -874,6 +881,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
         }
 
+        options.ClipboardTrace.Write("shim", text, request.Pane);
         _copies.Enqueue((request.Pane!, text));
         _wake.Release();
         return new ControlResponse { Ok = true };
@@ -2630,6 +2638,14 @@ public sealed class FleetDaemon(DaemonOptions options)
                 }
             }
 
+            if (effect.Kind == HostEffects.Clipboard)
+            {
+                options.ClipboardTrace.Write(
+                    viewers.Count > 0 ? "remote-copy" : "remote-copy-dropped",
+                    effect.Value,
+                    detail: $"{link.Host} to {(viewers.Count > 0 ? string.Join(",", viewers.Select(v => v.Client)) : "nobody")}");
+            }
+
             foreach (var session in viewers)
             {
                 if (effect.Kind == HostEffects.HandBack)
@@ -3247,34 +3263,47 @@ public sealed class FleetDaemon(DaemonOptions options)
     private string? CallerWorkspace(string? caller) =>
         caller is null ? null : _model.ListPanes().FirstOrDefault(p => p.Id.Value == caller)?.SessionName;
 
-    private bool ForRemoteViewer(PaneState pane, IReadOnlyDictionary<string, string>? requested)
+    private bool ForRemoteViewer(IReadOnlyDictionary<string, string>? requested) =>
+        requested is not null && requested.TryGetValue(AgentHarness.RemotePaneVariable, out var marked)
+            ? marked == "1"
+            : !_bridged.IsEmpty;
+
+    private void MarkBridged(bool attached)
     {
-        if (requested is not null && requested.TryGetValue(AgentHarness.RemotePaneVariable, out var marked))
+        if (options.BridgedFile is not { } file)
         {
-            return marked == "1";
+            return;
         }
 
-        if (requested is not null && requested.TryGetValue(ClientVariable, out var client) && _bridged.ContainsKey(client))
+        try
         {
-            return true;
+            if (attached)
+            {
+                File.WriteAllText(file, string.Empty);
+            }
+            else
+            {
+                File.Delete(file);
+            }
         }
-
-        var workspace = CallerWorkspace(pane.Id);
-        return workspace is not null && _bridged.Keys
-            .Select(_model.Client)
-            .Any(c => c is not null && (SameWorkspace(c.Showing, workspace) || c.Projects.Any(p => SameWorkspace(p, workspace))));
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            options.Log($"cannot {(attached ? "write" : "remove")} {file}: {e.Message}");
+        }
     }
-
-    private static bool SameWorkspace(string? a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     private void Start(PaneState pane, IReadOnlyDictionary<string, string>? requested, IPanePty? given = null)
     {
         var kept = (requested ?? new Dictionary<string, string>())
             .Where(e => e.Key != ClientVariable)
             .ToDictionary(e => e.Key, e => e.Value);
-        if (ServesRemoteViewers && ForRemoteViewer(pane, requested))
+        if (ServesRemoteViewers && ForRemoteViewer(requested))
         {
             AgentHarness.MarkRemotePane(kept);
+        }
+        else
+        {
+            kept.Remove(AgentHarness.RemotePaneVariable);
         }
 
         pane.Env = kept;
@@ -3299,6 +3328,11 @@ public sealed class FleetDaemon(DaemonOptions options)
         if (ServesRemoteViewers && kept.ContainsKey(AgentHarness.RemotePaneVariable))
         {
             AgentHarness.MarkRemotePane(env);
+        }
+
+        if (options.BridgedFile is { } bridgedFile)
+        {
+            env[AgentHarness.BridgedFileVariable] = bridgedFile;
         }
 
         env = new Dictionary<string, string>(env, StringComparer.OrdinalIgnoreCase)
@@ -3334,8 +3368,15 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         runtime.Terminal.Copied += text =>
         {
+            options.ClipboardTrace.Write("pane-osc52", text, pane.Id);
             _copies.Enqueue((pane.Id, text));
             _wake.Release();
+        };
+
+        runtime.Terminal.CopyDropped += reason =>
+        {
+            options.Log($"{pane.Id} osc 52 copy dropped: {reason}");
+            options.ClipboardTrace.Write("pane-osc52-dropped", null, pane.Id, reason);
         };
 
         pty.Output += (buffer, count) =>
@@ -3479,7 +3520,11 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             _model.Disconnect(session.Client);
             _sessions.Remove(session.Client);
-            _bridged.TryRemove(session.Client, out _);
+            if (_bridged.TryRemove(session.Client, out _) && _bridged.IsEmpty)
+            {
+                MarkBridged(false);
+            }
+
             _viewerForwards.Remove(session.Client);
             _sshOf.Remove(session.Client);
             _cannotForward.Remove(session.Client);
@@ -3545,10 +3590,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     {
                         effects.Add((target, new HostEffect { Kind = HostEffects.Clipboard, Value = copy.Text }));
                         options.Log($"{copy.Pane} copied {copy.Text.Length} chars to {target.Client}'s clipboard");
+                        options.ClipboardTrace.Write("copy-target", copy.Text, copy.Pane, target.Client);
                     }
                     else
                     {
                         options.Log($"{copy.Pane} copy of {copy.Text.Length} chars dropped: no client is attached to take it");
+                        options.ClipboardTrace.Write("copy-dropped", copy.Text, copy.Pane, "no client is attached to take it");
                     }
                 }
 
@@ -3803,6 +3850,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private void Shutdown()
     {
         _hub.Shutdown();
+        MarkBridged(false);
         lock (_gate)
         {
             foreach (var runtime in _runtimes.Values)

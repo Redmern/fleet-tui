@@ -62,9 +62,10 @@ public class AgentHarnessTests
         Assert.Contains(AgentHarness.RemoteClipboard, startup, StringComparison.Ordinal);
 
     [Fact]
-    public void The_remote_clipboard_only_acts_in_a_remote_pane_and_leaves_a_user_clipboard_alone()
+    public void The_remote_clipboard_acts_in_a_remote_pane_or_one_without_a_clipboard_tool_and_leaves_a_user_clipboard_alone()
     {
         Assert.Contains($"vim.env.{AgentHarness.RemotePaneVariable}=='1'", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
+        Assert.Contains("provider#clipboard#Executable", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
         Assert.Contains("vim.g.clipboard~=nil", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
         Assert.Contains("VimEnter", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
         Assert.Contains("TextYankPost", AgentHarness.RemoteClipboard, StringComparison.Ordinal);
