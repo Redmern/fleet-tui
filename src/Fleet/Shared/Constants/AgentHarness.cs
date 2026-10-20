@@ -44,23 +44,41 @@ public static class AgentHarness
 
     public static void MarkRemotePane(IDictionary<string, string> env) => env[RemotePaneVariable] = "1";
 
+    public const string BridgedFileVariable = "FLEET_BRIDGED_FILE";
+
+    public const string ClipboardTraceVariable = "FLEET_CLIPBOARD_TRACE";
+
     public const string RemoteClipboard =
         "local function fleet_clipboard() if vim.g.clipboard~=nil then return end "
         + "local ok,osc52=pcall(require,'vim.ui.clipboard.osc52') if not ok then return end "
-        + "local held={} "
+        + "local function trace(lines) local path=vim.env." + ClipboardTraceVariable + " "
+        + "if path==nil or path=='' then return end local text=table.concat(lines,'\\n') "
+        + "local f=io.open(path,'a') if not f then return end "
+        + "f:write(vim.json.encode({ts=os.time(),hop='nvim-yank',"
+        + "sha256=vim.fn.sha256(text),bytes=#text,pane=vim.env.FLEET_PANE})..'\\n') f:close() end "
+        + "local armed=vim.env." + RemotePaneVariable + "=='1' local shimmed=false "
+        + "if not armed then local found,exe=pcall(vim.fn['provider#clipboard#Executable']) "
+        + "armed=not found or exe=='' or exe=='OSC 52' "
+        + "shimmed=found and exe~='' and vim.fs.normalize(vim.fn.exepath(exe)):find('/fleet/shims/',1,true)~=nil end "
+        + "if armed then local held={} "
         + "local function copy(r) local send=osc52.copy(r) "
-        + "return function(lines,regtype) held[r]={lines,regtype} send(lines) end end "
+        + "return function(lines,regtype) held[r]={lines,regtype} trace(lines) send(lines) end end "
         + "local function paste(r) return function() return held[r] or {} end end "
         + "vim.g.clipboard={name='fleet-osc52',copy={['+']=copy('+'),['*']=copy('*')},"
         + "paste={['+']=paste('+'),['*']=paste('*')}} "
+        + "if vim.g.loaded_clipboard_provider~=nil then vim.g.loaded_clipboard_provider=nil "
+        + "vim.cmd('silent! runtime autoload/provider/clipboard.vim') end end "
         + "vim.api.nvim_create_autocmd('TextYankPost',{callback=function() local e=vim.v.event "
-        + "if e.operator~='y' or e.regname=='+' or e.regname=='*' "
-        + "or (e.regname=='' and vim.o.clipboard:find('unnamed')) then return end "
+        + "if e.operator~='y' then return end "
+        + "local clip=e.regname=='+' or e.regname=='*' or (e.regname=='' and vim.o.clipboard:find('unnamed')~=nil) "
         + "local lines=vim.list_slice(e.regcontents) if e.regtype=='V' then table.insert(lines,'') end "
-        + "vim.g.clipboard.copy['+'](lines,e.regtype) end}) end "
-        + "if vim.env." + RemotePaneVariable + "=='1' then "
+        + "if armed then if not clip then vim.g.clipboard.copy['+'](lines,e.regtype) end return end "
+        + "if clip and shimmed then return end "
+        + "local bridged=vim.env." + BridgedFileVariable + " "
+        + "if bridged and bridged~='' and vim.fn.filereadable(bridged)==1 then trace(lines) osc52.copy('+')(lines) end "
+        + "end}) end "
         + "if vim.v.vim_did_enter==1 then fleet_clipboard() "
-        + "else vim.api.nvim_create_autocmd('VimEnter',{once=true,callback=fleet_clipboard}) end end ";
+        + "else vim.api.nvim_create_autocmd('VimEnter',{once=true,callback=fleet_clipboard}) end ";
 
     public const string NvimStartup =
         NvimBoot + "vim.schedule(function() vim.cmd('Neotree show') vim.cmd('stopinsert') end)";
