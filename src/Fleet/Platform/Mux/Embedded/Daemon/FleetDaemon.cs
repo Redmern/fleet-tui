@@ -51,6 +51,8 @@ public sealed class DaemonOptions
 
     public bool ServesBridge { get; init; }
 
+    public string? BridgedFile { get; init; }
+
     public Func<byte[], string?>? DropClipboardImage { get; init; }
 
     public ClipboardImageLimit ClipboardImageLimit { get; init; } = new(Reads: 20, Per: TimeSpan.FromMinutes(1));
@@ -141,6 +143,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         using var listener = options.Endpoint.Listen();
         options.Log($"fleetd listening on {options.Endpoint.Address}");
 
+        MarkBridged(false);
         RestoreSession();
 
         var render = Task.Run(() => RenderLoopAsync(token), CancellationToken.None);
@@ -506,6 +509,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     {
                         _servedBridge = true;
                         _bridged[client.Id] = hello;
+                        MarkBridged(true);
                     }
 
                     if (hello.Ssh is { Length: > 0 } ssh)
@@ -3247,34 +3251,47 @@ public sealed class FleetDaemon(DaemonOptions options)
     private string? CallerWorkspace(string? caller) =>
         caller is null ? null : _model.ListPanes().FirstOrDefault(p => p.Id.Value == caller)?.SessionName;
 
-    private bool ForRemoteViewer(PaneState pane, IReadOnlyDictionary<string, string>? requested)
+    private bool ForRemoteViewer(IReadOnlyDictionary<string, string>? requested) =>
+        requested is not null && requested.TryGetValue(AgentHarness.RemotePaneVariable, out var marked)
+            ? marked == "1"
+            : !_bridged.IsEmpty;
+
+    private void MarkBridged(bool attached)
     {
-        if (requested is not null && requested.TryGetValue(AgentHarness.RemotePaneVariable, out var marked))
+        if (options.BridgedFile is not { } file)
         {
-            return marked == "1";
+            return;
         }
 
-        if (requested is not null && requested.TryGetValue(ClientVariable, out var client) && _bridged.ContainsKey(client))
+        try
         {
-            return true;
+            if (attached)
+            {
+                File.WriteAllText(file, string.Empty);
+            }
+            else
+            {
+                File.Delete(file);
+            }
         }
-
-        var workspace = CallerWorkspace(pane.Id);
-        return workspace is not null && _bridged.Keys
-            .Select(_model.Client)
-            .Any(c => c is not null && (SameWorkspace(c.Showing, workspace) || c.Projects.Any(p => SameWorkspace(p, workspace))));
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            options.Log($"cannot {(attached ? "write" : "remove")} {file}: {e.Message}");
+        }
     }
-
-    private static bool SameWorkspace(string? a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
     private void Start(PaneState pane, IReadOnlyDictionary<string, string>? requested, IPanePty? given = null)
     {
         var kept = (requested ?? new Dictionary<string, string>())
             .Where(e => e.Key != ClientVariable)
             .ToDictionary(e => e.Key, e => e.Value);
-        if (ServesRemoteViewers && ForRemoteViewer(pane, requested))
+        if (ServesRemoteViewers && ForRemoteViewer(requested))
         {
             AgentHarness.MarkRemotePane(kept);
+        }
+        else
+        {
+            kept.Remove(AgentHarness.RemotePaneVariable);
         }
 
         pane.Env = kept;
@@ -3299,6 +3316,11 @@ public sealed class FleetDaemon(DaemonOptions options)
         if (ServesRemoteViewers && kept.ContainsKey(AgentHarness.RemotePaneVariable))
         {
             AgentHarness.MarkRemotePane(env);
+        }
+
+        if (options.BridgedFile is { } bridgedFile)
+        {
+            env[AgentHarness.BridgedFileVariable] = bridgedFile;
         }
 
         env = new Dictionary<string, string>(env, StringComparer.OrdinalIgnoreCase)
@@ -3479,7 +3501,11 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             _model.Disconnect(session.Client);
             _sessions.Remove(session.Client);
-            _bridged.TryRemove(session.Client, out _);
+            if (_bridged.TryRemove(session.Client, out _) && _bridged.IsEmpty)
+            {
+                MarkBridged(false);
+            }
+
             _viewerForwards.Remove(session.Client);
             _sshOf.Remove(session.Client);
             _cannotForward.Remove(session.Client);
@@ -3803,6 +3829,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private void Shutdown()
     {
         _hub.Shutdown();
+        MarkBridged(false);
         lock (_gate)
         {
             foreach (var runtime in _runtimes.Values)

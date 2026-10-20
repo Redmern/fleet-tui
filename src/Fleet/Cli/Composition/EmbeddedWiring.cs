@@ -77,9 +77,10 @@ public static class EmbeddedWiring
         Composer.Use(Adapters.Themes().Active());
         using var themeWatch = ThemeWiring.Follow(Composer.Use);
 
+        var endpoint = Endpoint.Default();
         var daemon = new FleetDaemon(new DaemonOptions
         {
-            Endpoint = Endpoint.Default(),
+            Endpoint = endpoint,
             Pty = IPanePty.Create,
             Terminal = GhosttyTerminal.Create,
             Log = line => log.Write($"fleetd: {line}"),
@@ -89,6 +90,7 @@ public static class EmbeddedWiring
             WarmMenus = true,
             PaneEnv = cwd => PaneProfile.Env(cwd, Adapters.Projects().List(), Profiles()),
             ServesBridge = StartedForBridge,
+            BridgedFile = OperatingSystem.IsWindows() ? null : endpoint.Address + ".bridged",
             RemotePaneEnv = OperatingSystem.IsWindows() ? null : RemotePaneEnv(log),
             DropClipboardImage = png => ClipboardImageDrop.Drop(
                 png, ClipboardImageDrop.Folder, DateTimeOffset.UtcNow, OperatingSystem.IsWindows(), line => log.Write($"fleetd: {line}")),
