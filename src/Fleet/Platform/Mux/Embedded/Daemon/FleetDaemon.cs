@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using Fleet.Platform.Clipboard;
 using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Platform.Mux.Embedded.Native;
 using Fleet.Platform.Mux.Embedded.Protocol;
@@ -52,6 +53,8 @@ public sealed class DaemonOptions
     public bool ServesBridge { get; init; }
 
     public string? BridgedFile { get; init; }
+
+    public ClipboardTrace ClipboardTrace { get; init; } = ClipboardTrace.FromEnvironment();
 
     public Func<byte[], string?>? DropClipboardImage { get; init; }
 
@@ -878,6 +881,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
         }
 
+        options.ClipboardTrace.Write("shim", text, request.Pane);
         _copies.Enqueue((request.Pane!, text));
         _wake.Release();
         return new ControlResponse { Ok = true };
@@ -2634,6 +2638,14 @@ public sealed class FleetDaemon(DaemonOptions options)
                 }
             }
 
+            if (effect.Kind == HostEffects.Clipboard)
+            {
+                options.ClipboardTrace.Write(
+                    viewers.Count > 0 ? "remote-copy" : "remote-copy-dropped",
+                    effect.Value,
+                    detail: $"{link.Host} to {(viewers.Count > 0 ? string.Join(",", viewers.Select(v => v.Client)) : "nobody")}");
+            }
+
             foreach (var session in viewers)
             {
                 if (effect.Kind == HostEffects.HandBack)
@@ -3356,8 +3368,15 @@ public sealed class FleetDaemon(DaemonOptions options)
 
         runtime.Terminal.Copied += text =>
         {
+            options.ClipboardTrace.Write("pane-osc52", text, pane.Id);
             _copies.Enqueue((pane.Id, text));
             _wake.Release();
+        };
+
+        runtime.Terminal.CopyDropped += reason =>
+        {
+            options.Log($"{pane.Id} osc 52 copy dropped: {reason}");
+            options.ClipboardTrace.Write("pane-osc52-dropped", null, pane.Id, reason);
         };
 
         pty.Output += (buffer, count) =>
@@ -3571,10 +3590,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     {
                         effects.Add((target, new HostEffect { Kind = HostEffects.Clipboard, Value = copy.Text }));
                         options.Log($"{copy.Pane} copied {copy.Text.Length} chars to {target.Client}'s clipboard");
+                        options.ClipboardTrace.Write("copy-target", copy.Text, copy.Pane, target.Client);
                     }
                     else
                     {
                         options.Log($"{copy.Pane} copy of {copy.Text.Length} chars dropped: no client is attached to take it");
+                        options.ClipboardTrace.Write("copy-dropped", copy.Text, copy.Pane, "no client is attached to take it");
                     }
                 }
 

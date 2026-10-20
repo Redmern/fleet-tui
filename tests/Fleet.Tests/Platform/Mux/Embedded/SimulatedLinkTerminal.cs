@@ -97,5 +97,11 @@ public sealed class SimulatedLinkTerminal(FakePanes.FakeTerminal inner) : IPaneT
         remove => inner.Copied -= value;
     }
 
+    public event Action<string>? CopyDropped
+    {
+        add => inner.CopyDropped += value;
+        remove => inner.CopyDropped -= value;
+    }
+
     public void Dispose() => inner.Dispose();
 }

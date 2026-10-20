@@ -23,7 +23,9 @@ public sealed class AttachClient(
     Action<bool, int>? forwardPort = null,
     IClipboardImageSource? clipboardImages = null,
     Action<string>? clipboardNotice = null,
-    ClipboardText? clipboardText = null)
+    ClipboardText? clipboardText = null,
+    ClipboardSink? clipboardSink = null,
+    ClipboardTrace? clipboardTrace = null)
 {
     private const string EnterHost = "\e[?1049h\e[H\e[2J";
 
@@ -277,7 +279,12 @@ public sealed class AttachClient(
                 break;
 
             case HostEffects.Clipboard when effect.Value is { } text:
-                if (OperatingSystem.IsWindows())
+                (clipboardTrace ?? ClipboardTrace.Off).Write("viewer-received", text);
+                if (clipboardSink is not null)
+                {
+                    CopyToSink(text, clipboardSink, log, clipboardTrace ?? ClipboardTrace.Off);
+                }
+                else if (OperatingSystem.IsWindows())
                 {
                     CopyOnWindows(text, HostEffectsOut.SetWindowsClipboard, write, log, clipboardNotice);
                 }
@@ -288,6 +295,15 @@ public sealed class AttachClient(
 
                 break;
         }
+    }
+
+    public static void CopyToSink(string text, ClipboardSink sink, Action<string> log, ClipboardTrace trace)
+    {
+        var failed = sink.Append(text);
+        log(failed is null
+            ? $"clipboard: {text.Length} chars written to the sink {sink.Path}"
+            : $"clipboard: {text.Length} chars NOT written to the sink {sink.Path}: {failed}");
+        trace.Write("viewer-sink", text, detail: failed);
     }
 
     public static void CopyOnWindows(

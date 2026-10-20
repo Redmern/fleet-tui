@@ -191,6 +191,8 @@ public sealed class FakePanes
 
         public event Action<string>? Copied;
 
+        public event Action<string>? CopyDropped;
+
         public void SetTitle(string title)
         {
             Title = title;
@@ -198,6 +200,8 @@ public sealed class FakePanes
         }
 
         public void Copy(string text) => Copied?.Invoke(text);
+
+        public void DropCopy(string reason) => CopyDropped?.Invoke(reason);
 
         public string PlainText() => _text.ToString();
 

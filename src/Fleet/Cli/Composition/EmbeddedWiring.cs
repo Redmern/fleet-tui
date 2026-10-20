@@ -427,7 +427,9 @@ public static class EmbeddedWiring
                 tunnels is null ? null : tunnels.Apply,
                 ClipboardImageSources.ForThisMachine(ClipboardImageResponse.MaxBytes),
                 notice => Platform.Notifications.DesktopToast.Show("fleet", notice),
-                ClipboardText.ForThisMachine(PasteMarkers.MaxPaste))
+                ClipboardText.ForThisMachine(PasteMarkers.MaxPaste),
+                ClipboardSink.FromEnvironment(),
+                ClipboardTrace.FromEnvironment())
             .RunAsync()
             .ConfigureAwait(false);
 
@@ -849,7 +851,37 @@ public static class EmbeddedWiring
         }
     }
 
-    public static ProcessStartInfo RemoteSsh(string host, string token, Endpoint home)
+    public const string BridgeCommandVariable = "FLEET_BRIDGE_COMMAND";
+
+    public const string BridgeHostVariable = "FLEET_BRIDGE_HOST";
+
+    public static ProcessStartInfo RemoteSsh(string host, string token, Endpoint home) =>
+        RemoteSsh(host, token, home, Environment.GetEnvironmentVariable(BridgeCommandVariable));
+
+    public static ProcessStartInfo RemoteSsh(string host, string token, Endpoint home, string? bridgeCommand) =>
+        bridgeCommand is { Length: > 0 } command ? BridgeCommand(command, host, OperatingSystem.IsWindows()) : Ssh(host, token, home);
+
+    public static ProcessStartInfo BridgeCommand(string command, string host, bool windows)
+    {
+        var start = new ProcessStartInfo(windows ? "cmd.exe" : "/bin/sh")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        foreach (var arg in windows ? (string[])["/d", "/s", "/c", command] : ["-c", command])
+        {
+            start.ArgumentList.Add(arg);
+        }
+
+        start.Environment[BridgeHostVariable] = host;
+        return start;
+    }
+
+    private static ProcessStartInfo Ssh(string host, string token, Endpoint home)
     {
         var start = new ProcessStartInfo("ssh")
         {

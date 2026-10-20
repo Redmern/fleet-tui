@@ -53,7 +53,7 @@ public sealed class RemoteSshArgumentsTests
     public void Attach_over_ssh_uses_the_same_ssh_arguments_and_control_master_as_a_remote_link()
     {
         var attach = EmbeddedWiring.AttachSsh("box");
-        var link = EmbeddedWiring.RemoteSsh("box", "token", new Fleet.Platform.Mux.Embedded.Daemon.Endpoint("/tmp/fleet-test.sock"));
+        var link = EmbeddedWiring.RemoteSsh("box", "token", new Fleet.Platform.Mux.Embedded.Daemon.Endpoint("/tmp/fleet-test.sock"), null);
 
         Assert.Equal("ssh", attach.FileName);
         Assert.Equal(WithoutControlPath(link.ArgumentList), WithoutControlPath(attach.ArgumentList));
@@ -63,6 +63,34 @@ public sealed class RemoteSshArgumentsTests
             Assert.Contains("ControlMaster=yes", attach.ArgumentList);
             Assert.Contains($"ControlPath={socket}", attach.ArgumentList);
         }
+    }
+
+    [Fact]
+    public void A_bridge_command_replaces_ssh_for_a_remote_link_and_learns_the_host()
+    {
+        var link = EmbeddedWiring.RemoteSsh(
+            "box", "token", new Fleet.Platform.Mux.Embedded.Daemon.Endpoint("/tmp/fleet-test.sock"), "fleet bridge");
+
+        Assert.NotEqual("ssh", link.FileName);
+        Assert.Equal("fleet bridge", link.ArgumentList.Last());
+        Assert.Equal("box", link.Environment[EmbeddedWiring.BridgeHostVariable]);
+        Assert.True(link.RedirectStandardInput && link.RedirectStandardOutput);
+    }
+
+    [Fact]
+    public void A_bridge_command_runs_through_the_platform_shell()
+    {
+        Assert.Equal(["-c", "fleet bridge"], EmbeddedWiring.BridgeCommand("fleet bridge", "box", windows: false).ArgumentList);
+        Assert.Equal("/bin/sh", EmbeddedWiring.BridgeCommand("fleet bridge", "box", windows: false).FileName);
+        Assert.Equal("cmd.exe", EmbeddedWiring.BridgeCommand("fleet bridge", "box", windows: true).FileName);
+    }
+
+    [Fact]
+    public void An_empty_bridge_command_keeps_ssh()
+    {
+        Assert.Equal(
+            "ssh",
+            EmbeddedWiring.RemoteSsh("box", "token", new Fleet.Platform.Mux.Embedded.Daemon.Endpoint("/tmp/fleet-test.sock"), string.Empty).FileName);
     }
 
     // An attach that starts first must not become the master the link's port forwards ride on.

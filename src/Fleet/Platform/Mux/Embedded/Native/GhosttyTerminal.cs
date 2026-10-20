@@ -60,6 +60,8 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
 
     public event Action<string>? Copied;
 
+    public event Action<string>? CopyDropped;
+
     public string Title
     {
         get
@@ -477,32 +479,59 @@ public sealed unsafe class GhosttyTerminal : IPaneTerminal
         }
     }
 
+    public static (int Index, string? Dropped) PickText(IReadOnlyList<(string Mime, ulong Bytes)> offered)
+    {
+        if (offered.Count == 0)
+        {
+            return (-1, "the copy carried no content");
+        }
+
+        string? tooLarge = null;
+        for (var i = 0; i < offered.Count; i++)
+        {
+            var (mime, bytes) = offered[i];
+            if (mime.Length != 0 && !mime.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (bytes <= MaxClipboard)
+            {
+                return (i, null);
+            }
+
+            tooLarge ??= $"{bytes} bytes of text is over the {MaxClipboard} byte limit";
+        }
+
+        return (-1, tooLarge ?? $"no text/plain content, only {string.Join(", ", offered.Select(o => o.Mime))}");
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnClipboardWrite(nint terminal, nint userdata, ClipboardWrite* write)
     {
         var result = 1;
 
-        if (GCHandle.FromIntPtr(userdata).Target is GhosttyTerminal self && write->ContentsLength > 0)
+        if (GCHandle.FromIntPtr(userdata).Target is GhosttyTerminal self)
         {
-            string? text = null;
-
+            var offered = new List<(string Mime, ulong Bytes)>();
             for (nuint i = 0; i < write->ContentsLength; i++)
             {
                 var content = write->Contents[i];
-                var mime = content.Mime.Ptr == null ? string.Empty : Encoding.UTF8.GetString(content.Mime.Ptr, (int)content.Mime.Len);
-
-                if ((mime.Length == 0 || mime.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase))
-                    && content.Data.Len <= MaxClipboard)
-                {
-                    text = content.Data.Ptr == null ? string.Empty : Encoding.UTF8.GetString(content.Data.Ptr, (int)content.Data.Len);
-                    break;
-                }
+                offered.Add((
+                    content.Mime.Ptr == null ? string.Empty : Encoding.UTF8.GetString(content.Mime.Ptr, (int)content.Mime.Len),
+                    content.Data.Len));
             }
 
-            if (text is not null)
+            var (index, dropped) = PickText(offered);
+            if (index >= 0)
             {
-                self.Copied?.Invoke(text);
+                var data = write->Contents[index].Data;
+                self.Copied?.Invoke(data.Ptr == null ? string.Empty : Encoding.UTF8.GetString(data.Ptr, (int)data.Len));
                 result = 0;
+            }
+            else
+            {
+                self.CopyDropped?.Invoke(dropped!);
             }
         }
 
