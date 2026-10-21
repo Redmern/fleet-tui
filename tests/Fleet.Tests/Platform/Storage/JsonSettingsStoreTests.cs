@@ -41,6 +41,37 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_last_repository_and_harness_round_trip()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithLastNewAgent("backend", "claude"));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.Equal(("backend", "claude"), (loaded.LastRepo, loaded.LastHarness));
+    }
+
+    [Fact]
+    public void No_last_repository_is_stored_until_one_is_used()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+
+        var raw = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Equal((string.Empty, string.Empty), (Store.Load("techweb").LastRepo, Store.Load("techweb").LastHarness));
+        Assert.DoesNotContain("lastRepo", raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void The_last_new_agent_survives_another_setting_changing()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithLastNewAgent("backend", "nvim"));
+
+        Store.Save("techweb", Store.Load("techweb").WithPush(ActionPolicy.Forbid));
+
+        Assert.Equal("backend", Store.Load("techweb").LastRepo);
+    }
+
+    [Fact]
     public void The_todo_trigger_round_trips_and_is_stored_only_when_changed()
     {
         Store.Save("techweb", SettingsConfig.Default);

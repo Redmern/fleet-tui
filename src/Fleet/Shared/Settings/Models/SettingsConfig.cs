@@ -42,6 +42,10 @@ public sealed record SettingsConfig(
 
     public JiraSettings? Jira { get; init; }
 
+    public string LastRepo { get; init; } = string.Empty;
+
+    public string LastHarness { get; init; } = string.Empty;
+
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
 
@@ -108,6 +112,9 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithModels(RoleModels models) => this with { Models = models };
 
+    public SettingsConfig WithLastNewAgent(string repository, string harness) =>
+        this with { LastRepo = repository, LastHarness = harness };
+
     public SettingsConfig MergedOverDefaults()
     {
         var rules = SettingsDefaults.Rules.ToDictionary(r => r.Key, r => r.Value);
@@ -144,6 +151,8 @@ public sealed record SettingsConfig(
             ButtonHints = ButtonHints,
             Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
             Jira = Jira,
+            LastRepo = LastRepo,
+            LastHarness = LastHarness,
         };
     }
 
