@@ -13,8 +13,17 @@ public sealed class FleetList : ListView
         AddCommand(Command.End, () => Jump((Source?.Count ?? 1) - 1, -1));
     }
 
+    public event EventHandler<Key>? Pressing;
+
     public static int Wrap(int index, int count) =>
         count <= 0 ? 0 : ((index % count) + count) % count;
+
+    protected override bool OnKeyDown(Key key)
+    {
+        Pressing?.Invoke(this, key);
+
+        return key.Handled || base.OnKeyDown(key);
+    }
 
     private bool? Step(int delta)
     {

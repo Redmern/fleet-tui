@@ -66,6 +66,18 @@ public static class FleetIcons
 
     public const string OpenBrowser = "";
 
+    public const string NewAgent = "";
+
+    public const string Repo = "";
+
+    public const string Branch = "";
+
+    public const string Base = "";
+
+    public const string Harness = "";
+
+    public const string Create = "";
+
     private static readonly Dictionary<string, string> Names = new()
     {
         [Info] = "keybinds",
