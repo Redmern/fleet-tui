@@ -72,6 +72,13 @@ public class FileBrowserTests
     }
 
     [Fact]
+    public void An_empty_or_unknown_path_starts_in_the_launch_folder_when_there_is_one()
+    {
+        Assert.Equal("C:/repos", FileBrowser.StartIn(string.Empty, p => p == "C:/repos", "C:/repos"));
+        Assert.Equal("C:/repos", FileBrowser.StartIn("Z:/nope/nope", p => p == "C:/repos", "C:/repos"));
+    }
+
+    [Fact]
     public void The_file_navigator_has_its_own_key_in_the_menu()
     {
         var map = Keymap.Default;

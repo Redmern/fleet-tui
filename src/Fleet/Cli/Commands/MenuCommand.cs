@@ -1123,7 +1123,11 @@ public static class MenuCommand
             return;
         }
 
-        if (CreateProjectView.Show(app, new CreateProjectHandler(Adapters.Projects()), PickProjectCommand.FolderPicker(mux)) is not { } made)
+        if (CreateProjectView.Show(
+                app,
+                new CreateProjectHandler(Adapters.Projects()),
+                PickProjectCommand.FolderPicker(mux),
+                defaultRoot: Adapters.LaunchDirectory) is not { } made)
         {
             return;
         }

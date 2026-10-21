@@ -402,6 +402,14 @@ public static class Adapters
 
     public static string HomeDirectory => Home;
 
+    public static string? LaunchDirectory =>
+        LaunchFolder(Environment.GetEnvironmentVariable(FleetDaemon.LaunchDirVariable), Directory.Exists);
+
+    public static string? LaunchFolder(string? launchDir, Func<string, bool> exists) =>
+        launchDir is { Length: > 0 } && exists(launchDir) ? launchDir : null;
+
+    public static string BrowseFallback(string? launchDir) => launchDir ?? Home;
+
     private static string Home =>
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
