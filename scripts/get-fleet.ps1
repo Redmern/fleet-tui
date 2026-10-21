@@ -151,7 +151,8 @@ function Save-Download($Uri, $Path) {
 }
 
 # fonts.ps1 is fetched from the same repository as deps.ps1, since 'irm | iex' has
-# no sibling files. It installs JetBrainsMono Nerd Font Mono for this user, so the
+# no sibling files. Both run as script blocks: the default execution policy refuses
+# to dot-source a downloaded .ps1. It installs JetBrainsMono Nerd Font Mono for this user, so the
 # icons render. A fetch or font install that fails only warns.
 function Invoke-FleetFontStep {
     param(
@@ -164,7 +165,7 @@ function Invoke-FleetFontStep {
         & $Fetch $fontsUrl $fontsFile
         Write-Ok $fontsUrl
 
-        . $fontsFile
+        . ([scriptblock]::Create([IO.File]::ReadAllText($fontsFile)))
         Install-FleetFont | Out-Null
     }
     catch {
@@ -188,7 +189,7 @@ if ($WithDeps -or $DepsMissing) {
         Invoke-WebRequest -Uri $depsUrl -OutFile $depsFile -UseBasicParsing
         Write-Ok $depsUrl
 
-        . $depsFile
+        . ([scriptblock]::Create([IO.File]::ReadAllText($depsFile)))
         Invoke-FleetDepsOffer -WithDeps:$WithDeps -NvimConfig $NvimConfig
     }
     catch {

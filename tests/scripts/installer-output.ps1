@@ -200,6 +200,7 @@ $getFleetHelpers = Get-Helpers $getFleet
 
 function Invoke-FontStepCase([scriptblock]$Fetch) {
     $marker = Join-Path ([IO.Path]::GetTempPath()) "fleet-font-step-$([guid]::NewGuid().ToString('N'))"
+    $script:fontMarker = $marker
     $out = & {
         $ErrorActionPreference = 'Stop'
         $WithDeps = $false
@@ -217,7 +218,7 @@ $fetchedUrl = $null
 $ok = Invoke-FontStepCase {
     param($Uri, $OutFile)
     $script:fetchedUrl = $Uri
-    Set-Content -LiteralPath $OutFile -Value "function Install-FleetFont { New-Item -ItemType File -Path '$($marker -replace "'", "''")' | Out-Null; `$true }"
+    Set-Content -LiteralPath $OutFile -Value "function Install-FleetFont { New-Item -ItemType File -Path '$($script:fontMarker -replace "'", "''")' | Out-Null; `$true }"
 }
 Check 'get-fleet: fetches fonts.ps1 from the same repository as deps.ps1' ($fetchedUrl -eq 'https://raw.githubusercontent.com/owner/fleet/main/scripts/fonts.ps1')
 Check 'get-fleet: runs Install-FleetFont from the fetched fonts.ps1' ($ok.Called)
@@ -256,15 +257,23 @@ Check 'get-fleet: installs the font on every install, after fleet setup' (
     $top[$stepAt - 1].Extent.Text -match "^Write-Step 'Installing JetBrainsMono Nerd Font'")
 
 $steps = @($getFleetAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Write-Step' }, $true)).Count
-$totals = foreach ($withDeps in $true, $false) {
+$totals = foreach ($deps in $true, $false) {
     & {
-        $WithDeps = $withDeps
+        $WithDeps = $deps
         $DepsMissing = @()
         . ([scriptblock]::Create($getFleetHelpers))
         $script:StepTotal
     }
 }
 Check 'get-fleet: the step total counts the font step' ($totals[0] -eq $steps -and $totals[1] -eq $steps - 1)
+
+# The default execution policy on Windows clients (Restricted) refuses to dot-source
+# a .ps1 file, and irm | iex works around it, so fetched scripts run as script blocks.
+$dotSourcedFiles = @($getFleetAst.FindAll({
+            param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.InvocationOperator -eq 'Dot' -and
+            $n.CommandElements[0] -is [System.Management.Automation.Language.VariableExpressionAst]
+        }, $true))
+Check 'get-fleet: runs fetched scripts without dot-sourcing a .ps1 file' ($dotSourcedFiles.Count -eq 0)
 
 Check 'get-fleet: never touches settings.json or HKCU:\Console' (
     [IO.File]::ReadAllText($getFleet) -notmatch 'settings\.json|HKCU:\\Console')
