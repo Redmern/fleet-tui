@@ -259,9 +259,18 @@ public static class DashboardWiring
 
         _ = Task.Run(async () =>
         {
-            var note = await new RemoveAgentsHandler(remover)
-                .HandleAsync(project, doomed)
-                .ConfigureAwait(false);
+            string note;
+
+            try
+            {
+                note = await new RemoveAgentsHandler(remover)
+                    .HandleAsync(project, doomed)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                note = $"removal stopped: {e.Message}";
+            }
 
             Note(log, project, note);
             Adapters.Notifier().Notify(note);
