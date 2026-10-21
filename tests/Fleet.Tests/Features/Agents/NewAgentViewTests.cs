@@ -1,4 +1,6 @@
 using Fleet.Features.Agents.NewAgent;
+using Fleet.Features.Agents.NewAgent.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -74,5 +76,48 @@ public sealed class NewAgentViewTests
         {
             Assert.False(button.Clashes(Keymap.Default), button.Mnemonic);
         }
+    }
+
+    private static NewAgentPrompt Prompt(int selected = 0, string harness = AgentHarness.Nvim) =>
+        new(
+            "techweb",
+            [("backend", "/r/backend", "main"), ("frontend", "/r/frontend", "main")],
+            selected,
+            _ => [],
+            harness);
+
+    [Fact]
+    public void The_last_used_repository_and_harness_are_preselected()
+    {
+        var picked = NewAgentView.Preselect(Prompt(), "frontend", AgentHarness.Claude);
+
+        Assert.Equal((1, AgentHarness.Claude), picked);
+    }
+
+    [Fact]
+    public void A_last_repository_that_is_gone_keeps_the_prompt_selection()
+    {
+        var picked = NewAgentView.Preselect(Prompt(selected: 1), "removed", AgentHarness.Claude);
+
+        Assert.Equal((1, AgentHarness.Claude), picked);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("vscode")]
+    [InlineData(AgentHarness.Orchestrator)]
+    public void A_harness_a_new_agent_cannot_open_keeps_the_prompt_harness(string last)
+    {
+        var picked = NewAgentView.Preselect(Prompt(), "backend", last);
+
+        Assert.Equal((0, AgentHarness.Nvim), picked);
+    }
+
+    [Fact]
+    public void Nothing_remembered_keeps_the_prompt()
+    {
+        var picked = NewAgentView.Preselect(Prompt(selected: 1, harness: AgentHarness.Claude), string.Empty, string.Empty);
+
+        Assert.Equal((1, AgentHarness.Claude), picked);
     }
 }
