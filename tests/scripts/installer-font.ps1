@@ -278,6 +278,10 @@ try {
 finally {
     Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
     if ($onWindows -and (Test-Path -LiteralPath $registryRoot)) { Remove-Item -LiteralPath $registryRoot -Recurse -Force }
+    if ($onWindows -and (Test-Path -LiteralPath 'HKCU:\Software\FleetTest') -and
+        -not (Get-ChildItem -LiteralPath 'HKCU:\Software\FleetTest')) {
+        Remove-Item -LiteralPath 'HKCU:\Software\FleetTest' -Force
+    }
 }
 
 if ($failures -gt 0) {
