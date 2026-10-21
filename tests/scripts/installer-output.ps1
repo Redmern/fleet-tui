@@ -192,6 +192,83 @@ foreach ($installer in 'install.ps1', 'scripts/get-fleet.ps1') {
     Check "$installer offers the deps on every install" ($offers.Count -eq 1 -and $guarded.Count -eq 0 -and $offers[0].Extent.Text -match '-WithDeps:\$WithDeps')
 }
 
+# get-fleet.ps1 font step: fonts.ps1 is fetched like deps.ps1 (irm | iex has no
+# sibling files), and nothing about the font can fail the install. The fetch is
+# stubbed, so each case writes its own fonts.ps1 or throws.
+$getFleet = Join-Path $repo 'scripts/get-fleet.ps1'
+$getFleetHelpers = Get-Helpers $getFleet
+
+function Invoke-FontStepCase([scriptblock]$Fetch) {
+    $marker = Join-Path ([IO.Path]::GetTempPath()) "fleet-font-step-$([guid]::NewGuid().ToString('N'))"
+    $out = & {
+        $ErrorActionPreference = 'Stop'
+        $WithDeps = $false
+        . ([scriptblock]::Create($getFleetHelpers))
+        $script:Fancy = $false
+        Invoke-FleetFontStep -Repo 'owner/fleet' -Fetch $Fetch
+        'step returned'
+    } 6>&1 2>&1 | Out-String
+    $called = Test-Path -LiteralPath $marker
+    Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+    [pscustomobject]@{ Output = $out; Called = $called }
+}
+
+$fetchedUrl = $null
+$ok = Invoke-FontStepCase {
+    param($Uri, $OutFile)
+    $script:fetchedUrl = $Uri
+    Set-Content -LiteralPath $OutFile -Value "function Install-FleetFont { New-Item -ItemType File -Path '$($marker -replace "'", "''")' | Out-Null; `$true }"
+}
+Check 'get-fleet: fetches fonts.ps1 from the same repository as deps.ps1' ($fetchedUrl -eq 'https://raw.githubusercontent.com/owner/fleet/main/scripts/fonts.ps1')
+Check 'get-fleet: runs Install-FleetFont from the fetched fonts.ps1' ($ok.Called)
+Check 'get-fleet: the font step prints no result value and carries on' ($ok.Output -notmatch '(?m)^True\r?$' -and $ok.Output -match 'step returned')
+
+$noFetch = Invoke-FontStepCase { param($Uri, $OutFile) throw 'offline' }
+Check 'get-fleet: a failed fonts.ps1 fetch warns and carries on' (
+    $noFetch.Output -match 'could not install JetBrainsMono Nerd Font' -and $noFetch.Output -match 'offline' -and
+    $noFetch.Output -match 're-run the installer' -and $noFetch.Output -match 'step returned')
+
+$broken = Invoke-FontStepCase {
+    param($Uri, $OutFile)
+    Set-Content -LiteralPath $OutFile -Value "function Install-FleetFont { throw 'font exploded' }"
+}
+Check 'get-fleet: a throwing font install warns and carries on' (
+    $broken.Output -match 'font exploded' -and $broken.Output -match 're-run the installer' -and $broken.Output -match 'step returned')
+
+$failed = Invoke-FontStepCase {
+    param($Uri, $OutFile)
+    Set-Content -LiteralPath $OutFile -Value "function Install-FleetFont { Write-Host '    could not install it'; `$false }"
+}
+Check 'get-fleet: a font install that reports failure carries on' ($failed.Output -match 'could not install it' -and $failed.Output -match 'step returned')
+
+$getFleetAst = [System.Management.Automation.Language.Parser]::ParseFile($getFleet, [ref]$null, [ref]$null)
+$top = @($getFleetAst.EndBlock.Statements)
+$stepAt = -1; $setupAt = -1; $doneAt = -1
+for ($i = 0; $i -lt $top.Count; $i++) {
+    $text = $top[$i].Extent.Text
+    if ($text -match '^Invoke-FleetFontStep\b') { $stepAt = $i }
+    if ($text -match '^& \$BinPath setup') { $setupAt = $i }
+    if ($text -eq 'Complete-Steps') { $doneAt = $i }
+}
+$fontCalls = @($getFleetAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-FleetFontStep' }, $true))
+Check 'get-fleet: installs the font on every install, after fleet setup' (
+    $fontCalls.Count -eq 1 -and $stepAt -ge 0 -and $setupAt -ge 0 -and $stepAt -gt $setupAt -and $stepAt -lt $doneAt -and
+    $top[$stepAt - 1].Extent.Text -match "^Write-Step 'Installing JetBrainsMono Nerd Font'")
+
+$steps = @($getFleetAst.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Write-Step' }, $true)).Count
+$totals = foreach ($withDeps in $true, $false) {
+    & {
+        $WithDeps = $withDeps
+        $DepsMissing = @()
+        . ([scriptblock]::Create($getFleetHelpers))
+        $script:StepTotal
+    }
+}
+Check 'get-fleet: the step total counts the font step' ($totals[0] -eq $steps -and $totals[1] -eq $steps - 1)
+
+Check 'get-fleet: never touches settings.json or HKCU:\Console' (
+    [IO.File]::ReadAllText($getFleet) -notmatch 'settings\.json|HKCU:\\Console')
+
 $sh = Get-Command sh -ErrorAction SilentlyContinue
 if ($sh) {
     $bin = Join-Path ([IO.Path]::GetTempPath()) "fleet-installer-bin-$([guid]::NewGuid().ToString('N'))"

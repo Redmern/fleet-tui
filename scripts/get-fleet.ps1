@@ -6,6 +6,10 @@
     Downloads the native binary, puts it on the user PATH and runs 'fleet setup',
     which reports whatever is still missing.
 
+    fleet's icons are Nerd Font glyphs, so it also installs JetBrainsMono Nerd Font
+    Mono for the current user (no admin needed), through scripts/fonts.ps1 fetched
+    from the same repository. A failed font install only warns.
+
     Defaults to the upstream release repository. Pass -Repo, or set FLEET_REPO, to
     install from a fork instead.
 
@@ -54,7 +58,7 @@ $script:Fancy = -not ($env:FLEET_NO_ANIMATION -or $env:NO_COLOR -or $env:CI -or 
     $Host.Name -ne 'ConsoleHost' -or [Console]::IsOutputRedirected)
 $script:StepCount = 0
 $DepsMissing = @('git', 'nvim', 'yazi' | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
-$script:StepTotal = if ($WithDeps -or $DepsMissing) { 4 } else { 3 }
+$script:StepTotal = if ($WithDeps -or $DepsMissing) { 5 } else { 4 }
 
 function Format-Bar([double]$fraction, [int]$width = 24) {
     $filled = [int][Math]::Floor([Math]::Max(0.0, [Math]::Min(1.0, $fraction)) * $width)
@@ -146,6 +150,32 @@ function Save-Download($Uri, $Path) {
     }
 }
 
+# fonts.ps1 is fetched from the same repository as deps.ps1, since 'irm | iex' has
+# no sibling files. It installs JetBrainsMono Nerd Font Mono for this user, so the
+# icons render. A fetch or font install that fails only warns.
+function Invoke-FleetFontStep {
+    param(
+        [string]$Repo,
+        [scriptblock]$Fetch = { param($Uri, $OutFile) Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing }
+    )
+    $fontsUrl = "https://raw.githubusercontent.com/$Repo/main/scripts/fonts.ps1"
+    $fontsFile = Join-Path ([IO.Path]::GetTempPath()) "fleet-fonts-$([guid]::NewGuid().ToString('N')).ps1"
+    try {
+        & $Fetch $fontsUrl $fontsFile
+        Write-Ok $fontsUrl
+
+        . $fontsFile
+        Install-FleetFont | Out-Null
+    }
+    catch {
+        Write-Host "    could not install JetBrainsMono Nerd Font from $fontsUrl ($($_.Exception.Message))" -ForegroundColor Yellow
+        Write-Host '    fleet still installs; its icons need this font - re-run the installer to try again' -ForegroundColor Yellow
+    }
+    finally {
+        Remove-Item $fontsFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
 # The dependency script is only fetched when something is missing or -WithDeps asks
 # for it. -WithDeps installs, an interactive console asks y/N, anything else prints
 # the commands. Nothing here can fail the fleet install.
@@ -205,6 +235,9 @@ if (($current -split ';') -notcontains $InstallDir) {
 
 Write-Step 'Setting up'
 & $BinPath setup
+
+Write-Step 'Installing JetBrainsMono Nerd Font'
+Invoke-FleetFontStep -Repo $Repo
 
 Complete-Steps
 Write-Host ''
