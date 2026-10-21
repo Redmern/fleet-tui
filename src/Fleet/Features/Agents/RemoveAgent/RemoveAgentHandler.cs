@@ -9,11 +9,22 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.RemoveAgent;
 
-public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentStore store)
+public sealed class RemoveAgentHandler(
+    IGitRunner git, IMuxDriver mux, IAgentStore store, IReadOnlyList<TimeSpan>? folderRetries = null)
 {
     private const int Attempts = 4;
 
     private static readonly TimeSpan Backoff = TimeSpan.FromMilliseconds(400);
+
+    private static readonly IReadOnlyList<TimeSpan> FolderPatience =
+    [
+        TimeSpan.FromMilliseconds(250),
+        TimeSpan.FromMilliseconds(500),
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(3),
+        TimeSpan.FromMilliseconds(3250),
+    ];
 
     public async Task<WorktreeState> InspectAsync(
         AgentRecord agent, CancellationToken ct = default)
@@ -62,23 +73,47 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
         bool deleteWorktree,
         CancellationToken ct = default)
     {
-        await StopAsync(agent, ct).ConfigureAwait(false);
+        var removal = await RemoveAsync(project, agent, deleteWorktree, ct).ConfigureAwait(false);
 
-        if (deleteWorktree)
+        return removal.Problem is null ? Result.Ok() : Result.Fail(removal.Problem);
+    }
+
+    public async Task<AgentRemoval> RemoveAsync(
+        string project,
+        AgentRecord agent,
+        bool deleteWorktree,
+        CancellationToken ct = default)
+    {
+        if (!store.Remove(project, agent.Worktree))
         {
-            var failure = AgentHarness.IsOrchestrator(agent.Harness)
-                ? DiscardFolder(agent.Worktree)
-                : await DiscardWorktreeAsync(agent.Worktree, ct).ConfigureAwait(false);
-
-            if (failure is not null)
-            {
-                return Result.Fail(failure);
-            }
+            return AgentRemoval.Refused(
+                $"{agent.Branch} was not removed: fleet could not update its session file. Try again.");
         }
 
-        store.Remove(project, agent.Worktree);
+        await StopAsync(agent, ct).ConfigureAwait(false);
 
-        return Result.Ok();
+        if (!deleteWorktree)
+        {
+            return AgentRemoval.Done;
+        }
+
+        if (AgentHarness.IsOrchestrator(agent.Harness))
+        {
+            return await DiscardFolderAsync(agent.Worktree, ct).ConfigureAwait(false)
+                ? AgentRemoval.Done
+                : AgentRemoval.FolderKept(WorktreeLock.Kept(agent.Worktree));
+        }
+
+        var failure = await DiscardWorktreeAsync(agent.Worktree, ct).ConfigureAwait(false);
+
+        if (failure is null)
+        {
+            return AgentRemoval.Done;
+        }
+
+        store.Save(project, agent);
+
+        return AgentRemoval.Refused(failure);
     }
 
     private async Task<string?> DiscardWorktreeAsync(string worktree, CancellationToken ct)
@@ -125,19 +160,22 @@ public sealed class RemoveAgentHandler(IGitRunner git, IMuxDriver mux, IAgentSto
         return Directory.Exists(worktree) ? WorktreeLock.Busy(worktree) : null;
     }
 
-    private string? DiscardFolder(string folder)
+    private async Task<bool> DiscardFolderAsync(string folder, CancellationToken ct)
     {
-        for (var attempt = 0; attempt < Attempts && Directory.Exists(folder); attempt++)
+        Discard(folder);
+
+        foreach (var wait in folderRetries ?? FolderPatience)
         {
-            if (attempt > 0)
+            if (!Directory.Exists(folder))
             {
-                Thread.Sleep(Backoff);
+                break;
             }
 
+            await Task.Delay(wait, ct).ConfigureAwait(false);
             Discard(folder);
         }
 
-        return Directory.Exists(folder) ? WorktreeLock.Busy(folder) : null;
+        return !Directory.Exists(folder);
     }
 
     private static void Discard(string directory)
