@@ -17,7 +17,9 @@ public static class NewAgentView
     public static NewAgentCommand? Show(
         IApplication app,
         NewAgentPrompt prompt,
-        Keymap keymap)
+        Keymap keymap,
+        string lastRepo = "",
+        string lastHarness = "")
     {
         if (prompt.Repositories.Count == 0)
         {
@@ -31,9 +33,8 @@ public static class NewAgentView
 
         NewAgentCommand? result = null;
 
-        var repository = Math.Clamp(prompt.Selected, 0, prompt.Repositories.Count - 1);
+        var (repository, harness) = Preselect(prompt, lastRepo, lastHarness);
         var chosenBase = prompt.Repositories[repository].DefaultBranch;
-        var harness = AgentHarness.Normalize(prompt.Harness);
         var branch = string.Empty;
 
         var window = FleetTheme.Overlay(Title);
@@ -214,6 +215,24 @@ public static class NewAgentView
         }
 
         return result;
+    }
+
+    public static (int Repository, string Harness) Preselect(
+        NewAgentPrompt prompt, string lastRepo, string lastHarness)
+    {
+        var remembered = prompt.Repositories
+            .Select((r, index) => (r.Name, Index: index))
+            .FirstOrDefault(r => lastRepo.Length > 0 && string.Equals(r.Name, lastRepo, StringComparison.Ordinal));
+
+        var repository = remembered.Name is null
+            ? Math.Clamp(prompt.Selected, 0, Math.Max(prompt.Repositories.Count - 1, 0))
+            : remembered.Index;
+
+        var harness = AgentHarness.All.Contains(lastHarness)
+            ? lastHarness
+            : AgentHarness.Normalize(prompt.Harness);
+
+        return (repository, harness);
     }
 
     public static IReadOnlyList<FleetRow> Fields(string repository, string branch, string from, string opens) =>
