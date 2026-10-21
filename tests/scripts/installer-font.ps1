@@ -179,6 +179,55 @@ try {
     Check 'skip: a registry value without its file downloads again' ($repair.Downloads -eq 1 -and $repair.Result -eq $true -and
         (Test-Path -LiteralPath (Join-Path $fontDir 'JetBrainsMonoNerdFontMono-Regular.ttf')))
 
+    # A font file that cannot be written (here a directory in its place) warns for
+    # that file, registers only the files that landed, and the next run retries.
+    $blockedRegistry = @{}
+    $blockedKey = "$registryRoot\blocked"
+    $blockedDir = Join-Path $workDir 'fonts-blocked'
+    $blocked = Join-Path $blockedDir 'JetBrainsMonoNerdFontMono-Italic.ttf'
+    New-Item -ItemType Directory -Path $blocked -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $blocked 'keep'), 'in the way')
+    $partial = Invoke-FontCase -FontDir $blockedDir -RegistryPath $blockedKey -Registry $blockedRegistry
+    $italic = $FleetFontFiles | Where-Object { $_.File -eq 'JetBrainsMonoNerdFontMono-Italic.ttf' }
+    $others = @($FleetFontFiles | Where-Object { $_.File -ne $italic.File })
+    Check 'copy failure: returns false' ($partial.Result -eq $false)
+    Check 'copy failure: warns for that file with how to retry' (
+        $partial.Output -match 'JetBrainsMonoNerdFontMono-Italic\.ttf' -and $partial.Output -match 're-run the installer')
+    Check 'copy failure: does not register the file it could not copy' (-not (Get-RegValue $blockedRegistry $blockedKey $italic.Name))
+    Check 'copy failure: still copies and registers the other files' (
+        @($others | Where-Object {
+                -not (Test-Path -LiteralPath (Join-Path $blockedDir $_.File) -PathType Leaf) -or
+                (Get-RegValue $blockedRegistry $blockedKey $_.Name) -ne (Join-Path $blockedDir $_.File) }).Count -eq 0)
+    Remove-Item -LiteralPath $blocked -Recurse -Force
+    $retry = Invoke-FontCase -FontDir $blockedDir -RegistryPath $blockedKey -Registry $blockedRegistry
+    Check 'copy failure: the next run downloads again and completes' (
+        $retry.Downloads -eq 1 -and $retry.Result -eq $true -and
+        (Get-RegValue $blockedRegistry $blockedKey $italic.Name) -eq (Join-Path $blockedDir $italic.File))
+
+    # A font file Windows has open (Terminal using it) cannot be replaced; the file
+    # already there is still registered.
+    if ($onWindows) {
+        $lockedRegistry = @{}
+        $lockedKey = "$registryRoot\locked"
+        $lockedDir = Join-Path $workDir 'fonts-locked'
+        New-Item -ItemType Directory -Path $lockedDir | Out-Null
+        $lockedFile = Join-Path $lockedDir 'JetBrainsMonoNerdFontMono-Bold.ttf'
+        [IO.File]::WriteAllText($lockedFile, 'in use')
+        $lock = [IO.File]::Open($lockedFile, 'Open', 'Read', 'None')
+        try {
+            $locked = Invoke-FontCase -FontDir $lockedDir -RegistryPath $lockedKey -Registry $lockedRegistry
+        }
+        finally {
+            $lock.Dispose()
+        }
+        Check 'locked file: warns for that file' ($locked.Output -match 'JetBrainsMonoNerdFontMono-Bold\.ttf')
+        Check 'locked file: registers every file that is present' (
+            @($FleetFontFiles | Where-Object { (Get-RegValue $lockedRegistry $lockedKey $_.Name) -ne (Join-Path $lockedDir $_.File) }).Count -eq 0)
+    }
+    else {
+        Write-Host 'skip locked-file check (file locks are Windows-only)' -ForegroundColor Yellow
+    }
+
     # Purge: removes exactly what the installer added.
     $otherFile = Join-Path $fontDir 'SomeoneElse.ttf'
     [IO.File]::WriteAllText($otherFile, 'not ours')

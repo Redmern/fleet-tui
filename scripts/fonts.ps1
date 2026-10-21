@@ -13,7 +13,7 @@
     The zip is a pinned nerd-fonts release asset, checked against a pinned SHA256
     before anything is extracted.
 
-    When the face is already installed (registry value and file present) nothing
+    When the face is already installed (every style registered, its file present) nothing
     is downloaded. A failed download, hash check or extraction only warns, so the
     fleet install carries on.
 
@@ -57,19 +57,21 @@ function Remove-FleetFontRegistryValue([string]$Path, [string]$Name) {
     Remove-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue
 }
 
-# Installed means the Regular style is registered and its file is where the
-# registry says.
+# Installed means every style is registered and its file is where the registry
+# says, so a run that got only some of them in place is retried.
 function Test-FleetFontInstalled {
     [CmdletBinding()]
     param(
         [string]$FontDir = (Get-FleetFontDefaultDir),
         [string]$RegistryPath = $FleetFontRegistryPath
     )
-    $regular = $FleetFontFiles[0]
-    $registered = Get-FleetFontRegistryValue -Path $RegistryPath -Name $regular.Name
-    if (-not $registered) { return $false }
-    if (-not [IO.Path]::IsPathRooted($registered)) { $registered = Join-Path $FontDir $registered }
-    [bool](Test-Path -LiteralPath $registered)
+    foreach ($font in $FleetFontFiles) {
+        $registered = Get-FleetFontRegistryValue -Path $RegistryPath -Name $font.Name
+        if (-not $registered) { return $false }
+        if (-not [IO.Path]::IsPathRooted($registered)) { $registered = Join-Path $FontDir $registered }
+        if (-not (Test-Path -LiteralPath $registered -PathType Leaf)) { return $false }
+    }
+    $true
 }
 
 function Save-FleetFontZip([string]$Url, [string]$OutFile) {
@@ -132,9 +134,28 @@ function Install-FleetFont {
 
         New-Item -ItemType Directory -Path $FontDir -Force | Out-Null
         foreach ($font in $FleetFontFiles) {
+            try {
+                [IO.File]::Copy((Join-Path $extracted $font.File), (Join-Path $FontDir $font.File), $true)
+            }
+            catch {
+                $cause = $_.Exception
+                if ($cause.InnerException) { $cause = $cause.InnerException }
+                Write-Host "    could not copy $($font.File): $($cause.Message)" -ForegroundColor Yellow
+            }
+        }
+
+        $missing = @()
+        foreach ($font in $FleetFontFiles) {
             $target = Join-Path $FontDir $font.File
-            Copy-Item -LiteralPath (Join-Path $extracted $font.File) -Destination $target -Force
-            Set-FleetFontRegistryValue -Path $RegistryPath -Name $font.Name -Value $target
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+                Set-FleetFontRegistryValue -Path $RegistryPath -Name $font.Name -Value $target
+            }
+            else {
+                $missing += $font.File
+            }
+        }
+        if ($missing.Count -gt 0) {
+            throw "not installed: $($missing -join ', ')"
         }
 
         Write-Host "    installed $FleetFontFace for this user" -ForegroundColor Green
