@@ -7,15 +7,22 @@ public sealed class LaunchFolderTests
     [Fact]
     public void A_launch_folder_that_exists_is_the_default_root()
     {
-        Assert.Equal("C:/repos", Adapters.LaunchFolder("C:/repos", p => p == "C:/repos"));
+        Assert.Equal("C:/repos", Adapters.LaunchFolder("C:/repos", true, "C:/daemon", p => p == "C:/repos"));
     }
 
     [Fact]
-    public void A_missing_empty_or_vanished_launch_folder_gives_no_default_root()
+    public void Inside_a_fleetd_pane_a_missing_empty_or_vanished_launch_folder_gives_no_default_root()
     {
-        Assert.Null(Adapters.LaunchFolder(null, _ => true));
-        Assert.Null(Adapters.LaunchFolder(string.Empty, _ => true));
-        Assert.Null(Adapters.LaunchFolder("Z:/gone", _ => false));
+        Assert.Null(Adapters.LaunchFolder(null, true, "C:/daemon", _ => true));
+        Assert.Null(Adapters.LaunchFolder(string.Empty, true, "C:/daemon", _ => true));
+        Assert.Null(Adapters.LaunchFolder("Z:/gone", true, "C:/daemon", _ => false));
+    }
+
+    [Fact]
+    public void Run_straight_from_a_shell_the_current_folder_is_the_launch_folder()
+    {
+        Assert.Equal("C:/here", Adapters.LaunchFolder(null, false, "C:/here", p => p == "C:/here"));
+        Assert.Null(Adapters.LaunchFolder(null, false, "C:/gone", _ => false));
     }
 
     [Fact]
