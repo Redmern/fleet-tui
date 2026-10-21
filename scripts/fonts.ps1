@@ -96,13 +96,13 @@ function Install-FleetFont {
         [scriptblock]$Download = { param($Url, $OutFile) Save-FleetFontZip $Url $OutFile }
     )
 
-    if (Test-FleetFontInstalled -FontDir $FontDir -RegistryPath $RegistryPath) {
-        Write-Host "    $FleetFontFace already installed" -ForegroundColor Green
-        return $true
-    }
-
     $work = Join-Path ([IO.Path]::GetTempPath()) "fleet-font-$([guid]::NewGuid().ToString('N'))"
     try {
+        if (Test-FleetFontInstalled -FontDir $FontDir -RegistryPath $RegistryPath) {
+            Write-Host "    $FleetFontFace already installed" -ForegroundColor Green
+            return $true
+        }
+
         New-Item -ItemType Directory -Path $work -Force | Out-Null
         $zip = Join-Path $work 'JetBrainsMono.zip'
 
