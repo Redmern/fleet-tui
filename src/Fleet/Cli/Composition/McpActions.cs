@@ -457,9 +457,19 @@ public sealed class McpActions(
 
         var delete = ToolArguments.Flag(request, ToolArguments.DeleteWorktree);
 
-        var outcome = await _remover.HandleAsync(project, agent, delete, ct).ConfigureAwait(false);
+        var outcome = await _remover.RemoveAsync(project, agent, delete, ct).ConfigureAwait(false);
 
-        return From(outcome, delete
+        if (!outcome.Forgotten)
+        {
+            return McpResult.Error(outcome.Problem!);
+        }
+
+        if (outcome.Problem is not null)
+        {
+            return Ok($"removed {Repo(request)}/{Branch(request)}. {outcome.Problem}");
+        }
+
+        return Ok(delete
             ? $"removed {Repo(request)}/{Branch(request)} and its worktree."
             : $"removed {Repo(request)}/{Branch(request)}, kept its files.");
     }
