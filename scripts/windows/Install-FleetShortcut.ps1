@@ -5,7 +5,8 @@
 .DESCRIPTION
     Copies Start-Fleet.ps1, FleetTaskbar.cs and the icons into the install directory,
     adds a Windows Terminal profile named "Fleet" as a JSON fragment (the user's
-    settings.json is never edited) and creates a Start Menu Fleet.lnk carrying the Fleet
+    settings.json is never edited) that uses the Nerd Font the installers put in,
+    JetBrainsMono Nerd Font Mono, and creates a Start Menu Fleet.lnk carrying the Fleet
     AppUserModelID, so Fleet windows group under it on the taskbar.
 
     Safe to run again: unchanged files are left alone. A Start Menu Fleet.lnk that this
@@ -128,6 +129,7 @@ else {
                 icon              = Join-Path $InstallDir 'fleet-32.png'
                 tabTitle          = $ProfileName
                 startingDirectory = '%USERPROFILE%'
+                font              = [ordered]@{ face = 'JetBrainsMono Nerd Font Mono' }
             }
         )
     } | ConvertTo-Json -Depth 4
