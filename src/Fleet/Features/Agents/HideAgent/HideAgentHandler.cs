@@ -39,7 +39,7 @@ public sealed class HideAgentHandler(IMuxDriver mux, IAgentStore store)
             await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
         }
 
-        store.Save(project, changed);
+        store.Replace(project, changed);
 
         return Result<AgentRecord>.Ok(changed);
     }

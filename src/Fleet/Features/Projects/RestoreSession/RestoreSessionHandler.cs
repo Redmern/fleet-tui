@@ -35,7 +35,7 @@ public sealed class RestoreSessionHandler(
 
         foreach (var agent in all.Where(a => AgentHarness.IsOrchestrator(a.Harness)))
         {
-            store?.Save(project, agent with { InNvim = subOrchestratorsInNvim });
+            store?.Replace(project, agent with { InNvim = subOrchestratorsInNvim });
         }
 
         return all.Count;

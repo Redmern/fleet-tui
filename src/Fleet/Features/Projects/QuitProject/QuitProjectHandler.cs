@@ -51,7 +51,7 @@ public sealed class QuitProjectHandler(IMuxDriver mux, IAgentStore store)
 
             if (open != agent.Open)
             {
-                store.Save(project, agent with { Open = open });
+                store.Replace(project, agent with { Open = open });
             }
         }
     }

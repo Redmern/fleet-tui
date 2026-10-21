@@ -88,6 +88,18 @@ public sealed class RenameAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task Renaming_an_agent_removed_meanwhile_does_not_bring_it_back()
+    {
+        var repo = await RepositoryAsync();
+        var agent = await AgentAsync(repo, "feature/old");
+        _store.Remove("proj", agent.Worktree);
+
+        await new RenameAgentHandler(new GitRunner(), _store).HandleAsync("proj", agent, "feature/new");
+
+        Assert.Empty(_store.List("proj"));
+    }
+
+    [Fact]
     public async Task Renaming_onto_an_existing_branch_is_refused_and_changes_nothing()
     {
         var repo = await RepositoryAsync();
@@ -123,6 +135,11 @@ public sealed class RenameAgentTests : IDisposable
 
         public bool Replace(string project, AgentRecord agent)
         {
+            if (!_agents.Any(a => PathKey.Same(a.Worktree, agent.Worktree)))
+            {
+                return false;
+            }
+
             Save(project, agent);
             return true;
         }

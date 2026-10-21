@@ -45,7 +45,7 @@ public sealed class RenameAgentHandler(IGitRunner git, IAgentStore store)
 
         var updated = agent with { Branch = target };
 
-        store.Save(project, updated);
+        store.Replace(project, updated);
 
         return Result<AgentRecord>.Ok(updated);
     }
