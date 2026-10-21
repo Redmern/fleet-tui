@@ -60,6 +60,13 @@ $notZip = Join-Path $workDir 'not-a-zip.zip'
 [IO.File]::WriteAllText($notZip, 'not a zip')
 $notZipHash = (Get-FileHash -LiteralPath $notZip -Algorithm SHA256).Hash
 
+$noMonoSource = Join-Path $workDir 'no-mono-source'
+New-Item -ItemType Directory -Path $noMonoSource | Out-Null
+[IO.File]::WriteAllText((Join-Path $noMonoSource 'JetBrainsMonoNerdFont-Regular.ttf'), 'not the Mono face')
+$noMonoZip = Join-Path $workDir 'no-mono.zip'
+[IO.Compression.ZipFile]::CreateFromDirectory($noMonoSource, $noMonoZip)
+$noMonoHash = (Get-FileHash -LiteralPath $noMonoZip -Algorithm SHA256).Hash
+
 $registryRoot = "HKCU:\Software\FleetTest\Fonts-$([guid]::NewGuid().ToString('N'))"
 if (-not $onWindows) {
     Write-Host 'skip real registry checks (not Windows): the registry helpers are stubbed with a hashtable' -ForegroundColor Yellow
@@ -189,7 +196,8 @@ try {
     $cases = @(
         @{ Name = 'hash mismatch'; Args = @{ Sha256 = $FleetFontSha256 }; Expect = 'SHA256' },
         @{ Name = 'download failure'; Args = @{ DownloadThrows = $true }; Expect = 'network down' },
-        @{ Name = 'extraction failure'; Args = @{ SourceZip = $notZip; Sha256 = $notZipHash }; Expect = '.' }
+        @{ Name = 'extraction failure'; Args = @{ SourceZip = $notZip; Sha256 = $notZipHash }; Expect = 'Central Directory' },
+        @{ Name = 'zip without the Mono files'; Args = @{ SourceZip = $noMonoZip; Sha256 = $noMonoHash }; Expect = 'JetBrainsMonoNerdFontMono-Regular\.ttf is not in the zip' }
     )
     foreach ($case in $cases) {
         $registry = @{}
