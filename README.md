@@ -32,7 +32,10 @@ To run fleet:
   config does not need them
 - [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
 - Claude Code, which nvim starts in the pane fleet opens on the left
-- a Nerd Font in your terminal, or the branch pills and icons render as boxes
+- a Nerd Font in your terminal, or the branch pills and icons render as boxes. On
+  Windows both installers install JetBrainsMono Nerd Font Mono for you (see
+  [The Nerd Font on Windows](#the-nerd-font-on-windows)); on Linux and macOS, install
+  one yourself
 
 To build it yourself, additionally:
 
@@ -54,6 +57,9 @@ irm https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-fleet.p
 # Linux
 curl -fsSL https://raw.githubusercontent.com/Redmern/fleet-tui/main/scripts/get-fleet.sh | sh
 ```
+
+On Windows it also installs JetBrainsMono Nerd Font Mono for your user, so the
+icons render; see [The Nerd Font on Windows](#the-nerd-font-on-windows).
 
 Running on a fork? Point either script at it instead with `-Repo <owner>/fleet`
 (PowerShell) or `FLEET_REPO=<owner>/fleet` (sh).
@@ -135,8 +141,8 @@ then group under that button. A `Fleet.lnk` you made yourself is kept (`-Force`
 on the script replaces it); `-NoShortcut` skips the launcher altogether.
 
 `.\install.ps1 -Uninstall` reverses a Windows install. Add `-Purge` to delete
-`%APPDATA%\fleet` as well. On Linux, `./install.sh --uninstall`
-removes the binary and the marked `PATH` line.
+`%APPDATA%\fleet` and the JetBrainsMono Nerd Font as well. On Linux,
+`./install.sh --uninstall` removes the binary and the marked `PATH` line.
 
 If publishing fails with `'vswhere.exe' is not recognized` followed by `MSB3073`,
 the toolchain is fine and only `vswhere` is missing from `PATH`; the installer
@@ -145,6 +151,28 @@ adds it automatically, but a manual `dotnet publish` needs:
 ```powershell
 $env:PATH = "C:\Program Files (x86)\Microsoft Visual Studio\Installer;$env:PATH"
 ```
+
+### The Nerd Font on Windows
+
+fleet's icons are Nerd Font glyphs, so on Windows both `get-fleet.ps1` and
+`install.ps1` install **JetBrainsMono Nerd Font Mono** for the current user, without
+admin rights (`scripts\fonts.ps1`, which runs under Windows PowerShell 5.1 and
+PowerShell 7). They download the pinned nerd-fonts v3.5.1 release, check its SHA256,
+copy the four Mono styles to `%LOCALAPPDATA%\Microsoft\Windows\Fonts` and register
+them under `HKCU`. A face that is already installed is not downloaded again. If the
+download, hash check or extraction fails, the installer warns and finishes the fleet
+install anyway; run it again to retry the font.
+
+Restart Windows Terminal after the install so it sees the new font. The "Fleet"
+Terminal profile that `install.ps1` creates asks for the face itself. The installers
+never edit your Terminal `settings.json` or console settings, so in any other profile,
+pick **JetBrainsMono Nerd Font Mono** under Appearance › Font face yourself. That
+includes machines without pwsh (PowerShell 7), where the installer creates no Fleet
+profile, and installs through `get-fleet.ps1`, which creates none.
+
+`.\install.ps1 -Uninstall -Purge` removes the font again. The font is licensed under
+the SIL Open Font License 1.1; see
+[docs/third-party/jetbrainsmono-nerd-font-OFL.md](docs/third-party/jetbrainsmono-nerd-font-OFL.md).
 
 ## Commands
 
@@ -1449,6 +1477,7 @@ libraries survive NativeAOT and what owning a pane would actually cost. See
 | `docs/DESIGN.md` | the design, every decision, and a dated verification log |
 | `docs/phase1.md` | the phase 1 specification |
 | `docs/PHASE1-PLAN.md` | the implementation plan it was built from |
+| `docs/third-party/` | licenses of third-party files the installers fetch (JetBrainsMono Nerd Font, SIL OFL 1.1) |
 
 `DESIGN.md` also carries a **Non-obvious behaviour** section: the Terminal.Gui
 v2 traps, the multiplexer quirks, and the git plumbing this project had to discover.
