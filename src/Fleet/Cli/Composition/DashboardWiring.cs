@@ -894,30 +894,7 @@ public static class DashboardWiring
                 var history = Adapters.History();
 
                 var prompt = await FleetAsync
-                    .OnUi(app, () =>
-                    {
-                        var past = history.List(project.Name);
-                        var initial = string.Empty;
-
-                        if (past.Count > 0)
-                        {
-                            var options = past.Append("Type a new task...").ToList();
-                            var picked = FleetPicker.Choose(app, "New sub-orchestrator", options, keymap);
-
-                            if (picked is null)
-                            {
-                                return null;
-                            }
-
-                            if (picked.Value < past.Count)
-                            {
-                                initial = past[picked.Value];
-                            }
-                        }
-
-                        return FleetPrompt.Text(
-                            app, "New sub-orchestrator", initial, "Task for the sub");
-                    })
+                    .OnUi(app, () => NewSubView.Show(app, history.List(project.Name), keymap))
                     .ConfigureAwait(false);
 
                 if (string.IsNullOrWhiteSpace(prompt))

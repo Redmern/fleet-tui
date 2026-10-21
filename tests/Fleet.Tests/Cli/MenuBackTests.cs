@@ -85,6 +85,7 @@ public class MenuBackTests
         new[] { "Features", "Repositories", "AddRepository", "AddRepositoryView.cs" },
         new[] { "Features", "Repositories", "Secrets", "SecretsView.cs" },
         new[] { "Features", "Agents", "NewAgent", "NewAgentView.cs" },
+        new[] { "Features", "Orchestrations", "Dispatch", "NewSubView.cs" },
         new[] { "Features", "Agents", "ListAgents", "ListAgentsView.cs" },
         new[] { "Features", "Todos", "ShowBoard", "BoardView.cs" },
     };
@@ -110,6 +111,24 @@ public class MenuBackTests
 
         Assert.Contains("field.KeyDown", source);
         Assert.Contains("FleetKeys.GoesBack(key, field.Text)", source);
+    }
+
+    [Fact]
+    public void The_new_sub_task_field_only_goes_back_when_it_is_empty()
+    {
+        var source = Source("Features", "Orchestrations", "Dispatch", "NewSubView.cs");
+
+        Assert.Contains("field.KeyDown", source);
+        Assert.Contains("FleetKeys.GoesBack(key, field.Text)", source);
+    }
+
+    [Fact]
+    public void Starting_a_new_sub_opens_the_dedicated_dialog()
+    {
+        var wiring = Source("Cli", "Composition", "DashboardWiring.cs");
+
+        Assert.Contains("NewSubView.Show(", wiring);
+        Assert.DoesNotContain("\"Type a new task...\"", wiring);
     }
 
     // Backspace is a key you may want to bind, so the capture dialog takes it
