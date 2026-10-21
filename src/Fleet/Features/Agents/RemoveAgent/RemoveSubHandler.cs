@@ -40,12 +40,12 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 + "stop_sub, or remove it from the dashboard's Subs tab.");
         }
 
-        var gone = await remover.HandleAsync(command.Project, sub, command.DeleteFolder, ct)
+        var gone = await remover.RemoveAsync(command.Project, sub, command.DeleteFolder, ct)
             .ConfigureAwait(false);
 
-        if (!gone.Succeeded)
+        if (!gone.Forgotten)
         {
-            return Result<SubRemoval>.Fail(gone.Error!);
+            return Result<SubRemoval>.Fail(gone.Problem!);
         }
 
         var removed = new List<string>();
@@ -58,7 +58,7 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
 
             if (!command.RemoveAgents)
             {
-                store.Save(command.Project, SubChildren.Released(child));
+                store.Replace(command.Project, SubChildren.Released(child));
                 released.Add(label);
                 continue;
             }
@@ -71,12 +71,19 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 continue;
             }
 
-            store.Save(command.Project, SubChildren.Released(child));
+            store.Replace(command.Project, SubChildren.Released(child));
             kept.Add($"{label} ({refusal})");
         }
 
         return Result<SubRemoval>.Ok(
-            new SubRemoval(sub.Branch, sub.Worktree, command.DeleteFolder, removed, kept, released));
+            new SubRemoval(
+                sub.Branch,
+                sub.Worktree,
+                command.DeleteFolder && gone.Problem is null,
+                removed,
+                kept,
+                released,
+                gone.Problem));
     }
 
     private async Task<bool> RunningAsync(AgentRecord sub, CancellationToken ct)

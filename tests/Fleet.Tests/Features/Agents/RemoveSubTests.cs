@@ -51,7 +51,7 @@ public sealed class RemoveSubTests : IDisposable
     }
 
     private RemoveSubHandler Handler() =>
-        new(new RemoveAgentHandler(new GitRunner(), _mux, _store), _store, _mux);
+        new(new RemoveAgentHandler(new GitRunner(), _mux, _store, folderRetries: []), _store, _mux);
 
     private static RemoveSubCommand Command(
         string slug = "upgrade", string caller = "", bool deleteFolder = false, bool removeAgents = false) =>
@@ -134,6 +134,45 @@ public sealed class RemoveSubTests : IDisposable
         Assert.True(result.Succeeded, result.Error);
         Assert.Null(Stored(sub));
         Assert.False(Directory.Exists(sub.Worktree));
+    }
+
+    [Fact]
+    public async Task A_folder_that_cannot_be_deleted_is_kept_but_the_sub_is_still_removed()
+    {
+        var sub = Sub();
+        var child = await ChildAsync("feature/login");
+
+        Fleet.Shared.Results.Result<SubRemoval> result;
+
+        using (PinnedFolder.For(sub.Worktree))
+        {
+            result = await Handler().HandleAsync(Command(deleteFolder: true));
+        }
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Null(Stored(sub));
+        Assert.True(Directory.Exists(sub.Worktree));
+        Assert.Equal(string.Empty, Stored(child)!.Owner);
+        Assert.Contains(sub.Worktree, result.Value!.Note);
+        Assert.Contains("kept", result.Value.Note);
+        Assert.Contains("manually", result.Value.Note);
+        Assert.DoesNotContain("deleted its folder", result.Value.Note);
+    }
+
+    [Fact]
+    public async Task A_sub_the_store_cannot_remove_is_not_reported_removed()
+    {
+        var sub = Sub();
+        var child = await ChildAsync("feature/login");
+        _store.RefuseRemove = true;
+
+        var result = await Handler().HandleAsync(Command(deleteFolder: true, removeAgents: true));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("not removed", result.Error);
+        Assert.True(Directory.Exists(sub.Worktree));
+        Assert.True(Directory.Exists(child.Worktree));
+        Assert.Equal("upgrade", Stored(child)!.Owner);
     }
 
     [Fact]
@@ -346,6 +385,8 @@ public sealed class RemoveSubTests : IDisposable
     {
         private readonly List<AgentRecord> _agents = [];
 
+        public bool RefuseRemove { get; set; }
+
         public void Save(string project, AgentRecord agent)
         {
             _agents.RemoveAll(a => PathKey.Same(a.Worktree, agent.Worktree));
@@ -356,12 +397,22 @@ public sealed class RemoveSubTests : IDisposable
 
         public bool Replace(string project, AgentRecord agent)
         {
+            if (!_agents.Any(a => PathKey.Same(a.Worktree, agent.Worktree)))
+            {
+                return false;
+            }
+
             Save(project, agent);
             return true;
         }
 
         public bool Remove(string project, string worktree)
         {
+            if (RefuseRemove)
+            {
+                return false;
+            }
+
             _agents.RemoveAll(a => PathKey.Same(a.Worktree, worktree));
             return true;
         }
