@@ -167,8 +167,9 @@ Restart Windows Terminal after the install so it sees the new font. The "Fleet"
 Terminal profile that `install.ps1` creates asks for the face itself. The installers
 never edit your Terminal `settings.json` or console settings, so in any other profile,
 pick **JetBrainsMono Nerd Font Mono** under Appearance › Font face yourself. That
-includes machines without pwsh (PowerShell 7), where the installer creates no Fleet
-profile, and installs through `get-fleet.ps1`, which creates none.
+includes every install without the installer's Fleet profile: through `get-fleet.ps1`,
+which creates none; on machines without pwsh (PowerShell 7); with `-NoShortcut`; and
+when your `settings.json` already has a "Fleet" profile.
 
 `.\install.ps1 -Uninstall -Purge` removes the font again. The font is licensed under
 the SIL Open Font License 1.1; see
