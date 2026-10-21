@@ -479,7 +479,8 @@ public static class DashboardWiring
             barPanes is null ? records : activity.For(records, barPanes, HookedNow());
 
         var spawner = new NewAgentHandler(
-            git, mux, agents, name => settings.Load(name).Models, name => settings.Load(name).SubagentGuidance);
+            git, mux, agents, name => settings.Load(name).Models, name => settings.Load(name).SubagentGuidance,
+            settings: settings);
         var hider = new HideAgentHandler(mux, agents);
         var editor = new OpenEditorHandler(mux);
         var branches = new ListBranchesHandler(git);
@@ -853,6 +854,7 @@ public static class DashboardWiring
 
             NewAgent: async (available, selected) =>
             {
+                var last = Adapters.LastNewAgent(project.Name);
                 var request = NewAgentView.Show(
                     app,
                     new NewAgentPrompt(
@@ -861,7 +863,9 @@ public static class DashboardWiring
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
                         AgentHarness.Nvim),
-                    keymap);
+                    keymap,
+                    last.Repo,
+                    last.Harness);
 
                 if (request is null)
                 {
