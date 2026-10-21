@@ -2,6 +2,7 @@ using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Fleet.Ui;
 
@@ -32,11 +33,7 @@ public static class FleetPrompt
             app.RequestStop(window);
         }
 
-        field.Accepting += (_, e) =>
-        {
-            e.Handled = true;
-            Submit();
-        };
+        Submits(field, Submit);
 
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
@@ -86,5 +83,23 @@ public static class FleetPrompt
         }
 
         return result;
+    }
+
+    public static void Submits(TextField field, Action submit)
+    {
+        field.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+            submit();
+        };
+
+        field.KeyDown += (_, key) =>
+        {
+            if (key == Key.Enter.WithCtrl)
+            {
+                key.Handled = true;
+                submit();
+            }
+        };
     }
 }
