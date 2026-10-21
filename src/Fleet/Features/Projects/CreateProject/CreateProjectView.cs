@@ -17,7 +17,8 @@ public static class CreateProjectView
         CreateProjectHandler handler,
         Func<string, string?>? pickFolder = null,
         ProjectDraft? draft = null,
-        Action<ProjectDraft>? leaveToBrowse = null)
+        Action<ProjectDraft>? leaveToBrowse = null,
+        string? defaultRoot = null)
     {
         Project? created = null;
 
@@ -30,11 +31,9 @@ public static class CreateProjectView
 
         browse.Visible = pickFolder is not null || leaveToBrowse is not null;
 
-        if (draft is not null)
-        {
-            nameField.Text = draft.Name;
-            rootField.Text = draft.Root;
-        }
+        var opening = ProjectDraft.Opening(draft, defaultRoot);
+        nameField.Text = opening.Name;
+        rootField.Text = opening.Root;
 
         browse.Accepting += (_, e) =>
         {
