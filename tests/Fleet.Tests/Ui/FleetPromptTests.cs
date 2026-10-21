@@ -8,28 +8,28 @@ namespace Fleet.Tests.Ui;
 public sealed class FleetPromptTests
 {
     [Fact]
-    public void Ctrl_enter_in_the_text_field_submits()
+    public void Ctrl_enter_in_the_text_field_submits_the_dialog()
     {
         using var app = Application.Create().Init("ansi");
-        var submitted = 0;
-        var (window, _) = Open(app, () => submitted++);
+        var submitted = new List<bool>();
+        var (window, _) = Open(app, submitted.Add);
 
         app.Keyboard.RaiseKeyDownEvent(Key.Enter.WithCtrl);
 
-        Assert.Equal(1, submitted);
+        Assert.Equal([true], submitted);
         window.Dispose();
     }
 
     [Fact]
-    public void Enter_in_the_text_field_submits_once()
+    public void Enter_in_the_text_field_submits_the_prompt_only_once()
     {
         using var app = Application.Create().Init("ansi");
-        var submitted = 0;
-        var (window, _) = Open(app, () => submitted++);
+        var submitted = new List<bool>();
+        var (window, _) = Open(app, submitted.Add);
 
         app.Keyboard.RaiseKeyDownEvent(Key.Enter);
 
-        Assert.Equal(1, submitted);
+        Assert.Equal([false], submitted);
         window.Dispose();
     }
 
@@ -37,17 +37,17 @@ public sealed class FleetPromptTests
     public void A_letter_is_typed_as_text_and_does_not_submit()
     {
         using var app = Application.Create().Init("ansi");
-        var submitted = 0;
-        var (window, field) = Open(app, () => submitted++);
+        var submitted = new List<bool>();
+        var (window, field) = Open(app, submitted.Add);
 
         app.Keyboard.RaiseKeyDownEvent(Key.A);
 
-        Assert.Equal(0, submitted);
+        Assert.Empty(submitted);
         Assert.Equal("a", field.Text);
         window.Dispose();
     }
 
-    private static (Window Window, TextField Field) Open(IApplication app, Action submit)
+    private static (Window Window, TextField Field) Open(IApplication app, Action<bool> submit)
     {
         var window = new Window { Width = 40, Height = 10 };
         var field = new TextField { Width = 20 };
