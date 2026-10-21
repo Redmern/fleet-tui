@@ -147,6 +147,22 @@ public static class NewAgentView
         FleetKeys.ApplyMotions(list, keymap);
         FleetPillButton.Bind(list, buttons);
 
+        void Jump(int index, Action act)
+        {
+            Refill(index);
+            act();
+            Refill(index);
+        }
+
+        var fieldKeys = FieldKeys(
+                () => Jump(0, ChooseRepository),
+                () => Jump(1, EditBranch),
+                () => Jump(3, ChooseHarness))
+            .Where(k => !k.Clashes(keymap))
+            .ToList();
+
+        FleetPillButton.Bind(list, fieldKeys);
+
         void Activate()
         {
             var index = FleetRows.Selected(list);
@@ -186,6 +202,7 @@ public static class NewAgentView
         bar.Show(
         [
             ("enter", FleetIcons.Select, Activate),
+            .. fieldKeys.Select(k => (k.Mnemonic, k.Icon, k.Activate)),
             ("bksp", FleetIcons.Back, () =>
             {
                 FleetModal.Back();
@@ -241,6 +258,13 @@ public static class NewAgentView
         FleetFieldRow.Of(FleetIcons.Branch, "Branch", branch),
         FleetFieldRow.Of(FleetIcons.Base, "Base", from),
         FleetFieldRow.Of(FleetIcons.Harness, "Opens", opens),
+    ];
+
+    public static IReadOnlyList<FleetPillButton> FieldKeys(Action repository, Action branch, Action opens) =>
+    [
+        new(FleetIcons.Repo, "Repo", "r", repository),
+        new(FleetIcons.Branch, "Branch", "b", branch),
+        new(FleetIcons.Harness, "Opens", "o", opens),
     ];
 
     public static IReadOnlyList<FleetPillButton> Buttons(Action create, Action cancel) =>
