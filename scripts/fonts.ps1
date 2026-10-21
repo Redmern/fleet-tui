@@ -138,6 +138,7 @@ function Install-FleetFont {
         }
 
         Write-Host "    installed $FleetFontFace for this user" -ForegroundColor Green
+        Write-Host '    restart Windows Terminal if the font does not appear' -ForegroundColor DarkGray
         $true
     }
     catch {

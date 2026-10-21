@@ -148,6 +148,7 @@ try {
     $fresh = Invoke-FontCase -FontDir $fontDir -RegistryPath $registryRoot -Registry $registry
     $placed = @(Get-ChildItem -LiteralPath $fontDir -ErrorAction SilentlyContinue | ForEach-Object Name | Sort-Object)
     Check 'install: returns true' ($fresh.Result -eq $true)
+    Check 'install: says to restart Windows Terminal if the font does not appear' ($fresh.Output -match 'restart Windows Terminal if the font does not appear')
     Check 'install: downloads once' ($fresh.Downloads -eq 1)
     Check 'install: copies only the four Mono files to the font dir' (
         ($placed -join ',') -eq ((@($FleetFontFiles | ForEach-Object { $_.File }) | Sort-Object) -join ','))
