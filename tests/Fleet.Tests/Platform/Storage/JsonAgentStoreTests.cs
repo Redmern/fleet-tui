@@ -227,4 +227,63 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
         Assert.Null(agent.InNvim);
         Assert.True(agent.StartedInNvim);
     }
+    [Fact]
+    public void Replacing_a_removed_agent_does_not_bring_it_back()
+    {
+        var worktree = Path.Combine(ConfigHome, ".fleet", "orchestrations", "upgrade");
+        var stale = Agent(worktree) with { Harness = "orchestrator", Open = true };
+
+        _store.Save("techweb", stale);
+        Assert.True(_store.Remove("techweb", worktree));
+
+        Assert.False(_store.Replace("techweb", stale with { Open = false }));
+        Assert.Empty(_store.List("techweb"));
+    }
+
+    [Fact]
+    public void Replacing_an_existing_agent_updates_it()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+
+        _store.Save("techweb", Agent(worktree));
+
+        Assert.True(_store.Replace("techweb", Agent(worktree) with { Open = true }));
+        Assert.True(Assert.Single(_store.List("techweb")).Open);
+    }
+
+    [Fact]
+    public async Task Removing_from_a_session_file_that_stays_unreadable_reports_failure()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+        _store.Save("techweb", Agent(worktree));
+        var file = Path.Combine(FleetPaths.Sessions, "techweb.json");
+
+        bool removed;
+
+        using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            removed = await Task.Run(() => _store.Remove("techweb", worktree));
+        }
+
+        Assert.False(removed);
+        Assert.Single(_store.List("techweb"));
+    }
+
+    [Fact]
+    public async Task Removing_while_the_session_lock_stays_held_reports_failure()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+        _store.Save("techweb", Agent(worktree));
+        var lockFile = Path.Combine(FleetPaths.Sessions, "techweb.json.lock");
+
+        bool removed;
+
+        using (new FileStream(lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            removed = await Task.Run(() => _store.Remove("techweb", worktree));
+        }
+
+        Assert.False(removed);
+        Assert.Single(_store.List("techweb"));
+    }
 }

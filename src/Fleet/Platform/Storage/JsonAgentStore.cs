@@ -22,27 +22,54 @@ public sealed class JsonAgentStore : IAgentStore
         Mutate(file, session =>
         {
             session.Agents.RemoveAll(a => SameWorktree(a.Worktree, agent.Worktree));
-            session.Agents.Add(new AgentEntry
-            {
-                Worktree = HomePath.Contract(agent.Worktree),
-                Repository = agent.Repository,
-                Branch = agent.Branch,
-                Harness = agent.Harness,
-                BaseRef = agent.BaseRef,
-                RepositoryWasBare = agent.RepositoryWasBare,
-                Hidden = agent.Hidden,
-                Open = agent.Open,
-                Owner = agent.Owner,
-                Status = agent.Status,
-                Claude = agent.Claude,
-                InNvim = agent.InNvim,
-                Summary = agent.Summary,
-                ReportedAt = agent.ReportedAt,
-                Model = agent.Model?.Model,
-                Effort = agent.Model?.Effort,
-            });
+            session.Agents.Add(Entry(agent));
+            return true;
         });
     }
+
+    public bool Replace(string project, AgentRecord agent)
+    {
+        var file = FileFor(project);
+
+        if (file is null || agent.Worktree.Length == 0)
+        {
+            return false;
+        }
+
+        return Mutate(file, session =>
+        {
+            var index = session.Agents.FindIndex(a => SameWorktree(a.Worktree, agent.Worktree));
+
+            if (index < 0)
+            {
+                return false;
+            }
+
+            session.Agents[index] = Entry(agent);
+            return true;
+        });
+    }
+
+    private static AgentEntry Entry(AgentRecord agent) =>
+        new()
+        {
+            Worktree = HomePath.Contract(agent.Worktree),
+            Repository = agent.Repository,
+            Branch = agent.Branch,
+            Harness = agent.Harness,
+            BaseRef = agent.BaseRef,
+            RepositoryWasBare = agent.RepositoryWasBare,
+            Hidden = agent.Hidden,
+            Open = agent.Open,
+            Owner = agent.Owner,
+            Status = agent.Status,
+            Claude = agent.Claude,
+            InNvim = agent.InNvim,
+            Summary = agent.Summary,
+            ReportedAt = agent.ReportedAt,
+            Model = agent.Model?.Model,
+            Effort = agent.Model?.Effort,
+        };
 
     public IReadOnlyList<AgentRecord> List(string project)
     {
@@ -75,34 +102,37 @@ public sealed class JsonAgentStore : IAgentStore
             .ToList();
     }
 
-    public void Remove(string project, string worktree)
+    public bool Remove(string project, string worktree)
     {
         var file = FileFor(project);
 
         if (file is null)
         {
-            return;
+            return false;
         }
 
-        Mutate(file, session => session.Agents.RemoveAll(a => SameWorktree(a.Worktree, worktree)));
+        return Mutate(file, session =>
+        {
+            session.Agents.RemoveAll(a => SameWorktree(a.Worktree, worktree));
+            return true;
+        });
     }
 
     private static bool SameWorktree(string stored, string candidate) =>
         PathKey.Same(stored, candidate);
 
-    private static void Mutate(string file, Action<SessionFile> change)
+    private static bool Mutate(string file, Func<SessionFile, bool> change)
     {
         FleetPaths.EnsureDirs();
 
         using var gate = Lock(file + ".lock");
 
-        if (TryRead(file, BusyFiles.Patience) is not { } session)
+        if (gate is null || TryRead(file, BusyFiles.Patience) is not { } session)
         {
-            return;
+            return false;
         }
 
-        change(session);
-        Write(file, session);
+        return change(session) && Write(file, session);
     }
 
     private static FileStream? Lock(string lockPath)
@@ -149,10 +179,11 @@ public sealed class JsonAgentStore : IAgentStore
             }
         }, patience);
 
-    private static void Write(string file, SessionFile session)
+    private static bool Write(string file, SessionFile session)
     {
         var json = JsonSerializer.Serialize(session, FleetJsonContext.Default.SessionFile);
-        BusyFiles.Replace(file, temp => File.WriteAllText(temp, json));
+
+        return BusyFiles.Replace(file, temp => File.WriteAllText(temp, json));
     }
 
     private static string? FileFor(string project)

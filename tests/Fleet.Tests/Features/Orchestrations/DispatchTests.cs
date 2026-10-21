@@ -819,8 +819,17 @@ public sealed class DispatchTests : IDisposable
 
         public IReadOnlyList<AgentRecord> List(string project) => Saved;
 
-        public void Remove(string project, string worktree) =>
+        public bool Replace(string project, AgentRecord agent)
+        {
+            Save(project, agent);
+            return true;
+        }
+
+        public bool Remove(string project, string worktree)
+        {
             Saved.RemoveAll(a => a.Worktree == worktree);
+            return true;
+        }
     }
 
     [Fact]

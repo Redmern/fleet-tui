@@ -348,8 +348,17 @@ public sealed class NewAgentTests : IDisposable
         public IReadOnlyList<AgentRecord> List(string project) =>
             Saved.Where(s => s.Project == project).Select(s => s.Agent).ToList();
 
-        public void Remove(string project, string worktree) =>
+        public bool Replace(string project, AgentRecord agent)
+        {
+            Save(project, agent);
+            return true;
+        }
+
+        public bool Remove(string project, string worktree)
+        {
             Saved.RemoveAll(s => s.Project == project && s.Agent.Worktree == worktree);
+            return true;
+        }
     }
 
     [Fact]

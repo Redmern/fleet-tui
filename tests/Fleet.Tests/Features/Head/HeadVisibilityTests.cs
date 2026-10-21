@@ -488,8 +488,15 @@ public sealed class HeadVisibilityTests
         public IReadOnlyList<AgentRecord> List(string project) =>
             _records.TryGetValue(project, out var records) ? [.. records] : [];
 
-        public void Remove(string project, string worktree)
+        public bool Replace(string project, AgentRecord agent)
         {
+            Save(project, agent);
+            return true;
+        }
+
+        public bool Remove(string project, string worktree)
+        {
+            return true;
         }
     }
 
