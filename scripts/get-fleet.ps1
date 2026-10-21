@@ -11,15 +11,17 @@
     from the same repository. A failed font install only warns.
 
     Defaults to the upstream release repository. Pass -Repo, or set FLEET_REPO, to
-    install from a fork instead.
+    install from a fork instead. The dependency and font scripts (scripts/deps.ps1,
+    scripts/fonts.ps1) come from that repository's main branch, so this works
+    through 'irm | iex' too; -Version does not pin them, but the font zip is pinned
+    and SHA256-checked inside fonts.ps1.
 
 .PARAMETER WithDeps
     Install Neovim, yazi and git through winget when missing, without asking.
     Without it the installer still checks for them: on an interactive console it
     asks y/N, anywhere else (or with FLEET_NO_DEPS_PROMPT set) it prints the winget
     commands. fleet's own
-    Neovim config ships inside the binary. The dependency script is downloaded
-    from the same repository, so this works through 'irm | iex' too.
+    Neovim config ships inside the binary.
 
 .PARAMETER NvimConfig
     Optional: git URL of a Neovim config to clone into %LOCALAPPDATA%\nvim with
@@ -150,10 +152,9 @@ function Save-Download($Uri, $Path) {
     }
 }
 
-# fonts.ps1 is fetched from the same repository as deps.ps1, since 'irm | iex' has
-# no sibling files. Both run as script blocks: the default execution policy refuses
-# to dot-source a downloaded .ps1. It installs JetBrainsMono Nerd Font Mono for this user, so the
-# icons render. A fetch or font install that fails only warns.
+# Fetched like deps.ps1 ('irm | iex' has no sibling files) and run as a script
+# block, since the default execution policy refuses to dot-source a downloaded
+# .ps1. A failed fetch or font install only warns.
 function Invoke-FleetFontStep {
     param(
         [string]$Repo,
