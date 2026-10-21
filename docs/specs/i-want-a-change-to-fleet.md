@@ -23,6 +23,7 @@ New-project dialog (`CreateProjectView`) opens with an empty Root; the folder br
 - AC-6: The system shall apply AC-1..AC-5 to both `PickProjectCommand` and `MenuCommand.NewProjectFrom`.
 - AC-7: When a client without a cwd in Hello (older client) connects, the daemon shall accept it and fall back per AC-4.
 - AC-8: The user shall still be able to edit Root freely.
+- AC-10: When `fleet` runs outside fleetd (no FLEET_LAUNCH_DIR and no FLEET_PANE), the system shall use the process's current folder as the launch folder; inside a fleetd pane without FLEET_LAUNCH_DIR it shall not (AC-4 applies). Added after Build at user's request ("keep the fallback").
 - AC-9: `dotnet build`, `dotnet test`, and `dotnet format --verify-no-changes` pass; no comments added to `src`; feature slices do not read `Environment.CurrentDirectory`.
 
 ## Decisions (from interview)
