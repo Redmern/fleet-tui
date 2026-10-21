@@ -30,7 +30,7 @@ public sealed record FleetPillButton(
         var spans = new List<FleetSpan>
         {
             new(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
-            new($" {FleetButtonHints.Face(Icon, hints)} {Label} ", Tone),
+            new($" {Face(hints)} ", Tone),
         };
 
         if (Mnemonic.Length > 0)
@@ -42,6 +42,9 @@ public sealed record FleetPillButton(
 
         return new FleetRow(spans);
     }
+
+    private string Face(ButtonHints hints) =>
+        Label.Length == 0 ? FleetButtonHints.Face(Icon, hints) : $"{Icon} {Label}";
 
     public bool Answers(Key key) =>
         Parsed is { IsValid: true } own && key == own;

@@ -70,13 +70,18 @@ public sealed class FleetPillButtonTests : IDisposable
         Assert.Contains("Create agent", Pill().Row(hints).Text);
 
     [Fact]
-    public void The_icon_goes_through_the_button_hints_face()
+    public void An_icon_only_pill_follows_the_button_hints_face()
     {
-        var pill = new FleetPillButton(FleetIcons.Back, "Back", "b", () => { });
+        var pill = new FleetPillButton(FleetIcons.Back, string.Empty, "b", () => { });
 
-        Assert.Contains($"{FleetIcons.Back} back Back", pill.Row(ButtonHints.Text).Text);
-        Assert.DoesNotContain($"{FleetIcons.Back} back", pill.Row(ButtonHints.None).Text);
+        Assert.Contains($" {FleetIcons.Back} back ", pill.Row(ButtonHints.Text).Text);
+        Assert.Contains($" {FleetIcons.Back} ", pill.Row(ButtonHints.Tooltips).Text);
+        Assert.DoesNotContain("back", pill.Row(ButtonHints.Tooltips).Text);
     }
+
+    [Fact]
+    public void A_labelled_pill_does_not_repeat_its_icon_name_in_text_mode() =>
+        Assert.DoesNotContain("create", Pill().Row(ButtonHints.Text).Text);
 
     [Fact]
     public void A_pill_answers_its_own_key_only()
