@@ -77,6 +77,9 @@ public sealed class Hello
 
     [JsonPropertyName("forwards")]
     public bool? Forwards { get; set; }
+
+    [JsonPropertyName("cwd")]
+    public string? Cwd { get; set; }
 }
 
 public sealed class WindowEntryDto
@@ -585,6 +588,9 @@ public sealed class ControlResponse
 
     [JsonPropertyName("text")]
     public string? Text { get; set; }
+
+    [JsonPropertyName("cwd")]
+    public string? Cwd { get; set; }
 
     [JsonPropertyName("ms")]
     public double Ms { get; set; }

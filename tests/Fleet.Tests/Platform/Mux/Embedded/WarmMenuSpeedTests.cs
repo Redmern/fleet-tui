@@ -49,9 +49,10 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         await _running;
     }
 
-    private async Task<DaemonTests.TestClient> ConnectAsync(string role, string? workspace = null)
+    private async Task<DaemonTests.TestClient> ConnectAsync(string role, string? workspace = null, string? cwd = null)
     {
-        var client = await DaemonTests.TestClient.ConnectAsync(_endpoint, role, 100, 30, workspace);
+        var client = await DaemonTests.TestClient.ConnectAsync(
+            _endpoint, role, 100, 30, workspace, furnish: hello => hello.Cwd = cwd);
         _clients.Add(client);
         return client;
     }
@@ -60,7 +61,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
 
     private FakePanes.FakePty[] Live => [.. _panes.Started.Where(p => p.Program == "fleet" && !p.IsDisposed)];
 
-    private async Task<(DaemonTests.TestClient Control, DaemonTests.TestClient Client, FakePanes.FakePty Warm)> WarmAsync()
+    private async Task<(DaemonTests.TestClient Control, DaemonTests.TestClient Client, FakePanes.FakePty Warm)> WarmAsync(string? cwd = null)
     {
         var control = await ConnectAsync(ClientRoles.Control);
         Assert.True((await control.RequestAsync(new ControlRequest
@@ -72,7 +73,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
             Args = ["claude"],
         })).Ok);
 
-        var client = await ConnectAsync(ClientRoles.Attach, "techweb");
+        var client = await ConnectAsync(ClientRoles.Attach, "techweb", cwd);
         await client.WaitForFramesAsync(1);
         await Eventually(() => Menus == 1);
 
@@ -200,7 +201,22 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
 
         await client.SendCommandAsync("menu", "notifications");
 
-        Assert.Equal("notifications", await waiting.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(new MenuOpened("notifications", null), await waiting.WaitAsync(TimeSpan.FromSeconds(5)));
+    }
+
+    [Fact]
+    public async Task A_warm_menu_learns_the_folder_of_the_client_that_opens_it()
+    {
+        var launch = Path.Combine(Path.GetTempPath(), "fleet-launched-here");
+        var (_, client, warm) = await WarmAsync(launch);
+        Assert.False(warm.Env.ContainsKey(FleetDaemon.LaunchDirVariable));
+        using var driver = new EmbeddedDriver(_endpoint);
+        var waiting = driver.WaitForMenuOpenAsync(new PaneId(warm.Env[FleetDaemon.PaneVariable]));
+        await Waiting(warm);
+
+        await client.SendCommandAsync("menu", "new-project");
+
+        Assert.Equal(new MenuOpened("new-project", launch), await waiting.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
