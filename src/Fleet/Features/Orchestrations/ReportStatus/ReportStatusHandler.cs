@@ -77,7 +77,8 @@ public sealed class ReportStatusHandler(
         if (!kept)
         {
             return Result<string>.Fail(
-                isAgent ? $"agent '{id}' was removed from {project}." : $"sub-orchestrator '{id}' was removed from {project}.");
+                $"could not record the report for '{id}': it was removed from {project}, "
+                + "or fleet could not update its session file.");
         }
 
         if (!isAgent && root.Trim().Length > 0)
