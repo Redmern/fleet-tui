@@ -270,6 +270,20 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public async Task A_new_agent_is_still_saved_while_the_session_lock_stays_held()
+    {
+        FleetPaths.EnsureDirs();
+        var lockFile = Path.Combine(FleetPaths.Sessions, "techweb.json.lock");
+
+        using (new FileStream(lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        {
+            await Task.Run(() => _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop"))));
+        }
+
+        Assert.Single(_store.List("techweb"));
+    }
+
+    [Fact]
     public async Task Removing_while_the_session_lock_stays_held_reports_failure()
     {
         var worktree = Path.Combine(ConfigHome, "backend", "develop");

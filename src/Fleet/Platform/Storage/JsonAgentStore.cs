@@ -19,7 +19,7 @@ public sealed class JsonAgentStore : IAgentStore
             return;
         }
 
-        Mutate(file, session =>
+        Mutate(file, unlockedIsFine: true, session =>
         {
             session.Agents.RemoveAll(a => SameWorktree(a.Worktree, agent.Worktree));
             session.Agents.Add(Entry(agent));
@@ -36,7 +36,7 @@ public sealed class JsonAgentStore : IAgentStore
             return false;
         }
 
-        return Mutate(file, session =>
+        return Mutate(file, unlockedIsFine: false, session =>
         {
             var index = session.Agents.FindIndex(a => SameWorktree(a.Worktree, agent.Worktree));
 
@@ -111,7 +111,7 @@ public sealed class JsonAgentStore : IAgentStore
             return false;
         }
 
-        return Mutate(file, session =>
+        return Mutate(file, unlockedIsFine: false, session =>
         {
             session.Agents.RemoveAll(a => SameWorktree(a.Worktree, worktree));
             return true;
@@ -121,13 +121,13 @@ public sealed class JsonAgentStore : IAgentStore
     private static bool SameWorktree(string stored, string candidate) =>
         PathKey.Same(stored, candidate);
 
-    private static bool Mutate(string file, Func<SessionFile, bool> change)
+    private static bool Mutate(string file, bool unlockedIsFine, Func<SessionFile, bool> change)
     {
         FleetPaths.EnsureDirs();
 
         using var gate = Lock(file + ".lock");
 
-        if (gate is null || TryRead(file, BusyFiles.Patience) is not { } session)
+        if ((gate is null && !unlockedIsFine) || TryRead(file, BusyFiles.Patience) is not { } session)
         {
             return false;
         }
