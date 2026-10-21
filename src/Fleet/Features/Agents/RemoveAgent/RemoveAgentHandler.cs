@@ -111,7 +111,7 @@ public sealed class RemoveAgentHandler(
             return AgentRemoval.Done;
         }
 
-        store.Save(project, agent);
+        store.Save(project, agent with { Open = false });
 
         return AgentRemoval.Refused(failure);
     }

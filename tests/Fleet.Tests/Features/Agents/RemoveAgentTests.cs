@@ -177,6 +177,27 @@ public sealed class RemoveAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task An_agent_whose_worktree_stays_in_use_is_kept_but_recorded_as_closed()
+    {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
+        var agent = await AgentAsync() with { Open = true };
+
+        Result result;
+
+        using (PinnedFolder.For(agent.Worktree))
+        {
+            result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+        }
+
+        Assert.False(result.Succeeded);
+        Assert.False(Assert.Single(_store.Saved).Open);
+    }
+
+    [Fact]
     public async Task The_repository_and_its_other_worktrees_survive()
     {
         var agent = await AgentAsync();
