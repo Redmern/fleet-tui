@@ -1,7 +1,8 @@
 namespace Fleet.Tests.Features.Agents;
 
 // Keeps a folder from being deleted: on Windows by holding a file inside it open, elsewhere by
-// taking write permission off the folder so its entries cannot be unlinked.
+// taking write permission off the folder so its entries cannot be unlinked. Root ignores that
+// permission, so on Unix as root (a CI container, say) nothing can pin a folder: check Possible.
 public sealed class PinnedFolder : IDisposable
 {
     private readonly string _folder;
@@ -25,6 +26,8 @@ public sealed class PinnedFolder : IDisposable
         _mode = File.GetUnixFileMode(folder);
         File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
     }
+
+    public static bool Possible => OperatingSystem.IsWindows() || !Environment.IsPrivilegedProcess;
 
     public static PinnedFolder For(string folder) => new(folder);
 

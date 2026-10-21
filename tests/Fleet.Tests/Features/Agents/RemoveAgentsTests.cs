@@ -50,6 +50,11 @@ public sealed class RemoveAgentsTests : IDisposable
     [Fact]
     public async Task A_sub_whose_folder_cannot_be_deleted_is_not_saved_back()
     {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
         var sub = Sub();
         _store.Saves = 0;
 

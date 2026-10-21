@@ -96,6 +96,11 @@ public sealed class RemoveAgentTests : IDisposable
     [Fact]
     public async Task An_orchestrator_whose_folder_cannot_be_deleted_stays_removed()
     {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
         var agent = Orchestrator();
 
         Result result;
@@ -114,6 +119,11 @@ public sealed class RemoveAgentTests : IDisposable
     [Fact]
     public async Task A_kept_orchestrator_folder_is_named_and_left_for_manual_deletion()
     {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
         var agent = Orchestrator();
 
         Result result;

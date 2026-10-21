@@ -139,6 +139,11 @@ public sealed class RemoveSubTests : IDisposable
     [Fact]
     public async Task A_folder_that_cannot_be_deleted_is_kept_but_the_sub_is_still_removed()
     {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
         var sub = Sub();
         var child = await ChildAsync("feature/login");
 
