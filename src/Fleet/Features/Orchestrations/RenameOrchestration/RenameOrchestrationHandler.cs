@@ -61,12 +61,12 @@ public sealed class RenameOrchestrationHandler(IAgentStore store, IMuxDriver? mu
 
         var updated = sub with { Branch = slug };
 
-        store.Save(project, updated);
+        store.Replace(project, updated);
 
         foreach (var child in store.List(project)
             .Where(a => string.Equals(a.Owner, sub.Branch, StringComparison.OrdinalIgnoreCase)))
         {
-            store.Save(project, child with { Owner = slug });
+            store.Replace(project, child with { Owner = slug });
         }
 
         return Result<AgentRecord>.Ok(updated);

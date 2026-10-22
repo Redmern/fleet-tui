@@ -210,7 +210,17 @@ public sealed class TellAgentTests : IDisposable
 
         public IReadOnlyList<AgentRecord> List(string project) => _agents;
 
-        public void Remove(string project, string worktree) => _agents.RemoveAll(a => a.Worktree == worktree);
+        public bool Replace(string project, AgentRecord agent)
+        {
+            Save(project, agent);
+            return true;
+        }
+
+        public bool Remove(string project, string worktree)
+        {
+            _agents.RemoveAll(a => a.Worktree == worktree);
+            return true;
+        }
     }
 
     private sealed class MutableSettings : ISettingsStore

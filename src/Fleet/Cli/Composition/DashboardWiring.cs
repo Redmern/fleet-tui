@@ -101,10 +101,7 @@ public static class DashboardWiring
         return index >= 0 && index < source.Count ? source[index] : null;
     }
 
-    private static string Label(AgentRecord agent) =>
-        AgentHarness.IsOrchestrator(agent.Harness)
-            ? agent.Branch
-            : $"{agent.Repository}/{agent.Branch}";
+    private static string Label(AgentRecord agent) => RemoveAgentsHandler.Label(agent);
 
     private static string? Noted(IFleetLog log, string project, string? message)
     {
@@ -262,25 +259,18 @@ public static class DashboardWiring
 
         _ = Task.Run(async () =>
         {
-            var failures = new List<string>();
+            string note;
 
-            foreach (var (agent, delete) in doomed)
+            try
             {
-                var gone = await remover.HandleAsync(project, agent, delete)
+                note = await new RemoveAgentsHandler(remover)
+                    .HandleAsync(project, doomed)
                     .ConfigureAwait(false);
-
-                if (!gone.Succeeded)
-                {
-                    store.Save(project, agent);
-                    failures.Add($"{Label(agent)}: {gone.Error}");
-                }
             }
-
-            var note = failures.Count == 0
-                ? doomed.Count == 1
-                    ? $"removed {Label(doomed[0].Agent)}."
-                    : $"removed {doomed.Count} agent(s)."
-                : $"could not remove: {string.Join("; ", failures)}";
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                note = $"removal stopped: {e.Message}";
+            }
 
             Note(log, project, note);
             Adapters.Notifier().Notify(note);
@@ -1265,7 +1255,7 @@ public static class DashboardWiring
                     {
                         foreach (var child in children)
                         {
-                            agents.Save(project.Name, SubChildren.Released(child));
+                            agents.Replace(project.Name, SubChildren.Released(child));
                         }
                     }
                 }

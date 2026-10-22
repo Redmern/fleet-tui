@@ -67,12 +67,19 @@ public sealed class ReportStatusHandler(
 
         var normalized = OrchestrationStatus.Normalize(status);
 
-        store.Save(project, record with
+        var kept = store.Replace(project, record with
         {
             Status = normalized,
             Summary = summary.Trim(),
             ReportedAt = _now().ToString("O", CultureInfo.InvariantCulture),
         });
+
+        if (!kept)
+        {
+            return Result<string>.Fail(
+                $"could not record the report for '{id}': it was removed from {project}, "
+                + "or fleet could not update its session file.");
+        }
 
         if (!isAgent && root.Trim().Length > 0)
         {

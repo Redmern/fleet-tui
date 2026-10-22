@@ -57,7 +57,7 @@ public sealed class OpenAgentHandler(
 
                 if (agent.Hidden || !agent.Open)
                 {
-                    store.Save(project, agent with { Hidden = false, Open = true });
+                    store.Replace(project, agent with { Hidden = false, Open = true });
                 }
 
                 await mux.FocusPaneAsync(main.Id, ct).ConfigureAwait(false);
@@ -95,7 +95,7 @@ public sealed class OpenAgentHandler(
 
             if (agent.Hidden || !agent.Open)
             {
-                store.Save(project, agent with { Hidden = false, Open = true });
+                store.Replace(project, agent with { Hidden = false, Open = true });
             }
 
             await mux.FocusPaneAsync(running.Id, ct).ConfigureAwait(false);
@@ -139,7 +139,7 @@ public sealed class OpenAgentHandler(
 
         if (agent.Hidden || !agent.Open || started != agent)
         {
-            store.Save(project, started with { Hidden = false, Open = true });
+            store.Replace(project, started with { Hidden = false, Open = true });
         }
 
         return Result.Ok();

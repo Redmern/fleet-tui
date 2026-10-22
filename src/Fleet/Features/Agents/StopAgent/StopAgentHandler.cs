@@ -29,7 +29,7 @@ public sealed class StopAgentHandler(IMuxDriver mux, IAgentStore store)
 
         if (agent.Open)
         {
-            store.Save(project, agent with { Open = false });
+            store.Replace(project, agent with { Open = false });
         }
 
         return Result.Ok();

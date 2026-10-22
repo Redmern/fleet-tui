@@ -6,7 +6,9 @@ public interface IAgentStore
 {
     void Save(string project, AgentRecord agent);
 
+    bool Replace(string project, AgentRecord agent);
+
     IReadOnlyList<AgentRecord> List(string project);
 
-    void Remove(string project, string worktree);
+    bool Remove(string project, string worktree);
 }

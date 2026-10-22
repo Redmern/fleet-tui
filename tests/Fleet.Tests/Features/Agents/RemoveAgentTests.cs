@@ -8,6 +8,7 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Results;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -43,7 +44,7 @@ public sealed class RemoveAgentTests : IDisposable
         }
     }
 
-    private RemoveAgentHandler Handler() => new(new GitRunner(), _mux, _store);
+    private RemoveAgentHandler Handler() => new(new GitRunner(), _mux, _store, folderRetries: []);
 
     private async Task<AgentRecord> AgentAsync(string branch = "feature/login")
     {
@@ -93,6 +94,66 @@ public sealed class RemoveAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task An_orchestrator_whose_folder_cannot_be_deleted_stays_removed()
+    {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
+        var agent = Orchestrator();
+
+        Result result;
+
+        using (PinnedFolder.For(agent.Worktree))
+        {
+            result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+        }
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(agent.Worktree, Assert.Single(_store.Removed));
+        Assert.Empty(_store.Saved);
+        Assert.True(Directory.Exists(agent.Worktree));
+    }
+
+    [Fact]
+    public async Task A_kept_orchestrator_folder_is_named_and_left_for_manual_deletion()
+    {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
+        var agent = Orchestrator();
+
+        Result result;
+
+        using (PinnedFolder.For(agent.Worktree))
+        {
+            result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+        }
+
+        Assert.Contains(agent.Worktree, result.Error);
+        Assert.Contains("kept", result.Error);
+        Assert.Contains("manually", result.Error);
+    }
+
+    [Fact]
+    public async Task A_record_the_store_cannot_remove_fails_before_anything_is_stopped_or_deleted()
+    {
+        var agent = Orchestrator();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _store.RefuseRemove = true;
+
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("not removed", result.Error);
+        Assert.Single(await _mux.ListPanesAsync());
+        Assert.True(Directory.Exists(agent.Worktree));
+    }
+
+    [Fact]
     public async Task Forgetting_an_orchestrator_leaves_its_folder_on_disk()
     {
         var agent = Orchestrator();
@@ -113,6 +174,27 @@ public sealed class RemoveAgentTests : IDisposable
         Assert.True(result.Succeeded, result.Error);
         Assert.False(Directory.Exists(agent.Worktree));
         Assert.Equal(agent.Worktree, Assert.Single(_store.Removed));
+    }
+
+    [Fact]
+    public async Task An_agent_whose_worktree_stays_in_use_is_kept_but_recorded_as_closed()
+    {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
+        var agent = await AgentAsync() with { Open = true };
+
+        Result result;
+
+        using (PinnedFolder.For(agent.Worktree))
+        {
+            result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+        }
+
+        Assert.False(result.Succeeded);
+        Assert.False(Assert.Single(_store.Saved).Open);
     }
 
     [Fact]
@@ -247,11 +329,28 @@ public sealed class RemoveAgentTests : IDisposable
 
         public List<AgentRecord> Saved { get; } = [];
 
+        public bool RefuseRemove { get; set; }
+
         public void Save(string project, AgentRecord agent) => Saved.Add(agent);
 
         public IReadOnlyList<AgentRecord> List(string project) => [];
 
-        public void Remove(string project, string worktree) => Removed.Add(worktree);
+        public bool Replace(string project, AgentRecord agent)
+        {
+            Save(project, agent);
+            return true;
+        }
+
+        public bool Remove(string project, string worktree)
+        {
+            if (RefuseRemove)
+            {
+                return false;
+            }
+
+            Removed.Add(worktree);
+            return true;
+        }
     }
 
     [Fact]

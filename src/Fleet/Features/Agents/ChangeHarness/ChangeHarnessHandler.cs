@@ -17,7 +17,7 @@ public sealed class ChangeHarnessHandler(IAgentStore store)
         }
 
         var changed = agent with { Harness = wanted };
-        store.Save(project, changed);
+        store.Replace(project, changed);
 
         return Result<AgentRecord>.Ok(changed);
     }
