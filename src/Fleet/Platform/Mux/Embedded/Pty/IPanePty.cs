@@ -1,3 +1,5 @@
+using Fleet.Platform.Logging;
+
 namespace Fleet.Platform.Mux.Embedded.Pty;
 
 public interface IPanePty : IDisposable
@@ -5,6 +7,12 @@ public interface IPanePty : IDisposable
     event Action<byte[], int>? Output;
 
     event Action<int>? Exited;
+
+    event Action<PaneKillResult>? KillFailed
+    {
+        add { }
+        remove { }
+    }
 
     void Start(
         string program,
@@ -19,5 +27,7 @@ public interface IPanePty : IDisposable
     void Resize(int cols, int rows);
 
     static IPanePty Create() =>
-        OperatingSystem.IsWindows() ? new ConPtyPane(ConPtyApi.Current) : new UnixPanePty();
+        OperatingSystem.IsWindows() ? new ConPtyPane(ConPtyApi.Current, DaemonLog) : new UnixPanePty();
+
+    private static void DaemonLog(string line) => new FileLog().Write($"fleetd: {line}");
 }

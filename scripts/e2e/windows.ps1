@@ -10,6 +10,7 @@
 # Only the fleetd this script starts is ever stopped (its panes go with it), so a fleet
 # session running from the same build is left alone. Step 6 runs `fleet apply-keybinds` and
 # `fleet doctor` against a temp fleet-nvim (XDG_CONFIG_HOME) and Claude home (CLAUDE_CONFIG_DIR).
+# Step 7 kills a pane whose cmd runs ping and checks the ping does not outlive it.
 # Exits with the number of failed checks.
 
 param([string]$Fleet)
@@ -226,6 +227,26 @@ try {
     Add-Content $generated '-- edited by hand'
     $doctor = (& $Fleet doctor 2>&1) -join "`n"
     Check ($doctor -match 'keybinds\s+! 1 file\(s\) out of date' -and $doctor -match 'keybinds\.generated\.lua differs from the keybind model') 'doctor reports drift after an edit'
+
+    Write-Host '== 7. killing a pane ends its whole process tree'
+    $size = Get-Random -Minimum 1000 -Maximum 9999
+    $tree = (Ctl spawn @{ session = 'alpha'; cwd = "$work\alpha"; args = @('cmd.exe', '/d', '/q', '/k', "ping -n 600 -l $size 127.0.0.1") }).pane
+    $ping = $null
+    for ($i = 0; $i -lt 50 -and -not $ping; $i++) {
+        $ping = Get-CimInstance Win32_Process -Filter "Name = 'PING.EXE'" | Where-Object { $_.CommandLine -match "-l $size " } | Select-Object -First 1
+        if (-not $ping) { Start-Sleep -Milliseconds 100 }
+    }
+    Check ($null -ne $ping) 'the pane started a ping grandchild'
+    if ($ping) {
+        $null = Ctl kill @{ pane = $tree }
+        $gone = $false
+        for ($i = 0; $i -lt 50 -and -not $gone; $i++) {
+            $gone = -not (Get-Process -Id $ping.ProcessId -ErrorAction SilentlyContinue)
+            if (-not $gone) { Start-Sleep -Milliseconds 100 }
+        }
+        Check $gone "ping $($ping.ProcessId) is gone within 5 s of killing its pane"
+        if (-not $gone) { Stop-Process -Id $ping.ProcessId -Force -ErrorAction SilentlyContinue }
+    }
 }
 catch {
     Bad "script error: $_"
