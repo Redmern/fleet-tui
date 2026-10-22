@@ -31,6 +31,8 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api, Action<string>? log
 
     public PaneKillResult? LastKill { get; private set; }
 
+    public string? KillProblem => LastKill?.Problem;
+
     public int Pid { get; private set; }
 
     public void Start(

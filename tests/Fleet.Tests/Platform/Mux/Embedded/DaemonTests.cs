@@ -1210,6 +1210,31 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Killing_a_pane_whose_processes_survive_answers_with_the_kill_problem()
+    {
+        var control = await ControlAsync();
+        var pane = await SpawnAsync(control, "techweb", "claude");
+        _panes.ByProgram("claude")!.KillProblem = "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)";
+
+        var killed = await control.RequestAsync(new ControlRequest { Op = "kill", Pane = pane });
+
+        Assert.True(killed.Ok);
+        Assert.Contains("Win32 error 5", killed.KillProblem);
+    }
+
+    [Fact]
+    public async Task Killing_a_pane_that_ends_cleanly_answers_without_a_kill_problem()
+    {
+        var control = await ControlAsync();
+        var pane = await SpawnAsync(control, "techweb", "claude");
+
+        var killed = await control.RequestAsync(new ControlRequest { Op = "kill", Pane = pane });
+
+        Assert.True(killed.Ok);
+        Assert.Null(killed.KillProblem);
+    }
+
+    [Fact]
     public async Task A_window_whose_project_goes_away_shows_its_previous_project()
     {
         var control = await ControlAsync();

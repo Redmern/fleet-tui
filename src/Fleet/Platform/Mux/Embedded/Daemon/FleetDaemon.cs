@@ -269,8 +269,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                         response.Pane = Split(request);
                         break;
                     case "kill":
-                        Require(Kill(request.Pane), request);
-                        break;
+                        {
+                            var pty = request.Pane is null ? null : _runtimes.GetValueOrDefault(request.Pane)?.Pty;
+                            Require(Kill(request.Pane), request);
+                            response.KillProblem = pty?.KillProblem;
+                            break;
+                        }
                     case "move":
                         Require(_model.Move(Pane(request), MoveTarget(request)), request);
                         break;

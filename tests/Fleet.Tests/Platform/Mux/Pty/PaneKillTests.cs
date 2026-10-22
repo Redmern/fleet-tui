@@ -61,6 +61,22 @@ public class PaneKillTests
     }
 
     [Fact]
+    public void A_clean_kill_has_no_problem_to_report()
+    {
+        Assert.Null(PaneKill.Run(42, job: () => 0, process: null, _log.Add).Problem);
+    }
+
+    [Fact]
+    public void A_failed_kill_describes_every_failed_call_for_the_removal_result()
+    {
+        var result = PaneKill.Run(42, job: () => AccessDenied, process: () => 6, _log.Add);
+
+        Assert.Contains("42", result.Problem);
+        Assert.Contains("TerminateJobObject failed with Win32 error 5", result.Problem);
+        Assert.Contains("TerminateProcess failed with Win32 error 6", result.Problem);
+    }
+
+    [Fact]
     public void A_pane_without_a_job_whose_root_already_exited_has_nothing_to_kill()
     {
         var result = PaneKill.Run(42, job: null, process: null, _log.Add);

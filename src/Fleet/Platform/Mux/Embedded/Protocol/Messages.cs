@@ -628,6 +628,9 @@ public sealed class ControlResponse
     [JsonPropertyName("toolFailed")]
     public bool ToolFailed { get; set; }
 
+    [JsonPropertyName("killProblem")]
+    public string? KillProblem { get; set; }
+
     [JsonPropertyName("forwards")]
     public List<ForwardDto>? Forwards { get; set; }
 

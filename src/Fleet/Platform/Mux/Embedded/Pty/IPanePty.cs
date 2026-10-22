@@ -8,6 +8,8 @@ public interface IPanePty : IDisposable
 
     event Action<int>? Exited;
 
+    string? KillProblem => null;
+
     event Action<PaneKillResult>? KillFailed
     {
         add { }
