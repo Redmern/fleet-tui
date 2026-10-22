@@ -155,7 +155,7 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api, Action<string>? log
         var result = PaneKill.Run(
             Pid,
             job is null ? null : () => job.Terminate(),
-            _exited != 0 ? null : () => TerminateProcess(process, 1) ? 0 : Marshal.GetLastPInvokeError(),
+            _exited != 0 ? null : () => TerminateRoot(process),
             Log);
 
         LastKill = result;
@@ -163,6 +163,17 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api, Action<string>? log
         {
             KillFailed?.Invoke(result);
         }
+    }
+
+    private static int TerminateRoot(nint process)
+    {
+        if (TerminateProcess(process, 1))
+        {
+            return 0;
+        }
+
+        var error = Marshal.GetLastPInvokeError();
+        return WaitForSingleObject(process, 0) == 0 ? 0 : error;
     }
 
     private PaneJob? Hold(nint process, int pid)

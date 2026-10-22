@@ -8,6 +8,12 @@ public interface IPanePty : IDisposable
 
     event Action<int>? Exited;
 
+    event Action<PaneKillResult>? KillFailed
+    {
+        add { }
+        remove { }
+    }
+
     void Start(
         string program,
         IReadOnlyList<string> args,

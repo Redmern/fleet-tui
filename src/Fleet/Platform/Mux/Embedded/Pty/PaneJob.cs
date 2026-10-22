@@ -8,6 +8,7 @@ public sealed partial class PaneJob : IDisposable
 {
     private const int ExtendedLimitInformation = 9;
     private const uint KillOnJobClose = 0x2000;
+    private const uint BreakawayOk = 0x800;
     private const int InvalidHandle = 6;
 
     private nint _job;
@@ -23,7 +24,7 @@ public sealed partial class PaneJob : IDisposable
             return null;
         }
 
-        var limits = new ExtendedLimit { Basic = new BasicLimit { LimitFlags = KillOnJobClose } };
+        var limits = new ExtendedLimit { Basic = new BasicLimit { LimitFlags = KillOnJobClose | BreakawayOk } };
         if (!SetInformationJobObject(job, ExtendedLimitInformation, ref limits, (uint)Marshal.SizeOf<ExtendedLimit>()))
         {
             error = Marshal.GetLastPInvokeError();

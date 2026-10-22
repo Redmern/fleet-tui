@@ -6,7 +6,7 @@ namespace Fleet.Tests.Platform.Mux.Pty;
 public class PaneJobTests
 {
     private static Process Ping() =>
-        Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 600 127.0.0.1 >nul") { CreateNoWindow = true })!;
+        Process.Start(new ProcessStartInfo("ping.exe", "-n 600 127.0.0.1") { CreateNoWindow = true, RedirectStandardOutput = true })!;
 
     [Fact]
     public void Terminating_the_job_ends_the_process_assigned_to_it()
