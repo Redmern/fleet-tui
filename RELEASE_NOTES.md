@@ -4,12 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
-## 0.7.25 (2026-10-21)
+## 0.7.25 (2026-10-22)
 
-- **Icons render out of the box on Windows**: `get-fleet.ps1` and `install.ps1` install JetBrainsMono Nerd Font Mono (nerd-fonts v3.5.1, SHA256-checked) for your user, without admin rights, on Windows PowerShell 5.1 or PowerShell 7. Restart Windows Terminal afterwards.
-- The "Fleet" Terminal profile uses that face. Other profiles, and machines without pwsh, where no Fleet profile is made, need **JetBrainsMono Nerd Font Mono** picked under Appearance › Font face; the installers never edit `settings.json`.
-- A failed font download, hash check or extraction only warns and the fleet install still finishes; run the installer again to retry. `.\install.ps1 -Uninstall -Purge` removes the font.
-- The font is under the SIL Open Font License 1.1; see `docs/third-party/jetbrainsmono-nerd-font-OFL.md`.
+- **Icons render out of the box on Windows**: `get-fleet.ps1` and `install.ps1` install JetBrainsMono Nerd Font Mono (nerd-fonts v3.5.1, SHA256-checked, SIL OFL 1.1) for your user, without admin rights. Restart Windows Terminal afterwards; a failed font download only warns, and `.\install.ps1 -Uninstall -Purge` removes the font.
+- The "Fleet" Terminal profile uses that face. Other profiles, and machines without pwsh, need **JetBrainsMono Nerd Font Mono** picked under Appearance › Font face; the installers never edit `settings.json`.
+- **New project starts where you started fleet**: Root is set to that folder, and the folder browser opens there instead of your home folder.
+- This works through fleetd too: the attach client sends its folder to the daemon, so menus opened from any pane know where fleet was started.
+- **A removed sub-orchestrator stays removed**, from the Subs tab or `remove_sub`, even when its folder can't be deleted (for example on Windows while something still holds it); fleet tells you which folder it kept so you can delete it yourself.
+- Stopping, hiding, opening, renaming, reporting or quitting can no longer bring back an agent that was just removed, and a removal fleet can't record now says so instead of claiming success.
 
 ## 0.7.24 (2026-10-20)
 
