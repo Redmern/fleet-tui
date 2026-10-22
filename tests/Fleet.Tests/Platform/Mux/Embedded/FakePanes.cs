@@ -39,6 +39,8 @@ public sealed class FakePanes
 
         public IReadOnlyList<string> Args { get; private set; } = [];
 
+        public string Cwd { get; private set; } = string.Empty;
+
         public IReadOnlyDictionary<string, string> Env { get; private set; } = new Dictionary<string, string>();
 
         public (int Cols, int Rows) Size { get; private set; }
@@ -55,6 +57,7 @@ public sealed class FakePanes
         {
             Program = program;
             Args = args;
+            Cwd = cwd;
             Env = env;
             Size = (cols, rows);
             Terminal = owner.Terminals.Last();

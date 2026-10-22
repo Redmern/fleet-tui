@@ -22,8 +22,10 @@ using Fleet.Platform.Mux.Embedded.Render;
 using Fleet.Platform.Profiles;
 using Fleet.Platform.Storage;
 using Fleet.Ports;
+using Fleet.Ports.Agents;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Projects;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -116,11 +118,15 @@ public static class EmbeddedWiring
             Worktrees = project => Adapters.Agents().List(project).Select(a => a.Worktree),
             Forwards = ForwardWiring(log),
             ProjectConfigs = ProjectConfigsCached,
+            IsKnownAgent = cwd => HasAgentRecord(Adapters.Projects(), Adapters.Agents(), cwd),
         });
 
         await daemon.RunAsync().ConfigureAwait(false);
         return 0;
     }
+
+    public static bool HasAgentRecord(IProjectStore projects, IAgentStore agents, string cwd) =>
+        projects.List().Any(p => agents.List(p.Name).Any(a => PathKey.Same(a.Worktree, cwd)));
 
     public static bool StartedForBridge => Environment.GetEnvironmentVariable(ShimFolder.RemoteDaemonVariable) == "1";
 
