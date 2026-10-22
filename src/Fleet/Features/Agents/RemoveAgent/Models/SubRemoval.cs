@@ -18,12 +18,17 @@ public sealed record SubRemoval(
         {
             var parts = new List<string>
             {
-                FolderProblem is not null
-                    ? $"removed {Slug}. {FolderProblem}"
-                    : FolderDeleted
-                        ? $"removed {Slug} and deleted its folder."
+                FolderDeleted
+                    ? $"removed {Slug} and deleted its folder."
+                    : FolderProblem is not null
+                        ? $"removed {Slug}."
                         : $"removed {Slug}; its folder stays at {Folder}.",
             };
+
+            if (FolderProblem is not null)
+            {
+                parts.Add(FolderProblem);
+            }
 
             if (Removed.Count > 0)
             {

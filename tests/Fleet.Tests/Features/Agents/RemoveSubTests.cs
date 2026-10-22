@@ -137,6 +137,22 @@ public sealed class RemoveSubTests : IDisposable
     }
 
     [Fact]
+    public async Task A_sub_pane_whose_processes_survive_is_named_in_the_note_but_its_folder_still_goes()
+    {
+        var sub = Sub();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)");
+
+        var result = await Handler().HandleAsync(Command(deleteFolder: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.True(result.Value!.FolderDeleted);
+        Assert.False(Directory.Exists(sub.Worktree));
+        Assert.Contains("could not terminate", result.Value.Note);
+        Assert.Contains("Win32 error 5", result.Value.Note);
+    }
+
+    [Fact]
     public async Task A_folder_that_cannot_be_deleted_is_kept_but_the_sub_is_still_removed()
     {
         if (!PinnedFolder.Possible)

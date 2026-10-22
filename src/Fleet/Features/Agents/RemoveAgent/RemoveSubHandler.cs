@@ -79,7 +79,7 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
             new SubRemoval(
                 sub.Branch,
                 sub.Worktree,
-                command.DeleteFolder && gone.Problem is null,
+                command.DeleteFolder && !Directory.Exists(sub.Worktree),
                 removed,
                 kept,
                 released,
