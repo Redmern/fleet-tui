@@ -91,6 +91,8 @@ public sealed class DaemonOptions
     public ForwardOptions Forwards { get; init; } = new();
 
     public Func<IReadOnlyList<ProjectConfigDto>> ProjectConfigs { get; init; } = () => [];
+
+    public Func<string, bool> IsKnownAgent { get; init; } = _ => true;
 }
 
 public sealed record ClipboardImageLimit(int Reads, TimeSpan Per);
@@ -3761,6 +3763,11 @@ public sealed class FleetDaemon(DaemonOptions options)
         if (snapshot is null)
         {
             return;
+        }
+
+        foreach (var cwd in SavedSubOrchestrators.DropUnknown(snapshot, options.IsKnownAgent))
+        {
+            options.Log($"restore: dropped sub-orchestrator pane {cwd}: it has no agent record");
         }
 
         lock (_gate)
