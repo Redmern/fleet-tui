@@ -4,6 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.26 (2026-10-22)
+
+- **New agent, Add repository and the new sub-orchestrator dialog get icons and pill buttons**: every field leads with an icon, and each button shows its key: `c` creates an agent, `a` adds a repository, `d` dispatches a sub, Esc cancels.
+- **New sub-orchestrator dialog**: a task field and your past tasks in one dialog, replacing the old picker and text prompt.
+- Ctrl+Enter in a dialog's text prompt submits the whole dialog; Enter still only accepts the field.
+- In New agent, `r`, `b` and `o` jump to Repo, Branch and Opens, and the dialog preselects the repository and harness you used last.
+- Removing an agent or sub-orchestrator on Windows now says when some of its processes could not be ended, and that they may be what keeps its folder locked.
+
 ## 0.7.25 (2026-10-22)
 
 - **Icons render out of the box on Windows**: `get-fleet.ps1` and `install.ps1` install JetBrainsMono Nerd Font Mono (nerd-fonts v3.5.1, SHA256-checked, SIL OFL 1.1) for your user, without admin rights. Restart Windows Terminal afterwards; a failed font download only warns, and `.\install.ps1 -Uninstall -Purge` removes the font.
