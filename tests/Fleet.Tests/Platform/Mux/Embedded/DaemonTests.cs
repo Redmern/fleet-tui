@@ -474,6 +474,20 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Terminating_a_pane_through_the_embedded_driver_returns_its_kill_problem()
+    {
+        using var driver = new EmbeddedDriver(_endpoint);
+        Fleet.Ports.Mux.IMuxDriver mux = driver;
+        var pane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Cwd = ".", Args = ["claude"] });
+        _panes.ByProgram("claude")!.KillProblem = "pane 4242: TerminateProcess failed with Win32 error 5 (Access is denied)";
+
+        var problem = await mux.TerminatePaneAsync(pane);
+
+        Assert.Contains("Win32 error 5", problem);
+        Assert.Empty(await mux.ListPanesAsync());
+    }
+
+    [Fact]
     public async Task Fleets_own_handlers_switch_projects_through_the_embedded_driver()
     {
         using var mux = new EmbeddedDriver(_endpoint);

@@ -1,5 +1,6 @@
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
 
@@ -27,6 +28,17 @@ public class NvimConfigDriverTests
         var id = await mux.SpawnAsync(new SpawnOptions { NewWindow = true, Args = AgentHarness.BrowseCommandFor("files") });
 
         Assert.Equal(AgentHarness.FleetNvimAppName, fake.EnvFor(id)[AgentHarness.NvimAppNameVariable]);
+    }
+
+    [Fact]
+    public async Task A_kill_problem_from_the_inner_driver_passes_through()
+    {
+        var fake = new FakeMuxDriver();
+        IMuxDriver mux = new NvimConfigDriver(fake, () => true);
+        var id = await mux.SpawnAsync(new SpawnOptions { NewWindow = true });
+        fake.FailKill(id, "access denied");
+
+        Assert.Equal("access denied", await mux.TerminatePaneAsync(id));
     }
 
     [Fact]
