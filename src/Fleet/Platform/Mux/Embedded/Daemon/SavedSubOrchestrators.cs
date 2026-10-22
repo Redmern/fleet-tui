@@ -29,32 +29,68 @@ public static class SavedSubOrchestrators
             return true;
         }
 
-        void Prune(LayoutSnapshot? node)
+        bool Prune(TabSnapshot tab)
         {
-            if (node is null)
+            var leaves = new List<LayoutSnapshot>();
+            Leaves(tab.Root, leaves);
+
+            var kept = new bool[leaves.Count];
+            for (var i = 0; i < leaves.Count; i++)
             {
-                return;
+                kept[i] = !Unknown(leaves[i].Pane!);
+                if (!kept[i])
+                {
+                    leaves[i].Pane = null;
+                }
             }
 
-            if (node.Pane is { } pane && Unknown(pane))
+            int KeptBefore(int index) => kept.Take(index).Count(k => k);
+
+            if (tab.ActivePane >= 0 && tab.ActivePane < kept.Length)
             {
-                node.Pane = null;
+                tab.ActivePane = KeptBefore(tab.ActivePane);
             }
 
-            Prune(node.First);
-            Prune(node.Second);
+            if (tab.Zoomed >= 0 && tab.Zoomed < kept.Length)
+            {
+                tab.Zoomed = kept[tab.Zoomed] ? KeptBefore(tab.Zoomed) : -1;
+            }
+
+            return kept.Any(k => k);
         }
 
         foreach (var workspace in snapshot.Workspaces)
         {
-            foreach (var tab in workspace.Tabs)
+            var emptiedBeforeActive = 0;
+            for (var i = 0; i < workspace.Tabs.Count; i++)
             {
-                Prune(tab.Root);
+                if (!Prune(workspace.Tabs[i]) && i < workspace.ActiveTab)
+                {
+                    emptiedBeforeActive++;
+                }
             }
 
+            workspace.ActiveTab -= emptiedBeforeActive;
             workspace.Floats.RemoveAll(box => Unknown(box.Pane));
         }
 
         return dropped;
+    }
+
+    private static void Leaves(LayoutSnapshot? node, List<LayoutSnapshot> leaves)
+    {
+        if (node is null)
+        {
+            return;
+        }
+
+        if (node.Pane is not null)
+        {
+            leaves.Add(node);
+            return;
+        }
+
+        Leaves(node.First, leaves);
+        Leaves(node.Second, leaves);
     }
 }

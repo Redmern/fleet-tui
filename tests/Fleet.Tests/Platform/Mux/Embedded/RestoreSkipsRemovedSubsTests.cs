@@ -93,6 +93,42 @@ public sealed class RestoreSkipsRemovedSubsTests
     }
 
     [Fact]
+    public void The_active_tab_active_pane_and_zoom_still_point_at_the_same_panes_after_a_drop()
+    {
+        var snapshot = new SessionSnapshot
+        {
+            Workspaces =
+            [
+                new WorkspaceSnapshot
+                {
+                    Name = "techweb",
+                    ActiveTab = 2,
+                    Tabs =
+                    [
+                        new TabSnapshot { Root = Leaf(Removed) },
+                        new TabSnapshot { Root = Split(Leaf(Removed), Split(Leaf(Project, "x"), Leaf(Project, "y"))), ActivePane = 2, Zoomed = 1 },
+                        new TabSnapshot { Root = Split(Leaf(Project, "a"), Split(Leaf(Removed), Leaf(Project, "b"))), ActivePane = 2, Zoomed = 1 },
+                    ],
+                },
+            ],
+        };
+
+        SavedSubOrchestrators.DropUnknown(snapshot, OnlyKept);
+
+        var model = new MuxModel();
+        model.Restore(snapshot, Same);
+        var techweb = model.Workspace("techweb")!;
+        string Program(string? pane) => pane is null ? "-" : model.Pane(pane)!.Args[0];
+
+        Assert.Equal(2, techweb.Tabs.Count);
+        Assert.Equal(techweb.Tabs[1].Id, techweb.ActiveTab);
+        Assert.Equal("y", Program(techweb.Tabs[0].ActivePane));
+        Assert.Equal("x", Program(techweb.Tabs[0].Zoomed));
+        Assert.Equal("b", Program(techweb.Tabs[1].ActivePane));
+        Assert.Equal("-", Program(techweb.Tabs[1].Zoomed));
+    }
+
+    [Fact]
     public void Nothing_is_dropped_when_every_sub_has_a_record()
     {
         var snapshot = new SessionSnapshot
