@@ -10,7 +10,7 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 - The "Fleet" Terminal profile uses that face. Other profiles, and machines without pwsh, need **JetBrainsMono Nerd Font Mono** picked under Appearance › Font face; the installers never edit `settings.json`.
 - **New project starts where you started fleet**: Root is set to that folder, and the folder browser opens there instead of your home folder.
 - This works through fleetd too: the attach client sends its folder to the daemon, so menus opened from any pane know where fleet was started.
-- **A removed sub-orchestrator stays removed**, from the Subs tab or `remove_sub`, even when its folder can't be deleted (for example on Windows while something still holds it); fleet tells you which folder it kept so you can delete it yourself.
+- **A removed sub-orchestrator stays removed**, from the Subs tab or `remove_sub`, even when its folder can't be deleted (for example on Windows while something still holds it); fleet tells you which folder it kept so you can delete it yourself. fleetd also no longer relaunches its saved pane after a restart.
 - Stopping, hiding, opening, renaming, reporting or quitting can no longer bring back an agent that was just removed, and a removal fleet can't record now says so instead of claiming success.
 
 ## 0.7.24 (2026-10-20)

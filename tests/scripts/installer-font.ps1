@@ -117,7 +117,7 @@ function Invoke-FontCase {
         else {
             $script:caseResult = Uninstall-FleetFont -FontDir $FontDir -RegistryPath $RegistryPath
         }
-    } 6>&1 2>&1 | Out-String
+    } 6>&1 2>&1 | Out-String -Width 4096
     $result = $script:caseResult
     [pscustomobject]@{ Result = $result; Output = $out; Downloads = $downloads.Count }
 }
@@ -255,7 +255,7 @@ try {
     $cases = @(
         @{ Name = 'hash mismatch'; Args = @{ Sha256 = $FleetFontSha256 }; Expect = 'SHA256' },
         @{ Name = 'download failure'; Args = @{ DownloadThrows = $true }; Expect = 'network down' },
-        @{ Name = 'extraction failure'; Args = @{ SourceZip = $notZip; Sha256 = $notZipHash }; Expect = 'End of Central Directory record could not be found' },
+        @{ Name = 'extraction failure'; Args = @{ SourceZip = $notZip; Sha256 = $notZipHash }; Expect = 'End\s+of\s+Central\s+Directory\s+record\s+could\s+not\s+be\s+found' },
         @{ Name = 'zip without the Mono files'; Args = @{ SourceZip = $noMonoZip; Sha256 = $noMonoHash }; Expect = 'JetBrainsMonoNerdFontMono-Regular\.ttf is not in the zip' }
     )
     foreach ($case in $cases) {
