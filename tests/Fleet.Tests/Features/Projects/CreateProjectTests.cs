@@ -174,6 +174,26 @@ public sealed class CreateProjectTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void A_fresh_dialog_starts_with_the_launch_folder_as_its_root()
+    {
+        Assert.Equal(new ProjectDraft(string.Empty, "C:/repos"), ProjectDraft.Opening(null, "C:/repos"));
+    }
+
+    [Fact]
+    public void A_fresh_dialog_without_a_launch_folder_starts_empty()
+    {
+        Assert.Equal(new ProjectDraft(string.Empty, string.Empty), ProjectDraft.Opening(null, null));
+    }
+
+    [Fact]
+    public void A_dialog_reopened_from_a_draft_keeps_the_draft_root_over_the_launch_folder()
+    {
+        var draft = new ProjectDraft("techweb", "C:/repos/techweb");
+
+        Assert.Equal(draft, ProjectDraft.Opening(draft, "C:/elsewhere"));
+    }
+
+    [Fact]
     public void A_root_under_home_typed_with_a_tilde_is_expanded_not_taken_as_a_folder_named_tilde()
     {
         var reply = Handler().Handle(new CreateProjectCommand("web", "~"));

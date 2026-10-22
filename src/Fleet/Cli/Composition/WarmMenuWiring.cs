@@ -17,7 +17,13 @@ public static class WarmMenuWiring
         try
         {
             using var driver = new EmbeddedDriver(Endpoint.Default());
-            return await driver.WaitForMenuOpenAsync(driver.CurrentPane, ct).ConfigureAwait(false);
+            var opened = await driver.WaitForMenuOpenAsync(driver.CurrentPane, ct).ConfigureAwait(false);
+            if (opened.LaunchDir is { Length: > 0 } launchDir)
+            {
+                Environment.SetEnvironmentVariable(FleetDaemon.LaunchDirVariable, launchDir);
+            }
+
+            return opened.Action;
         }
         catch (Exception e) when (e is MuxUnavailableException or OperationCanceledException or IOException)
         {

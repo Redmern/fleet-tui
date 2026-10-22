@@ -402,6 +402,21 @@ public static class Adapters
 
     public static string HomeDirectory => Home;
 
+    public static string? LaunchDirectory =>
+        LaunchFolder(
+            Environment.GetEnvironmentVariable(FleetDaemon.LaunchDirVariable),
+            Environment.GetEnvironmentVariable(FleetDaemon.PaneVariable) is { Length: > 0 },
+            Environment.CurrentDirectory,
+            Directory.Exists);
+
+    public static string? LaunchFolder(string? launchDir, bool insideFleetd, string currentDirectory, Func<string, bool> exists) =>
+        (launchDir is { Length: > 0 } ? launchDir : insideFleetd ? null : currentDirectory) is { Length: > 0 } folder
+            && exists(folder)
+            ? folder
+            : null;
+
+    public static string BrowseFallback(string? launchDir) => launchDir ?? Home;
+
     private static string Home =>
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 

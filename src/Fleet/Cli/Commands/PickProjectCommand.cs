@@ -267,7 +267,7 @@ public static class PickProjectCommand
             ? wanted => Adapters.PickFolder(
                 driver,
                 "fleet",
-                FileBrowser.StartIn(wanted, Directory.Exists, Adapters.HomeDirectory))
+                FileBrowser.StartIn(wanted, Directory.Exists, Adapters.BrowseFallback(Adapters.LaunchDirectory)))
             : null;
 
     private static ProjectPick? Choose(bool startNew)
@@ -290,7 +290,7 @@ public static class PickProjectCommand
             }
 
             draft = browse.Browsed(Adapters.PickFolderInTerminal(
-                FileBrowser.StartIn(browse.Root, Directory.Exists, Adapters.HomeDirectory)));
+                FileBrowser.StartIn(browse.Root, Directory.Exists, Adapters.BrowseFallback(Adapters.LaunchDirectory))));
         }
     }
 
@@ -311,7 +311,7 @@ public static class PickProjectCommand
 
         if (draft is not null || startNew)
         {
-            var made = CreateProjectView.Show(app, creator, folders, draft, leaveToBrowse);
+            var made = CreateProjectView.Show(app, creator, folders, draft, leaveToBrowse, Adapters.LaunchDirectory);
 
             if (made is not null || browse is not null)
             {
@@ -328,7 +328,7 @@ public static class PickProjectCommand
             new PickProjectCallbacks(
                 CreateProject: () =>
                 {
-                    var made = CreateProjectView.Show(app, creator, folders, null, leaveToBrowse);
+                    var made = CreateProjectView.Show(app, creator, folders, null, leaveToBrowse, Adapters.LaunchDirectory);
 
                     if (browse is not null)
                     {

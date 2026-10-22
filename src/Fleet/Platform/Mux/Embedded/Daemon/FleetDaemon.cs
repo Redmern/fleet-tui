@@ -98,6 +98,8 @@ public sealed record ClipboardImageLimit(int Reads, TimeSpan Per);
 public sealed class FleetDaemon(DaemonOptions options)
 {
     public const string ClientVariable = "FLEET_CLIENT";
+
+    public const string LaunchDirVariable = "FLEET_LAUNCH_DIR";
     public const string PaneVariable = "FLEET_PANE";
     public const string ExecutableVariable = "FLEET_EXECUTABLE";
     public const string PaneTokenVariable = "FLEET_PANE_TOKEN";
@@ -114,6 +116,7 @@ public sealed class FleetDaemon(DaemonOptions options)
     private readonly ForwardHub _hub = new(options.Forwards, options.Log);
     private readonly Dictionary<string, List<ForwardDto>> _viewerForwards = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _sshOf = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _launchDirOf = new(StringComparer.Ordinal);
     private readonly HashSet<string> _cannotForward = new(StringComparer.Ordinal);
     private readonly HashSet<string> _tunnelsItself = new(StringComparer.Ordinal);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, ViewerAnswer> _viewerAnswers = new(StringComparer.Ordinal);
@@ -518,6 +521,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                     if (hello.Ssh is { Length: > 0 } ssh)
                     {
                         _sshOf[client.Id] = ssh;
+                    }
+
+                    if (hello.Cwd is { Length: > 0 } launchDir)
+                    {
+                        _launchDirOf[client.Id] = launchDir;
                     }
 
                     if (hello.Forwards is false)
@@ -1343,16 +1351,16 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string MenuWaitOp = "menu-wait";
 
-    private readonly Dictionary<string, TaskCompletionSource<string?>> _menuWaits = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TaskCompletionSource<MenuOpened>> _menuWaits = new(StringComparer.Ordinal);
 
     private async Task AnswerMenuWaitAsync(Wire wire, ControlRequest request, CancellationToken gone, CancellationToken ct)
     {
-        TaskCompletionSource<string?>? waiting = null;
+        TaskCompletionSource<MenuOpened>? waiting = null;
         lock (_gate)
         {
             if (request.Caller is { } pane && _model.Float(pane) is { Parked: true })
             {
-                waiting = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                waiting = new TaskCompletionSource<MenuOpened>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _menuWaits.Remove(pane, out var replaced);
                 replaced?.TrySetCanceled();
                 _menuWaits[pane] = waiting;
@@ -1372,7 +1380,9 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 try
                 {
-                    response.Text = await waiting.Task.WaitAsync(gone).ConfigureAwait(false);
+                    var opened = await waiting.Task.WaitAsync(gone).ConfigureAwait(false);
+                    response.Text = opened.Action;
+                    response.Cwd = opened.LaunchDir;
                 }
                 catch (OperationCanceledException) when (!gone.IsCancellationRequested)
                 {
@@ -1394,7 +1404,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
-    private void StopWaiting(string pane, TaskCompletionSource<string?> waiting)
+    private void StopWaiting(string pane, TaskCompletionSource<MenuOpened> waiting)
     {
         lock (_gate)
         {
@@ -3025,6 +3035,11 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         var env = new Dictionary<string, string> { [ClientVariable] = client };
+        var launchDir = _launchDirOf.GetValueOrDefault(client);
+        if (launchDir is not null)
+        {
+            env[LaunchDirVariable] = launchDir;
+        }
 
         if (state.Showing is { } shown && _model.Workspace(shown) is not null)
         {
@@ -3051,7 +3066,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                 if (_menuWaits.Remove(warm.Pane, out var waiting))
                 {
-                    waiting.TrySetResult(action);
+                    waiting.TrySetResult(new MenuOpened(action, launchDir));
                 }
 
                 state.Menu = warm.Pane;
@@ -3527,6 +3542,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             _viewerForwards.Remove(session.Client);
             _sshOf.Remove(session.Client);
+            _launchDirOf.Remove(session.Client);
             _cannotForward.Remove(session.Client);
             _tunnelsItself.Remove(session.Client);
             ApplyResizes();

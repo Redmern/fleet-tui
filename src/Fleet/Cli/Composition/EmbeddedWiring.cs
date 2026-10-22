@@ -415,6 +415,7 @@ public static class EmbeddedWiring
                 hello =>
                 {
                     hello.Ssh = sshHost is null ? Environment.GetEnvironmentVariable(BridgedHello.SshConnectionVariable) : null;
+                    hello.Cwd = sshHost is null ? Environment.CurrentDirectory : null;
                     if (tunnels is not null)
                     {
                         hello.Forwards = true;
