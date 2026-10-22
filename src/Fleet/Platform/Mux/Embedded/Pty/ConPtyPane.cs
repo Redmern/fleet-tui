@@ -7,16 +7,18 @@ using Microsoft.Win32.SafeHandles;
 namespace Fleet.Platform.Mux.Embedded.Pty;
 
 [SupportedOSPlatform("windows")]
-public sealed unsafe partial class ConPtyPane(ConPtyApi api) : IPanePty
+public sealed unsafe partial class ConPtyPane(ConPtyApi api, Action<string>? log = null) : IPanePty
 {
     private const int ExtendedStartupInfoPresent = 0x00080000;
     private const int CreateUnicodeEnvironment = 0x00000400;
+    private const int CreateSuspended = 0x00000004;
     private const int StartfUseStdHandles = 0x00000100;
     private const nuint ProcThreadAttributePseudoConsole = 0x00020016;
 
     private nint _console;
     private nint _process;
     private nint _attributes;
+    private PaneJob? _job;
     private FileStream? _input;
     private FileStream? _output;
     private int _exited;
@@ -24,6 +26,10 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api) : IPanePty
     public event Action<byte[], int>? Output;
 
     public event Action<int>? Exited;
+
+    public event Action<PaneKillResult>? KillFailed;
+
+    public PaneKillResult? LastKill { get; private set; }
 
     public int Pid { get; private set; }
 
@@ -66,7 +72,7 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api) : IPanePty
         {
             if (!CreateProcessW(
                     null, line, 0, 0, false,
-                    ExtendedStartupInfoPresent | CreateUnicodeEnvironment,
+                    ExtendedStartupInfoPresent | CreateUnicodeEnvironment | CreateSuspended,
                     environment, directory, ref startup, out var info))
             {
                 var error = Marshal.GetLastPInvokeError();
@@ -76,6 +82,16 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api) : IPanePty
 
             _process = info.Process;
             Pid = info.ProcessId;
+            _job = Hold(info.Process, info.ProcessId);
+
+            if (ResumeThread(info.Thread) == uint.MaxValue)
+            {
+                var error = Marshal.GetLastPInvokeError();
+                CloseHandle(info.Thread);
+                Dispose();
+                throw new Win32Exception(error, $"ResumeThread failed for {commandLine}");
+            }
+
             CloseHandle(info.Thread);
         }
 
@@ -102,9 +118,9 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api) : IPanePty
 
     public void Dispose()
     {
-        if (_process != 0 && _exited == 0)
+        if (_process != 0)
         {
-            TerminateProcess(_process, 1);
+            Kill(_process);
         }
 
         if (_console != 0)
@@ -128,7 +144,48 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api) : IPanePty
             CloseHandle(_process);
             _process = 0;
         }
+
+        _job?.Dispose();
+        _job = null;
     }
+
+    private void Kill(nint process)
+    {
+        var job = _job;
+        var result = PaneKill.Run(
+            Pid,
+            job is null ? null : () => job.Terminate(),
+            _exited != 0 ? null : () => TerminateProcess(process, 1) ? 0 : Marshal.GetLastPInvokeError(),
+            Log);
+
+        LastKill = result;
+        if (!result.Ok)
+        {
+            KillFailed?.Invoke(result);
+        }
+    }
+
+    private PaneJob? Hold(nint process, int pid)
+    {
+        var job = PaneJob.Create(out var error);
+        if (job is null)
+        {
+            Log(PaneKill.Failure(pid, "CreateJobObject", error) + "; closing this pane kills only its root process");
+            return null;
+        }
+
+        error = job.Assign(process);
+        if (error != 0)
+        {
+            Log(PaneKill.Failure(pid, "AssignProcessToJobObject", error) + "; closing this pane kills only its root process");
+            job.Dispose();
+            return null;
+        }
+
+        return job;
+    }
+
+    private void Log(string line) => log?.Invoke(line);
 
     private void ReadLoop()
     {
@@ -280,9 +337,12 @@ public sealed unsafe partial class ConPtyPane(ConPtyApi api) : IPanePty
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool CloseHandle(nint handle);
 
-    [LibraryImport("kernel32.dll")]
+    [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool TerminateProcess(nint process, uint code);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial uint ResumeThread(nint thread);
 
     [LibraryImport("kernel32.dll")]
     private static partial uint WaitForSingleObject(nint handle, uint milliseconds);
