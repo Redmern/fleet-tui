@@ -86,6 +86,14 @@ public static class FleetIcons
 
     public const string Url = "";
 
+    public const string NewSub = "";
+
+    public const string Task = "";
+
+    public const string Dispatch = "";
+
+    public const string History = "";
+
     private static readonly Dictionary<string, string> Names = new()
     {
         [Info] = "keybinds",
@@ -125,6 +133,10 @@ public static class FleetIcons
         [Clone] = "clone",
         [RepoName] = "name",
         [Url] = "url",
+        [NewSub] = "new sub",
+        [Task] = "task",
+        [Dispatch] = "dispatch",
+        [History] = "past tasks",
         [For(FleetAction.NewAgent)!] = "new agent",
         [For(FleetAction.AddRepository)!] = "add repo",
         [For(FleetAction.Refresh)!] = "refresh",
