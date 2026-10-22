@@ -6,6 +6,7 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
+using Fleet.Ports.Settings;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
@@ -22,7 +23,8 @@ public sealed class NewAgentHandler(
     Func<string, RoleModels>? models = null,
     Func<string, bool>? subagentGuidance = null,
     IModelRouter? router = null,
-    IFleetLog? log = null)
+    IFleetLog? log = null,
+    ISettingsStore? settings = null)
 {
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
@@ -75,9 +77,9 @@ public sealed class NewAgentHandler(
             await SeedSecretsAsync(command, plan.TargetDirectory, ct).ConfigureAwait(false);
         }
 
-        var settings = models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models;
+        var roles = models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models;
         var runsClaude = command.Claude ?? command.Owner.Length > 0;
-        var routed = settings.Agent.IsAuto && (runsClaude || !AgentHarness.HostedInNvim(command.Harness))
+        var routed = roles.Agent.IsAuto && (runsClaude || !AgentHarness.HostedInNvim(command.Harness))
             ? await RoutedModel(command, branch, ct).ConfigureAwait(false)
             : null;
         var stored = store.List(command.ProjectName)
@@ -121,7 +123,7 @@ public sealed class NewAgentHandler(
                             agent.Repository,
                             agent.Branch,
                             orchestrator: false,
-                            agent.ModelsFrom(settings, orchestrator: false),
+                            agent.ModelsFrom(roles, orchestrator: false),
                             agent.Worktree)),
                     Env = AgentHarness.SpawnEnv(command.Harness),
                 }),
@@ -140,7 +142,21 @@ public sealed class NewAgentHandler(
             await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
         }
 
+        Remember(command);
+
         return Result<AgentRecord>.Ok(agent);
+    }
+
+    private void Remember(NewAgentCommand command)
+    {
+        if (settings is null)
+        {
+            return;
+        }
+
+        settings.Save(
+            command.ProjectName,
+            settings.Load(command.ProjectName).WithLastNewAgent(command.RepositoryName, command.Harness));
     }
 
     private async Task<RoleModel?> RoutedModel(NewAgentCommand command, string branch, CancellationToken ct)

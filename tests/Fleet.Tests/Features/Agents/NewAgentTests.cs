@@ -11,6 +11,7 @@ using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
+using Fleet.Ports.Settings;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings;
@@ -571,6 +572,60 @@ public sealed class NewAgentTests : IDisposable
         Assert.True(result.Succeeded, result.Error);
         Assert.Empty(router.Requests);
         Assert.Null(result.Value!.Model);
+    }
+
+    [Fact]
+    public async Task A_created_agent_remembers_its_repository_and_harness()
+    {
+        var directory = await RepositoryAsync();
+        var settings = new FakeSettings();
+
+        var result = await new NewAgentHandler(new GitRunner(), _mux, _store, settings: settings)
+            .HandleAsync(Command(directory, "feature/x"));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal("techweb", settings.SavedFor);
+        Assert.Equal(("backend", "claude"), (settings.Stored.LastRepo, settings.Stored.LastHarness));
+    }
+
+    [Fact]
+    public async Task Remembering_keeps_the_other_settings()
+    {
+        var directory = await RepositoryAsync();
+        var settings = new FakeSettings(SettingsConfig.Default.WithTrigger(";"));
+
+        await new NewAgentHandler(new GitRunner(), _mux, _store, settings: settings)
+            .HandleAsync(Command(directory, "feature/x"));
+
+        Assert.Equal(";", settings.Stored.Trigger);
+    }
+
+    [Fact]
+    public async Task A_refused_agent_remembers_nothing()
+    {
+        var directory = await RepositoryAsync();
+        var settings = new FakeSettings();
+
+        var result = await new NewAgentHandler(new GitRunner(), _mux, _store, settings: settings)
+            .HandleAsync(Command(directory, "feature/x", from: "nope"));
+
+        Assert.False(result.Succeeded);
+        Assert.Null(settings.SavedFor);
+    }
+
+    private sealed class FakeSettings(SettingsConfig? stored = null) : ISettingsStore
+    {
+        public SettingsConfig Stored { get; private set; } = stored ?? SettingsConfig.Default;
+
+        public string? SavedFor { get; private set; }
+
+        public SettingsConfig Load(string project) => Stored;
+
+        public void Save(string project, SettingsConfig config)
+        {
+            SavedFor = project;
+            Stored = config;
+        }
     }
 
     private sealed class FakeModelRouter(RoleModel? choice = null, bool throws = false) : IModelRouter

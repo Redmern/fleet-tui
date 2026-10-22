@@ -89,6 +89,8 @@ public sealed class JsonSettingsStore : ISettingsStore
                     ParseRole(stored.MainModel, stored.MainEffort, SettingsDefaults.MainModel),
                     ParseRole(stored.SubModel, stored.SubEffort, SettingsDefaults.SubModel),
                     ParseRole(stored.AgentModel, stored.AgentEffort, SettingsDefaults.AgentModel)),
+                LastRepo = stored.LastRepo ?? string.Empty,
+                LastHarness = stored.LastHarness ?? string.Empty,
             };
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -127,6 +129,8 @@ public sealed class JsonSettingsStore : ISettingsStore
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
             Iso = config.Iso == SettingsDefaults.Iso ? null : config.Iso,
             Jira = config.Jira is { } jira ? JiraFile(jira) : StoredJira(file),
+            LastRepo = config.LastRepo.Length == 0 ? null : config.LastRepo,
+            LastHarness = config.LastHarness.Length == 0 ? null : config.LastHarness,
             MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),

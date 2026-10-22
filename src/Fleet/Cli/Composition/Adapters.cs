@@ -102,6 +102,13 @@ public static class Adapters
 
     public static void SaveButtonHints(ButtonHints hints) => new JsonSettingsStore().SaveButtonHints(hints);
 
+    public static (string Repo, string Harness) LastNewAgent(string project)
+    {
+        var stored = Settings().Load(project);
+
+        return (stored.LastRepo, stored.LastHarness);
+    }
+
     public static ToggleSettingHandler Toggles() =>
         new(
             Settings(),

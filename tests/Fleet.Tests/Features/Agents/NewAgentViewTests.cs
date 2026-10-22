@@ -1,4 +1,8 @@
 using Fleet.Features.Agents.NewAgent;
+using Fleet.Features.Agents.NewAgent.Models;
+using Fleet.Shared.Constants;
+using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Keymap.Models;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -74,5 +78,108 @@ public sealed class NewAgentViewTests
         {
             Assert.False(button.Clashes(Keymap.Default), button.Mnemonic);
         }
+    }
+
+    private static NewAgentPrompt Prompt(int selected = 0, string harness = AgentHarness.Nvim) =>
+        new(
+            "techweb",
+            [("backend", "/r/backend", "main"), ("frontend", "/r/frontend", "main")],
+            selected,
+            _ => [],
+            harness);
+
+    [Fact]
+    public void The_last_used_repository_and_harness_are_preselected()
+    {
+        var picked = NewAgentView.Preselect(Prompt(), "frontend", AgentHarness.Claude);
+
+        Assert.Equal((1, AgentHarness.Claude), picked);
+    }
+
+    [Fact]
+    public void A_last_repository_that_is_gone_keeps_the_prompt_selection()
+    {
+        var picked = NewAgentView.Preselect(Prompt(selected: 1), "removed", AgentHarness.Claude);
+
+        Assert.Equal((1, AgentHarness.Claude), picked);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("vscode")]
+    [InlineData(AgentHarness.Orchestrator)]
+    public void A_harness_a_new_agent_cannot_open_keeps_the_prompt_harness(string last)
+    {
+        var picked = NewAgentView.Preselect(Prompt(), "backend", last);
+
+        Assert.Equal((0, AgentHarness.Nvim), picked);
+    }
+
+    [Fact]
+    public void Nothing_remembered_keeps_the_prompt()
+    {
+        var picked = NewAgentView.Preselect(Prompt(selected: 1, harness: AgentHarness.Claude), string.Empty, string.Empty);
+
+        Assert.Equal((1, AgentHarness.Claude), picked);
+    }
+
+    private static IReadOnlyList<FleetPillButton> FieldKeys(List<string>? ran = null) =>
+        NewAgentView.FieldKeys(() => ran?.Add("repo"), () => ran?.Add("branch"), () => ran?.Add("opens"));
+
+    [Fact]
+    public void Repo_branch_and_opens_answer_r_b_and_o()
+    {
+        Assert.Equal(["r", "b", "o"], FieldKeys().Select(k => k.Mnemonic));
+    }
+
+    [Fact]
+    public void Each_field_key_opens_its_own_field()
+    {
+        var ran = new List<string>();
+
+        foreach (var key in FieldKeys(ran))
+        {
+            key.Activate();
+        }
+
+        Assert.Equal(["repo", "branch", "opens"], ran);
+    }
+
+    [Fact]
+    public void No_field_key_clashes_with_the_list_motions()
+    {
+        foreach (var key in FieldKeys())
+        {
+            Assert.False(key.Clashes(Keymap.Default), key.Mnemonic);
+        }
+    }
+
+    [Fact]
+    public void No_field_key_clashes_with_a_button_key()
+    {
+        var buttons = NewAgentView.Buttons(() => { }, () => { });
+
+        foreach (var key in FieldKeys())
+        {
+            Assert.DoesNotContain(buttons, b => string.Equals(b.Mnemonic, key.Mnemonic, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    public void No_field_key_is_the_cancel_or_back_key()
+    {
+        foreach (var key in FieldKeys())
+        {
+            Assert.False(key.Answers(FleetKeys.Cancel), key.Mnemonic);
+            Assert.False(key.Answers(FleetKeys.Back), key.Mnemonic);
+        }
+    }
+
+    [Fact]
+    public void A_field_key_rebound_to_a_motion_clashes()
+    {
+        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.MoveDown, "r"));
+
+        Assert.True(FieldKeys()[0].Clashes(keymap));
     }
 }
