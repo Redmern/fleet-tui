@@ -4,6 +4,13 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.25 (2026-10-21)
+
+- **Icons render out of the box on Windows**: `get-fleet.ps1` and `install.ps1` install JetBrainsMono Nerd Font Mono (nerd-fonts v3.5.1, SHA256-checked) for your user, without admin rights, on Windows PowerShell 5.1 or PowerShell 7. Restart Windows Terminal afterwards.
+- The "Fleet" Terminal profile uses that face. Other profiles, and machines without pwsh, where no Fleet profile is made, need **JetBrainsMono Nerd Font Mono** picked under Appearance › Font face; the installers never edit `settings.json`.
+- A failed font download, hash check or extraction only warns and the fleet install still finishes; run the installer again to retry. `.\install.ps1 -Uninstall -Purge` removes the font.
+- The font is under the SIL Open Font License 1.1; see `docs/third-party/jetbrainsmono-nerd-font-OFL.md`.
+
 ## 0.7.24 (2026-10-20)
 
 - **Yanks in remote nvim panes now reach your clipboard**: 0.7.23 missed panes opened together with a project, panes started by sub-orchestrators and panes started before you connected; nvim answered "clipboard: no provider". Every nvim pane on a remote now copies while you are connected, without a restart.

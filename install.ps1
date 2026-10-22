@@ -9,12 +9,17 @@
     Wiring lives in 'fleet setup', which this script runs at the end, so the
     installer stays a build-and-copy step and the wiring is testable on its own.
 
+    fleet's icons are Nerd Font glyphs, so it also installs JetBrainsMono Nerd Font
+    Mono for the current user (scripts\fonts.ps1, no admin needed) and the "Fleet"
+    Terminal profile uses it. A failed font download only warns.
+
 .PARAMETER Uninstall
     Remove the binary and the PATH entry. Configuration under %APPDATA%\fleet is
     kept unless -Purge is also given.
 
 .PARAMETER Purge
-    With -Uninstall, also delete %APPDATA%\fleet.
+    With -Uninstall, also delete %APPDATA%\fleet and the JetBrainsMono Nerd Font
+    the installer added for the current user.
 
 .PARAMETER WithDeps
     Install Neovim, yazi and git through winget when they are missing, without
@@ -62,7 +67,7 @@ $ShortcutScript = Join-Path $RepoRoot 'scripts\windows\Install-FleetShortcut.ps1
 $script:Fancy = -not ($env:FLEET_NO_ANIMATION -or $env:NO_COLOR -or $env:CI -or $env:TERM -eq 'dumb' -or
     $Host.Name -ne 'ConsoleHost' -or [Console]::IsOutputRedirected)
 $script:StepCount = 0
-$script:StepTotal = if ($NoShortcut) { 4 } else { 5 }
+$script:StepTotal = if ($NoShortcut) { 5 } else { 6 }
 
 function Format-Bar([double]$fraction, [int]$width = 24) {
     $filled = [int][Math]::Floor([Math]::Max(0.0, [Math]::Min(1.0, $fraction)) * $width)
@@ -185,9 +190,12 @@ if ($Uninstall) {
             Remove-Item $ConfigDir -Recurse -Force
             Write-Ok "purged $ConfigDir"
         }
+
+        . (Join-Path $RepoRoot 'scripts\fonts.ps1')
+        Uninstall-FleetFont
     }
     else {
-        Write-Warn2 'config kept; re-run with -Purge to delete it'
+        Write-Warn2 'config and font kept; re-run with -Purge to delete them'
     }
 
     Complete-Steps
@@ -299,6 +307,10 @@ Write-Step 'Setting up'
 if ($LASTEXITCODE -ne 0) {
     Write-Host '    something fleet needs is missing - see the list above' -ForegroundColor Yellow
 }
+
+Write-Step 'Installing JetBrainsMono Nerd Font'
+. (Join-Path $RepoRoot 'scripts\fonts.ps1')
+Install-FleetFont | Out-Null
 
 if (-not $NoShortcut) {
     Write-Step 'Creating the Fleet shortcut'
