@@ -250,6 +250,18 @@ public sealed class RemoveAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task A_removal_with_only_a_kill_warning_still_succeeds()
+    {
+        var agent = await AgentAsync();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateProcess failed with Win32 error 5 (Access is denied)");
+
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+
+        Assert.True(result.Succeeded, result.Error);
+    }
+
+    [Fact]
     public async Task A_kept_folder_says_an_unterminated_process_may_be_what_locks_it()
     {
         if (!PinnedFolder.Possible)

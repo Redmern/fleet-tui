@@ -75,7 +75,7 @@ public sealed class RemoveAgentHandler(
     {
         var removal = await RemoveAsync(project, agent, deleteWorktree, ct).ConfigureAwait(false);
 
-        return removal.Problem is null ? Result.Ok() : Result.Fail(removal.Problem);
+        return removal.Problem is null || removal.Warning ? Result.Ok() : Result.Fail(removal.Problem);
     }
 
     public async Task<AgentRemoval> RemoveAsync(

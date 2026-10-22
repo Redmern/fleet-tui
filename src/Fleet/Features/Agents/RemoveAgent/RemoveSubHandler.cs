@@ -63,11 +63,11 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 continue;
             }
 
-            var refusal = await RemoveOrRefuseAsync(command.Project, child, ct).ConfigureAwait(false);
+            var (refusal, warning) = await RemoveOrRefuseAsync(command.Project, child, ct).ConfigureAwait(false);
 
             if (refusal is null)
             {
-                removed.Add(label);
+                removed.Add(warning is null ? label : $"{label} ({warning})");
                 continue;
             }
 
@@ -83,7 +83,8 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 removed,
                 kept,
                 released,
-                gone.Problem));
+                gone.Warning ? null : gone.Problem,
+                gone.Warning ? gone.Problem : null));
     }
 
     private async Task<bool> RunningAsync(AgentRecord sub, CancellationToken ct)
@@ -93,29 +94,30 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
         return panes.Any(p => AgentPanes.Owns(p, sub) && !SubBrowse.Is(p));
     }
 
-    private async Task<string?> RemoveOrRefuseAsync(string project, AgentRecord child, CancellationToken ct)
+    private async Task<(string? Refusal, string? Warning)> RemoveOrRefuseAsync(
+        string project, AgentRecord child, CancellationToken ct)
     {
         var state = await remover.InspectAsync(child, ct).ConfigureAwait(false);
 
         if (state.IsDirty)
         {
-            return $"{state.Changed.Count} uncommitted change(s)";
+            return ($"{state.Changed.Count} uncommitted change(s)", null);
         }
 
         var unpushed = await remover.UnpushedAsync(child, ct).ConfigureAwait(false);
 
         if (unpushed is null)
         {
-            return "could not check for unpushed commits";
+            return ("could not check for unpushed commits", null);
         }
 
         if (unpushed > 0)
         {
-            return $"{unpushed} unpushed commit(s)";
+            return ($"{unpushed} unpushed commit(s)", null);
         }
 
-        var gone = await remover.HandleAsync(project, child, deleteWorktree: true, ct).ConfigureAwait(false);
+        var gone = await remover.RemoveAsync(project, child, deleteWorktree: true, ct).ConfigureAwait(false);
 
-        return gone.Succeeded ? null : gone.Error;
+        return gone.Problem is null || gone.Warning ? (null, gone.Problem) : (gone.Problem, null);
     }
 }

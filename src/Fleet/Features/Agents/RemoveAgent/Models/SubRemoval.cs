@@ -10,7 +10,8 @@ public sealed record SubRemoval(
     IReadOnlyList<string> Removed,
     IReadOnlyList<string> Kept,
     IReadOnlyList<string> Released,
-    string? FolderProblem = null)
+    string? FolderProblem = null,
+    string? Warning = null)
 {
     public string Note
     {
@@ -18,16 +19,16 @@ public sealed record SubRemoval(
         {
             var parts = new List<string>
             {
-                FolderDeleted
-                    ? $"removed {Slug} and deleted its folder."
-                    : FolderProblem is not null
-                        ? $"removed {Slug}."
+                FolderProblem is not null
+                    ? $"removed {Slug}. {FolderProblem}"
+                    : FolderDeleted
+                        ? $"removed {Slug} and deleted its folder."
                         : $"removed {Slug}; its folder stays at {Folder}.",
             };
 
-            if (FolderProblem is not null)
+            if (Warning is not null)
             {
-                parts.Add(FolderProblem);
+                parts.Add(Warning);
             }
 
             if (Removed.Count > 0)

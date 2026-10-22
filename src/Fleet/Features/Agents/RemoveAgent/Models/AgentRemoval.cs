@@ -1,6 +1,6 @@
 namespace Fleet.Features.Agents.RemoveAgent.Models;
 
-public sealed record AgentRemoval(bool Forgotten, string? Problem)
+public sealed record AgentRemoval(bool Forgotten, string? Problem, bool Warning = false)
 {
     public static readonly AgentRemoval Done = new(true, null);
 
@@ -8,5 +8,5 @@ public sealed record AgentRemoval(bool Forgotten, string? Problem)
 
     public static AgentRemoval FolderKept(string problem) => new(true, problem);
 
-    public static AgentRemoval Warned(string problem) => new(true, problem);
+    public static AgentRemoval Warned(string problem) => new(true, problem, Warning: true);
 }
