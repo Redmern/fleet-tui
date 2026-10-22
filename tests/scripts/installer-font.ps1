@@ -26,9 +26,15 @@ $shortcutScript = Join-Path $repo 'scripts/windows/Install-FleetShortcut.ps1'
 $onWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 $failures = 0
 
-function Check($name, $condition) {
+# Output, when given, is printed under a failing check so a CI log shows what
+# the installer actually said.
+function Check($name, $condition, $Output) {
     if ($condition) { Write-Host "ok   $name" -ForegroundColor Green }
-    else { Write-Host "FAIL $name" -ForegroundColor Red; $script:failures++ }
+    else {
+        Write-Host "FAIL $name" -ForegroundColor Red
+        if ($Output) { Write-Host (($Output.TrimEnd() -split "`n" | ForEach-Object { "     | $($_.TrimEnd())" }) -join "`n") }
+        $script:failures++
+    }
 }
 
 function New-TempDir([string]$prefix) {
@@ -57,7 +63,11 @@ $fakeZip = Join-Path $workDir 'JetBrainsMono.zip'
 $fakeHash = (Get-FileHash -LiteralPath $fakeZip -Algorithm SHA256).Hash
 
 $notZip = Join-Path $workDir 'not-a-zip.zip'
-[IO.File]::WriteAllText($notZip, 'not a zip')
+# Longer than the 22-byte end-of-central-directory record, so both runtimes search
+# for it and say so. A shorter file fails differently: .NET Core reports "Central
+# Directory corrupt", while .NET Framework (Windows PowerShell 5.1) lets the
+# IOException from seeking before the start of the file escape.
+[IO.File]::WriteAllText($notZip, ('not a zip ' * 20))
 $notZipHash = (Get-FileHash -LiteralPath $notZip -Algorithm SHA256).Hash
 
 $noMonoSource = Join-Path $workDir 'no-mono-source'
@@ -245,7 +255,7 @@ try {
     $cases = @(
         @{ Name = 'hash mismatch'; Args = @{ Sha256 = $FleetFontSha256 }; Expect = 'SHA256' },
         @{ Name = 'download failure'; Args = @{ DownloadThrows = $true }; Expect = 'network down' },
-        @{ Name = 'extraction failure'; Args = @{ SourceZip = $notZip; Sha256 = $notZipHash }; Expect = 'Central Directory' },
+        @{ Name = 'extraction failure'; Args = @{ SourceZip = $notZip; Sha256 = $notZipHash }; Expect = 'End of Central Directory record could not be found' },
         @{ Name = 'zip without the Mono files'; Args = @{ SourceZip = $noMonoZip; Sha256 = $noMonoHash }; Expect = 'JetBrainsMonoNerdFontMono-Regular\.ttf is not in the zip' }
     )
     foreach ($case in $cases) {
@@ -255,7 +265,7 @@ try {
         $failed = Invoke-FontCase -FontDir $dir -RegistryPath $registryRoot -Registry $registry @caseArgs
         Check "$($case.Name): returns false" ($failed.Result -eq $false)
         Check "$($case.Name): warns with the cause and how to retry" (
-            $failed.Output -match 're-run the installer' -and $failed.Output -match $case.Expect)
+            $failed.Output -match 're-run the installer' -and $failed.Output -match $case.Expect) $failed.Output
         Check "$($case.Name): installs nothing" (Test-NothingInstalled $dir $registry $registryRoot)
     }
 
