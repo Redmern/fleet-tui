@@ -16,6 +16,7 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
     private readonly ConcurrentDictionary<string, List<string>> _sent = new();
 
     private readonly ConcurrentDictionary<string, string> _text = new();
+    private readonly ConcurrentDictionary<string, string> _killProblems = new();
     private int _nextPane;
     private int _nextWindow;
     private int _nextTab;
@@ -141,6 +142,14 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
             options.Env);
 
         return Task.FromResult(id);
+    }
+
+    public void FailKill(PaneId id, string problem) => _killProblems[id.Value] = problem;
+
+    public async Task<string?> TerminatePaneAsync(PaneId id, CancellationToken ct = default)
+    {
+        await KillPaneAsync(id, ct).ConfigureAwait(false);
+        return _killProblems.TryRemove(id.Value, out var problem) ? problem : null;
     }
 
     public Task KillPaneAsync(PaneId id, CancellationToken ct = default)
