@@ -66,6 +66,26 @@ public static class FleetIcons
 
     public const string OpenBrowser = "";
 
+    public const string NewAgent = "";
+
+    public const string Repo = "";
+
+    public const string Branch = "";
+
+    public const string Base = "";
+
+    public const string Harness = "";
+
+    public const string Create = "";
+
+    public const string AddRepo = "";
+
+    public const string Clone = "";
+
+    public const string RepoName = "";
+
+    public const string Url = "";
+
     private static readonly Dictionary<string, string> Names = new()
     {
         [Info] = "keybinds",
@@ -95,6 +115,16 @@ public static class FleetIcons
         [Forward] = "forward",
         [Unforward] = "unforward",
         [OpenBrowser] = "open",
+        [NewAgent] = "new agent",
+        [Repo] = "repo",
+        [Branch] = "branch",
+        [Base] = "base",
+        [Harness] = "opens",
+        [Create] = "create",
+        [AddRepo] = "add repository",
+        [Clone] = "clone",
+        [RepoName] = "name",
+        [Url] = "url",
         [For(FleetAction.NewAgent)!] = "new agent",
         [For(FleetAction.AddRepository)!] = "add repo",
         [For(FleetAction.Refresh)!] = "refresh",

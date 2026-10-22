@@ -12,6 +12,8 @@ public static class NewAgentView
 {
     public const string DefaultBase = "(default branch)";
 
+    public const string Title = $"{FleetIcons.NewAgent} New agent";
+
     public static NewAgentCommand? Show(
         IApplication app,
         NewAgentPrompt prompt,
@@ -34,7 +36,7 @@ public static class NewAgentView
         var harness = AgentHarness.Normalize(prompt.Harness);
         var branch = string.Empty;
 
-        var window = FleetTheme.Overlay("New agent");
+        var window = FleetTheme.Overlay(Title);
         var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
         var rows = new List<(FleetRow Row, Action Act)>();
 
@@ -116,15 +118,22 @@ public static class NewAgentView
             app.RequestStop(window);
         }
 
+        var buttons = Buttons(Submit, () => app.RequestStop(window));
+
         void Rebuild()
         {
+            var fields = Fields(
+                prompt.Repositories[repository].Name,
+                branch.Length == 0 ? "(base itself)" : branch,
+                Shown(chosenBase),
+                AgentHarness.Describe(harness));
+
             rows.Clear();
-            rows.Add((Field("Repo", prompt.Repositories[repository].Name), ChooseRepository));
-            rows.Add((Field("Branch", branch.Length == 0 ? "(base itself)" : branch), EditBranch));
-            rows.Add((Field("Base", Shown(chosenBase)), ChooseBase));
-            rows.Add((Field("Opens", AgentHarness.Describe(harness)), ChooseHarness));
-            rows.Add((Choice("Create agent"), Submit));
-            rows.Add((Choice("Cancel"), () => app.RequestStop(window)));
+            rows.Add((fields[0], ChooseRepository));
+            rows.Add((fields[1], EditBranch));
+            rows.Add((fields[2], ChooseBase));
+            rows.Add((fields[3], ChooseHarness));
+            rows.AddRange(buttons.Select(b => (b.Row(), b.Activate)));
         }
 
         void Refill(int selected)
@@ -135,6 +144,7 @@ public static class NewAgentView
 
         Refill(0);
         FleetKeys.ApplyMotions(list, keymap);
+        FleetPillButton.Bind(list, buttons);
 
         void Activate()
         {
@@ -206,16 +216,19 @@ public static class NewAgentView
         return result;
     }
 
-    private static FleetRow Field(string label, string value) =>
-        new([new FleetSpan($"{label}:".PadRight(9), FleetTones.Key), FleetSpan.Plain(value)]);
+    public static IReadOnlyList<FleetRow> Fields(string repository, string branch, string from, string opens) =>
+    [
+        FleetFieldRow.Of(FleetIcons.Repo, "Repo", repository),
+        FleetFieldRow.Of(FleetIcons.Branch, "Branch", branch),
+        FleetFieldRow.Of(FleetIcons.Base, "Base", from),
+        FleetFieldRow.Of(FleetIcons.Harness, "Opens", opens),
+    ];
 
-    private static FleetRow Choice(string label) =>
-        new(
-        [
-            new FleetSpan(FleetGlyphs.PillLeft, FleetTones.ChipEdge),
-            new FleetSpan($" {label} ", FleetTones.ChipLabel),
-            new FleetSpan(FleetGlyphs.PillRight, FleetTones.ChipEdge),
-        ]);
+    public static IReadOnlyList<FleetPillButton> Buttons(Action create, Action cancel) =>
+    [
+        new(FleetIcons.Create, "Create agent", "c", create),
+        new(FleetIcons.Close, "Cancel", "Esc", cancel),
+    ];
 
     private static string Shown(string branch) =>
         branch.Length == 0 ? DefaultBase : branch;
