@@ -30,6 +30,27 @@ public class FailSilentDriverTests
     }
 
     [Fact]
+    public async Task A_kill_problem_from_the_inner_driver_passes_through()
+    {
+        var fake = new FakeMuxDriver();
+        IMuxDriver mux = new FailSilentDriver(fake, _ => { });
+        var id = await mux.SpawnAsync(new SpawnOptions { NewWindow = true });
+        fake.FailKill(id, "access denied");
+
+        Assert.Equal("access denied", await mux.TerminatePaneAsync(id));
+    }
+
+    [Fact]
+    public async Task A_terminate_on_an_unavailable_mux_is_swallowed_without_a_problem()
+    {
+        var swallowed = new List<Exception>();
+        IMuxDriver mux = new FailSilentDriver(new FakeMuxDriver { Available = false }, swallowed.Add);
+
+        Assert.Null(await mux.TerminatePaneAsync(new PaneId("p1")));
+        Assert.Single(swallowed);
+    }
+
+    [Fact]
     public async Task Successful_calls_pass_straight_through()
     {
         var mux = new FailSilentDriver(new FakeMuxDriver(), _ => { });

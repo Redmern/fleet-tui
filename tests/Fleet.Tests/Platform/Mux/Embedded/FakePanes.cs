@@ -47,6 +47,8 @@ public sealed class FakePanes
 
         public bool IsDisposed { get; private set; }
 
+        public string? KillProblem { get; set; }
+
         public FakeTerminal Terminal { get; private set; } = null!;
 
         public string Written => string.Concat(_written.Select(b => Encoding.UTF8.GetString(b)));

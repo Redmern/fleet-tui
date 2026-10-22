@@ -117,8 +117,10 @@ public sealed class EmbeddedDriver(
         return new PaneId(response.Pane ?? string.Empty);
     }
 
-    public Task KillPaneAsync(PaneId id, CancellationToken ct = default) =>
-        RequestAsync(new ControlRequest { Op = "kill", Pane = id.Value }, ct);
+    public Task KillPaneAsync(PaneId id, CancellationToken ct = default) => TerminatePaneAsync(id, ct);
+
+    public async Task<string?> TerminatePaneAsync(PaneId id, CancellationToken ct = default) =>
+        (await RequestAsync(new ControlRequest { Op = "kill", Pane = id.Value }, ct).ConfigureAwait(false)).KillProblem;
 
     public Task MovePaneAsync(PaneId id, MovePaneOptions options, CancellationToken ct = default) =>
         RequestAsync(

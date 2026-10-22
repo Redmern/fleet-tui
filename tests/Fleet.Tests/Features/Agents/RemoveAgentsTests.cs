@@ -30,8 +30,10 @@ public sealed class RemoveAgentsTests : IDisposable
         }
     }
 
+    private readonly FakeMuxDriver _mux = new();
+
     private RemoveAgentsHandler Handler() =>
-        new(new RemoveAgentHandler(new GitRunner(), new FakeMuxDriver(), _store, folderRetries: []));
+        new(new RemoveAgentHandler(new GitRunner(), _mux, _store, folderRetries: []));
 
     private AgentRecord Sub(string slug = "upgrade")
     {
@@ -45,6 +47,20 @@ public sealed class RemoveAgentsTests : IDisposable
         _store.Save(Project, sub);
 
         return sub;
+    }
+
+    [Fact]
+    public async Task The_background_note_names_processes_that_could_not_be_terminated()
+    {
+        var sub = Sub();
+        var pane = await _mux.SpawnAsync(new Fleet.Ports.Mux.Models.SpawnOptions { Cwd = sub.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)");
+
+        var note = await Handler().HandleAsync(Project, [(sub, true)]);
+
+        Assert.StartsWith("removed upgrade.", note);
+        Assert.Contains("could not terminate", note);
+        Assert.Contains("Win32 error 5", note);
     }
 
     [Fact]

@@ -137,6 +137,22 @@ public sealed class RemoveSubTests : IDisposable
     }
 
     [Fact]
+    public async Task A_sub_pane_whose_processes_survive_is_named_in_the_note_but_its_folder_still_goes()
+    {
+        var sub = Sub();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)");
+
+        var result = await Handler().HandleAsync(Command(deleteFolder: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.True(result.Value!.FolderDeleted);
+        Assert.False(Directory.Exists(sub.Worktree));
+        Assert.Contains("could not terminate", result.Value.Note);
+        Assert.Contains("Win32 error 5", result.Value.Note);
+    }
+
+    [Fact]
     public async Task A_folder_that_cannot_be_deleted_is_kept_but_the_sub_is_still_removed()
     {
         if (!PinnedFolder.Possible)
@@ -235,6 +251,37 @@ public sealed class RemoveSubTests : IDisposable
         Assert.Null(Stored(child));
         Assert.False(Directory.Exists(child.Worktree));
         Assert.Equal(["backend/feature/login"], result.Value!.Removed);
+    }
+
+    [Fact]
+    public async Task A_child_removed_despite_a_kill_warning_counts_as_removed_and_keeps_the_warning()
+    {
+        Sub();
+        var child = await ChildAsync("feature/login");
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = child.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)");
+
+        var result = await Handler().HandleAsync(Command(removeAgents: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Empty(result.Value!.Kept);
+        Assert.False(Directory.Exists(child.Worktree));
+        Assert.StartsWith("backend/feature/login (", Assert.Single(result.Value.Removed));
+        Assert.Contains("Win32 error 5", result.Value.Note);
+    }
+
+    [Fact]
+    public async Task A_kept_sub_folder_with_a_kill_warning_still_says_where_the_folder_stays()
+    {
+        var sub = Sub();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)");
+
+        var result = await Handler().HandleAsync(Command());
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Contains($"its folder stays at {sub.Worktree}", result.Value!.Note);
+        Assert.Contains("could not terminate", result.Value.Note);
     }
 
     [Fact]

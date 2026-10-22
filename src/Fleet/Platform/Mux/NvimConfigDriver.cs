@@ -28,6 +28,8 @@ public sealed class NvimConfigDriver(IMuxDriver inner, Func<bool> useFleetConfig
 
     public Task KillPaneAsync(PaneId id, CancellationToken ct = default) => inner.KillPaneAsync(id, ct);
 
+    public Task<string?> TerminatePaneAsync(PaneId id, CancellationToken ct = default) => inner.TerminatePaneAsync(id, ct);
+
     public Task MovePaneAsync(PaneId id, MovePaneOptions options, CancellationToken ct = default) =>
         inner.MovePaneAsync(id, options, ct);
 

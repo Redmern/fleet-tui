@@ -1,4 +1,5 @@
 using Fleet.Features.Agents.RemoveAgent;
+using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Features.Agents.StopAgent;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
@@ -232,6 +233,57 @@ public sealed class RemoveAgentTests : IDisposable
         await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
 
         Assert.Empty(await _mux.ListPanesAsync());
+    }
+
+    [Fact]
+    public async Task A_pane_whose_processes_could_not_be_terminated_is_named_in_the_removal()
+    {
+        var agent = await AgentAsync();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)");
+
+        var removal = await Handler().RemoveAsync("techweb", agent, deleteWorktree: true);
+
+        Assert.True(removal.Forgotten);
+        Assert.Contains("could not terminate", removal.Problem);
+        Assert.Contains("Win32 error 5", removal.Problem);
+    }
+
+    [Fact]
+    public async Task A_removal_with_only_a_kill_warning_still_succeeds()
+    {
+        var agent = await AgentAsync();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateProcess failed with Win32 error 5 (Access is denied)");
+
+        var result = await Handler().HandleAsync("techweb", agent, deleteWorktree: true);
+
+        Assert.True(result.Succeeded, result.Error);
+    }
+
+    [Fact]
+    public async Task A_kept_folder_says_an_unterminated_process_may_be_what_locks_it()
+    {
+        if (!PinnedFolder.Possible)
+        {
+            return;
+        }
+
+        var agent = Orchestrator();
+        var pane = await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _mux.FailKill(pane, "pane 4242: TerminateProcess failed with Win32 error 5 (Access is denied)");
+
+        AgentRemoval removal;
+
+        using (PinnedFolder.For(agent.Worktree))
+        {
+            removal = await Handler().RemoveAsync("techweb", agent, deleteWorktree: true);
+        }
+
+        Assert.True(removal.Forgotten);
+        Assert.Contains("kept", removal.Problem);
+        Assert.Contains("could not terminate", removal.Problem);
+        Assert.Contains("locked", removal.Problem);
     }
 
     [Fact]

@@ -15,6 +15,14 @@ public static class WorktreeLock
         $"{worktree} is still in use, so its files were kept. Something the agent started "
       + "is still running - close it and remove the agent again.";
 
+    public static string Unterminated(IReadOnlyList<string> problems) =>
+        $"Fleet could not terminate every process the agent started ({string.Join("; ", problems)}); "
+      + "they may still be running.";
+
+    public static string LockedBy(IReadOnlyList<string> problems) =>
+        $"Fleet could not terminate every process the agent started ({string.Join("; ", problems)}), "
+      + "which is likely what keeps the folder locked.";
+
     public static string Kept(string folder) =>
         $"{folder} could not be deleted because something still uses it, so the folder was kept. "
       + "The agent itself is removed; close whatever holds the folder and delete it manually.";

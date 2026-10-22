@@ -474,6 +474,20 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Terminating_a_pane_through_the_embedded_driver_returns_its_kill_problem()
+    {
+        using var driver = new EmbeddedDriver(_endpoint);
+        Fleet.Ports.Mux.IMuxDriver mux = driver;
+        var pane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Cwd = ".", Args = ["claude"] });
+        _panes.ByProgram("claude")!.KillProblem = "pane 4242: TerminateProcess failed with Win32 error 5 (Access is denied)";
+
+        var problem = await mux.TerminatePaneAsync(pane);
+
+        Assert.Contains("Win32 error 5", problem);
+        Assert.Empty(await mux.ListPanesAsync());
+    }
+
+    [Fact]
     public async Task Fleets_own_handlers_switch_projects_through_the_embedded_driver()
     {
         using var mux = new EmbeddedDriver(_endpoint);
@@ -1207,6 +1221,31 @@ public sealed class DaemonTests : IAsyncLifetime
 
         await Eventually(() => client.Farewell is not null);
         Assert.Equal(FleetDaemon.NothingLeft, client.Farewell);
+    }
+
+    [Fact]
+    public async Task Killing_a_pane_whose_processes_survive_answers_with_the_kill_problem()
+    {
+        var control = await ControlAsync();
+        var pane = await SpawnAsync(control, "techweb", "claude");
+        _panes.ByProgram("claude")!.KillProblem = "pane 4242: TerminateJobObject failed with Win32 error 5 (Access is denied)";
+
+        var killed = await control.RequestAsync(new ControlRequest { Op = "kill", Pane = pane });
+
+        Assert.True(killed.Ok);
+        Assert.Contains("Win32 error 5", killed.KillProblem);
+    }
+
+    [Fact]
+    public async Task Killing_a_pane_that_ends_cleanly_answers_without_a_kill_problem()
+    {
+        var control = await ControlAsync();
+        var pane = await SpawnAsync(control, "techweb", "claude");
+
+        var killed = await control.RequestAsync(new ControlRequest { Op = "kill", Pane = pane });
+
+        Assert.True(killed.Ok);
+        Assert.Null(killed.KillProblem);
     }
 
     [Fact]

@@ -23,6 +23,12 @@ public interface IMuxDriver
 
     Task KillPaneAsync(PaneId id, CancellationToken ct = default);
 
+    async Task<string?> TerminatePaneAsync(PaneId id, CancellationToken ct = default)
+    {
+        await KillPaneAsync(id, ct).ConfigureAwait(false);
+        return null;
+    }
+
     Task MovePaneAsync(PaneId id, MovePaneOptions options, CancellationToken ct = default);
 
     Task SetTitleAsync(PaneId id, string title, CancellationToken ct = default);

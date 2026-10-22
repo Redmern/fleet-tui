@@ -75,7 +75,7 @@ public sealed class RemoveAgentHandler(
     {
         var removal = await RemoveAsync(project, agent, deleteWorktree, ct).ConfigureAwait(false);
 
-        return removal.Problem is null ? Result.Ok() : Result.Fail(removal.Problem);
+        return removal.Problem is null || removal.Warning ? Result.Ok() : Result.Fail(removal.Problem);
     }
 
     public async Task<AgentRemoval> RemoveAsync(
@@ -90,31 +90,37 @@ public sealed class RemoveAgentHandler(
                 $"{agent.Branch} was not removed: fleet could not update its session file. Try again.");
         }
 
-        await StopAsync(agent, ct).ConfigureAwait(false);
+        var unterminated = await StopAsync(agent, ct).ConfigureAwait(false);
 
         if (!deleteWorktree)
         {
-            return AgentRemoval.Done;
+            return Removed(unterminated);
         }
 
         if (AgentHarness.IsOrchestrator(agent.Harness))
         {
             return await DiscardFolderAsync(agent.Worktree, ct).ConfigureAwait(false)
-                ? AgentRemoval.Done
-                : AgentRemoval.FolderKept(WorktreeLock.Kept(agent.Worktree));
+                ? Removed(unterminated)
+                : AgentRemoval.FolderKept(Locked(WorktreeLock.Kept(agent.Worktree), unterminated));
         }
 
         var failure = await DiscardWorktreeAsync(agent.Worktree, ct).ConfigureAwait(false);
 
         if (failure is null)
         {
-            return AgentRemoval.Done;
+            return Removed(unterminated);
         }
 
         store.Save(project, agent with { Open = false });
 
-        return AgentRemoval.Refused(failure);
+        return AgentRemoval.Refused(Locked(failure, unterminated));
     }
+
+    private static AgentRemoval Removed(IReadOnlyList<string> unterminated) =>
+        unterminated.Count == 0 ? AgentRemoval.Done : AgentRemoval.Warned(WorktreeLock.Unterminated(unterminated));
+
+    private static string Locked(string problem, IReadOnlyList<string> unterminated) =>
+        unterminated.Count == 0 ? problem : $"{problem} {WorktreeLock.LockedBy(unterminated)}";
 
     private async Task<string?> DiscardWorktreeAsync(string worktree, CancellationToken ct)
     {
@@ -200,14 +206,20 @@ public sealed class RemoveAgentHandler(
         }
     }
 
-    private async Task StopAsync(AgentRecord agent, CancellationToken ct)
+    private async Task<IReadOnlyList<string>> StopAsync(AgentRecord agent, CancellationToken ct)
     {
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var unterminated = new List<string>();
 
         foreach (var pane in panes.Where(p => PathKey.Same(p.Cwd, agent.Worktree)))
         {
-            await mux.KillPaneAsync(pane.Id, ct).ConfigureAwait(false);
+            if (await mux.TerminatePaneAsync(pane.Id, ct).ConfigureAwait(false) is { } problem)
+            {
+                unterminated.Add(problem);
+            }
         }
+
+        return unterminated;
     }
 
     private async Task<string?> AnchorAsync(string worktree, CancellationToken ct)

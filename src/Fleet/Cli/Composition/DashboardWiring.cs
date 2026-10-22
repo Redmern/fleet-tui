@@ -991,12 +991,12 @@ public static class DashboardWiring
                         case "forget":
                             {
                                 var removed = await remover
-                                    .HandleAsync(project.Name, agent, deleteWorktree: false)
+                                    .RemoveAsync(project.Name, agent, deleteWorktree: false)
                                     .ConfigureAwait(false);
 
-                                if (!removed.Succeeded)
+                                if (removed.Problem is not null)
                                 {
-                                    failures.Add($"{agent.Branch}: {removed.Error}");
+                                    failures.Add($"{agent.Branch}: {removed.Problem}");
                                 }
 
                                 break;
@@ -1112,12 +1112,14 @@ public static class DashboardWiring
                     }
 
                     var gone = await remover
-                        .HandleAsync(project.Name, agent, deleteWorktree: true)
+                        .RemoveAsync(project.Name, agent, deleteWorktree: true)
                         .ConfigureAwait(false);
 
-                    return Noted(log, project.Name, gone.Succeeded
+                    return Noted(log, project.Name, gone.Problem is null
                         ? $"{finished.Value} Agent removed with its worktree."
-                        : $"{finished.Value} But removal failed: {gone.Error}");
+                        : gone.Warning
+                            ? $"{finished.Value} Agent removed with its worktree. {gone.Problem}"
+                            : $"{finished.Value} But removal failed: {gone.Problem}");
                 }
 
                 if (choice == "v")

@@ -5,6 +5,14 @@ namespace Fleet.Platform.Mux.Embedded.Pty;
 public sealed record PaneKillResult(int Pid, bool Tree, int? JobError, int? ProcessError)
 {
     public bool Ok => JobError is null && ProcessError is null;
+
+    public string? Problem => Ok
+        ? null
+        : string.Join("; ", new[]
+        {
+            JobError is { } job ? PaneKill.Failure(Pid, "TerminateJobObject", job) : null,
+            ProcessError is { } process ? PaneKill.Failure(Pid, "TerminateProcess", process) : null,
+        }.OfType<string>());
 }
 
 public static class PaneKill
