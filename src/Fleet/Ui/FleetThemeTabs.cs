@@ -1,0 +1,62 @@
+using Fleet.Shared.Themes;
+using Fleet.Ui.Models;
+
+namespace Fleet.Ui;
+
+public sealed class FleetThemeTabs
+{
+    public const int Dark = 0;
+
+    public const int Light = 1;
+
+    public const int Custom = 2;
+
+    public const string ActiveMark = "  (active)";
+
+    private static readonly string[] Titles = ["Dark", "Light", "Custom"];
+
+    private readonly IReadOnlyList<IReadOnlyList<ThemePalette>> themes;
+
+    private FleetThemeTabs(
+        IReadOnlyList<IReadOnlyList<ThemePalette>> themes,
+        IReadOnlyList<(string Title, IReadOnlyList<PickerEntry> Entries)> tabs,
+        int startTab,
+        int startIndex)
+    {
+        this.themes = themes;
+        Tabs = tabs;
+        StartTab = startTab;
+        StartIndex = startIndex;
+    }
+
+    public IReadOnlyList<(string Title, IReadOnlyList<PickerEntry> Entries)> Tabs { get; }
+
+    public int StartTab { get; }
+
+    public int StartIndex { get; }
+
+    public static FleetThemeTabs For(IReadOnlyList<ThemePalette> all, Func<ThemePalette, bool> isCustom, string active)
+    {
+        IReadOnlyList<ThemePalette>[] themes =
+        [
+            [.. all.Where(t => !isCustom(t) && !t.Light)],
+            [.. all.Where(t => !isCustom(t) && t.Light)],
+            [.. all.Where(isCustom)],
+        ];
+
+        var tabs = themes
+            .Select((list, i) => (Titles[i], (IReadOnlyList<PickerEntry>)[.. list.Select(t => Entry(t, active))]))
+            .ToList();
+
+        var startTab = Array.FindIndex(themes, list => list.Any(t => t.Name == active));
+
+        return startTab < 0
+            ? new FleetThemeTabs(themes, tabs, Dark, 0)
+            : new FleetThemeTabs(themes, tabs, startTab, themes[startTab].ToList().FindIndex(t => t.Name == active));
+    }
+
+    public ThemePalette Pick(int tab, int index) => themes[tab][index];
+
+    private static PickerEntry Entry(ThemePalette theme, string active) =>
+        new(theme.Title, theme.Name == active ? theme.Name + ActiveMark : theme.Name);
+}
