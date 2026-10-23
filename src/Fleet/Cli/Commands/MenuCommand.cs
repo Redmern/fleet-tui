@@ -402,24 +402,22 @@ public static class MenuCommand
             case FleetAction.EditTheme:
                 {
                     var themes = Adapters.Themes();
-                    var all = themes.List();
-                    var active = themes.Active().Name;
+                    var themeTabs = FleetThemeTabs.For(themes.List(), themes.IsCustom, themes.Active().Name);
 
-                    var pickedTheme = FleetPicker.Choose(
+                    var pickedTheme = FleetTabbedPicker.Choose(
                         app,
                         "Theme — fleet, nvim, claude and yazi",
-                        [.. all.Select(t => new PickerEntry(
-                            t.Title,
-                            t.Name == active ? $"{t.Name}  (active)" : t.Name))],
+                        themeTabs.Tabs,
                         keymap,
-                        Math.Max(0, all.ToList().FindIndex(t => t.Name == active)));
+                        themeTabs.StartTab,
+                        themeTabs.StartIndex);
 
-                    if (pickedTheme is not { } themeIndex)
+                    if (pickedTheme is not var (themeTab, themeIndex, _))
                     {
                         break;
                     }
 
-                    var set = themes.Set(all[themeIndex].Name);
+                    var set = themes.Set(themeTabs.Pick(themeTab, themeIndex).Name);
 
                     if (!set.Succeeded)
                     {
