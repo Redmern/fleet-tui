@@ -46,6 +46,15 @@ public sealed record SettingsConfig(
 
     public string LastHarness { get; init; } = string.Empty;
 
+    public Editor? Editor { get; init; }
+
+    public Editor? DefaultEditor { get; init; }
+
+    public Editor? InstalledEditor { get; init; } = Enums.Editor.Nvim;
+
+    public Editor ResolvedEditor => EditorChoice.Resolve(
+        Editor, DefaultEditor, InstalledEditor == Enums.Editor.Nvim, InstalledEditor == Enums.Editor.Vscode);
+
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
 
@@ -112,6 +121,8 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithModels(RoleModels models) => this with { Models = models };
 
+    public SettingsConfig WithEditor(Editor? editor) => this with { Editor = editor };
+
     public SettingsConfig WithLastNewAgent(string repository, string harness) =>
         this with { LastRepo = repository, LastHarness = harness };
 
@@ -153,6 +164,9 @@ public sealed record SettingsConfig(
             Jira = Jira,
             LastRepo = LastRepo,
             LastHarness = LastHarness,
+            Editor = Editor,
+            DefaultEditor = DefaultEditor,
+            InstalledEditor = InstalledEditor,
         };
     }
 
