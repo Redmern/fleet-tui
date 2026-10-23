@@ -190,5 +190,6 @@ public sealed record SettingsConfig(
                 .Append($"iso={Iso}")
                 .Append($"nvim-config={Nvim}")
                 .Append($"button-hints={ButtonHints}")
+                .Append($"editor={EditorChoice.Word(Editor)}")
                 .Append(Models.Signature));
 }

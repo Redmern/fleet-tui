@@ -36,6 +36,7 @@ public class KeymapGroupsTests
     [InlineData(FleetAction.EditFleetConfig, "fleet menu › settings › fleet config")]
     [InlineData(FleetAction.EditAidlcMode, "fleet menu › settings › fleet config")]
     [InlineData(FleetAction.EditMainOrchestratorInNvim, "fleet menu › settings › fleet config")]
+    [InlineData(FleetAction.EditEditor, "fleet menu › settings › fleet config")]
     [InlineData(FleetAction.NewProject, "project picker")]
     [InlineData(FleetAction.MoveDown, "navigation")]
     public void An_action_lives_in_the_expected_group(FleetAction action, string label)
