@@ -88,6 +88,34 @@ run_tty() {
     RC=$?
 }
 
+# The tools the manifest writer needs, next to the fakes.
+with_manifest_utils() {
+    for util in date mkdir dirname tr sed mv cat rm; do
+        ln -sf "$(command -v "$util")" "$FAKEBIN/$util"
+    done
+}
+
+# run_manifest <script> <with_deps> [keep] [config home] -> like run_deps with
+# FLEET_CONFIG_HOME set; the manifest is $MANIFEST. Without keep it starts empty.
+run_manifest() {
+    CFG="${4:-$WORK/cfg}"
+    MANIFEST="$CFG/installed-deps.json"
+    [ "${3:-}" = keep ] || rm -rf "$WORK/cfg"
+    FLEET_CONFIG_HOME="$CFG"
+    export FLEET_CONFIG_HOME
+    run_deps "$1" "$2"
+    unset FLEET_CONFIG_HOME
+}
+
+manifest_has() { [ -f "$MANIFEST" ] && grep -qF -- "$1" "$MANIFEST"; }
+
+manifest_valid() {
+    [ -f "$MANIFEST" ] || return 1
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["version"]==1 and isinstance(d["deps"],list)' "$MANIFEST"
+    fi
+}
+
 has() { grep -qF -- "$1" "$OUT"; }
 called() { grep -qF -- "$1" "$LOG"; }
 no_calls() { [ ! -s "$LOG" ]; }
@@ -215,6 +243,100 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
         elif ! has 'sudo pacman -S --needed --noconfirm neovim yazi'; then fail 'command'
         else pass; fi
     fi
+
+    CASE="$NAME: a real install records the installed tools only (AC-11, AC-12)"
+    make_bin git pacman sudo
+    with_manifest_utils
+    run_manifest "$SCRIPT" 1
+    if [ "$RC" != 0 ]; then fail "exit $RC"
+    elif ! manifest_valid; then fail 'manifest missing or not JSON'
+    elif ! manifest_has '"tool":"nvim","manager":"pacman","package":"neovim","sudo":true,"installedAt":"20'; then fail 'nvim entry'
+    elif ! manifest_has '"tool":"yazi","manager":"pacman","package":"yazi","sudo":true'; then fail 'yazi entry'
+    elif manifest_has '"tool":"git"'; then fail 'recorded the present git'
+    elif ! manifest_has '{"version":1,"deps":['; then fail 'shape'
+    elif ! has 'after check_deps'; then fail 'did not continue'
+    else pass; fi
+
+    CASE="$NAME: the timestamp is UTC ISO-8601 (AC-12)"
+    if ! grep -qE '"installedAt":"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"' "$MANIFEST"; then fail 'installedAt'; else pass; fi
+
+    CASE="$NAME: all present records nothing (AC-11)"
+    make_bin git nvim yazi pacman sudo
+    with_manifest_utils
+    run_manifest "$SCRIPT" 1
+    if [ -e "$MANIFEST" ]; then fail 'wrote a manifest'; else pass; fi
+
+    CASE="$NAME: a failed install records nothing (AC-12)"
+    make_bin pacman sudo
+    with_manifest_utils
+    FAKE_FAIL=1
+    export FAKE_FAIL
+    run_manifest "$SCRIPT" 1
+    unset FAKE_FAIL
+    if [ -e "$MANIFEST" ]; then fail 'wrote a manifest'
+    elif ! has 'after check_deps'; then fail 'did not continue'
+    else pass; fi
+
+    CASE="$NAME: only printing the command records nothing (AC-12)"
+    make_bin git pacman sudo
+    with_manifest_utils
+    run_manifest "$SCRIPT" 0
+    if [ -e "$MANIFEST" ]; then fail 'wrote a manifest'; else pass; fi
+
+    CASE="$NAME: apt records git and neovim as apt, not the hinted yazi (AC-12)"
+    make_bin apt-get sudo
+    with_manifest_utils
+    run_manifest "$SCRIPT" 1
+    if ! manifest_has '"tool":"git","manager":"apt","package":"git","sudo":true'; then fail 'git entry'
+    elif ! manifest_has '"tool":"nvim","manager":"apt","package":"neovim"'; then fail 'nvim entry'
+    elif manifest_has 'yazi'; then fail 'recorded yazi'
+    else pass; fi
+
+    CASE="$NAME: brew records sudo false (AC-12)"
+    make_bin git nvim brew sudo
+    with_manifest_utils
+    FAKE_UNAME=Darwin
+    export FAKE_UNAME
+    run_manifest "$SCRIPT" 1
+    unset FAKE_UNAME
+    if ! manifest_has '"tool":"yazi","manager":"brew","package":"yazi","sudo":false'; then fail 'brew entry'; else pass; fi
+
+    CASE="$NAME: existing entries are kept and a reinstalled tool replaced (AC-12)"
+    make_bin git pacman sudo
+    with_manifest_utils
+    mkdir -p "$WORK/cfg"
+    printf '%s\n' '{' '  "version": 1,' '  "deps": [' \
+        '    { "tool": "git", "manager": "dnf", "package": "git", "sudo": true, "installedAt": "2026-01-01T00:00:00Z" },' \
+        '    { "tool": "nvim", "manager": "dnf", "package": "neovim", "sudo": true, "installedAt": "2026-01-01T00:00:00Z" }' \
+        '  ]' '}' >"$WORK/cfg/installed-deps.json"
+    run_manifest "$SCRIPT" 1 keep
+    if ! manifest_valid; then fail 'not JSON'
+    elif ! manifest_has '"tool": "git", "manager": "dnf"'; then fail 'dropped the git entry'
+    elif [ "$(grep -o '"tool": *"nvim"' "$MANIFEST" | wc -l)" != 1 ]; then fail 'nvim not exactly once'
+    elif ! manifest_has '"tool":"nvim","manager":"pacman"'; then fail 'nvim not replaced'
+    elif ! manifest_has '"tool":"yazi","manager":"pacman"'; then fail 'yazi entry'
+    else pass; fi
+
+    CASE="$NAME: a manifest that cannot be written only warns (AC-12)"
+    make_bin git pacman sudo
+    with_manifest_utils
+    : >"$WORK/notadir"
+    run_manifest "$SCRIPT" 1 keep "$WORK/notadir/fleet"
+    rm -f "$WORK/notadir"
+    if [ "$RC" != 0 ]; then fail "exit $RC"
+    elif ! has 'could not record'; then fail 'no warning'
+    elif ! has 'after check_deps'; then fail 'did not continue'
+    else pass; fi
+
+    CASE="$NAME: an unreadable manifest is left alone and only warns (AC-12)"
+    make_bin git pacman sudo
+    with_manifest_utils
+    mkdir -p "$WORK/cfg"
+    printf 'not json\n' >"$WORK/cfg/installed-deps.json"
+    run_manifest "$SCRIPT" 1 keep
+    if [ "$(cat "$MANIFEST")" != 'not json' ]; then fail 'overwrote it'
+    elif ! has 'could not record'; then fail 'no warning'
+    else pass; fi
 
     if command -v script >/dev/null 2>&1; then
         CASE="$NAME: interactive yes installs the missing tools (AC-3)"

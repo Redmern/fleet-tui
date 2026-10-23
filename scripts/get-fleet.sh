@@ -147,13 +147,20 @@ deps_plan() {
         sudo=
     fi
     pkgs=
+    DEPS_RECORD=
     for tool in $DEPS_MISSING; do
         case "$tool" in
-            nvim) pkgs="$pkgs neovim" ;;
-            yazi) [ "$DEPS_PM" = apt-get ] || pkgs="$pkgs yazi" ;;
-            *) pkgs="$pkgs $tool" ;;
+            nvim) pkg=neovim ;;
+            yazi) [ "$DEPS_PM" = apt-get ] && continue; pkg=yazi ;;
+            *) pkg="$tool" ;;
         esac
+        pkgs="$pkgs $pkg"
+        DEPS_RECORD="$DEPS_RECORD $tool $pkg"
     done
+    DEPS_SUDO=false
+    if [ -n "$sudo" ] && [ "$DEPS_PM" != brew ]; then
+        DEPS_SUDO=true
+    fi
     case "$DEPS_PM" in
         brew) DEPS_CMD="brew install$pkgs" ;;
         pacman) DEPS_CMD="${sudo}pacman -S --needed --noconfirm$pkgs" ;;
@@ -170,6 +177,68 @@ deps_plan() {
             DEPS_HINT='no known package manager - install them yourself: git https://git-scm.com/downloads, neovim https://neovim.io, yazi https://yazi-rs.github.io/docs/installation'
             ;;
     esac
+}
+
+deps_config_home() {
+    if [ -n "${FLEET_CONFIG_HOME:-}" ]; then
+        printf '%s\n' "$FLEET_CONFIG_HOME"
+    else
+        printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/fleet"
+    fi
+}
+
+# Records the tools just installed in installed-deps.json, which 'fleet uninstall'
+# reads. One entry per tool: a newer one replaces it, entries for other tools stay.
+# Plain sed and tr, no jq; a file it cannot read is left alone. Never fatal.
+deps_record() {
+    [ -n "$DEPS_RECORD" ] || return 0
+    m_file="$(deps_config_home)/installed-deps.json"
+    if ! (deps_write_manifest "$m_file") 2>/dev/null; then
+        ok "could not record the installed tools in $m_file"
+    fi
+}
+
+deps_write_manifest() {
+    m_file="$1"
+    m_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" || return 1
+    m_manager="$DEPS_PM"
+    [ "$m_manager" != apt-get ] || m_manager=apt
+    m_entries=
+    m_tools=' '
+    # shellcheck disable=SC2086
+    set -- $DEPS_RECORD
+    while [ $# -ge 2 ]; do
+        m_entries="$m_entries${m_entries:+,}{\"tool\":\"$1\",\"manager\":\"$m_manager\",\"package\":\"$2\",\"sudo\":$DEPS_SUDO,\"installedAt\":\"$m_at\"}"
+        m_tools="$m_tools$1 "
+        shift 2
+    done
+    m_kept=
+    if [ -e "$m_file" ]; then
+        m_flat="$(tr -d '\r\n' <"$m_file")" || return 1
+        case "$m_flat" in
+            *'"deps"'*'['*']'*) ;;
+            *) return 1 ;;
+        esac
+        m_objs="$(printf '%s\n' "$m_flat" |
+            sed -e 's/^.*"deps"[[:space:]]*:[[:space:]]*\[//' -e 's/\][^]]*$//' |
+            tr '}' '\n' | sed -e 's/^[[:space:],]*//')" || return 1
+        while read -r m_obj; do
+            case "$m_obj" in
+                '{'*) ;;
+                *) continue ;;
+            esac
+            m_tool="$(printf '%s\n' "$m_obj" | sed -n 's/.*"tool"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+            case "$m_tools" in
+                *" $m_tool "*) continue ;;
+            esac
+            m_kept="$m_kept${m_kept:+,}$m_obj}"
+        done <<M_OBJS
+$m_objs
+M_OBJS
+    fi
+    mkdir -p "$(dirname -- "$m_file")" || return 1
+    printf '{"version":1,"deps":[%s]}\n' "$m_kept${m_kept:+,}$m_entries" >"$m_file.tmp" || return 1
+    mv -f "$m_file.tmp" "$m_file"
 }
 
 deps_interactive() {
@@ -207,6 +276,7 @@ check_deps() {
             fi
             if eval "$DEPS_CMD" <"$deps_stdin"; then
                 ok "installed with $DEPS_PM"
+                deps_record
             else
                 ok "$DEPS_PM could not install everything - run it yourself: $DEPS_CMD"
             fi
