@@ -12,15 +12,15 @@ public class RunUninstallHandlerTests
     {
         public List<UninstallItem> Removed { get; } = [];
 
-        public HashSet<string> Failing { get; } = [];
+        public Dictionary<string, Exception> Failing { get; } = [];
 
         public IReadOnlyList<UninstallItem> Discover() => items;
 
         public void Remove(UninstallItem item)
         {
-            if (Failing.Contains(item.Path))
+            if (Failing.TryGetValue(item.Path, out var failure))
             {
-                throw new IOException("in use");
+                throw failure;
             }
 
             Removed.Add(item);
@@ -29,7 +29,7 @@ public class RunUninstallHandlerTests
 
     private static readonly UninstallItem Binary = new(UninstallKind.Binary, "/usr/local/bin/fleet", "the fleet binary");
 
-    private static readonly UninstallItem Other = new(UninstallKind.Other, "/home/me/.config/fleet", "fleet config");
+    private static readonly UninstallItem Other = new(UninstallKind.Directory, "/home/me/.config/fleet", "fleet config");
 
     private static (int Exit, List<string> Output, int Asked) Run(
         FakeTargets targets, bool yes = false, bool interactive = true, bool answer = false)
@@ -137,14 +137,14 @@ public class RunUninstallHandlerTests
         Assert.Equal(1, exit);
         Assert.Equal(0, asked);
         Assert.Empty(targets.Removed);
-        Assert.Contains(output, l => l.Contains("--yes", StringComparison.Ordinal));
+        Assert.Equal([RunUninstallHandler.NoTtyRefusal], output);
     }
 
     [Fact]
     public void A_failed_removal_is_reported_and_the_rest_still_go_and_it_exits_1()
     {
         var targets = new FakeTargets(Binary, Other);
-        targets.Failing.Add(Other.Path);
+        targets.Failing.Add(Other.Path, new IOException("in use"));
 
         var (exit, output, _) = Run(targets, yes: true);
 
@@ -160,5 +160,41 @@ public class RunUninstallHandlerTests
 
         Assert.Equal(0, exit);
         Assert.Equal(0, asked);
+    }
+
+    [Fact]
+    public void Any_failure_is_reported_and_the_rest_still_go_and_it_exits_1()
+    {
+        var targets = new FakeTargets(Binary, Other);
+        targets.Failing.Add(Other.Path, new InvalidOperationException("odd state"));
+
+        var (exit, output, _) = Run(targets, yes: true);
+
+        Assert.Equal(1, exit);
+        Assert.Equal([Binary], targets.Removed);
+        Assert.Contains(output, l => l.Contains(Other.Path, StringComparison.Ordinal) && l.Contains("odd state", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_successful_uninstall_notes_what_remains()
+    {
+        var (exit, output, _) = Run(new FakeTargets(Binary, Other), yes: true);
+
+        Assert.Equal(0, exit);
+        var note = string.Join('\n', output.SkipWhile(l => !l.Contains("done", StringComparison.Ordinal)));
+        Assert.Contains("worktrees", note, StringComparison.Ordinal);
+        Assert.Contains(".fleet", note, StringComparison.Ordinal);
+        Assert.Contains("~/.claude", note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_failed_uninstall_does_not_claim_success()
+    {
+        var targets = new FakeTargets(Binary, Other);
+        targets.Failing.Add(Other.Path, new IOException("in use"));
+
+        var (_, output, _) = Run(targets, yes: true);
+
+        Assert.DoesNotContain(output, l => l.Contains("worktrees", StringComparison.Ordinal));
     }
 }

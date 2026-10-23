@@ -11,6 +11,12 @@ public sealed class RunUninstallHandler(IUninstallTargets targets)
     public const string NoTtyRefusal =
         "fleet uninstall: stdin is not a terminal, so it cannot ask; pass --yes (-y) to remove without asking.";
 
+    public static readonly IReadOnlyList<string> RemainsNote =
+    [
+        "fleet uninstall: left in place: your repositories and their agent worktrees,",
+        "  per-project fleet files (.mcp.json, Claude hooks and skills, .fleet) and ~/.claude* entries.",
+    ];
+
     public UninstallPlan Plan() =>
         new(targets.Discover().OrderBy(i => i.Kind == UninstallKind.Binary).ToList());
 
@@ -59,7 +65,7 @@ public sealed class RunUninstallHandler(IUninstallTargets targets)
                 targets.Remove(item);
                 write($"removed {item.Label}: {item.Path}");
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            catch (Exception e)
             {
                 failed++;
                 write($"could not remove {item.Label} ({item.Path}): {e.Message}");
@@ -73,6 +79,12 @@ public sealed class RunUninstallHandler(IUninstallTargets targets)
         }
 
         write("fleet uninstall: done.");
+
+        foreach (var line in RemainsNote)
+        {
+            write(line);
+        }
+
         return 0;
     }
 }
