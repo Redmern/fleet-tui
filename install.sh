@@ -5,7 +5,8 @@
 #   ./install.sh                build, install, run 'fleet setup'
 #   ./install.sh --with-deps    install missing git, neovim and yazi first, without asking
 #   ./install.sh --deps-only    install only those dependencies
-#   ./install.sh --uninstall    remove the binary and the PATH line (configuration is kept)
+#   ./install.sh --uninstall    run 'fleet uninstall' (--yes skips its question); without
+#                               the binary, remove only the PATH line (configuration is kept)
 #   ./install.sh --no-path      don't add the bin folder to PATH in a shell startup file
 #
 # When the bin folder isn't on PATH, a marked line adding it goes into the startup
@@ -26,6 +27,8 @@ set -eu
 WITH_DEPS=0
 DEPS_ONLY=0
 NO_PATH=0
+UNINSTALL=0
+YES=0
 if [ -n "${FLEET_NO_PATH:-}" ] && [ "$FLEET_NO_PATH" != 0 ]; then
     NO_PATH=1
 fi
@@ -130,6 +133,8 @@ for arg in "$@"; do
         --with-deps) WITH_DEPS=1 ;;
         --deps-only) DEPS_ONLY=1; WITH_DEPS=1 ;;
         --no-path) NO_PATH=1 ;;
+        --uninstall) UNINSTALL=1 ;;
+        --yes | -y) YES=1 ;;
     esac
 done
 
@@ -402,7 +407,14 @@ if [ -n "${FLEET_INSTALLER_LIB:-}" ]; then
     return 0
 fi
 
-if [ "${1:-}" = "--uninstall" ]; then
+if [ "$UNINSTALL" = 1 ] && [ -x "$BIN" ]; then
+    if [ "$YES" = 1 ]; then
+        exec "$BIN" uninstall --yes
+    fi
+    exec "$BIN" uninstall
+fi
+
+if [ "$UNINSTALL" = 1 ]; then
     STEPS=1
     step 'Uninstalling'
     rm -f "$BIN"

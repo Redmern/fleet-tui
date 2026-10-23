@@ -443,5 +443,57 @@ elif ! called 'pacman -S --needed --noconfirm neovim yazi'; then fail 'pacman ca
 elif ! called 'fleet setup'; then fail 'did not install fleet'
 else pass; fi
 
+CASE="install.sh: --uninstall runs fleet uninstall when the binary exists (AC-14)"
+make_bin git nvim yazi
+with_utils
+fake_fleet() {
+    mkdir -p "$WORK/home/bin"
+    printf '#!%s\nprintf "fleet %%s\\n" "$*" >>"$LOG"\nexit "${FAKE_FLEET_EXIT:-0}"\n' "$REAL_SH" >"$WORK/home/bin/fleet"
+    chmod +x "$WORK/home/bin/fleet"
+}
+run_uninstall() {
+    OUT="$WORK/out"
+    LOG="$WORK/log"
+    : >"$LOG"
+    export LOG
+    env -u FLEET_INSTALLER_LIB HOME="$WORK/home" XDG_CONFIG_HOME="$WORK/home/.config" SHELL=/bin/sh \
+        FLEET_BIN_DIR="$WORK/home/bin" PATH="$FAKEBIN" "$REAL_SH" "$ROOT/install.sh" "$@" >"$OUT" 2>&1 </dev/null
+    RC=$?
+}
+rm -rf "${WORK:?}/home"
+fake_fleet
+printf 'export A=1\nexport PATH=x # added by fleet installer\n' >"$WORK/home/.profile"
+run_uninstall --uninstall
+if [ "$RC" != 0 ]; then fail "exit $RC"
+elif ! called 'fleet uninstall'; then fail 'did not delegate'
+elif called 'fleet uninstall --yes'; then fail 'added --yes'
+elif ! grep -qF 'added by fleet installer' "$WORK/home/.profile"; then fail 'also ran the old removal'
+else pass; fi
+
+CASE="install.sh: --uninstall --yes forwards --yes (AC-14)"
+run_uninstall --uninstall --yes
+if ! called 'fleet uninstall --yes'; then fail 'did not forward --yes'; else pass; fi
+
+CASE="install.sh: --yes before --uninstall forwards it too (AC-14)"
+run_uninstall --yes --uninstall
+if ! called 'fleet uninstall --yes'; then fail 'did not delegate with --yes'; else pass; fi
+
+CASE="install.sh: a failing fleet uninstall fails the uninstall (AC-14)"
+FAKE_FLEET_EXIT=3
+export FAKE_FLEET_EXIT
+run_uninstall --uninstall
+unset FAKE_FLEET_EXIT
+if [ "$RC" != 3 ]; then fail "exit $RC, want 3"; else pass; fi
+
+CASE="install.sh: --uninstall without the binary uses the old removal (AC-14)"
+rm -f "$WORK/home/bin/fleet"
+run_uninstall --uninstall --yes
+if [ "$RC" != 0 ]; then fail "exit $RC"
+elif called 'fleet'; then fail 'ran fleet'
+elif ! has 'removed the PATH line'; then fail 'did not remove the PATH line'
+elif grep -qF 'added by fleet installer' "$WORK/home/.profile"; then fail 'PATH line still there'
+elif ! grep -qF 'export A=1' "$WORK/home/.profile"; then fail 'lost the rest of .profile'
+else pass; fi
+
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" = 0 ]
