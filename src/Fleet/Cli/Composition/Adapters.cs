@@ -44,6 +44,7 @@ using Fleet.Ports.Todos;
 using Fleet.Ports.Uninstall;
 using Fleet.Platform.Releases;
 using Fleet.Platform.Uninstall;
+using Fleet.Platform.Uninstall.Models;
 using Fleet.Shared;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
@@ -66,7 +67,16 @@ public static class Adapters
 
     public static IBinaryInstaller Installer() => new SelfInstall();
 
-    public static IUninstallTargets UninstallTargets() => new FleetUninstallTargets(Executable);
+    public static IUninstallTargets UninstallTargets() =>
+        new FleetUninstallTargets(
+            UninstallEnvironment.ForThisMachine(Executable, FleetHome.Config),
+            new EmbeddedDaemonStopper(),
+            new UserPathVariable());
+
+    private sealed class EmbeddedDaemonStopper : IDaemonStopper
+    {
+        public bool Stop() => EmbeddedWiring.StopDaemonAsync().GetAwaiter().GetResult() == 0;
+    }
 
     public static IUpdateCheckCache UpdateChecks() => new JsonUpdateCheckCache();
 
