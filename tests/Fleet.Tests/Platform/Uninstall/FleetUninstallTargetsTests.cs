@@ -418,6 +418,76 @@ public sealed class FleetUninstallTargetsTests : IDisposable
         Assert.All(Targets().Discover().Concat(Targets(windows: true).Discover()), i => Assert.False(string.IsNullOrWhiteSpace(i.Label)));
     }
 
+    private FleetUninstallTargets WithConfigHome(string configHome) =>
+        new(new UninstallEnvironment(Path.Combine(_dir, "gone"), Home, configHome, false, _ => null), _daemon, _userPath);
+
+    [Fact]
+    public void A_relative_config_home_is_refused()
+    {
+        MakeDirectory("relative", "fleet");
+        var targets = WithConfigHome(Path.Combine("relative", "fleet"));
+
+        Assert.DoesNotContain(targets.Discover(), i => i.Path.EndsWith(Path.Combine("relative", "fleet"), StringComparison.Ordinal));
+        Assert.Contains(targets.Refusals(), r => r.Contains("not an absolute path", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_filesystem_root_config_home_is_refused()
+    {
+        var root = Path.GetPathRoot(_dir)!;
+        var targets = WithConfigHome(root);
+
+        Assert.DoesNotContain(targets.Discover(), i => i.Path == root);
+        Assert.Contains(targets.Refusals(), r => r.Contains("filesystem root", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_home_directory_as_config_home_is_refused()
+    {
+        var targets = WithConfigHome(Home + Path.DirectorySeparatorChar);
+
+        Assert.DoesNotContain(targets.Discover(), i => i.Kind == UninstallKind.Directory && i.Path.TrimEnd(Path.DirectorySeparatorChar) == Home);
+        Assert.Contains(targets.Refusals(), r => r.Contains("home directory", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_ancestor_of_home_as_config_home_is_refused()
+    {
+        var targets = WithConfigHome(_dir);
+
+        Assert.DoesNotContain(targets.Discover(), i => i.Path == _dir);
+        Assert.Contains(targets.Refusals(), r => r.Contains("home directory", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_dotted_path_that_resolves_to_home_is_refused()
+    {
+        MakeDirectory("sub");
+        var targets = WithConfigHome(Path.Combine(Home, "sub", ".."));
+
+        Assert.DoesNotContain(targets.Discover(), i => i.Kind == UninstallKind.Directory);
+        Assert.NotEmpty(targets.Refusals());
+    }
+
+    [Fact]
+    public void A_config_home_under_home_is_not_refused()
+    {
+        MakeDirectory(".config", "fleet");
+
+        Assert.Empty(Targets().Refusals());
+    }
+
+    [Fact]
+    public void A_relative_xdg_variable_is_ignored_for_the_fleet_nvim_directories()
+    {
+        _variables["XDG_DATA_HOME"] = "relative-data";
+        var data = MakeDirectory(".local", "share", "fleet-nvim");
+
+        var paths = Targets().Discover().Where(i => i.Kind == UninstallKind.Directory).Select(i => i.Path);
+
+        Assert.Equal([data], paths);
+    }
+
     private static UninstallItem Item(UninstallKind kind, string path) => new(kind, path, "x");
 
     [Fact]

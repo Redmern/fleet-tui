@@ -37,7 +37,7 @@ public sealed class FleetUninstallTargets(
             .Where(d => System.IO.Directory.Exists(d.Path))
             .Select(d => new UninstallItem(UninstallKind.Directory, d.Path, d.Label)));
 
-        if (System.IO.Directory.Exists(environment.ConfigHome))
+        if (ConfigHomeRefusal() is null && System.IO.Directory.Exists(environment.ConfigHome))
         {
             items.Add(new(UninstallKind.Directory, environment.ConfigHome, "the fleet config home"));
         }
@@ -51,6 +51,9 @@ public sealed class FleetUninstallTargets(
 
         return items;
     }
+
+    public IReadOnlyList<string> Refusals() =>
+        ConfigHomeRefusal() is { } reason ? [$"left out the fleet config home {environment.ConfigHome}: {reason}"] : [];
 
     public void Remove(UninstallItem item)
     {
@@ -89,6 +92,31 @@ public sealed class FleetUninstallTargets(
         {
             File.Move(path, $"{path}.old-{DateTime.UtcNow:yyyyMMddHHmmss}", overwrite: true);
         }
+    }
+
+    private string? ConfigHomeRefusal()
+    {
+        var configHome = environment.ConfigHome;
+
+        if (string.IsNullOrWhiteSpace(configHome) || !Path.IsPathFullyQualified(configHome))
+        {
+            return "it is not an absolute path";
+        }
+
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configHome));
+        var home = Path.TrimEndingDirectorySeparator(Path.GetFullPath(environment.Home));
+
+        if (string.Equals(full, Path.TrimEndingDirectorySeparator(Path.GetPathRoot(full) ?? ""), PathComparison))
+        {
+            return "it is a filesystem root";
+        }
+
+        if (string.Equals(full, home, PathComparison) || Contains(full, home))
+        {
+            return "it is the home directory or one of its parents";
+        }
+
+        return null;
     }
 
     private IEnumerable<(string Path, string Label)> NvimDirectories()

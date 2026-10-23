@@ -18,9 +18,12 @@ public sealed class RunUninstallHandler(IUninstallTargets targets)
     ];
 
     public UninstallPlan Plan() =>
-        new(targets.Discover().OrderBy(i => i.Kind == UninstallKind.Binary).ToList());
+        new(targets.Discover().OrderBy(i => i.Kind == UninstallKind.Binary).ToList()) { Refused = targets.Refusals() };
 
     public static IReadOnlyList<string> PlanLines(UninstallPlan plan) =>
+        [.. plan.Refused.Select(r => $"fleet uninstall: {r}"), .. ItemLines(plan)];
+
+    private static IReadOnlyList<string> ItemLines(UninstallPlan plan) =>
         plan.Items.Count == 0
             ? ["fleet uninstall: nothing to remove."]
             : ["fleet uninstall will remove:", .. plan.Items.Select(i => $"  - {i.Label}: {i.Path}")];

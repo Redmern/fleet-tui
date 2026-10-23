@@ -14,7 +14,11 @@ public class RunUninstallHandlerTests
 
         public Dictionary<string, Exception> Failing { get; } = [];
 
+        public List<string> Refused { get; } = [];
+
         public IReadOnlyList<UninstallItem> Discover() => items;
+
+        public IReadOnlyList<string> Refusals() => Refused;
 
         public void Remove(UninstallItem item)
         {
@@ -196,5 +200,29 @@ public class RunUninstallHandlerTests
         var (_, output, _) = Run(targets, yes: true);
 
         Assert.DoesNotContain(output, l => l.Contains("worktrees", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_refused_target_is_printed_with_the_plan_and_never_removed()
+    {
+        var targets = new FakeTargets(Binary);
+        targets.Refused.Add("left out the fleet config home /: it is a filesystem root");
+
+        var (exit, output, _) = Run(targets, yes: true);
+
+        Assert.Equal(0, exit);
+        Assert.Contains(output, l => l.Contains("left out the fleet config home /: it is a filesystem root", StringComparison.Ordinal));
+        Assert.Equal([Binary], targets.Removed);
+    }
+
+    [Fact]
+    public void A_refusal_is_printed_even_when_nothing_else_is_planned()
+    {
+        var targets = new FakeTargets();
+        targets.Refused.Add("left out the fleet config home relative: it is not an absolute path");
+
+        var (_, output, _) = Run(targets);
+
+        Assert.Contains(output, l => l.Contains("left out the fleet config home relative: it is not an absolute path", StringComparison.Ordinal));
     }
 }

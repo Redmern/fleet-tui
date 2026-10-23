@@ -22,6 +22,6 @@ public sealed record UninstallEnvironment(
     {
         var value = Variable(variable);
 
-        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+        return string.IsNullOrWhiteSpace(value) || !Path.IsPathFullyQualified(value) ? fallback : value;
     }
 }
