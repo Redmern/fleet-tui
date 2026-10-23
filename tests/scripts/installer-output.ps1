@@ -352,6 +352,79 @@ Check 'get-fleet: runs fetched scripts without dot-sourcing a .ps1 file' ($dotSo
 Check 'get-fleet: never touches settings.json or HKCU:\Console' (
     [IO.File]::ReadAllText($getFleet) -notmatch 'settings\.json|HKCU:\\Console')
 
+# install.ps1 -Uninstall hands over to 'fleet uninstall' when fleet.exe is there.
+# Only the delegating path is meant to run here: the fallback stops every fleet
+# process, so install.ps1 runs in this process with Get-Process and Stop-Process
+# stubbed, and only once the delegation is found.
+$installPs1 = Join-Path $repo 'install.ps1'
+$installAst = [System.Management.Automation.Language.Parser]::ParseFile($installPs1, [ref]$null, [ref]$null)
+$installTop = @($installAst.EndBlock.Statements)
+$delegateAt = -1; $fallbackAt = -1
+for ($i = 0; $i -lt $installTop.Count; $i++) {
+    $text = $installTop[$i].Extent.Text
+    if ($delegateAt -lt 0 -and $text -match '^if \(\$Uninstall -and \(Test-Path -LiteralPath \$BinPath\)\)') { $delegateAt = $i }
+    if ($text -match '^if \(\$Uninstall\) \{') { $fallbackAt = $i }
+}
+Check 'install.ps1: the old -Uninstall removal stays as the fallback after the delegation (AC-14)' (
+    $delegateAt -ge 0 -and $fallbackAt -gt $delegateAt -and $installTop[$fallbackAt].Extent.Text -match 'Remove-Item \$InstallDir')
+
+# Never run install.ps1 without the delegation: its fallback stops every running fleet.
+if ($delegateAt -lt 0) {
+    Write-Host 'skip install.ps1 -Uninstall run: no delegation to fleet uninstall found' -ForegroundColor Yellow
+}
+elseif (-not $IsWindows) {
+    $sandbox = Join-Path ([IO.Path]::GetTempPath()) "fleet-uninstall-$([guid]::NewGuid().ToString('N'))"
+    $local = Join-Path $sandbox 'local'
+    $roaming = Join-Path $sandbox 'roaming'
+    $log = Join-Path $sandbox 'calls'
+    $installDir = Join-Path $local 'Programs\fleet'
+    New-Item -ItemType Directory -Force -Path $installDir, $roaming | Out-Null
+    $fake = Join-Path $installDir 'fleet.exe'
+    [IO.File]::WriteAllText($fake, "#!/bin/sh`nprintf 'fleet %s\n' `"`$*`" >>'$log'`nexit `"`${FAKE_FLEET_EXIT:-0}`"`n")
+    & chmod +x $fake
+
+    function Invoke-PsUninstall([hashtable]$Params, [string]$Exit = '0') {
+        if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
+        $vars = @{ LOCALAPPDATA = $local; APPDATA = $roaming; FAKE_FLEET_EXIT = $Exit }
+        $savedVars = @{}
+        foreach ($k in $vars.Keys) { $savedVars[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $vars[$k]) }
+        try {
+            $global:LASTEXITCODE = 0
+            $out = & {
+                function Get-Process { 'Get-Process called' }
+                function Stop-Process { 'Stop-Process called' }
+                & $installPs1 @Params
+            } 6>&1 2>&1 | Out-String
+            $code = $LASTEXITCODE
+        }
+        finally {
+            foreach ($k in $savedVars.Keys) { [Environment]::SetEnvironmentVariable($k, $savedVars[$k]) }
+        }
+        $calls = @(if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log })
+        [pscustomobject]@{ Output = $out; Code = $code; Calls = $calls }
+    }
+
+    try {
+        $plainUninstall = Invoke-PsUninstall @{ Uninstall = $true }
+        Check 'install.ps1 -Uninstall runs fleet uninstall when fleet.exe exists (AC-14)' (
+            $plainUninstall.Output -notmatch 'Stop-Process called' -and
+            $plainUninstall.Code -eq 0 -and $plainUninstall.Calls.Count -eq 1 -and $plainUninstall.Calls[0] -eq 'fleet uninstall' -and
+            (Test-Path -LiteralPath $fake))
+
+        $yesUninstall = Invoke-PsUninstall @{ Uninstall = $true; Yes = $true }
+        Check 'install.ps1 -Uninstall -Yes forwards --yes (AC-14)' ($yesUninstall.Calls.Count -eq 1 -and $yesUninstall.Calls[0] -eq 'fleet uninstall --yes')
+
+        $failedUninstall = Invoke-PsUninstall @{ Uninstall = $true; Yes = $true } '3'
+        Check 'install.ps1 -Uninstall passes the exit code of fleet uninstall through (AC-14)' ($failedUninstall.Code -eq 3)
+    }
+    finally {
+        Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+else {
+    Write-Host 'skip install.ps1 -Uninstall delegation run (Windows: would need a real fleet.exe)' -ForegroundColor Yellow
+}
+
 $sh = Get-Command sh -ErrorAction SilentlyContinue
 if ($sh) {
     $bin = Join-Path ([IO.Path]::GetTempPath()) "fleet-installer-bin-$([guid]::NewGuid().ToString('N'))"
