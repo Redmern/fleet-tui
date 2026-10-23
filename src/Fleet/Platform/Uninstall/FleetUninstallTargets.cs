@@ -245,6 +245,12 @@ public sealed class FleetUninstallTargets(
             return;
         }
 
+        if (new DirectoryInfo(path).LinkTarget is not null)
+        {
+            System.IO.Directory.Delete(path);
+            return;
+        }
+
         foreach (var file in System.IO.Directory.EnumerateFiles(path, "*", Everything()))
         {
             File.SetAttributes(file, FileAttributes.Normal);

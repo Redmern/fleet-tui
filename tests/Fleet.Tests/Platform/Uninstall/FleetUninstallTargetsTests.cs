@@ -488,6 +488,29 @@ public sealed class FleetUninstallTargetsTests : IDisposable
         Assert.Equal([data], paths);
     }
 
+    [Fact]
+    public void A_symlinked_directory_is_unlinked_and_its_target_left_alone()
+    {
+        var target = MakeDirectory("elsewhere");
+        var file = Path.Combine(target, "file");
+        File.SetAttributes(file, FileAttributes.ReadOnly);
+        Directory.CreateDirectory(Path.Combine(Home, ".config"));
+        Directory.CreateSymbolicLink(ConfigHome, target);
+
+        try
+        {
+            RemoveAll(Targets());
+
+            Assert.False(Path.Exists(ConfigHome));
+            Assert.True(File.Exists(file));
+            Assert.True(File.GetAttributes(file).HasFlag(FileAttributes.ReadOnly));
+        }
+        finally
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+    }
+
     private static UninstallItem Item(UninstallKind kind, string path) => new(kind, path, "x");
 
     [Fact]
