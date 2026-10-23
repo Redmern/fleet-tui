@@ -8,7 +8,7 @@ namespace Fleet.Platform.Uninstall;
 public sealed class FleetUninstallTargets(string executable) : IUninstallTargets
 {
     public IReadOnlyList<UninstallItem> Discover() =>
-        File.Exists(executable) ? [new UninstallItem(UninstallKind.Binary, executable, "the fleet binary")] : [];
+        IsFleet(executable) && File.Exists(executable) ? [new UninstallItem(UninstallKind.Binary, executable, "the fleet binary")] : [];
 
     public void Remove(UninstallItem item)
     {
@@ -19,6 +19,9 @@ public sealed class FleetUninstallTargets(string executable) : IUninstallTargets
                 break;
         }
     }
+
+    private static bool IsFleet(string path) =>
+        string.Equals(Path.GetFileNameWithoutExtension(path), "fleet", StringComparison.OrdinalIgnoreCase);
 
     private static void RemoveBinary(string path)
     {

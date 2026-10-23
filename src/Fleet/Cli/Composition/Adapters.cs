@@ -41,7 +41,9 @@ using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Ports.Todos;
+using Fleet.Ports.Uninstall;
 using Fleet.Platform.Releases;
+using Fleet.Platform.Uninstall;
 using Fleet.Shared;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
@@ -63,6 +65,8 @@ public static class Adapters
     public static IReleaseClient Releases() => new HttpReleaseClient();
 
     public static IBinaryInstaller Installer() => new SelfInstall();
+
+    public static IUninstallTargets UninstallTargets() => new FleetUninstallTargets(Executable);
 
     public static IUpdateCheckCache UpdateChecks() => new JsonUpdateCheckCache();
 

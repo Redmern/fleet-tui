@@ -20,6 +20,7 @@ public enum FleetVerb
     Doctor,
     Version,
     Update,
+    Uninstall,
     Titled,
     WithEnv,
     Daemon,

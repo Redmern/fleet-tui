@@ -26,6 +26,7 @@ public static class Runner
         FleetVerb.Doctor => await DoctorCommand.RunAsync().ConfigureAwait(false),
         FleetVerb.Version => await VersionCommand.RunAsync().ConfigureAwait(false),
         FleetVerb.Update => await UpdateCommand.RunAsync(invocation).ConfigureAwait(false),
+        FleetVerb.Uninstall => UninstallCommand.Run(invocation),
         FleetVerb.Titled => TitledCommand.Run(invocation),
         FleetVerb.WithEnv => WithEnvCommand.Run(invocation),
         FleetVerb.Daemon => await EmbeddedCommands.DaemonAsync(invocation).ConfigureAwait(false),

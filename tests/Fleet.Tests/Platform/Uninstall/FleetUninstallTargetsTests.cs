@@ -28,6 +28,30 @@ public sealed class FleetUninstallTargetsTests : IDisposable
     public void A_missing_binary_is_not_in_the_plan() =>
         Assert.Empty(new FleetUninstallTargets(Path.Combine(_dir, "gone")).Discover());
 
+    [Theory]
+    [InlineData("dotnet")]
+    [InlineData("dotnet.exe")]
+    public void A_host_that_is_not_fleet_is_never_in_the_plan(string name)
+    {
+        // Run as `dotnet Fleet.dll`, the process path is the dotnet host, which uninstall must leave alone.
+        var host = Path.Combine(_dir, name);
+        File.WriteAllText(host, "exe");
+
+        Assert.Empty(new FleetUninstallTargets(host).Discover());
+    }
+
+    [Theory]
+    [InlineData("fleet")]
+    [InlineData("fleet.exe")]
+    [InlineData("Fleet.exe")]
+    public void The_fleet_binary_is_found_by_its_name(string name)
+    {
+        var binary = Path.Combine(_dir, name);
+        File.WriteAllText(binary, "exe");
+
+        Assert.Single(new FleetUninstallTargets(binary).Discover());
+    }
+
     [Fact]
     public void Removing_the_binary_takes_it_off_its_path()
     {
