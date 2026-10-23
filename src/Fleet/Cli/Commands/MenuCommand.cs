@@ -791,8 +791,7 @@ public static class MenuCommand
                     {
                         Adapters.Toast($"fleet · {project.Name}", opened.Error!);
                     }
-
-                    if (!opened.Succeeded)
+                    else if (!opened.Succeeded)
                     {
                         FleetDialog.Error(app, "Open editor here", opened.Error!);
                     }

@@ -47,7 +47,6 @@ public sealed class OpenEditorHandler(IMuxDriver mux, IEditorLauncher? launcher 
         string projectRoot,
         CancellationToken ct)
     {
-
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
         var open = panes.FirstOrDefault(p => AgentPaneMatch.IsEditor(p, agent));
