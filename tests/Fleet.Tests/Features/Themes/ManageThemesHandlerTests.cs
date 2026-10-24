@@ -268,4 +268,21 @@ public class ManageThemesHandlerTests
         Assert.False(handler.DeleteCustom("nope").Succeeded);
         Assert.Equal("nord", store.Current);
     }
+
+    [Fact]
+    public void Saving_refuses_the_name_theme_sync_owns_but_deleting_it_still_works()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        var result = handler.SaveCustom("Omarchy", "Mine", "nord", BuiltInThemes.Find("nord")!);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("theme sync", result.Error, StringComparison.Ordinal);
+        Assert.Empty(store.Texts);
+
+        store.SaveCustom(BuiltInThemes.Find("nord")! with { Name = OmarchyTheme.CustomName });
+        Assert.True(handler.DeleteCustom(OmarchyTheme.CustomName).Succeeded);
+        Assert.Empty(store.Saved);
+    }
 }

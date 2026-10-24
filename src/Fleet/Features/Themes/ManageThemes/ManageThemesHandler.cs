@@ -78,6 +78,11 @@ public sealed class ManageThemesHandler(IThemeStore store, IOmarchy omarchy)
             return Result<ThemePalette>.Fail($"'{key}' is a built-in theme; pick another name");
         }
 
+        if (key == OmarchyTheme.CustomName)
+        {
+            return Result<ThemePalette>.Fail($"'{key}' is reserved for '{SyncVerb}', which would overwrite it; pick another name");
+        }
+
         if (Find(baseName) is not { } basis)
         {
             return Result<ThemePalette>.Fail($"unknown base theme '{baseName}'");
