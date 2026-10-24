@@ -863,7 +863,7 @@ public static class DashboardWiring
                         available.Select(r => (r.Name, r.Directory, r.DefaultBranch)).ToList(),
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
-                        AgentHarness.Nvim),
+                        settings.Load(project.Name).DefaultAgentHarness),
                     keymap,
                     last.Repo,
                     last.Harness);
