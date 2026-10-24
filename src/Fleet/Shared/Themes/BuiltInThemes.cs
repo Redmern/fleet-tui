@@ -118,7 +118,7 @@ public static class BuiltInThemes
             "#75715e #f92672 #a6e22e #f4bf75 #66d9ef #ae81ff #a1efe4 #f9f8f5"),
         Make(
             "material-ocean", "Material Ocean", false,
-            "#090b10 #0c0e15 #0f111a #1f2233 #3b3f51 #464b5d #717cb4 #a6accd",
+            "#090b10 #0c0e15 #0f111a #1f2233 #3b3f51 #464b5d #717cb4 #8f93a2",
             "#82aaff #c792ea #c3e88d #ffcb6b #f07178 #ffcc00",
             "#546e7a #ff5370 #c3e88d #ffcb6b #82aaff #c792ea #89ddff #ffffff",
             "#546e7a #ff5370 #c3e88d #ffcb6b #82aaff #c792ea #89ddff #ffffff"),
@@ -186,8 +186,8 @@ public static class BuiltInThemes
             "night-owl-light", "Night Owl Light", true,
             "#e0e7ea #f0f0f0 #fbfbfb #e0e0e0 #d9d9d9 #989fb1 #7a8181 #403f53",
             "#4876d6 #994cc3 #08916a #daaa01 #de3d3b #90a7b2",
-            "#011627 #d3423e #2aa298 #daaa01 #4876d6 #403f53 #08916a #7a8181",
-            "#7a8181 #f76e6e #49d0c5 #dac26b #5ca7e4 #697098 #00c990 #989fb1"),
+            "#403f53 #de3d3b #08916a #e0af02 #288ed7 #d6438a #2aa298 #bdbdbd",
+            "#7a8181 #de3d3b #08916a #daaa01 #288ed7 #d6438a #2aa298 #f0f0f0"),
         Make(
             "papercolor-light", "PaperColor Light", true,
             "#dadada #e4e4e4 #eeeeee #d0d0d0 #bcbcbc #878787 #5f5f5f #444444",
