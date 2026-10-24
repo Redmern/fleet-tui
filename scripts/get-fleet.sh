@@ -237,8 +237,11 @@ $m_objs
 M_OBJS
     fi
     mkdir -p "$(dirname -- "$m_file")" || return 1
-    printf '{"version":1,"deps":[%s]}\n' "$m_kept${m_kept:+,}$m_entries" >"$m_file.tmp" || return 1
-    mv -f "$m_file.tmp" "$m_file"
+    if ! printf '{"version":1,"deps":[%s]}\n' "$m_kept${m_kept:+,}$m_entries" >"$m_file.tmp" ||
+        ! mv -f "$m_file.tmp" "$m_file"; then
+        rm -f "$m_file.tmp"
+        return 1
+    fi
 }
 
 deps_interactive() {

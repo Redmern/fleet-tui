@@ -328,6 +328,19 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
     elif ! has 'after check_deps'; then fail 'did not continue'
     else pass; fi
 
+    CASE="$NAME: a failed move leaves no temp file behind (AC-12)"
+    make_bin git pacman sudo
+    with_manifest_utils
+    rm -f "$FAKEBIN/mv"
+    printf '#!%s\nexit 1\n' "$REAL_SH" >"$FAKEBIN/mv"
+    chmod +x "$FAKEBIN/mv"
+    run_manifest "$SCRIPT" 1
+    if [ -e "$MANIFEST" ]; then fail 'wrote a manifest'
+    elif [ -e "$MANIFEST.tmp" ]; then fail 'left the temp file'
+    elif ! has 'could not record'; then fail 'no warning'
+    elif ! has 'after check_deps'; then fail 'did not continue'
+    else pass; fi
+
     CASE="$NAME: an unreadable manifest is left alone and only warns (AC-12)"
     make_bin git pacman sudo
     with_manifest_utils
