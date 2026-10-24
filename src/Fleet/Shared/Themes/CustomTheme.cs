@@ -4,11 +4,13 @@ public static class CustomTheme
 {
     public const string Extension = ".toml";
 
-    public static ThemePalette FromToml(string name, string text)
+    public static ThemePalette FromToml(string name, string text) => FromToml(name, text, _ => null);
+
+    public static ThemePalette FromToml(string name, string text, Func<string, ThemePalette?> resolve)
     {
         var values = ThemeToml.Parse(text);
         var basis = values.TryGetValue("inherits", out var inherits)
-            ? BuiltInThemes.Find(inherits) ?? BuiltInThemes.CatppuccinMocha
+            ? resolve(inherits) ?? BuiltInThemes.Find(inherits) ?? BuiltInThemes.CatppuccinMocha
             : BuiltInThemes.CatppuccinMocha;
 
         var theme = basis with
