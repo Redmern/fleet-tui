@@ -372,7 +372,7 @@ Check 'install.ps1: the old -Uninstall removal stays as the fallback after the d
 if ($delegateAt -lt 0) {
     Write-Host 'skip install.ps1 -Uninstall run: no delegation to fleet uninstall found' -ForegroundColor Yellow
 }
-elseif (-not $IsWindows) {
+elseif ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) {
     $sandbox = Join-Path ([IO.Path]::GetTempPath()) "fleet-uninstall-$([guid]::NewGuid().ToString('N'))"
     $local = Join-Path $sandbox 'local'
     $roaming = Join-Path $sandbox 'roaming'
