@@ -4,9 +4,11 @@ using Fleet.Shared.Settings;
 
 namespace Fleet.Platform.Editors;
 
-public sealed class VscodeLauncher(Func<string, bool> onPath, Func<ProcessStartInfo, Process?> start) : IEditorLauncher
+public sealed class VscodeLauncher(Func<string, bool> onPath, Func<ProcessStartInfo, Process?> start) : IFileEditor
 {
     private const string NewWindow = "-n";
+
+    private const string Wait = "--wait";
 
     private static readonly char[] CmdReinterprets = ['&', '|', '<', '>', '^', '%', '!', '"'];
 
@@ -36,7 +38,24 @@ public sealed class VscodeLauncher(Func<string, bool> onPath, Func<ProcessStartI
         return info;
     }
 
-    public string? TryStart(string flag, string target, bool windows, Action<Process>? started = null)
+    public string? TryStart(string flag, string target, bool windows, Action<Process>? started = null) =>
+        Start(flag, target, windows, process =>
+        {
+            using (process)
+            {
+                if (process is not null)
+                {
+                    started?.Invoke(process);
+                }
+            }
+        });
+
+    public string? EditAndWait(string file, Action closed) => EditAndWait(file, closed, OperatingSystem.IsWindows());
+
+    public string? EditAndWait(string file, Action closed, bool windows) =>
+        Start(Wait, file, windows, process => _ = Task.Run(() => WaitThenAsync(process, closed)));
+
+    private string? Start(string flag, string target, bool windows, Action<Process?> handle)
     {
         if (Build(flag, target, windows) is not { } info)
         {
@@ -45,19 +64,32 @@ public sealed class VscodeLauncher(Func<string, bool> onPath, Func<ProcessStartI
 
         try
         {
-            using var process = start(info);
-
-            if (process is not null)
-            {
-                started?.Invoke(process);
-            }
-
+            handle(start(info));
             return null;
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
             return $"could not start {EditorChoice.VscodeCommand}: {e.Message}";
         }
+    }
+
+    private static async Task WaitThenAsync(Process? process, Action closed)
+    {
+        using (process)
+        {
+            try
+            {
+                if (process is not null)
+                {
+                    await process.WaitForExitAsync().ConfigureAwait(false);
+                }
+            }
+            catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+            }
+        }
+
+        closed();
     }
 
     public string? LaunchDetached(string folder) => TryStart(NewWindow, folder, OperatingSystem.IsWindows());
