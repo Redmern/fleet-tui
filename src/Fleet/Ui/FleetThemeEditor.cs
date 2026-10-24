@@ -103,6 +103,11 @@ public static class FleetThemeEditor
             : Result<string>.Ok(name);
     }
 
+    public static string Inheritable(string baseName) =>
+        baseName == OmarchyTheme.CustomName ? BuiltInThemes.DefaultName : baseName;
+
+    public static bool SavesAs(string name) => !NewName(name).Succeeded;
+
     public static ThemeEdit? Show(IApplication app, Keymap keymap, string title, ThemePalette palette)
     {
         var edited = palette;
@@ -119,7 +124,7 @@ public static class FleetThemeEditor
             var item = FleetRows.Selected(list);
             var color = Colors[item];
 
-            if (FleetColorDialog.Show(app, $"{color.Label} — {edited.Title}", Of(edited, color.Key)) is { } hex)
+            if (FleetColorDialog.Show(app, keymap, $"{color.Label} — {edited.Title}", Of(edited, color.Key)) is { } hex)
             {
                 edited = With(edited, color.Key, hex);
             }
@@ -133,10 +138,25 @@ public static class FleetThemeEditor
             app.RequestStop(window);
         }
 
+        bool Discards() =>
+            !Changed(palette, edited)
+            || FleetDialog.Confirm(app, "Discard changes", [$"Leave {title} without saving your changes?"], "Discard");
+
+        void Cancel()
+        {
+            if (Discards())
+            {
+                app.RequestStop(window);
+            }
+        }
+
         void Leave()
         {
-            FleetModal.Back();
-            app.RequestStop(window);
+            if (Discards())
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }
         }
 
         list.Accepting += (_, e) =>
@@ -174,7 +194,7 @@ public static class FleetThemeEditor
             }
             else if (key == FleetKeys.Cancel)
             {
-                app.RequestStop(window);
+                Cancel();
             }
             else if (FleetKeys.GoesBack(key))
             {
@@ -190,7 +210,7 @@ public static class FleetThemeEditor
 
         app.Keyboard.KeyDown += Keys;
         window.Add(list, bar.Root);
-        FleetCorners.Attach(window, () => app.RequestStop(window));
+        FleetCorners.Attach(window, Cancel);
         Fill(0);
 
         try

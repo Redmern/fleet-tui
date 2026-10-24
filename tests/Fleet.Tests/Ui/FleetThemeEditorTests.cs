@@ -99,4 +99,19 @@ public sealed class FleetThemeEditorTests
         Assert.False(FleetThemeEditor.Changed(Nord, Nord with { Title = "Other" }));
         Assert.True(FleetThemeEditor.Changed(Nord, FleetThemeEditor.With(Nord, "color9", "#010203")));
     }
+
+    [Fact]
+    public void A_copy_of_the_synced_omarchy_theme_does_not_inherit_from_it()
+    {
+        Assert.Equal(BuiltInThemes.DefaultName, FleetThemeEditor.Inheritable(OmarchyTheme.CustomName));
+        Assert.Equal("nord", FleetThemeEditor.Inheritable("nord"));
+        Assert.Equal("paper", FleetThemeEditor.Inheritable("paper"));
+    }
+
+    [Theory]
+    [InlineData("paper", false)]
+    [InlineData("omarchy", true)]
+    [InlineData("nord", true)]
+    public void A_custom_theme_saved_under_a_name_it_cannot_keep_is_saved_as_a_new_one(string name, bool savesAs) =>
+        Assert.Equal(savesAs, FleetThemeEditor.SavesAs(name));
 }

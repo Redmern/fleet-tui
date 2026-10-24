@@ -1,4 +1,5 @@
 using System.Globalization;
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Themes;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
@@ -81,7 +82,7 @@ public static class FleetColorDialog
         return new string('█', filled) + new string('░', width - filled);
     }
 
-    public static string? Show(IApplication app, string title, string hex)
+    public static string? Show(IApplication app, Keymap keymap, string title, string hex)
     {
         var color = HexColor.Normalize(hex) ?? "#000000";
         var channel = Red;
@@ -130,7 +131,7 @@ public static class FleetColorDialog
 
         void Accept()
         {
-            result = color;
+            result = Typed(color, field.Text);
             app.RequestStop(window);
         }
 
@@ -191,12 +192,12 @@ public static class FleetColorDialog
             {
                 Leave();
             }
-            else if (key == Key.CursorUp || key == Key.K)
+            else if (key == Key.CursorUp || key == keymap.KeyFor(FleetAction.MoveUp))
             {
                 channel = (channel + 2) % 3;
                 Draw();
             }
-            else if (key == Key.CursorDown || key == Key.J)
+            else if (key == Key.CursorDown || key == keymap.KeyFor(FleetAction.MoveDown))
             {
                 channel = (channel + 1) % 3;
                 Draw();
