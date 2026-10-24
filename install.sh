@@ -264,8 +264,65 @@ deps_ask() {
     return 1
 }
 
+# The editor agents open. With neither nvim nor code on PATH, a terminal (no CI,
+# FLEET_NO_DEPS_PROMPT or --with-deps) is asked nvim / VS Code / skip and the answer
+# becomes fleet's global default in editor.json, the file 'fleet' reads. VS Code
+# is never installed here, only hinted, because its packaging varies. Anywhere
+# else both install commands are printed and nothing is written.
+EDITOR_VSCODE_HINT="install VS Code and its 'code' shell command: https://code.visualstudio.com/docs/setup/setup-overview"
+
+editor_record() {
+    dir="${FLEET_CONFIG_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/fleet}"
+    mkdir -p "$dir"
+    printf '{\n  "version": 1,\n  "editor": "%s"\n}\n' "$1" >"$dir/editor.json.tmp" &&
+        mv -f "$dir/editor.json.tmp" "$dir/editor.json" &&
+        ok "default editor: $1 (in $dir/editor.json)"
+}
+
+editor_without_nvim() {
+    kept=
+    for tool in $DEPS_MISSING; do
+        [ "$tool" = nvim ] || kept="${kept:+$kept }$tool"
+    done
+    DEPS_MISSING="$kept"
+}
+
+editor_choice() {
+    if command -v nvim >/dev/null 2>&1 || command -v code >/dev/null 2>&1; then
+        return 0
+    fi
+    ok 'no editor found: fleet opens agents in nvim or VS Code'
+    if [ "$WITH_DEPS" = 1 ] || ! deps_interactive; then
+        missing="$DEPS_MISSING"
+        DEPS_MISSING=nvim
+        deps_plan
+        DEPS_MISSING="$missing"
+        ok "  nvim:    ${DEPS_CMD:-install neovim: https://neovim.io}"
+        ok "  VS Code: $EDITOR_VSCODE_HINT"
+        return 0
+    fi
+    printf '    which editor? nvim / VS Code / skip [1/2/3] '
+    editor_answer=
+    read -r editor_answer </dev/tty || editor_answer=
+    case "$editor_answer" in
+        1 | [nN] | nvim)
+            editor_record nvim
+            ;;
+        2 | [vV] | code | vscode)
+            editor_without_nvim
+            editor_record vscode
+            ok "$EDITOR_VSCODE_HINT"
+            ;;
+        *)
+            editor_without_nvim
+            ok "no editor chosen; set one later in fleet menu › settings › fleet config"
+            ;;
+    esac
+}
+
 check_deps() {
     deps_missing
+    editor_choice
     if [ -z "$DEPS_MISSING" ]; then
         return 0
     fi
