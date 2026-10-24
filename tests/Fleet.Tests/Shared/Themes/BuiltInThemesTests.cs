@@ -9,9 +9,9 @@ public partial class BuiltInThemesTests
     private static partial Regex Hex();
 
     [Fact]
-    public void Fifteen_themes_ship_with_catppuccin_mocha_first_and_default()
+    public void Thirty_three_themes_ship_with_catppuccin_mocha_first_and_default()
     {
-        Assert.Equal(15, BuiltInThemes.All.Count);
+        Assert.Equal(33, BuiltInThemes.All.Count);
         Assert.Same(BuiltInThemes.CatppuccinMocha, BuiltInThemes.All[0]);
         Assert.Equal(BuiltInThemes.DefaultName, BuiltInThemes.CatppuccinMocha.Name);
     }
@@ -45,7 +45,61 @@ public partial class BuiltInThemesTests
     {
         var light = BuiltInThemes.All.Where(t => t.Light).Select(t => t.Name).Order();
 
-        Assert.Equal(["catppuccin-latte", "gruvbox-light", "solarized-light"], light);
+        Assert.Equal(
+            [
+                "ayu-light", "catppuccin-latte", "everforest-light", "flexoki-light", "github-light",
+                "gruvbox-light", "kanagawa-lotus", "material-lighter", "modus-operandi", "night-owl-light",
+                "one-light", "papercolor-light", "rose-pine-dawn", "solarized-light", "tokyo-night-day",
+            ],
+            light);
+    }
+
+    [Fact]
+    public void Every_color_normalizes_to_itself()
+    {
+        foreach (var theme in BuiltInThemes.All)
+        {
+            var colors = ThemePalette.RoleNames.Select(theme.Role).Concat(theme.Ansi).Concat(theme.Brights);
+
+            Assert.All(colors, c => Assert.Equal(c, HexColor.Normalize(c)));
+        }
+    }
+
+    [Fact]
+    public void The_light_flag_agrees_with_the_base_color()
+    {
+        Assert.All(BuiltInThemes.All, t => Assert.True(t.Light == HexColor.IsLight(t.Base), t.Name));
+    }
+
+    [Fact]
+    public void Text_stands_out_clearly_from_the_base()
+    {
+        foreach (var theme in BuiltInThemes.All)
+        {
+            var contrast = Math.Abs(Luma(theme.Text) - Luma(theme.Base));
+
+            Assert.True(contrast > 0.45, $"{theme.Name}: text/base luma difference {contrast:0.00}");
+        }
+    }
+
+    [Fact]
+    public void Subtext_stays_readable_on_the_base()
+    {
+        foreach (var theme in BuiltInThemes.All)
+        {
+            var contrast = Math.Abs(Luma(theme.Subtext0) - Luma(theme.Base));
+
+            Assert.True(contrast > 0.3, $"{theme.Name}: subtext/base luma difference {contrast:0.00}");
+        }
+    }
+
+    private static double Luma(string hex)
+    {
+        var r = Convert.ToInt32(hex[1..3], 16);
+        var g = Convert.ToInt32(hex[3..5], 16);
+        var b = Convert.ToInt32(hex[5..7], 16);
+
+        return ((0.299 * r) + (0.587 * g) + (0.114 * b)) / 255;
     }
 
     [Theory]
