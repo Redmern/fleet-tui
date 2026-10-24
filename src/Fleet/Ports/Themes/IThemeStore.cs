@@ -13,4 +13,8 @@ public interface IThemeStore
     IReadOnlyList<ThemePalette> Custom();
 
     string SaveCustom(ThemePalette theme);
+
+    string SaveCustom(string name, string toml);
+
+    bool DeleteCustom(string name);
 }

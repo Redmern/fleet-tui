@@ -32,11 +32,89 @@ public sealed class FileThemeStore(string config) : IThemeStore
 
     public IReadOnlyList<ThemePalette> Custom()
     {
-        string[] files;
+        var texts = new Dictionary<string, (string Stem, string Text)>(StringComparer.Ordinal);
 
+        foreach (var file in CustomFiles())
+        {
+            try
+            {
+                var stem = Path.GetFileNameWithoutExtension(file);
+
+                texts.TryAdd(ThemeNames.Normalize(stem), (stem, File.ReadAllText(file)));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        var resolved = new Dictionary<string, ThemePalette>(StringComparer.Ordinal);
+        var resolving = new HashSet<string>(StringComparer.Ordinal);
+
+        return [.. texts.Keys.Select(Resolve).OfType<ThemePalette>()];
+
+        ThemePalette? Resolve(string name)
+        {
+            var key = ThemeNames.Normalize(name);
+
+            if (resolved.TryGetValue(key, out var done))
+            {
+                return done;
+            }
+
+            if (!texts.TryGetValue(key, out var source) || !resolving.Add(key))
+            {
+                return null;
+            }
+
+            var theme = CustomTheme.FromToml(source.Stem, source.Text, Resolve);
+
+            resolving.Remove(key);
+            resolved[key] = theme;
+
+            return theme;
+        }
+    }
+
+    public string SaveCustom(ThemePalette theme) => SaveCustom(theme.Name, ThemeToml.Write(theme));
+
+    public string SaveCustom(string name, string toml)
+    {
+        var file = Path.Combine(ThemesDirectory, name + CustomTheme.Extension);
+
+        WriteAtomically(file, toml);
+
+        return file;
+    }
+
+    public bool DeleteCustom(string name)
+    {
+        var key = ThemeNames.Normalize(name);
+        var deleted = false;
+
+        foreach (var file in CustomFiles().Where(f => ThemeNames.Normalize(Path.GetFileNameWithoutExtension(f)) == key))
+        {
+            var gone = BusyFiles.Retry(() =>
+            {
+                File.Delete(file);
+                return file;
+            }, BusyFiles.Patience);
+
+            if (gone is null)
+            {
+                throw new IOException($"{file} could not be deleted (another program may have it open)");
+            }
+
+            deleted = true;
+        }
+
+        return deleted;
+    }
+
+    private string[] CustomFiles()
+    {
         try
         {
-            files = Directory.Exists(ThemesDirectory)
+            return Directory.Exists(ThemesDirectory)
                 ? [.. Directory.EnumerateFiles(ThemesDirectory, "*" + CustomTheme.Extension).Order()]
                 : [];
         }
@@ -44,30 +122,6 @@ public sealed class FileThemeStore(string config) : IThemeStore
         {
             return [];
         }
-
-        var themes = new List<ThemePalette>();
-
-        foreach (var file in files)
-        {
-            try
-            {
-                themes.Add(CustomTheme.FromToml(Path.GetFileNameWithoutExtension(file), File.ReadAllText(file)));
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
-        }
-
-        return themes;
-    }
-
-    public string SaveCustom(ThemePalette theme)
-    {
-        var file = Path.Combine(ThemesDirectory, theme.Name + CustomTheme.Extension);
-
-        WriteAtomically(file, ThemeToml.Write(theme));
-
-        return file;
     }
 
     public static void WriteAtomically(string file, string text)

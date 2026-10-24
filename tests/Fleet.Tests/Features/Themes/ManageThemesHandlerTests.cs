@@ -14,6 +14,8 @@ public class ManageThemesHandlerTests
 
         public List<ThemePalette> Saved { get; } = [];
 
+        public Dictionary<string, string> Texts { get; } = [];
+
         public string CurrentFile => "current-theme";
 
         public string? CurrentName() => Current;
@@ -27,6 +29,18 @@ public class ManageThemesHandlerTests
             Saved.RemoveAll(t => t.Name == theme.Name);
             Saved.Add(theme);
             return theme.Name + ".toml";
+        }
+
+        public string SaveCustom(string name, string toml)
+        {
+            Texts[name] = toml;
+            return SaveCustom(CustomTheme.FromToml(name, toml, n => Saved.FirstOrDefault(t => t.Name == n)));
+        }
+
+        public bool DeleteCustom(string name)
+        {
+            Texts.Remove(name);
+            return Saved.RemoveAll(t => t.Name == name) > 0;
         }
     }
 
