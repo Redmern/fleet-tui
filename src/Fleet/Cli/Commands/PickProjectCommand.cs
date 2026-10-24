@@ -96,20 +96,19 @@ public static class PickProjectCommand
         var agents = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name);
 
         var runnable = agents
-            .Where(a => Adapters.OnPath(
-                AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0]))
+            .Where(a => Adapters.OnPath(Adapters.Opens(chosen.Name, a)))
             .ToList();
 
         foreach (var stranded in agents.Except(runnable)
-            .Select(a => AgentHarness.CommandFor(
-                a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0])
+            .Select(a => Adapters.Opens(chosen.Name, a))
             .Distinct())
         {
             Console.Error.WriteLine(
                 $"fleet: {stranded} is not on PATH, so agents that open it stay closed.");
         }
 
-        await new RestoreSessionHandler(mux.Driver, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name))
+        await new RestoreSessionHandler(
+            mux.Driver, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 
@@ -187,11 +186,11 @@ public static class PickProjectCommand
             }
 
             var runnable = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name)
-                .Where(a => Adapters.OnPath(
-                    AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0]))
+                .Where(a => Adapters.OnPath(Adapters.Opens(chosen.Name, a)))
                 .ToList();
 
-            await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name))
+            await new RestoreSessionHandler(
+            mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
                 .HandleAsync(chosen.Name, chosen.Root, runnable)
                 .ConfigureAwait(false);
 

@@ -27,6 +27,7 @@ using Fleet.Platform.Storage;
 using Fleet.Platform.Themes;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
+using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Aidlc;
 using Fleet.Ports.Approvals;
 using Fleet.Ports.Editors;
@@ -45,6 +46,7 @@ using Fleet.Ports.Settings;
 using Fleet.Ports.Todos;
 using Fleet.Platform.Releases;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -94,6 +96,17 @@ public static class Adapters
     public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorHostedInNvim;
 
     public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsHostedInNvim;
+
+    public static bool AgentsInNvim(string project) => Settings().Load(project).HostsInNvim;
+
+    public static string Opens(string project, AgentRecord agent)
+    {
+        var settings = Settings().Load(project);
+
+        return AgentHarness.CommandFor(
+            AgentHarness.HostedFor(agent.Harness, settings.HostsInNvim),
+            orchestratorInNvim: settings.SubOrchestratorsHostedInNvim)[0];
+    }
 
     public static RoleModels Models(string project) => Settings().Load(project).Models;
 

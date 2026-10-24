@@ -1295,11 +1295,11 @@ public static class MenuCommand
         var agents = new ListAgentsHandler(Adapters.Agents()).Handle(project.Name);
 
         var runnable = agents
-            .Where(a => Adapters.OnPath(
-                AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(project.Name))[0]))
+            .Where(a => Adapters.OnPath(Adapters.Opens(project.Name, a)))
             .ToList();
 
-        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(project.Name), Adapters.Agents(), Adapters.Models(project.Name))
+        await new RestoreSessionHandler(
+            mux, Adapters.SubOrchestratorsInNvim(project.Name), Adapters.Agents(), Adapters.Models(project.Name), Adapters.AgentsInNvim(project.Name))
             .HandleAsync(project.Name, project.Root, runnable)
             .ConfigureAwait(false);
 

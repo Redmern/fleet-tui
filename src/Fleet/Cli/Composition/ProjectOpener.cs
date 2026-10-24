@@ -31,11 +31,11 @@ public static class ProjectOpener
         }
 
         var runnable = new ListAgentsHandler(Adapters.Agents()).Handle(chosen.Name)
-            .Where(a => Adapters.OnPath(
-                AgentHarness.CommandFor(a.Harness, orchestratorInNvim: Adapters.SubOrchestratorsInNvim(chosen.Name))[0]))
+            .Where(a => Adapters.OnPath(Adapters.Opens(chosen.Name, a)))
             .ToList();
 
-        await new RestoreSessionHandler(mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name))
+        await new RestoreSessionHandler(
+            mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 

@@ -384,7 +384,8 @@ public sealed class McpActions(
 
         ClaudeWiring.TrustFolder(agent.Worktree);
 
-        var outcome = await new OpenAgentHandler(mux, store, SubOrchestratorsInNvim(), models: Adapters.Models(project))
+        var outcome = await new OpenAgentHandler(
+                mux, store, SubOrchestratorsInNvim(), models: Adapters.Models(project), agentsInNvim: Adapters.AgentsInNvim(project))
             .HandleAsync(project, agent, root, ct)
             .ConfigureAwait(false);
 

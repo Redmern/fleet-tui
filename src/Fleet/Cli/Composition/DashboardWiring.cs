@@ -522,7 +522,8 @@ public static class DashboardWiring
         {
             var loaded = settings.Load(project.Name);
             var inNvim = loaded.SubOrchestratorsHostedInNvim;
-            var executable = AgentHarness.CommandFor(agent.Harness, orchestratorInNvim: inNvim)[0];
+            var executable = AgentHarness.CommandFor(
+                AgentHarness.HostedFor(agent.Harness, loaded.HostsInNvim), orchestratorInNvim: inNvim)[0];
 
             if (!Adapters.OnPath(executable))
             {
@@ -531,7 +532,7 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models)
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim)
                 .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 

@@ -25,7 +25,12 @@ public static class HeadPanes
                 trust(agent.Worktree);
 
                 var opened = await new OpenAgentHandler(
-                        mux, store, subOrchestratorsInNvim(project.Name), preferCaller: false, Adapters.Models(project.Name))
+                        mux,
+                        store,
+                        subOrchestratorsInNvim(project.Name),
+                        preferCaller: false,
+                        Adapters.Models(project.Name),
+                        Adapters.AgentsInNvim(project.Name))
                     .HandleAsync(project.Name, agent, project.Root, ct)
                     .ConfigureAwait(false);
 

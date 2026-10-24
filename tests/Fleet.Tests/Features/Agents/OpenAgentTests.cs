@@ -318,6 +318,34 @@ public sealed class OpenAgentTests : IDisposable
         Assert.Equal(1, atWorktree);
     }
 
+    [Fact]
+    public async Task Without_nvim_a_closed_nvim_agent_reopens_as_bare_claude()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Nvim, Claude = true };
+
+        var result = await new OpenAgentHandler(_mux, _store, agentsInNvim: false)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Claude, _mux.ArgsFor(pane.Id)[0]);
+        Assert.Contains(AgentHarness.ResumeArgument, _mux.ArgsFor(pane.Id));
+        Assert.Equal(AgentHarness.Claude, Assert.Single(_store.Saved).Harness);
+    }
+
+    [Fact]
+    public async Task With_nvim_a_closed_nvim_agent_reopens_in_nvim()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Nvim, Claude = true };
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
+    }
+
     private sealed class RecordingStore : IAgentStore
     {
         public List<AgentRecord> Saved { get; } = [];

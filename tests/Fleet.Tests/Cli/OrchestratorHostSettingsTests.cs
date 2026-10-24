@@ -1,5 +1,6 @@
 using Fleet.Cli.Composition;
 using Fleet.Platform.Storage;
+using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
@@ -68,5 +69,27 @@ public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
     {
         Assert.Equal(AgentHarness.Claude, SettingsConfig.Default.WithEditor(Editor.Vscode).DefaultAgentHarness);
         Assert.Equal(AgentHarness.Nvim, SettingsConfig.Default.DefaultAgentHarness);
+    }
+
+    private static AgentRecord Worker(string harness) =>
+        new("/w/dev", "backend", "dev", harness, "main", false, false, true);
+
+    [Fact]
+    public void A_vscode_project_opens_nvim_agents_and_subs_with_claude()
+    {
+        new JsonSettingsStore().Save("techweb", SettingsConfig.Default.WithEditor(Editor.Vscode));
+
+        Assert.False(Adapters.AgentsInNvim("techweb"));
+        Assert.Equal(AgentHarness.Claude, Adapters.Opens("techweb", Worker(AgentHarness.Nvim)));
+        Assert.Equal(AgentHarness.Claude, Adapters.Opens("techweb", Worker(AgentHarness.Orchestrator)));
+    }
+
+    [Fact]
+    public void An_nvim_project_opens_agents_with_their_own_harness()
+    {
+        Assert.True(Adapters.AgentsInNvim("techweb"));
+        Assert.Equal(AgentHarness.Nvim, Adapters.Opens("techweb", Worker(AgentHarness.Nvim)));
+        Assert.Equal(AgentHarness.Claude, Adapters.Opens("techweb", Worker(AgentHarness.Claude)));
+        Assert.Equal(AgentHarness.Nvim, Adapters.Opens("techweb", Worker(AgentHarness.Orchestrator)));
     }
 }
