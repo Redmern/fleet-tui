@@ -18,9 +18,9 @@ public static class FleetThemeEditor
 
     public const string Brights = "Brights";
 
-    public static readonly Key Save = Key.S.WithCtrl;
+    public static readonly Key Save = Key.S;
 
-    public static readonly Key SaveAndUse = Key.U.WithCtrl;
+    public static readonly Key SaveAndUse = Key.U;
 
     private const string ColorPrefix = "color";
 
@@ -150,8 +150,8 @@ public static class FleetThemeEditor
         bar.Show(
         [
             ("enter", FleetIcons.Edit, Pick),
-            ("^s", FleetIcons.Save, () => Finish(use: false)),
-            ("^u", FleetIcons.SaveAndUse, () => Finish(use: true)),
+            ("s", FleetIcons.Save, () => Finish(use: false)),
+            ("u", FleetIcons.SaveAndUse, () => Finish(use: true)),
             ("bksp", FleetIcons.Back, Leave),
         ]);
 
