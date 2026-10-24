@@ -140,9 +140,7 @@ so pin it yourself: right-click Fleet in Start, "Pin to taskbar". Fleet windows
 then group under that button. A `Fleet.lnk` you made yourself is kept (`-Force`
 on the script replaces it); `-NoShortcut` skips the launcher altogether.
 
-`.\install.ps1 -Uninstall` reverses a Windows install. Add `-Purge` to delete
-`%APPDATA%\fleet` and the JetBrainsMono Nerd Font as well. On Linux,
-`./install.sh --uninstall` removes the binary and the marked `PATH` line.
+To remove fleet again, see [Uninstalling](#uninstalling).
 
 If publishing fails with `'vswhere.exe' is not recognized` followed by `MSB3073`,
 the toolchain is fine and only `vswhere` is missing from `PATH`; the installer
@@ -174,6 +172,41 @@ when your `settings.json` already has a "Fleet" profile.
 `.\install.ps1 -Uninstall -Purge` removes the font again. The font is licensed under
 the SIL Open Font License 1.1; see
 [docs/third-party/jetbrainsmono-nerd-font-OFL.md](docs/third-party/jetbrainsmono-nerd-font-OFL.md).
+
+### Uninstalling
+
+`fleet uninstall` lists everything it would remove and asks one `Remove all of this? [y/N]`:
+
+```
+fleet uninstall               show the plan, ask y/N, then remove it (the binary last)
+fleet uninstall --yes         the same without asking (-y); needed when stdin is not a terminal
+fleet uninstall --remove-deps also remove the git, nvim and yazi fleet's installer added
+```
+
+It stops the daemon and removes the fleet-nvim config and data folders, the fleet config
+home (`%APPDATA%\fleet` / `~/.config/fleet`), the `PATH` lines the installer marked in
+your shell rc files and, last, the binary. On Windows it also takes the install folder
+off your user `PATH` and removes the Fleet shortcut, the "Fleet" Windows Terminal profile
+and `%LOCALAPPDATA%\Programs\fleet`.
+A config home that is your home folder, one of its parents or a filesystem root is left
+out. It never touches your repositories and their agent worktrees, the per-project fleet
+files (`.mcp.json`, Claude hooks and skills, `.fleet`) or your `~/.claude*` entries.
+
+The dependency installers (`--with-deps` / `-WithDeps`) record each tool they actually
+install in `installed-deps.json` in the config home: the tool, its package, the package
+manager (brew, pacman, dnf, apt or winget) and whether it needed sudo. Tools that were
+already there are not recorded. `fleet uninstall` shows these separately and keeps them
+by default: after you confirm, it asks `Also remove <tool>? [y/N]` for each one;
+`--remove-deps` removes them all without asking, and `--yes` alone keeps them. Installs
+made before 0.7.27 have no manifest, so their tools are never offered. Brew tap-style
+names (`user/tap/pkg`) are refused rather than removed, and `get-fleet.sh --with-deps`
+records tools only from the 0.7.27 `install.sh` on.
+
+`./install.sh --uninstall` and `.\install.ps1 -Uninstall` run `fleet uninstall` when the
+binary is installed (`--yes` / `-Yes` passes `--yes` along); `-Purge` additionally
+removes the JetBrainsMono Nerd Font once the uninstall succeeds. Only when the binary is
+already gone do they fall back to removing the binary and the `PATH` line themselves,
+and that fallback keeps the config home (on Windows unless you pass `-Purge`).
 
 ## Commands
 
