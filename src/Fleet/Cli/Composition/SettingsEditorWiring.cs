@@ -1,8 +1,12 @@
 using Fleet.Features.Menu.EditSettings;
+using Fleet.Platform.Editors;
 using Fleet.Platform.Storage;
+using Fleet.Ports.Editors;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Cli.Composition;
@@ -18,13 +22,46 @@ public static class SettingsEditorWiring
     public static OpenSettingsInEditor For(Project project, Func<SettingsConfig, string?> resync)
     {
         var store = new JsonSettingsStore();
+        var editor = Adapters.ResolvedEditor(project.Name);
 
         return new OpenSettingsInEditor(
             () => store.Exists(project.Name),
             next => store.Save(project.Name, next),
-            exited => Spawn(project, exited),
+            SpawnFor(editor, exited => Spawn(project, exited), exited => EditInVscode(project, exited)),
             () => store.Reload(project.Name),
-            resync);
+            resync,
+            editor);
+    }
+
+    public static Func<Action, string?> SpawnFor(
+        Editor editor, Func<Action, string?> nvim, Func<Action, string?> vscode) =>
+        editor == Editor.Vscode ? vscode : nvim;
+
+    public static string? OpenInVscode(IFileEditor code, string file, Action exited, Action<string> toast, bool windows)
+    {
+        var trouble = code.Available ? code.EditAndWait(file, exited) : EditorChoice.InstallHint(windows);
+
+        if (trouble is not null)
+        {
+            toast(trouble);
+        }
+
+        return trouble;
+    }
+
+    private static string? EditInVscode(Project project, Action exited)
+    {
+        if (JsonSettingsStore.FileFor(project.Name) is not { } file)
+        {
+            return $"'{project.Name}' has no settings file to open.";
+        }
+
+        return OpenInVscode(
+            new VscodeLauncher(Adapters.OnPath),
+            file,
+            exited,
+            body => Adapters.Toast($"fleet · {project.Name}", body),
+            OperatingSystem.IsWindows());
     }
 
     private static string? Spawn(Project project, Action exited)
