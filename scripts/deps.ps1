@@ -13,6 +13,10 @@
     it prints the winget commands and installs nothing. A failed install only
     warns, so the fleet install carries on.
 
+    With neither nvim nor code on PATH, Invoke-FleetEditorChoice runs first: an
+    interactive console picks nvim, VS Code or skip, and the pick is recorded as
+    fleet's global default editor in editor.json.
+
     Everything is skipped when it is already there, so re-running is harmless.
 
     fleet ships its own Neovim config (nvim\ in the repo, embedded in the binary) and
@@ -29,7 +33,7 @@ function Get-FleetDepTools {
         [pscustomobject]@{ Name = 'nvim'; Id = 'Neovim.Neovim'; Url = 'https://neovim.io (or https://github.com/neovim/neovim/releases)' },
         [pscustomobject]@{ Name = 'git'; Id = 'Git.Git'; Url = 'https://git-scm.com/download/win' },
         [pscustomobject]@{ Name = 'yazi'; Id = 'sxyazi.yazi'; Url = 'https://yazi-rs.github.io/docs/installation' }
-    )
+    ) | Where-Object { -not ($script:FleetEditorSkipsNvim -and $_.Name -eq 'nvim') }
 }
 
 function Get-MissingFleetDeps {
@@ -60,6 +64,79 @@ function Write-FleetDepsCommands($missing) {
     }
 }
 
+# The editor agents open. With neither nvim nor code on PATH an interactive console
+# (not -WithDeps) is asked nvim / VS Code / skip and the answer becomes fleet's
+# global default in editor.json, the file 'fleet' reads. VS Code is installed here;
+# nvim is left to the deps offer that follows, and is dropped from it for VS Code
+# or skip. Anywhere else both winget commands are printed and nothing is written.
+function Invoke-FleetEditorChoice {
+    param(
+        [switch]$WithDeps,
+        [object]$Interactive = $null,
+        [scriptblock]$ReadAnswer = { Read-Host '    which editor? nvim / VS Code / skip [1/2/3]' },
+        [string]$ConfigHome
+    )
+
+    $script:FleetEditorSkipsNvim = $false
+
+    if ((Get-Command nvim -ErrorAction SilentlyContinue) -or (Get-Command code -ErrorAction SilentlyContinue)) {
+        return
+    }
+
+    Write-Host '    no editor found: fleet opens agents in nvim or VS Code' -ForegroundColor Yellow
+
+    $winget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+    $ask = if ($null -eq $Interactive) { Test-FleetDepsInteractive } else { [bool]$Interactive }
+
+    if ($WithDeps -or -not $ask -or -not $winget) {
+        Write-Host '      nvim:    winget install --id Neovim.Neovim -e' -ForegroundColor Yellow
+        Write-Host '      VS Code: winget install --id Microsoft.VisualStudioCode -e' -ForegroundColor Yellow
+        return
+    }
+
+    $editor = switch -Regex ("$(& $ReadAnswer)".Trim()) {
+        '^(1|n|nvim)$' { 'nvim' }
+        '^(2|v|code|vscode)$' { 'vscode' }
+        default { $null }
+    }
+
+    if ($editor -ne 'nvim') {
+        $script:FleetEditorSkipsNvim = $true
+    }
+
+    if (-not $editor) {
+        Write-Host '    no editor chosen; set one later in fleet menu > settings > fleet config' -ForegroundColor Yellow
+        return
+    }
+
+    if ($editor -eq 'vscode') {
+        Write-Host '    winget install Microsoft.VisualStudioCode' -ForegroundColor DarkGray
+        try {
+            winget install --id Microsoft.VisualStudioCode --exact --silent `
+                --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "    winget could not install VS Code (exit $LASTEXITCODE)" -ForegroundColor Yellow
+            }
+        }
+        catch {
+            Write-Host "    winget could not install VS Code: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
+    $dir = if ($ConfigHome) { $ConfigHome }
+    elseif ($env:FLEET_CONFIG_HOME) { $env:FLEET_CONFIG_HOME }
+    else { Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'fleet' }
+
+    try {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        [IO.File]::WriteAllText((Join-Path $dir 'editor.json'), "{`n  `"version`": 1,`n  `"editor`": `"$editor`"`n}`n")
+        Write-Host "    default editor: $editor (in $(Join-Path $dir 'editor.json'))" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "    could not record the editor: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
 # The installers' entry point. Interactive and ReadAnswer exist for the tests:
 # leave them out and the console is detected and asked through Read-Host.
 function Invoke-FleetDepsOffer {
@@ -69,10 +146,16 @@ function Invoke-FleetDepsOffer {
         [string]$NvimConfig,
         [switch]$SkipConfig,
         [object]$Interactive = $null,
-        [scriptblock]$ReadAnswer = { Read-Host '    install them with winget now? [y/N]' }
+        [scriptblock]$ReadAnswer = { Read-Host '    install them with winget now? [y/N]' },
+        [scriptblock]$EditorAnswer,
+        [string]$ConfigHome
     )
 
     try {
+        $editorArgs = @{ WithDeps = $WithDeps; Interactive = $Interactive; ConfigHome = $ConfigHome }
+        if ($EditorAnswer) { $editorArgs.ReadAnswer = $EditorAnswer }
+        Invoke-FleetEditorChoice @editorArgs
+
         $missing = @(Get-MissingFleetDeps)
 
         Write-Host '==> Checking git, nvim and yazi' -ForegroundColor Cyan

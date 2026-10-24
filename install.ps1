@@ -209,6 +209,7 @@ if ($Uninstall) {
 
 # Offered before the prerequisite check so a missing git can be installed first:
 # -WithDeps installs, an interactive console asks y/N, anything else prints the commands.
+# With neither nvim nor code on PATH it first asks nvim / VS Code / skip (Invoke-FleetEditorChoice).
 . (Join-Path $RepoRoot 'scripts\deps.ps1')
 Invoke-FleetDepsOffer -WithDeps:$WithDeps -NvimConfig $NvimConfig
 

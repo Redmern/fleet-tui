@@ -164,6 +164,52 @@ Check 'deps: a failing winget install warns and carries on' ($failed.Calls.Count
 $threw = Invoke-DepsCase -Present @() -WingetExit -1 -Offer @{ WithDeps = $true; SkipConfig = $true }
 Check 'deps: a throwing winget install warns and carries on' ($threw.Calls.Count -eq 3 -and $threw.Output -match 'could not install yazi')
 
+# The editor choice: with neither nvim nor code on PATH an interactive console is
+# asked nvim / VS Code / skip; the answer is installed and recorded in editor.json
+# (the bytes JsonSettingsStore reads); anything else prints both commands.
+function Invoke-EditorCase([string[]]$Present, [hashtable]$Offer) {
+    $home_ = Join-Path ([IO.Path]::GetTempPath()) "fleet-editor-$([guid]::NewGuid().ToString('N'))"
+    try {
+        $case = Invoke-DepsCase -Present $Present -Offer ($Offer + @{ ConfigHome = $home_ })
+        $file = Join-Path $home_ 'editor.json'
+        $case | Add-Member -NotePropertyName Editor -NotePropertyValue $(if (Test-Path $file) { [IO.File]::ReadAllText($file) } else { $null })
+        $case
+    }
+    finally {
+        Remove-Item $home_ -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function EditorJson($editor) { "{`n  `"version`": 1,`n  `"editor`": `"$editor`"`n}`n" }
+
+$noEditor = Invoke-EditorCase -Present 'git', 'yazi' -Offer @{ Interactive = $false; ReadAnswer = { throw 'asked' }; EditorAnswer = { throw 'asked' } }
+Check 'editor: non-interactive with no editor prints both commands (AC-10)' (
+    $noEditor.Output -match 'no editor found' -and $noEditor.Output -match 'winget install --id Neovim\.Neovim -e' -and
+    $noEditor.Output -match 'winget install --id Microsoft\.VisualStudioCode -e')
+Check 'editor: non-interactive asks, installs and writes nothing (AC-10)' (
+    $noEditor.Output -notmatch 'asked' -and $noEditor.Calls.Count -eq 0 -and $null -eq $noEditor.Editor)
+
+$withCode = Invoke-EditorCase -Present 'git', 'yazi', 'code' -Offer @{ Interactive = $true; ReadAnswer = { 'n' }; EditorAnswer = { throw 'asked' } }
+Check 'editor: code on PATH does not ask for an editor (AC-11)' (
+    $withCode.Output -notmatch 'asked|no editor found' -and $null -eq $withCode.Editor -and $withCode.Output -match 'missing: nvim')
+
+$withNvim = Invoke-EditorCase -Present 'git', 'yazi', 'nvim' -Offer @{ Interactive = $true; ReadAnswer = { throw 'asked' }; EditorAnswer = { throw 'asked' } }
+Check 'editor: nvim on PATH does not ask for an editor (AC-11)' ($withNvim.Output -notmatch 'asked|no editor found' -and $null -eq $withNvim.Editor)
+
+$vscode = Invoke-EditorCase -Present 'git', 'yazi' -Offer @{ Interactive = $true; ReadAnswer = { throw 'asked' }; EditorAnswer = { '2' } }
+Check 'editor: VS Code is installed with winget and nvim is not offered (AC-10)' (
+    $vscode.Calls.Count -eq 1 -and $vscode.Calls[0] -match 'Microsoft\.VisualStudioCode' -and
+    $vscode.Output -notmatch 'asked|missing: nvim')
+Check 'editor: VS Code is recorded as the global default (AC-10)' ($vscode.Editor -eq (EditorJson 'vscode'))
+
+$nvim = Invoke-EditorCase -Present 'git', 'yazi' -Offer @{ Interactive = $true; ReadAnswer = { 'y' }; EditorAnswer = { '1' } }
+Check 'editor: nvim is installed through the deps offer and recorded (AC-10)' (
+    $nvim.Calls.Count -eq 1 -and $nvim.Calls[0] -match 'Neovim\.Neovim' -and $nvim.Editor -eq (EditorJson 'nvim'))
+
+$skip = Invoke-EditorCase -Present 'git', 'yazi' -Offer @{ Interactive = $true; ReadAnswer = { throw 'asked' }; EditorAnswer = { '3' } }
+Check 'editor: skip installs and records nothing (AC-10)' (
+    $skip.Calls.Count -eq 0 -and $null -eq $skip.Editor -and $skip.Output -notmatch 'asked|missing: nvim')
+
 $saved = @{}
 foreach ($name in 'CI', 'FLEET_NO_DEPS_PROMPT') { $saved[$name] = [Environment]::GetEnvironmentVariable($name) }
 try {
