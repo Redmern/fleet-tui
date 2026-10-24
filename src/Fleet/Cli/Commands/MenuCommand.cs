@@ -951,7 +951,8 @@ public static class MenuCommand
         var basis = bases.Pick(tab, index);
 
         return CustomThemeName(app, themes, "New custom theme") is var (name, title)
-            ? EditTheme(app, keymap, project, themes, name, title, basis.Name, basis with { Name = name, Title = title })
+            ? EditTheme(
+                app, keymap, project, themes, name, title, FleetThemeEditor.Inheritable(basis.Name), basis with { Name = name, Title = title })
             : null;
     }
 
@@ -963,13 +964,14 @@ public static class MenuCommand
             return null;
         }
 
-        if (theme.Name != OmarchyTheme.CustomName)
+        if (!FleetThemeEditor.SavesAs(theme.Name))
         {
             return EditTheme(app, keymap, project, themes, theme.Name, theme.Title, themes.BaseOf(theme.Name), theme);
         }
 
         return CustomThemeName(app, themes, $"Save {theme.Title} as") is var (name, title)
-            ? EditTheme(app, keymap, project, themes, name, title, theme.Name, theme with { Name = name, Title = title })
+            ? EditTheme(
+                app, keymap, project, themes, name, title, FleetThemeEditor.Inheritable(theme.Name), theme with { Name = name, Title = title })
             : null;
     }
 
@@ -1011,6 +1013,7 @@ public static class MenuCommand
             return null;
         }
 
+        var before = themes.Active();
         var saved = themes.SaveCustom(name, title, baseName, edit.Palette);
 
         if (!saved.Succeeded)
@@ -1023,9 +1026,9 @@ public static class MenuCommand
         {
             UseTheme(app, project, themes, saved.Value.Name);
         }
-        else if (themes.Active().Name == saved.Value.Name)
+        else
         {
-            ApplyTheme(app, project, saved.Value);
+            ReapplyIfChanged(app, project, themes, before);
         }
 
         return saved.Value.Name;
@@ -1039,16 +1042,25 @@ public static class MenuCommand
             return;
         }
 
-        var wasActive = themes.Active().Name == theme.Name;
+        var before = themes.Active();
         var deleted = themes.DeleteCustom(theme.Name);
 
         if (!deleted.Succeeded)
         {
             FleetDialog.Error(app, "Theme", deleted.Error!);
+            return;
         }
-        else if (wasActive)
+
+        ReapplyIfChanged(app, project, themes, before);
+    }
+
+    private static void ReapplyIfChanged(IApplication app, Project project, ManageThemesHandler themes, ThemePalette before)
+    {
+        var after = themes.Active();
+
+        if (after.Name != before.Name || FleetThemeEditor.Changed(before, after))
         {
-            ApplyTheme(app, project, deleted.Value);
+            ApplyTheme(app, project, after);
         }
     }
 
