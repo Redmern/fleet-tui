@@ -86,6 +86,24 @@ public sealed class FileThemeStore(string config) : IThemeStore
         return file;
     }
 
+    public string? CustomText(string name)
+    {
+        var key = ThemeNames.Normalize(name);
+
+        foreach (var file in CustomFiles().Where(f => ThemeNames.Normalize(Path.GetFileNameWithoutExtension(f)) == key))
+        {
+            try
+            {
+                return File.ReadAllText(file);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        return null;
+    }
+
     public bool DeleteCustom(string name)
     {
         var key = ThemeNames.Normalize(name);

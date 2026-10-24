@@ -37,6 +37,8 @@ public class ManageThemesHandlerTests
             return SaveCustom(CustomTheme.FromToml(name, toml, n => Saved.FirstOrDefault(t => t.Name == n)));
         }
 
+        public string? CustomText(string name) => Texts.GetValueOrDefault(name);
+
         public bool DeleteCustom(string name)
         {
             Texts.Remove(name);
@@ -284,5 +286,31 @@ public class ManageThemesHandlerTests
         store.SaveCustom(BuiltInThemes.Find("nord")! with { Name = OmarchyTheme.CustomName });
         Assert.True(handler.DeleteCustom(OmarchyTheme.CustomName).Succeeded);
         Assert.Empty(store.Saved);
+    }
+
+    [Fact]
+    public void The_base_of_a_custom_theme_is_what_it_inherits()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        handler.SaveCustom("parent", "Parent", "nord", BuiltInThemes.Find("nord")!);
+        handler.SaveCustom("child", "Child", "Parent", BuiltInThemes.Find("nord")!);
+
+        Assert.Equal("nord", handler.BaseOf("parent"));
+        Assert.Equal("parent", handler.BaseOf("Child"));
+    }
+
+    [Fact]
+    public void A_custom_theme_without_a_known_base_is_based_on_mocha()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        store.SaveCustom(BuiltInThemes.Find("nord")! with { Name = OmarchyTheme.CustomName });
+        store.Texts["orphan"] = "inherits = \"gone\"\n";
+
+        Assert.Equal(BuiltInThemes.DefaultName, handler.BaseOf(OmarchyTheme.CustomName));
+        Assert.Equal(BuiltInThemes.DefaultName, handler.BaseOf("orphan"));
     }
 }

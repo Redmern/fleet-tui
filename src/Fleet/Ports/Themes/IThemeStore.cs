@@ -16,5 +16,7 @@ public interface IThemeStore
 
     string SaveCustom(string name, string toml);
 
+    string? CustomText(string name);
+
     bool DeleteCustom(string name);
 }

@@ -102,6 +102,18 @@ public sealed class ManageThemesHandler(IThemeStore store, IOmarchy omarchy)
             : Result<ThemePalette>.Fail($"'{key}' was written but could not be read back");
     }
 
+    public string BaseOf(string name)
+    {
+        var key = ThemeNames.Normalize(name);
+        var inherits = store.CustomText(key) is { } text
+            ? ThemeToml.Parse(text).GetValueOrDefault("inherits")
+            : null;
+
+        return inherits is not null && Find(inherits) is { } basis && basis.Name != key
+            ? basis.Name
+            : BuiltInThemes.DefaultName;
+    }
+
     public Result<ThemePalette> DeleteCustom(string name)
     {
         var key = ThemeNames.Normalize(name);

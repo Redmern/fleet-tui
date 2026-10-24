@@ -81,6 +81,17 @@ public sealed class FileThemeStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_custom_theme_text_reads_back_and_a_missing_one_is_null()
+    {
+        var store = new FileThemeStore(_config);
+
+        store.SaveCustom("mine", "inherits = \"nord\"\n");
+
+        Assert.Equal("inherits = \"nord\"\n", store.CustomText("Mine"));
+        Assert.Null(store.CustomText("gone"));
+    }
+
+    [Fact]
     public void A_custom_theme_inherits_from_another_custom_theme()
     {
         var store = new FileThemeStore(_config);
