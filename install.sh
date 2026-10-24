@@ -273,10 +273,11 @@ EDITOR_VSCODE_HINT="install VS Code and its 'code' shell command: https://code.v
 
 editor_record() {
     dir="${FLEET_CONFIG_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/fleet}"
-    mkdir -p "$dir"
-    printf '{\n  "version": 1,\n  "editor": "%s"\n}\n' "$1" >"$dir/editor.json.tmp" &&
+    mkdir -p "$dir" 2>/dev/null &&
+        printf '{\n  "version": 1,\n  "editor": "%s"\n}\n' "$1" >"$dir/editor.json.tmp" &&
         mv -f "$dir/editor.json.tmp" "$dir/editor.json" &&
-        ok "default editor: $1 (in $dir/editor.json)"
+        ok "default editor: $1 (in $dir/editor.json)" ||
+        ok "could not record the editor in $dir/editor.json"
 }
 
 editor_without_nvim() {
@@ -315,7 +316,7 @@ editor_choice() {
             ;;
         *)
             editor_without_nvim
-            ok "no editor chosen; set one later in fleet menu › settings › fleet config"
+            ok "no editor chosen; set one per project with E in fleet menu › settings › fleet config, or write editor.json in fleet's config folder"
             ;;
     esac
 }

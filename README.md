@@ -118,7 +118,8 @@ left alone — an existing tool is skipped, a config directory holding a differe
 remote is not touched, and a matching one is fast-forwarded. A config that ships its
 own `bootstrap.sh` is reported rather than run.
 
-When neither `nvim` nor `code` is on PATH, both installers first ask which editor
+When neither `nvim` nor `code` is on PATH, `install.sh`, `install.ps1` and
+`get-fleet.ps1` first ask which editor
 fleet should use: nvim, VS Code or skip. nvim goes through the same dependency offer
 as above; VS Code is installed with winget on Windows, while on Linux and macOS the
 installer only prints how to get VS Code and its `code` command, because its packaging

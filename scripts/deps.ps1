@@ -105,7 +105,7 @@ function Invoke-FleetEditorChoice {
     }
 
     if (-not $editor) {
-        Write-Host '    no editor chosen; set one later in fleet menu > settings > fleet config' -ForegroundColor Yellow
+        Write-Host "    no editor chosen; set one per project with E in fleet menu > settings > fleet config, or write editor.json in fleet's config folder" -ForegroundColor Yellow
         return
     }
 
