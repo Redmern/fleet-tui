@@ -115,6 +115,51 @@ function Invoke-FleetDepsOffer {
     }
 }
 
+function Get-FleetConfigHome {
+    if ($env:FLEET_CONFIG_HOME) { return $env:FLEET_CONFIG_HOME }
+    Join-Path $env:APPDATA 'fleet'
+}
+
+# installed-deps.json lists what the installers installed, so 'fleet uninstall' can
+# offer to remove it. One entry per tool: a new one replaces it, other entries stay.
+# A file it cannot read is left alone; nothing here fails the install.
+function Save-FleetDepsManifest($installed) {
+    $installed = @($installed)
+    if ($installed.Count -eq 0) { return }
+
+    $path = Join-Path (Get-FleetConfigHome) 'installed-deps.json'
+
+    try {
+        $names = @($installed | ForEach-Object Name)
+        $deps = [System.Collections.Generic.List[object]]::new()
+
+        if (Test-Path -LiteralPath $path) {
+            $existing = [IO.File]::ReadAllText($path) | ConvertFrom-Json
+            if ($null -eq $existing -or $null -eq $existing.PSObject.Properties['deps']) {
+                throw "$path is not a fleet dependency manifest"
+            }
+            foreach ($dep in @($existing.deps)) {
+                if ($names -contains $dep.tool) { continue }
+                $at = $dep.installedAt
+                if ($at -is [DateTime]) { $at = $at.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") }
+                $deps.Add([ordered]@{ tool = $dep.tool; manager = $dep.manager; package = $dep.package; sudo = [bool]$dep.sudo; installedAt = "$at" })
+            }
+        }
+
+        $now = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+        foreach ($tool in $installed) {
+            $deps.Add([ordered]@{ tool = $tool.Name; manager = 'winget'; package = $tool.Id; sudo = $false; installedAt = $now })
+        }
+
+        $json = ConvertTo-Json -InputObject ([ordered]@{ version = 1; deps = $deps.ToArray() }) -Depth 4 -Compress
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+        [IO.File]::WriteAllText($path, $json)
+    }
+    catch {
+        Write-Host "    could not record the installed tools in ${path}: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
 function Install-FleetDeps {
     [CmdletBinding()]
     param(
@@ -131,6 +176,7 @@ function Install-FleetDeps {
     Step 'Installing dependencies'
 
     $missing = @()
+    $installed = @()
 
     foreach ($tool in Get-FleetDepTools) {
         if (Get-Command $tool.Name -ErrorAction SilentlyContinue) {
@@ -151,6 +197,7 @@ function Install-FleetDeps {
 
             if ($LASTEXITCODE -eq 0) {
                 Ok "installed $($tool.Name)"
+                $installed += $tool
             }
             else {
                 Warn "winget could not install $($tool.Name) (exit $LASTEXITCODE)"
@@ -164,6 +211,8 @@ function Install-FleetDeps {
     if ($missing.Count -gt 0) {
         Write-FleetDepsManual $missing
     }
+
+    Save-FleetDepsManifest $installed
 
     # winget puts new tools on the machine PATH, which this process does not see
     # until it restarts. Add the usual locations so 'fleet setup' can find them.
