@@ -55,6 +55,14 @@ public sealed record SettingsConfig(
     public Editor ResolvedEditor => EditorChoice.Resolve(
         Editor, DefaultEditor, InstalledEditor == Enums.Editor.Nvim, InstalledEditor == Enums.Editor.Vscode);
 
+    public bool HostsInNvim => ResolvedEditor == Enums.Editor.Nvim;
+
+    public bool MainOrchestratorHostedInNvim => MainOrchestratorInNvim && HostsInNvim;
+
+    public bool SubOrchestratorsHostedInNvim => SubOrchestratorsInNvim && HostsInNvim;
+
+    public string DefaultAgentHarness => HostsInNvim ? Constants.AgentHarness.Nvim : Constants.AgentHarness.Claude;
+
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
 

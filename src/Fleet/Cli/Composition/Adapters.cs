@@ -91,9 +91,9 @@ public static class Adapters
 
     public static IIsoMode Iso() => new JsonIsoMode();
 
-    public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorInNvim;
+    public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorHostedInNvim;
 
-    public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsInNvim;
+    public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsHostedInNvim;
 
     public static RoleModels Models(string project) => Settings().Load(project).Models;
 
