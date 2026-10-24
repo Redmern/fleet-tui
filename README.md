@@ -1514,7 +1514,7 @@ dotnet test
 dotnet run --project src/Fleet -- doctor
 ```
 
-203 tests, none of which need a terminal. Command behaviour runs against
+About 4,500 tests, none of which need a terminal. Command behaviour runs against
 `FakeMuxDriver`; repository behaviour runs against real git in temp directories,
 because the plumbing is the point.
 
