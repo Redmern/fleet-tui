@@ -154,11 +154,12 @@ function Invoke-FleetDepsOffer {
     try {
         $editorArgs = @{ WithDeps = $WithDeps; Interactive = $Interactive; ConfigHome = $ConfigHome }
         if ($EditorAnswer) { $editorArgs.ReadAnswer = $EditorAnswer }
+
+        Write-Host '==> Checking git, nvim and yazi' -ForegroundColor Cyan
+
         Invoke-FleetEditorChoice @editorArgs
 
         $missing = @(Get-MissingFleetDeps)
-
-        Write-Host '==> Checking git, nvim and yazi' -ForegroundColor Cyan
 
         if ($missing.Count -eq 0) {
             Write-Host '    git, nvim and yazi are installed' -ForegroundColor Green
