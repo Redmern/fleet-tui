@@ -67,7 +67,7 @@ public static class DoctorCommand
 
         foreach (var tool in SetupHandler.Required.Concat(SetupHandler.Harness).Concat(SetupHandler.Optional).Where(t => t != "git"))
         {
-            Console.WriteLine($"  {tool,-13} {(Adapters.OnPath(tool) ? "on PATH" : "NOT FOUND")}");
+            Console.WriteLine($"  {tool,-13} {(Adapters.OnPathOrEditor(tool) ? "on PATH" : "NOT FOUND")}");
         }
         var nvim = SetupHandler.Nvim(Adapters.InspectNvim(install: false));
         Console.WriteLine($"  nvim config   {(nvim.Ok ? string.Empty : "! ")}{nvim.Detail}");
@@ -126,7 +126,7 @@ public static class DoctorCommand
 
         if (EditorTrouble.With(
                 Adapters.ResolvedEditor(string.Empty),
-                Adapters.OnPath(EditorChoice.VscodeCommand),
+                Adapters.OnPathOrEditor(EditorChoice.VscodeCommand),
                 OperatingSystem.IsWindows()) is { } editorWarning)
         {
             Console.WriteLine($"  ! {editorWarning}");
