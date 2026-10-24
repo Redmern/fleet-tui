@@ -7,15 +7,24 @@ namespace Fleet.Cli.Commands;
 
 public static class UninstallCommand
 {
-    public static int Run(Invocation invocation) =>
-        new RunUninstallHandler(Adapters.UninstallTargets()).Handle(
-            new RunUninstallCommand(CommandLine.Yes(invocation), !Console.IsInputRedirected),
-            Confirm,
-            Console.WriteLine);
-
-    private static bool Confirm()
+    public static int Run(Invocation invocation)
     {
-        Console.Write(RunUninstallHandler.Question);
+        var interactive = !Console.IsInputRedirected;
+
+        return new RunUninstallHandler(
+                Adapters.UninstallTargets(),
+                Adapters.DependencyManifest(),
+                Adapters.PackageRemover(interactive))
+            .Handle(
+                new RunUninstallCommand(CommandLine.Yes(invocation), interactive, CommandLine.RemoveDeps(invocation)),
+                () => Ask(RunUninstallHandler.Question),
+                Console.WriteLine,
+                Ask);
+    }
+
+    private static bool Ask(string question)
+    {
+        Console.Write(question);
         var answer = Console.ReadLine()?.Trim();
 
         return string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase)

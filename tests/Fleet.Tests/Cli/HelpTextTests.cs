@@ -48,6 +48,7 @@ public class HelpTextTests
     [InlineData("fleet uninstall ")]
     [InlineData("--yes")]
     [InlineData("-y")]
+    [InlineData("--remove-deps")]
     public void Fleet_help_documents_uninstall_and_its_flags(string text) =>
         Assert.Contains(text, HelpCommand.Text, StringComparison.Ordinal);
 }

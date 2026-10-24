@@ -73,6 +73,10 @@ public static class Adapters
             new EmbeddedDaemonStopper(),
             new UserPathVariable());
 
+    public static IDependencyManifest DependencyManifest() => new JsonDependencyManifest(FleetHome.Config);
+
+    public static IPackageRemover PackageRemover(bool interactive) => new PackageRemover(interactive);
+
     private sealed class EmbeddedDaemonStopper : IDaemonStopper
     {
         public bool Stop() => EmbeddedWiring.StopDaemonAsync().GetAwaiter().GetResult() == 0;

@@ -40,7 +40,8 @@ public static class HelpCommand
               fleet update --list         the installed, latest and newest 10 releases (-l)
               fleet update --list --all   every release, prereleases included
               fleet uninstall             show what fleet would remove, ask y/N, then remove it (the binary last)
-              fleet uninstall --yes       the same without asking (-y); needed when stdin is not a terminal
+              fleet uninstall --yes       the same without asking (-y); needed when stdin is not a terminal; keeps tools
+              fleet uninstall --remove-deps also remove the git, nvim and yazi fleet's installer added, without asking each
 
             embedded multiplexer:
               fleet attach [--project <p>] attach this terminal to fleetd (a picker when it runs several projects)
