@@ -140,7 +140,7 @@ public static class FleetThemeEditor
 
         bool Discards() =>
             !Changed(palette, edited)
-            || FleetDialog.Confirm(app, "Discard changes", [$"Leave {title} without saving your changes?"], "Discard");
+            || FleetDialog.Confirm(app, "Discard changes", [$"Leave {palette.Title} without saving your changes?"], "Discard");
 
         void Cancel()
         {
