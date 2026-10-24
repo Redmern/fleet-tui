@@ -15,7 +15,7 @@ public static class SetupCommand
         var keymap = new Keymap(Adapters.Keymaps().Load());
 
         var report = new SetupHandler(Adapters.OnPath)
-            .Inspect(Adapters.ConfigDirectory, Adapters.InspectNvim(install: true));
+            .Inspect(Adapters.ConfigDirectory, Adapters.InspectNvim(install: true), Adapters.ResolvedEditor(string.Empty));
 
         var keybinds = KeybindWiring.ApplyAll();
 
