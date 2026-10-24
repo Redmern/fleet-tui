@@ -129,4 +129,13 @@ public sealed class FleetThemeTabsTests
         Assert.True(tabs.IsNew(FleetThemeTabs.Custom, 0));
         Assert.Equal((FleetThemeTabs.Dark, 0), (tabs.StartTab, tabs.StartIndex));
     }
+
+    [Fact]
+    public void It_can_open_on_another_theme_than_the_active_one()
+    {
+        var tabs = FleetThemeTabs.For([.. BuiltInThemes.All, Paper], t => t == Paper, Mocha.Name, select: Paper.Name);
+
+        Assert.Equal(Paper, tabs.Pick(tabs.StartTab, tabs.StartIndex));
+        Assert.EndsWith(FleetThemeTabs.ActiveMark, tabs.Tabs[FleetThemeTabs.Dark].Entries[0].Detail, StringComparison.Ordinal);
+    }
 }

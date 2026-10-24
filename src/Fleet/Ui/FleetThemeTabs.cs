@@ -38,7 +38,7 @@ public sealed class FleetThemeTabs
     public int StartIndex { get; }
 
     public static FleetThemeTabs For(
-        IReadOnlyList<ThemePalette> all, Func<ThemePalette, bool> isCustom, string active, bool withNew = false)
+        IReadOnlyList<ThemePalette> all, Func<ThemePalette, bool> isCustom, string active, bool withNew = false, string? select = null)
     {
         IReadOnlyList<ThemePalette>[] themes =
         [
@@ -55,11 +55,12 @@ public sealed class FleetThemeTabs
             ]))
             .ToList();
 
-        var startTab = Array.FindIndex(themes, list => list.Any(t => t.Name == active));
+        var start = select ?? active;
+        var startTab = Array.FindIndex(themes, list => list.Any(t => t.Name == start));
 
         return startTab < 0
             ? new FleetThemeTabs(themes, tabs, Dark, 0)
-            : new FleetThemeTabs(themes, tabs, startTab, themes[startTab].ToList().FindIndex(t => t.Name == active));
+            : new FleetThemeTabs(themes, tabs, startTab, themes[startTab].ToList().FindIndex(t => t.Name == start));
     }
 
     public ThemePalette Pick(int tab, int index) => themes[tab][index];
