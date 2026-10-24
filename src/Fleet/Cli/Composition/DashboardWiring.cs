@@ -521,7 +521,7 @@ public static class DashboardWiring
         async Task<string?> OpenFlow(AgentRecord agent)
         {
             var loaded = settings.Load(project.Name);
-            var inNvim = loaded.SubOrchestratorsInNvim;
+            var inNvim = loaded.SubOrchestratorsHostedInNvim;
             var executable = AgentHarness.CommandFor(agent.Harness, orchestratorInNvim: inNvim)[0];
 
             if (!Adapters.OnPath(executable))
@@ -811,7 +811,7 @@ public static class DashboardWiring
             {
                 var rebuilt = new RebuildDashboardHandler(
                     mux,
-                    settings.Load(project.Name).MainOrchestratorInNvim,
+                    settings.Load(project.Name).MainOrchestratorHostedInNvim,
                     ClaudeLaunch.MainOrchestrator(project.Name, settings.Load(project.Name).Models))
                     .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Orchestrator)
                     .GetAwaiter()

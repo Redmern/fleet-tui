@@ -132,7 +132,7 @@ public sealed class DispatchHandler(
         await LeaveKickoff(folder, ct).ConfigureAwait(false);
 
         var loaded = settings?.Load(command.ProjectName);
-        var inNvim = loaded?.SubOrchestratorsInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
+        var inNvim = loaded?.SubOrchestratorsHostedInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
         var launch = ClaudeLaunch.ForAgent(command.ProjectName, string.Empty, slug, orchestrator: true, models);
 
         var record = new AgentRecord(

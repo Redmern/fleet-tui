@@ -360,7 +360,7 @@ public sealed class HeadRelay(HeadDeps deps, HeadGate gate, HeadTiming timing)
 
     private async Task SendAsync(string project, PaneId pane, string text, CancellationToken ct)
     {
-        var keys = RelayText.Keys(text, deps.Settings.Load(project).MainOrchestratorInNvim);
+        var keys = RelayText.Keys(text, deps.Settings.Load(project).MainOrchestratorHostedInNvim);
 
         await deps.Mux.SendTextAsync(pane, keys, ct).ConfigureAwait(false);
         await Task.Delay(timing.KeyDelay, ct).ConfigureAwait(false);
