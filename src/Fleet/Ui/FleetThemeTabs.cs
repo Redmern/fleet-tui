@@ -13,6 +13,8 @@ public sealed class FleetThemeTabs
 
     public const string ActiveMark = "  (active)";
 
+    public const string NewLabel = "New custom theme…";
+
     private static readonly string[] Titles = ["Dark", "Light", "Custom"];
 
     private readonly IReadOnlyList<IReadOnlyList<ThemePalette>> themes;
@@ -35,7 +37,8 @@ public sealed class FleetThemeTabs
 
     public int StartIndex { get; }
 
-    public static FleetThemeTabs For(IReadOnlyList<ThemePalette> all, Func<ThemePalette, bool> isCustom, string active)
+    public static FleetThemeTabs For(
+        IReadOnlyList<ThemePalette> all, Func<ThemePalette, bool> isCustom, string active, bool withNew = false)
     {
         IReadOnlyList<ThemePalette>[] themes =
         [
@@ -45,7 +48,11 @@ public sealed class FleetThemeTabs
         ];
 
         var tabs = themes
-            .Select((list, i) => (Titles[i], (IReadOnlyList<PickerEntry>)[.. list.Select(t => Entry(t, active))]))
+            .Select((list, i) => (Titles[i], (IReadOnlyList<PickerEntry>)
+            [
+                .. list.Select(t => Entry(t, active)),
+                .. withNew && i == Custom ? [new PickerEntry(NewLabel, Key: "n")] : Array.Empty<PickerEntry>(),
+            ]))
             .ToList();
 
         var startTab = Array.FindIndex(themes, list => list.Any(t => t.Name == active));
@@ -56,6 +63,8 @@ public sealed class FleetThemeTabs
     }
 
     public ThemePalette Pick(int tab, int index) => themes[tab][index];
+
+    public bool IsNew(int tab, int index) => index >= themes[tab].Count && index < Tabs[tab].Entries.Count;
 
     private static PickerEntry Entry(ThemePalette theme, string active) =>
         new(theme.Title, theme.Name == active ? theme.Name + ActiveMark : theme.Name);
