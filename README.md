@@ -30,6 +30,8 @@ To run fleet:
   Claude Code alone. fleet brings its own nvim config with `neo-tree` and
   `claudecode.nvim` (see [Fleet's nvim config](#fleets-nvim-config)), so your own
   config does not need them
+- or, instead of Neovim, [VS Code](https://code.visualstudio.com) with its `code` shell
+  command on PATH (see [nvim or VS Code](#nvim-or-vs-code))
 - [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
 - Claude Code, which nvim starts in the pane fleet opens on the left
 - a Nerd Font in your terminal, or the branch pills and icons render as boxes. On
@@ -115,6 +117,15 @@ To also clone a Neovim config of your own into `%LOCALAPPDATA%\nvim` / `~/.confi
 left alone — an existing tool is skipped, a config directory holding a different
 remote is not touched, and a matching one is fast-forwarded. A config that ships its
 own `bootstrap.sh` is reported rather than run.
+
+When neither `nvim` nor `code` is on PATH, both installers first ask which editor
+fleet should use: nvim, VS Code or skip. nvim goes through the same dependency offer
+as above; VS Code is installed with winget on Windows, while on Linux and macOS the
+installer only prints how to get VS Code and its `code` command, because its packaging
+varies. The pick is written to `editor.json` in fleet's config folder as the global
+default editor. Without a terminal (CI, a redirected run, `FLEET_NO_DEPS_PROMPT`, or
+`--with-deps` / `-WithDeps`) nothing is asked or written: both install commands are
+printed instead. With either editor already on PATH there is no question.
 
 Either route ends by running `fleet setup`, which installs fleet's nvim config, writes
 the keybinds and lists anything still missing with the command that fixes it:
@@ -794,7 +805,7 @@ the floats). Every fleet menu action has a key there:
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
-| `g c` fleet config | `v` / `V` / `N` nvim toggles, `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
+| `g c` fleet config | `v` / `V` / `N` nvim toggles, `E` editor (nvim / vscode), `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
 | `m` maintenance | `b` rebuild dashboard, `x` clean up agents, `X` hide all agents, `l` view logs, `u` update, `v` version, `W` what's new |
 | `f` float | `f` new, `t` show or hide, `e` embed, `g` mode |
 | `w` project | `w` next workspace, `s` switch project |
@@ -969,6 +980,25 @@ second one. **Open editor here** in the fleet menu does the same for the agent w
 pane you are in; the entry only shows when the menu was opened from such a pane. The
 editor is a helper, not the agent: hiding or stopping the agent
 leaves it alone, and an agent with only its editor open still counts as not running.
+
+### nvim or VS Code
+
+Each project opens agents in one editor: `nvim` (the default) or `vscode`. Set it per
+project with `E` in the fleet config menu (`g c`), which flips between the two and
+stores it in that project's settings. A project with no choice of its own uses the
+global default in `editor.json`, which the installers write (see
+[Bringing the dependencies with it](#bringing-the-dependencies-with-it)); with neither,
+fleet uses nvim when it is on PATH and VS Code when only `code` is.
+
+In a vscode project:
+
+- `e` and **Open editor here** run `code -n <folder>`, a new VS Code window on the
+  agent's worktree (or the sub's folder), instead of an nvim pane.
+- Agents, sub-orchestrators and the main orchestrator run Claude Code bare in their
+  pane, not inside nvim through `claudecode.nvim`; saved nvim agents come back bare too.
+- Editing the fleet config opens it in VS Code with `code --wait`.
+- `fleet setup` skips writing fleet's nvim config when nvim is not installed, and lists
+  a missing `code` as a to-do; `fleet doctor` warns when `code` is not on PATH.
 
 ### Hiding an agent
 
