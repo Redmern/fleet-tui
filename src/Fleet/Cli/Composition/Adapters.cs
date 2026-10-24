@@ -70,16 +70,26 @@ public static class Adapters
     public static IUninstallTargets UninstallTargets() =>
         new FleetUninstallTargets(
             UninstallEnvironment.ForThisMachine(Executable, FleetHome.Config),
-            new EmbeddedDaemonStopper(),
+            new EmbeddedDaemonStopper(() => EmbeddedWiring.StopDaemonAsync().GetAwaiter().GetResult()),
             new UserPathVariable());
 
     public static IDependencyManifest DependencyManifest() => new JsonDependencyManifest(FleetHome.Config);
 
     public static IPackageRemover PackageRemover(bool interactive) => new PackageRemover(interactive);
 
-    private sealed class EmbeddedDaemonStopper : IDaemonStopper
+    public sealed class EmbeddedDaemonStopper(Func<int> stop) : IDaemonStopper
     {
-        public bool Stop() => EmbeddedWiring.StopDaemonAsync().GetAwaiter().GetResult() == 0;
+        public bool Stop()
+        {
+            try
+            {
+                return stop() == 0;
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+        }
     }
 
     public static IUpdateCheckCache UpdateChecks() => new JsonUpdateCheckCache();
