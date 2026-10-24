@@ -244,10 +244,19 @@ public static class Adapters
             new FailSilentDriver(new NvimConfigDriver(inner, UseFleetNvimConfig), log.Swallowed), chosen, unsupported);
     }
 
+    public static bool SkipsNvimSetup(Editor editor, Version? nvimVersion) =>
+        editor == Editor.Vscode && nvimVersion is null;
+
     public static NvimSetup InspectNvim(bool install)
     {
-        var fleetConfig = LoadNvimConfig() == NvimConfig.Fleet;
         var version = NvimVersion.Parse(FleetNvimConfig.NvimVersionOutput());
+
+        if (SkipsNvimSetup(Settings().Load(string.Empty).ResolvedEditor, version))
+        {
+            return new NvimSetup(false, true, FleetNvimConfig.Directory, null);
+        }
+
+        var fleetConfig = LoadNvimConfig() == NvimConfig.Fleet;
         var written = fleetConfig && (install ? FleetNvimConfig.Install() && WriteNvimPalette() : Directory.Exists(FleetNvimConfig.Directory));
 
         return new NvimSetup(

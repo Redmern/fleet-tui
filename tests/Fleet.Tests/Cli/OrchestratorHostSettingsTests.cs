@@ -92,4 +92,12 @@ public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
         Assert.Equal(AgentHarness.Claude, Adapters.Opens("techweb", Worker(AgentHarness.Claude)));
         Assert.Equal(AgentHarness.Nvim, Adapters.Opens("techweb", Worker(AgentHarness.Orchestrator)));
     }
+
+    [Fact]
+    public void Nvim_setup_is_skipped_only_for_vscode_without_nvim()
+    {
+        Assert.True(Adapters.SkipsNvimSetup(Editor.Vscode, nvimVersion: null));
+        Assert.False(Adapters.SkipsNvimSetup(Editor.Vscode, new Version(0, 10)));
+        Assert.False(Adapters.SkipsNvimSetup(Editor.Nvim, nvimVersion: null));
+    }
 }
