@@ -78,12 +78,12 @@ public static class Adapters
 
     public static IKeymapStore Keymaps() => new ApplyingKeymapStore(new JsonKeymapStore(), () => _ = Task.Run(KeybindWiring.ApplyQuietly));
 
-    public static ISettingsStore Settings() => new JsonSettingsStore(() => InstalledEditor.Value);
+    public static JsonSettingsStore Settings() => new(() => InstalledEditor.Value);
 
     private static readonly Lazy<Editor?> InstalledEditor =
         new(() => EditorChoice.Installed(OnPath(EditorChoice.NvimCommand), EditorLauncher().Available));
 
-    public static IEditorLauncher EditorLauncher() => new VscodeLauncher(OnPath);
+    public static IFileEditor EditorLauncher() => new VscodeLauncher(OnPath);
 
     public static Editor ResolvedEditor(string project) => Settings().Load(project).ResolvedEditor;
 

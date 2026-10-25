@@ -166,4 +166,19 @@ public class SettingsEditorWiringTests
         Assert.Equal(1, nvims);
         Assert.Equal(0, codes);
     }
+    [Fact]
+    public void The_shared_launcher_can_wait_on_a_file()
+    {
+        IFileEditor code = Adapters.EditorLauncher();
+
+        Assert.NotNull(code);
+    }
+
+    [Fact]
+    public void The_shared_settings_store_can_reload_and_check_the_file()
+    {
+        var store = Adapters.Settings();
+
+        Assert.False(store.Exists("no-such-project-" + Guid.NewGuid().ToString("N")));
+    }
 }

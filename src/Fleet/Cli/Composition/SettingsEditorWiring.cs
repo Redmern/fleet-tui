@@ -1,5 +1,4 @@
 using Fleet.Features.Menu.EditSettings;
-using Fleet.Platform.Editors;
 using Fleet.Platform.Storage;
 using Fleet.Ports.Editors;
 using Fleet.Ports.Mux.Models;
@@ -21,7 +20,7 @@ public static class SettingsEditorWiring
 
     public static OpenSettingsInEditor For(Project project, Func<SettingsConfig, string?> resync)
     {
-        var store = new JsonSettingsStore();
+        var store = Adapters.Settings();
         var editor = Adapters.ResolvedEditor(project.Name);
 
         return new OpenSettingsInEditor(
@@ -57,7 +56,7 @@ public static class SettingsEditorWiring
         }
 
         return OpenInVscode(
-            new VscodeLauncher(Adapters.OnPath),
+            Adapters.EditorLauncher(),
             file,
             exited,
             body => Adapters.Toast($"fleet · {project.Name}", body),
