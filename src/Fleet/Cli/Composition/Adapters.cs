@@ -93,9 +93,9 @@ public static class Adapters
 
     public static IIsoMode Iso() => new JsonIsoMode();
 
-    public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorHostedInNvim;
+    public static bool MainOrchestratorHostedInNvim(string project) => Settings().Load(project).MainOrchestratorHostedInNvim;
 
-    public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsHostedInNvim;
+    public static bool SubOrchestratorsHostedInNvim(string project) => Settings().Load(project).SubOrchestratorsHostedInNvim;
 
     public static bool AgentsInNvim(string project) => Settings().Load(project).HostsInNvim;
 
@@ -244,14 +244,11 @@ public static class Adapters
             new FailSilentDriver(new NvimConfigDriver(inner, UseFleetNvimConfig), log.Swallowed), chosen, unsupported);
     }
 
-    public static bool SkipsNvimSetup(Editor editor, Version? nvimVersion) =>
-        editor == Editor.Vscode && nvimVersion is null;
-
     public static NvimSetup InspectNvim(bool install)
     {
         var version = NvimVersion.Parse(FleetNvimConfig.NvimVersionOutput());
 
-        if (SkipsNvimSetup(Settings().Load(string.Empty).ResolvedEditor, version))
+        if (EditorChoice.SkipsNvimSetup(Settings().Load(string.Empty).ResolvedEditor, nvimInstalled: version is not null))
         {
             return new NvimSetup(false, true, FleetNvimConfig.Directory, null);
         }

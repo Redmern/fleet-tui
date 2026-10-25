@@ -85,7 +85,7 @@ public static class PickProjectCommand
 
         var result = await new OpenProjectHandler(mux.Driver)
             .HandleAsync(new OpenProjectCommand(
-                chosen, AgentHarness.Orchestrator, Adapters.Executable, windowId, Adapters.MainOrchestratorInNvim(chosen.Name), Adapters.Models(chosen.Name)))
+                chosen, AgentHarness.Orchestrator, Adapters.Executable, windowId, Adapters.MainOrchestratorHostedInNvim(chosen.Name), Adapters.Models(chosen.Name)))
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -108,7 +108,7 @@ public static class PickProjectCommand
         }
 
         await new RestoreSessionHandler(
-            mux.Driver, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
+            mux.Driver, Adapters.SubOrchestratorsHostedInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 
@@ -177,7 +177,7 @@ public static class PickProjectCommand
         {
             var opened = await new OpenProjectHandler(mux)
                 .HandleAsync(new OpenProjectCommand(
-                    chosen, AgentHarness.Orchestrator, Adapters.Executable, null, Adapters.MainOrchestratorInNvim(chosen.Name), Adapters.Models(chosen.Name)))
+                    chosen, AgentHarness.Orchestrator, Adapters.Executable, null, Adapters.MainOrchestratorHostedInNvim(chosen.Name), Adapters.Models(chosen.Name)))
                 .ConfigureAwait(false);
 
             if (!opened.Succeeded)
@@ -190,7 +190,7 @@ public static class PickProjectCommand
                 .ToList();
 
             await new RestoreSessionHandler(
-            mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
+            mux, Adapters.SubOrchestratorsHostedInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
                 .HandleAsync(chosen.Name, chosen.Root, runnable)
                 .ConfigureAwait(false);
 

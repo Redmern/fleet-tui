@@ -366,7 +366,7 @@ public sealed class McpActions(
         return pane?.Id;
     }
 
-    private bool SubOrchestratorsInNvim() => Adapters.SubOrchestratorsInNvim(project);
+    private bool SubOrchestratorsHostedInNvim() => Adapters.SubOrchestratorsHostedInNvim(project);
 
     private async Task<McpResult> OpenAgent(McpRequest request, CancellationToken ct)
     {
@@ -385,7 +385,7 @@ public sealed class McpActions(
         ClaudeWiring.TrustFolder(agent.Worktree);
 
         var outcome = await new OpenAgentHandler(
-                mux, store, SubOrchestratorsInNvim(), models: Adapters.Models(project), agentsInNvim: Adapters.AgentsInNvim(project))
+                mux, store, SubOrchestratorsHostedInNvim(), models: Adapters.Models(project), agentsInNvim: Adapters.AgentsInNvim(project))
             .HandleAsync(project, agent, root, ct)
             .ConfigureAwait(false);
 

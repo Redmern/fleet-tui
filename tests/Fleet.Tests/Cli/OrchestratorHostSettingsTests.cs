@@ -2,6 +2,7 @@ using Fleet.Cli.Composition;
 using Fleet.Platform.Storage;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
@@ -13,8 +14,8 @@ public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
     [Fact]
     public void Both_default_to_nvim()
     {
-        Assert.True(Adapters.MainOrchestratorInNvim("techweb"));
-        Assert.True(Adapters.SubOrchestratorsInNvim("techweb"));
+        Assert.True(Adapters.MainOrchestratorHostedInNvim("techweb"));
+        Assert.True(Adapters.SubOrchestratorsHostedInNvim("techweb"));
     }
 
     [Fact]
@@ -22,8 +23,8 @@ public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
     {
         new JsonSettingsStore().Save("techweb", SettingsConfig.Default.WithMainOrchestratorInNvim(false));
 
-        Assert.False(Adapters.MainOrchestratorInNvim("techweb"));
-        Assert.True(Adapters.SubOrchestratorsInNvim("techweb"));
+        Assert.False(Adapters.MainOrchestratorHostedInNvim("techweb"));
+        Assert.True(Adapters.SubOrchestratorsHostedInNvim("techweb"));
     }
 
     [Fact]
@@ -31,8 +32,8 @@ public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
     {
         new JsonSettingsStore().Save("techweb", SettingsConfig.Default.WithSubOrchestratorsInNvim(false));
 
-        Assert.True(Adapters.MainOrchestratorInNvim("techweb"));
-        Assert.False(Adapters.SubOrchestratorsInNvim("techweb"));
+        Assert.True(Adapters.MainOrchestratorHostedInNvim("techweb"));
+        Assert.False(Adapters.SubOrchestratorsHostedInNvim("techweb"));
     }
 
     [Fact]
@@ -40,8 +41,8 @@ public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
     {
         new JsonSettingsStore().Save("techweb", SettingsConfig.Default.WithEditor(Editor.Vscode));
 
-        Assert.False(Adapters.MainOrchestratorInNvim("techweb"));
-        Assert.False(Adapters.SubOrchestratorsInNvim("techweb"));
+        Assert.False(Adapters.MainOrchestratorHostedInNvim("techweb"));
+        Assert.False(Adapters.SubOrchestratorsHostedInNvim("techweb"));
     }
 
     [Fact]
@@ -96,8 +97,8 @@ public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
     [Fact]
     public void Nvim_setup_is_skipped_only_for_vscode_without_nvim()
     {
-        Assert.True(Adapters.SkipsNvimSetup(Editor.Vscode, nvimVersion: null));
-        Assert.False(Adapters.SkipsNvimSetup(Editor.Vscode, new Version(0, 10)));
-        Assert.False(Adapters.SkipsNvimSetup(Editor.Nvim, nvimVersion: null));
+        Assert.True(EditorChoice.SkipsNvimSetup(Editor.Vscode, nvimInstalled: false));
+        Assert.False(EditorChoice.SkipsNvimSetup(Editor.Vscode, nvimInstalled: true));
+        Assert.False(EditorChoice.SkipsNvimSetup(Editor.Nvim, nvimInstalled: false));
     }
 }

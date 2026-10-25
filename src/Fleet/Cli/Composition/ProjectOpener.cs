@@ -22,7 +22,7 @@ public static class ProjectOpener
 
         var opened = await new OpenProjectHandler(mux)
             .HandleAsync(new OpenProjectCommand(
-                chosen, AgentHarness.Orchestrator, Adapters.Executable, null, Adapters.MainOrchestratorInNvim(chosen.Name), Adapters.Models(chosen.Name)))
+                chosen, AgentHarness.Orchestrator, Adapters.Executable, null, Adapters.MainOrchestratorHostedInNvim(chosen.Name), Adapters.Models(chosen.Name)))
             .ConfigureAwait(false);
 
         if (!opened.Succeeded)
@@ -35,7 +35,7 @@ public static class ProjectOpener
             .ToList();
 
         await new RestoreSessionHandler(
-            mux, Adapters.SubOrchestratorsInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
+            mux, Adapters.SubOrchestratorsHostedInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 
