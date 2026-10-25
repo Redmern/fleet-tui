@@ -18,6 +18,7 @@ using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 using Terminal.Gui.Input;
 
@@ -512,6 +513,42 @@ public sealed class OpenEditorTests : IDisposable
         Assert.True(await OpenEditorHandler.CanOpenEditorAsync(null, agent.Worktree, [agent], Editor.Vscode));
         Assert.False(await OpenEditorHandler.CanOpenEditorAsync(null, ProjectRoot, [agent], Editor.Vscode));
         Assert.False(await OpenEditorHandler.CanOpenEditorAsync(null, agent.Worktree, [agent], Editor.Nvim));
+    }
+
+    [Fact]
+    public async Task AC8_a_vscode_project_stops_quits_and_matches_panes_with_no_editor_pane_anywhere()
+    {
+        var project = SettingsConfig.Default.WithEditor(Editor.Vscode);
+        var agent = Agent() with { Open = true };
+        var dashboard = await DashboardAsync();
+        var claude = await AgentPaneAsync(agent);
+        var launcher = new FakeLauncher();
+
+        var opened = await new OpenEditorHandler(_mux, launcher)
+            .HandleAsync(Project, agent, ProjectRoot, project.ResolvedEditor);
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.True(opened.Succeeded, opened.Error);
+        Assert.Equal(Editor.Vscode, project.ResolvedEditor);
+        Assert.Equal([agent.Worktree], launcher.Launched);
+        Assert.DoesNotContain(panes, p => AgentPaneMatch.IsEditor(p, agent));
+        Assert.Equal(claude, panes.Single(p => AgentPaneMatch.Owns(p, agent)).Id);
+        Assert.Equal(agent, OpenEditorHandler.Caller(panes, dashboard, floating: false, agent.Worktree, [agent]));
+        Assert.Equal(agent, OpenEditorHandler.CallerByFolder(agent.Worktree, [agent]));
+        Assert.True(AgentPanes.Shown(agent, panes));
+        Assert.False(RestoreSessionHandler.Wanted(agent, panes));
+
+        var doomed = QuitPlan.PanesToClose(panes, ProjectRoot, [agent]);
+
+        Assert.Contains(claude, doomed);
+
+        Assert.True((await new StopAgentHandler(_mux, new RecordingStore()).HandleAsync(Project, agent)).Succeeded);
+
+        var after = await _mux.ListPanesAsync();
+
+        Assert.DoesNotContain(after, p => AgentPaneMatch.Owns(p, agent) || AgentPaneMatch.IsEditor(p, agent));
+        Assert.True(RestoreSessionHandler.Wanted(agent, after));
+        Assert.All(QuitPlan.PanesToClose(after, ProjectRoot, [agent]), id => Assert.Contains(after, p => p.Id == id));
     }
 
     private sealed class RecordingStore : IAgentStore

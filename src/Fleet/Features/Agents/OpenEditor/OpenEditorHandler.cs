@@ -106,7 +106,10 @@ public sealed class OpenEditorHandler(IMuxDriver mux, IEditorLauncher? launcher 
         CancellationToken ct = default) =>
         usable is not null
             ? await CallerAsync(usable, cwd, agents, ct).ConfigureAwait(false) is not null
-            : editor == Editor.Vscode && Caller([], PaneId.None, floating: false, cwd, agents) is not null;
+            : editor == Editor.Vscode && CallerByFolder(cwd, agents) is not null;
+
+    public static AgentRecord? CallerByFolder(string cwd, IReadOnlyList<AgentRecord> agents) =>
+        Caller([], PaneId.None, floating: false, cwd, agents);
 
     public static async Task<AgentRecord?> CallerAsync(
         IMuxDriver mux, string cwd, IReadOnlyList<AgentRecord> agents, CancellationToken ct = default) =>

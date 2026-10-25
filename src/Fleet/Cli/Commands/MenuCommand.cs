@@ -775,7 +775,7 @@ public static class MenuCommand
                     var agent = editorMux.Unsupported is null
                         ? await OpenEditorHandler.CallerAsync(driver, Environment.CurrentDirectory, listed)
                             .ConfigureAwait(false)
-                        : OpenEditorHandler.Caller([], PaneId.None, false, Environment.CurrentDirectory, listed);
+                        : OpenEditorHandler.CallerByFolder(Environment.CurrentDirectory, listed);
 
                     if (agent is null)
                     {
