@@ -11,7 +11,7 @@ public static class SetupHints
     public const string Glyphs =
         "if the pills above look like boxes, point your terminal at a Nerd Font";
 
-    public static string Windows(string tool) => tool switch
+    private static string Windows(string tool) => tool switch
     {
         "git" => "winget install Git.Git",
         "nvim" => "winget install Neovim.Neovim",
@@ -21,7 +21,7 @@ public static class SetupHints
         _ => $"install {tool} and put it on PATH",
     };
 
-    public static string Linux(string tool) => tool switch
+    private static string Linux(string tool) => tool switch
     {
         "claude" => "npm install -g @anthropic-ai/claude-code",
         "nvim" => "install neovim with your package manager",

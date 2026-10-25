@@ -45,10 +45,18 @@ public class EditorSetupTests
     }
 
     [Fact]
-    public void The_vs_code_hint_names_the_winget_id_on_windows_and_the_shell_command_on_linux()
+    public void The_vs_code_hint_names_the_winget_id_on_windows_and_the_shell_command_elsewhere()
     {
-        Assert.Equal("winget install Microsoft.VisualStudioCode", SetupHints.Windows(EditorChoice.VscodeCommand));
-        Assert.Contains("'code' shell command", SetupHints.Linux(EditorChoice.VscodeCommand));
+        var hint = SetupHints.For(EditorChoice.VscodeCommand);
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal("winget install Microsoft.VisualStudioCode", hint);
+        }
+        else
+        {
+            Assert.Contains("'code' shell command", hint);
+        }
     }
 
     [Fact]
