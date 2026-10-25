@@ -28,7 +28,7 @@ public sealed class RestoreSessionHandler(
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
 
         var window = ProjectWindows.For(mux, panes, project, projectRoot, preferCaller: false);
-        var wanted = agents.Where(a => Wanted(a, panes)).Select(a => HostedBy(a, agentsInNvim)).ToList();
+        var wanted = agents.Where(a => Wanted(a, panes)).ToList();
 
         var restored = await Task.WhenAll(
                 InOrderAsync(project, [.. wanted.Where(a => !a.Hidden)], window, ct),
@@ -42,9 +42,14 @@ public sealed class RestoreSessionHandler(
             store?.Replace(project, agent with { InNvim = subOrchestratorsInNvim });
         }
 
-        foreach (var agent in all.Where(a => !agents.Contains(a) && !AgentHarness.IsOrchestrator(a.Harness)))
+        foreach (var agent in all.Where(a => !AgentHarness.IsOrchestrator(a.Harness)))
         {
-            store?.Replace(project, agent);
+            var started = agent with { InNvim = HostedBy(agent, agentsInNvim).Harness == agent.Harness ? null : false };
+
+            if (started != agent)
+            {
+                store?.Replace(project, started);
+            }
         }
 
         return all.Count;

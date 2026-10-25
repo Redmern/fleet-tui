@@ -137,7 +137,10 @@ public sealed class OpenAgentHandler(
 
         await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
 
-        var started = orchestrator ? agent with { InNvim = subOrchestratorsInNvim } : hosted;
+        var started = agent with
+        {
+            InNvim = orchestrator ? subOrchestratorsInNvim : hosted.Harness == agent.Harness ? null : false,
+        };
 
         if (agent.Hidden || !agent.Open || started != agent)
         {

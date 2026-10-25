@@ -330,7 +330,25 @@ public sealed class OpenAgentTests : IDisposable
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.Equal(AgentHarness.Claude, _mux.ArgsFor(pane.Id)[0]);
         Assert.Contains(AgentHarness.ResumeArgument, _mux.ArgsFor(pane.Id));
-        Assert.Equal(AgentHarness.Claude, Assert.Single(_store.Saved).Harness);
+        var saved = Assert.Single(_store.Saved);
+        Assert.Equal(AgentHarness.Nvim, saved.Harness);
+        Assert.False(saved.InNvim);
+    }
+
+    [Fact]
+    public async Task Back_on_nvim_an_agent_that_ran_as_bare_claude_reopens_in_nvim()
+    {
+        var agent = Agent() with { Harness = AgentHarness.Nvim, Claude = true, InNvim = false };
+
+        var result = await new OpenAgentHandler(_mux, _store)
+            .HandleAsync("techweb", agent, ProjectRoot);
+
+        Assert.True(result.Succeeded, result.Error);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
+        var saved = Assert.Single(_store.Saved);
+        Assert.Equal(AgentHarness.Nvim, saved.Harness);
+        Assert.Null(saved.InNvim);
     }
 
     [Fact]

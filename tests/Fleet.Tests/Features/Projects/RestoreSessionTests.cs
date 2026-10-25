@@ -163,7 +163,7 @@ public sealed class RestoreSessionTests : IDisposable
     }
 
     [Fact]
-    public async Task Without_nvim_a_restored_nvim_agent_is_recorded_as_bare_claude()
+    public async Task Without_nvim_a_restored_nvim_agent_keeps_its_harness_but_records_it_ran_outside_nvim()
     {
         Directory.CreateDirectory(ProjectRoot);
         var store = new RecordingStore();
@@ -173,7 +173,25 @@ public sealed class RestoreSessionTests : IDisposable
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.Equal(AgentHarness.Claude, _mux.ArgsFor(pane.Id)[0]);
-        Assert.Equal(AgentHarness.Claude, Assert.Single(store.Saved).Harness);
+        var saved = Assert.Single(store.Saved);
+        Assert.Equal(AgentHarness.Nvim, saved.Harness);
+        Assert.False(saved.InNvim);
+    }
+
+    [Fact]
+    public async Task Back_on_nvim_an_agent_that_ran_as_bare_claude_is_restored_in_nvim_again()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        var store = new RecordingStore();
+
+        await new RestoreSessionHandler(_mux, store: store)
+            .HandleAsync("techweb", ProjectRoot, [Agent("dev", open: true) with { InNvim = false }]);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
+        var saved = Assert.Single(store.Saved);
+        Assert.Equal(AgentHarness.Nvim, saved.Harness);
+        Assert.Null(saved.InNvim);
     }
 
     [Fact]
