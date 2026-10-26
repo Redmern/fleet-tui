@@ -4,12 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
-## 0.7.27 (2026-10-24)
+## 0.7.27 (2026-10-26)
 
 - **`fleet uninstall`** removes fleet from this machine: it lists what it would remove and asks one y/N (`--yes` skips the question and is required when stdin is not a terminal). It stops the daemon and removes the fleet-nvim folders, the fleet config home, the marked shell `PATH` lines and the binary (last); on Windows also the user `PATH` entry, the Fleet shortcut and Terminal profile, and the install folder. Your repositories, agent worktrees, per-project fleet files and `~/.claude*` entries stay.
-- **Dependencies the installer added can go too**: `install.sh --with-deps`, `install.ps1 -WithDeps` and `get-fleet.sh --with-deps` now record the git, nvim and yazi they install in `<config home>/installed-deps.json`. `fleet uninstall` asks about each one separately after you confirm; `--remove-deps` removes them all without asking, and `--yes` alone keeps them. Installs from before this release have no such file, so their tools are never offered.
+- **Dependencies the installer added can go too**: the installers now record the git, nvim and yazi they install (with `--with-deps` / `-WithDeps` or when you answer yes) in `<config home>/installed-deps.json`. `fleet uninstall` asks about each one separately after you confirm; `--remove-deps` removes them all without asking, and `--yes` alone keeps them. Installs from before this release have no such file, so their tools are never offered.
 - `./install.sh --uninstall` and `.\install.ps1 -Uninstall` now hand over to `fleet uninstall` when the binary is there (`--yes` / `-Yes` passes `--yes`). Delegated, `-Uninstall` without `-Purge` now removes the config home too; the old fallback, used when the binary is gone, still keeps it.
-- Brew tap-style package names (`user/tap/pkg`) in the manifest are refused rather than removed, and `get-fleet.sh --with-deps` records dependencies only once it fetches an `install.sh` from this release or later.
+- **The theme picker has Dark, Light and Custom tabs**, and 18 more themes ship with fleet, 12 of them light: 33 in all.
+- **Make your own themes**: in the Custom tab, `n` starts a new theme from any built-in or custom one, `Ctrl+E` edits it and Del deletes it.
+- **VS Code as the editor**: set `E` in fleet menu › settings › fleet config to nvim or vscode per project; a vscode project opens agents and the fleet config in VS Code. The installers ask nvim, VS Code or skip when neither is on PATH and save the answer as the default; on Windows they install VS Code with winget.
 
 ## 0.7.26 (2026-10-22)
 
