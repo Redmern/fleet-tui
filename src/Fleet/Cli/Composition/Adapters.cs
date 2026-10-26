@@ -27,6 +27,7 @@ using Fleet.Platform.Storage;
 using Fleet.Platform.Themes;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
+using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Aidlc;
 using Fleet.Ports.Approvals;
 using Fleet.Ports.Editors;
@@ -48,6 +49,7 @@ using Fleet.Platform.Releases;
 using Fleet.Platform.Uninstall;
 using Fleet.Platform.Uninstall.Models;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -119,9 +121,20 @@ public static class Adapters
 
     public static IIsoMode Iso() => new JsonIsoMode();
 
-    public static bool MainOrchestratorInNvim(string project) => Settings().Load(project).MainOrchestratorInNvim;
+    public static bool MainOrchestratorHostedInNvim(string project) => Settings().Load(project).MainOrchestratorHostedInNvim;
 
-    public static bool SubOrchestratorsInNvim(string project) => Settings().Load(project).SubOrchestratorsInNvim;
+    public static bool SubOrchestratorsHostedInNvim(string project) => Settings().Load(project).SubOrchestratorsHostedInNvim;
+
+    public static bool AgentsInNvim(string project) => Settings().Load(project).HostsInNvim;
+
+    public static string Opens(string project, AgentRecord agent)
+    {
+        var settings = Settings().Load(project);
+
+        return AgentHarness.CommandFor(
+            AgentHarness.HostedFor(agent.Harness, settings.HostsInNvim),
+            orchestratorInNvim: settings.SubOrchestratorsHostedInNvim)[0];
+    }
 
     public static RoleModels Models(string project) => Settings().Load(project).Models;
 
@@ -261,8 +274,14 @@ public static class Adapters
 
     public static NvimSetup InspectNvim(bool install)
     {
-        var fleetConfig = LoadNvimConfig() == NvimConfig.Fleet;
         var version = NvimVersion.Parse(FleetNvimConfig.NvimVersionOutput());
+
+        if (EditorChoice.SkipsNvimSetup(Settings().Load(string.Empty).ResolvedEditor, nvimInstalled: version is not null))
+        {
+            return new NvimSetup(false, true, FleetNvimConfig.Directory, null);
+        }
+
+        var fleetConfig = LoadNvimConfig() == NvimConfig.Fleet;
         var written = fleetConfig && (install ? FleetNvimConfig.Install() && WriteNvimPalette() : Directory.Exists(FleetNvimConfig.Directory));
 
         return new NvimSetup(

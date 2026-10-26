@@ -116,6 +116,22 @@ public sealed class NewAgentViewTests
     }
 
     [Fact]
+    public void A_remembered_nvim_harness_gives_way_to_a_bare_claude_default()
+    {
+        var picked = NewAgentView.Preselect(Prompt(harness: AgentHarness.Claude), "backend", AgentHarness.Nvim);
+
+        Assert.Equal((0, AgentHarness.Claude), picked);
+    }
+
+    [Fact]
+    public void A_remembered_claude_harness_still_wins_over_an_nvim_default()
+    {
+        var picked = NewAgentView.Preselect(Prompt(), "backend", AgentHarness.Claude);
+
+        Assert.Equal((0, AgentHarness.Claude), picked);
+    }
+
+    [Fact]
     public void Nothing_remembered_keeps_the_prompt()
     {
         var picked = NewAgentView.Preselect(Prompt(selected: 1, harness: AgentHarness.Claude), string.Empty, string.Empty);

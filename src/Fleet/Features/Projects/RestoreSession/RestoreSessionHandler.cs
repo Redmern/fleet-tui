@@ -11,7 +11,11 @@ using Fleet.Shared.Settings.Models;
 namespace Fleet.Features.Projects.RestoreSession;
 
 public sealed class RestoreSessionHandler(
-    IMuxDriver mux, bool subOrchestratorsInNvim = true, IAgentStore? store = null, RoleModels? models = null)
+    IMuxDriver mux,
+    bool subOrchestratorsInNvim = true,
+    IAgentStore? store = null,
+    RoleModels? models = null,
+    bool agentsInNvim = true)
 {
     private const int AtOnce = 4;
 
@@ -36,6 +40,16 @@ public sealed class RestoreSessionHandler(
         foreach (var agent in all.Where(a => AgentHarness.IsOrchestrator(a.Harness)))
         {
             store?.Replace(project, agent with { InNvim = subOrchestratorsInNvim });
+        }
+
+        foreach (var agent in all.Where(a => !AgentHarness.IsOrchestrator(a.Harness)))
+        {
+            var started = agent with { InNvim = HostedBy(agent, agentsInNvim).Harness == agent.Harness ? null : false };
+
+            if (started != agent)
+            {
+                store?.Replace(project, started);
+            }
         }
 
         return all.Count;
@@ -102,7 +116,7 @@ public sealed class RestoreSessionHandler(
 
     private Task<PaneId> SpawnAsync(string project, AgentRecord agent, string? window, CancellationToken ct) =>
         mux.SpawnAsync(
-            Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim, models),
+            Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim, models, agentsInNvim),
             ct);
 
     private Task TitleAsync(PaneId pane, AgentRecord agent, CancellationToken ct) =>
@@ -122,10 +136,11 @@ public sealed class RestoreSessionHandler(
         string? window,
         bool workspaces = false,
         bool subOrchestratorsInNvim = true,
-        RoleModels? models = null) =>
+        RoleModels? models = null,
+        bool agentsInNvim = true) =>
         Options(
             project,
-            agent,
+            HostedBy(agent, agentsInNvim),
             window,
             workspaces,
             subOrchestratorsInNvim,
@@ -136,6 +151,9 @@ public sealed class RestoreSessionHandler(
                 AgentHarness.IsOrchestrator(agent.Harness),
                 agent.ModelsFrom(models ?? SettingsDefaults.Models, AgentHarness.IsOrchestrator(agent.Harness)),
                 agent.Worktree));
+
+    private static AgentRecord HostedBy(AgentRecord agent, bool agentsInNvim) =>
+        agent with { Harness = AgentHarness.HostedFor(agent.Harness, agentsInNvim) };
 
     private static SpawnOptions Options(
         string project,

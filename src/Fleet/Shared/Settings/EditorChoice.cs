@@ -15,6 +15,9 @@ public static class EditorChoice
     public static Editor? Installed(bool nvimInstalled, bool codeInstalled) =>
         nvimInstalled ? Editor.Nvim : codeInstalled ? Editor.Vscode : null;
 
+    public static bool SkipsNvimSetup(Editor editor, bool nvimInstalled) =>
+        editor == Editor.Vscode && !nvimInstalled;
+
     public static Editor? Parse(string? stored) => Words.Parse<Editor>(stored);
 
     public static string Word(Editor? editor) => editor is { } chosen ? Words.Of(chosen) : string.Empty;

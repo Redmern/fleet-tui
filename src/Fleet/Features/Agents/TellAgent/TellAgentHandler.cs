@@ -13,7 +13,7 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
     public static bool PumpedByNvim(AgentRecord agent) =>
         AgentHarness.IsOrchestrator(agent.Harness)
             ? agent.StartedInNvim
-            : AgentHarness.HostedInNvim(agent.Harness);
+            : AgentHarness.HostedInNvim(agent.Harness) && agent.StartedInNvim;
 
     public async Task<string?> RouteAsync(
         AgentRecord agent, PaneId pane, string message, bool typed, CancellationToken ct = default)

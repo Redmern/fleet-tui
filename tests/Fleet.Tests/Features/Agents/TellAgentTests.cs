@@ -136,6 +136,15 @@ public sealed class TellAgentTests : IDisposable
     }
 
     [Fact]
+    public void An_nvim_agent_started_as_bare_claude_is_told_by_typing()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Nvim, string.Empty, false, InNvim: false);
+
+        Assert.False(TellAgentHandler.PumpedByNvim(agent));
+        Assert.True(TellAgentHandler.PumpedByNvim(agent with { InNvim = null }));
+    }
+
+    [Fact]
     public async Task Ordinary_agents_are_told_by_their_harness_as_before()
     {
         var claude = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false);

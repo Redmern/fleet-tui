@@ -154,6 +154,9 @@ public static class AgentHarness
 
     public static bool HostedInNvim(string harness) => CommandFor(harness)[0] == Nvim;
 
+    public static string HostedFor(string harness, bool nvimAllowed) =>
+        nvimAllowed || IsOrchestrator(harness) || !HostedInNvim(harness) ? harness : Claude;
+
     public const string TellPrefix = ":FleetTell ";
 
     public const string AgentInstructionFile = "instruction.md";

@@ -521,8 +521,9 @@ public static class DashboardWiring
         async Task<string?> OpenFlow(AgentRecord agent)
         {
             var loaded = settings.Load(project.Name);
-            var inNvim = loaded.SubOrchestratorsInNvim;
-            var executable = AgentHarness.CommandFor(agent.Harness, orchestratorInNvim: inNvim)[0];
+            var inNvim = loaded.SubOrchestratorsHostedInNvim;
+            var executable = AgentHarness.CommandFor(
+                AgentHarness.HostedFor(agent.Harness, loaded.HostsInNvim), orchestratorInNvim: inNvim)[0];
 
             if (!Adapters.OnPath(executable))
             {
@@ -531,7 +532,7 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models)
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim)
                 .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 
@@ -811,7 +812,7 @@ public static class DashboardWiring
             {
                 var rebuilt = new RebuildDashboardHandler(
                     mux,
-                    settings.Load(project.Name).MainOrchestratorInNvim,
+                    settings.Load(project.Name).MainOrchestratorHostedInNvim,
                     ClaudeLaunch.MainOrchestrator(project.Name, settings.Load(project.Name).Models))
                     .HandleAsync(project.Root, lister.Handle(project.Name), AgentHarness.Orchestrator)
                     .GetAwaiter()
@@ -863,7 +864,7 @@ public static class DashboardWiring
                         available.Select(r => (r.Name, r.Directory, r.DefaultBranch)).ToList(),
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
-                        AgentHarness.Nvim),
+                        settings.Load(project.Name).DefaultAgentHarness),
                     keymap,
                     last.Repo,
                     last.Harness);

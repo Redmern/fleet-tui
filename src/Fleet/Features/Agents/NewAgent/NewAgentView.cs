@@ -245,9 +245,10 @@ public static class NewAgentView
             ? Math.Clamp(prompt.Selected, 0, Math.Max(prompt.Repositories.Count - 1, 0))
             : remembered.Index;
 
+        var fallback = AgentHarness.Normalize(prompt.Harness);
         var harness = AgentHarness.All.Contains(lastHarness)
-            ? lastHarness
-            : AgentHarness.Normalize(prompt.Harness);
+            ? AgentHarness.HostedFor(lastHarness, AgentHarness.HostedInNvim(fallback))
+            : fallback;
 
         return (repository, harness);
     }

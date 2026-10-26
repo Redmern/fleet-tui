@@ -1,5 +1,6 @@
 using Fleet.Features.Projects.RestoreSession;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Settings;
@@ -151,6 +152,77 @@ public sealed class RestoreSessionTests : IDisposable
         Assert.False(options.NewWindow);
         Assert.Null(options.Workspace);
         Assert.Equal(AgentHarness.CommandFor(AgentHarness.Nvim), options.Args);
+    }
+
+    [Fact]
+    public void Without_nvim_an_nvim_agent_is_restored_as_bare_claude()
+    {
+        var options = RestoreSessionHandler.Options("techweb", Agent("dev", open: true), "w7", agentsInNvim: false);
+
+        Assert.Equal(AgentHarness.Claude, options.Args[0]);
+    }
+
+    [Fact]
+    public async Task Without_nvim_a_restored_nvim_agent_keeps_its_harness_but_records_it_ran_outside_nvim()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        var store = new RecordingStore();
+
+        await new RestoreSessionHandler(_mux, store: store, agentsInNvim: false)
+            .HandleAsync("techweb", ProjectRoot, [Agent("dev", open: true)]);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Claude, _mux.ArgsFor(pane.Id)[0]);
+        var saved = Assert.Single(store.Saved);
+        Assert.Equal(AgentHarness.Nvim, saved.Harness);
+        Assert.False(saved.InNvim);
+    }
+
+    [Fact]
+    public async Task Back_on_nvim_an_agent_that_ran_as_bare_claude_is_restored_in_nvim_again()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        var store = new RecordingStore();
+
+        await new RestoreSessionHandler(_mux, store: store)
+            .HandleAsync("techweb", ProjectRoot, [Agent("dev", open: true) with { InNvim = false }]);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
+        var saved = Assert.Single(store.Saved);
+        Assert.Equal(AgentHarness.Nvim, saved.Harness);
+        Assert.Null(saved.InNvim);
+    }
+
+    [Fact]
+    public async Task With_nvim_a_restored_nvim_agent_keeps_its_record()
+    {
+        Directory.CreateDirectory(ProjectRoot);
+        var store = new RecordingStore();
+
+        await new RestoreSessionHandler(_mux, store: store)
+            .HandleAsync("techweb", ProjectRoot, [Agent("dev", open: true)]);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
+        Assert.Empty(store.Saved);
+    }
+
+    private sealed class RecordingStore : IAgentStore
+    {
+        public List<AgentRecord> Saved { get; } = [];
+
+        public void Save(string project, AgentRecord agent) => Saved.Add(agent);
+
+        public IReadOnlyList<AgentRecord> List(string project) => Saved;
+
+        public bool Replace(string project, AgentRecord agent)
+        {
+            Save(project, agent);
+            return true;
+        }
+
+        public bool Remove(string project, string worktree) => true;
     }
 
     [Fact]
