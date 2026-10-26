@@ -608,6 +608,25 @@ public sealed class DispatchTests : IDisposable
         Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], _mux.SentTo(pane.Id));
     }
 
+    [Fact]
+    public async Task In_a_vscode_project_the_sub_runs_bare_claude_even_with_subs_in_nvim_on()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default
+                .WithSubOrchestratorsInNvim(true)
+                .WithEditor(Editor.Vscode)));
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Claude, _mux.ArgsFor(pane.Id)[0]);
+        Assert.False(Assert.Single(_store.Saved).InNvim);
+        Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], _mux.SentTo(pane.Id));
+    }
+
     private readonly FakeStarter _starter = new();
 
     private DispatchHandler Direct(AidlcMode mode = AidlcMode.Off, ISlugNamer? namer = null) =>

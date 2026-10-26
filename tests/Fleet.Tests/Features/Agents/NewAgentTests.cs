@@ -15,6 +15,7 @@ using Fleet.Ports.Settings;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Agents;
@@ -586,6 +587,37 @@ public sealed class NewAgentTests : IDisposable
         Assert.True(result.Succeeded, result.Error);
         Assert.Equal("techweb", settings.SavedFor);
         Assert.Equal(("backend", "claude"), (settings.Stored.LastRepo, settings.Stored.LastHarness));
+    }
+
+    [Fact]
+    public async Task In_a_vscode_project_an_nvim_agent_starts_as_bare_claude()
+    {
+        var directory = await RepositoryAsync();
+        var settings = new FakeSettings(SettingsConfig.Default.WithEditor(Editor.Vscode));
+
+        var result = await new NewAgentHandler(new GitRunner(), _mux, _store, settings: settings)
+            .HandleAsync(Command(directory, "feature/x") with { Harness = AgentHarness.Nvim, Claude = true });
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal(AgentHarness.Claude, Assert.Single(_store.Saved).Agent.Harness);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Claude, _mux.ArgsFor(pane.Id)[0]);
+        Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(pane.Id));
+    }
+
+    [Fact]
+    public async Task In_an_nvim_project_an_nvim_agent_still_opens_in_nvim()
+    {
+        var directory = await RepositoryAsync();
+        var settings = new FakeSettings(SettingsConfig.Default);
+
+        var result = await new NewAgentHandler(new GitRunner(), _mux, _store, settings: settings)
+            .HandleAsync(Command(directory, "feature/x") with { Harness = AgentHarness.Nvim, Claude = true });
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal(AgentHarness.Nvim, Assert.Single(_store.Saved).Agent.Harness);
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
     }
 
     [Fact]

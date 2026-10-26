@@ -15,7 +15,8 @@ public sealed class OpenAgentHandler(
     IAgentStore store,
     bool subOrchestratorsInNvim = true,
     bool preferCaller = true,
-    RoleModels? models = null)
+    RoleModels? models = null,
+    bool agentsInNvim = true)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -109,6 +110,7 @@ public sealed class OpenAgentHandler(
         }
 
         var orchestrator = Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness);
+        var hosted = agent with { Harness = Shared.Constants.AgentHarness.HostedFor(agent.Harness, agentsInNvim) };
         var launch = Shared.Constants.ClaudeLaunch.ForAgent(
             project, agent.Repository, agent.Branch, orchestrator,
             agent.ModelsFrom(models ?? SettingsDefaults.Models, orchestrator),
@@ -123,8 +125,8 @@ public sealed class OpenAgentHandler(
                 Args = orchestrator
                     ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
                     : Shared.Constants.AgentHarness.Resumed(Shared.Constants.AgentHarness.CommandFor(
-                        agent.Harness, withClaude: agent.RunsClaude, launch: launch)),
-                Env = Shared.Constants.AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim),
+                        hosted.Harness, withClaude: agent.RunsClaude, launch: launch)),
+                Env = Shared.Constants.AgentHarness.SpawnEnv(hosted.Harness, subOrchestratorsInNvim),
             },
             ct).ConfigureAwait(false);
 
@@ -135,7 +137,10 @@ public sealed class OpenAgentHandler(
 
         await mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct).ConfigureAwait(false);
 
-        var started = orchestrator ? agent with { InNvim = subOrchestratorsInNvim } : agent;
+        var started = agent with
+        {
+            InNvim = orchestrator ? subOrchestratorsInNvim : hosted.Harness == agent.Harness ? null : false,
+        };
 
         if (agent.Hidden || !agent.Open || started != agent)
         {

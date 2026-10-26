@@ -29,6 +29,11 @@ public sealed class NewAgentHandler(
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
     {
+        command = command with
+        {
+            Harness = AgentHarness.HostedFor(command.Harness, settings?.Load(command.ProjectName).HostsInNvim ?? true),
+        };
+
         var planned = AgentBranch.Plan(command.BranchName, command.Base);
 
         if (!planned.Succeeded)

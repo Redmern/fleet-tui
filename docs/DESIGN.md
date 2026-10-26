@@ -5875,6 +5875,29 @@ in fleetd's frame.
   calling fleet by absolute path (`|| true`, so a missing fleet never breaks Omarchy's
   switch); an existing hook is appended to, ahead of a trailing `exit`, never replaced.
 
+## The editor option: nvim or VS Code — 2026-10-24
+
+- **Where it lives.** `Editor { Nvim, Vscode }` is a per-project setting (`editor` in the
+  project's settings file) with a global default in `<config home>/editor.json`
+  (`{"version": 1, "editor": "vscode"}`). `EditorChoice.Resolve` takes the project's, then the
+  global one, then whichever of `nvim` / `code` is on PATH (nvim first), then nvim.
+- **What vscode changes.** `e` runs `code -n <folder>` through `IEditorLauncher`
+  (`Platform/Editors/VscodeLauncher`); editing the fleet config uses `code --wait`. Nothing is
+  hosted in nvim: orchestrators and agents start Claude Code bare, and restored nvim agents
+  reopen bare.
+- **Setup and doctor.** `code` is an optional setup step: a to-do only when the resolved
+  editor is vscode, never blocking. `fleet doctor` prints a warning (not a problem, so the
+  exit code is unchanged) when the editor is vscode and `code` is missing, with
+  `EditorChoice.InstallHint`. fleet's nvim config is not written when the editor is vscode
+  and nvim is absent.
+- **Installers.** With neither editor on PATH, `install.sh` and `scripts/deps.ps1` ask nvim /
+  VS Code / skip on a terminal and write `editor.json` by hand, in the exact shape
+  `JsonSettingsStore` writes (pinned by `InstallerEditorFileTests`). nvim stays on the
+  existing dependency path; VS Code is installed with winget on Windows and only hinted on
+  Linux and macOS, where its packaging varies (deb, rpm, snap, flatpak, AUR). VS Code or skip
+  drop nvim from the dependency offer. Non-interactive runs print both commands and write
+  nothing, so CI never records an editor.
+
 ## Still to verify
 - Omarchy specifics were written from memory of Omarchy 3.x, not checked on a machine:
   that hooks live at `~/.config/omarchy/hooks/theme-set`, that `current/theme.name` exists
