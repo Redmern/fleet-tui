@@ -224,7 +224,7 @@ public static class EditSettingsView
 
         var showing = true;
 
-        void OpenInNvim()
+        void OpenInEditor()
         {
             var trouble = editor.Open(config, () => app.Invoke(() =>
             {
@@ -240,7 +240,7 @@ public static class EditSettingsView
                 status.Text = reloaded.Message;
             }));
 
-            status.Text = trouble ?? OpenSettingsInEditor.Opened;
+            status.Text = trouble ?? editor.Opened;
         }
 
         list.Accepting += (_, e) =>
@@ -259,7 +259,7 @@ public static class EditSettingsView
             ("f", "forbid", () => SetPolicy(ActionPolicy.Forbid)),
             ("c", SettingsRows.ChannelChip, Channel),
             ("r", "default", Reset),
-            ("e", "open in nvim", OpenInNvim),
+            ("e", editor.OpenLabel, OpenInEditor),
             ("bksp", FleetIcons.Back, () =>
             {
                 FleetModal.Back();
@@ -328,7 +328,7 @@ public static class EditSettingsView
 
             if (key == Key.E)
             {
-                OpenInNvim();
+                OpenInEditor();
                 key.Handled = true;
             }
         }

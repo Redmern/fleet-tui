@@ -149,4 +149,33 @@ public class OpenSettingsInEditorTests
         Assert.Same(Edited, reloaded.Config);
         Assert.Equal(OpenSettingsInEditor.Reloaded, reloaded.Message);
     }
+    private static OpenSettingsInEditor For(Fleet.Shared.Settings.Enums.Editor editor) =>
+        new(() => true, _ => { }, _ => null, () => null, OpenSettingsInEditor.NoResync, editor);
+
+    [Fact]
+    public void With_nvim_the_status_and_label_name_nvim()
+    {
+        var editor = For(Fleet.Shared.Settings.Enums.Editor.Nvim);
+
+        Assert.Equal("Opened in nvim; the list reloads when you quit it.", editor.Opened);
+        Assert.Equal("open in nvim", editor.OpenLabel);
+    }
+
+    [Fact]
+    public void With_vscode_the_status_and_label_name_vs_code()
+    {
+        var editor = For(Fleet.Shared.Settings.Enums.Editor.Vscode);
+
+        Assert.Equal("Opened in VS Code; the list reloads when you close its tab.", editor.Opened);
+        Assert.Equal("open in vs code", editor.OpenLabel);
+        Assert.DoesNotContain("nvim", editor.Opened, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Without_an_editor_it_stays_nvim()
+    {
+        var editor = new OpenSettingsInEditor(() => true, _ => { }, _ => null, () => null, OpenSettingsInEditor.NoResync);
+
+        Assert.Equal("open in nvim", editor.OpenLabel);
+    }
 }
