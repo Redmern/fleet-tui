@@ -14,6 +14,8 @@ public class ManageThemesHandlerTests
 
         public List<ThemePalette> Saved { get; } = [];
 
+        public Dictionary<string, string> Texts { get; } = [];
+
         public string CurrentFile => "current-theme";
 
         public string? CurrentName() => Current;
@@ -27,6 +29,20 @@ public class ManageThemesHandlerTests
             Saved.RemoveAll(t => t.Name == theme.Name);
             Saved.Add(theme);
             return theme.Name + ".toml";
+        }
+
+        public string SaveCustom(string name, string toml)
+        {
+            Texts[name] = toml;
+            return SaveCustom(CustomTheme.FromToml(name, toml, n => Saved.FirstOrDefault(t => t.Name == n)));
+        }
+
+        public string? CustomText(string name) => Texts.GetValueOrDefault(name);
+
+        public bool DeleteCustom(string name)
+        {
+            Texts.Remove(name);
+            return Saved.RemoveAll(t => t.Name == name) > 0;
         }
     }
 
@@ -131,4 +147,170 @@ public class ManageThemesHandlerTests
     [Fact]
     public void The_hook_line_quotes_a_path_with_a_single_quote() =>
         Assert.StartsWith("'/a'\\''b' theme sync", ManageThemesHandler.HookLine("/a'b"), StringComparison.Ordinal);
+
+    [Fact]
+    public void Saving_writes_the_normalized_name_inheriting_the_base_with_only_the_changes()
+    {
+        var store = new FakeStore();
+        var nord = BuiltInThemes.Find("nord")!;
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        var result = handler.SaveCustom("My Theme!", "My Theme", "Nord", nord with { Blue = "#010203" });
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("my-theme", result.Value.Name);
+        Assert.Equal("#010203", result.Value.Blue);
+        Assert.Equal(nord.Base, result.Value.Base);
+        var values = ThemeToml.Parse(store.Texts["my-theme"]);
+        Assert.Equal("nord", values["inherits"]);
+        Assert.Equal("#010203", values["blue"]);
+        Assert.DoesNotContain("base", values.Keys);
+        Assert.True(handler.IsCustom(result.Value));
+    }
+
+    [Theory]
+    [InlineData("  !! ")]
+    [InlineData("")]
+    [InlineData("Tokyo Night")]
+    [InlineData("nord")]
+    public void Saving_refuses_an_empty_or_built_in_name(string name)
+    {
+        var store = new FakeStore();
+        var result = new ManageThemesHandler(store, new FakeOmarchy(null))
+            .SaveCustom(name, "x", "nord", BuiltInThemes.CatppuccinMocha);
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(store.Texts);
+    }
+
+    [Fact]
+    public void Saving_refuses_an_unknown_base_or_the_theme_itself_as_base()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+        handler.SaveCustom("mine", "Mine", "nord", BuiltInThemes.Find("nord")!);
+
+        Assert.False(handler.SaveCustom("other", "Other", "nope", BuiltInThemes.CatppuccinMocha).Succeeded);
+        Assert.False(handler.SaveCustom("Mine", "Mine", "mine", BuiltInThemes.CatppuccinMocha).Succeeded);
+        Assert.Equal(["mine"], store.Texts.Keys);
+    }
+
+    [Fact]
+    public void A_custom_theme_can_be_the_base_of_another()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+        var parent = handler.SaveCustom("parent", "Parent", "nord", BuiltInThemes.Find("nord")! with { Blue = "#010203" }).Value;
+
+        var child = handler.SaveCustom("child", "Child", "parent", parent with { Red = "#040506" });
+
+        Assert.Equal("parent", ThemeToml.Parse(store.Texts["child"])["inherits"]);
+        Assert.DoesNotContain("blue", ThemeToml.Parse(store.Texts["child"]).Keys);
+        Assert.Equal("#010203", child.Value.Blue);
+        Assert.Equal("#040506", child.Value.Red);
+    }
+
+    [Fact]
+    public void A_blank_title_falls_back_to_the_name()
+    {
+        var store = new FakeStore();
+        var result = new ManageThemesHandler(store, new FakeOmarchy(null))
+            .SaveCustom("My Theme", " ", "nord", BuiltInThemes.Find("nord")!);
+
+        Assert.Equal("My Theme", result.Value.Title);
+    }
+
+    [Fact]
+    public void Saving_sets_light_from_the_resulting_base_color()
+    {
+        var store = new FakeStore();
+        var mocha = BuiltInThemes.CatppuccinMocha;
+
+        var result = new ManageThemesHandler(store, new FakeOmarchy(null))
+            .SaveCustom("bright", "Bright", "catppuccin-mocha", mocha with { Base = "#fafafa" });
+
+        Assert.True(result.Value.Light);
+    }
+
+    [Fact]
+    public void Deleting_the_active_custom_theme_removes_it_and_falls_back_to_mocha()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+        handler.SaveCustom("mine", "Mine", "nord", BuiltInThemes.Find("nord")!);
+        handler.Set("mine");
+
+        var result = handler.DeleteCustom("Mine");
+
+        Assert.True(result.Succeeded);
+        Assert.Same(BuiltInThemes.CatppuccinMocha, result.Value);
+        Assert.Equal(BuiltInThemes.CatppuccinMocha.Name, store.Current);
+        Assert.Empty(store.Saved);
+    }
+
+    [Fact]
+    public void Deleting_an_inactive_custom_theme_keeps_the_current_one()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+        handler.SaveCustom("mine", "Mine", "nord", BuiltInThemes.Find("nord")!);
+        handler.Set("dracula");
+
+        Assert.Equal("dracula", handler.DeleteCustom("mine").Value.Name);
+        Assert.Equal("dracula", store.Current);
+    }
+
+    [Fact]
+    public void Deleting_refuses_a_built_in_or_unknown_theme()
+    {
+        var store = new FakeStore { Current = "nord" };
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        Assert.Contains("built-in", handler.DeleteCustom("nord").Error, StringComparison.Ordinal);
+        Assert.False(handler.DeleteCustom("nope").Succeeded);
+        Assert.Equal("nord", store.Current);
+    }
+
+    [Fact]
+    public void Saving_refuses_the_name_theme_sync_owns_but_deleting_it_still_works()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        var result = handler.SaveCustom("Omarchy", "Mine", "nord", BuiltInThemes.Find("nord")!);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("theme sync", result.Error, StringComparison.Ordinal);
+        Assert.Empty(store.Texts);
+
+        store.SaveCustom(BuiltInThemes.Find("nord")! with { Name = OmarchyTheme.CustomName });
+        Assert.True(handler.DeleteCustom(OmarchyTheme.CustomName).Succeeded);
+        Assert.Empty(store.Saved);
+    }
+
+    [Fact]
+    public void The_base_of_a_custom_theme_is_what_it_inherits()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        handler.SaveCustom("parent", "Parent", "nord", BuiltInThemes.Find("nord")!);
+        handler.SaveCustom("child", "Child", "Parent", BuiltInThemes.Find("nord")!);
+
+        Assert.Equal("nord", handler.BaseOf("parent"));
+        Assert.Equal("parent", handler.BaseOf("Child"));
+    }
+
+    [Fact]
+    public void A_custom_theme_without_a_known_base_is_based_on_mocha()
+    {
+        var store = new FakeStore();
+        var handler = new ManageThemesHandler(store, new FakeOmarchy(null));
+
+        store.SaveCustom(BuiltInThemes.Find("nord")! with { Name = OmarchyTheme.CustomName });
+        store.Texts["orphan"] = "inherits = \"gone\"\n";
+
+        Assert.Equal(BuiltInThemes.DefaultName, handler.BaseOf(OmarchyTheme.CustomName));
+        Assert.Equal(BuiltInThemes.DefaultName, handler.BaseOf("orphan"));
+    }
 }

@@ -1,3 +1,5 @@
+using Fleet.Shared.Settings;
+
 namespace Fleet.Features.Setup.RunSetup;
 
 public static class SetupHints
@@ -15,6 +17,7 @@ public static class SetupHints
         "nvim" => "winget install Neovim.Neovim",
         "claude" => "npm install -g @anthropic-ai/claude-code",
         "yazi" => "winget install sxyazi.yazi",
+        EditorChoice.VscodeCommand => "winget install Microsoft.VisualStudioCode",
         _ => $"install {tool} and put it on PATH",
     };
 
@@ -23,6 +26,7 @@ public static class SetupHints
         "claude" => "npm install -g @anthropic-ai/claude-code",
         "nvim" => "install neovim with your package manager",
         "yazi" => "install yazi with your package manager, or see https://yazi-rs.github.io",
+        EditorChoice.VscodeCommand => $"install VS Code and its '{EditorChoice.VscodeCommand}' shell command",
         _ => $"install {tool} with your package manager",
     };
 }

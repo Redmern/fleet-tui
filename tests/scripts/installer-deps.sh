@@ -41,7 +41,7 @@ make_bin() {
     printf '#!%s\nprintf "1000\\n"\n' "$REAL_SH" >"$FAKEBIN/id"
     for tool in "$@"; do
         case "$tool" in
-            git | nvim | yazi)
+            git | nvim | yazi | code)
                 printf '#!%s\nexit 0\n' "$REAL_SH" >"$FAKEBIN/$tool"
                 ;;
             sudo)
@@ -353,7 +353,7 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
 
     if command -v script >/dev/null 2>&1; then
         CASE="$NAME: interactive yes installs the missing tools (AC-3)"
-        make_bin git pacman sudo
+        make_bin git code pacman sudo
         run_tty "$SCRIPT" y
         if ! has 'nvim, yazi' || ! has '[y/N]'; then fail 'no prompt'
         elif ! called 'pacman -S --needed --noconfirm neovim yazi'; then fail 'did not install'
@@ -361,7 +361,7 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
         else pass; fi
 
         CASE="$NAME: interactive Enter installs nothing and prints the command (AC-4)"
-        make_bin git pacman sudo
+        make_bin git code pacman sudo
         run_tty "$SCRIPT" ''
         if ! has '[y/N]'; then fail 'no prompt'
         elif ! no_calls; then fail 'installed'
@@ -370,14 +370,14 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
         else pass; fi
 
         CASE="$NAME: interactive no installs nothing (AC-4)"
-        make_bin git pacman sudo
+        make_bin git code pacman sudo
         run_tty "$SCRIPT" n
         if ! has '[y/N]'; then fail 'no prompt'
         elif ! no_calls; then fail 'installed'
         else pass; fi
 
         CASE="$NAME: FLEET_NO_DEPS_PROMPT skips the prompt (AC-3)"
-        make_bin git pacman sudo
+        make_bin git code pacman sudo
         : >"$LOG"
         printf 'y\n' | FLEET_NO_DEPS_PROMPT=1 script -qec \
             "$REAL_SH -c 'FLEET_INSTALLER_LIB=1; . \"$SCRIPT\"; WITH_DEPS=0; PATH=\"$FAKEBIN\"; check_deps'" \
@@ -392,6 +392,91 @@ for SCRIPT in "$ROOT/install.sh" "$ROOT/scripts/get-fleet.sh"; do
         printf 'skip interactive cases: no script(1)\n'
     fi
 done
+
+# The editor choice in install.sh: with neither nvim nor code on PATH it asks
+# nvim / VS Code / skip on a terminal and records the answer in editor.json;
+# anywhere else it prints both install commands and writes nothing.
+SCRIPT="$ROOT/install.sh"
+NAME=install.sh
+EDITOR_JSON="$WORK/fleet-config/editor.json"
+export FLEET_CONFIG_HOME="$WORK/fleet-config"
+
+# editor_record needs mkdir and mv, which every real machine has.
+editor_bin() {
+    make_bin "$@"
+    for util in mkdir mv; do
+        ln -s "$(command -v "$util")" "$FAKEBIN/$util"
+    done
+}
+
+expect_editor() {
+    printf '{\n  "version": 1,\n  "editor": "%s"\n}\n' "$1" >"$WORK/expected-editor.json"
+    cmp -s "$WORK/expected-editor.json" "$EDITOR_JSON"
+}
+
+CASE="$NAME: non-interactive with no editor prints both commands and writes nothing (AC-10)"
+rm -rf "$FLEET_CONFIG_HOME"
+editor_bin git yazi pacman sudo
+run_deps "$SCRIPT" 0
+if [ "$RC" != 0 ]; then fail "exit $RC"
+elif ! has 'no editor found'; then fail 'did not say no editor'
+elif ! has 'sudo pacman -S --needed --noconfirm neovim'; then fail 'nvim command'
+elif ! has "VS Code and its 'code' shell command"; then fail 'vs code command'
+elif [ -e "$EDITOR_JSON" ]; then fail 'wrote editor.json'
+elif ! no_calls; then fail 'installed'
+elif ! has 'after check_deps'; then fail 'did not continue'
+else pass; fi
+
+CASE="$NAME: code on PATH, nvim missing, does not ask for an editor (AC-11)"
+rm -rf "$FLEET_CONFIG_HOME"
+editor_bin git yazi code pacman sudo
+run_deps "$SCRIPT" 0
+if has 'no editor found' || has 'nvim / VS Code / skip'; then fail 'asked about the editor'
+elif [ -e "$EDITOR_JSON" ]; then fail 'wrote editor.json'
+elif ! has 'missing: nvim'; then fail 'dropped the existing nvim offer'
+else pass; fi
+
+if command -v script >/dev/null 2>&1; then
+    CASE="$NAME: interactive with nvim present does not ask for an editor (AC-11)"
+    rm -rf "$FLEET_CONFIG_HOME"
+    editor_bin git nvim yazi pacman sudo
+    run_tty "$SCRIPT" 2
+    if has 'nvim / VS Code / skip' || [ -e "$EDITOR_JSON" ] || ! no_calls; then fail 'asked or wrote'; else pass; fi
+
+    CASE="$NAME: interactive VS Code records vscode, hints the install and skips neovim (AC-10)"
+    rm -rf "$FLEET_CONFIG_HOME"
+    editor_bin git yazi pacman sudo
+    run_tty "$SCRIPT" 2
+    if ! has 'nvim / VS Code / skip'; then fail 'no editor prompt'
+    elif ! expect_editor vscode; then fail "editor.json: $(cat "$EDITOR_JSON" 2>/dev/null)"
+    elif ! has "VS Code and its 'code' shell command"; then fail 'vs code hint'
+    elif called 'neovim'; then fail 'installed neovim'
+    elif called 'pacman'; then fail 'ran a package manager for vs code'
+    elif ! has 'after check_deps'; then fail 'did not continue'
+    else pass; fi
+
+    CASE="$NAME: interactive nvim records nvim and installs neovim on yes (AC-10)"
+    rm -rf "$FLEET_CONFIG_HOME"
+    editor_bin git yazi pacman sudo
+    run_tty "$SCRIPT" "1
+y"
+    if ! has 'nvim / VS Code / skip'; then fail 'no editor prompt'
+    elif ! expect_editor nvim; then fail "editor.json: $(cat "$EDITOR_JSON" 2>/dev/null)"
+    elif ! called 'pacman -S --needed --noconfirm neovim'; then fail 'did not install neovim'
+    else pass; fi
+
+    CASE="$NAME: interactive skip records nothing and does not install neovim (AC-10)"
+    rm -rf "$FLEET_CONFIG_HOME"
+    editor_bin git yazi pacman sudo
+    run_tty "$SCRIPT" 3
+    if ! has 'nvim / VS Code / skip'; then fail 'no editor prompt'
+    elif [ -e "$EDITOR_JSON" ]; then fail 'wrote editor.json'
+    elif ! no_calls; then fail 'installed'
+    elif ! has 'after check_deps'; then fail 'did not continue'
+    else pass; fi
+fi
+
+unset FLEET_CONFIG_HOME
 
 # End to end: the real scripts, so the check_deps call sites are covered too.
 # No dotnet on PATH stops install.sh before it builds; curl is fake.

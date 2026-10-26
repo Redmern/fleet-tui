@@ -323,6 +323,9 @@ public static class Adapters
 
     public static bool OnPath(string exe) => MuxEnvironment.OnPath(exe);
 
+    public static bool OnPathOrEditor(string exe) =>
+        exe == EditorChoice.VscodeCommand ? EditorLauncher().Available : OnPath(exe);
+
     public static string? PickFolder(IMuxDriver mux, string project, string startIn) =>
         WithFolderFile(file =>
         {

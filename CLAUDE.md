@@ -17,6 +17,10 @@ fleet doctor                                           # end-to-end smoke test o
 
 "Done" means `dotnet build` and `dotnet test` pass. `TreatWarningsAsErrors` is on, so a warning fails the build.
 
+Smoke-test fleet binaries under `env -i` with a sandbox `FLEET_ENDPOINT` and `XDG_RUNTIME_DIR` (plus sandbox HOME/XDG
+dirs). Fleet panes export the real `FLEET_ENDPOINT`; without this a smoke test of `fleet uninstall` or any daemon verb
+can stop the real daemon.
+
 ## Layout (`src/Fleet`)
 
 | Folder | What goes there |

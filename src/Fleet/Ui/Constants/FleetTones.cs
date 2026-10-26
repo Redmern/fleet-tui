@@ -35,4 +35,8 @@ public static class FleetTones
     public const string Warn = "warn";
 
     public const string Bad = "bad";
+
+    public const string SwatchPrefix = "swatch:";
+
+    public static string Swatch(string hex) => SwatchPrefix + hex;
 }

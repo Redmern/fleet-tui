@@ -1,3 +1,4 @@
+using Fleet.Shared.Themes;
 using Fleet.Ui.Constants;
 using Terminal.Gui.Drawing;
 
@@ -43,6 +44,10 @@ public static class FleetInk
         FleetTones.Ahead => OnPill(FleetPalette.Green),
         FleetTones.Behind => OnPill(FleetPalette.Yellow),
         FleetTones.Dirty => OnPill(FleetPalette.Red),
+
+        _ when tone.StartsWith(FleetTones.SwatchPrefix, StringComparison.Ordinal)
+            && HexColor.Normalize(tone[FleetTones.SwatchPrefix.Length..]) is { } hex =>
+            new Attribute(new Color(hex), basis.Background, TextStyle.None),
 
         _ => basis,
     };

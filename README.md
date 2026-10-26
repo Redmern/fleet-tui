@@ -30,6 +30,8 @@ To run fleet:
   Claude Code alone. fleet brings its own nvim config with `neo-tree` and
   `claudecode.nvim` (see [Fleet's nvim config](#fleets-nvim-config)), so your own
   config does not need them
+- or, instead of Neovim, [VS Code](https://code.visualstudio.com) with its `code` shell
+  command on PATH (see [nvim or VS Code](#nvim-or-vs-code))
 - [yazi](https://yazi-rs.github.io), for the folder picker and the file navigator
 - Claude Code, which nvim starts in the pane fleet opens on the left
 - a Nerd Font in your terminal, or the branch pills and icons render as boxes. On
@@ -115,6 +117,16 @@ To also clone a Neovim config of your own into `%LOCALAPPDATA%\nvim` / `~/.confi
 left alone — an existing tool is skipped, a config directory holding a different
 remote is not touched, and a matching one is fast-forwarded. A config that ships its
 own `bootstrap.sh` is reported rather than run.
+
+When neither `nvim` nor `code` is on PATH, `install.sh`, `install.ps1` and
+`get-fleet.ps1` first ask which editor
+fleet should use: nvim, VS Code or skip. nvim goes through the same dependency offer
+as above; VS Code is installed with winget on Windows, while on Linux and macOS the
+installer only prints how to get VS Code and its `code` command, because its packaging
+varies. The pick is written to `editor.json` in fleet's config folder as the global
+default editor. Without a terminal (CI, a redirected run, `FLEET_NO_DEPS_PROMPT`, or
+`--with-deps` / `-WithDeps`) nothing is asked or written: both install commands are
+printed instead. With either editor already on PATH there is no question.
 
 Either route ends by running `fleet setup`, which installs fleet's nvim config, writes
 the keybinds and lists anything still missing with the command that fixes it:
@@ -831,7 +843,7 @@ the floats). Every fleet menu action has a key there:
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
-| `g c` fleet config | `v` / `V` / `N` nvim toggles, `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
+| `g c` fleet config | `v` / `V` / `N` nvim toggles, `E` editor (nvim / vscode), `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
 | `m` maintenance | `b` rebuild dashboard, `x` clean up agents, `X` hide all agents, `l` view logs, `u` update, `v` version, `W` what's new |
 | `f` float | `f` new, `t` show or hide, `e` embed, `g` mode |
 | `w` project | `w` next workspace, `s` switch project |
@@ -1006,6 +1018,25 @@ second one. **Open editor here** in the fleet menu does the same for the agent w
 pane you are in; the entry only shows when the menu was opened from such a pane. The
 editor is a helper, not the agent: hiding or stopping the agent
 leaves it alone, and an agent with only its editor open still counts as not running.
+
+### nvim or VS Code
+
+Each project opens agents in one editor: `nvim` (the default) or `vscode`. Set it per
+project with `E` in the fleet config menu (`g c`), which flips between the two and
+stores it in that project's settings. A project with no choice of its own uses the
+global default in `editor.json`, which the installers write (see
+[Bringing the dependencies with it](#bringing-the-dependencies-with-it)); with neither,
+fleet uses nvim when it is on PATH and VS Code when only `code` is.
+
+In a vscode project:
+
+- `e` and **Open editor here** run `code -n <folder>`, a new VS Code window on the
+  agent's worktree (or the sub's folder), instead of an nvim pane.
+- Agents, sub-orchestrators and the main orchestrator run Claude Code bare in their
+  pane, not inside nvim through `claudecode.nvim`; saved nvim agents come back bare too.
+- Editing the fleet config opens it in VS Code with `code --wait`.
+- `fleet setup` skips writing fleet's nvim config when nvim is not installed, and lists
+  a missing `code` as a to-do; `fleet doctor` warns when `code` is not on PATH.
 
 ### Hiding an agent
 
@@ -1342,13 +1373,20 @@ fleet.log               failures fleet degraded past, shown by doctor
 
 ## Themes
 
-fleet's screens and its fleetd chrome all draw from one palette. Fifteen themes ship with it:
+fleet's screens and its fleetd chrome all draw from one palette. 33 themes ship with it,
+18 dark and 15 light:
 
 ```
-catppuccin-mocha (default)  catppuccin-latte  tokyo-night     gruvbox-dark
-gruvbox-light               nord              dracula         solarized-dark
-solarized-light             rose-pine         everforest      kanagawa
-one-dark                    ayu-dark          github-dark
+dark   catppuccin-mocha (default)  catppuccin-macchiato  tokyo-night      tokyo-night-storm
+       gruvbox-dark                nord                  dracula          solarized-dark
+       rose-pine                   everforest            kanagawa         one-dark
+       ayu-dark                    github-dark           monokai          material-ocean
+       palenight                   night-owl
+
+light  catppuccin-latte            gruvbox-light         solarized-light  github-light
+       ayu-light                   one-light             rose-pine-dawn   tokyo-night-day
+       everforest-light            kanagawa-lotus        material-lighter night-owl-light
+       papercolor-light            modus-operandi        flexoki-light
 ```
 
 ```powershell
@@ -1361,7 +1399,45 @@ Every running dashboard, menu and picker, and fleetd, watches the theme and
 redraws within a moment of a switch.
 
 You can also pick a theme from the fleet menu: **Settings › Theme** (`T`) lists the
-themes with the active one marked.
+themes with the active one marked, in three tabs: **Dark**, **Light** and **Custom**.
+Left/Right switch tabs and Enter uses the selected theme. The Custom tab holds your
+own themes (see [Custom themes](#custom-themes)) and is where you make and change them:
+
+| Key | In the Custom tab |
+|---|---|
+| Enter | use the selected theme; on **New custom theme…** (`n`), make a new one |
+| `Ctrl+E` | edit the selected custom theme |
+| `Del` | delete the selected custom theme; fleet asks first (`y` or Enter confirms) |
+
+A new custom theme starts from a base you pick from any tab, built-in or custom, and
+then a name. fleet refuses a name without a letter or digit, the name of a built-in
+theme, a name already taken, and reserved names such as `omarchy`. Editing the
+Omarchy-synced theme (`omarchy`), or a custom theme that shadows a built-in name, asks
+for a new name and saves a copy under it.
+
+The editor lists the theme's 30 colors in three groups, **Roles** (the 14 palette
+roles), **ANSI** (`color0`..`color7`) and **Brights** (`color8`..`color15`), each with
+a swatch and its hex value:
+
+| Key | In the editor |
+|---|---|
+| `j`/`k`, Up/Down | move |
+| Enter | open the color dialog for the selected color |
+| `s` | save |
+| `u` | save and use the theme |
+| Esc, Backspace | leave; with unsaved changes fleet asks whether to discard them |
+
+| Key | In the color dialog |
+|---|---|
+| Up/Down | pick the R, G or B channel |
+| Left/Right | that channel -1/+1 |
+| Shift+Left/Right, PageUp/PageDown | that channel -16/+16 |
+| Tab | the hex field, to type `#rrggbb` |
+| Enter | accept the color |
+| Esc | cancel |
+
+A hex value that isn't a color is rejected and the old color kept. Saving writes
+`themes/<name>.toml` the way the next section describes.
 
 `fleet theme set`, `fleet theme sync` and the menu also restyle the tools fleet
 opens, and `fleet theme set` prints one line per tool saying what it did:
@@ -1427,6 +1503,21 @@ color0  = "#15161e"    # color0..color7 are the ANSI colors,
 color9  = "#ff7a93"    # color8..color15 the bright ones
 ```
 
+The theme editor writes the same format, with only `inherits`, `title`, `light` (worked
+out from the resulting `base` color) and the colors that differ from the base. A copy
+of Nord with a new blue, saved as `mine`:
+
+```toml
+# themes/mine.toml
+inherits = "nord"
+title = "Mine"
+light = false
+blue = "#010203"
+```
+
+A theme made from `omarchy` inherits Catppuccin Mocha instead, so it keeps every color
+it differs in and doesn't change when Omarchy switches.
+
 Editing a custom theme that is active recolors running windows as well.
 
 ### Omarchy
@@ -1491,7 +1582,7 @@ dotnet test
 dotnet run --project src/Fleet -- doctor
 ```
 
-203 tests, none of which need a terminal. Command behaviour runs against
+About 4,500 tests, none of which need a terminal. Command behaviour runs against
 `FakeMuxDriver`; repository behaviour runs against real git in temp directories,
 because the plumbing is the point.
 

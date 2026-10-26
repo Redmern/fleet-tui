@@ -62,6 +62,40 @@ public static class ThemeToml
         return text.ToString();
     }
 
+    public static string WriteOverrides(ThemePalette theme, ThemePalette basis)
+    {
+        var text = new StringBuilder();
+
+        text.Append("inherits = \"").Append(basis.Name).Append("\"\n");
+        text.Append("title = \"").Append(theme.Title.Replace("\"", "'", StringComparison.Ordinal)).Append("\"\n");
+        text.Append("light = ").Append(HexColor.IsLight(theme.Base) ? "true" : "false").Append('\n');
+
+        foreach (var role in ThemePalette.RoleNames)
+        {
+            AppendChanged(text, role, theme.Role(role), basis.Role(role));
+        }
+
+        var ansi = theme.Ansi.Concat(theme.Brights).ToList();
+        var inherited = basis.Ansi.Concat(basis.Brights).ToList();
+
+        for (var i = 0; i < ansi.Count; i++)
+        {
+            AppendChanged(text, $"color{i}", ansi[i], inherited[i]);
+        }
+
+        return text.ToString();
+    }
+
+    private static void AppendChanged(StringBuilder text, string key, string color, string inherited)
+    {
+        var normalized = HexColor.Normalize(color);
+
+        if (normalized is not null && normalized != HexColor.Normalize(inherited))
+        {
+            text.Append(key).Append(" = \"").Append(normalized).Append("\"\n");
+        }
+    }
+
     private static string StripComment(string line)
     {
         var quote = '\0';
