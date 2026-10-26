@@ -1,4 +1,5 @@
 using Fleet.Features.Menu.EditSettings.Models;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Features.Menu.EditSettings;
@@ -8,9 +9,15 @@ public sealed class OpenSettingsInEditor(
     Action<SettingsConfig> save,
     Func<Action, string?> spawn,
     Func<SettingsConfig?> reload,
-    Func<SettingsConfig, string?> resync)
+    Func<SettingsConfig, string?> resync,
+    Editor editor = Editor.Nvim)
 {
-    public const string Opened = "Opened in nvim; the list reloads when you quit it.";
+    public string Opened =>
+        editor == Editor.Vscode
+            ? "Opened in VS Code; the list reloads when you close its tab."
+            : "Opened in nvim; the list reloads when you quit it.";
+
+    public string OpenLabel => editor == Editor.Vscode ? "open in vs code" : "open in nvim";
 
     public const string Reloaded = "Reloaded from disk.";
 

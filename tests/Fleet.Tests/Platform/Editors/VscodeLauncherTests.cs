@@ -154,4 +154,67 @@ public sealed class VscodeLauncherTests
         Assert.Null(error);
         Assert.Equal(1, handed);
     }
+    [Theory]
+    [InlineData(@"C:\fleet\a&b\settings.json")]
+    [InlineData(@"C:\fleet\100%\settings.json")]
+    public void On_windows_editing_a_file_cmd_would_reinterpret_is_refused_and_does_not_call_back(string file)
+    {
+        var starts = 0;
+        var closes = 0;
+        var launcher = new VscodeLauncher(_ => true, _ =>
+        {
+            starts++;
+            return null;
+        });
+
+        var error = launcher.EditAndWait(file, () => closes++, windows: true);
+
+        Assert.NotNull(error);
+        Assert.Equal(0, starts);
+        Assert.Equal(0, closes);
+    }
+
+    [Fact]
+    public void Editing_a_file_with_a_space_waits_on_code_with_the_path_as_one_argument()
+    {
+        ProcessStartInfo? started = null;
+        var launcher = new VscodeLauncher(_ => true, info =>
+        {
+            started = info;
+            return null;
+        });
+
+        var error = launcher.EditAndWait(@"C:\Users\Jane Doe\.fleet\settings.json", () => { }, windows: true);
+
+        Assert.Null(error);
+        Assert.Equal(["/d", "/c", "code", "--wait", @"C:\Users\Jane Doe\.fleet\settings.json"], started!.ArgumentList);
+    }
+
+    [Fact]
+    public async Task Editing_a_file_calls_back_once_the_editor_process_exits()
+    {
+        var closed = new TaskCompletionSource();
+        var launcher = new VscodeLauncher(_ => true, _ => Process.Start(new ProcessStartInfo("dotnet", "--version")
+        {
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        }));
+
+        var error = launcher.EditAndWait("/work/my settings.json", () => closed.TrySetResult(), windows: false);
+
+        Assert.Null(error);
+        await closed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void Editing_a_file_reports_a_start_that_throws_and_does_not_call_back()
+    {
+        var closes = 0;
+        var launcher = new VscodeLauncher(_ => true, _ => throw new System.ComponentModel.Win32Exception("nope"));
+
+        var error = launcher.EditAndWait("/work/settings.json", () => closes++, windows: false);
+
+        Assert.Contains("nope", error);
+        Assert.Equal(0, closes);
+    }
 }
