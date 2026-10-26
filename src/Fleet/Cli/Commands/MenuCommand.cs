@@ -34,6 +34,7 @@ using Fleet.Features.Updates.ShowVersion;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.ListRemotes;
 using Fleet.Features.Repositories.ListRepositories;
+using Fleet.Features.Themes.ManageThemes;
 using Fleet.Features.Todos.LaunchTicket;
 using Fleet.Features.Todos.OpenTicket;
 using Fleet.Features.Todos.ShowBoard;
@@ -53,11 +54,14 @@ using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Themes;
 using Fleet.Shared.Todos.Models;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
+using Terminal.Gui.Input;
 
 namespace Fleet.Cli.Commands;
 
@@ -400,43 +404,8 @@ public static class MenuCommand
                 break;
 
             case FleetAction.EditTheme:
-                {
-                    var themes = Adapters.Themes();
-                    var themeTabs = FleetThemeTabs.For(themes.List(), themes.IsCustom, themes.Active().Name);
-
-                    var pickedTheme = FleetTabbedPicker.Choose(
-                        app,
-                        "Theme — fleet, nvim, claude and yazi",
-                        themeTabs.Tabs,
-                        keymap,
-                        themeTabs.StartTab,
-                        themeTabs.StartIndex);
-
-                    if (pickedTheme is not var (themeTab, themeIndex, _))
-                    {
-                        break;
-                    }
-
-                    var set = themes.Set(themeTabs.Pick(themeTab, themeIndex).Name);
-
-                    if (!set.Succeeded)
-                    {
-                        FleetDialog.Error(app, "Theme", set.Error!);
-                        break;
-                    }
-
-                    var problems = ThemeWiring.Apply(set.Value, project.Root)
-                        .Where(a => a.Outcome == ThemeOutcome.Failed)
-                        .Select(a => a.Line)
-                        .ToList();
-
-                    if (problems.Count > 0)
-                    {
-                        FleetDialog.Error(app, "Theme", string.Join("\n", problems));
-                    }
-
-                    break;
-                }
+                ChooseTheme(app, keymap, project);
+                break;
 
             case FleetAction.EditSettings:
                 var settings = Adapters.Settings();
@@ -919,6 +888,207 @@ public static class MenuCommand
         return 0;
     }
 
+
+    private const string ThemeTitle = "Theme — fleet, nvim, claude and yazi";
+
+    private static readonly TabbedAction EditThemeKey =
+        new(Key.E.WithCtrl, "^e", FleetIcons.Edit, FleetThemeTabs.Custom);
+
+    private static readonly TabbedAction DeleteThemeKey =
+        new(Key.Delete, "del", FleetIcons.Delete, FleetThemeTabs.Custom);
+
+    private static void ChooseTheme(IApplication app, Keymap keymap, Project project)
+    {
+        var themes = Adapters.Themes();
+        string? select = null;
+
+        while (true)
+        {
+            var tabs = FleetThemeTabs.For(themes.List(), themes.IsCustom, themes.Active().Name, withNew: true, select);
+            var pick = FleetTabbedPicker.Pick(
+                app, ThemeTitle, tabs.Tabs, keymap, [EditThemeKey, DeleteThemeKey], tabs.StartTab, tabs.StartIndex);
+
+            if (pick is null)
+            {
+                return;
+            }
+
+            if (tabs.IsNew(pick.Tab, pick.Index))
+            {
+                select = pick.Action is null ? NewCustomTheme(app, keymap, project, themes) : null;
+                continue;
+            }
+
+            var theme = tabs.Pick(pick.Tab, pick.Index);
+
+            if (pick.Action == EditThemeKey)
+            {
+                select = EditCustomTheme(app, keymap, project, themes, theme) ?? theme.Name;
+            }
+            else if (pick.Action == DeleteThemeKey)
+            {
+                DeleteCustomTheme(app, project, themes, theme);
+                select = null;
+            }
+            else
+            {
+                UseTheme(app, project, themes, theme.Name);
+                return;
+            }
+        }
+    }
+
+    private static string? NewCustomTheme(IApplication app, Keymap keymap, Project project, ManageThemesHandler themes)
+    {
+        var bases = FleetThemeTabs.For(themes.List(), themes.IsCustom, themes.Active().Name);
+
+        if (FleetTabbedPicker.Choose(app, "Base for the new custom theme", bases.Tabs, keymap, bases.StartTab, bases.StartIndex)
+            is not var (tab, index, _))
+        {
+            return null;
+        }
+
+        var basis = bases.Pick(tab, index);
+
+        return CustomThemeName(app, themes, "New custom theme") is var (name, title)
+            ? EditTheme(
+                app, keymap, project, themes, name, title, FleetThemeEditor.Inheritable(basis.Name), basis with { Name = name, Title = title })
+            : null;
+    }
+
+    private static string? EditCustomTheme(
+        IApplication app, Keymap keymap, Project project, ManageThemesHandler themes, ThemePalette theme)
+    {
+        if (!themes.IsCustom(theme))
+        {
+            return null;
+        }
+
+        if (!FleetThemeEditor.SavesAs(theme.Name))
+        {
+            return EditTheme(app, keymap, project, themes, theme.Name, theme.Title, themes.BaseOf(theme.Name), theme);
+        }
+
+        return CustomThemeName(app, themes, $"Save {theme.Title} as") is var (name, title)
+            ? EditTheme(
+                app, keymap, project, themes, name, title, FleetThemeEditor.Inheritable(theme.Name), theme with { Name = name, Title = title })
+            : null;
+    }
+
+    private static (string Name, string Title)? CustomThemeName(IApplication app, ManageThemesHandler themes, string prompt)
+    {
+        while (FleetPrompt.Text(app, prompt, label: "Name") is { } typed)
+        {
+            var name = FleetThemeEditor.NewName(typed);
+
+            if (!name.Succeeded)
+            {
+                FleetDialog.Error(app, "Theme", name.Error!);
+            }
+            else if (themes.List().Any(t => t.Name == name.Value))
+            {
+                FleetDialog.Error(app, "Theme", $"'{name.Value}' already exists; edit it from the Custom tab or pick another name");
+            }
+            else
+            {
+                return (name.Value, typed.Trim());
+            }
+        }
+
+        return null;
+    }
+
+    private static string? EditTheme(
+        IApplication app,
+        Keymap keymap,
+        Project project,
+        ManageThemesHandler themes,
+        string name,
+        string title,
+        string baseName,
+        ThemePalette start)
+    {
+        if (FleetThemeEditor.Show(app, keymap, $"{title} — based on {baseName}", start) is not { } edit)
+        {
+            return null;
+        }
+
+        var before = themes.Active();
+        var saved = themes.SaveCustom(name, title, baseName, edit.Palette);
+
+        if (!saved.Succeeded)
+        {
+            FleetDialog.Error(app, "Theme", saved.Error!);
+            return null;
+        }
+
+        if (edit.Use)
+        {
+            UseTheme(app, project, themes, saved.Value.Name);
+        }
+        else
+        {
+            ReapplyIfChanged(app, project, themes, before);
+        }
+
+        return saved.Value.Name;
+    }
+
+    private static void DeleteCustomTheme(IApplication app, Project project, ManageThemesHandler themes, ThemePalette theme)
+    {
+        if (!themes.IsCustom(theme)
+            || !FleetDialog.Confirm(app, "Delete theme", [$"Delete the custom theme {theme.Title} ({theme.Name})?", "Its file is removed."], "Delete"))
+        {
+            return;
+        }
+
+        var before = themes.Active();
+        var deleted = themes.DeleteCustom(theme.Name);
+
+        if (!deleted.Succeeded)
+        {
+            FleetDialog.Error(app, "Theme", deleted.Error!);
+            return;
+        }
+
+        ReapplyIfChanged(app, project, themes, before);
+    }
+
+    private static void ReapplyIfChanged(IApplication app, Project project, ManageThemesHandler themes, ThemePalette before)
+    {
+        var after = themes.Active();
+
+        if (after.Name != before.Name || FleetThemeEditor.Changed(before, after))
+        {
+            ApplyTheme(app, project, after);
+        }
+    }
+
+    private static void UseTheme(IApplication app, Project project, ManageThemesHandler themes, string name)
+    {
+        var set = themes.Set(name);
+
+        if (!set.Succeeded)
+        {
+            FleetDialog.Error(app, "Theme", set.Error!);
+            return;
+        }
+
+        ApplyTheme(app, project, set.Value);
+    }
+
+    private static void ApplyTheme(IApplication app, Project project, ThemePalette theme)
+    {
+        var problems = ThemeWiring.Apply(theme, project.Root)
+            .Where(a => a.Outcome == ThemeOutcome.Failed)
+            .Select(a => a.Line)
+            .ToList();
+
+        if (problems.Count > 0)
+        {
+            FleetDialog.Error(app, "Theme", string.Join("\n", problems));
+        }
+    }
 
     private static void ShowBoard(IApplication app, Keymap keymap, string here, BoardScopes scopes)
     {

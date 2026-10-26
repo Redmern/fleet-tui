@@ -106,4 +106,36 @@ public sealed class FleetThemeTabsTests
         Assert.Equal(Paper, tabs.Pick(FleetThemeTabs.Custom, 0));
         Assert.Equal(Latte, tabs.Pick(FleetThemeTabs.Light, 0));
     }
+
+    [Fact]
+    public void With_new_the_custom_tab_ends_with_a_new_custom_theme_entry()
+    {
+        var tabs = FleetThemeTabs.For([.. BuiltInThemes.All, Paper], t => t == Paper, Mocha.Name, withNew: true);
+        var custom = tabs.Tabs[FleetThemeTabs.Custom].Entries;
+
+        Assert.Equal(["Paper", FleetThemeTabs.NewLabel], custom.Select(e => e.Label));
+        Assert.True(tabs.IsNew(FleetThemeTabs.Custom, 1));
+        Assert.False(tabs.IsNew(FleetThemeTabs.Custom, 0));
+        Assert.False(tabs.IsNew(FleetThemeTabs.Dark, 1));
+        Assert.Equal(Paper, tabs.Pick(FleetThemeTabs.Custom, 0));
+    }
+
+    [Fact]
+    public void Without_custom_themes_the_new_entry_is_the_only_custom_entry()
+    {
+        var tabs = FleetThemeTabs.For(BuiltInThemes.All, _ => false, Mocha.Name, withNew: true);
+
+        Assert.Equal(FleetThemeTabs.NewLabel, Assert.Single(tabs.Tabs[FleetThemeTabs.Custom].Entries).Label);
+        Assert.True(tabs.IsNew(FleetThemeTabs.Custom, 0));
+        Assert.Equal((FleetThemeTabs.Dark, 0), (tabs.StartTab, tabs.StartIndex));
+    }
+
+    [Fact]
+    public void It_can_open_on_another_theme_than_the_active_one()
+    {
+        var tabs = FleetThemeTabs.For([.. BuiltInThemes.All, Paper], t => t == Paper, Mocha.Name, select: Paper.Name);
+
+        Assert.Equal(Paper, tabs.Pick(tabs.StartTab, tabs.StartIndex));
+        Assert.EndsWith(FleetThemeTabs.ActiveMark, tabs.Tabs[FleetThemeTabs.Dark].Entries[0].Detail, StringComparison.Ordinal);
+    }
 }

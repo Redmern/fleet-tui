@@ -13,6 +13,8 @@ public sealed class FleetThemeTabs
 
     public const string ActiveMark = "  (active)";
 
+    public const string NewLabel = "New custom theme…";
+
     private static readonly string[] Titles = ["Dark", "Light", "Custom"];
 
     private readonly IReadOnlyList<IReadOnlyList<ThemePalette>> themes;
@@ -35,7 +37,8 @@ public sealed class FleetThemeTabs
 
     public int StartIndex { get; }
 
-    public static FleetThemeTabs For(IReadOnlyList<ThemePalette> all, Func<ThemePalette, bool> isCustom, string active)
+    public static FleetThemeTabs For(
+        IReadOnlyList<ThemePalette> all, Func<ThemePalette, bool> isCustom, string active, bool withNew = false, string? select = null)
     {
         IReadOnlyList<ThemePalette>[] themes =
         [
@@ -45,17 +48,24 @@ public sealed class FleetThemeTabs
         ];
 
         var tabs = themes
-            .Select((list, i) => (Titles[i], (IReadOnlyList<PickerEntry>)[.. list.Select(t => Entry(t, active))]))
+            .Select((list, i) => (Titles[i], (IReadOnlyList<PickerEntry>)
+            [
+                .. list.Select(t => Entry(t, active)),
+                .. withNew && i == Custom ? [new PickerEntry(NewLabel, Key: "n")] : Array.Empty<PickerEntry>(),
+            ]))
             .ToList();
 
-        var startTab = Array.FindIndex(themes, list => list.Any(t => t.Name == active));
+        var start = select ?? active;
+        var startTab = Array.FindIndex(themes, list => list.Any(t => t.Name == start));
 
         return startTab < 0
             ? new FleetThemeTabs(themes, tabs, Dark, 0)
-            : new FleetThemeTabs(themes, tabs, startTab, themes[startTab].ToList().FindIndex(t => t.Name == active));
+            : new FleetThemeTabs(themes, tabs, startTab, themes[startTab].ToList().FindIndex(t => t.Name == start));
     }
 
     public ThemePalette Pick(int tab, int index) => themes[tab][index];
+
+    public bool IsNew(int tab, int index) => index >= themes[tab].Count && index < Tabs[tab].Entries.Count;
 
     private static PickerEntry Entry(ThemePalette theme, string active) =>
         new(theme.Title, theme.Name == active ? theme.Name + ActiveMark : theme.Name);

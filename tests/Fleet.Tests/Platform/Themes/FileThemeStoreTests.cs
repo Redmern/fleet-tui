@@ -68,6 +68,86 @@ public sealed class FileThemeStoreTests : IDisposable
         Assert.Equal(nord.Base, Assert.Single(store.Custom()).Base);
     }
 
+    [Fact]
+    public void Saved_overrides_are_written_as_given_under_the_theme_name()
+    {
+        var store = new FileThemeStore(_config);
+
+        var file = store.SaveCustom("mine", "inherits = \"nord\"\nblue = \"#010203\"\n");
+
+        Assert.Equal(Path.Combine(store.ThemesDirectory, "mine.toml"), file);
+        Assert.Equal("inherits = \"nord\"\nblue = \"#010203\"\n", File.ReadAllText(file));
+        Assert.Equal("#010203", Assert.Single(store.Custom()).Blue);
+    }
+
+    [Fact]
+    public void A_custom_theme_text_reads_back_and_a_missing_one_is_null()
+    {
+        var store = new FileThemeStore(_config);
+
+        store.SaveCustom("mine", "inherits = \"nord\"\n");
+
+        Assert.Equal("inherits = \"nord\"\n", store.CustomText("Mine"));
+        Assert.Null(store.CustomText("gone"));
+    }
+
+    [Fact]
+    public void A_custom_theme_inherits_from_another_custom_theme()
+    {
+        var store = new FileThemeStore(_config);
+
+        store.SaveCustom("parent", "inherits = \"nord\"\nblue = \"#010203\"\n");
+        store.SaveCustom("child", "inherits = \"parent\"\nred = \"#040506\"\n");
+
+        var child = store.Custom().Single(t => t.Name == "child");
+
+        Assert.Equal("#010203", child.Blue);
+        Assert.Equal("#040506", child.Red);
+        Assert.Equal(BuiltInThemes.Find("nord")!.Base, child.Base);
+    }
+
+    [Fact]
+    public void Inheritance_cycles_end_at_the_built_in_or_mocha()
+    {
+        var store = new FileThemeStore(_config);
+
+        store.SaveCustom("nord", "inherits = \"nord\"\nblue = \"#010203\"\n");
+        store.SaveCustom("a", "inherits = \"b\"\n");
+        store.SaveCustom("b", "inherits = \"a\"\n");
+
+        var themes = store.Custom();
+
+        Assert.Equal(BuiltInThemes.Find("nord")!.Base, themes.Single(t => t.Name == "nord").Base);
+        Assert.Equal(BuiltInThemes.CatppuccinMocha.Base, themes.Single(t => t.Name == "a").Base);
+    }
+
+    [Fact]
+    public void A_theme_whose_base_was_deleted_falls_back_to_mocha()
+    {
+        var store = new FileThemeStore(_config);
+
+        store.SaveCustom("parent", "inherits = \"nord\"\n");
+        store.SaveCustom("child", "inherits = \"parent\"\nred = \"#040506\"\n");
+        store.DeleteCustom("parent");
+
+        var child = Assert.Single(store.Custom());
+
+        Assert.Equal(BuiltInThemes.CatppuccinMocha.Base, child.Base);
+        Assert.Equal("#040506", child.Red);
+    }
+
+    [Fact]
+    public void Deleting_a_custom_theme_removes_its_file_and_a_missing_one_is_no_error()
+    {
+        var store = new FileThemeStore(_config);
+        var file = store.SaveCustom("mine", "inherits = \"nord\"\n");
+
+        Assert.True(store.DeleteCustom("mine"));
+        Assert.False(File.Exists(file));
+        Assert.False(store.DeleteCustom("mine"));
+        Assert.Empty(store.Custom());
+    }
+
     // Windows refuses to replace a file another process (Defender, the indexer) has open; the write waits it out.
     [Fact]
     public void An_atomic_write_waits_out_a_target_briefly_held_by_another_process()

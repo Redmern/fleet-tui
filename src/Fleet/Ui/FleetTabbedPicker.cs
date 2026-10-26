@@ -17,6 +17,18 @@ public static class FleetTabbedPicker
         IReadOnlyList<(string Title, IReadOnlyList<PickerEntry> Entries)> tabs,
         Keymap keymap,
         int tab = 0,
+        int selected = 0) =>
+        Pick(app, title, tabs, keymap, [], tab, selected) is { } pick
+            ? (pick.Tab, pick.Index, pick.NewWindow)
+            : null;
+
+    public static TabbedPick? Pick(
+        IApplication app,
+        string title,
+        IReadOnlyList<(string Title, IReadOnlyList<PickerEntry> Entries)> tabs,
+        Keymap keymap,
+        IReadOnlyList<TabbedAction> actions,
+        int tab = 0,
         int selected = 0)
     {
         if (tabs.Count == 0)
@@ -24,7 +36,7 @@ public static class FleetTabbedPicker
             return null;
         }
 
-        (int Tab, int Index, bool NewWindow)? result = null;
+        TabbedPick? result = null;
         var reserved = Reserved(keymap);
         var keys = tabs.Select(t => PickerKeys.For(t.Entries, reserved)).ToList();
 
@@ -38,11 +50,13 @@ public static class FleetTabbedPicker
         FleetKeys.ApplyMotions(list, keymap);
 
         var current = Math.Clamp(tab, 0, tabs.Count - 1);
+        var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
         void Show(int index, int row)
         {
             current = index;
             tabBar.Select(index);
+            Hints();
             var entries = tabs[index].Entries;
             FleetRows.Fill(
                 list,
@@ -50,14 +64,14 @@ public static class FleetTabbedPicker
                 Math.Clamp(row, 0, Math.Max(0, entries.Count - 1)));
         }
 
-        void Take(int index, bool newWindow)
+        void Take(int index, bool newWindow, TabbedAction? action = null)
         {
             if (index < 0 || index >= tabs[current].Entries.Count)
             {
                 return;
             }
 
-            result = (current, index, newWindow);
+            result = new TabbedPick(current, index, newWindow, action);
             app.RequestStop(window);
         }
 
@@ -67,6 +81,19 @@ public static class FleetTabbedPicker
             e.Handled = true;
         };
 
+        void Hints() => bar.Show(
+        [
+            ("enter", FleetIcons.Select, () => Take(FleetRows.Selected(list), newWindow: false)),
+            ("SHIFT", FleetIcons.NewWindow, () => Take(FleetRows.Selected(list), newWindow: true)),
+            .. actions.Where(a => a.Tab == current)
+                .Select(a => (a.Hint, a.Icon, (Action)(() => Take(FleetRows.Selected(list), newWindow: false, a)))),
+            ("bksp", FleetIcons.Back, () =>
+            {
+                FleetModal.Back();
+                app.RequestStop(window);
+            }),
+        ]);
+
         tabBar.Chosen += index =>
         {
             if (index != current)
@@ -74,18 +101,6 @@ public static class FleetTabbedPicker
                 Show(index, 0);
             }
         };
-
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
-        bar.Show(
-        [
-            ("enter", FleetIcons.Select, () => Take(FleetRows.Selected(list), newWindow: false)),
-            ("SHIFT", FleetIcons.NewWindow, () => Take(FleetRows.Selected(list), newWindow: true)),
-            ("bksp", FleetIcons.Back, () =>
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-            }),
-        ]);
 
         var claim = FleetModal.Enter();
 
@@ -96,7 +111,11 @@ public static class FleetTabbedPicker
                 return;
             }
 
-            if (key == Key.Enter.WithShift)
+            if (actions.FirstOrDefault(a => a.Key == key && a.Tab == current) is { } action)
+            {
+                Take(FleetRows.Selected(list), newWindow: false, action);
+            }
+            else if (key == Key.Enter.WithShift)
             {
                 Take(FleetRows.Selected(list), newWindow: true);
             }

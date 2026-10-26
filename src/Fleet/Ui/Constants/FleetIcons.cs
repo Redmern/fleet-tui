@@ -94,8 +94,20 @@ public static class FleetIcons
 
     public const string History = "";
 
+    public const string Edit = "";
+
+    public const string Save = "";
+
+    public const string SaveAndUse = "";
+
+    public const string Delete = "";
+
     private static readonly Dictionary<string, string> Names = new()
     {
+        [Edit] = "edit",
+        [Save] = "save",
+        [SaveAndUse] = "save and use",
+        [Delete] = "delete",
         [Info] = "keybinds",
         [Select] = "select",
         [Back] = "back",

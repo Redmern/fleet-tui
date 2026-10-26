@@ -78,4 +78,60 @@ public class ThemeTomlTests
 
         Assert.Equal(BuiltInThemes.CatppuccinMocha.Base, theme.Base);
     }
+
+    [Fact]
+    public void Overrides_name_the_base_and_write_only_the_changed_colors()
+    {
+        var nord = BuiltInThemes.Find("nord")!;
+        var theme = nord with { Title = "Mine", Blue = "#010203" };
+
+        var text = ThemeToml.WriteOverrides(theme, nord);
+        var values = ThemeToml.Parse(text);
+
+        Assert.Equal("nord", values["inherits"]);
+        Assert.Equal("Mine", values["title"]);
+        Assert.Equal("#010203", values["blue"]);
+        Assert.Equal(4, values.Count);
+    }
+
+    [Fact]
+    public void Overrides_take_light_from_the_resulting_base_color()
+    {
+        var mocha = BuiltInThemes.CatppuccinMocha;
+
+        Assert.Equal("true", ThemeToml.Parse(ThemeToml.WriteOverrides(mocha with { Base = "#f0f0f0" }, mocha))["light"]);
+        Assert.Equal("false", ThemeToml.Parse(ThemeToml.WriteOverrides(mocha, mocha))["light"]);
+    }
+
+    [Fact]
+    public void Ansi_and_bright_overrides_round_trip_and_the_rest_inherits()
+    {
+        var nord = BuiltInThemes.Find("nord")!;
+        var ansi = nord.Ansi.ToArray();
+        var brights = nord.Brights.ToArray();
+        ansi[0] = "#111111";
+        brights[7] = "#222222";
+        var theme = nord with { Name = "mine", Ansi = ansi, Brights = brights };
+
+        var text = ThemeToml.WriteOverrides(theme, nord);
+        var back = CustomTheme.FromToml("mine", text);
+
+        Assert.Equal("#111111", ThemeToml.Parse(text)["color0"]);
+        Assert.Equal("#222222", ThemeToml.Parse(text)["color15"]);
+        Assert.DoesNotContain("color1", ThemeToml.Parse(text).Keys);
+        Assert.Equal(ansi, back.Ansi);
+        Assert.Equal(brights, back.Brights);
+        Assert.All(ThemePalette.RoleNames, r => Assert.Equal(nord.Role(r), back.Role(r)));
+    }
+
+    [Fact]
+    public void A_custom_theme_can_inherit_from_a_theme_the_resolver_finds()
+    {
+        var parent = BuiltInThemes.CatppuccinMocha with { Name = "parent", Blue = "#123456" };
+
+        var theme = CustomTheme.FromToml("child", "inherits = \"parent\"\nred = \"#654321\"", n => n == "parent" ? parent : null);
+
+        Assert.Equal("#123456", theme.Blue);
+        Assert.Equal("#654321", theme.Red);
+    }
 }

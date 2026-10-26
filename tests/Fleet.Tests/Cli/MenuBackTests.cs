@@ -71,6 +71,8 @@ public class MenuBackTests
     {
         new[] { "Ui", "FleetPicker.cs" },
         new[] { "Ui", "FleetTabbedPicker.cs" },
+        new[] { "Ui", "FleetColorDialog.cs" },
+        new[] { "Ui", "FleetThemeEditor.cs" },
         new[] { "Ui", "FleetDialog.cs" },
         new[] { "Ui", "FleetPrompt.cs" },
         new[] { "Features", "Menu", "ShowMenu", "ShowMenuView.cs" },
