@@ -87,6 +87,7 @@ public class ToggleSettingHandlerTests
     [InlineData(FleetAction.EditMainOrchestratorInNvim, "main orchestrator in nvim: off")]
     [InlineData(FleetAction.EditSubOrchestratorsInNvim, "sub-orchestrators in nvim: off")]
     [InlineData(FleetAction.EditNvimConfig, "nvim config: user")]
+    [InlineData(FleetAction.EditEditor, "editor: vscode")]
     public void Every_toggle_says_its_new_state(FleetAction action, string expected)
     {
         var start = SettingsConfig.Default
@@ -105,7 +106,7 @@ public class ToggleSettingHandlerTests
     {
         var toggles = Enum.GetValues<FleetAction>().Where(FleetMenus.IsToggle).ToList();
 
-        Assert.Equal(5, toggles.Count);
+        Assert.Equal(6, toggles.Count);
 
         foreach (var action in toggles)
         {

@@ -248,7 +248,8 @@ public static class MenuCommand
         return await OpenEditorHandler.CanOpenEditorAsync(
                 mux.Unsupported is null ? mux.Driver : null,
                 Environment.CurrentDirectory,
-                new ListAgentsHandler(Adapters.Agents()).Handle(project.Name))
+                new ListAgentsHandler(Adapters.Agents()).Handle(project.Name),
+                Adapters.ResolvedEditor(project.Name))
             .ConfigureAwait(false);
     }
 
@@ -728,19 +729,20 @@ public static class MenuCommand
             case FleetAction.OpenEditor:
                 {
                     var editorMux = Adapters.Mux(Adapters.Log());
+                    var editorKind = Adapters.ResolvedEditor(project.Name);
 
-                    if (editorMux.Unsupported is not null)
+                    if (editorMux.Unsupported is not null && editorKind != Editor.Vscode)
                     {
                         FleetDialog.Error(app, "Open editor here", editorMux.Unsupported);
                         break;
                     }
 
                     var driver = editorMux.Driver;
-                    var agent = await OpenEditorHandler.CallerAsync(
-                            driver,
-                            Environment.CurrentDirectory,
-                            new ListAgentsHandler(Adapters.Agents()).Handle(project.Name))
-                        .ConfigureAwait(false);
+                    var listed = new ListAgentsHandler(Adapters.Agents()).Handle(project.Name);
+                    var agent = editorMux.Unsupported is null
+                        ? await OpenEditorHandler.CallerAsync(driver, Environment.CurrentDirectory, listed)
+                            .ConfigureAwait(false)
+                        : OpenEditorHandler.CallerByFolder(Environment.CurrentDirectory, listed);
 
                     if (agent is null)
                     {
@@ -748,11 +750,15 @@ public static class MenuCommand
                         break;
                     }
 
-                    var opened = await new OpenEditorHandler(driver)
-                        .HandleAsync(project.Name, agent, project.Root)
+                    var opened = await new OpenEditorHandler(driver, Adapters.EditorLauncher())
+                        .HandleAsync(project.Name, agent, project.Root, editorKind)
                         .ConfigureAwait(false);
 
-                    if (!opened.Succeeded)
+                    if (!opened.Succeeded && editorKind == Editor.Vscode)
+                    {
+                        Adapters.Toast($"fleet · {project.Name}", opened.Error!);
+                    }
+                    else if (!opened.Succeeded)
                     {
                         FleetDialog.Error(app, "Open editor here", opened.Error!);
                     }

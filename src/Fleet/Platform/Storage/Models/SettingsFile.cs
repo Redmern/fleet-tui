@@ -32,6 +32,8 @@ public sealed class SettingsFile
 
     public int AutoCloseMinutes { get; set; }
 
+    public string Editor { get; set; } = string.Empty;
+
     public string MainModel { get; set; } = string.Empty;
 
     public string MainEffort { get; set; } = string.Empty;
@@ -103,6 +105,13 @@ public sealed class NvimSettingsFile
     public int Version { get; set; } = 1;
 
     public string Config { get; set; } = string.Empty;
+}
+
+public sealed class EditorSettingsFile
+{
+    public int Version { get; set; } = 1;
+
+    public string Editor { get; set; } = string.Empty;
 }
 
 public sealed class ToolRuleEntry

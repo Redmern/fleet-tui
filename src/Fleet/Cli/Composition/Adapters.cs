@@ -3,6 +3,7 @@ using Fleet.Cli.Composition.Models;
 using Fleet.Platform.Aidlc;
 using Fleet.Platform.Approvals;
 using Fleet.Platform.Claude;
+using Fleet.Platform.Editors;
 using Fleet.Platform.Git;
 using Fleet.Platform.Mcp;
 using Fleet.Platform.Logging;
@@ -28,6 +29,7 @@ using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Aidlc;
 using Fleet.Ports.Approvals;
+using Fleet.Ports.Editors;
 using Fleet.Ports.Git;
 using Fleet.Ports.Mcp;
 using Fleet.Ports.Keymap;
@@ -48,6 +50,7 @@ using Fleet.Platform.Uninstall.Models;
 using Fleet.Shared;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Themes;
@@ -103,7 +106,16 @@ public static class Adapters
 
     public static IKeymapStore Keymaps() => new ApplyingKeymapStore(new JsonKeymapStore(), () => _ = Task.Run(KeybindWiring.ApplyQuietly));
 
-    public static ISettingsStore Settings() => new JsonSettingsStore();
+    public static ISettingsStore Settings() => new JsonSettingsStore(() => InstalledEditor.Value);
+
+    private static readonly Lazy<Editor?> InstalledEditor =
+        new(() => EditorChoice.Installed(OnPath(EditorChoice.NvimCommand), EditorLauncher().Available));
+
+    public static IEditorLauncher EditorLauncher() => new VscodeLauncher(OnPath);
+
+    public static Editor ResolvedEditor(string project) => Settings().Load(project).ResolvedEditor;
+
+    public static void Toast(string title, string body) => Platform.Notifications.DesktopToast.Show(title, body);
 
     public static IIsoMode Iso() => new JsonIsoMode();
 
@@ -146,7 +158,7 @@ public static class Adapters
                 SaveNvimConfig(shared.Nvim);
                 SaveButtonHints(shared.ButtonHints);
             },
-            (title, body) => Platform.Notifications.DesktopToast.Show(title, body));
+            Toast);
 
     public static ISettingsSync SettingsSync() => new ClaudeSettingsSync();
 

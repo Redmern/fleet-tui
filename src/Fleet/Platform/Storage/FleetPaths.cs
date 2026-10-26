@@ -34,6 +34,8 @@ public static class FleetPaths
 
     public static string NvimSettingsFile => Path.Combine(Config, "nvim.json");
 
+    public static string EditorSettingsFile => Path.Combine(Config, "editor.json");
+
     public static string Approvals => Path.Combine(Config, "approvals");
 
     public static string Notices => Path.Combine(Config, "notices");

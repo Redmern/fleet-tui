@@ -658,4 +658,79 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
         Assert.True(Store.Load("techweb").SubagentGuidance);
         Assert.DoesNotContain("subagentGuidance", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
     }
+    [Fact]
+    public void No_editor_setting_anywhere_resolves_to_nvim_and_writes_nothing()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+
+        var loaded = Store.Load("techweb");
+
+        Assert.Null(loaded.Editor);
+        Assert.Null(loaded.DefaultEditor);
+        Assert.Equal(Editor.Nvim, loaded.ResolvedEditor);
+        Assert.Contains("\"editor\": \"\"", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+        Assert.False(File.Exists(FleetPaths.EditorSettingsFile));
+    }
+
+    [Fact]
+    public void A_project_editor_round_trips_and_stays_per_project()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithEditor(Editor.Vscode));
+
+        Assert.Equal(Editor.Vscode, Store.Load("techweb").Editor);
+        Assert.Equal(Editor.Vscode, Store.Load("techweb").ResolvedEditor);
+        Assert.Null(Store.Load("other").Editor);
+        Assert.Contains("\"editor\": \"vscode\"", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+
+        Store.Save("techweb", Store.Load("techweb").WithEditor(Editor.Nvim));
+
+        Assert.Equal(Editor.Nvim, Store.Load("techweb").Editor);
+    }
+
+    [Fact]
+    public void A_stored_editor_that_is_not_known_is_unset()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(Path.Combine(FleetPaths.Settings, "techweb.json"), """{"version":1,"editor":"emacs"}""");
+
+        Assert.Null(Store.Load("techweb").Editor);
+    }
+
+    [Fact]
+    public void The_global_default_editor_lives_in_editor_json_and_is_merged_into_every_project()
+    {
+        Store.SaveDefaultEditor(Editor.Vscode);
+
+        Assert.Equal(Editor.Vscode, Store.LoadDefaultEditor());
+        Assert.Equal(Editor.Vscode, Store.Load("techweb").DefaultEditor);
+        Assert.Equal(Editor.Vscode, Store.Load("techweb").ResolvedEditor);
+        Assert.Equal(Editor.Nvim, Store.Load("techweb").WithEditor(Editor.Nvim).ResolvedEditor);
+        Assert.Contains("\"editor\": \"vscode\"", File.ReadAllText(FleetPaths.EditorSettingsFile));
+        Assert.False(File.Exists(FleetPaths.EditorSettingsFile + ".tmp"));
+
+        Store.SaveDefaultEditor(null);
+
+        Assert.Null(Store.LoadDefaultEditor());
+        Assert.Null(Store.Reload("techweb")!.DefaultEditor);
+    }
+
+    [Fact]
+    public void Saving_a_project_does_not_write_the_global_default_into_it()
+    {
+        Store.SaveDefaultEditor(Editor.Vscode);
+
+        Store.Save("techweb", Store.Load("techweb"));
+
+        Assert.Contains("\"editor\": \"\"", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+    }
+
+    [Fact]
+    public void The_installed_editor_is_the_last_fallback_before_nvim()
+    {
+        var onlyCode = new JsonSettingsStore(() => Editor.Vscode);
+
+        Assert.Equal(Editor.Vscode, onlyCode.Load("techweb").ResolvedEditor);
+        Assert.Equal(Editor.Nvim, onlyCode.Load("techweb").WithEditor(Editor.Nvim).ResolvedEditor);
+        Assert.Equal(Editor.Nvim, new JsonSettingsStore(() => null).Load("techweb").ResolvedEditor);
+    }
 }

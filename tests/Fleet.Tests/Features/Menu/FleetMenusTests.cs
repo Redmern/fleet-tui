@@ -319,6 +319,34 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void The_editor_is_a_toggle_in_fleet_config_between_nvim_and_vscode()
+    {
+        Assert.Contains(FleetAction.EditEditor, FleetMenus.Actions(FleetMenus.FleetConfig));
+        Assert.True(FleetMenus.IsToggle(FleetAction.EditEditor));
+        Assert.Equal("Editor", FleetMenus.Label(FleetAction.EditEditor));
+        Assert.Equal("[nvim]", FleetMenus.Value(FleetAction.EditEditor, SettingsConfig.Default));
+
+        var vscode = FleetMenus.Flip(FleetAction.EditEditor, SettingsConfig.Default);
+
+        Assert.Equal(Editor.Vscode, vscode.Editor);
+        Assert.Equal("[vscode]", FleetMenus.Value(FleetAction.EditEditor, vscode));
+        Assert.NotEqual(SettingsConfig.Default.Signature, vscode.Signature);
+        Assert.Equal(Editor.Nvim, FleetMenus.Flip(FleetAction.EditEditor, vscode).Editor);
+    }
+
+    [Fact]
+    public void The_editor_toggle_shows_and_flips_the_resolved_editor_not_only_the_project_setting()
+    {
+        var byDefault = SettingsConfig.Default with { DefaultEditor = Editor.Vscode };
+        var onlyCode = SettingsConfig.Default with { InstalledEditor = Editor.Vscode };
+
+        Assert.Equal("[vscode]", FleetMenus.Value(FleetAction.EditEditor, byDefault));
+        Assert.Equal("[vscode]", FleetMenus.Value(FleetAction.EditEditor, onlyCode));
+        Assert.Equal(Editor.Nvim, FleetMenus.Flip(FleetAction.EditEditor, byDefault).Editor);
+        Assert.Equal(Editor.Nvim, FleetMenus.Flip(FleetAction.EditEditor, onlyCode).Editor);
+    }
+
+    [Fact]
     public void Without_keys_a_row_starts_with_its_icon()
     {
         var items = new ShowMenuHandler(Keymap.Default).Items(FleetMenus.Main, _ => null);
