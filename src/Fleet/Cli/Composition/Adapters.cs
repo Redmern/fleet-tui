@@ -41,7 +41,10 @@ using Fleet.Ports.Requests;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Settings;
 using Fleet.Ports.Todos;
+using Fleet.Ports.Uninstall;
 using Fleet.Platform.Releases;
+using Fleet.Platform.Uninstall;
+using Fleet.Platform.Uninstall.Models;
 using Fleet.Shared;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
@@ -63,6 +66,31 @@ public static class Adapters
     public static IReleaseClient Releases() => new HttpReleaseClient();
 
     public static IBinaryInstaller Installer() => new SelfInstall();
+
+    public static IUninstallTargets UninstallTargets() =>
+        new FleetUninstallTargets(
+            UninstallEnvironment.ForThisMachine(Executable, FleetHome.Config),
+            new EmbeddedDaemonStopper(() => EmbeddedWiring.StopDaemonAsync().GetAwaiter().GetResult()),
+            new UserPathVariable());
+
+    public static IDependencyManifest DependencyManifest() => new JsonDependencyManifest(FleetHome.Config);
+
+    public static IPackageRemover PackageRemover(bool interactive) => new PackageRemover(interactive);
+
+    public sealed class EmbeddedDaemonStopper(Func<int> stop) : IDaemonStopper
+    {
+        public bool Stop()
+        {
+            try
+            {
+                return stop() == 0;
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+        }
+    }
 
     public static IUpdateCheckCache UpdateChecks() => new JsonUpdateCheckCache();
 

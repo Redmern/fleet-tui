@@ -43,4 +43,12 @@ public class HelpTextTests
     [InlineData("s switch project, space menu")]
     public void Fleet_help_drops_the_moved_prefix_keys(string text) =>
         Assert.DoesNotContain(text, HelpCommand.Text, StringComparison.Ordinal);
+
+    [Theory]
+    [InlineData("fleet uninstall ")]
+    [InlineData("--yes")]
+    [InlineData("-y")]
+    [InlineData("--remove-deps")]
+    public void Fleet_help_documents_uninstall_and_its_flags(string text) =>
+        Assert.Contains(text, HelpCommand.Text, StringComparison.Ordinal);
 }

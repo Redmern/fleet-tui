@@ -164,6 +164,80 @@ Check 'deps: a failing winget install warns and carries on' ($failed.Calls.Count
 $threw = Invoke-DepsCase -Present @() -WingetExit -1 -Offer @{ WithDeps = $true; SkipConfig = $true }
 Check 'deps: a throwing winget install warns and carries on' ($threw.Calls.Count -eq 3 -and $threw.Output -match 'could not install yazi')
 
+# installed-deps.json: written by Install-FleetDeps for what winget installed, under
+# a throwaway FLEET_CONFIG_HOME.
+function Invoke-ManifestCase([string[]]$Present, [int]$WingetExit = 0, [hashtable]$Offer = @{ WithDeps = $true; SkipConfig = $true }, [string]$Existing, [string]$ConfigHome) {
+    $cfg = if ($ConfigHome) { $ConfigHome } else { Join-Path ([IO.Path]::GetTempPath()) "fleet-manifest-$([guid]::NewGuid().ToString('N'))" }
+    $file = Join-Path $cfg 'installed-deps.json'
+    if ($Existing) {
+        New-Item -ItemType Directory -Force -Path $cfg | Out-Null
+        [IO.File]::WriteAllText($file, $Existing)
+    }
+    $saved = $env:FLEET_CONFIG_HOME
+    $env:FLEET_CONFIG_HOME = $cfg
+    try {
+        $case = Invoke-DepsCase -Present $Present -WingetExit $WingetExit -Offer $Offer
+        $text = if (Test-Path -LiteralPath $file -PathType Leaf) { [IO.File]::ReadAllText($file) } else { $null }
+        $json = if ($text) { try { $text | ConvertFrom-Json } catch { $null } } else { $null }
+        [pscustomobject]@{ Output = $case.Output; Calls = $case.Calls; Text = $text; Json = $json; Bytes = if ($text) { [IO.File]::ReadAllBytes($file) } else { @() } }
+    }
+    finally {
+        $env:FLEET_CONFIG_HOME = $saved
+        if (-not $ConfigHome) { Remove-Item -LiteralPath $cfg -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+function Get-ManifestDep($case, $tool) { @($case.Json.deps | Where-Object { $_.tool -eq $tool }) }
+
+$recorded = Invoke-ManifestCase -Present 'nvim'
+$git = Get-ManifestDep $recorded 'git'
+$yazi = Get-ManifestDep $recorded 'yazi'
+Check 'manifest: a winget install records the installed tools (AC-12)' (
+    $recorded.Json.version -eq 1 -and $git.Count -eq 1 -and $git[0].manager -eq 'winget' -and $git[0].package -eq 'Git.Git' -and
+    $git[0].sudo -eq $false -and $yazi.Count -eq 1 -and $yazi[0].package -eq 'sxyazi.yazi')
+Check 'manifest: a tool that was already there is not recorded (AC-11)' ((Get-ManifestDep $recorded 'nvim').Count -eq 0)
+Check 'manifest: installedAt is UTC ISO-8601 (AC-12)' ($recorded.Text -match '"installedAt":\s*"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
+Check 'manifest: written without a byte order mark' ($recorded.Bytes.Count -gt 0 -and $recorded.Bytes[0] -eq [byte][char]'{')
+
+$none = Invoke-ManifestCase -Present 'git', 'nvim', 'yazi'
+Check 'manifest: all present records nothing (AC-11)' ($null -eq $none.Text)
+
+$failedRecord = Invoke-ManifestCase -Present @() -WingetExit 1
+Check 'manifest: a failed winget install records nothing (AC-12)' ($null -eq $failedRecord.Text)
+
+$threwRecord = Invoke-ManifestCase -Present @() -WingetExit -1
+Check 'manifest: a throwing winget install records nothing (AC-12)' ($null -eq $threwRecord.Text)
+
+$declined = Invoke-ManifestCase -Present 'git' -Offer @{ Interactive = $true; ReadAnswer = { 'n' } }
+Check 'manifest: declining records nothing (AC-12)' ($null -eq $declined.Text)
+
+$accepted = Invoke-ManifestCase -Present 'git', 'nvim' -Offer @{ Interactive = $true; ReadAnswer = { 'y' } }
+Check 'manifest: an interactive yes records the tool (AC-12)' ((Get-ManifestDep $accepted 'yazi').Count -eq 1)
+
+$existing = '{ "version": 1, "deps": [ { "tool": "git", "manager": "winget", "package": "Git.Git", "sudo": false, "installedAt": "2026-01-01T00:00:00Z" }, { "tool": "pacman-only", "manager": "pacman", "package": "x", "sudo": true, "installedAt": "2026-01-02T03:04:05Z" } ] }'
+$merged = Invoke-ManifestCase -Present 'nvim' -Existing $existing
+$kept = Get-ManifestDep $merged 'pacman-only'
+Check 'manifest: existing entries are kept (AC-12)' ($kept.Count -eq 1 -and $kept[0].manager -eq 'pacman' -and $merged.Text -match '"installedAt":\s*"2026-01-02T03:04:05Z"')
+Check 'manifest: a reinstalled tool replaces its entry (AC-12)' (
+    (Get-ManifestDep $merged 'git').Count -eq 1 -and $merged.Text -notmatch '2026-01-01T00:00:00Z' -and (Get-ManifestDep $merged 'yazi').Count -eq 1)
+
+$single = Invoke-ManifestCase -Present 'git', 'nvim'
+Check 'manifest: a single entry is still an array' ($single.Text -match '"deps":\s*\[')
+
+$blocker = Join-Path ([IO.Path]::GetTempPath()) "fleet-manifest-file-$([guid]::NewGuid().ToString('N'))"
+Set-Content -LiteralPath $blocker -Value 'x'
+try {
+    $unwritable = Invoke-ManifestCase -Present 'nvim' -ConfigHome (Join-Path $blocker 'fleet')
+    Check 'manifest: a manifest that cannot be written only warns (AC-12)' (
+        $unwritable.Output -match 'could not record' -and $unwritable.Calls.Count -eq 2)
+}
+finally {
+    Remove-Item -LiteralPath $blocker -Force
+}
+
+$corrupt = Invoke-ManifestCase -Present 'nvim' -Existing 'not json'
+Check 'manifest: an unreadable manifest is left alone and only warns (AC-12)' ($corrupt.Output -match 'could not record')
+
 $saved = @{}
 foreach ($name in 'CI', 'FLEET_NO_DEPS_PROMPT') { $saved[$name] = [Environment]::GetEnvironmentVariable($name) }
 try {
@@ -278,15 +352,97 @@ Check 'get-fleet: runs fetched scripts without dot-sourcing a .ps1 file' ($dotSo
 Check 'get-fleet: never touches settings.json or HKCU:\Console' (
     [IO.File]::ReadAllText($getFleet) -notmatch 'settings\.json|HKCU:\\Console')
 
+# install.ps1 -Uninstall hands over to 'fleet uninstall' when fleet.exe is there.
+# Only the delegating path is meant to run here: the fallback stops every fleet
+# process, so install.ps1 runs in this process with Get-Process and Stop-Process
+# stubbed, and only once the delegation is found.
+$installPs1 = Join-Path $repo 'install.ps1'
+$installAst = [System.Management.Automation.Language.Parser]::ParseFile($installPs1, [ref]$null, [ref]$null)
+$installTop = @($installAst.EndBlock.Statements)
+$delegateAt = -1; $fallbackAt = -1
+for ($i = 0; $i -lt $installTop.Count; $i++) {
+    $text = $installTop[$i].Extent.Text
+    if ($delegateAt -lt 0 -and $text -match '^if \(\$Uninstall -and \(Test-Path -LiteralPath \$BinPath\)\)') { $delegateAt = $i }
+    if ($text -match '^if \(\$Uninstall\) \{') { $fallbackAt = $i }
+}
+Check 'install.ps1: the old -Uninstall removal stays as the fallback after the delegation (AC-14)' (
+    $delegateAt -ge 0 -and $fallbackAt -gt $delegateAt -and $installTop[$fallbackAt].Extent.Text -match 'Remove-Item \$InstallDir')
+
+# Never run install.ps1 without the delegation: its fallback stops every running fleet.
+if ($delegateAt -lt 0) {
+    Write-Host 'skip install.ps1 -Uninstall run: no delegation to fleet uninstall found' -ForegroundColor Yellow
+}
+elseif ($PSVersionTable.PSVersion.Major -ge 6 -and -not $IsWindows) {
+    $sandbox = Join-Path ([IO.Path]::GetTempPath()) "fleet-uninstall-$([guid]::NewGuid().ToString('N'))"
+    $local = Join-Path $sandbox 'local'
+    $roaming = Join-Path $sandbox 'roaming'
+    $log = Join-Path $sandbox 'calls'
+    $installDir = Join-Path $local 'Programs\fleet'
+    New-Item -ItemType Directory -Force -Path $installDir, $roaming | Out-Null
+    $fake = Join-Path $installDir 'fleet.exe'
+    [IO.File]::WriteAllText($fake, "#!/bin/sh`nprintf 'fleet %s\n' `"`$*`" >>'$log'`nexit `"`${FAKE_FLEET_EXIT:-0}`"`n")
+    & chmod +x $fake
+
+    function Invoke-PsUninstall([hashtable]$Params, [string]$Exit = '0') {
+        if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
+        $vars = @{ LOCALAPPDATA = $local; APPDATA = $roaming; FAKE_FLEET_EXIT = $Exit }
+        $savedVars = @{}
+        foreach ($k in $vars.Keys) { $savedVars[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $vars[$k]) }
+        try {
+            $global:LASTEXITCODE = 0
+            $out = & {
+                function Get-Process { 'Get-Process called' }
+                function Stop-Process { 'Stop-Process called' }
+                & $installPs1 @Params
+            } 6>&1 2>&1 | Out-String
+            $code = $LASTEXITCODE
+        }
+        finally {
+            foreach ($k in $savedVars.Keys) { [Environment]::SetEnvironmentVariable($k, $savedVars[$k]) }
+        }
+        $calls = @(if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log })
+        [pscustomobject]@{ Output = $out; Code = $code; Calls = $calls }
+    }
+
+    try {
+        $plainUninstall = Invoke-PsUninstall @{ Uninstall = $true }
+        Check 'install.ps1 -Uninstall runs fleet uninstall when fleet.exe exists (AC-14)' (
+            $plainUninstall.Output -notmatch 'Stop-Process called' -and
+            $plainUninstall.Code -eq 0 -and $plainUninstall.Calls.Count -eq 1 -and $plainUninstall.Calls[0] -eq 'fleet uninstall' -and
+            (Test-Path -LiteralPath $fake))
+
+        $yesUninstall = Invoke-PsUninstall @{ Uninstall = $true; Yes = $true }
+        Check 'install.ps1 -Uninstall -Yes forwards --yes (AC-14)' ($yesUninstall.Calls.Count -eq 1 -and $yesUninstall.Calls[0] -eq 'fleet uninstall --yes')
+
+        $failedUninstall = Invoke-PsUninstall @{ Uninstall = $true; Yes = $true } '3'
+        Check 'install.ps1 -Uninstall passes the exit code of fleet uninstall through (AC-14)' ($failedUninstall.Code -eq 3)
+    }
+    finally {
+        Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+else {
+    Write-Host 'skip install.ps1 -Uninstall delegation run (Windows: would need a real fleet.exe)' -ForegroundColor Yellow
+}
+
 $sh = Get-Command sh -ErrorAction SilentlyContinue
 if ($sh) {
     $bin = Join-Path ([IO.Path]::GetTempPath()) "fleet-installer-bin-$([guid]::NewGuid().ToString('N'))"
+    $home2 = "$bin-home"
+    New-Item -ItemType Directory -Force -Path $home2 | Out-Null
     $env:FLEET_BIN_DIR = $bin
+    $savedHome = $env:HOME
+    $savedXdg = $env:XDG_CONFIG_HOME
+    $env:HOME = $home2
+    $env:XDG_CONFIG_HOME = Join-Path $home2 '.config'
     try {
         $out = & $sh.Source (Join-Path $repo 'install.sh') --uninstall 2>&1 | Out-String
     }
     finally {
         Remove-Item Env:FLEET_BIN_DIR
+        $env:HOME = $savedHome
+        $env:XDG_CONFIG_HOME = $savedXdg
+        Remove-Item -LiteralPath $home2 -Recurse -Force -ErrorAction SilentlyContinue
     }
     Check 'install.sh is plain when piped' ($out -match '(?m)^==> Uninstalling\r?$' -and -not ($out -match '\[#|\x1b'))
 }

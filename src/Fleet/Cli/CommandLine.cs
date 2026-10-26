@@ -27,12 +27,18 @@ public static class CommandLine
 
     public const string SshFlag = "--ssh";
 
+    public const string YesFlag = "--yes";
+
+    public const string YesShortFlag = "-y";
+
+    public const string RemoveDepsFlag = "--remove-deps";
+
     public const string AskPassVariable = "FLEET_ASKPASS";
 
     private static readonly string[] ValueFlags =
         [ProjectFlag, ActionFlag, CallerFlag, StatusFlag, TitleFlag, VersionFlag, VersionShortFlag, SshFlag];
 
-    private static readonly string[] BoolFlags = [ListFlag, ListShortFlag, AllFlag];
+    private static readonly string[] BoolFlags = [ListFlag, ListShortFlag, AllFlag, YesShortFlag];
 
     public static Invocation Parse(IReadOnlyList<string> args)
     {
@@ -58,6 +64,12 @@ public static class CommandLine
             HasFlag(options, AllFlag));
     }
 
+    public static bool Yes(Invocation invocation) =>
+        HasFlag([.. invocation.Arguments ?? []], YesFlag, YesShortFlag);
+
+    public static bool RemoveDeps(Invocation invocation) =>
+        HasFlag([.. invocation.Arguments ?? []], RemoveDepsFlag);
+
     private static FleetVerb VerbFor(string verb) => verb switch
     {
         "" => FleetVerb.Pick,
@@ -78,6 +90,7 @@ public static class CommandLine
         "doctor" => FleetVerb.Doctor,
         "version" or "--version" or "-v" => FleetVerb.Version,
         "update" => FleetVerb.Update,
+        "uninstall" => FleetVerb.Uninstall,
         "daemon" => FleetVerb.Daemon,
         "attach" => FleetVerb.Attach,
         "bridge" => FleetVerb.Bridge,
