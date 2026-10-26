@@ -11,11 +11,11 @@ namespace Fleet.Cli.Commands;
 
 public static class HookDispatchCommand
 {
-    public const string JsonModeVariable = "FLEET_HOOK_BLOCK";
+    public static Task<int> RunAsync(Invocation invocation) => RunAsync(invocation, Console.In, Console.Out);
 
-    public static async Task<int> RunAsync(Invocation invocation)
+    public static async Task<int> RunAsync(Invocation invocation, TextReader input, TextWriter output)
     {
-        var payload = Adapters.ReadHookPayload();
+        var payload = Adapters.ReadHookPayload(input);
 
         var project = Resolve(invocation.Project, payload.Cwd);
 
@@ -32,10 +32,10 @@ public static class HookDispatchCommand
             return 0;
         }
 
-        return await BlockAsync(project, decision.Task).ConfigureAwait(false);
+        return await StopAsync(project, decision.Task, output).ConfigureAwait(false);
     }
 
-    private static async Task<int> BlockAsync(Project project, string task)
+    private static async Task<int> StopAsync(Project project, string task, TextWriter output)
     {
         var log = Adapters.Log();
         var mux = Adapters.Mux(log);
@@ -63,22 +63,7 @@ public static class HookDispatchCommand
                 : $"hook dispatch failed: {reply.Error}"));
         }
 
-        Emit(HookNote.For(note));
-        return 2;
-    }
-
-    private static void Emit(string note)
-    {
-        if (string.Equals(
-                Environment.GetEnvironmentVariable(JsonModeVariable),
-                "json",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            Console.Out.Write(Adapters.HookBlockJson(note));
-            return;
-        }
-
-        Console.Error.Write(note);
+        return Adapters.StopPrompt(HookNote.For(note), output);
     }
 
     private static Project? Resolve(string? name, string? cwd) =>

@@ -48,7 +48,11 @@ public static class HookIo
             ? socket.StartsWith(PeerAddressPrefix, StringComparison.Ordinal) ? socket : PeerAddressPrefix + socket
             : string.Empty;
 
-    public static string Block(string reason) =>
-        JsonSerializer.Serialize(
-            new HookBlock { Reason = reason }, HookJsonContext.Default.HookBlock);
+    public static int Stop(string note, TextWriter output)
+    {
+        output.Write(JsonSerializer.Serialize(
+            new HookStop { StopReason = note }, HookJsonContext.Default.HookStop));
+
+        return 0;
+    }
 }

@@ -5,5 +5,5 @@ namespace Fleet.Platform.Hooks;
 
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(HookPayload))]
-[JsonSerializable(typeof(HookBlock))]
+[JsonSerializable(typeof(HookStop))]
 public partial class HookJsonContext : JsonSerializerContext;
