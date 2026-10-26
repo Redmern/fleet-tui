@@ -10,15 +10,22 @@ using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Platform.Storage;
 
-public sealed class JsonSettingsStore : ISettingsStore
+public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : ISettingsStore
 {
-    public SettingsConfig Load(string project) =>
-        LoadProject(project) with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints(), Nvim = LoadNvim() };
+    public SettingsConfig Load(string project) => WithShared(LoadProject(project));
 
     public SettingsConfig? Reload(string project) =>
-        ReadProject(project) is { } read
-            ? read with { ShowMenuKeys = LoadShowMenuKeys(), ButtonHints = LoadButtonHints(), Nvim = LoadNvim() }
-            : null;
+        ReadProject(project) is { } read ? WithShared(read) : null;
+
+    private SettingsConfig WithShared(SettingsConfig project) =>
+        project with
+        {
+            ShowMenuKeys = LoadShowMenuKeys(),
+            ButtonHints = LoadButtonHints(),
+            Nvim = LoadNvim(),
+            DefaultEditor = LoadDefaultEditor(),
+            InstalledEditor = installedEditor is null ? Editor.Nvim : installedEditor(),
+        };
 
     public bool Exists(string project) => FileFor(project) is { } file && File.Exists(file);
 
@@ -91,6 +98,7 @@ public sealed class JsonSettingsStore : ISettingsStore
                     ParseRole(stored.AgentModel, stored.AgentEffort, SettingsDefaults.AgentModel)),
                 LastRepo = stored.LastRepo ?? string.Empty,
                 LastHarness = stored.LastHarness ?? string.Empty,
+                Editor = EditorChoice.Parse(stored.Editor),
             };
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
@@ -125,6 +133,7 @@ public sealed class JsonSettingsStore : ISettingsStore
                 config.SubOrchestratorsInNvim, SettingsDefaults.SubOrchestratorsInNvim),
             AutoClose = OnOffAgainstDefault(config.AutoClose, SettingsDefaults.AutoClose),
             AutoCloseMinutes = config.AutoCloseMinutes == SettingsDefaults.AutoCloseMinutes ? 0 : config.AutoCloseMinutes,
+            Editor = EditorChoice.Word(config.Editor),
             StatusHooks = config.StatusHooks == SettingsDefaults.StatusHooks ? null : config.StatusHooks,
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
             Iso = config.Iso == SettingsDefaults.Iso ? null : config.Iso,
@@ -277,6 +286,40 @@ public sealed class JsonSettingsStore : ISettingsStore
             var temporary = FleetPaths.NvimSettingsFile + ".tmp";
             File.WriteAllText(temporary, JsonSerializer.Serialize(stored, FleetJsonContext.Default.NvimSettingsFile));
             File.Move(temporary, FleetPaths.NvimSettingsFile, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    public Editor? LoadDefaultEditor()
+    {
+        try
+        {
+            if (File.Exists(FleetPaths.EditorSettingsFile)
+                && JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.EditorSettingsFile), FleetJsonContext.Default.EditorSettingsFile) is { } stored)
+            {
+                return EditorChoice.Parse(stored.Editor);
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+        }
+
+        return null;
+    }
+
+    public void SaveDefaultEditor(Editor? editor)
+    {
+        var stored = new EditorSettingsFile { Editor = EditorChoice.Word(editor) };
+
+        try
+        {
+            FleetPaths.EnsureDirs();
+            var temporary = FleetPaths.EditorSettingsFile + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(stored, FleetJsonContext.Default.EditorSettingsFile));
+            File.Move(temporary, FleetPaths.EditorSettingsFile, overwrite: true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

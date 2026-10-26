@@ -8,6 +8,7 @@ using Fleet.Features.Projects.RestoreSession;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Editors;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
@@ -15,6 +16,9 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
 using Fleet.Ui;
 using Terminal.Gui.Input;
 
@@ -392,6 +396,159 @@ public sealed class OpenEditorTests : IDisposable
     public void E_does_nothing_on_the_repositories_tab()
     {
         Assert.False(DashboardKeys.For(Key.E, Keymap.Default, DashboardTabs.RepositoriesTab).Consume);
+    }
+
+    private sealed class FakeLauncher(bool available = true) : IEditorLauncher
+    {
+        public List<string> Launched { get; } = [];
+
+        public bool Available => available;
+
+        public string? LaunchDetached(string folder)
+        {
+            Launched.Add(folder);
+            return null;
+        }
+    }
+
+    [Fact]
+    public async Task With_vscode_the_worktree_opens_detached_in_code_and_no_pane_is_made()
+    {
+        var agent = Agent();
+        await DashboardAsync();
+        await AgentPaneAsync(agent);
+        var launcher = new FakeLauncher();
+        var before = (await _mux.ListPanesAsync()).Count;
+        var opened = Opened;
+
+        var result = await new OpenEditorHandler(_mux, launcher).HandleAsync(Project, agent, ProjectRoot, Editor.Vscode);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal([agent.Worktree], launcher.Launched);
+        Assert.Equal(opened, Opened);
+        Assert.Equal(before, (await _mux.ListPanesAsync()).Count);
+        Assert.DoesNotContain(await _mux.ListPanesAsync(), p => AgentPaneMatch.IsEditor(p, agent));
+    }
+
+    [Fact]
+    public async Task With_vscode_and_no_code_on_path_the_error_says_how_to_install_it_and_nvim_is_not_opened()
+    {
+        var agent = Agent();
+        await DashboardAsync();
+        var launcher = new FakeLauncher(available: false);
+        var opened = Opened;
+
+        var result = await new OpenEditorHandler(_mux, launcher).HandleAsync(Project, agent, ProjectRoot, Editor.Vscode);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(EditorChoice.InstallHint(OperatingSystem.IsWindows()), result.Error);
+        Assert.Empty(launcher.Launched);
+        Assert.Equal(opened, Opened);
+        Assert.DoesNotContain(await _mux.ListPanesAsync(), p => AgentPaneMatch.IsEditor(p, agent));
+    }
+
+    [Fact]
+    public async Task With_vscode_and_no_launcher_wired_the_install_hint_is_shown_too()
+    {
+        var agent = Agent();
+
+        var result = await Handler.HandleAsync(Project, agent, ProjectRoot, Editor.Vscode);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("not on PATH", result.Error);
+        Assert.Equal(0, Opened);
+    }
+
+    [Fact]
+    public async Task With_vscode_a_folder_that_is_gone_is_reported_rather_than_launched()
+    {
+        var agent = Agent();
+        Directory.Delete(agent.Worktree);
+        var launcher = new FakeLauncher();
+
+        var result = await new OpenEditorHandler(_mux, launcher).HandleAsync(Project, agent, ProjectRoot, Editor.Vscode);
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(launcher.Launched);
+    }
+
+    [Fact]
+    public async Task With_nvim_the_launcher_is_never_used()
+    {
+        var agent = Agent();
+        await DashboardAsync();
+        var launcher = new FakeLauncher();
+
+        var result = await new OpenEditorHandler(_mux, launcher).HandleAsync(Project, agent, ProjectRoot, Editor.Nvim);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Empty(launcher.Launched);
+        Assert.Single(await _mux.ListPanesAsync(), p => AgentPaneMatch.IsEditor(p, agent));
+    }
+
+    [Fact]
+    public async Task With_vscode_stop_and_quit_work_without_any_editor_pane()
+    {
+        var agent = Agent();
+        await DashboardAsync();
+        var claude = await AgentPaneAsync(agent);
+        await new OpenEditorHandler(_mux, new FakeLauncher()).HandleAsync(Project, agent, ProjectRoot, Editor.Vscode);
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.DoesNotContain(panes, p => AgentPaneMatch.IsEditor(p, agent));
+        Assert.Equal([claude], QuitPlan.PanesToClose(panes, ProjectRoot, [agent]).Where(id => id == claude));
+        Assert.Contains(claude, QuitPlan.PanesToClose(panes, ProjectRoot, [agent]));
+
+        var stopper = new StopAgentHandler(_mux, new RecordingStore());
+
+        Assert.True((await stopper.HandleAsync(Project, agent)).Succeeded);
+        Assert.DoesNotContain(await _mux.ListPanesAsync(), p => p.Id == claude);
+    }
+
+    [Fact]
+    public async Task With_vscode_the_editor_can_open_from_the_agents_folder_even_without_a_usable_multiplexer()
+    {
+        var agent = Agent();
+
+        Assert.True(await OpenEditorHandler.CanOpenEditorAsync(null, agent.Worktree, [agent], Editor.Vscode));
+        Assert.False(await OpenEditorHandler.CanOpenEditorAsync(null, ProjectRoot, [agent], Editor.Vscode));
+        Assert.False(await OpenEditorHandler.CanOpenEditorAsync(null, agent.Worktree, [agent], Editor.Nvim));
+    }
+
+    [Fact]
+    public async Task AC8_a_vscode_project_stops_quits_and_matches_panes_with_no_editor_pane_anywhere()
+    {
+        var project = SettingsConfig.Default.WithEditor(Editor.Vscode);
+        var agent = Agent() with { Open = true };
+        var dashboard = await DashboardAsync();
+        var claude = await AgentPaneAsync(agent);
+        var launcher = new FakeLauncher();
+
+        var opened = await new OpenEditorHandler(_mux, launcher)
+            .HandleAsync(Project, agent, ProjectRoot, project.ResolvedEditor);
+        var panes = await _mux.ListPanesAsync();
+
+        Assert.True(opened.Succeeded, opened.Error);
+        Assert.Equal(Editor.Vscode, project.ResolvedEditor);
+        Assert.Equal([agent.Worktree], launcher.Launched);
+        Assert.DoesNotContain(panes, p => AgentPaneMatch.IsEditor(p, agent));
+        Assert.Equal(claude, panes.Single(p => AgentPaneMatch.Owns(p, agent)).Id);
+        Assert.Equal(agent, OpenEditorHandler.Caller(panes, dashboard, floating: false, agent.Worktree, [agent]));
+        Assert.Equal(agent, OpenEditorHandler.CallerByFolder(agent.Worktree, [agent]));
+        Assert.True(AgentPanes.Shown(agent, panes));
+        Assert.False(RestoreSessionHandler.Wanted(agent, panes));
+
+        var doomed = QuitPlan.PanesToClose(panes, ProjectRoot, [agent]);
+
+        Assert.Contains(claude, doomed);
+
+        Assert.True((await new StopAgentHandler(_mux, new RecordingStore()).HandleAsync(Project, agent)).Succeeded);
+
+        var after = await _mux.ListPanesAsync();
+
+        Assert.DoesNotContain(after, p => AgentPaneMatch.Owns(p, agent) || AgentPaneMatch.IsEditor(p, agent));
+        Assert.True(RestoreSessionHandler.Wanted(agent, after));
+        Assert.All(QuitPlan.PanesToClose(after, ProjectRoot, [agent]), id => Assert.Contains(after, p => p.Id == id));
     }
 
     private sealed class RecordingStore : IAgentStore

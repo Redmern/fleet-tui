@@ -22,6 +22,7 @@ public class MenuToggleTests
     [InlineData(FleetAction.EditMainOrchestratorInNvim)]
     [InlineData(FleetAction.EditSubOrchestratorsInNvim)]
     [InlineData(FleetAction.EditNvimConfig)]
+    [InlineData(FleetAction.EditEditor)]
     public void A_toggle_action_runs_headless(FleetAction action)
     {
         Assert.True(FleetMenus.IsToggle(action));

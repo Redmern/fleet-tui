@@ -59,6 +59,7 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Orchestrations;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Status;
 using Fleet.Shared.Status.Models;
@@ -482,7 +483,7 @@ public static class DashboardWiring
             git, mux, agents, name => settings.Load(name).Models, name => settings.Load(name).SubagentGuidance,
             settings: settings);
         var hider = new HideAgentHandler(mux, agents);
-        var editor = new OpenEditorHandler(mux);
+        var editor = new OpenEditorHandler(mux, Adapters.EditorLauncher());
         var branches = new ListBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
         var stopper = new StopAgentHandler(mux, agents);
@@ -1433,8 +1434,14 @@ public static class DashboardWiring
                     return null;
                 }
 
-                var outcome = await editor.HandleAsync(project.Name, agent, project.Root)
+                var chosen = settings.Load(project.Name).ResolvedEditor;
+                var outcome = await editor.HandleAsync(project.Name, agent, project.Root, chosen)
                     .ConfigureAwait(false);
+
+                if (!outcome.Succeeded && chosen == Editor.Vscode)
+                {
+                    Adapters.Toast($"fleet · {project.Name}", outcome.Error!);
+                }
 
                 return outcome.Succeeded
                     ? null
