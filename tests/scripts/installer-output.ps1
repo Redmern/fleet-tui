@@ -108,20 +108,33 @@ Check 'Invoke-WithSpinner captures stdout and stderr' ($result.Output -match 'ca
 function Invoke-DepsCase([string[]]$Present, [bool]$Winget = $true, [int]$WingetExit = 0, [hashtable]$Offer = @{}) {
     $deps = Join-Path $repo 'scripts/deps.ps1'
     $calls = [System.Collections.Generic.List[string]]::new()
-    $out = & {
-        . $deps
-        function Get-Command {
-            [CmdletBinding()] param([string]$Name)
-            if ($Name -eq 'winget') { if ($Winget) { [pscustomobject]@{ Name = 'winget' } } ; return }
-            if ($Present -contains $Name) { [pscustomobject]@{ Name = $Name } }
-        }
-        function winget {
-            $calls.Add($args -join ' ')
-            if ($WingetExit -lt 0) { throw 'winget exploded' }
-            $global:LASTEXITCODE = $WingetExit
-        }
-        Invoke-FleetDepsOffer @Offer
-    } 6>&1 2>&1 | Out-String
+    # Cases that don't answer the editor question pick nvim, which leaves the deps
+    # offer as it was before VS Code; without this Read-Host waits on a terminal.
+    if (-not $Offer.ContainsKey('EditorAnswer')) { $Offer = $Offer + @{ EditorAnswer = { '1' } } }
+    # Never let a case record installed-deps.json in the real config folder.
+    $savedHome = $env:FLEET_CONFIG_HOME
+    $sandbox = if ($savedHome) { $null } else { Join-Path ([IO.Path]::GetTempPath()) "fleet-deps-$([guid]::NewGuid().ToString('N'))" }
+    if ($sandbox) { $env:FLEET_CONFIG_HOME = $sandbox }
+    try {
+        $out = & {
+            . $deps
+            function Get-Command {
+                [CmdletBinding()] param([string]$Name)
+                if ($Name -eq 'winget') { if ($Winget) { [pscustomobject]@{ Name = 'winget' } } ; return }
+                if ($Present -contains $Name) { [pscustomobject]@{ Name = $Name } }
+            }
+            function winget {
+                $calls.Add($args -join ' ')
+                if ($WingetExit -lt 0) { throw 'winget exploded' }
+                $global:LASTEXITCODE = $WingetExit
+            }
+            Invoke-FleetDepsOffer @Offer
+        } 6>&1 2>&1 | Out-String
+    }
+    finally {
+        $env:FLEET_CONFIG_HOME = $savedHome
+        if ($sandbox) { Remove-Item -LiteralPath $sandbox -Recurse -Force -ErrorAction SilentlyContinue }
+    }
     [pscustomobject]@{ Output = $out; Calls = @($calls) }
 }
 
@@ -242,13 +255,18 @@ Check 'manifest: an unreadable manifest is left alone and only warns (AC-12)' ($
 # (the bytes JsonSettingsStore reads); anything else prints both commands.
 function Invoke-EditorCase([string[]]$Present, [hashtable]$Offer) {
     $home_ = Join-Path ([IO.Path]::GetTempPath()) "fleet-editor-$([guid]::NewGuid().ToString('N'))"
+    $savedHome = $env:FLEET_CONFIG_HOME
+    $env:FLEET_CONFIG_HOME = $home_
     try {
         $case = Invoke-DepsCase -Present $Present -Offer ($Offer + @{ ConfigHome = $home_ })
         $file = Join-Path $home_ 'editor.json'
         $case | Add-Member -NotePropertyName Editor -NotePropertyValue $(if (Test-Path $file) { [IO.File]::ReadAllText($file) } else { $null })
+        $manifest = Join-Path $home_ 'installed-deps.json'
+        $case | Add-Member -NotePropertyName Manifest -NotePropertyValue $(if (Test-Path $manifest) { [IO.File]::ReadAllText($manifest) } else { $null })
         $case
     }
     finally {
+        $env:FLEET_CONFIG_HOME = $savedHome
         Remove-Item $home_ -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
@@ -278,6 +296,8 @@ Check 'editor: VS Code is recorded as the global default (AC-10)' ($vscode.Edito
 $nvim = Invoke-EditorCase -Present 'git', 'yazi' -Offer @{ Interactive = $true; ReadAnswer = { 'y' }; EditorAnswer = { '1' } }
 Check 'editor: nvim is installed through the deps offer and recorded (AC-10)' (
     $nvim.Calls.Count -eq 1 -and $nvim.Calls[0] -match 'Neovim\.Neovim' -and $nvim.Editor -eq (EditorJson 'nvim'))
+Check 'editor: nvim installed through the deps offer lands in installed-deps.json next to editor.json' (
+    $nvim.Manifest -match '"tool":"nvim"' -and $nvim.Manifest -match '"package":"Neovim\.Neovim"')
 
 $skip = Invoke-EditorCase -Present 'git', 'yazi' -Offer @{ Interactive = $true; ReadAnswer = { throw 'asked' }; EditorAnswer = { '3' } }
 Check 'editor: skip installs and records nothing (AC-10)' (
