@@ -14,12 +14,16 @@
     Terminal profile uses it. A failed font download only warns.
 
 .PARAMETER Uninstall
-    Remove the binary and the PATH entry. Configuration under %APPDATA%\fleet is
+    Run 'fleet uninstall' when fleet.exe is installed. Without it, remove the
+    install folder and the PATH entry; configuration under %APPDATA%\fleet is then
     kept unless -Purge is also given.
 
+.PARAMETER Yes
+    With -Uninstall, pass --yes to 'fleet uninstall' so it does not ask first.
+
 .PARAMETER Purge
-    With -Uninstall, also delete %APPDATA%\fleet and the JetBrainsMono Nerd Font
-    the installer added for the current user.
+    With -Uninstall, also delete the JetBrainsMono Nerd Font the installer added
+    for the current user, and (without fleet.exe) %APPDATA%\fleet.
 
 .PARAMETER WithDeps
     Install Neovim, yazi and git through winget when they are missing, without
@@ -47,6 +51,7 @@
 [CmdletBinding()]
 param(
     [switch]$Uninstall,
+    [switch]$Yes,
     [switch]$Purge,
     [switch]$WithDeps,
     [string]$NvimConfig,
@@ -165,6 +170,21 @@ function Remove-FromUserPath($dir) {
 # ---------------------------------------------------------------------------
 # Uninstall
 # ---------------------------------------------------------------------------
+
+if ($Uninstall -and (Test-Path -LiteralPath $BinPath)) {
+    $uninstallArgs = @('uninstall')
+    if ($Yes) { $uninstallArgs += '--yes' }
+
+    & $BinPath @uninstallArgs
+    $uninstallExit = $LASTEXITCODE
+
+    if ($Purge -and $uninstallExit -eq 0) {
+        . (Join-Path $RepoRoot 'scripts\fonts.ps1')
+        Uninstall-FleetFont
+    }
+
+    exit $uninstallExit
+}
 
 if ($Uninstall) {
     $script:StepTotal = 1

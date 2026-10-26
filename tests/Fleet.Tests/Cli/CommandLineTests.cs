@@ -19,12 +19,38 @@ public class CommandLineTests
     [InlineData("doctor", FleetVerb.Doctor)]
     [InlineData("theme", FleetVerb.Theme)]
     [InlineData("forward", FleetVerb.Forward)]
+    [InlineData("uninstall", FleetVerb.Uninstall)]
     [InlineData("help", FleetVerb.Help)]
     [InlineData("--help", FleetVerb.Help)]
     [InlineData("-h", FleetVerb.Help)]
     public void Each_verb_is_recognised(string arg, FleetVerb expected)
     {
         Assert.Equal(expected, CommandLine.Parse([arg]).Verb);
+    }
+
+    [Theory]
+    [InlineData("--yes")]
+    [InlineData("-y")]
+    public void Uninstall_takes_yes_to_skip_the_confirmation(string flag)
+    {
+        var invocation = CommandLine.Parse(["uninstall", flag]);
+
+        Assert.Equal(FleetVerb.Uninstall, invocation.Verb);
+        Assert.True(CommandLine.Yes(invocation));
+    }
+
+    [Fact]
+    public void Uninstall_without_yes_asks()
+    {
+        Assert.False(CommandLine.Yes(CommandLine.Parse(["uninstall"])));
+        Assert.False(CommandLine.Yes(CommandLine.Parse(["uninstall", "--remove-deps"])));
+    }
+
+    [Fact]
+    public void Uninstall_reads_remove_deps()
+    {
+        Assert.True(CommandLine.RemoveDeps(CommandLine.Parse(["uninstall", "--remove-deps", "-y"])));
+        Assert.False(CommandLine.RemoveDeps(CommandLine.Parse(["uninstall", "-y"])));
     }
 
     [Theory]
