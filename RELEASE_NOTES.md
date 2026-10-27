@@ -4,6 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.28 (2026-10-27)
+
+- **New agent, New sub-orchestrator and Add repository are centered cards**: each field shows its value inline with a jump key chip (`r`/`b`/`a`/`o` in New agent, `c`/`n`/`u`/`b` in Add repository), pill buttons show their keys, and Ctrl+Enter submits from anywhere in the card. Text prompts, confirmations and error notices use the same card look.
+- **New sub-orchestrator has its own multi-line task field**: Enter adds a line, Ctrl+Enter dispatches, and the past tasks below it filter as you type; Enter on one fills the field. A blank task shows an inline error instead of dispatching. Past tasks are remembered on one line (newlines become spaces); the sub still gets the full text.
+- **Type to filter** in the repository, base-branch and clone-URL pickers: letters narrow the list instead of jumping, Ctrl+N/Ctrl+P move, Backspace deletes and goes back once the filter is empty. Other pickers keep their letter keys.
+- **Base-branch search finds remote branches**: the picker shows the branches fleet knows right away and runs `git fetch --prune origin` in the background (15 s limit), adding new remote branches without losing your filter. Offline, it says so and keeps the list usable; a remote-only branch starts the agent from `origin/<name>`.
+- **Add repository checks its fields**: an empty name, an empty URL while cloning or an empty branch shows an inline error and keeps the dialog open.
+
 ## 0.7.27 (2026-10-26)
 
 - **`fleet uninstall`** removes fleet from this machine: it lists what it would remove and asks one y/N (`--yes` skips the question and is required when stdin is not a terminal). It stops the daemon and removes the fleet-nvim folders, the fleet config home, the marked shell `PATH` lines and the binary (last); on Windows also the user `PATH` entry, the Fleet shortcut and Terminal profile, and the install folder. Your repositories, agent worktrees, per-project fleet files and `~/.claude*` entries stay.
