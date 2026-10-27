@@ -7,10 +7,11 @@ using Terminal.Gui.Views;
 
 namespace Fleet.Tests.Ui;
 
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class FloatBorderCollection
+// FloatBorder state is static like FleetModal's depth, and the card layout
+// tests turn the float border on, so both share one non-parallel collection.
+public static class FloatBorderCollection
 {
-    public const string Name = "float-border";
+    public const string Name = ModalDepthCollection.Name;
 }
 
 [Collection(FloatBorderCollection.Name)]

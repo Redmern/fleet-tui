@@ -28,7 +28,7 @@ public static class FleetPrompt
     {
         Reply? result = null;
 
-        var window = FleetTheme.Modal(title, FleetCard.Width, 8 + FleetCorners.Rows);
+        var window = FleetTheme.Modal(title, FleetCard.Width, 9 + FleetCorners.Rows);
         var header = Static(1, 1, 1);
         var field = FleetTheme.Field(3, 2, initial);
         field.Width = Dim.Fill(3);
