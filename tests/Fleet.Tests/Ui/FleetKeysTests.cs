@@ -48,4 +48,17 @@ public class FleetKeysTests
         Assert.False(FleetKeys.GoesBack(Key.Backspace.WithShift));
         Assert.False(FleetKeys.GoesBack(Key.Backspace.WithCtrl));
     }
+
+    [Fact]
+    public void Ctrl_enter_submits_a_dialog()
+    {
+        Assert.True(FleetKeys.Submits(Key.Enter.WithCtrl));
+    }
+
+    [Fact]
+    public void A_plain_enter_activates_the_row_instead_of_submitting()
+    {
+        Assert.False(FleetKeys.Submits(Key.Enter));
+        Assert.False(FleetKeys.Submits(Key.Enter.WithShift));
+    }
 }
