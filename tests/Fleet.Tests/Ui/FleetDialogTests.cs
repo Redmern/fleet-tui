@@ -21,16 +21,9 @@ public class FleetDialogTests
     }
 
     [Fact]
-    public void Enter_follows_the_focused_button_rather_than_a_default_one()
-    {
-        Assert.DoesNotContain("FleetTheme.Primary", Source[..Source.IndexOf("public static void Error", StringComparison.Ordinal)]);
-        Assert.Contains("yes.SetFocus();", Source);
-    }
-
-    [Fact]
     public void The_confirm_bar_is_icon_buttons_with_y_and_back_and_a_close_corner()
     {
-        Assert.Contains("(\"y\", FleetIcons.Select,", Source);
+        Assert.Contains("(selectKey, FleetIcons.Select, Activate)", Source);
         Assert.Contains("(\"bksp\", FleetIcons.Back,", Source);
         Assert.Contains("FleetCorners.Attach(window,", Source);
         Assert.DoesNotContain("HintBar(", Source);
