@@ -1,4 +1,5 @@
 using Fleet.Ports.Orchestrations;
+using Fleet.Shared.Orchestrations;
 
 namespace Fleet.Platform.Storage;
 
@@ -29,10 +30,7 @@ public sealed class FileDispatchHistory : IDispatchHistory
         BusyFiles.Replace(file, temp => File.WriteAllLines(temp, next));
     }
 
-    public static string OneLine(string prompt) =>
-        string.Join(
-            ' ',
-            prompt.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
+    public static string OneLine(string prompt) => PromptLine.OneLine(prompt);
 
     private static List<string>? Read(string file, TimeSpan patience) =>
         BusyFiles.Retry(

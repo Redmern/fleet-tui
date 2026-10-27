@@ -131,13 +131,25 @@ public class MenuBackTests
         Assert.Contains("FleetKeys.GoesBack(key, field.Text)", source);
     }
 
+    // The multi-line area claims keys in OnKeyDown, before TextView's own
+    // backspace binding, so backspace deletes until the area is empty.
     [Fact]
-    public void The_new_sub_task_field_only_goes_back_when_it_is_empty()
+    public void The_multi_line_text_area_only_goes_back_when_it_is_empty()
+    {
+        var source = Source("Ui", "FleetTextArea.cs");
+
+        Assert.Contains("override bool OnKeyDown(Key key)", source);
+        Assert.Contains("FleetKeys.GoesBack(key, Value)", source);
+    }
+
+    [Fact]
+    public void The_new_sub_task_field_goes_back_through_the_text_area()
     {
         var source = Source("Features", "Orchestrations", "Dispatch", "NewSubView.cs");
 
-        Assert.Contains("field.KeyDown", source);
-        Assert.Contains("FleetKeys.GoesBack(key, field.Text)", source);
+        Assert.Contains("new FleetTextArea", source);
+        Assert.Contains("GoingBack +=", source);
+        Assert.Contains("FleetModal.Back();", source);
     }
 
     [Fact]

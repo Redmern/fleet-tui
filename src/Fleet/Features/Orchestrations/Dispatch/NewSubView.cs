@@ -1,8 +1,8 @@
+using Fleet.Shared.Orchestrations;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
-using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 
 namespace Fleet.Features.Orchestrations.Dispatch;
@@ -11,90 +11,149 @@ public static class NewSubView
 {
     public const string Title = $"{FleetIcons.NewSub} New sub-orchestrator";
 
-    public const string EmptyTask = "(press enter to type the task)";
+    public const string EmptyTask = "Type a task for the sub first.";
+
+    public const string NoPast = "no earlier tasks";
+
+    public const string NoMatch = "no earlier task matches";
+
+    public const int TaskSlot = 0;
+
+    public const int PastSlot = 1;
+
+    private const int AreaRows = 6;
+
+    private const int MostPastRows = 8;
+
+    private const int RowWidth = FleetCard.Width - 6;
 
     public static string? Show(IApplication app, IReadOnlyList<string> past, Keymap keymap)
     {
         string? result = null;
-        var task = string.Empty;
+        var pastRows = Math.Clamp(past.Count, 1, MostPastRows);
+        var height = AreaRows + pastRows + 10 + FleetCorners.Rows;
+        var window = FleetTheme.Modal(Title, FleetCard.Width, height);
 
-        var window = FleetTheme.Overlay(Title);
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
-        var rows = new List<(FleetRow Row, Action Act)>();
+        var taskHeader = Header(0);
+        var area = new FleetTextArea { X = 2, Y = 1, Width = Dim.Fill(2), Height = AreaRows };
+        var error = FleetTheme.ErrorText(2, AreaRows + 1);
+        var pastHeader = Header(AreaRows + 2);
+        var list = FleetTheme.Rows(1, AreaRows + 3, pastRows + 3);
+        IReadOnlyList<int> shown = [];
+
+        void Close() => app.RequestStop(window);
 
         void Submit()
         {
-            if (!Dispatchable(task))
+            if (Problem(area.Value) is { } problem)
             {
-                EditTask();
-
+                error.Text = problem;
+                area.SetFocus();
                 return;
             }
 
-            result = task.Trim();
-            app.RequestStop(window);
+            result = Dispatched(area.Value);
+            Close();
         }
 
-        void EditTask()
+        void Back()
         {
-            var typed = TypeTask(app, task);
-
-            if (typed is null)
-            {
-                return;
-            }
-
-            task = typed.Value.Text;
-
-            if (typed.Value.Submit && Dispatchable(task))
-            {
-                Submit();
-            }
+            FleetModal.Back();
+            Close();
         }
 
-        void ChoosePast()
-        {
-            var picked = FleetPicker.Choose(app, "Past tasks", past, keymap);
-
-            if (picked is not null)
-            {
-                task = past[picked.Value];
-            }
-        }
-
-        var buttons = Buttons(Submit, () => app.RequestStop(window));
+        var pills = Pills(Submit, Close);
+        var keys = Keys(keymap, pills);
 
         void Refill(int selected)
         {
-            var fields = Fields(task, past.Count);
-
-            rows.Clear();
-            rows.Add((fields[0], EditTask));
-
-            if (fields.Count > 1)
-            {
-                rows.Add((fields[1], ChoosePast));
-            }
-
-            rows.AddRange(buttons.Select(b => (b.Row(), b.Activate)));
-            FleetRows.Fill(list, [.. rows.Select(r => r.Row)], selected);
+            shown = Shown(past, area.Value);
+            var rows = PastRows(past, shown, RowWidth);
+            FleetRows.Fill(list, [.. rows, .. pills.Select(p => p.Row())], selected, gapsAfter: [rows.Count - 1]);
         }
 
-        Refill(0);
-        FleetKeys.ApplyMotions(list, keymap);
-        FleetPillButton.Bind(list, buttons);
+        void Pick(int index)
+        {
+            if (index < 0 || index >= shown.Count)
+            {
+                return;
+            }
+
+            area.Text = past[shown[index]];
+            area.MoveEnd();
+            area.SetFocus();
+        }
+
+        void Act(int slot)
+        {
+            switch (slot)
+            {
+                case TaskSlot:
+                    area.SetFocus();
+                    break;
+
+                case PastSlot:
+                    list.SetFocus();
+                    FleetRows.Select(list, 0);
+                    break;
+
+                default:
+                    pills[slot - 2].Activate();
+                    break;
+            }
+        }
 
         void Activate()
         {
             var index = FleetRows.Selected(list);
+            var pastCount = Math.Max(shown.Count, 1);
 
-            if (index < 0 || index >= rows.Count)
+            if (index < pastCount)
             {
-                return;
+                Pick(index);
             }
+            else if (index - pastCount < pills.Count)
+            {
+                pills[index - pastCount].Activate();
+            }
+        }
 
-            rows[index].Act();
-            Refill(index);
+        FleetRows.Fill(taskHeader, [TaskHeader(keys[TaskSlot])]);
+        FleetRows.Fill(pastHeader, [PastHeader(past.Count, keys[PastSlot])]);
+        taskHeader.SelectedItem = null;
+        pastHeader.SelectedItem = null;
+        Refill(0);
+        FleetKeys.ApplyMotions(list, keymap);
+
+        area.Submitting += (_, _) => Submit();
+        area.Cancelling += (_, _) => Close();
+        area.GoingBack += (_, _) => Back();
+        area.ContentsChanged += (_, _) =>
+        {
+            error.Text = string.Empty;
+            Refill(FleetRows.Selected(list));
+        };
+
+        if (list is FleetList rows)
+        {
+            rows.Pressing += (_, key) =>
+            {
+                if (key.Handled)
+                {
+                    return;
+                }
+
+                if (FleetKeys.Submits(key))
+                {
+                    Submit();
+                    key.Handled = true;
+                }
+                else if (FleetCard.Jump(key, keys, pills) is { } slot)
+                {
+                    Act(slot);
+                    key.Handled = true;
+                }
+            };
         }
 
         list.Accepting += (_, e) =>
@@ -107,13 +166,17 @@ public static class NewSubView
         {
             if (key == FleetKeys.Cancel)
             {
-                app.RequestStop(window);
+                Close();
                 key.Handled = true;
             }
-            else if (FleetKeys.GoesBack(key))
+            else if (FleetKeys.Submits(key))
             {
-                FleetModal.Back();
-                app.RequestStop(window);
+                Submit();
+                key.Handled = true;
+            }
+            else if (!area.HasFocus && FleetKeys.GoesBack(key))
+            {
+                Back();
                 key.Handled = true;
             }
         };
@@ -123,23 +186,26 @@ public static class NewSubView
         bar.Show(
         [
             ("enter", FleetIcons.Select, Activate),
-            ("bksp", FleetIcons.Back, () =>
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-            }),
+            ("ctrl+enter", FleetIcons.Dispatch, Submit),
+            ("tab", FleetIcons.History, () => (area.HasFocus ? (View)list : area).SetFocus()),
+            ("bksp", FleetIcons.Back, Back),
         ]);
 
         window.Add(
+            taskHeader,
+            area,
+            error,
+            pastHeader,
             list,
-            FleetTheme.Caption(1, Pos.AnchorEnd(2), "The sub-orchestrator plans the task and starts agents for it."),
+            FleetTheme.Caption(1, Pos.AnchorEnd(2), "Enter adds a line. The sub plans the task and starts agents."),
             bar.Root);
-        FleetCorners.Attach(window, () => app.RequestStop(window));
+        FleetCorners.Attach(window, Close);
 
         FleetModal.Enter();
 
         try
         {
+            area.SetFocus();
             app.Run(window);
         }
         finally
@@ -151,99 +217,62 @@ public static class NewSubView
         return result;
     }
 
-    public static IReadOnlyList<FleetRow> Fields(string task, int pastTasks)
-    {
-        var rows = new List<FleetRow>
-        {
-            FleetFieldRow.Of(FleetIcons.Task, "Task", task.Length == 0 ? EmptyTask : task),
-        };
+    public static IReadOnlyList<FleetPillButton> Pills(Action dispatch, Action cancel) =>
+        FleetCard.Pills(FleetIcons.Dispatch, "Dispatch", "d", dispatch, cancel);
 
-        if (pastTasks > 0)
+    public static IReadOnlyList<string> Keys(Keymap keymap, IReadOnlyList<FleetPillButton> pills) =>
+        FleetMnemonics.For(["Task", "Past tasks"], keymap, pills.Select(p => p.Mnemonic.ToLowerInvariant()));
+
+    public static FleetRow TaskHeader(string key) =>
+        FleetCard.FieldRow(new FleetCardField(FleetIcons.Task, "Task", string.Empty, () => { }), key);
+
+    public static FleetRow PastHeader(int count, string key) =>
+        FleetCard.FieldRow(
+            new FleetCardField(
+                FleetIcons.History,
+                "Past",
+                count switch
+                {
+                    0 => NoPast,
+                    1 => "1 earlier task",
+                    _ => $"{count} earlier tasks",
+                },
+                () => { }),
+            key);
+
+    public static IReadOnlyList<int> Shown(IReadOnlyList<string> past, string typed) =>
+        PickerFilter.Apply(PickerEntry.Plain(past), PromptLine.OneLine(typed));
+
+    public static IReadOnlyList<FleetRow> PastRows(IReadOnlyList<string> past, IReadOnlyList<int> shown, int width)
+    {
+        if (shown.Count == 0)
         {
-            rows.Add(FleetFieldRow.Of(
-                FleetIcons.History, "Past", pastTasks == 1 ? "1 earlier task" : $"{pastTasks} earlier tasks"));
+            return [new FleetRow([new FleetSpan(past.Count == 0 ? NoPast : NoMatch, FleetTones.Muted)])];
         }
 
-        return rows;
+        return
+        [
+            .. shown.Select(i => new FleetRow(
+            [
+                new FleetSpan(FleetIcons.History, FleetTones.Icon),
+                FleetSpan.Plain(" "),
+                FleetSpan.Plain(PickerFilter.OneLine(PromptLine.OneLine(past[i]), width - 2)),
+            ])),
+        ];
     }
-
-    public static IReadOnlyList<FleetPillButton> Buttons(Action dispatch, Action cancel) =>
-    [
-        new(FleetIcons.Dispatch, "Dispatch", "d", dispatch),
-        new(FleetIcons.Close, "Cancel", "Esc", cancel),
-    ];
 
     public static bool Dispatchable(string task) => !string.IsNullOrWhiteSpace(task);
 
-    public static bool SubmitsWhileTyping(Key key) => key == Key.Enter.WithCtrl;
+    public static string? Problem(string task) => Dispatchable(task) ? null : EmptyTask;
 
-    private static (string Text, bool Submit)? TypeTask(IApplication app, string initial)
+    public static string Dispatched(string task) => FleetTextArea.Normalize(task).Trim();
+
+    private static FleetList Header(int y)
     {
-        (string Text, bool Submit)? result = null;
+        var header = (FleetList)FleetTheme.Rows(1, y, 1);
 
-        var window = FleetTheme.Modal(Title, 70, 8 + FleetCorners.Rows);
-        var field = FleetTheme.Field(2, 3, initial);
+        header.CanFocus = false;
 
-        void Done(bool submit)
-        {
-            result = (field.Text.Trim(), submit);
-            app.RequestStop(window);
-        }
-
-        field.Accepting += (_, e) =>
-        {
-            e.Handled = true;
-            Done(false);
-        };
-
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
-
-        bar.Show(
-        [
-            ("enter", FleetIcons.Select, () => Done(false)),
-            ("ctrl+enter", FleetIcons.Dispatch, () => Done(true)),
-            ("bksp", FleetIcons.Back, () => app.RequestStop(window)),
-        ]);
-
-        window.Add(FleetTheme.Caption(2, 1, $"{FleetIcons.Task} Task for the sub"), field, bar.Root);
-        FleetCorners.Attach(window, () => app.RequestStop(window));
-
-        window.KeyDown += (_, key) =>
-        {
-            if (key == FleetKeys.Cancel)
-            {
-                key.Handled = true;
-                app.RequestStop(window);
-            }
-        };
-
-        field.KeyDown += (_, key) =>
-        {
-            if (SubmitsWhileTyping(key))
-            {
-                key.Handled = true;
-                Done(true);
-            }
-            else if (FleetKeys.GoesBack(key, field.Text))
-            {
-                key.Handled = true;
-                app.RequestStop(window);
-            }
-        };
-
-        FleetModal.Enter();
-
-        try
-        {
-            field.SetFocus();
-            app.Run(window);
-        }
-        finally
-        {
-            FleetModal.Leave();
-            window.Dispose();
-        }
-
-        return result;
+        return header;
     }
 }
