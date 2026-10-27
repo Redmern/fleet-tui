@@ -1,13 +1,18 @@
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
+using Fleet.Shared.Settings.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 
 namespace Fleet.Tests.Features.Repositories;
 
-public sealed class AddRepositoryViewTests
+public sealed class AddRepositoryViewTests : IDisposable
 {
+    public AddRepositoryViewTests() => FleetButtonHints.Reset();
+
+    public void Dispose() => FleetButtonHints.Reset();
+
     private static IReadOnlyList<FleetCardField> Fields(
         bool cloning, string name = "fleet", string url = "git@x:fleet.git", string branch = "main", List<string>? ran = null) =>
         AddRepositoryView.Fields(
@@ -71,9 +76,56 @@ public sealed class AddRepositoryViewTests
         Assert.Equal((FleetIcons.AddRepo, "Add repository", "a"), AddRepositoryView.Add);
 
     [Fact]
+    public void Cancel_has_an_icon_and_the_esc_key()
+    {
+        var cancel = Pills()[1];
+
+        Assert.Equal(("Cancel", FleetIcons.Close, "Esc"), (cancel.Label, cancel.Icon, cancel.Mnemonic));
+    }
+
+    [Fact]
+    public void Each_pill_shows_its_icon_and_a_key_chip()
+    {
+        foreach (var pill in Pills())
+        {
+            var row = pill.Row(ButtonHints.None);
+
+            Assert.Contains(pill.Icon, row.Text);
+            Assert.Contains(row.Spans, s => s.Tone == FleetTones.ChipKey);
+        }
+    }
+
+    [Theory]
+    [InlineData(ButtonHints.None)]
+    [InlineData(ButtonHints.Tooltips)]
+    [InlineData(ButtonHints.Text)]
+    public void The_pill_names_and_key_chips_show_in_every_hints_mode(ButtonHints hints)
+    {
+        var rows = Pills().Select(p => p.Row(hints)).ToList();
+
+        Assert.Contains("Add repository", rows[0].Text);
+        Assert.Contains("Cancel", rows[1].Text);
+        Assert.All(rows, r => Assert.Contains(r.Spans, s => s.Tone == FleetTones.ChipKey));
+    }
+
+    [Fact]
+    public void The_pills_run_add_and_cancel()
+    {
+        var ran = new List<string>();
+        var pills = FleetCard.Pills(
+            AddRepositoryView.Add.Icon, AddRepositoryView.Add.Label, AddRepositoryView.Add.Mnemonic, () => ran.Add("add"), () => ran.Add("cancel"));
+
+        pills[0].Activate();
+        pills[1].Activate();
+
+        Assert.Equal(["add", "cancel"], ran);
+    }
+
+    [Fact]
     public void No_jump_key_clashes_with_the_list_motions()
     {
         Assert.All(Pills(), p => Assert.False(p.Clashes(Keymap.Default), p.Mnemonic));
+        Assert.All(Pills(), p => Assert.False(p.Answers(FleetKeys.Back), p.Mnemonic));
         Assert.DoesNotContain("j", FleetCard.FieldKeys(Fields(cloning: true), Pills(), Keymap.Default));
         Assert.DoesNotContain("k", FleetCard.FieldKeys(Fields(cloning: true), Pills(), Keymap.Default));
     }
