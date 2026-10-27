@@ -85,7 +85,6 @@ public class MenuBackTests
         new[] { "Features", "Remotes", "ManageRemotes", "ManageRemotesView.cs" },
         new[] { "Features", "Notifications", "ShowNotices", "ShowNoticesView.cs" },
         new[] { "Features", "Dashboard", "ShowDashboard", "ShowDashboardView.cs" },
-        new[] { "Features", "Repositories", "AddRepository", "AddRepositoryView.cs" },
         new[] { "Features", "Repositories", "Secrets", "SecretsView.cs" },
         new[] { "Features", "Orchestrations", "Dispatch", "NewSubView.cs" },
         new[] { "Features", "Agents", "ListAgents", "ListAgentsView.cs" },
@@ -107,6 +106,7 @@ public class MenuBackTests
     public static TheoryData<string[]> CardScreens => new()
     {
         new[] { "Features", "Agents", "NewAgent", "NewAgentView.cs" },
+        new[] { "Features", "Repositories", "AddRepository", "AddRepositoryView.cs" },
     };
 
     [Theory]
