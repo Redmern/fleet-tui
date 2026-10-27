@@ -1,10 +1,11 @@
+using System.Collections.Concurrent;
 using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Results;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
-using Terminal.Gui.ViewBase;
 
 namespace Fleet.Features.Agents.NewAgent;
 
@@ -31,37 +32,29 @@ public static class NewAgentView
             return null;
         }
 
-        NewAgentCommand? result = null;
-
         var (repository, harness) = Preselect(prompt, lastRepo, lastHarness);
         var chosenBase = prompt.Repositories[repository].DefaultBranch;
         var branch = string.Empty;
 
-        var window = FleetTheme.Overlay(Title);
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
-        var rows = new List<(FleetRow Row, Action Act)>();
-
         void ChooseRepository()
         {
+            var names = prompt.Repositories.Select(r => r.Name).ToList();
             var picked = FleetPicker.Choose(
-                app,
-                "Repository",
-                prompt.Repositories.Select(r => r.Name).ToList(),
-                keymap,
-                repository);
+                app, "Repository", PickerEntry.Plain(names), keymap, RepositoryPicker, repository);
 
             if (picked is null)
             {
                 return;
             }
 
-            repository = picked.Value;
+            repository = names.IndexOf(picked.Label);
             chosenBase = prompt.Repositories[repository].DefaultBranch;
         }
 
         void ChooseBase()
         {
-            var branches = prompt.Branches(prompt.Repositories[repository].Directory);
+            var directory = prompt.Repositories[repository].Directory;
+            var branches = prompt.Branches(directory);
 
             if (branches.Count == 0)
             {
@@ -71,12 +64,17 @@ public static class NewAgentView
                 return;
             }
 
+            var known = Known(branches);
             var picked = FleetPicker.Choose(
-                app, "Base branch", branches.Select(b => b.Label).ToList(), keymap);
+                app,
+                "Base branch",
+                [.. branches.Select(b => new PickerEntry(b.Label))],
+                keymap,
+                BasePicker(prompt.Fetch, directory, known));
 
-            if (picked is not null)
+            if (picked is not null && known.TryGetValue(picked.Label, out var choice))
             {
-                chosenBase = branches[picked.Value].Reference;
+                chosenBase = choice.Reference;
             }
         }
 
@@ -106,133 +104,66 @@ public static class NewAgentView
             }
         }
 
-        void Submit()
-        {
-            result = new NewAgentCommand(
+        var submitted = FleetCard.Show(
+            app,
+            Title,
+            keymap,
+            () => Fields(
+                prompt.Repositories[repository].Name,
+                branch.Length == 0 ? "(base itself)" : branch,
+                Shown(chosenBase),
+                AgentHarness.Describe(harness),
+                ChooseRepository,
+                EditBranch,
+                ChooseBase,
+                ChooseHarness),
+            Create,
+            "Empty branch works on the base; empty base cuts from the default branch.");
+
+        return submitted
+            ? new NewAgentCommand(
                 prompt.ProjectName,
                 prompt.Repositories[repository].Name,
                 prompt.Repositories[repository].Directory,
                 branch,
                 chosenBase,
-                harness);
-
-            app.RequestStop(window);
-        }
-
-        var buttons = Buttons(Submit, () => app.RequestStop(window));
-
-        void Rebuild()
-        {
-            var fields = Fields(
-                prompt.Repositories[repository].Name,
-                branch.Length == 0 ? "(base itself)" : branch,
-                Shown(chosenBase),
-                AgentHarness.Describe(harness));
-
-            rows.Clear();
-            rows.Add((fields[0], ChooseRepository));
-            rows.Add((fields[1], EditBranch));
-            rows.Add((fields[2], ChooseBase));
-            rows.Add((fields[3], ChooseHarness));
-            rows.AddRange(buttons.Select(b => (b.Row(), b.Activate)));
-        }
-
-        void Refill(int selected)
-        {
-            Rebuild();
-            FleetRows.Fill(list, [.. rows.Select(r => r.Row)], selected);
-        }
-
-        Refill(0);
-        FleetKeys.ApplyMotions(list, keymap);
-        FleetPillButton.Bind(list, buttons);
-
-        void Jump(int index, Action act)
-        {
-            Refill(index);
-            act();
-            Refill(index);
-        }
-
-        var fieldKeys = FieldKeys(
-                () => Jump(0, ChooseRepository),
-                () => Jump(1, EditBranch),
-                () => Jump(3, ChooseHarness))
-            .Where(k => !k.Clashes(keymap))
-            .ToList();
-
-        FleetPillButton.Bind(list, fieldKeys);
-
-        void Activate()
-        {
-            var index = FleetRows.Selected(list);
-
-            if (index < 0 || index >= rows.Count)
-            {
-                return;
-            }
-
-            rows[index].Act();
-            Refill(index);
-        }
-
-        list.Accepting += (_, e) =>
-        {
-            Activate();
-            e.Handled = true;
-        };
-
-        window.KeyDown += (_, key) =>
-        {
-            if (key == FleetKeys.Cancel)
-            {
-                app.RequestStop(window);
-                key.Handled = true;
-            }
-            else if (FleetKeys.GoesBack(key))
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-                key.Handled = true;
-            }
-        };
-
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
-
-        bar.Show(
-        [
-            ("enter", FleetIcons.Select, Activate),
-            .. fieldKeys.Select(k => (k.Mnemonic, k.Icon, k.Activate)),
-            ("bksp", FleetIcons.Back, () =>
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-            }),
-        ]);
-
-        window.Add(
-            list,
-            FleetTheme.Caption(
-                1,
-                Pos.AnchorEnd(2),
-                "Empty branch works on the base; empty base cuts from the default branch."),
-            bar.Root);
-        FleetCorners.Attach(window, () => app.RequestStop(window));
-
-        FleetModal.Enter();
-
-        try
-        {
-            app.Run(window);
-        }
-        finally
-        {
-            FleetModal.Leave();
-            window.Dispose();
-        }
-
-        return result;
+                harness)
+            : null;
     }
+
+    public static readonly (string Icon, string Label, string Mnemonic) Create =
+        (FleetIcons.Create, "Create agent", "c");
+
+    public static readonly FleetPickerOptions RepositoryPicker = new(Filter: true);
+
+    public static FleetPickerOptions BasePicker(
+        Func<string, CancellationToken, Task<Result<IReadOnlyList<BranchChoice>>>>? fetch,
+        string directory,
+        ConcurrentDictionary<string, BranchChoice> known) =>
+        new(
+            Filter: true,
+            Refresh: fetch is null ? null : async ct =>
+            {
+                var fetched = await fetch(directory, ct).ConfigureAwait(false);
+
+                if (!fetched.Succeeded)
+                {
+                    return new PickerRefresh([], fetched.Error ?? string.Empty);
+                }
+
+                foreach (var choice in fetched.Value)
+                {
+                    known.TryAdd(choice.Label, choice);
+                }
+
+                return new PickerRefresh([.. fetched.Value.Select(b => new PickerEntry(b.Label))]);
+            },
+            Refreshing: "fetching origin...");
+
+    public static ConcurrentDictionary<string, BranchChoice> Known(IReadOnlyList<BranchChoice> branches) =>
+        new(branches
+            .GroupBy(b => b.Label, StringComparer.Ordinal)
+            .Select(g => KeyValuePair.Create(g.Key, g.First())));
 
     public static (int Repository, string Harness) Preselect(
         NewAgentPrompt prompt, string lastRepo, string lastHarness)
@@ -253,25 +184,20 @@ public static class NewAgentView
         return (repository, harness);
     }
 
-    public static IReadOnlyList<FleetRow> Fields(string repository, string branch, string from, string opens) =>
+    public static IReadOnlyList<FleetCardField> Fields(
+        string repository,
+        string branch,
+        string from,
+        string opens,
+        Action chooseRepository,
+        Action editBranch,
+        Action chooseBase,
+        Action chooseHarness) =>
     [
-        FleetFieldRow.Of(FleetIcons.Repo, "Repo", repository),
-        FleetFieldRow.Of(FleetIcons.Branch, "Branch", branch),
-        FleetFieldRow.Of(FleetIcons.Base, "Base", from),
-        FleetFieldRow.Of(FleetIcons.Harness, "Opens", opens),
-    ];
-
-    public static IReadOnlyList<FleetPillButton> FieldKeys(Action repository, Action branch, Action opens) =>
-    [
-        new(FleetIcons.Repo, "Repo", "r", repository),
-        new(FleetIcons.Branch, "Branch", "b", branch),
-        new(FleetIcons.Harness, "Opens", "o", opens),
-    ];
-
-    public static IReadOnlyList<FleetPillButton> Buttons(Action create, Action cancel) =>
-    [
-        new(FleetIcons.Create, "Create agent", "c", create),
-        new(FleetIcons.Close, "Cancel", "Esc", cancel),
+        new(FleetIcons.Repo, "Repo", repository, chooseRepository),
+        new(FleetIcons.Branch, "Branch", branch, editBranch),
+        new(FleetIcons.Base, "Base", from, chooseBase),
+        new(FleetIcons.Harness, "Opens", opens, chooseHarness),
     ];
 
     private static string Shown(string branch) =>

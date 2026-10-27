@@ -70,6 +70,7 @@ public class MenuBackTests
     public static TheoryData<string[]> Screens => new()
     {
         new[] { "Ui", "FleetPicker.cs" },
+        new[] { "Ui", "FleetCard.cs" },
         new[] { "Ui", "FleetTabbedPicker.cs" },
         new[] { "Ui", "FleetColorDialog.cs" },
         new[] { "Ui", "FleetThemeEditor.cs" },
@@ -86,7 +87,6 @@ public class MenuBackTests
         new[] { "Features", "Dashboard", "ShowDashboard", "ShowDashboardView.cs" },
         new[] { "Features", "Repositories", "AddRepository", "AddRepositoryView.cs" },
         new[] { "Features", "Repositories", "Secrets", "SecretsView.cs" },
-        new[] { "Features", "Agents", "NewAgent", "NewAgentView.cs" },
         new[] { "Features", "Orchestrations", "Dispatch", "NewSubView.cs" },
         new[] { "Features", "Agents", "ListAgents", "ListAgentsView.cs" },
         new[] { "Features", "Todos", "ShowBoard", "BoardView.cs" },
@@ -101,6 +101,22 @@ public class MenuBackTests
         Assert.Contains("FleetKeys.GoesBack(key", source);
         Assert.Contains("FleetModal.Back();", source);
     }
+
+    // Card dialogs get Esc, backspace-goes-back and ctrl+enter from FleetCard,
+    // which is itself in Screens above.
+    public static TheoryData<string[]> CardScreens => new()
+    {
+        new[] { "Features", "Agents", "NewAgent", "NewAgentView.cs" },
+    };
+
+    [Theory]
+    [MemberData(nameof(CardScreens))]
+    public void Every_card_dialog_goes_back_on_backspace_through_the_shared_card(string[] path) =>
+        Assert.Contains("FleetCard.Show(", Source(path));
+
+    [Fact]
+    public void The_shared_card_submits_on_ctrl_enter() =>
+        Assert.Contains("FleetKeys.Submits(key)", Source("Ui", "FleetCard.cs"));
 
     // A text field must keep backspace for deleting what was typed; it only
     // goes back once the field is empty.
