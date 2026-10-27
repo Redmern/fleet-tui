@@ -92,14 +92,16 @@ public static class FleetPicker
         var widest = entries.Max(e => e.Label.Length + e.Detail.Length + e.Key.Length) + 16;
         var extra = filtering ? 1 : 0;
         var status = options.Refresh is null ? 0 : 1;
+        var cardWidth = Math.Max(widest, Math.Max(title.Length + 10, 56));
         var window = FleetTheme.Modal(
             title,
-            Math.Max(widest, Math.Max(title.Length + 10, 56)),
+            cardWidth,
             Math.Min(entries.Count, MostRows) + 6 + extra + status + FleetCorners.Rows);
 
         var filterLine = FleetTheme.Caption(1, 1, string.Empty);
         var list = FleetTheme.Rows(1, 1 + extra, Dim.Fill(2 + status));
         var note = FleetTheme.StatusLine(Pos.AnchorEnd(2));
+        var noteWidth = cardWidth - 4;
 
         int Current() =>
             visible.Count == 0 ? -1 : visible[Math.Clamp(FleetRows.Selected(list), 0, visible.Count - 1)];
@@ -274,6 +276,10 @@ public static class FleetPicker
                     {
                         return;
                     }
+                    catch (Exception e)
+                    {
+                        found = new PickerRefresh([], $"offline: {e.Message}");
+                    }
 
                     app.Invoke(() =>
                     {
@@ -288,7 +294,7 @@ public static class FleetPicker
                         all = PickerFilter.Merge(all, found.Entries);
                         keys = Accelerators(all, keymap, filtering);
                         Show(keep);
-                        note.Text = found.Note;
+                        note.Text = PickerFilter.OneLine(found.Note, noteWidth);
                     });
                 },
                 token);

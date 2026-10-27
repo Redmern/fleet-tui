@@ -63,4 +63,13 @@ public class FleetPickerTests
         Assert.Contains("PickerFilter.Merge(", Source);
         Assert.Contains("FleetGlyphs.Frame(", Source);
     }
+
+    // A refresh that throws must not leave the spinner running: it ends as a note.
+    [Fact]
+    public void A_refresh_that_throws_stops_the_spinner_with_an_offline_note()
+    {
+        Assert.Contains("catch (Exception e)", Source);
+        Assert.Contains("new PickerRefresh([], $\"offline: {e.Message}\")", Source);
+        Assert.Contains("PickerFilter.OneLine(found.Note", Source);
+    }
 }

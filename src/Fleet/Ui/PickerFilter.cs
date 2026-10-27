@@ -56,4 +56,17 @@ public static class PickerFilter
 
         return [.. known, .. fresh.Where(e => labels.Add(e.Label))];
     }
+
+    public static string OneLine(string note, int width)
+    {
+        var line = note.Split('\n', 2)[0].TrimEnd('\r', ' ');
+        var runes = line.EnumerateRunes().ToList();
+
+        if (runes.Count <= width || width < 1)
+        {
+            return line;
+        }
+
+        return string.Concat(runes.Take(width - 1).Select(r => r.ToString())) + "…";
+    }
 }

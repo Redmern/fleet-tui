@@ -108,4 +108,34 @@ public class PickerFilterTests
 
         Assert.Equal(known, PickerFilter.Merge(known, Entries("develop")));
     }
+
+    [Fact]
+    public void A_short_note_is_shown_as_is()
+    {
+        Assert.Equal("offline: timed out", PickerFilter.OneLine("offline: timed out", 40));
+    }
+
+    [Fact]
+    public void A_note_keeps_only_its_first_line()
+    {
+        Assert.Equal("offline: fatal: no remote", PickerFilter.OneLine("offline: fatal: no remote\nhint: try again\n", 40));
+    }
+
+    [Fact]
+    public void A_long_note_is_cut_with_an_ellipsis_to_fit()
+    {
+        var note = PickerFilter.OneLine("offline: " + new string('x', 100), 20);
+
+        Assert.Equal(20, note.Length);
+        Assert.EndsWith("…", note);
+        Assert.StartsWith("offline: ", note);
+    }
+
+    [Fact]
+    public void A_note_is_never_cut_inside_a_surrogate_pair()
+    {
+        var note = PickerFilter.OneLine("ab\U0001F600\U0001F600\U0001F600", 4);
+
+        Assert.Equal("ab\U0001F600…", note);
+    }
 }
