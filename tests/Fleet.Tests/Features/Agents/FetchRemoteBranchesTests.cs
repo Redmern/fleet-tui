@@ -103,4 +103,15 @@ public class FetchRemoteBranchesTests
 
         Assert.DoesNotContain(git.Calls, c => c[0] == "fetch");
     }
+
+    [Fact]
+    public async Task A_git_runner_that_throws_is_reported_offline_instead_of_hanging()
+    {
+        var git = new ScriptedGit((_, _) => throw new System.ComponentModel.Win32Exception("git not found"));
+
+        var fetched = await new FetchRemoteBranchesHandler(git).HandleAsync("/r/backend");
+
+        Assert.False(fetched.Succeeded);
+        Assert.Equal("offline: git not found", fetched.Error);
+    }
 }

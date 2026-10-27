@@ -35,5 +35,9 @@ public sealed class FetchRemoteBranchesHandler(IGitRunner git, TimeSpan? timeout
         {
             return Result<IReadOnlyList<BranchChoice>>.Fail("offline: fetch timed out");
         }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            return Result<IReadOnlyList<BranchChoice>>.Fail($"offline: {e.Message}");
+        }
     }
 }
