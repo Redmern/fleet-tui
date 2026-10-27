@@ -19,13 +19,14 @@ public sealed class AddRepositoryDialogTests
 
     private static readonly IReadOnlyList<string> Known = ["git@x:fleet.git", "git@x:site.git"];
 
-    private sealed record Outcome(AddRepositoryCommand? Command, bool WentBack, string Error, IReadOnlyList<string> Rows);
+    private sealed record Outcome(AddRepositoryCommand? Command, bool WentBack, string Error, IReadOnlyList<string> Rows, bool PromptWentBack);
 
     private static Outcome Run(IReadOnlyList<string> known, params Key[] keys)
     {
         using var app = Application.Create().Init("ansi");
         var error = string.Empty;
         IReadOnlyList<string> rows = [];
+        var promptWentBack = false;
 
         Step(app, keys, 0, () =>
         {
@@ -34,6 +35,7 @@ public sealed class AddRepositoryDialogTests
                 return;
             }
 
+            promptWentBack = FleetModal.WentBack();
             error = window.SubViews.OfType<Label>().Single(l => l.SchemeName == FleetSchemes.Error).Text;
             rows = [.. window.SubViews.OfType<FleetList>().Single().Source!.ToList().Cast<string>()];
             app.Keyboard.RaiseKeyDownEvent(Key.Esc);
@@ -41,7 +43,7 @@ public sealed class AddRepositoryDialogTests
 
         var command = AddRepositoryView.Show(app, Root, known, Keymap.Default);
 
-        return new Outcome(command, FleetModal.WentBack(), error, rows);
+        return new Outcome(command, FleetModal.WentBack(), error, rows, promptWentBack);
     }
 
     // Each key queues the next before it is raised, since a key that opens a
@@ -172,6 +174,24 @@ public sealed class AddRepositoryDialogTests
         var outcome = Run([], [new Key('j'), Key.Enter, .. Typed("fleet"), Key.Enter, Key.Enter.WithCtrl]);
 
         Assert.Equal(AddRepositoryCommand.CreateNew(Root, "fleet", "main"), outcome.Command);
+    }
+
+    [Fact]
+    public void Backspace_in_an_empty_name_prompt_goes_back_to_the_card()
+    {
+        var outcome = Run([], new Key('n'), Key.Backspace);
+
+        Assert.True(outcome.PromptWentBack);
+        Assert.False(outcome.WentBack);
+        Assert.Contains(outcome.Rows, r => r.Contains("Name:    (required)"));
+    }
+
+    [Fact]
+    public void Backspace_in_a_name_prompt_with_text_only_deletes()
+    {
+        var outcome = Run([], [new Key('n'), .. Typed("ab"), Key.Backspace, Key.Enter, Key.Enter.WithCtrl]);
+
+        Assert.Equal(AddRepositoryCommand.CreateNew(Root, "a", "main"), outcome.Command);
     }
 
     [Fact]
