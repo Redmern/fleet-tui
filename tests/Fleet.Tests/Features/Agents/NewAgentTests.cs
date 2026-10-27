@@ -247,6 +247,40 @@ public sealed class NewAgentTests : IDisposable
         Assert.False(upstream.Ok);
     }
 
+    // AC-15: a branch that exists only on the remote is found by the picker's
+    // background fetch and the agent starts from origin/<name>.
+    [Fact]
+    public async Task A_remote_only_branch_found_by_the_fetch_becomes_the_agents_base()
+    {
+        var directory = await RepositoryAsync();
+        var git = new GitRunner();
+
+        var remote = Path.Combine(_root, "origin.git");
+        await git.RunAsync(_root, ["init", "--bare", remote]);
+        await git.RunAsync(directory, ["remote", "add", "origin", remote]);
+        await git.RunAsync(directory, ["push", "origin", "main"]);
+
+        var other = Path.Combine(_root, "other");
+        await git.RunAsync(_root, ["clone", remote, other]);
+        await git.RunAsync(other, ["switch", "-c", "feat/remote-only"]);
+        await git.RunAsync(
+            other,
+            ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "remote work"]);
+        await git.RunAsync(other, ["push", "origin", "feat/remote-only"]);
+        var pushed = (await git.RunAsync(other, ["rev-parse", "HEAD"])).Out;
+
+        var fetched = await new FetchRemoteBranchesHandler(git).HandleAsync(directory);
+
+        Assert.True(fetched.Succeeded, fetched.Error);
+        Assert.Contains(fetched.Value, b => b.Reference == "origin/feat/remote-only");
+
+        var result = await Handler()
+            .HandleAsync(Command(directory, "feature/on-remote", from: "origin/feat/remote-only"));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal(pushed, (await git.RunAsync(result.Value!.Worktree, ["rev-parse", "HEAD"])).Out);
+    }
+
     [Fact]
     public async Task A_repository_whose_trunk_is_not_main_still_cuts_from_its_own_head()
     {
