@@ -12,9 +12,9 @@ public sealed class FileDispatchHistory : IDispatchHistory
     public void Add(string project, string prompt)
     {
         var file = FileFor(project);
-        var trimmed = prompt.Trim();
+        var trimmed = OneLine(prompt);
 
-        if (file is null || trimmed.Length == 0 || trimmed.Contains('\n')
+        if (file is null || trimmed.Length == 0
             || Read(file, BusyFiles.Patience) is not { } history)
         {
             return;
@@ -28,6 +28,11 @@ public sealed class FileDispatchHistory : IDispatchHistory
 
         BusyFiles.Replace(file, temp => File.WriteAllLines(temp, next));
     }
+
+    public static string OneLine(string prompt) =>
+        string.Join(
+            ' ',
+            prompt.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0));
 
     private static List<string>? Read(string file, TimeSpan patience) =>
         BusyFiles.Retry(
