@@ -71,18 +71,26 @@ public static class FleetCard
         Keymap keymap,
         Func<IReadOnlyList<FleetCardField>> fields,
         (string Icon, string Label, string Mnemonic) submit,
-        string caption = "")
+        string caption = "",
+        Func<string?>? validate = null)
     {
         var submitted = false;
         var shown = fields();
-        var height = shown.Count + 3 + 6 + FleetCorners.Rows;
+        var height = shown.Count + 3 + 7 + FleetCorners.Rows;
         var window = FleetTheme.Modal(title, Width, height);
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(3));
+        var list = FleetTheme.Rows(1, 1, Dim.Fill(4));
+        var error = FleetTheme.ErrorText(1, Pos.AnchorEnd(3));
 
         void Close() => app.RequestStop(window);
 
         void Submit()
         {
+            if (validate?.Invoke() is { Length: > 0 } problem)
+            {
+                error.Text = problem;
+                return;
+            }
+
             submitted = true;
             Close();
         }
@@ -99,6 +107,7 @@ public static class FleetCard
         void Refill(int selected)
         {
             shown = fields();
+            keys = FieldKeys(shown, pills, keymap);
             var rows = shown.Select((f, i) => FieldRow(f, keys[i])).Concat(pills.Select(p => p.Row())).ToList();
             FleetRows.Fill(list, rows, selected, gapsAfter: [shown.Count - 1]);
         }
@@ -109,6 +118,7 @@ public static class FleetCard
 
             if (index < shown.Count)
             {
+                error.Text = string.Empty;
                 shown[index].Edit();
                 Refill(index);
                 return;
@@ -175,7 +185,7 @@ public static class FleetCard
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
         bar.Show(Footer(Activate, Submit, Back));
 
-        window.Add(list, FleetTheme.Caption(1, Pos.AnchorEnd(2), caption), bar.Root);
+        window.Add(list, error, FleetTheme.Caption(1, Pos.AnchorEnd(2), caption), bar.Root);
         FleetCorners.Attach(window, Close);
 
         FleetModal.Enter();
