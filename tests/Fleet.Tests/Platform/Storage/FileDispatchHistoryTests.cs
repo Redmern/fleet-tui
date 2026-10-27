@@ -77,13 +77,4 @@ public sealed class FileDispatchHistoryTests : ConfigHomeFixture
 
         Assert.Equal(["fix the build then run the tests"], _history.List("techweb"));
     }
-
-    [Theory]
-    [InlineData("one line", "one line")]
-    [InlineData("a\nb", "a b")]
-    [InlineData("a\r\nb", "a b")]
-    [InlineData("  a  \n\n   b  \n", "a b")]
-    [InlineData("a  b\nc", "a  b c")]
-    public void Newlines_collapse_to_a_single_space(string prompt, string remembered) =>
-        Assert.Equal(remembered, FileDispatchHistory.OneLine(prompt));
 }

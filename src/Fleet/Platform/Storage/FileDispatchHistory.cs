@@ -13,7 +13,7 @@ public sealed class FileDispatchHistory : IDispatchHistory
     public void Add(string project, string prompt)
     {
         var file = FileFor(project);
-        var trimmed = OneLine(prompt);
+        var trimmed = PromptLine.OneLine(prompt);
 
         if (file is null || trimmed.Length == 0
             || Read(file, BusyFiles.Patience) is not { } history)
@@ -29,8 +29,6 @@ public sealed class FileDispatchHistory : IDispatchHistory
 
         BusyFiles.Replace(file, temp => File.WriteAllLines(temp, next));
     }
-
-    public static string OneLine(string prompt) => PromptLine.OneLine(prompt);
 
     private static List<string>? Read(string file, TimeSpan patience) =>
         BusyFiles.Retry(
