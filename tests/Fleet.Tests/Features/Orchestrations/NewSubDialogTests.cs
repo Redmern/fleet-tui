@@ -1,7 +1,10 @@
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Ui;
+using Fleet.Ui.Constants;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Fleet.Tests.Features.Orchestrations;
 
@@ -30,6 +33,37 @@ public sealed class NewSubDialogTests
 
         return (task, FleetModal.WentBack());
     }
+
+    private static (string? Task, bool WentBack) Drive(
+        IReadOnlyList<string> past, Action<Action<Key[]>, Func<View>> script)
+    {
+        using var app = Application.Create().Init("ansi");
+
+        app.Invoke(() =>
+        {
+            script(
+                keys =>
+                {
+                    foreach (var key in keys)
+                    {
+                        app.Keyboard.RaiseKeyDownEvent(key);
+                    }
+                },
+                () => app.TopRunnableView!);
+
+            app.Keyboard.RaiseKeyDownEvent(Key.Esc);
+        });
+
+        var task = NewSubView.Show(app, past, Keymap.Default);
+
+        return (task, FleetModal.WentBack());
+    }
+
+    private static string ErrorShown(View window) =>
+        window.SubViews.OfType<Label>().Single(l => l.SchemeName == FleetSchemes.Error).Text;
+
+    private static IReadOnlyList<string> Listed(View window) =>
+        [.. window.SubViews.OfType<FleetList>().Single(l => l.CanFocus).Source!.ToList().Cast<string>()];
 
     private static Key[] Typed(string text) => [.. text.Select(c => new Key(c))];
 
@@ -132,5 +166,62 @@ public sealed class NewSubDialogTests
 
         Assert.Null(task);
         Assert.True(wentBack);
+    }
+
+    [Fact]
+    public void A_blank_dispatch_shows_an_inline_error_that_the_next_edit_clears()
+    {
+        var shown = new List<string>();
+
+        Drive([], (press, window) =>
+        {
+            press([Key.Enter.WithCtrl]);
+            shown.Add(ErrorShown(window()));
+            press(Typed("x"));
+            shown.Add(ErrorShown(window()));
+        });
+
+        Assert.Equal([NewSubView.EmptyTask, string.Empty], shown);
+    }
+
+    [Fact]
+    public void Picking_a_past_task_keeps_the_other_past_tasks_listed()
+    {
+        IReadOnlyList<string> listed = [];
+
+        var (task, _) = Drive(Past, (press, window) =>
+        {
+            press([Key.Tab, Key.Enter]);
+            listed = Listed(window());
+        });
+
+        Assert.Null(task);
+        Assert.Contains(listed, l => l.Contains("fix the build"));
+        Assert.Contains(listed, l => l.Contains("write the release notes"));
+    }
+
+    [Fact]
+    public void Enter_on_the_no_match_row_does_nothing()
+    {
+        IReadOnlyList<string> listed = [];
+        var typed = "zzz";
+
+        var (task, wentBack) = Drive(Past, (press, window) =>
+        {
+            press([.. Typed(typed), Key.Tab, Key.Enter]);
+            listed = Listed(window());
+        });
+
+        Assert.Null(task);
+        Assert.False(wentBack);
+        Assert.Contains(listed, l => l.Contains(NewSubView.NoMatch));
+    }
+
+    [Fact]
+    public void Enter_on_the_no_match_row_leaves_the_task_as_typed()
+    {
+        var (task, _) = Run(Past, [.. Typed("zzz"), Key.Tab, Key.Enter, Key.Enter.WithCtrl]);
+
+        Assert.Equal("zzz", task);
     }
 }

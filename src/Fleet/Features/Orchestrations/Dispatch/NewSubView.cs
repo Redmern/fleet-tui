@@ -40,6 +40,7 @@ public static class NewSubView
         var pastHeader = Header(AreaRows + 2);
         var list = FleetTheme.Rows(1, AreaRows + 3, pastRows + 3);
         IReadOnlyList<int> shown = [];
+        var filling = false;
 
         void Close() => app.RequestStop(window);
 
@@ -79,7 +80,17 @@ public static class NewSubView
                 return;
             }
 
-            area.Text = past[shown[index]];
+            filling = true;
+
+            try
+            {
+                area.Text = past[shown[index]];
+            }
+            finally
+            {
+                filling = false;
+            }
+
             area.MoveEnd();
             area.SetFocus();
         }
@@ -131,7 +142,11 @@ public static class NewSubView
         area.ContentsChanged += (_, _) =>
         {
             error.Text = string.Empty;
-            Refill(FleetRows.Selected(list));
+
+            if (!filling)
+            {
+                Refill(FleetRows.Selected(list));
+            }
         };
 
         if (list is FleetList rows)
