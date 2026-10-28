@@ -1122,6 +1122,42 @@ public sealed class DaemonTests : IAsyncLifetime
         Assert.False((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = "p404", Cols = 30, Rows = 8 })).Ok);
     }
     [Fact]
+    public async Task A_dialog_in_a_tiled_dash_lifts_the_pane_over_the_window_and_dropping_gives_back_its_tile()
+    {
+        var control = await ControlAsync();
+        var left = await SpawnAsync(control, "techweb", "claude");
+        var split = await control.RequestAsync(new ControlRequest
+        {
+            Op = "split",
+            Pane = left,
+            Direction = "right",
+            Cwd = ".",
+            Args = ["C:/tools/fleet.exe", "dash", "--project", "techweb"],
+        });
+        var client = await AttachAsync(cols: 100, rows: 31, workspace: "techweb");
+        await client.WaitForFramesAsync(1);
+        var dash = _panes.ByProgram("C:/tools/fleet.exe")!;
+        await Eventually(() => dash.Size.Cols > 0);
+        var tile = dash.Size;
+        var claude = _panes.ByProgram("claude")!.Size;
+
+        var lifted = await control.RequestAsync(new ControlRequest { Op = "lift", Caller = split.Pane, Cols = 60, Rows = 12, Text = "Base branch" });
+
+        Assert.True(lifted.Ok, lifted.Error);
+        Assert.Equal((60, 12), (lifted.Cols, lifted.Rows));
+        await Eventually(() => dash.Size == (60, 12));
+        Assert.Equal(claude, _panes.ByProgram("claude")!.Size);
+        Assert.False((await control.RequestAsync(new ControlRequest { Op = "lift", Caller = left, Cols = 60, Rows = 12 })).Ok);
+
+        var dropped = await control.RequestAsync(new ControlRequest { Op = "drop", Caller = split.Pane });
+
+        Assert.True(dropped.Ok, dropped.Error);
+        Assert.Equal(tile, (dropped.Cols, dropped.Rows));
+        await Eventually(() => dash.Size == tile);
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "drop", Caller = split.Pane })).Ok);
+    }
+
+    [Fact]
     public async Task The_menu_float_appears_only_once_it_has_its_size_and_has_drawn_and_keys_reach_it_meanwhile()
     {
         var control = await ControlAsync();

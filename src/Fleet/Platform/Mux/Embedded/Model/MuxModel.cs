@@ -271,6 +271,45 @@ public sealed class MuxModel
 
     public Rect? FloatBounds(string pane) => FloatOf(pane)?.Float.Bounds;
 
+    public bool Lift(string id, int cols, int rows, string title)
+    {
+        if (!_panes.TryGetValue(id, out var pane) || !IsDashboard(pane) || TabOf(pane) is null)
+        {
+            return false;
+        }
+
+        pane.Lift = new PaneLift(Math.Max(1, cols), Math.Max(1, rows), title);
+        return true;
+    }
+
+    public bool Drop(string id)
+    {
+        if (!_panes.TryGetValue(id, out var pane) || pane.Lift is null)
+        {
+            return false;
+        }
+
+        pane.Lift = null;
+        return true;
+    }
+
+    public static Rect LiftArea(PaneLift lift, Rect content) =>
+        FloatArea(
+            Centred(
+                Math.Min(Math.Max(lift.Cols + 2, MinFloatWidth), content.Width),
+                Math.Min(Math.Max(lift.Rows + 2, MinFloatHeight), content.Height),
+                content),
+            content);
+
+    private void Lifted(List<Placed> placed, List<Placed> floats, Rect content)
+    {
+        foreach (var p in placed.Where(p => _panes[p.Pane].Lift is not null).ToList())
+        {
+            placed.Remove(p);
+            floats.Add(new Placed(p.Pane, LiftArea(_panes[p.Pane].Lift!, content)));
+        }
+    }
+
     public PaneState? Split(
         string source, bool sideBySide, bool newFirst, int percent, string cwd, IReadOnlyList<string> args)
     {
@@ -1113,6 +1152,9 @@ public sealed class MuxModel
             .Where(f => !f.Hidden)
             .Select(f => new Placed(f.Pane, FloatArea(f.Drawn, area)))
             .ToList();
+        var lifts = new List<Placed>();
+        Lifted(placed, lifts, area);
+        floats.AddRange(lifts);
 
         var focused = overlay?.Pane
             ?? (candidates.Count > 0 && (workspace!.FloatFocused || tab is null) ? candidates[^1].Pane : null)
@@ -1120,6 +1162,13 @@ public sealed class MuxModel
 
         var labels = workspace?.Floats.ToDictionary(f => f.Pane, f => f.HeldLabel ?? FloatLabel(f));
         var buttons = workspace?.Floats.Where(f => f.Buttons.Count > 0).ToDictionary(f => f.Pane, f => f.Buttons);
+
+        foreach (var lifted in lifts.Select(l => _panes[l.Pane]))
+        {
+            labels?.Add(lifted.Id, lifted.Lift!.Title);
+            buttons?.Add(lifted.Id, lifted.Buttons);
+        }
+
         var frame = tab is not null && workspace?.RemoteHost is null && Framed(tab) ? FrameFor(area) : null;
 
         return new ClientView(c, workspace, tab, placed, dividers, focused, overlay, floats, labels)
@@ -1198,9 +1247,12 @@ public sealed class MuxModel
                     ? (shownBy.Cols, shownBy.Rows)
                     : Reference();
                 var placed = new List<Placed>();
-                Arrange(tab, Area(workspace, size.Item1, size.Item2), placed, []);
+                var area = Area(workspace, size.Item1, size.Item2);
+                Arrange(tab, area, placed, []);
+                var lifts = new List<Placed>();
+                Lifted(placed, lifts, area);
 
-                foreach (var p in placed)
+                foreach (var p in placed.Concat(lifts.Select(l => l with { Area = ClientView.Inner(l.Area) })))
                 {
                     var pane = _panes[p.Pane];
                     var cols = Math.Max(1, p.Area.Width);
@@ -1452,7 +1504,11 @@ public sealed class PaneState(string id, string cwd, IReadOnlyList<string> args)
     public int Rows { get; set; }
 
     public IReadOnlyList<FloatButton> Buttons { get; set; } = [];
+
+    public PaneLift? Lift { get; set; }
 }
+
+public sealed record PaneLift(int Cols, int Rows, string Title);
 
 public sealed class TabState(string id, Layout root)
 {

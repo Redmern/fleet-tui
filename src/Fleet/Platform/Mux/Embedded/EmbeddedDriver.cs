@@ -173,6 +173,18 @@ public sealed class EmbeddedDriver(
         return fitted.Cols > 0 && fitted.Rows > 0 ? (fitted.Cols, fitted.Rows) : null;
     }
 
+    public async Task<(int Cols, int Rows)?> LiftAsync(int cols, int rows, string title, CancellationToken ct = default)
+    {
+        var lifted = await RequestAsync(new ControlRequest { Op = "lift", Cols = cols, Rows = rows, Text = title }, ct).ConfigureAwait(false);
+        return lifted.Cols > 0 && lifted.Rows > 0 ? (lifted.Cols, lifted.Rows) : null;
+    }
+
+    public async Task<(int Cols, int Rows)?> DropAsync(CancellationToken ct = default)
+    {
+        var dropped = await RequestAsync(new ControlRequest { Op = "drop" }, ct).ConfigureAwait(false);
+        return dropped.Cols > 0 && dropped.Rows > 0 ? (dropped.Cols, dropped.Rows) : null;
+    }
+
     public async Task<DaemonStatusDto?> StatusAsync(CancellationToken ct = default) =>
         (await RequestAsync(new ControlRequest { Op = "status" }, ct).ConfigureAwait(false)).Status;
 

@@ -147,4 +147,138 @@ public sealed class FramedDashTests
 
         Assert.True(top.IndexOf(" ? i ", StringComparison.Ordinal) < top.IndexOf("fleet — alpha", StringComparison.Ordinal));
     }
+    [Fact]
+    public void A_lifted_dash_floats_centred_on_the_whole_window_sized_to_its_dialog()
+    {
+        var (claude, dash, client) = Dash(cols: 100, rows: 31);
+        _model.Resizes();
+        var claudeArea = _model.View(client.Id)!.Panes.Single(p => p.Pane == claude.Id).Area;
+
+        Assert.True(_model.Lift(dash.Id, 60, 12, "Base branch - alpha"));
+        var changed = _model.Resizes();
+
+        var view = _model.View(client.Id)!;
+        var box = view.FloatingPanes.Single();
+        Assert.Equal(dash.Id, box.Pane);
+        Assert.Equal(MuxModel.Centred(62, 14, MuxModel.Content(100, 31)), box.Area);
+        Assert.True(box.Area.X < claudeArea.X + claudeArea.Width, "the dialog reaches over the Claude pane");
+        Assert.Equal((60, 12), (dash.Cols, dash.Rows));
+        Assert.Contains(changed, c => c.Pane == dash);
+        Assert.DoesNotContain(changed, c => c.Pane == claude);
+        Assert.Equal(claudeArea, view.Panes.Single().Area);
+        Assert.Equal("Base branch - alpha", view.FloatLabel(dash.Id));
+        Assert.Equal(dash.Id, view.Focused);
+    }
+
+    [Fact]
+    public void Dropping_the_lift_puts_the_dash_back_in_its_tile_with_its_size_and_the_split_untouched()
+    {
+        var (claude, dash, client) = Dash(cols: 100, rows: 31);
+        _model.Resizes();
+        var before = _model.View(client.Id)!;
+        var tile = (dash.Cols, dash.Rows);
+
+        _model.Lift(dash.Id, 60, 12, "Base branch - alpha");
+        _model.Resizes();
+        Assert.True(_model.Drop(dash.Id));
+        _model.Resizes();
+
+        var after = _model.View(client.Id)!;
+        Assert.Empty(after.FloatingPanes);
+        Assert.Equal(before.Panes, after.Panes);
+        Assert.Equal(before.Dividers.Single().X, after.Dividers.Single().X);
+        Assert.Equal(tile, (dash.Cols, dash.Rows));
+        Assert.Equal(dash.Id, after.Focused);
+        Assert.False(_model.Drop(dash.Id));
+        Assert.Contains(claude.Id, after.Panes.Select(p => p.Pane));
+    }
+
+    [Fact]
+    public void A_nested_dialog_relifts_to_its_own_size()
+    {
+        var (_, dash, client) = Dash(cols: 100, rows: 31);
+
+        _model.Lift(dash.Id, 60, 12, "New agent");
+        _model.Lift(dash.Id, 40, 6, "Base branch");
+        _model.Resizes();
+
+        Assert.Equal((40, 6), (dash.Cols, dash.Rows));
+        Assert.Equal("Base branch", _model.View(client.Id)!.FloatLabel(dash.Id));
+    }
+
+    [Fact]
+    public void A_resized_window_recentres_the_lift_and_clamps_it_to_the_window()
+    {
+        var (_, dash, client) = Dash(cols: 100, rows: 31);
+        _model.Lift(dash.Id, 90, 20, "New agent");
+        _model.Resizes();
+
+        _model.Resize(client.Id, 50, 15);
+        _model.Resizes();
+
+        var content = MuxModel.Content(50, 15);
+        Assert.Equal(content, _model.View(client.Id)!.FloatingPanes.Single().Area);
+        Assert.Equal((48, 12), (dash.Cols, dash.Rows));
+    }
+
+    [Fact]
+    public void Only_a_tiled_dash_lifts()
+    {
+        var (claude, _, _) = Dash();
+        var box = _model.SpawnFloat("alpha", "C:/repos/alpha", ["C:/tools/fleet.exe", "dash"]);
+
+        Assert.False(_model.Lift(claude.Id, 40, 6, "x"));
+        Assert.False(_model.Lift(box.Id, 40, 6, "x"));
+        Assert.False(_model.Lift("p404", 40, 6, "x"));
+    }
+
+    [Fact]
+    public void A_dash_that_dies_while_lifted_leaves_the_rest_of_the_layout_whole()
+    {
+        var (claude, dash, client) = Dash(cols: 100, rows: 31);
+        _model.Lift(dash.Id, 60, 12, "New agent");
+        _model.Resizes();
+
+        _model.Kill(dash.Id);
+        _model.Resizes();
+
+        var view = _model.View(client.Id)!;
+        Assert.Empty(view.FloatingPanes);
+        Assert.Equal(claude.Id, view.Panes.Single().Pane);
+        Assert.Equal(claude.Id, view.Focused);
+    }
+
+    [Fact]
+    public void Clicks_inside_the_lift_reach_the_dash_in_its_own_coordinates_and_its_buttons_sit_on_the_lift_border()
+    {
+        var (_, dash, client) = Dash(cols: 100, rows: 31);
+        FloatButton[] buttons = [new(false, true, "esc", "x", "f2")];
+        _model.SetFloatButtons(dash.Id, buttons);
+        _model.Lift(dash.Id, 60, 12, "New agent");
+        var view = _model.View(client.Id)!;
+        var area = view.FloatingPanes.Single().Area;
+
+        var hit = _model.Hit(client.Id, area.X + 1, area.Y + 1);
+
+        Assert.Equal((MouseHitKind.Pane, dash.Id, 0, 0), (hit.Kind, hit.Pane, hit.X, hit.Y));
+        Assert.Equal(buttons, view.ButtonsOf(dash.Id));
+        Assert.Empty(view.FrameButtonsOf(dash.Id));
+        Assert.False(_model.MoveFloat(dash.Id, 0, 0));
+    }
+
+    [Fact]
+    public void The_lift_is_drawn_bordered_with_its_title_over_the_claude_pane()
+    {
+        var (_, dash, client) = Dash(cols: 100, rows: 31);
+        _model.Lift(dash.Id, 60, 12, "Base branch - alpha");
+        var view = _model.View(client.Id)!;
+        var area = view.FloatingPanes.Single().Area;
+
+        var frame = Composer.Compose(view, _ => null, null);
+
+        Assert.Equal("╭", frame.At(area.X, area.Y).Text);
+        Assert.Equal("╯", frame.At(area.X + area.Width - 1, area.Y + area.Height - 1).Text);
+        Assert.Contains("Base branch - alpha", frame.RowText(area.Y), StringComparison.Ordinal);
+        Assert.Equal(Composer.FocusFg, frame.At(area.X, area.Y + 1).Fg);
+    }
 }
