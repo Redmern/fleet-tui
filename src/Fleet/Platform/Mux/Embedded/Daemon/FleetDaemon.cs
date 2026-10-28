@@ -252,6 +252,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "hold":
                         Hold(request.Pane ?? request.Caller ?? string.Empty);
                         break;
+                    case "lift":
+                        Require(_model.Lift(request.Pane ?? request.Caller ?? string.Empty, request.Cols, request.Rows, request.Text ?? string.Empty), request);
+                        break;
+                    case "drop":
+                        _model.Drop(request.Pane ?? request.Caller ?? string.Empty);
+                        break;
                     case "float-buttons":
                         {
                             var pane = request.Pane ?? request.Caller ?? string.Empty;
@@ -461,7 +467,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                 ApplyResizes();
 
-                if (request.Op == "fit" && _model.Pane(request.Pane ?? request.Caller ?? string.Empty) is { } fitted)
+                if (request.Op is "fit" or "lift" or "drop" && _model.Pane(request.Pane ?? request.Caller ?? string.Empty) is { } fitted)
                 {
                     (response.Cols, response.Rows) = (fitted.Cols, fitted.Rows);
                 }

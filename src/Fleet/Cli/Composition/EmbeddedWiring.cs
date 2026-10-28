@@ -529,6 +529,32 @@ public static class EmbeddedWiring
         }
     }
 
+    public static (int Cols, int Rows)? LiftOwnPane(FloatScreen screen)
+    {
+        try
+        {
+            _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
+            return _ownFloat.LiftAsync(screen.Cols, screen.Rows, screen.Title).GetAwaiter().GetResult();
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return null;
+        }
+    }
+
+    public static (int Cols, int Rows)? DropOwnPane()
+    {
+        try
+        {
+            _ownFloat ??= new EmbeddedDriver(Endpoint.Default());
+            return _ownFloat.DropAsync().GetAwaiter().GetResult();
+        }
+        catch (Ports.Mux.Exceptions.MuxUnavailableException)
+        {
+            return null;
+        }
+    }
+
     public static void HoldOwnFloat()
     {
         try

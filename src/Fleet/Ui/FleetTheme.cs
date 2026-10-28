@@ -58,7 +58,7 @@ public static class FleetTheme
         window.Width = Dim.Func(_ => Fit(width, window.App?.Screen.Width ?? width));
         window.Height = Dim.Func(_ => Fit(height, window.App?.Screen.Height ?? height, 0));
 
-        return Floating(window, new FloatScreen(title, width, height));
+        return Floating(window, new FloatScreen(title, width, height, Lifts: true));
     }
 
     public static int Fit(int wanted, int screen, int margin = ModalMargin) =>
@@ -69,7 +69,7 @@ public static class FleetTheme
     public static int RowsWidth(int modalWidth) => Math.Max(0, modalWidth - ModalChrome);
 
     public static int RowsWidth(IApplication app, int modalWidth) =>
-        RowsWidth(FloatPane.Inside ? modalWidth : Fit(modalWidth, app.Screen.Width));
+        RowsWidth(FloatPane.Inside || FloatScreens.CanLift ? modalWidth : Fit(modalWidth, app.Screen.Width));
 
     private static Window Floating(Window window, FloatScreen screen)
     {
@@ -77,17 +77,28 @@ public static class FleetTheme
         {
             if (FramedPane.Inside)
             {
-                window.IsRunningChanged += (_, running) => FloatBorder.Run(window, running.Value);
+                window.IsRunningChanged += (_, running) =>
+                {
+                    var sized = FloatScreens.Lifting(screen, running.Value);
+
+                    if (running.Value && FloatScreens.Lifted)
+                    {
+                        Fill(window);
+                    }
+
+                    FloatBorder.Run(window, running.Value);
+
+                    if (sized is var (cols, rows))
+                    {
+                        window.App?.Driver?.SetScreenSize(cols, rows);
+                    }
+                };
             }
 
             return window;
         }
 
-        window.BorderStyle = LineStyle.None;
-        window.X = 0;
-        window.Y = 0;
-        window.Width = Dim.Fill();
-        window.Height = Dim.Fill();
+        Fill(window);
         window.IsRunningChanged += (_, running) =>
         {
             var fitted = FloatScreens.Running(screen, running.Value);
@@ -100,6 +111,15 @@ public static class FleetTheme
         };
 
         return window;
+    }
+
+    private static void Fill(Window window)
+    {
+        window.BorderStyle = LineStyle.None;
+        window.X = 0;
+        window.Y = 0;
+        window.Width = Dim.Fill();
+        window.Height = Dim.Fill();
     }
 
     public static Label SectionHeader(Pos x, Pos y, string text) => new()

@@ -29,6 +29,9 @@ public static class FleetUi
         else if (FramedPane.Inside)
         {
             FloatBorder.Enable(app, EmbeddedWiring.PublishOwnFloatButtons, framed: true);
+            FloatScreens.Lift = EmbeddedWiring.LiftOwnPane;
+            FloatScreens.Drop = EmbeddedWiring.DropOwnPane;
+            EmbeddedWiring.DropOwnPane();
         }
 
         return app;

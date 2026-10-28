@@ -4240,6 +4240,51 @@ border. It is now one window:
 - A blank line under the tab bar was tried and then taken out again at the
   user's request; content starts right under the bar.
 
+### Dialogs of the tiled dashboard lift over the whole window
+
+A dialog the dashboard opens (base-branch picker, New agent card, prompts,
+confirms) used to be drawn inside the dashboard's half of the tab, so long
+names were cut and the card could not be wider than that half. While a
+`FleetTheme.Modal` is open, the dashboard now asks fleetd to **lift** its pane:
+
+- **The layout is not touched.** `MuxModel.Lift` records the dialog's size and
+  title on the pane (`PaneState.Lift`); `View` and `Resizes` then take the pane
+  out of its tile and place it as a float centred on the whole content area
+  (`MuxModel.LiftArea`), drawn last with fleetd's border, the dialog title as its
+  label and the dashboard's border buttons on it. The Claude pane keeps its
+  size and position, and the split ratio is never rewritten. `Drop` clears the
+  field and the next `Resizes` gives the pane its tile size back.
+- **Why not promote the pane with `ToFloat` / `ToTile`?** Those rebuild the
+  layout: the Claude pane would resize to the full width while the dialog is
+  open (and Claude Code redraws), and `ToTile` re-joins at 50% to the active
+  pane, losing a dragged divider. **Why not a separate overlay pane hosting the
+  dialog?** The dialog lives in the dashboard's Terminal.Gui process (its
+  repositories, keymap, async fetches); moving it to another process would mean
+  a second dashboard instance per dialog and a protocol for the result.
+- **Dash side:** in a framed pane (`FLEET_FRAMED=1`) `FleetTheme.Floating`
+  tracks every screen on `FloatScreens`' stack; when the top one lifts
+  (`FloatScreen.Lifts`, set by `Modal`) it calls the `lift` control op, takes
+  the size fleetd answers, drops its own border and fills the screen. A nested
+  dialog lifts again to its own size; closing it lifts back to the one below;
+  when no lifting screen is left on top it calls `drop`. Overlays and the
+  dashboard screen do not lift.
+- **Fallback:** a refused or unanswered lift (no fleetd, an older fleetd that
+  answers "unknown operation") leaves the dialog bordered and clamped inside the
+  pane, as before.
+- **Resize while open:** the lift stores the wanted size, not a rectangle, so a
+  window resize re-centres and clamps it.
+- **Focus and input:** focus is not forced. Dialogs open from a key in the
+  dashboard, so the dashboard is already the active pane and the lift draws
+  focused; mouse hits inside the lift go to the dashboard in its own
+  coordinates. A dialog that opens on its own while you type in Claude does not
+  steal the keys.
+- **Crash safety:** the lift lives on the pane, so a dashboard that exits takes
+  it with it (`Kill`). A dashboard that starts again in a framed pane sends
+  `drop` once at start in case it left one behind.
+- Covered by `FramedDashTests` (layout, resize, nesting, hits, drawing, death),
+  a `DaemonTests` case for the `lift` / `drop` ops, `FloatScreensTests` for the
+  stack and `FleetModalLiftTests` for the Terminal.Gui side.
+
 ### The agents list loads faster
 
 *List agents* (and every dashboard refresh) waited on git before showing
