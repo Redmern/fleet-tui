@@ -6260,6 +6260,25 @@ origin.
   (non-destructive), as are per-project agent and session state files. A failed open without
   repositories keeps the project and says "created, not opened: <reason>".
 
+## Taken prompts stop instead of block, 2026-10-26
+
+A `, task` typed into the main pane was dispatched, and then the text came back in the
+input field. Claude Code 2.1.310 hands a *blocked* UserPromptSubmit prompt back to the input:
+both exit 2 with the note on stderr and `{"decision":"block","reason":...}` (the old
+`FLEET_HOOK_BLOCK=json` mode) restore it, with or without `suppressOutput` or
+`hookSpecificOutput`.
+
+- **Stop, exit 0.** `hook-dispatch` and `hook-todo` both end through `HookIo.Stop`
+  (`Adapters.StopPrompt`): `{"continue":false,"stopReason":<note>}` on stdout, exit 0. The
+  field is left empty, no model turn runs, and the note shows as "Operation stopped by hook:
+  <note>". `FLEET_HOOK_BLOCK` and `HookBlock` are gone.
+- **Trade-off.** A stopped prompt is kept in the transcript as a user entry, with the note
+  after it, so the orchestrator sees `, task` and "stopped by hook: fleet: dispatched ..." on
+  its next real turn. A blocked prompt was a display-only entry it never saw.
+- **Rejected: block, then clear the field.** Sending clear keys to the pane after the hook
+  returns works only with a delay (immediately loses to the restore, 300 ms wins), and the
+  delay can wipe text the user has started typing.
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.

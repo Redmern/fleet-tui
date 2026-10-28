@@ -193,8 +193,6 @@ public static class Adapters
         return new StdioMcpServer(Console.In, stdout, log);
     }
 
-    public static (string Text, string? Cwd) ReadHookPayload() => ReadHookPayload(Console.In);
-
     public static (string Text, string? Cwd) ReadHookPayload(TextReader input)
     {
         var payload = HookIo.Read(input);
@@ -208,7 +206,7 @@ public static class Adapters
             Environment.GetEnvironmentVariable(HookIo.ProjectDirVariable),
             Environment.GetEnvironmentVariable(HookIo.MessagingSocketVariable));
 
-    public static string HookBlockJson(string note) => HookIo.Block(note);
+    public static int StopPrompt(string note, TextWriter output) => HookIo.Stop(note, output);
 
     public static IAgentStateStore AgentStates() => new FileAgentStateStore();
 

@@ -31,8 +31,7 @@ public sealed class TodoCommandTests : ConfigHomeFixture
         HookTodoCommand.Run(
             new Invocation(FleetVerb.HookTodo, "hook-todo", "demo", null),
             new StringReader(JsonSerializer.Serialize(new Dictionary<string, string> { ["prompt"] = prompt, ["cwd"] = Root })),
-            _out,
-            _error);
+            _out);
 
     private IReadOnlyList<string> Tickets() =>
         Directory.Exists(TodoPaths.Folder(Root))
@@ -40,38 +39,18 @@ public sealed class TodoCommandTests : ConfigHomeFixture
             : [];
 
     [Fact]
-    public void A_plus_prompt_files_a_ticket_and_blocks_with_a_note_naming_it()
+    public void A_plus_prompt_files_a_ticket_and_stops_the_prompt_with_a_note_naming_it()
     {
         Register();
 
         var exit = Hook("+ tidy the logs");
 
-        Assert.Equal(2, exit);
+        Assert.Equal(0, exit);
         var id = Assert.Single(Tickets());
         Assert.Equal("0001-tidy-the-logs", id);
-        Assert.Contains(id, _error.ToString());
-        Assert.Empty(_out.ToString());
-    }
-
-    [Fact]
-    public void In_json_mode_the_hook_blocks_with_a_json_reason_on_stdout()
-    {
-        Register();
-        Environment.SetEnvironmentVariable(HookDispatchCommand.JsonModeVariable, "json");
-
-        try
-        {
-            var exit = Hook("+ tidy the logs");
-
-            Assert.Equal(2, exit);
-            using var block = JsonDocument.Parse(_out.ToString());
-            Assert.Contains(Assert.Single(Tickets()), block.RootElement.GetProperty("reason").GetString());
-            Assert.Empty(_error.ToString());
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(HookDispatchCommand.JsonModeVariable, null);
-        }
+        using var stop = JsonDocument.Parse(_out.ToString());
+        Assert.False(stop.RootElement.GetProperty("continue").GetBoolean());
+        Assert.Contains(id, stop.RootElement.GetProperty("stopReason").GetString());
     }
 
     [Theory]
@@ -85,7 +64,6 @@ public sealed class TodoCommandTests : ConfigHomeFixture
         Assert.Equal(0, Hook(prompt));
         Assert.Empty(Tickets());
         Assert.Empty(_out.ToString());
-        Assert.Empty(_error.ToString());
     }
 
     [Fact]

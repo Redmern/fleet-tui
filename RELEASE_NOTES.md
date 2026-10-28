@@ -12,6 +12,11 @@ release workflow uses the entry for a tag as the GitHub release text. Every rele
 - **Base-branch search finds remote branches**: the picker shows the branches fleet knows right away and runs `git fetch --prune origin` in the background (15 s limit), adding new remote branches without losing your filter. Offline, it says so and keeps the list usable; a remote-only branch starts the agent from `origin/<name>`.
 - **Add repository checks its fields**: an empty name, an empty URL while cloning or an empty branch shows an inline error and keeps the dialog open.
 
+## 0.7.27.1 (2026-10-27)
+
+- **A `,` prompt no longer comes back in the input field**: when the dispatch or todo hook takes a prompt, Claude Code 2.1.310 used to put its text back in the main pane's input. The hooks now stop the prompt instead of blocking it, so the field stays empty, no model turn runs, and the dispatch note still shows (as "Operation stopped by hook").
+- The taken prompt and its note now stay in the main pane's transcript, so the orchestrator can see that a task was dispatched.
+
 ## 0.7.27 (2026-10-26)
 
 - **`fleet uninstall`** removes fleet from this machine: it lists what it would remove and asks one y/N (`--yes` skips the question and is required when stdin is not a terminal). It stops the daemon and removes the fleet-nvim folders, the fleet config home, the marked shell `PATH` lines and the binary (last); on Windows also the user `PATH` entry, the Fleet shortcut and Terminal profile, and the install folder. Your repositories, agent worktrees, per-project fleet files and `~/.claude*` entries stay.
