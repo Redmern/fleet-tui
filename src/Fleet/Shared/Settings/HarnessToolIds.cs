@@ -33,6 +33,7 @@ public static class HarnessToolIds
         HarnessTool.StopSub => "stop_sub",
         HarnessTool.RemoveSub => "remove_sub",
         HarnessTool.Report => "report",
+        HarnessTool.WaitForAgent => "wait_for_agent",
         HarnessTool.ListForwards => "list_forwards",
         HarnessTool.ForwardPort => "forward_port",
         HarnessTool.UnforwardPort => "unforward_port",

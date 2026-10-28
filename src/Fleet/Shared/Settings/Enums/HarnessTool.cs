@@ -27,6 +27,7 @@ public enum HarnessTool
     StopSub,
     RemoveSub,
     Report,
+    WaitForAgent,
     ListForwards,
     ForwardPort,
     UnforwardPort,
