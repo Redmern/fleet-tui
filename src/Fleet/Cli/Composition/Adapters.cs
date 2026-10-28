@@ -142,6 +142,9 @@ public static class Adapters
         return binaries.FirstOrDefault(b => !OnPath(b)) ?? binaries[0];
     }
 
+    public static IReadOnlyDictionary<string, int> HarnessesInUse() =>
+        HarnessCheck.InUse(Projects().List().SelectMany(p => Agents().List(p.Name)));
+
     public static RoleModels Models(string project) => Settings().Load(project).Models;
 
     public static bool SubagentGuidance(string project) => Settings().Load(project).SubagentGuidance;
