@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Fleet.Shared.Harness;
 
 namespace Fleet.Shared.Orchestrations;
 
@@ -15,7 +16,10 @@ public static class OrchestrationPaths
     public static string For(string projectRoot, string slug) =>
         Path.Combine(Root(projectRoot), slug);
 
-    public static string InstructionsFile(string folder) => Path.Combine(folder, "CLAUDE.md");
+    public static string InstructionsFile(string folder) => InstructionsFile(folder, HarnessRegistry.Claude);
+
+    public static string InstructionsFile(string folder, HarnessProfile profile) =>
+        Path.Combine(folder, profile.InstructionFile);
 
     public static string TaskFile(string folder) => Path.Combine(folder, "TASK.md");
 
