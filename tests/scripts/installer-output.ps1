@@ -200,7 +200,9 @@ function Invoke-ManifestCase([string[]]$Present, [int]$WingetExit = 0, [hashtabl
     }
 }
 
-function Get-ManifestDep($case, $tool) { @($case.Json.deps | Where-Object { $_.tool -eq $tool }) }
+# The leading comma keeps a one-entry result an array: unrolled to a bare object it
+# has no .Count on Windows PowerShell 5.1, so the Count checks below would fail.
+function Get-ManifestDep($case, $tool) { , @($case.Json.deps | Where-Object { $_.tool -eq $tool }) }
 
 $recorded = Invoke-ManifestCase -Present 'nvim'
 $git = Get-ManifestDep $recorded 'git'
