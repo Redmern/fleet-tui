@@ -7,21 +7,37 @@ public static class PickerKeys
 {
     private const string Fallbacks = "abcdefghijklmnopqrstuvwxyz0123456789";
 
+    private const int KeyWidth = 3;
+
+    private const int Caps = 2;
+
     public static IReadOnlyList<FleetRow> Rows(
-        IReadOnlyList<PickerEntry> entries, IReadOnlyList<string> keys)
+        IReadOnlyList<PickerEntry> entries, IReadOnlyList<string> keys, int width = int.MaxValue)
     {
         var labelWidth = entries.Max(e => e.Label.Length);
 
         return
         [
-            .. entries.Select((e, i) => new FleetRow(
-                [
-                    new FleetSpan(keys[i].Length == 0 ? "   " : $"{keys[i]}  ", FleetTones.Key),
-                    FleetSpan.Plain(e.Label.PadRight(labelWidth)),
-                ],
-                e.Detail.Length == 0 ? null : [FleetSpan.Muted($"{e.Detail} ")])),
+            .. entries.Select((e, i) =>
+            {
+                var room = Math.Min(labelWidth, LabelRoom(e, width));
+
+                return new FleetRow(
+                    [
+                        new FleetSpan(keys[i].Length == 0 ? "   " : $"{keys[i]}  ", FleetTones.Key),
+                        FleetSpan.Plain(FleetText.Middle(e.Label, room).PadRight(room)),
+                    ],
+                    e.Detail.Length == 0 ? null : [FleetSpan.Muted($"{e.Detail} ")]);
+            }),
         ];
     }
+
+    public static bool Cut(PickerEntry entry, int width) => entry.Label.Length > LabelRoom(entry, width);
+
+    private static int LabelRoom(PickerEntry entry, int width) =>
+        width == int.MaxValue
+            ? int.MaxValue
+            : Math.Max(1, width - Caps - KeyWidth - (entry.Detail.Length == 0 ? 0 : entry.Detail.Length + 2));
 
     public static IReadOnlyList<string> For(
         IReadOnlyList<string> labels, IReadOnlySet<char>? reserved = null)
