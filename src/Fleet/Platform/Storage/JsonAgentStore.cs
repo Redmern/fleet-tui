@@ -69,6 +69,7 @@ public sealed class JsonAgentStore : IAgentStore
             ReportedAt = agent.ReportedAt,
             Model = agent.Model?.Model,
             Effort = agent.Model?.Effort,
+            OrchestratorHarness = agent.OrchestratorHarness.Length == 0 ? null : agent.OrchestratorHarness,
         };
 
     public IReadOnlyList<AgentRecord> List(string project)
@@ -106,7 +107,8 @@ public sealed class JsonAgentStore : IAgentStore
             a.InNvim,
             a.Summary,
             a.ReportedAt,
-            a.Model is null ? null : new RoleModel(a.Model, a.Effort ?? ModelChoice.Inherit));
+            a.Model is null ? null : new RoleModel(a.Model, a.Effort ?? ModelChoice.Inherit),
+            a.OrchestratorHarness ?? string.Empty);
     }
 
     public bool Remove(string project, string worktree)

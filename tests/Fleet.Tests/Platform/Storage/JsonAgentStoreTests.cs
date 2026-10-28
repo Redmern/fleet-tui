@@ -385,4 +385,18 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
         Assert.Equal(harness, agent.Harness);
         Assert.Equal(host, agent.HostInNvim);
     }
+
+    [Fact]
+    public void A_sub_orchestrators_harness_round_trips_and_defaults_to_claude()
+    {
+        var folder = Path.Combine(ConfigHome, ".fleet", "orchestrations", "add-login");
+
+        _store.Save("techweb", Agent(folder) with { Harness = "orchestrator" });
+        Assert.Equal("claude", Assert.Single(_store.List("techweb")).OrchestratorProfile.Name);
+
+        _store.Save("techweb", Agent(folder) with { Harness = "orchestrator", OrchestratorHarness = "opencode" });
+        var sub = Assert.Single(_store.List("techweb"));
+        Assert.Equal("opencode", sub.OrchestratorHarness);
+        Assert.Equal("opencode", sub.OrchestratorProfile.Name);
+    }
 }

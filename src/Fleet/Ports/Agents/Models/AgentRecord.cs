@@ -1,4 +1,5 @@
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
 
@@ -19,8 +20,11 @@ public sealed record AgentRecord(
     bool? InNvim = null,
     string Summary = "",
     string ReportedAt = "",
-    RoleModel? Model = null)
+    RoleModel? Model = null,
+    string OrchestratorHarness = "")
 {
+    public HarnessProfile OrchestratorProfile => HarnessRegistry.For(OrchestratorHarness);
+
     public bool StartedInNvim => InNvim ?? true;
 
     public bool RunsHarness => AgentHarness.RunsHarness(Harness);
