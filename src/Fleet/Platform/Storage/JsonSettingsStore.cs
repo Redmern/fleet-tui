@@ -98,6 +98,7 @@ public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : I
                     ParseRole(stored.AgentModel, stored.AgentEffort, SettingsDefaults.AgentModel)),
                 LastRepo = stored.LastRepo ?? string.Empty,
                 LastHarness = stored.LastHarness ?? string.Empty,
+                DefaultHarness = stored.DefaultHarness ?? string.Empty,
                 Editor = EditorChoice.Parse(stored.Editor),
             };
         }
@@ -140,6 +141,7 @@ public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : I
             Jira = config.Jira is { } jira ? JiraFile(jira) : StoredJira(file),
             LastRepo = config.LastRepo.Length == 0 ? null : config.LastRepo,
             LastHarness = config.LastHarness.Length == 0 ? null : config.LastHarness,
+            DefaultHarness = config.ChosenHarness.Length == 0 ? null : config.ChosenHarness,
             MainModel = ModelAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             MainEffort = EffortAgainstDefault(config.Models.Main, SettingsDefaults.MainModel),
             SubModel = ModelAgainstDefault(config.Models.Sub, SettingsDefaults.SubModel),

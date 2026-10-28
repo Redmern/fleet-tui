@@ -44,6 +44,7 @@ public enum FleetAction
     EditSubOrchestratorsInNvim,
     EditNvimConfig,
     EditEditor,
+    EditDefaultHarness,
     Notifications,
     Remotes,
     SaveSession,

@@ -171,6 +171,7 @@ public class KeysTests
             ["g c V"] = "menu sub-orchestrators-nvim",
             ["g c N"] = "menu nvim-config",
             ["g c E"] = "menu editor",
+            ["g c O"] = "menu agent-harness",
             ["g c i"] = "menu auto-close",
             ["g c A"] = "menu aidlc-mode",
             ["g c C"] = "menu claude-profile",

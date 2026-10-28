@@ -1,3 +1,4 @@
+using Fleet.Shared.Harness;
 using System.Globalization;
 using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Shared.Aidlc;
@@ -43,6 +44,7 @@ public static class FleetMenus
             FleetAction.EditSubOrchestratorsInNvim,
             FleetAction.EditNvimConfig,
             FleetAction.EditEditor,
+            FleetAction.EditDefaultHarness,
             FleetAction.EditAutoClose,
             FleetAction.EditAidlcMode,
             FleetAction.EditClaudeProfile,
@@ -79,6 +81,7 @@ public static class FleetMenus
         FleetAction.EditSubOrchestratorsInNvim,
         FleetAction.EditNvimConfig,
         FleetAction.EditEditor,
+        FleetAction.EditDefaultHarness,
         FleetAction.EditShowMenuKeys,
         FleetAction.EditButtonHints,
     ];
@@ -131,6 +134,7 @@ public static class FleetMenus
         FleetAction.EditShowMenuKeys => OnOff(settings.ShowMenuKeys),
         FleetAction.EditNvimConfig => $"[{Words.Of(settings.Nvim)}]",
         FleetAction.EditEditor => $"[{Words.Of(settings.ResolvedEditor)}]",
+        FleetAction.EditDefaultHarness => $"[{(settings.ChosenHarness.Length == 0 ? "auto" : settings.ChosenHarness)}]",
         FleetAction.EditButtonHints => $"[{settings.ButtonHints.ToString().ToLowerInvariant()}]",
         FleetAction.EditAutoClose => settings.AutoClose
             ? $"[{settings.AutoCloseMinutes.ToString(CultureInfo.InvariantCulture)}m]"
@@ -148,8 +152,17 @@ public static class FleetMenus
         FleetAction.EditButtonHints => settings.WithButtonHints(NextHints(settings.ButtonHints)),
         FleetAction.EditEditor => settings.WithEditor(
             settings.ResolvedEditor == Editor.Nvim ? Editor.Vscode : Editor.Nvim),
+        FleetAction.EditDefaultHarness => settings.WithDefaultHarness(NextHarness(settings.ChosenHarness)),
         _ => settings,
     };
+
+    public static string NextHarness(string current)
+    {
+        var choices = HarnessRegistry.Selectable;
+        var at = choices.ToList().IndexOf(current);
+
+        return at + 1 < choices.Count ? choices[at + 1] : string.Empty;
+    }
 
     private static ButtonHints NextHints(ButtonHints hints) => hints switch
     {
