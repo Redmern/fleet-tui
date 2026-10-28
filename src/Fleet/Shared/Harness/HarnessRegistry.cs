@@ -8,6 +8,8 @@ public static class HarnessRegistry
 
     public const string OpencodeName = "opencode";
 
+    public const string CodexName = "codex";
+
     public const string EditorName = "nvim";
 
     public const string ResumeArgument = "--continue";
@@ -38,7 +40,16 @@ public static class HarnessRegistry
         HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
         Path.Combine(".agents", "skills"));
 
-    public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode];
+    public static HarnessProfile Codex { get; } = new(
+        CodexName,
+        CodexName,
+        ["resume", "--last"],
+        new Dictionary<string, string>(),
+        "AGENTS.md",
+        HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
+        Path.Combine(".agents", "skills"));
+
+    public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode, Codex];
 
     public static IReadOnlyList<string> Selectable { get; } =
         [EditorName, .. Profiles.Select(p => p.Name)];
