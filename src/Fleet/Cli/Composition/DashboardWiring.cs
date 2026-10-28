@@ -889,7 +889,8 @@ public static class DashboardWiring
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
                         settings.Load(project.Name).DefaultAgentHarness,
-                        fetcher.HandleAsync),
+                        fetcher.HandleAsync,
+                        settings.Load(project.Name).HostsInNvim),
                     keymap,
                     last.Repo,
                     last.Harness);
@@ -899,7 +900,10 @@ public static class DashboardWiring
                     return null;
                 }
 
-                if (AgentHarness.Binaries(request.Harness, request.HostInNvim).FirstOrDefault(b => !Adapters.OnPath(b)) is { } missing)
+                var (harness, hostInNvim) = AgentHarness.Hosted(
+                    request.Harness, request.HostInNvim, settings.Load(project.Name).HostsInNvim);
+
+                if (AgentHarness.Binaries(harness, hostInNvim).FirstOrDefault(b => !Adapters.OnPath(b)) is { } missing)
                 {
                     return Noted(log, project.Name, HarnessTrouble.Missing(missing));
                 }

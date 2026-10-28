@@ -50,6 +50,7 @@ using Fleet.Platform.Uninstall;
 using Fleet.Platform.Uninstall.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -137,9 +138,12 @@ public static class Adapters
                 agent.Harness, orchestratorInNvim: settings.SubOrchestratorsHostedInNvim)[0];
         }
 
-        var binaries = agent.HostedFor(settings.HostsInNvim).Binaries();
+        var hosted = agent.HostedFor(settings.HostsInNvim);
+        var binaries = hosted.Binaries();
 
-        return binaries.FirstOrDefault(b => !OnPath(b)) ?? binaries[0];
+        return HarnessRegistry.For(hosted.Harness).TakesClaudeLaunch
+            ? binaries[0]
+            : binaries.FirstOrDefault(b => !OnPath(b)) ?? binaries[0];
     }
 
     public static IReadOnlyDictionary<string, int> HarnessesInUse() =>

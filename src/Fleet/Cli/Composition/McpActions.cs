@@ -508,7 +508,7 @@ public sealed class McpActions(
 
         return changed.Succeeded
             ? Ok($"{Repo(request)}/{Branch(request)} now opens "
-                + $"{AgentHarness.Describe(changed.Value!.Harness)}.")
+                + $"{AgentHarness.Describe(changed.Value!.Harness, changed.Value.HostInNvim)}.")
             : McpResult.Error(changed.Error!);
     }
 

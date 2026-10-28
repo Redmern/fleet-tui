@@ -33,7 +33,7 @@ public static class HarnessCheck
 
     public static IReadOnlyDictionary<string, int> InUse(IEnumerable<AgentRecord> agents) =>
         agents
-            .Select(a => AgentHarness.IsOrchestrator(a.Harness) ? HarnessRegistry.Claude.Name : a.Harness)
+            .Select(a => AgentHarness.IsOrchestrator(a.Harness) ? a.OrchestratorProfile.Name : a.Harness)
             .Where(AgentHarness.RunsHarness)
             .GroupBy(h => h, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);

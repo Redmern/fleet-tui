@@ -722,4 +722,13 @@ public sealed class NewAgentTests : IDisposable
 
         public IReadOnlyList<string> Tail(int lines) => Lines.TakeLast(lines).ToList();
     }
+
+    [Theory]
+    [InlineData("claude", true, "nvim")]
+    [InlineData("claude", false, "claude")]
+    [InlineData("opencode", false, "opencode")]
+    public void The_remembered_harness_keeps_reading_nvim_for_an_agent_hosted_in_nvim(string harness, bool host, string expected)
+    {
+        Assert.Equal(expected, NewAgentHandler.Remembered(new NewAgentCommand("p", "r", "/r", "b", "", harness, HostInNvim: host)));
+    }
 }

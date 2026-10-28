@@ -92,11 +92,11 @@ public static class NewAgentView
             if (picked is not null)
             {
                 harness = Harnesses[picked.Value];
-                hostInNvim = Hosted(harness, hostInNvim);
+                hostInNvim = prompt.NvimAllowed && Hosted(harness, hostInNvim);
             }
         }
 
-        void ToggleHost() => hostInNvim = Toggled(harness, hostInNvim);
+        void ToggleHost() => hostInNvim = prompt.NvimAllowed && Toggled(harness, hostInNvim);
 
         void EditBranch()
         {
@@ -118,7 +118,7 @@ public static class NewAgentView
                 branch.Length == 0 ? "(base itself)" : branch,
                 Shown(chosenBase),
                 AgentHarness.Describe(harness),
-                HostShown(harness, hostInNvim),
+                prompt.NvimAllowed ? HostShown(harness, hostInNvim) : NvimOff,
                 ChooseRepository,
                 EditBranch,
                 ChooseBase,
@@ -186,7 +186,7 @@ public static class NewAgentView
 
         var fallback = AgentHarness.Normalize(prompt.Harness);
         var harness = Harnesses.Contains(lastHarness)
-            ? AgentHarness.HostedFor(lastHarness, AgentHarness.HostedInNvim(fallback))
+            ? AgentHarness.HostedFor(lastHarness, prompt.NvimAllowed)
             : fallback;
 
         return (repository, harness);
@@ -212,6 +212,8 @@ public static class NewAgentView
     ];
 
     public static IReadOnlyList<string> Harnesses => HarnessRegistry.Selectable;
+
+    public const string NvimOff = "(off: the editor is not nvim)";
 
     public static bool Hosted(string harness, bool hostInNvim) => hostInNvim && AgentHarness.RunsHarness(harness);
 

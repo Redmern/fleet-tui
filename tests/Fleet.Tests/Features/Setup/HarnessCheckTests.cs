@@ -109,4 +109,12 @@ public sealed class HarnessCheckTests
         Assert.Equal(1, inUse["opencode"]);
         Assert.False(inUse.ContainsKey("nvim"));
     }
+
+    [Fact]
+    public void A_sub_orchestrator_counts_under_the_harness_it_runs()
+    {
+        var sub = new AgentRecord("/o", "", "add-login", "orchestrator", "", false, OrchestratorHarness: "opencode");
+
+        Assert.Equal(1, HarnessCheck.InUse([sub])["opencode"]);
+    }
 }

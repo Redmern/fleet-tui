@@ -162,8 +162,11 @@ public sealed class NewAgentHandler(
 
         settings.Save(
             command.ProjectName,
-            settings.Load(command.ProjectName).WithLastNewAgent(command.RepositoryName, command.Harness));
+            settings.Load(command.ProjectName).WithLastNewAgent(command.RepositoryName, Remembered(command)));
     }
+
+    public static string Remembered(NewAgentCommand command) =>
+        command.HostInNvim ? AgentHarness.Nvim : command.Harness;
 
     private async Task<RoleModel?> RoutedModel(NewAgentCommand command, string branch, CancellationToken ct)
     {

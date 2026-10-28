@@ -8,4 +8,5 @@ public sealed record NewAgentPrompt(
     int Selected,
     Func<string, IReadOnlyList<BranchChoice>> Branches,
     string Harness,
-    Func<string, CancellationToken, Task<Result<IReadOnlyList<BranchChoice>>>>? Fetch = null);
+    Func<string, CancellationToken, Task<Result<IReadOnlyList<BranchChoice>>>>? Fetch = null,
+    bool NvimAllowed = true);

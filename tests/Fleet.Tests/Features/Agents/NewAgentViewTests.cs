@@ -190,13 +190,14 @@ public sealed class NewAgentViewTests
         Assert.Equal("origin/x", known[new BranchChoice("origin/x", true).Label].Reference);
     }
 
-    private static NewAgentPrompt Prompt(int selected = 0, string harness = AgentHarness.Nvim) =>
+    private static NewAgentPrompt Prompt(int selected = 0, string harness = AgentHarness.Nvim, bool nvimAllowed = true) =>
         new(
             "techweb",
             [("backend", "/r/backend", "main"), ("frontend", "/r/frontend", "main")],
             selected,
             _ => [],
-            harness);
+            harness,
+            NvimAllowed: nvimAllowed);
 
     [Fact]
     public void The_last_used_repository_and_harness_are_preselected()
@@ -228,9 +229,17 @@ public sealed class NewAgentViewTests
     [Fact]
     public void A_remembered_nvim_harness_gives_way_to_a_bare_claude_default()
     {
-        var picked = NewAgentView.Preselect(Prompt(harness: AgentHarness.Claude), "backend", AgentHarness.Nvim);
+        var picked = NewAgentView.Preselect(Prompt(harness: AgentHarness.Claude, nvimAllowed: false), "backend", AgentHarness.Nvim);
 
         Assert.Equal((0, AgentHarness.Claude), picked);
+    }
+
+    [Fact]
+    public void A_remembered_nvim_harness_survives_a_chosen_non_nvim_default_while_nvim_is_allowed()
+    {
+        var picked = NewAgentView.Preselect(Prompt(harness: AgentHarness.Opencode), "backend", AgentHarness.Nvim);
+
+        Assert.Equal((0, AgentHarness.Nvim), picked);
     }
 
     [Fact]
