@@ -14,6 +14,7 @@ using Fleet.Shared.Aidlc;
 using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Aidlc.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Orchestrations.Enums;
 using Fleet.Shared.Orchestrations.Models;
@@ -36,8 +37,11 @@ public sealed class DispatchHandler(
     IIntentStore? intents = null,
     IAgentStarter? starter = null,
     IModelRouter? router = null,
-    IFleetLog? log = null)
+    IFleetLog? log = null,
+    HarnessProfile? orchestrator = null)
 {
+    private readonly HarnessProfile _profile = orchestrator ?? HarnessRegistry.Claude;
+
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(60);
 
     private readonly TimeSpan _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(200);
@@ -123,7 +127,7 @@ public sealed class DispatchHandler(
         }
 
         File.WriteAllText(
-            OrchestrationPaths.InstructionsFile(folder),
+            OrchestrationPaths.InstructionsFile(folder, _profile),
             OrchestrationText.Instructions(brief, howYouWork, process, route.Research, config.SubagentGuidance));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
@@ -317,7 +321,7 @@ public sealed class DispatchHandler(
         }
     }
 
-    private static async Task LeaveKickoff(string folder, CancellationToken ct)
+    private async Task LeaveKickoff(string folder, CancellationToken ct)
     {
         var inbox = Path.Combine(folder, ".fleet");
         Directory.CreateDirectory(inbox);
@@ -327,7 +331,7 @@ public sealed class DispatchHandler(
 
         await File.WriteAllTextAsync(
                 Path.Combine(inbox, AgentHarness.AgentInstructionFile),
-                AgentHarness.OrchestratorKickoff,
+                _profile.Kickoff,
                 ct)
             .ConfigureAwait(false);
     }
@@ -345,7 +349,7 @@ public sealed class DispatchHandler(
             await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
         }
 
-        await mux.SendTextAsync(pane, AgentHarness.OrchestratorKickoff, ct).ConfigureAwait(false);
+        await mux.SendTextAsync(pane, _profile.Kickoff, ct).ConfigureAwait(false);
         await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
