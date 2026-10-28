@@ -4,11 +4,14 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.29 (2026-10-28)
+
+- **Dialogs of the tiled dashboard open over the whole window**: the base-branch picker, New agent card, prompts and confirmations float centred on the window, over the Claude pane too, with their border, title and filter, and the dashboard goes back to its tile when they close. Without fleetd they stay inside the pane as before.
+
 ## 0.7.28.1 (2026-10-28)
 
 - **Dialogs fit the dashboard pane**: cards, prompts and pickers are now capped to the pane they open in, so a long branch name no longer pushes the border, title, filter and the start of every row off the left edge.
 - **Long branch names are cut in the middle** with an ellipsis in the base-branch picker and in card fields, keeping the start and the end readable; the picker shows the full name of a cut selected row in a footer.
-- **Dialogs of the tiled dashboard open over the whole window**: the base-branch picker, New agent card, prompts and confirmations float centred on the window, over the Claude pane too, with their border, title and filter, and the dashboard goes back to its tile when they close. Without fleetd they stay inside the pane as before.
 
 ## 0.7.28 (2026-10-28)
 
