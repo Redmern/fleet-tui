@@ -1,4 +1,5 @@
 using Fleet.Features.Orchestrations.ReportStatus;
+using Fleet.Features.Orchestrations.ReportStatus.Models;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Todos;
@@ -304,6 +305,114 @@ public sealed class ReportStatusTests
         Assert.False(result.Succeeded);
         Assert.Empty(inboxes.Asked);
     }
+
+    [Fact]
+    public async Task A_finished_opencode_agent_has_fleet_type_a_notice_into_its_claude_owner()
+    {
+        var sub = Seed("some-sub");
+        var agent = SeedAgent("backend", "feature/login");
+        _store.Saved[_store.Saved.IndexOf(agent)] = agent with { Harness = AgentHarness.Opencode };
+        var inboxes = new FakeInboxes { [sub.Worktree] = "uds:sub" };
+        var typed = new List<OwnerNotice>();
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes, typeToOwner: Typing(typed)).HandleAsync(
+            "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Done, "endpoint added");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.DoesNotContain("SendMessage", result.Value);
+        Assert.Contains("typed this report into your orchestrator's pane (techweb-sub-some-sub)", result.Value);
+        var notice = Assert.Single(typed);
+        Assert.Equal(sub.Worktree, notice.Owner!.Worktree);
+        Assert.Equal(sub.Worktree, notice.Folder);
+        Assert.Contains("backend/feature/login: done — endpoint added", notice.Message);
+        Assert.Empty(inboxes.Asked);
+        Assert.Equal(OrchestrationStatus.Done, Assert.Single(_store.Written).Status);
+    }
+
+    [Fact]
+    public async Task A_finished_claude_agent_types_into_an_opencode_owner()
+    {
+        _store.Saved.Add(new AgentRecord(
+            "C:/repos/techweb/api/lead", "api", "lead", AgentHarness.Opencode, "origin/main", true, Claude: true));
+        _store.Saved.Add(new AgentRecord(
+            "C:/repos/techweb/api/x", "api", "x", AgentHarness.Claude, "origin/main", true, Owner: "agent:api/lead"));
+        var typed = new List<OwnerNotice>();
+
+        var result = await new ReportStatusHandler(_store, inboxes: new FakeInboxes(), typeToOwner: Typing(typed))
+            .HandleAsync("techweb", Root, "agent:api/x", OrchestrationStatus.Failed, "build broke");
+
+        Assert.Contains("typed this report", result.Value);
+        Assert.Equal("C:/repos/techweb/api/lead", Assert.Single(typed).Folder);
+        Assert.Contains("api/x: failed — build broke", typed[0].Message);
+    }
+
+    [Fact]
+    public async Task An_opencode_agent_without_an_owner_types_into_the_main_orchestrator()
+    {
+        _store.Saved.Add(new AgentRecord(
+            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Opencode, "origin/main", true, Claude: true));
+        var typed = new List<OwnerNotice>();
+
+        await new ReportStatusHandler(_store, inboxes: new FakeInboxes { [Root] = "uds:main" }, typeToOwner: Typing(typed))
+            .HandleAsync("techweb", Root, "agent:backend/fix", OrchestrationStatus.Done, "fixed");
+
+        var notice = Assert.Single(typed);
+        Assert.Null(notice.Owner);
+        Assert.Equal(Root, notice.Folder);
+        Assert.Equal("techweb-main", notice.Name);
+    }
+
+    [Fact]
+    public async Task A_claude_agent_types_into_a_non_claude_main_orchestrator()
+    {
+        _store.Saved.Add(new AgentRecord(
+            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Claude, "origin/main", true));
+        var typed = new List<OwnerNotice>();
+        var inboxes = new FakeInboxes { [Root] = "uds:main" };
+
+        var result = await new ReportStatusHandler(
+                _store, inboxes: inboxes, typeToOwner: Typing(typed), mainHarness: AgentHarness.Opencode)
+            .HandleAsync("techweb", Root, "agent:backend/fix", OrchestrationStatus.Done, "fixed");
+
+        Assert.Single(typed);
+        Assert.DoesNotContain("SendMessage", result.Value);
+        Assert.Empty(inboxes.Asked);
+    }
+
+    [Fact]
+    public async Task An_unreachable_owner_pane_is_said_so_and_the_status_is_still_recorded()
+    {
+        _store.Saved.Add(new AgentRecord(
+            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Opencode, "origin/main", true));
+
+        var result = await new ReportStatusHandler(_store, typeToOwner: (_, _) => Task.FromResult(false))
+            .HandleAsync("techweb", Root, "agent:backend/fix", OrchestrationStatus.Done, "fixed");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Contains("could not reach your orchestrator's pane", result.Value);
+        Assert.Contains("wait_for_agent", result.Value);
+        Assert.Single(_store.Written);
+    }
+
+    [Fact]
+    public async Task A_working_opencode_report_types_nothing()
+    {
+        _store.Saved.Add(new AgentRecord(
+            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Opencode, "origin/main", true));
+        var typed = new List<OwnerNotice>();
+
+        await new ReportStatusHandler(_store, typeToOwner: Typing(typed))
+            .HandleAsync("techweb", Root, "agent:backend/fix", OrchestrationStatus.Working, "");
+
+        Assert.Empty(typed);
+    }
+
+    private static Func<OwnerNotice, CancellationToken, Task<bool>> Typing(List<OwnerNotice> typed) =>
+        (notice, _) =>
+        {
+            typed.Add(notice);
+            return Task.FromResult(true);
+        };
 
     private const string Root = "C:/repos/techweb";
 
