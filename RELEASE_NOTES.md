@@ -4,6 +4,11 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.28.1 (2026-10-28)
+
+- **Dialogs fit the dashboard pane**: cards, prompts and pickers are now capped to the pane they open in, so a long branch name no longer pushes the border, title, filter and the start of every row off the left edge.
+- **Long branch names are cut in the middle** with an ellipsis in the base-branch picker and in card fields, keeping the start and the end readable; the picker shows the full name of a cut selected row in a footer.
+
 ## 0.7.28 (2026-10-28)
 
 - **New agent, New sub-orchestrator and Add repository are centered cards**: each field shows its value inline with a jump key chip (`r`/`b`/`a`/`o` in New agent, `c`/`n`/`u`/`b` in Add repository), pill buttons show their keys, and Ctrl+Enter submits from anywhere in the card. Text prompts, confirmations and error notices use the same card look.
