@@ -232,12 +232,13 @@ public class HideAgentTests
     }
 
     [Fact]
-    public void An_unknown_harness_falls_back_to_claude_rather_than_being_stored()
+    public void An_unknown_harness_is_refused_rather_than_being_stored()
     {
         var changed = new ChangeHarnessHandler(_store)
             .Handle("techweb", Agent() with { Harness = AgentHarness.Nvim }, "emacs");
 
-        Assert.Equal(AgentHarness.Nvim, changed.Value!.Harness);
+        Assert.False(changed.Succeeded);
+        Assert.Empty(_store.Saved);
     }
 
     private sealed class RecordingStore : IAgentStore
