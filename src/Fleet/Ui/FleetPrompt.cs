@@ -1,4 +1,5 @@
 using Fleet.Ui.Constants;
+using Fleet.Ui.Models;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
@@ -27,8 +28,11 @@ public static class FleetPrompt
     {
         Reply? result = null;
 
-        var window = FleetTheme.Modal(title, 70, 8 + FleetCorners.Rows);
-        var field = FleetTheme.Field(2, 3, initial);
+        var window = FleetTheme.Modal(title, FleetCard.Width, 9 + FleetCorners.Rows);
+        var header = Static(1, 1, 1);
+        var field = FleetTheme.Field(3, 2, initial);
+        field.Width = Dim.Fill(3);
+        var pills = Static(1, 4, 2);
 
         void Submit(bool submitsDialog)
         {
@@ -45,6 +49,11 @@ public static class FleetPrompt
 
         Submits(field, Submit);
 
+        FleetRows.Fill(header, [Heading(label)]);
+        header.SelectedItem = null;
+        FleetRows.Fill(pills, [.. Pills(() => Submit(false), () => app.RequestStop(window)).Select(p => p.Row())]);
+        pills.SelectedItem = null;
+
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
         bar.Show(
@@ -57,7 +66,7 @@ public static class FleetPrompt
             }),
         ]);
 
-        window.Add(FleetTheme.Caption(2, 1, label), field, bar.Root);
+        window.Add(header, field, pills, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window));
 
         window.KeyDown += (_, key) =>
@@ -93,6 +102,19 @@ public static class FleetPrompt
         }
 
         return result;
+    }
+
+    private static FleetRow Heading(string label) =>
+        new([new FleetSpan(FleetIcons.Edit, FleetTones.Icon), FleetSpan.Plain(" "), new FleetSpan(label, FleetTones.Key)]);
+
+    private static IReadOnlyList<FleetPillButton> Pills(Action submit, Action cancel) =>
+        FleetCard.Pills(FleetIcons.Select, "OK", "Enter", submit, cancel);
+
+    private static ListView Static(int x, int y, int height)
+    {
+        var rows = FleetTheme.Rows(x, y, height);
+        rows.CanFocus = false;
+        return rows;
     }
 
     public static void Submits(TextField field, Action<bool> submit)

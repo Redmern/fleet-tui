@@ -1,4 +1,5 @@
 using Fleet.Ports.Orchestrations;
+using Fleet.Shared.Orchestrations;
 
 namespace Fleet.Platform.Storage;
 
@@ -12,9 +13,9 @@ public sealed class FileDispatchHistory : IDispatchHistory
     public void Add(string project, string prompt)
     {
         var file = FileFor(project);
-        var trimmed = prompt.Trim();
+        var trimmed = PromptLine.OneLine(prompt);
 
-        if (file is null || trimmed.Length == 0 || trimmed.Contains('\n')
+        if (file is null || trimmed.Length == 0
             || Read(file, BusyFiles.Patience) is not { } history)
         {
             return;

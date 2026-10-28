@@ -69,4 +69,12 @@ public sealed class FileDispatchHistoryTests : ConfigHomeFixture
 
         Assert.Empty(_history.List("techweb"));
     }
+
+    [Fact]
+    public void A_multi_line_prompt_is_remembered_on_one_line()
+    {
+        _history.Add("techweb", "fix the build\nthen run the tests");
+
+        Assert.Equal(["fix the build then run the tests"], _history.List("techweb"));
+    }
 }

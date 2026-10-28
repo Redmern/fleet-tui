@@ -2,6 +2,7 @@ using Fleet.Ui;
 
 namespace Fleet.Tests.Ui;
 
+[Collection(ModalDepthCollection.Name)]
 public class FleetModalTests
 {
     [Fact]

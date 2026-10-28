@@ -3,7 +3,7 @@ using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Keymap.Models;
-using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Results;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 
@@ -15,69 +15,152 @@ public sealed class NewAgentViewTests
     public void The_title_leads_with_the_new_agent_icon() =>
         Assert.Equal($"{FleetIcons.NewAgent} New agent", NewAgentView.Title);
 
-    [Fact]
-    public void Every_field_row_leads_with_its_icon()
-    {
-        var rows = NewAgentView.Fields("fleet", "feat/x", "main", "claude");
+    private static IReadOnlyList<FleetCardField> Fields(List<string>? ran = null) =>
+        NewAgentView.Fields(
+            "fleet",
+            "feat/x",
+            "main",
+            "claude",
+            () => ran?.Add("repo"),
+            () => ran?.Add("branch"),
+            () => ran?.Add("base"),
+            () => ran?.Add("opens"));
 
+    [Fact]
+    public void Every_field_leads_with_its_icon()
+    {
         Assert.Equal(
             [FleetIcons.Repo, FleetIcons.Branch, FleetIcons.Base, FleetIcons.Harness],
-            rows.Select(r => r.Spans[0].Text));
-        Assert.All(rows, r => Assert.Equal(FleetTones.Icon, r.Spans[0].Tone));
+            Fields().Select(f => f.Icon));
     }
 
     [Fact]
-    public void A_field_row_keeps_its_label_column_and_value()
+    public void A_field_shows_its_label_and_inline_value()
     {
-        var row = NewAgentView.Fields("fleet", "feat/x", "main", "claude")[1];
+        var row = FleetCard.FieldRow(Fields()[1], "b");
 
-        Assert.Equal($"{FleetIcons.Branch} Branch:  feat/x", row.Text);
+        Assert.Equal($"{FleetIcons.Branch} Branch:  feat/x", string.Concat(row.Spans.Select(s => s.Text)));
     }
+
+    [Fact]
+    public void Repo_branch_base_and_opens_jump_on_r_b_a_and_o()
+    {
+        var keys = FleetCard.FieldKeys(Fields(), Pills(), Keymap.Default);
+
+        Assert.Equal(["r", "b", "a", "o"], keys);
+    }
+
+    [Fact]
+    public void Each_field_edits_its_own_value()
+    {
+        var ran = new List<string>();
+
+        foreach (var field in Fields(ran))
+        {
+            field.Edit();
+        }
+
+        Assert.Equal(["repo", "branch", "base", "opens"], ran);
+    }
+
+    private static IReadOnlyList<FleetPillButton> Pills() =>
+        FleetCard.Pills(NewAgentView.Create.Icon, NewAgentView.Create.Label, NewAgentView.Create.Mnemonic, () => { }, () => { });
 
     [Fact]
     public void Create_agent_has_an_icon_and_the_c_key()
     {
-        var create = NewAgentView.Buttons(() => { }, () => { })[0];
-
-        Assert.Equal(("Create agent", FleetIcons.Create, "c"), (create.Label, create.Icon, create.Mnemonic));
+        Assert.Equal((FleetIcons.Create, "Create agent", "c"), NewAgentView.Create);
     }
 
     [Fact]
-    public void Cancel_has_an_icon_and_the_esc_key()
+    public void No_jump_key_clashes_with_the_list_motions()
     {
-        var cancel = NewAgentView.Buttons(() => { }, () => { })[1];
-
-        Assert.Equal(("Cancel", FleetIcons.Close, "Esc"), (cancel.Label, cancel.Icon, cancel.Mnemonic));
-    }
-
-    [Fact]
-    public void Each_button_shows_a_key_chip()
-    {
-        foreach (var button in NewAgentView.Buttons(() => { }, () => { }))
+        foreach (var pill in Pills())
         {
-            Assert.Contains(button.Row(ButtonHints.None).Spans, s => s.Tone == FleetTones.ChipKey);
+            Assert.False(pill.Clashes(Keymap.Default), pill.Mnemonic);
         }
+
+        Assert.DoesNotContain("j", FleetCard.FieldKeys(Fields(), Pills(), Keymap.Default));
+        Assert.DoesNotContain("k", FleetCard.FieldKeys(Fields(), Pills(), Keymap.Default));
     }
 
     [Fact]
-    public void The_buttons_run_create_and_cancel()
+    public void A_field_key_rebound_to_a_motion_moves_to_another_letter()
     {
-        var ran = new List<string>();
-        var buttons = NewAgentView.Buttons(() => ran.Add("create"), () => ran.Add("cancel"));
+        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.MoveDown, "r"));
 
-        buttons[0].Activate();
-        buttons[1].Activate();
-
-        Assert.Equal(["create", "cancel"], ran);
+        Assert.NotEqual("r", FleetCard.FieldKeys(Fields(), Pills(), keymap)[0]);
     }
 
     [Fact]
-    public void No_button_key_clashes_with_the_list_motions()
+    public void The_base_and_repository_pickers_filter_as_you_type()
     {
-        foreach (var button in NewAgentView.Buttons(() => { }, () => { }))
-        {
-            Assert.False(button.Clashes(Keymap.Default), button.Mnemonic);
-        }
+        Assert.True(NewAgentView.RepositoryPicker.Filter);
+        Assert.True(NewAgentView.BasePicker(null, "/r", new()).Filter);
+    }
+
+    [Fact]
+    public void Without_a_fetcher_the_base_picker_does_not_refresh()
+    {
+        Assert.Null(NewAgentView.BasePicker(null, "/r", new()).Refresh);
+    }
+
+    [Fact]
+    public void Opening_the_base_picker_fetches_the_chosen_repository()
+    {
+        var asked = new List<string>();
+        var options = NewAgentView.BasePicker(
+            (directory, _) =>
+            {
+                asked.Add(directory);
+                return Task.FromResult(Result<IReadOnlyList<BranchChoice>>.Ok([]));
+            },
+            "/r/backend",
+            new());
+
+        Assert.NotNull(options.Refresh);
+        Assert.Equal("fetching origin...", options.Refreshing);
+        options.Refresh!(CancellationToken.None);
+        Assert.Equal(["/r/backend"], asked);
+    }
+
+    [Fact]
+    public async Task Fetched_branches_become_picker_entries_and_can_be_chosen()
+    {
+        var known = new System.Collections.Concurrent.ConcurrentDictionary<string, BranchChoice>();
+        var options = NewAgentView.BasePicker(
+            (_, _) => Task.FromResult(Result<IReadOnlyList<BranchChoice>>.Ok(
+                [new BranchChoice("main", false), new BranchChoice("origin/feat/new", true)])),
+            "/r",
+            known);
+
+        var refreshed = await options.Refresh!(CancellationToken.None);
+
+        Assert.Equal(["main", new BranchChoice("origin/feat/new", true).Label], refreshed.Entries.Select(e => e.Label));
+        Assert.Equal("origin/feat/new", known[refreshed.Entries[1].Label].Reference);
+        Assert.Equal(string.Empty, refreshed.Note);
+    }
+
+    [Fact]
+    public async Task A_failed_fetch_keeps_the_list_and_leaves_a_note()
+    {
+        var options = NewAgentView.BasePicker(
+            (_, _) => Task.FromResult(Result<IReadOnlyList<BranchChoice>>.Fail("offline: could not resolve host")),
+            "/r",
+            new());
+
+        var refreshed = await options.Refresh!(CancellationToken.None);
+
+        Assert.Empty(refreshed.Entries);
+        Assert.Equal("offline: could not resolve host", refreshed.Note);
+    }
+
+    [Fact]
+    public void A_cached_branch_maps_back_to_its_reference()
+    {
+        var known = NewAgentView.Known([new BranchChoice("origin/x", true)]);
+
+        Assert.Equal("origin/x", known[new BranchChoice("origin/x", true).Label].Reference);
     }
 
     private static NewAgentPrompt Prompt(int selected = 0, string harness = AgentHarness.Nvim) =>
@@ -137,65 +220,5 @@ public sealed class NewAgentViewTests
         var picked = NewAgentView.Preselect(Prompt(selected: 1, harness: AgentHarness.Claude), string.Empty, string.Empty);
 
         Assert.Equal((1, AgentHarness.Claude), picked);
-    }
-
-    private static IReadOnlyList<FleetPillButton> FieldKeys(List<string>? ran = null) =>
-        NewAgentView.FieldKeys(() => ran?.Add("repo"), () => ran?.Add("branch"), () => ran?.Add("opens"));
-
-    [Fact]
-    public void Repo_branch_and_opens_answer_r_b_and_o()
-    {
-        Assert.Equal(["r", "b", "o"], FieldKeys().Select(k => k.Mnemonic));
-    }
-
-    [Fact]
-    public void Each_field_key_opens_its_own_field()
-    {
-        var ran = new List<string>();
-
-        foreach (var key in FieldKeys(ran))
-        {
-            key.Activate();
-        }
-
-        Assert.Equal(["repo", "branch", "opens"], ran);
-    }
-
-    [Fact]
-    public void No_field_key_clashes_with_the_list_motions()
-    {
-        foreach (var key in FieldKeys())
-        {
-            Assert.False(key.Clashes(Keymap.Default), key.Mnemonic);
-        }
-    }
-
-    [Fact]
-    public void No_field_key_clashes_with_a_button_key()
-    {
-        var buttons = NewAgentView.Buttons(() => { }, () => { });
-
-        foreach (var key in FieldKeys())
-        {
-            Assert.DoesNotContain(buttons, b => string.Equals(b.Mnemonic, key.Mnemonic, StringComparison.OrdinalIgnoreCase));
-        }
-    }
-
-    [Fact]
-    public void No_field_key_is_the_cancel_or_back_key()
-    {
-        foreach (var key in FieldKeys())
-        {
-            Assert.False(key.Answers(FleetKeys.Cancel), key.Mnemonic);
-            Assert.False(key.Answers(FleetKeys.Back), key.Mnemonic);
-        }
-    }
-
-    [Fact]
-    public void A_field_key_rebound_to_a_motion_clashes()
-    {
-        var keymap = new Keymap(KeymapConfig.Default.With(FleetAction.MoveDown, "r"));
-
-        Assert.True(FieldKeys()[0].Clashes(keymap));
     }
 }

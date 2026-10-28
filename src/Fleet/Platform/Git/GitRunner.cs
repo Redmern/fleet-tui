@@ -48,11 +48,31 @@ public sealed class GitRunner(string executable = "git") : IGitRunner
 
         var stdout = process.StandardOutput.ReadToEndAsync(ct);
         var stderr = process.StandardError.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            Kill(process);
+            throw;
+        }
 
         return new GitResult(
             process.ExitCode,
             await stdout.ConfigureAwait(false),
             await stderr.ConfigureAwait(false));
+    }
+
+    private static void Kill(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+        }
     }
 }

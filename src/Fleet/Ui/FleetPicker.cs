@@ -41,42 +41,110 @@ public static class FleetPicker
         int selected = 0) =>
         ChooseCore(app, title, entries, keymap, selected, captureWindow: true);
 
+    public static PickerEntry? Choose(
+        IApplication app,
+        string title,
+        IReadOnlyList<PickerEntry> entries,
+        Keymap keymap,
+        FleetPickerOptions options,
+        int selected = 0) =>
+        ChooseCore(app, title, entries, keymap, selected, captureWindow: false, options)?.Entry;
+
+    public const string NoMatches = "no matches";
+
+    private const string FilterIcon = "\uf002";
+
+    private const int MostRows = 20;
+
     private static (int Index, bool NewWindow)? ChooseCore(
         IApplication app,
         string title,
         IReadOnlyList<PickerEntry> entries,
         Keymap keymap,
         int selected,
-        bool captureWindow)
+        bool captureWindow) =>
+        ChooseCore(app, title, entries, keymap, selected, captureWindow, new FleetPickerOptions()) is { } taken
+            ? (taken.Index, taken.NewWindow)
+            : null;
+
+    private static (int Index, bool NewWindow, PickerEntry Entry)? ChooseCore(
+        IApplication app,
+        string title,
+        IReadOnlyList<PickerEntry> entries,
+        Keymap keymap,
+        int selected,
+        bool captureWindow,
+        FleetPickerOptions options)
     {
         if (entries.Count == 0)
         {
             return null;
         }
 
-        (int Index, bool NewWindow)? result = null;
+        (int Index, bool NewWindow, PickerEntry Entry)? result = null;
 
-        var keys = PickerKeys.For(entries, Motions(keymap));
+        var filtering = options.Filter;
+        var all = entries;
+        var text = string.Empty;
+        IReadOnlyList<int> visible = PickerFilter.Apply(all, text);
+        var keys = Accelerators(all, keymap, filtering);
 
         var widest = entries.Max(e => e.Label.Length + e.Detail.Length + e.Key.Length) + 16;
-        var window = FleetTheme.Overlay(title, Math.Max(widest, Math.Max(title.Length + 10, 56)), entries.Count + 6 + FleetCorners.Rows);
+        var extra = filtering ? 1 : 0;
+        var status = options.Refresh is null ? 0 : 1;
+        var cardWidth = Math.Max(widest, Math.Max(title.Length + 10, 56));
+        var window = FleetTheme.Modal(
+            title,
+            cardWidth,
+            Math.Min(entries.Count, MostRows) + 6 + extra + status + FleetCorners.Rows);
 
-        var list = FleetTheme.Rows(1, 1, Dim.Fill(2));
+        var filterLine = FleetTheme.Caption(1, 1, string.Empty);
+        var list = FleetTheme.Rows(1, 1 + extra, Dim.Fill(2 + status));
+        var note = FleetTheme.StatusLine(Pos.AnchorEnd(2));
+        var noteWidth = cardWidth - 4;
 
-        FleetRows.Fill(
-            list, PickerKeys.Rows(entries, keys), Math.Clamp(selected, 0, entries.Count - 1));
+        int Current() =>
+            visible.Count == 0 ? -1 : visible[Math.Clamp(FleetRows.Selected(list), 0, visible.Count - 1)];
 
-        FleetKeys.ApplyMotions(list, keymap);
+        void Show(int keep)
+        {
+            visible = PickerFilter.Apply(all, text);
+
+            IReadOnlyList<FleetRow> rows = visible.Count == 0
+                ? [new FleetRow([FleetSpan.Muted(NoMatches)])]
+                : PickerKeys.Rows([.. visible.Select(i => all[i])], [.. visible.Select(i => keys[i])]);
+
+            FleetRows.Fill(list, rows, Math.Max(PickerFilter.Keep(visible, keep), 0));
+            filterLine.Text = $"{FilterIcon} {text}";
+            list.SetNeedsDraw();
+        }
+
+        Show(Math.Clamp(selected, 0, entries.Count - 1));
+
+        if (filtering)
+        {
+            list.KeyBindings.ReplaceCommands(Key.N.WithCtrl, Command.Down);
+            list.KeyBindings.ReplaceCommands(Key.P.WithCtrl, Command.Up);
+        }
+        else
+        {
+            FleetKeys.ApplyMotions(list, keymap);
+        }
 
         void Take(int index, bool newWindow)
         {
-            result = (index, newWindow);
+            if (visible.Count == 0 || index < 0)
+            {
+                return;
+            }
+
+            result = (index, newWindow, all[index]);
             app.RequestStop(window);
         }
 
         list.Accepting += (_, e) =>
         {
-            Take(FleetRows.Selected(list), newWindow: false);
+            Take(Current(), newWindow: false);
             e.Handled = true;
         };
 
@@ -90,12 +158,12 @@ public static class FleetPicker
 
         var items = new List<(string, string, Action)>
         {
-            ("enter", FleetIcons.Select, () => Take(FleetRows.Selected(list), newWindow: false)),
+            ("enter", FleetIcons.Select, () => Take(Current(), newWindow: false)),
         };
 
         if (captureWindow)
         {
-            items.Add(("SHIFT", FleetIcons.NewWindow, () => Take(FleetRows.Selected(list), newWindow: true)));
+            items.Add(("SHIFT", FleetIcons.NewWindow, () => Take(Current(), newWindow: true)));
         }
 
         items.Add(("bksp", FleetIcons.Back, Back));
@@ -113,7 +181,7 @@ public static class FleetPicker
 
             if (captureWindow && key == Key.Enter.WithShift)
             {
-                Take(FleetRows.Selected(list), newWindow: true);
+                Take(Current(), newWindow: true);
                 key.Handled = true;
                 return;
             }
@@ -125,10 +193,22 @@ public static class FleetPicker
                 return;
             }
 
-            if (FleetKeys.GoesBack(key))
+            if (FleetKeys.GoesBack(key, text))
             {
                 Back();
                 key.Handled = true;
+                return;
+            }
+
+            if (filtering)
+            {
+                if (PickerFilter.Edit(text, key) is { } typed)
+                {
+                    text = typed;
+                    Show(-1);
+                    key.Handled = true;
+                }
+
                 return;
             }
 
@@ -159,7 +239,79 @@ public static class FleetPicker
 
         app.Keyboard.KeyDown += Keys;
 
+        var open = true;
+        var refreshing = false;
+        object? spin = null;
+        var closing = new CancellationTokenSource();
+
+        if (options.Refresh is { } refresh)
+        {
+            var tick = 0;
+            var token = closing.Token;
+
+            refreshing = true;
+            note.Text = $"{FleetGlyphs.Frame(tick)} {options.Refreshing}";
+            spin = app.AddTimeout(TimeSpan.FromMilliseconds(90), () =>
+            {
+                if (!open || !refreshing)
+                {
+                    return false;
+                }
+
+                note.Text = $"{FleetGlyphs.Frame(++tick)} {options.Refreshing}";
+
+                return true;
+            });
+
+            _ = Task.Run(
+                async () =>
+                {
+                    PickerRefresh found;
+
+                    try
+                    {
+                        found = await refresh(token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    catch (Exception e)
+                    {
+                        found = new PickerRefresh([], $"offline: {e.Message}");
+                    }
+
+                    app.Invoke(() =>
+                    {
+                        if (!open)
+                        {
+                            return;
+                        }
+
+                        refreshing = false;
+
+                        var keep = Current();
+                        all = PickerFilter.Merge(all, found.Entries);
+                        keys = Accelerators(all, keymap, filtering);
+                        Show(keep);
+                        note.Text = PickerFilter.OneLine(found.Note, noteWidth);
+                    });
+                },
+                token);
+        }
+
         window.Add(list, bar.Root);
+
+        if (filtering)
+        {
+            window.Add(filterLine);
+        }
+
+        if (options.Refresh is not null)
+        {
+            window.Add(note);
+        }
+
         FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
@@ -168,6 +320,14 @@ public static class FleetPicker
         }
         finally
         {
+            open = false;
+            closing.Cancel();
+
+            if (spin is not null)
+            {
+                app.RemoveTimeout(spin);
+            }
+
             FleetModal.Leave();
             app.Keyboard.KeyDown -= Keys;
             window.Dispose();
@@ -175,6 +335,10 @@ public static class FleetPicker
 
         return result;
     }
+
+    private static IReadOnlyList<string> Accelerators(
+        IReadOnlyList<PickerEntry> entries, Keymap keymap, bool filtering) =>
+        filtering ? [.. entries.Select(_ => string.Empty)] : PickerKeys.For(entries, Motions(keymap));
 
     private static IReadOnlySet<char> Motions(Keymap keymap)
     {

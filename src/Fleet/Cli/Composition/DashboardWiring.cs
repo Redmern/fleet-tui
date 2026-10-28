@@ -485,6 +485,7 @@ public static class DashboardWiring
         var hider = new HideAgentHandler(mux, agents);
         var editor = new OpenEditorHandler(mux, Adapters.EditorLauncher());
         var branches = new ListBranchesHandler(git);
+        var fetcher = new FetchRemoteBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
         var stopper = new StopAgentHandler(mux, agents);
         var remover = new RemoveAgentHandler(git, mux, agents);
@@ -864,7 +865,8 @@ public static class DashboardWiring
                         available.Select(r => (r.Name, r.Directory, r.DefaultBranch)).ToList(),
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
-                        settings.Load(project.Name).DefaultAgentHarness),
+                        settings.Load(project.Name).DefaultAgentHarness,
+                        fetcher.HandleAsync),
                     keymap,
                     last.Repo,
                     last.Harness);

@@ -10,6 +10,10 @@ public static class FleetKeys
 
     public static readonly Key Back = Key.Backspace;
 
+    public static readonly Key Submit = Key.Enter.WithCtrl;
+
+    public static bool Submits(Key key) => key == Submit;
+
     public static bool GoesBack(Key key, string? typed = null) =>
         key == Back && string.IsNullOrEmpty(typed);
 

@@ -3,6 +3,7 @@ using Fleet.Ui.Enums;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 namespace Fleet.Ui;
 
@@ -16,87 +17,23 @@ public static class FleetDialog
         string secondaryText)
     {
         var choice = DialogChoice.Cancelled;
-        var window = Sized(title, lines, extraRows: 5);
+        var window = Sized(title, lines, extraRows: 6);
 
-        var y = 1;
-        foreach (var line in lines)
+        void Pick(DialogChoice picked)
         {
-            window.Add(FleetTheme.Caption(2, y, line));
-            y++;
-        }
-
-        var primary = FleetTheme.Submit(2, y + 1, primaryText);
-        var secondary = FleetTheme.Secondary(2 + primaryText.Length + 6, y + 1, secondaryText);
-
-        primary.Accepting += (_, _) =>
-        {
-            choice = DialogChoice.Primary;
+            choice = picked;
             app.RequestStop(window);
-        };
-
-        secondary.Accepting += (_, _) =>
-        {
-            choice = DialogChoice.Secondary;
-            app.RequestStop(window);
-        };
-
-        window.KeyDown += (_, key) =>
-        {
-            if (key == FleetKeys.Cancel)
-            {
-                app.RequestStop(window);
-                key.Handled = true;
-            }
-            else if (FleetKeys.GoesBack(key))
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-                key.Handled = true;
-            }
-            else if (key == Key.H || key == Key.CursorLeft)
-            {
-                primary.SetFocus();
-                key.Handled = true;
-            }
-            else if (key == Key.L || key == Key.CursorRight)
-            {
-                secondary.SetFocus();
-                key.Handled = true;
-            }
-        };
-
-        var bar = new FleetActionBar(Pos.AnchorEnd(1));
-
-        bar.Show(
-        [
-            ("enter", FleetIcons.Select, () =>
-            {
-                choice = primary.HasFocus ? DialogChoice.Primary : DialogChoice.Secondary;
-                app.RequestStop(window);
-            }),
-            ("bksp", FleetIcons.Back, () =>
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-            }),
-        ]);
-
-        window.Add(primary, secondary, bar.Root);
-        FleetCorners.Attach(window, () => app.RequestStop(window));
-
-        primary.SetFocus();
-
-        FleetModal.Enter();
-
-        try
-        {
-            app.Run(window);
         }
-        finally
-        {
-            FleetModal.Leave();
-            window.Dispose();
-        }
+
+        Answer(
+            app,
+            window,
+            lines,
+            [
+                new(FleetIcons.Select, primaryText, string.Empty, () => Pick(DialogChoice.Primary)),
+                new(FleetIcons.Close, secondaryText, string.Empty, () => Pick(DialogChoice.Secondary)),
+            ],
+            "enter");
 
         return choice;
     }
@@ -105,8 +42,32 @@ public static class FleetDialog
         IApplication app, string title, IReadOnlyList<string> lines, string confirmText = "Yes")
     {
         var confirmed = false;
-        var window = Sized(title, lines, extraRows: 5);
+        var window = Sized(title, lines, extraRows: 6);
 
+        Answer(
+            app,
+            window,
+            lines,
+            [
+                new(FleetIcons.Select, confirmText, "y", () =>
+                {
+                    confirmed = true;
+                    app.RequestStop(window);
+                }),
+                new(FleetIcons.Close, "No", "n", () => app.RequestStop(window)),
+            ],
+            "y");
+
+        return confirmed;
+    }
+
+    private static void Answer(
+        IApplication app,
+        Window window,
+        IReadOnlyList<string> lines,
+        IReadOnlyList<FleetPillButton> pills,
+        string selectKey)
+    {
         var y = 1;
         foreach (var line in lines)
         {
@@ -114,68 +75,72 @@ public static class FleetDialog
             y++;
         }
 
-        var yes = FleetTheme.Submit(2, y + 1, confirmText);
-        var no = FleetTheme.Secondary(2 + confirmText.Length + 6, y + 1, "No");
+        var list = PillRows(y + 1, pills);
 
-        yes.Accepting += (_, _) =>
+        void Activate() => pills[Math.Clamp(FleetRows.Selected(list), 0, pills.Count - 1)].Activate();
+
+        void Back()
         {
-            confirmed = true;
+            FleetModal.Back();
             app.RequestStop(window);
+        }
+
+        list.Accepting += (_, e) =>
+        {
+            Activate();
+            e.Handled = true;
         };
 
-        no.Accepting += (_, _) => app.RequestStop(window);
-
-        window.KeyDown += (_, key) =>
+        void Keys(object? sender, Key key)
         {
-            if (key == Key.Y)
+            if (key.Handled)
             {
-                confirmed = true;
-                app.RequestStop(window);
-                key.Handled = true;
+                return;
             }
-            else if (key == Key.N || key == FleetKeys.Cancel)
+
+            if (pills.FirstOrDefault(p => p.Answers(key)) is { } pill)
+            {
+                pill.Activate();
+            }
+            else if (key == FleetKeys.Cancel)
             {
                 app.RequestStop(window);
-                key.Handled = true;
             }
             else if (FleetKeys.GoesBack(key))
             {
-                FleetModal.Back();
-                app.RequestStop(window);
-                key.Handled = true;
+                Back();
             }
             else if (key == Key.H || key == Key.CursorLeft)
             {
-                yes.SetFocus();
-                key.Handled = true;
+                FleetRows.Select(list, 0);
             }
             else if (key == Key.L || key == Key.CursorRight)
             {
-                no.SetFocus();
-                key.Handled = true;
+                FleetRows.Select(list, pills.Count - 1);
             }
-        };
+            else
+            {
+                return;
+            }
+
+            key.Handled = true;
+        }
+
+        ((FleetList)list).Pressing += Keys;
+        window.KeyDown += Keys;
 
         var bar = new FleetActionBar(Pos.AnchorEnd(1));
 
         bar.Show(
         [
-            ("y", FleetIcons.Select, () =>
-            {
-                confirmed = true;
-                app.RequestStop(window);
-            }),
-            ("bksp", FleetIcons.Back, () =>
-            {
-                FleetModal.Back();
-                app.RequestStop(window);
-            }),
+            (selectKey, FleetIcons.Select, Activate),
+            ("bksp", FleetIcons.Back, Back),
         ]);
 
-        window.Add(yes, no, bar.Root);
+        window.Add(list, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window));
 
-        yes.SetFocus();
+        list.SetFocus();
 
         FleetModal.Enter();
 
@@ -188,8 +153,13 @@ public static class FleetDialog
             FleetModal.Leave();
             window.Dispose();
         }
+    }
 
-        return confirmed;
+    private static ListView PillRows(Pos y, IReadOnlyList<FleetPillButton> pills)
+    {
+        var list = FleetTheme.Rows(1, y, pills.Count);
+        FleetRows.Fill(list, [.. pills.Select(p => p.Row())]);
+        return list;
     }
 
     public static string? Ask(IApplication app, string title, string question, bool secret = false, string initial = "")
@@ -333,8 +303,13 @@ public static class FleetDialog
             y++;
         }
 
-        var dismiss = FleetTheme.Primary(2, y + 1, "Dismiss");
-        dismiss.Accepting += (_, _) => app.RequestStop(window);
+        var dismiss = PillRows(
+            y + 1, [new(FleetIcons.Dismiss, "Dismiss", "Enter", () => app.RequestStop(window))]);
+        dismiss.Accepting += (_, e) =>
+        {
+            app.RequestStop(window);
+            e.Handled = true;
+        };
 
         window.KeyDown += (_, key) =>
         {
@@ -365,6 +340,7 @@ public static class FleetDialog
 
         window.Add(dismiss, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window));
+        dismiss.SetFocus();
 
         FleetModal.Enter();
 
