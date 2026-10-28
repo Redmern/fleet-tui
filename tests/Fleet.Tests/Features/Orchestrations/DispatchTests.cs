@@ -507,6 +507,9 @@ public sealed class DispatchTests : IDisposable
         var folder = reply.Value!.Folder;
         Assert.True(File.Exists(Path.Combine(folder, "AGENTS.md")));
         Assert.False(File.Exists(Path.Combine(folder, "CLAUDE.md")));
+        var instructions = File.ReadAllText(Path.Combine(folder, "AGENTS.md"));
+        Assert.Contains(OrchestrationText.WaitingForAgentsTyped, instructions);
+        Assert.DoesNotContain("notify_when_idle", instructions);
         Assert.Equal(
             opencode.Kickoff,
             File.ReadAllText(Path.Combine(folder, ".fleet", AgentHarness.AgentInstructionFile)));

@@ -128,7 +128,13 @@ public sealed class DispatchHandler(
 
         File.WriteAllText(
             OrchestrationPaths.InstructionsFile(folder, _profile),
-            OrchestrationText.Instructions(brief, howYouWork, process, route.Research, config.SubagentGuidance));
+            OrchestrationText.Instructions(
+                brief,
+                howYouWork,
+                process,
+                route.Research,
+                config.SubagentGuidance,
+                _profile.Has(HarnessCapabilities.NativeMessaging)));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
         harness.WriteForOrchestration(folder, command.ProjectName, slug);
