@@ -21,16 +21,18 @@ public sealed class NewAgentViewTests
             "feat/x",
             "main",
             "claude",
+            "no",
             () => ran?.Add("repo"),
             () => ran?.Add("branch"),
             () => ran?.Add("base"),
-            () => ran?.Add("opens"));
+            () => ran?.Add("opens"),
+            () => ran?.Add("in nvim"));
 
     [Fact]
     public void Every_field_leads_with_its_icon()
     {
         Assert.Equal(
-            [FleetIcons.Repo, FleetIcons.Branch, FleetIcons.Base, FleetIcons.Harness],
+            [FleetIcons.Repo, FleetIcons.Branch, FleetIcons.Base, FleetIcons.Harness, FleetIcons.Harness],
             Fields().Select(f => f.Icon));
     }
 
@@ -43,11 +45,36 @@ public sealed class NewAgentViewTests
     }
 
     [Fact]
-    public void Repo_branch_base_and_opens_jump_on_r_b_a_and_o()
+    public void Repo_branch_base_opens_and_in_nvim_jump_on_r_b_a_o_and_i()
     {
         var keys = FleetCard.FieldKeys(Fields(), Pills(), Keymap.Default);
 
-        Assert.Equal(["r", "b", "a", "o"], keys);
+        Assert.Equal(["r", "b", "a", "o", "i"], keys);
+    }
+
+    [Fact]
+    public void The_opens_picker_lists_every_registered_harness()
+    {
+        Assert.Equal(["nvim", "claude", "opencode"], NewAgentView.Harnesses);
+        Assert.Equal(Fleet.Shared.Harness.HarnessRegistry.Selectable, NewAgentView.Harnesses);
+    }
+
+    [Theory]
+    [InlineData("claude", false, true)]
+    [InlineData("opencode", true, false)]
+    [InlineData("nvim", false, false)]
+    public void The_nvim_host_toggles_only_for_a_harness_that_runs_an_ai(string harness, bool host, bool expected)
+    {
+        Assert.Equal(expected, NewAgentView.Toggled(harness, host));
+    }
+
+    [Fact]
+    public void The_in_nvim_field_says_when_nvim_is_the_editor_itself()
+    {
+        Assert.Equal("yes", NewAgentView.HostShown("opencode", true));
+        Assert.Equal("no", NewAgentView.HostShown("claude", false));
+        Assert.Equal("(nvim is the editor)", NewAgentView.HostShown("nvim", true));
+        Assert.False(NewAgentView.Hosted("nvim", true));
     }
 
     [Fact]
@@ -60,7 +87,7 @@ public sealed class NewAgentViewTests
             field.Edit();
         }
 
-        Assert.Equal(["repo", "branch", "base", "opens"], ran);
+        Assert.Equal(["repo", "branch", "base", "opens", "in nvim"], ran);
     }
 
     private static IReadOnlyList<FleetPillButton> Pills() =>

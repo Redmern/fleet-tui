@@ -250,8 +250,6 @@ public static class AgentHarness
             ? env
             : new Dictionary<string, string>(env) { [NvimAppNameVariable] = FleetNvimAppName };
 
-    public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
-
     public static IReadOnlyList<string> Known => [.. HarnessRegistry.Selectable, Orchestrator];
 
     public static string Describe(string harness) => Normalize(harness);
