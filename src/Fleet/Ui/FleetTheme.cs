@@ -39,16 +39,29 @@ public static class FleetTheme
         SchemeName = FleetSchemes.Screen,
     }, new FloatScreen(title, fitCols, fitRows));
 
-    public static Window Modal(string title, int width, int height) => Floating(new Window
+    public const int ModalMargin = 1;
+
+    private const int SmallestModal = 20;
+
+    public static Window Modal(string title, int width, int height)
     {
-        Title = $" {title} ",
-        X = Pos.Center(),
-        Y = Pos.Center(),
-        Width = width,
-        Height = height,
-        BorderStyle = Border,
-        SchemeName = FleetSchemes.Screen,
-    }, new FloatScreen(title, width, height));
+        var window = new Window
+        {
+            Title = $" {title} ",
+            X = Pos.Center(),
+            Y = Pos.Center(),
+            BorderStyle = Border,
+            SchemeName = FleetSchemes.Screen,
+        };
+
+        window.Width = Dim.Func(_ => Fit(width, window.App?.Screen.Width ?? width));
+        window.Height = Dim.Func(_ => Fit(height, window.App?.Screen.Height ?? height, 0));
+
+        return Floating(window, new FloatScreen(title, width, height));
+    }
+
+    public static int Fit(int wanted, int screen, int margin = ModalMargin) =>
+        Math.Min(wanted, Math.Max(screen - 2 * margin, Math.Min(screen, SmallestModal)));
 
     private static Window Floating(Window window, FloatScreen screen)
     {
@@ -135,6 +148,17 @@ public static class FleetTheme
         Text = string.Empty,
         TextAlignment = Alignment.End,
         SchemeName = FleetSchemes.Status,
+    };
+
+    public static Label FullLine(Pos y, int rows) => new()
+    {
+        X = 1,
+        Y = y,
+        Width = Dim.Fill(1),
+        Height = rows,
+        Text = string.Empty,
+        SchemeName = FleetSchemes.Status,
+        HotKeySpecifier = NoHotKey,
     };
 
     public static TextField Field(Pos x, Pos y, string text = "") => new()

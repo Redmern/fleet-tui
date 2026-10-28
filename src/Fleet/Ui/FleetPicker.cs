@@ -1,3 +1,4 @@
+using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
@@ -56,6 +57,12 @@ public static class FleetPicker
 
     private const int MostRows = 20;
 
+    private const int FullNameRows = 2;
+
+    private const int Chrome = 4;
+
+    private static int ListWidth(int cardWidth) => Math.Max(0, cardWidth - Chrome);
+
     private static (int Index, bool NewWindow)? ChooseCore(
         IApplication app,
         string title,
@@ -93,18 +100,28 @@ public static class FleetPicker
         var extra = filtering ? 1 : 0;
         var status = options.Refresh is null ? 0 : 1;
         var cardWidth = Math.Max(widest, Math.Max(title.Length + 10, 56));
+        var listWidth = ListWidth(FloatPane.Inside ? cardWidth : FleetTheme.Fit(cardWidth, app.Screen.Width));
+        var full = options.Refresh is not null || entries.Any(e => PickerKeys.Cut(e, listWidth)) ? FullNameRows : 0;
         var window = FleetTheme.Modal(
             title,
             cardWidth,
-            Math.Min(entries.Count, MostRows) + 6 + extra + status + FleetCorners.Rows);
+            Math.Min(entries.Count, MostRows) + 6 + extra + status + full + FleetCorners.Rows);
 
         var filterLine = FleetTheme.Caption(1, 1, string.Empty);
-        var list = FleetTheme.Rows(1, 1 + extra, Dim.Fill(2 + status));
+        var list = FleetTheme.Rows(1, 1 + extra, Dim.Fill(2 + status + full));
+        var fullName = FleetTheme.FullLine(Pos.AnchorEnd(2 + status + full), full);
         var note = FleetTheme.StatusLine(Pos.AnchorEnd(2));
-        var noteWidth = cardWidth - 4;
 
         int Current() =>
             visible.Count == 0 ? -1 : visible[Math.Clamp(FleetRows.Selected(list), 0, visible.Count - 1)];
+
+        void Name()
+        {
+            var at = Current();
+            fullName.Text = at < 0 || !PickerKeys.Cut(all[at], listWidth)
+                ? string.Empty
+                : string.Join('\n', FleetText.Lines(all[at].Label, listWidth, full));
+        }
 
         void Show(int keep)
         {
@@ -112,14 +129,27 @@ public static class FleetPicker
 
             IReadOnlyList<FleetRow> rows = visible.Count == 0
                 ? [new FleetRow([FleetSpan.Muted(NoMatches)])]
-                : PickerKeys.Rows([.. visible.Select(i => all[i])], [.. visible.Select(i => keys[i])]);
+                : PickerKeys.Rows([.. visible.Select(i => all[i])], [.. visible.Select(i => keys[i])], listWidth);
 
             FleetRows.Fill(list, rows, Math.Max(PickerFilter.Keep(visible, keep), 0));
             filterLine.Text = $"{FilterIcon} {text}";
+            Name();
             list.SetNeedsDraw();
         }
 
         Show(Math.Clamp(selected, 0, entries.Count - 1));
+
+        list.ValueChanged += (_, _) => Name();
+        window.FrameChanged += (_, _) =>
+        {
+            var fitted = ListWidth(window.Frame.Width);
+
+            if (window.Frame.Width > 0 && fitted != listWidth)
+            {
+                listWidth = fitted;
+                Show(Current());
+            }
+        };
 
         if (filtering)
         {
@@ -294,7 +324,7 @@ public static class FleetPicker
                         all = PickerFilter.Merge(all, found.Entries);
                         keys = Accelerators(all, keymap, filtering);
                         Show(keep);
-                        note.Text = PickerFilter.OneLine(found.Note, noteWidth);
+                        note.Text = PickerFilter.OneLine(found.Note, listWidth);
                     });
                 },
                 token);
@@ -305,6 +335,11 @@ public static class FleetPicker
         if (filtering)
         {
             window.Add(filterLine);
+        }
+
+        if (full > 0)
+        {
+            window.Add(fullName);
         }
 
         if (options.Refresh is not null)
