@@ -4,6 +4,11 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.27.1 (2026-10-27)
+
+- **A `,` prompt no longer comes back in the input field**: when the dispatch or todo hook takes a prompt, Claude Code 2.1.310 used to put its text back in the main pane's input. The hooks now stop the prompt instead of blocking it, so the field stays empty, no model turn runs, and the dispatch note still shows (as "Operation stopped by hook").
+- The taken prompt and its note now stay in the main pane's transcript, so the orchestrator can see that a task was dispatched.
+
 ## 0.7.27 (2026-10-26)
 
 - **`fleet uninstall`** removes fleet from this machine: it lists what it would remove and asks one y/N (`--yes` skips the question and is required when stdin is not a terminal). It stops the daemon and removes the fleet-nvim folders, the fleet config home, the marked shell `PATH` lines and the binary (last); on Windows also the user `PATH` entry, the Fleet shortcut and Terminal profile, and the install folder. Your repositories, agent worktrees, per-project fleet files and `~/.claude*` entries stay.
