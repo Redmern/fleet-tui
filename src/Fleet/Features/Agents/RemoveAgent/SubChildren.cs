@@ -10,5 +10,5 @@ public static class SubChildren
                               && string.Equals(a.Owner, slug, StringComparison.OrdinalIgnoreCase))];
 
     public static AgentRecord Released(AgentRecord child) =>
-        child with { Owner = string.Empty, Claude = child.RunsClaude };
+        child with { Owner = string.Empty };
 }

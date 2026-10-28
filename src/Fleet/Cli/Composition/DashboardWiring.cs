@@ -523,8 +523,7 @@ public static class DashboardWiring
         {
             var loaded = settings.Load(project.Name);
             var inNvim = loaded.SubOrchestratorsHostedInNvim;
-            var executable = AgentHarness.CommandFor(
-                AgentHarness.HostedFor(agent.Harness, loaded.HostsInNvim), orchestratorInNvim: inNvim)[0];
+            var executable = Adapters.Opens(project.Name, agent);
 
             if (!Adapters.OnPath(executable))
             {

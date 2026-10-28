@@ -131,9 +131,15 @@ public static class Adapters
     {
         var settings = Settings().Load(project);
 
-        return AgentHarness.CommandFor(
-            AgentHarness.HostedFor(agent.Harness, settings.HostsInNvim),
-            orchestratorInNvim: settings.SubOrchestratorsHostedInNvim)[0];
+        if (AgentHarness.IsOrchestrator(agent.Harness))
+        {
+            return AgentHarness.CommandFor(
+                agent.Harness, orchestratorInNvim: settings.SubOrchestratorsHostedInNvim)[0];
+        }
+
+        var binaries = agent.HostedFor(settings.HostsInNvim).Binaries();
+
+        return binaries.FirstOrDefault(b => !OnPath(b)) ?? binaries[0];
     }
 
     public static RoleModels Models(string project) => Settings().Load(project).Models;

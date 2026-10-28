@@ -300,4 +300,89 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
         Assert.False(removed);
         Assert.Single(_store.List("techweb"));
     }
+
+    private static string Legacy(string entry) =>
+        $$"""{"version":1,"agents":[{"worktree":"~/x","repository":"backend","branch":"dev",{{entry}}}]}""";
+
+    private AgentRecord LoadLegacy(string entry)
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(Path.Combine(FleetPaths.Sessions, "techweb.json"), Legacy(entry));
+
+        return Assert.Single(_store.List("techweb"));
+    }
+
+    [Fact]
+    public void A_legacy_nvim_agent_that_ran_claude_loads_as_claude_hosted_in_nvim()
+    {
+        var agent = LoadLegacy("\"harness\":\"nvim\",\"claude\":true");
+
+        Assert.Equal("claude", agent.Harness);
+        Assert.True(agent.HostInNvim);
+    }
+
+    [Fact]
+    public void A_legacy_owned_nvim_agent_without_a_claude_flag_loads_as_claude_hosted_in_nvim()
+    {
+        var agent = LoadLegacy("\"harness\":\"nvim\",\"owner\":\"add-login\"");
+
+        Assert.Equal("claude", agent.Harness);
+        Assert.True(agent.HostInNvim);
+    }
+
+    [Fact]
+    public void A_legacy_plain_nvim_agent_stays_an_editor_without_an_ai()
+    {
+        var agent = LoadLegacy("\"harness\":\"nvim\",\"claude\":false");
+
+        Assert.Equal("nvim", agent.Harness);
+        Assert.False(agent.HostInNvim);
+    }
+
+    [Fact]
+    public void A_legacy_opencode_agent_marked_as_claude_loads_as_plain_opencode()
+    {
+        var agent = LoadLegacy("\"harness\":\"opencode\",\"claude\":true");
+
+        Assert.Equal("opencode", agent.Harness);
+        Assert.False(agent.HostInNvim);
+    }
+
+    [Fact]
+    public void A_legacy_claude_agent_stays_claude_outside_nvim()
+    {
+        var agent = LoadLegacy("\"harness\":\"claude\",\"claude\":true");
+
+        Assert.Equal("claude", agent.Harness);
+        Assert.False(agent.HostInNvim);
+    }
+
+    [Fact]
+    public void A_migrated_agent_is_written_back_without_the_legacy_claude_flag()
+    {
+        var agent = LoadLegacy("\"harness\":\"nvim\",\"claude\":true");
+
+        _store.Save("techweb", agent with { Status = "done" });
+
+        var json = File.ReadAllText(Path.Combine(FleetPaths.Sessions, "techweb.json"));
+        Assert.DoesNotContain("\"claude\":", json, StringComparison.Ordinal);
+        Assert.Contains("\"hostInNvim\": true", json, StringComparison.Ordinal);
+        Assert.Equal(agent with { Status = "done" }, Assert.Single(_store.List("techweb")));
+    }
+
+    [Theory]
+    [InlineData("claude", true)]
+    [InlineData("claude", false)]
+    [InlineData("opencode", true)]
+    [InlineData("opencode", false)]
+    [InlineData("nvim", false)]
+    public void The_harness_and_the_nvim_host_round_trip_independently(string harness, bool host)
+    {
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop")) with { Harness = harness, HostInNvim = host });
+
+        var agent = Assert.Single(_store.List("techweb"));
+
+        Assert.Equal(harness, agent.Harness);
+        Assert.Equal(host, agent.HostInNvim);
+    }
 }

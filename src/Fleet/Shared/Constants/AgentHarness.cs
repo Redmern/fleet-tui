@@ -133,6 +133,50 @@ public static class AgentHarness
 
     private const string ClaudeCodeCall = "vim.cmd('ClaudeCode";
 
+    private const string HostedCommandCall = "local fleet_cmd={";
+
+    public static string NvimStartupWithCommand(IReadOnlyList<string> command) =>
+        NvimBoot
+        + HostedCommandCall + string.Join(",", command.Select(LuaString)) + "} "
+        + "vim.schedule(function() vim.cmd('Neotree show') "
+        + "if vim.fn.has('nvim-0.11')==1 then vim.fn.jobstart(fleet_cmd,{term=true}) "
+        + "else vim.fn.termopen(fleet_cmd) end "
+        + "vim.defer_fn(function() local tree,term for _,w in ipairs(vim.api.nvim_list_wins()) do "
+        + "local b=vim.api.nvim_win_get_buf(w) "
+        + "if vim.bo[b].filetype=='neo-tree' then tree=w "
+        + "elseif vim.bo[b].buftype=='terminal' then term=w end end "
+        + "if tree and term then vim.wo[term].winfixwidth=false "
+        + "pcall(vim.api.nvim_win_set_width, tree, math.floor(vim.o.columns*0.25)) "
+        + "vim.wo[tree].winfixwidth=true vim.api.nvim_set_current_win(term) end "
+        + "vim.cmd('startinsert') end, 150) end)";
+
+    private static string LuaString(string value) =>
+        "'" + value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal) + "'";
+
+    private static IReadOnlyList<string> ResumedHostedCommand(IReadOnlyList<string> command)
+    {
+        if (command.Count != 3 || command[0] != Nvim || command[1] != "-c")
+        {
+            return command;
+        }
+
+        var profile = HarnessRegistry.Profiles.FirstOrDefault(p =>
+            p.ResumeArguments.Count > 0
+            && command[2].Contains(HostedCommandCall + LuaString(p.Binary), StringComparison.Ordinal));
+
+        if (profile is null)
+        {
+            return command;
+        }
+
+        var launch = HostedCommandCall + LuaString(profile.Binary);
+        var resumed = launch + string.Concat(profile.ResumeArguments.Select(a => "," + LuaString(a)));
+
+        return command[2].Contains(resumed, StringComparison.Ordinal)
+            ? command
+            : [Nvim, "-c", command[2].Replace(launch, resumed, StringComparison.Ordinal)];
+    }
+
     public static IReadOnlyList<string> OrchestratorCommand(
         bool resume, bool inNvim = true, ClaudeLaunch? launch = null) =>
         inNvim
@@ -140,7 +184,7 @@ public static class AgentHarness
             : HarnessRegistry.Claude.Launch(ClaudeArguments(resume, launch));
 
     public static IReadOnlyList<string> Resumed(IReadOnlyList<string> command) =>
-        HarnessRegistry.Running(command)?.Resumed(command) ?? ResumedInNvim(command);
+        HarnessRegistry.Running(command)?.Resumed(command) ?? ResumedHostedCommand(ResumedInNvim(command));
 
     private static IReadOnlyList<string> ResumedInNvim(IReadOnlyList<string> command) =>
         command.Count == 3
@@ -254,6 +298,49 @@ public static class AgentHarness
 
         return profile.Launch(profile.TakesClaudeLaunch ? ClaudeArguments(false, launch) : []);
     }
+
+    public static bool RunsHarness(string harness) => HarnessRegistry.Find(harness) is not null;
+
+    public static bool PaneInNvim(string harness, bool hostInNvim) =>
+        Normalize(harness) == Nvim || (hostInNvim && RunsHarness(harness));
+
+    public static (string Harness, bool HostInNvim) Hosted(string harness, bool hostInNvim, bool nvimAllowed) =>
+        nvimAllowed || IsOrchestrator(harness)
+            ? (harness, hostInNvim && RunsHarness(harness))
+            : (HostedFor(harness, nvimAllowed: false), false);
+
+    public static IReadOnlyList<string> AgentCommand(string harness, bool hostInNvim, ClaudeLaunch? launch = null)
+    {
+        if (HarnessRegistry.Find(harness) is not { } profile)
+        {
+            return CommandFor(harness, launch: launch);
+        }
+
+        if (!hostInNvim)
+        {
+            return profile.Launch(profile.TakesClaudeLaunch ? ClaudeArguments(false, launch) : []);
+        }
+
+        return profile.TakesClaudeLaunch
+            ? [Nvim, "-c", NvimStartupWithClaude(NvimArguments(ClaudeArguments(false, launch)))]
+            : [Nvim, "-c", NvimStartupWithCommand(profile.Launch([]))];
+    }
+
+    public static (string Harness, bool HostInNvim) RunningAi(string harness) =>
+        Normalize(harness) == Nvim ? (Claude, true) : (harness, false);
+
+    public static IReadOnlyList<string> Binaries(string harness, bool hostInNvim) =>
+        [.. new[] { AgentCommand(harness, hostInNvim)[0], HarnessRegistry.Find(harness)?.Binary ?? string.Empty }
+            .Where(b => b.Length > 0)
+            .Distinct(StringComparer.Ordinal)];
+
+    public static IReadOnlyDictionary<string, string> SpawnEnvFor(IReadOnlyList<string> command) =>
+        HarnessRegistry.Running(command)?.SpawnEnv ?? new Dictionary<string, string>();
+
+    public static string Describe(string harness, bool hostInNvim) =>
+        PaneInNvim(harness, hostInNvim) && RunsHarness(harness)
+            ? $"{Normalize(harness)} in nvim"
+            : Describe(harness);
 
     public static string Normalize(string harness) =>
         Known.Contains(harness.Trim()) ? harness.Trim() : Nvim;

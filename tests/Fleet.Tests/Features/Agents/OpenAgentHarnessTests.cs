@@ -21,7 +21,7 @@ public sealed class OpenAgentHarnessTests : IDisposable
         var worktree = Path.Combine(_root, "api_feat");
         Directory.CreateDirectory(worktree);
 
-        return new AgentRecord(worktree, "api", "feat", harness, "origin/main", true, Claude: true);
+        return new AgentRecord(worktree, "api", "feat", harness, "origin/main", true);
     }
 
     [Fact]

@@ -31,7 +31,11 @@ public sealed class AgentEntry
 
     public string Status { get; set; } = string.Empty;
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Claude { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? HostInNvim { get; set; }
 
     public bool? InNvim { get; set; }
 

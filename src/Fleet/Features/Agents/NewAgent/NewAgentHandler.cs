@@ -31,10 +31,9 @@ public sealed class NewAgentHandler(
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
     {
-        command = command with
-        {
-            Harness = AgentHarness.HostedFor(command.Harness, settings?.Load(command.ProjectName).HostsInNvim ?? true),
-        };
+        var (harness, hostInNvim) = AgentHarness.Hosted(
+            command.Harness, command.HostInNvim, settings?.Load(command.ProjectName).HostsInNvim ?? true);
+        command = command with { Harness = harness, HostInNvim = hostInNvim };
 
         var planned = AgentBranch.Plan(command.BranchName, command.Base);
 
@@ -85,8 +84,7 @@ public sealed class NewAgentHandler(
         }
 
         var roles = models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models;
-        var runsClaude = command.Claude ?? command.Owner.Length > 0;
-        var routed = roles.Agent.IsAuto && (runsClaude || !AgentHarness.HostedInNvim(command.Harness))
+        var routed = roles.Agent.IsAuto && AgentHarness.RunsHarness(command.Harness)
             ? await RoutedModel(command, branch, ct).ConfigureAwait(false)
             : null;
         var stored = store.List(command.ProjectName)
@@ -103,15 +101,23 @@ public sealed class NewAgentHandler(
             Hidden: true,
             Open: true,
             Owner: command.Owner,
-            Claude: runsClaude,
+            HostInNvim: command.HostInNvim,
             Model: routed ?? stored);
 
         store.Save(command.ProjectName, agent);
 
         SubagentGuidance.Apply(
             agent.Worktree,
-            (agent.RunsClaude || !AgentHarness.HostedInNvim(agent.Harness))
-                && subagentGuidance?.Invoke(command.ProjectName) == true);
+            agent.RunsHarness && subagentGuidance?.Invoke(command.ProjectName) == true);
+
+        var args = agent.Command(
+            ClaudeLaunch.ForAgent(
+                command.ProjectName,
+                agent.Repository,
+                agent.Branch,
+                orchestrator: false,
+                agent.ModelsFrom(roles, orchestrator: false),
+                agent.Worktree));
 
         configs?.For(agent.Harness).WriteForAgent(agent.Worktree, command.ProjectName, agent.Repository, agent.Branch);
 
@@ -124,17 +130,8 @@ public sealed class NewAgentHandler(
                 new SpawnOptions
                 {
                     Cwd = plan.TargetDirectory,
-                    Args = AgentHarness.CommandFor(
-                        command.Harness,
-                        withClaude: agent.RunsClaude,
-                        launch: ClaudeLaunch.ForAgent(
-                            command.ProjectName,
-                            agent.Repository,
-                            agent.Branch,
-                            orchestrator: false,
-                            agent.ModelsFrom(roles, orchestrator: false),
-                            agent.Worktree)),
-                    Env = AgentHarness.SpawnEnv(command.Harness),
+                    Args = args,
+                    Env = AgentHarness.SpawnEnvFor(args),
                 }),
             ct).ConfigureAwait(false);
 
