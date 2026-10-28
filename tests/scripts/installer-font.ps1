@@ -338,8 +338,17 @@ try {
     $uninstalls = Find-Command 'Uninstall-FleetFont'
     Check 'install.ps1 dot-sources fonts.ps1' ([IO.File]::ReadAllText((Join-Path $repo 'install.ps1')) -match "scripts\\fonts\.ps1")
     Check 'install.ps1 installs the font on every install' ($installs.Count -eq 1 -and @(Get-IfConditions $installs[0]).Count -eq 0)
+    # Both uninstall paths (handing over to 'fleet uninstall', and the fallback when
+    # fleet.exe is gone) purge the font, so every call must sit under an if whose
+    # condition requires $Uninstall and one that requires $Purge (not negated).
+    function Test-Requires([string[]]$conditions, [string]$variable) {
+        @($conditions | Where-Object { $_ -match "(?<!-not\s+|!\s*)\`$$variable\b" }).Count -gt 0
+    }
     Check 'install.ps1 removes the font only under -Uninstall -Purge' (
-        $uninstalls.Count -eq 1 -and (Get-IfConditions $uninstalls[0]) -contains '$Purge' -and (Get-IfConditions $uninstalls[0]) -contains '$Uninstall')
+        $uninstalls.Count -ge 1 -and
+        @($uninstalls | Where-Object {
+                $conditions = @(Get-IfConditions $_)
+                -not (Test-Requires $conditions 'Uninstall') -or -not (Test-Requires $conditions 'Purge') }).Count -eq 0)
     Check 'install.ps1 never touches settings.json or HKCU:\Console' (
         [IO.File]::ReadAllText((Join-Path $repo 'install.ps1')) -notmatch 'settings\.json|HKCU:\\Console')
 }
