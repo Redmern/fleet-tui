@@ -1,4 +1,3 @@
-using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
@@ -59,9 +58,6 @@ public static class FleetPicker
 
     private const int FullNameRows = 2;
 
-    private const int Chrome = 4;
-
-    private static int ListWidth(int cardWidth) => Math.Max(0, cardWidth - Chrome);
 
     private static (int Index, bool NewWindow)? ChooseCore(
         IApplication app,
@@ -100,7 +96,7 @@ public static class FleetPicker
         var extra = filtering ? 1 : 0;
         var status = options.Refresh is null ? 0 : 1;
         var cardWidth = Math.Max(widest, Math.Max(title.Length + 10, 56));
-        var listWidth = ListWidth(FloatPane.Inside ? cardWidth : FleetTheme.Fit(cardWidth, app.Screen.Width));
+        var listWidth = FleetTheme.RowsWidth(app, cardWidth);
         var full = options.Refresh is not null || entries.Any(e => PickerKeys.Cut(e, listWidth)) ? FullNameRows : 0;
         var window = FleetTheme.Modal(
             title,
@@ -142,7 +138,7 @@ public static class FleetPicker
         list.ValueChanged += (_, _) => Name();
         window.FrameChanged += (_, _) =>
         {
-            var fitted = ListWidth(window.Frame.Width);
+            var fitted = FleetTheme.RowsWidth(window.Frame.Width);
 
             if (window.Frame.Width > 0 && fitted != listWidth)
             {

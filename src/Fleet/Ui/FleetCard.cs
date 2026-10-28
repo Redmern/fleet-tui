@@ -12,15 +12,24 @@ public static class FleetCard
 
     private const int LabelWidth = 9;
 
-    public static FleetRow FieldRow(FleetCardField field, string mnemonic) =>
-        new(
-            [
-                new FleetSpan(field.Icon, FleetTones.Icon),
-                FleetSpan.Plain(" "),
-                new FleetSpan($"{field.Label}:".PadRight(LabelWidth), FleetTones.Key),
-                FleetSpan.Plain(field.Value),
-            ],
-            mnemonic.Length == 0 ? null : Chip(mnemonic));
+    private const int Caps = 2;
+
+    public static FleetRow FieldRow(FleetCardField field, string mnemonic, int width = int.MaxValue)
+    {
+        IReadOnlyList<FleetSpan> lead =
+        [
+            new FleetSpan(field.Icon, FleetTones.Icon),
+            FleetSpan.Plain(" "),
+            new FleetSpan($"{field.Label}:".PadRight(LabelWidth), FleetTones.Key),
+        ];
+
+        var chip = mnemonic.Length == 0 ? null : Chip(mnemonic);
+        var room = width == int.MaxValue
+            ? int.MaxValue
+            : width - Caps - lead.Sum(s => s.Text.Length) - (chip is null ? 0 : chip.Sum(s => s.Text.Length) + 1);
+
+        return new([.. lead, FleetSpan.Plain(FleetText.Middle(field.Value, Math.Max(1, room)))], chip);
+    }
 
     public static IReadOnlyList<FleetPillButton> Pills(
         string icon, string label, string mnemonic, Action submit, Action cancel) =>
@@ -79,6 +88,7 @@ public static class FleetCard
         var height = shown.Count + 3 + 7 + FleetCorners.Rows;
         var window = FleetTheme.Modal(title, Width, height);
         var list = FleetTheme.Rows(1, 1, Dim.Fill(4));
+        var rowsWidth = FleetTheme.RowsWidth(app, Width);
         var error = FleetTheme.ErrorText(1, Pos.AnchorEnd(3));
 
         void Close() => app.RequestStop(window);
@@ -108,7 +118,7 @@ public static class FleetCard
         {
             shown = fields();
             keys = FieldKeys(shown, pills, keymap);
-            var rows = shown.Select((f, i) => FieldRow(f, keys[i])).Concat(pills.Select(p => p.Row())).ToList();
+            var rows = shown.Select((f, i) => FieldRow(f, keys[i], rowsWidth)).Concat(pills.Select(p => p.Row())).ToList();
             FleetRows.Fill(list, rows, selected, gapsAfter: [shown.Count - 1]);
         }
 
@@ -134,6 +144,17 @@ public static class FleetCard
 
         Refill(0);
         FleetKeys.ApplyMotions(list, keymap);
+
+        window.FrameChanged += (_, _) =>
+        {
+            var fitted = FleetTheme.RowsWidth(window.Frame.Width);
+
+            if (window.Frame.Width > 0 && fitted != rowsWidth)
+            {
+                rowsWidth = fitted;
+                Refill(FleetRows.Selected(list));
+            }
+        };
 
         if (list is FleetList rows)
         {

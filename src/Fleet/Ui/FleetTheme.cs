@@ -1,6 +1,7 @@
 using Fleet.Shared.Constants;
 using Fleet.Shared.Themes;
 using Fleet.Ui.Constants;
+using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -62,6 +63,13 @@ public static class FleetTheme
 
     public static int Fit(int wanted, int screen, int margin = ModalMargin) =>
         Math.Min(wanted, Math.Max(screen - 2 * margin, Math.Min(screen, SmallestModal)));
+
+    private const int ModalChrome = 4;
+
+    public static int RowsWidth(int modalWidth) => Math.Max(0, modalWidth - ModalChrome);
+
+    public static int RowsWidth(IApplication app, int modalWidth) =>
+        RowsWidth(FloatPane.Inside ? modalWidth : Fit(modalWidth, app.Screen.Width));
 
     private static Window Floating(Window window, FloatScreen screen)
     {
