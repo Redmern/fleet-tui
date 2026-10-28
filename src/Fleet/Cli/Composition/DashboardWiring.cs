@@ -533,7 +533,7 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim)
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim, configs: HarnessRegistration.NonClaudeConfigs())
                 .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 

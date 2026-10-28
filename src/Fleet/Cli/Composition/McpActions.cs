@@ -35,6 +35,7 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Messaging;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
@@ -220,7 +221,15 @@ public sealed class McpActions(
             return NoRepository(request);
         }
 
-        var started = await Start(repo, Branch(request), caller, ToolArguments.Text(request, ToolArguments.Task), ct)
+        var harness = ToolArguments.Text(request, ToolArguments.Harness).Trim();
+
+        if (harness.Length > 0 && HarnessRegistry.Require(harness) is { Succeeded: false } refused)
+        {
+            return McpResult.Error(refused.Error!);
+        }
+
+        var started = await Start(
+                repo, Branch(request), caller, ToolArguments.Text(request, ToolArguments.Task), ct, harness)
             .ConfigureAwait(false);
 
         return started.Succeeded ? Ok(started.Value!) : McpResult.Error(started.Error!);
@@ -251,13 +260,14 @@ public sealed class McpActions(
     }
 
     private async Task<Result<string>> Start(
-        RepositorySummary repo, string branch, string owner, string task, CancellationToken ct)
+        RepositorySummary repo, string branch, string owner, string task, CancellationToken ct, string harness = "")
     {
+        var chosen = harness.Length > 0 ? harness : Adapters.Settings().Load(project).DefaultAgentHarness;
         var created = await _spawner
             .HandleAsync(
                 new NewAgentCommand(
                     project, repo.Name, repo.Path, branch, repo.DefaultBranch,
-                    Adapters.Settings().Load(project).DefaultAgentHarness, owner, Claude: true, Task: task),
+                    chosen, owner, Claude: true, Task: task),
                 ct)
             .ConfigureAwait(false);
 
@@ -271,7 +281,8 @@ public sealed class McpActions(
             store.Save(project, created.Value! with { Owner = owner });
         }
 
-        ClaudeWiring.ApproveFolder(project, created.Value!.Worktree, repo.Name, branch);
+        HarnessRegistration.Configs().For(created.Value!.Harness)
+            .WriteForAgent(created.Value!.Worktree, project, repo.Name, branch);
 
         var name = SessionNames.RepoAgent(project, created.Value!.Repository, created.Value!.Branch);
         var session = $" Its Claude session is named \"{name}\".";
@@ -385,7 +396,8 @@ public sealed class McpActions(
         ClaudeWiring.TrustFolder(agent.Worktree);
 
         var outcome = await new OpenAgentHandler(
-                mux, store, SubOrchestratorsHostedInNvim(), models: Adapters.Models(project), agentsInNvim: Adapters.AgentsInNvim(project))
+                mux, store, SubOrchestratorsHostedInNvim(), models: Adapters.Models(project), agentsInNvim: Adapters.AgentsInNvim(project),
+                configs: HarnessRegistration.NonClaudeConfigs())
             .HandleAsync(project, agent, root, ct)
             .ConfigureAwait(false);
 

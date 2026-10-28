@@ -30,7 +30,8 @@ public static class HeadPanes
                         subOrchestratorsInNvim(project.Name),
                         preferCaller: false,
                         Adapters.Models(project.Name),
-                        Adapters.AgentsInNvim(project.Name))
+                        Adapters.AgentsInNvim(project.Name),
+                        HarnessRegistration.NonClaudeConfigs())
                     .HandleAsync(project.Name, agent, project.Root, ct)
                     .ConfigureAwait(false);
 

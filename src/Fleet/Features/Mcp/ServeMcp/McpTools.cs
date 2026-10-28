@@ -1,4 +1,5 @@
 using Fleet.Features.Mcp.ServeMcp.Models;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
@@ -64,7 +65,13 @@ public static class McpTools
             Repository,
             new ToolParam(ToolArguments.Branch, "string", "The branch to create or reuse.", true),
             new ToolParam(
-                ToolArguments.Task, "string", "An optional first instruction to send the agent.", false)),
+                ToolArguments.Task, "string", "An optional first instruction to send the agent.", false),
+            new ToolParam(
+                ToolArguments.Harness,
+                "string",
+                $"Optional: the harness it runs ({string.Join(", ", HarnessRegistry.Selectable)}); "
+                + "defaults to the project's agent harness.",
+                false)),
         Spec(
             HarnessTool.TellAgent,
             "Send an instruction to a running agent's Claude. When that Claude takes cross-session messages, "
@@ -97,7 +104,7 @@ public static class McpTools
                 false)),
         Spec(
             HarnessTool.ChangeHarness,
-            "Change what an agent opens (claude, nvim).",
+            $"Change what an agent opens ({string.Join(", ", HarnessRegistry.Selectable)}).",
             Repository,
             Branch,
             new ToolParam(ToolArguments.Harness, "string", "The harness to switch to.", true)),
