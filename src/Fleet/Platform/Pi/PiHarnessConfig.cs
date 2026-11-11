@@ -78,7 +78,7 @@ public sealed class PiHarnessConfig(
 
         HarnessFiles.WriteSkills(folder, HarnessRegistry.Pi.SkillsDir, skills);
 
-        var trusted = PiTrustStore.Canonical(folder);
+        var trusted = HarnessFiles.Canonical(folder);
 
         return HarnessFiles.Edit(trustStore, text => PiTrustStore.WithTrusted(Settled(trustStore, text), trusted));
     }

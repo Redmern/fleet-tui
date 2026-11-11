@@ -49,6 +49,6 @@ public sealed class CodexHarnessConfig(
 
         HarnessFiles.WriteSkills(folder, HarnessRegistry.Codex.SkillsDir, skills);
 
-        return HarnessFiles.Edit(userConfig, text => CodexToml.WithTrustedProject(text ?? string.Empty, Path.GetFullPath(folder)));
+        return HarnessFiles.Edit(userConfig, text => CodexToml.WithTrustedProject(text ?? string.Empty, HarnessFiles.Canonical(folder)));
     }
 }

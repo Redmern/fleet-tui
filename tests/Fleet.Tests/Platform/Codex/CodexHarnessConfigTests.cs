@@ -183,6 +183,22 @@ public sealed class CodexHarnessConfigTests : IDisposable
     }
 
     [Fact]
+    public void A_folder_reached_through_a_symlink_is_trusted_under_its_real_path()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var link = Path.Combine(_root, "link");
+        Directory.CreateSymbolicLink(link, _root);
+
+        Config().WriteForAgent(Path.Combine(link, "wt"), "proj", "api", "main");
+
+        Assert.Equal(Trusted(Folder), File.ReadAllText(UserConfig));
+    }
+
+    [Fact]
     public void Writing_twice_changes_nothing_the_second_time()
     {
         Seed(UserConfig, "[features]\nhooks = true\n");

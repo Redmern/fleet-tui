@@ -124,6 +124,6 @@ public sealed class HarnessFilesTests : IDisposable
 
         Assert.All(written, result => Assert.True(result.Succeeded, result.Error));
         var text = File.ReadAllText(store);
-        Assert.All(folders, folder => Assert.Contains($"\"{PiTrustStore.Canonical(folder)}\": true", text));
+        Assert.All(folders, folder => Assert.Contains($"\"{HarnessFiles.Canonical(folder)}\": true", text));
     }
 }

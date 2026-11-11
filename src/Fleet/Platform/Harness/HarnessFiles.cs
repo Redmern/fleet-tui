@@ -8,6 +8,8 @@ public static class HarnessFiles
 {
     private static readonly Lock InThisProcess = new();
 
+    private const int DeepestLinkChain = 40;
+
     private static readonly TimeSpan LockPatience = TimeSpan.FromSeconds(5);
 
     public static string LockFor(string path)
@@ -18,6 +20,8 @@ public static class HarnessFiles
 
         return Path.Combine(Path.GetTempPath(), $"fleet-{Environment.UserName}", "locks", name + ".lock");
     }
+
+    public static string Canonical(string folder) => Canonical(folder, 0) ?? Path.GetFullPath(folder);
 
     public static Result Edit(string path, Func<string?, Result<string>> change)
     {
@@ -128,6 +132,48 @@ public static class HarnessFiles
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
+        }
+    }
+
+    private static string? Canonical(string folder, int followed)
+    {
+        var full = Path.GetFullPath(folder);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        var current = root;
+
+        foreach (var part in full[root.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries))
+        {
+            var resolved = Resolved(Path.Combine(current, part), followed);
+
+            if (resolved is null)
+            {
+                return null;
+            }
+
+            current = resolved;
+        }
+
+        return current;
+    }
+
+    private static string? Resolved(string path, int followed)
+    {
+        if (followed >= DeepestLinkChain)
+        {
+            return null;
+        }
+
+        try
+        {
+            var target = new DirectoryInfo(path).ResolveLinkTarget(returnFinalTarget: true);
+
+            return target is null ? path : Canonical(target.FullName, followed + 1);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return path;
         }
     }
 }
