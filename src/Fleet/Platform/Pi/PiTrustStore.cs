@@ -68,7 +68,7 @@ public static class PiTrustStore
 
         try
         {
-            using var document = JsonDocument.Parse(text.TrimStart('﻿'));
+            using var document = JsonDocument.Parse(text.TrimStart('\uFEFF'));
 
             if (document.RootElement.ValueKind != JsonValueKind.Object)
             {
