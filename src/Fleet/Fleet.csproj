@@ -27,6 +27,21 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <!--
+    GHSA-p3jp-9v83-76w9 (CVE-2026-111497, Brotli decoder out-of-bounds write) is fixed in
+    the 10.0.14 ILCompiler and NativeAOT runtime packs. An SDK that still bundles an older
+    pack (10.0.113 and earlier) is lifted to that version; a newer SDK keeps its own.
+  -->
+  <Target Name="RaiseILCompilerPackToPatchedVersion"
+          BeforeTargets="ProcessFrameworkReferences"
+          Condition="$([MSBuild]::VersionLessThan('$(BundledNETCoreAppPackageVersion)', '10.0.14'))">
+    <ItemGroup>
+      <KnownILCompilerPack Condition="'%(TargetFramework)' == 'net10.0'">
+        <ILCompilerPackVersion>10.0.14</ILCompilerPackVersion>
+      </KnownILCompilerPack>
+    </ItemGroup>
+  </Target>
+
+  <!--
     libghostty-vt for the embedded multiplexer, linked statically into the AOT
     binary when scripts/ghostty/build.ps1 (or build.sh) has produced it. Without
     the archive fleet still builds and publishes; the embedded driver then reports
