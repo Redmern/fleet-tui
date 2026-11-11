@@ -335,6 +335,35 @@ public class FleetMenusTests
     }
 
     [Fact]
+    public void The_agent_harness_cycles_through_auto_and_every_registered_harness()
+    {
+        Assert.Contains(FleetAction.EditDefaultHarness, FleetMenus.Actions(FleetMenus.FleetConfig));
+        Assert.True(FleetMenus.IsToggle(FleetAction.EditDefaultHarness));
+        Assert.Equal("[auto]", FleetMenus.Value(FleetAction.EditDefaultHarness, SettingsConfig.Default));
+
+        var seen = new List<string>();
+        var settings = SettingsConfig.Default;
+
+        do
+        {
+            settings = FleetMenus.Flip(FleetAction.EditDefaultHarness, settings);
+            seen.Add(FleetMenus.Value(FleetAction.EditDefaultHarness, settings)!);
+        }
+        while (settings.ChosenHarness.Length > 0);
+
+        Assert.Equal(["[nvim]", "[claude]", "[opencode]", "[auto]"], seen);
+    }
+
+    [Fact]
+    public void A_chosen_agent_harness_becomes_the_default_and_auto_follows_the_editor()
+    {
+        Assert.Equal("nvim", SettingsConfig.Default.DefaultAgentHarness);
+        Assert.Equal("claude", SettingsConfig.Default.WithEditor(Editor.Vscode).DefaultAgentHarness);
+        Assert.Equal("opencode", SettingsConfig.Default.WithDefaultHarness("opencode").DefaultAgentHarness);
+        Assert.Equal("nvim", SettingsConfig.Default.WithDefaultHarness("codexx").DefaultAgentHarness);
+    }
+
+    [Fact]
     public void The_editor_toggle_shows_and_flips_the_resolved_editor_not_only_the_project_setting()
     {
         var byDefault = SettingsConfig.Default with { DefaultEditor = Editor.Vscode };

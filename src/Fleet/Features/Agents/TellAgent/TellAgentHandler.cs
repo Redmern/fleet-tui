@@ -14,7 +14,7 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
     public static bool PumpedByNvim(AgentRecord agent) =>
         AgentHarness.IsOrchestrator(agent.Harness)
             ? agent.StartedInNvim
-            : AgentHarness.HostedInNvim(agent.Harness) && agent.StartedInNvim;
+            : agent.HostedInNvim && agent.StartedInNvim;
 
     public static string HarnessOf(AgentRecord agent) => HarnessRoute.Of(agent.Harness, agent.RunsClaude);
 

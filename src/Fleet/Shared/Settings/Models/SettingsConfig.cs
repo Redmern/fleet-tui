@@ -61,7 +61,15 @@ public sealed record SettingsConfig(
 
     public bool SubOrchestratorsHostedInNvim => SubOrchestratorsInNvim && HostsInNvim;
 
-    public string DefaultAgentHarness => HostsInNvim ? Constants.AgentHarness.Nvim : Constants.AgentHarness.Claude;
+    public string DefaultHarness { get; init; } = string.Empty;
+
+    public string ChosenHarness =>
+        Harness.HarnessRegistry.Selectable.Contains(DefaultHarness) ? DefaultHarness : string.Empty;
+
+    public string DefaultAgentHarness =>
+        ChosenHarness.Length > 0
+            ? ChosenHarness
+            : HostsInNvim ? Constants.AgentHarness.Nvim : Constants.AgentHarness.Claude;
 
     public ToolRule RuleFor(HarnessTool tool) =>
         Rules.TryGetValue(tool, out var rule) ? rule : SettingsDefaults.RuleFor(tool);
@@ -131,6 +139,8 @@ public sealed record SettingsConfig(
 
     public SettingsConfig WithEditor(Editor? editor) => this with { Editor = editor };
 
+    public SettingsConfig WithDefaultHarness(string harness) => this with { DefaultHarness = harness };
+
     public SettingsConfig WithLastNewAgent(string repository, string harness) =>
         this with { LastRepo = repository, LastHarness = harness };
 
@@ -173,6 +183,7 @@ public sealed record SettingsConfig(
             LastRepo = LastRepo,
             LastHarness = LastHarness,
             Editor = Editor,
+            DefaultHarness = DefaultHarness,
             DefaultEditor = DefaultEditor,
             InstalledEditor = InstalledEditor,
         };
@@ -199,5 +210,6 @@ public sealed record SettingsConfig(
                 .Append($"nvim-config={Nvim}")
                 .Append($"button-hints={ButtonHints}")
                 .Append($"editor={EditorChoice.Word(Editor)}")
+                .Append($"harness={ChosenHarness}")
                 .Append(Models.Signature));
 }

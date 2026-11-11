@@ -69,7 +69,7 @@ public sealed class RestoreSessionTests : IDisposable
         await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
 
         await new RestoreSessionHandler(_mux).HandleAsync(
-            "techweb", ProjectRoot, [Agent("health", open: true) with { Claude = true }, Agent("notes", open: true)]);
+            "techweb", ProjectRoot, [Agent("health", open: true) with { Harness = AgentHarness.Claude, HostInNvim = true }, Agent("notes", open: true)]);
 
         var panes = await _mux.ListPanesAsync();
         var health = panes.Single(p => p.Cwd.EndsWith("health", StringComparison.Ordinal));

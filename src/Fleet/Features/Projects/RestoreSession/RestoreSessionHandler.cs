@@ -44,7 +44,7 @@ public sealed class RestoreSessionHandler(
 
         foreach (var agent in all.Where(a => !AgentHarness.IsOrchestrator(a.Harness)))
         {
-            var started = agent with { InNvim = HostedBy(agent, agentsInNvim).Harness == agent.Harness ? null : false };
+            var started = agent with { InNvim = HostedBy(agent, agentsInNvim) == agent ? null : false };
 
             if (started != agent)
             {
@@ -153,7 +153,7 @@ public sealed class RestoreSessionHandler(
                 agent.Worktree));
 
     private static AgentRecord HostedBy(AgentRecord agent, bool agentsInNvim) =>
-        agent with { Harness = AgentHarness.HostedFor(agent.Harness, agentsInNvim) };
+        AgentHarness.IsOrchestrator(agent.Harness) ? agent : agent.HostedFor(agentsInNvim);
 
     private static SpawnOptions Options(
         string project,
@@ -171,7 +171,7 @@ public sealed class RestoreSessionHandler(
             NewWindow = agent.Hidden,
             Args = AgentHarness.IsOrchestrator(agent.Harness)
                 ? AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
-                : AgentHarness.CommandFor(agent.Harness, withClaude: agent.RunsClaude, launch: launch),
+                : agent.Command(launch),
             Env = AgentHarness.IsOrchestrator(agent.Harness)
                 ? AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim)
                 : new Dictionary<string, string>(),

@@ -112,7 +112,7 @@ public sealed class OpenAgentHandler(
         }
 
         var orchestrator = Shared.Constants.AgentHarness.IsOrchestrator(agent.Harness);
-        var hosted = agent with { Harness = Shared.Constants.AgentHarness.HostedFor(agent.Harness, agentsInNvim) };
+        var hosted = orchestrator ? agent : agent.HostedFor(agentsInNvim);
         var launch = Shared.Constants.ClaudeLaunch.ForAgent(
             project, agent.Repository, agent.Branch, orchestrator,
             agent.ModelsFrom(models ?? SettingsDefaults.Models, orchestrator),
@@ -123,17 +123,20 @@ public sealed class OpenAgentHandler(
             configs?.For(hosted.Harness).WriteForAgent(agent.Worktree, project, agent.Repository, agent.Branch);
         }
 
+        var args = orchestrator
+            ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
+            : Shared.Constants.AgentHarness.Resumed(hosted.Command(launch));
+
         var pane = await mux.SpawnAsync(
             new SpawnOptions
             {
                 Cwd = agent.Worktree,
                 SessionName = project,
                 WindowId = window,
-                Args = orchestrator
-                    ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
-                    : Shared.Constants.AgentHarness.Resumed(Shared.Constants.AgentHarness.CommandFor(
-                        hosted.Harness, withClaude: agent.RunsClaude, launch: launch)),
-                Env = Shared.Constants.AgentHarness.SpawnEnv(hosted.Harness, subOrchestratorsInNvim),
+                Args = args,
+                Env = orchestrator
+                    ? Shared.Constants.AgentHarness.SpawnEnv(hosted.Harness, subOrchestratorsInNvim)
+                    : Shared.Constants.AgentHarness.SpawnEnvFor(args),
             },
             ct).ConfigureAwait(false);
 
@@ -146,7 +149,7 @@ public sealed class OpenAgentHandler(
 
         var started = agent with
         {
-            InNvim = orchestrator ? subOrchestratorsInNvim : hosted.Harness == agent.Harness ? null : false,
+            InNvim = orchestrator ? subOrchestratorsInNvim : hosted == agent ? null : false,
         };
 
         if (agent.Hidden || !agent.Open || started != agent)

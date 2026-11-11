@@ -56,6 +56,7 @@ using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Orchestrations;
@@ -189,21 +190,44 @@ public static class DashboardWiring
         var picked = FleetPicker.Choose(
             app,
             $"{agent.Repository}/{agent.Branch} opens",
-            AgentHarness.All.Select(AgentHarness.Describe).ToList(),
+            HarnessRegistry.Selectable.Select(AgentHarness.Describe).ToList(),
             keymap,
-            AgentHarness.All.ToList().IndexOf(agent.Harness));
+            HarnessRegistry.Selectable.ToList().IndexOf(agent.Harness));
 
         if (picked is null)
         {
             return string.Empty;
         }
 
-        var wanted = AgentHarness.All[picked.Value];
-        harnesses.Handle(project, agent, wanted);
+        var wanted = HarnessRegistry.Selectable[picked.Value];
+        var host = false;
 
-        return $"{agent.Repository}/{agent.Branch} now opens {AgentHarness.Describe(wanted)} "
-             + "next time it starts.";
+        if (AgentHarness.RunsHarness(wanted))
+        {
+            var hosting = FleetPicker.Choose(
+                app,
+                $"run {wanted} in nvim?",
+                HostChoices,
+                keymap,
+                agent.HostInNvim ? 1 : 0);
+
+            if (hosting is null)
+            {
+                return string.Empty;
+            }
+
+            host = hosting.Value == 1;
+        }
+
+        var changed = harnesses.Handle(project, agent, wanted, host);
+
+        return changed.Succeeded
+            ? $"{agent.Repository}/{agent.Branch} now opens {AgentHarness.Describe(changed.Value!.Harness, changed.Value.HostInNvim)} "
+              + "next time it starts."
+            : changed.Error!;
     }
+
+    public static IReadOnlyList<string> HostChoices { get; } = ["no, on its own", "yes, in an nvim terminal"];
 
     private static IReadOnlyList<string> ReportLines(string folder)
     {
@@ -527,8 +551,7 @@ public static class DashboardWiring
         {
             var loaded = settings.Load(project.Name);
             var inNvim = loaded.SubOrchestratorsHostedInNvim;
-            var executable = AgentHarness.CommandFor(
-                AgentHarness.HostedFor(agent.Harness, loaded.HostsInNvim), orchestratorInNvim: inNvim)[0];
+            var executable = Adapters.Opens(project.Name, agent);
 
             if (!Adapters.OnPath(executable))
             {
@@ -870,7 +893,8 @@ public static class DashboardWiring
                         selected,
                         directory => branches.HandleAsync(directory).GetAwaiter().GetResult(),
                         settings.Load(project.Name).DefaultAgentHarness,
-                        fetcher.HandleAsync),
+                        fetcher.HandleAsync,
+                        settings.Load(project.Name).HostsInNvim),
                     keymap,
                     last.Repo,
                     last.Harness);
@@ -880,17 +904,20 @@ public static class DashboardWiring
                     return null;
                 }
 
-                if (!Adapters.OnPath(request.Harness))
+                var (harness, hostInNvim) = AgentHarness.Hosted(
+                    request.Harness, request.HostInNvim, settings.Load(project.Name).HostsInNvim);
+
+                if (AgentHarness.Binaries(harness, hostInNvim).FirstOrDefault(b => !Adapters.OnPath(b)) is { } missing)
                 {
-                    return Noted(log, project.Name, HarnessTrouble.Missing(request.Harness));
+                    return Noted(log, project.Name, HarnessTrouble.Missing(missing));
                 }
 
                 var outcome = await spawner.HandleAsync(request).ConfigureAwait(false);
 
                 if (outcome.Succeeded)
                 {
-                    ClaudeWiring.ApproveFolder(
-                        project.Name, outcome.Value!.Worktree,
+                    HarnessRegistration.ClaudeConfigs().For(outcome.Value!.Harness).WriteForAgent(
+                        outcome.Value.Worktree, project.Name,
                         outcome.Value.Repository, outcome.Value.Branch);
                 }
 

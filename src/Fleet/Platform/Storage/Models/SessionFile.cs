@@ -31,13 +31,20 @@ public sealed class AgentEntry
 
     public string Status { get; set; } = string.Empty;
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Claude { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? HostInNvim { get; set; }
 
     public bool? InNvim { get; set; }
 
     public string Summary { get; set; } = string.Empty;
 
     public string ReportedAt { get; set; } = string.Empty;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OrchestratorHarness { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Model { get; set; }

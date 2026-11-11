@@ -106,7 +106,7 @@ public class ToggleSettingHandlerTests
     {
         var toggles = Enum.GetValues<FleetAction>().Where(FleetMenus.IsToggle).ToList();
 
-        Assert.Equal(6, toggles.Count);
+        Assert.Equal(7, toggles.Count);
 
         foreach (var action in toggles)
         {

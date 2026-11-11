@@ -21,7 +21,7 @@ public sealed class OpenAgentHarnessTests : IDisposable
         var worktree = Path.Combine(_root, "api_feat");
         Directory.CreateDirectory(worktree);
 
-        return new AgentRecord(worktree, "api", "feat", harness, "origin/main", true, Claude: true);
+        return new AgentRecord(worktree, "api", "feat", harness, "origin/main", true);
     }
 
     [Fact]
@@ -37,6 +37,23 @@ public sealed class OpenAgentHarnessTests : IDisposable
         Assert.Equal([(AgentHarness.Opencode, agent.Worktree, "proj", "api", "feat")], configs.Written);
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.Equal(["opencode", "--continue"], _mux.ArgsFor(pane.Id));
+    }
+
+    [Fact]
+    public async Task A_reopened_opencode_agent_hosted_in_nvim_resumes_inside_an_nvim_terminal()
+    {
+        var configs = new RecordingConfigs();
+        var agent = Agent(AgentHarness.Opencode) with { HostInNvim = true };
+
+        var opened = await new OpenAgentHandler(_mux, new NoStore(), configs: configs)
+            .HandleAsync("proj", agent, _root);
+
+        Assert.True(opened.Succeeded);
+        Assert.Equal([(AgentHarness.Opencode, agent.Worktree, "proj", "api", "feat")], configs.Written);
+        var args = _mux.ArgsFor(Assert.Single(await _mux.ListPanesAsync()).Id);
+        Assert.Equal(AgentHarness.Nvim, args[0]);
+        Assert.Contains("local fleet_cmd={'opencode','--continue'}", args[2], StringComparison.Ordinal);
+        Assert.Empty(_mux.EnvFor(Assert.Single(await _mux.ListPanesAsync()).Id));
     }
 
     private sealed class RecordingConfigs : IHarnessConfigs, IHarnessConfig

@@ -69,6 +69,12 @@ public static class DoctorCommand
         {
             Console.WriteLine($"  {tool,-13} {(Adapters.OnPathOrEditor(tool) ? "on PATH" : "NOT FOUND")}");
         }
+
+        foreach (var line in HarnessCheck.DoctorLines(Adapters.OnPath, Adapters.HarnessesInUse()))
+        {
+            Console.WriteLine($"  harness       {line}");
+        }
+
         var nvim = SetupHandler.Nvim(Adapters.InspectNvim(install: false));
         Console.WriteLine($"  nvim config   {(nvim.Ok ? string.Empty : "! ")}{nvim.Detail}");
         Console.WriteLine(

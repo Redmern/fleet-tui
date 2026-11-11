@@ -266,12 +266,13 @@ public sealed class McpActions(
     private async Task<Result<string>> Start(
         RepositorySummary repo, string branch, string owner, string task, CancellationToken ct, string harness = "")
     {
-        var chosen = harness.Length > 0 ? harness : Adapters.Settings().Load(project).DefaultAgentHarness;
+        var (chosen, hostInNvim) = AgentHarness.RunningAi(
+            harness.Length > 0 ? harness : Adapters.Settings().Load(project).DefaultAgentHarness);
         var created = await _spawner
             .HandleAsync(
                 new NewAgentCommand(
                     project, repo.Name, repo.Path, branch, repo.DefaultBranch,
-                    chosen, owner, Claude: true, Task: task),
+                    chosen, owner, HostInNvim: hostInNvim, Task: task),
                 ct)
             .ConfigureAwait(false);
 
@@ -597,7 +598,7 @@ public sealed class McpActions(
 
         return changed.Succeeded
             ? Ok($"{Repo(request)}/{Branch(request)} now opens "
-                + $"{AgentHarness.Describe(changed.Value!.Harness)}.")
+                + $"{AgentHarness.Describe(changed.Value!.Harness, changed.Value.HostInNvim)}.")
             : McpResult.Error(changed.Error!);
     }
 

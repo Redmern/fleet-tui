@@ -29,6 +29,7 @@ public static class HarnessRegistry
         Path.Combine(".claude", "skills"))
     {
         TakesClaudeLaunch = true,
+        InstallHint = "npm install -g @anthropic-ai/claude-code",
     };
 
     public static HarnessProfile Opencode { get; } = new(
@@ -38,7 +39,10 @@ public static class HarnessRegistry
         new Dictionary<string, string>(),
         "AGENTS.md",
         HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
-        Path.Combine(".agents", "skills"));
+        Path.Combine(".agents", "skills"))
+    {
+        InstallHint = "npm install -g opencode-ai",
+    };
 
     public static HarnessProfile Codex { get; } = new(
         CodexName,

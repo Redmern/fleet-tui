@@ -11,6 +11,8 @@ public sealed record HarnessProfile(
 {
     public bool TakesClaudeLaunch { get; init; }
 
+    public string InstallHint { get; init; } = string.Empty;
+
     public bool Has(HarnessCapabilities capability) => (Capabilities & capability) == capability;
 
     public IReadOnlyList<string> Launch(IReadOnlyList<string> arguments) => [Binary, .. arguments];
