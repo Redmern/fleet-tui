@@ -920,8 +920,9 @@ state (unknown means `nvim`, the legacy rule). Rejected: reflection or plugin di
 **Config writers.** `Ports/Harness/IHarnessConfig` has `WriteForAgent` and
 `WriteForOrchestration`; `IHarnessConfigs.For(name)` picks one. The implementations live
 in `Platform/Opencode`, `Platform/Codex`, `Platform/Pi` and are known only to the
-composition root (`HarnessRegistration`). Each writes the project-local MCP entry with
-`--caller`, the `fl-*` skills into `.agents/skills`, and git excludes for its own files.
+composition root (`HarnessRegistration`, `CodexRegistration`, `PiRegistration`). Each
+writes the project-local MCP entry with `--caller` and the `fl-*` skills into
+`.agents/skills`; for an agent worktree it also adds git excludes for its own files.
 
 - opencode: `opencode.json`, `mcp.fleet = { type: local, command: [...] }`, merged through
   `JsonNode`.
@@ -935,8 +936,9 @@ composition root (`HarnessRegistration`). Each writes the project-local MCP entr
   tools behind script calls), plus `"<real path>": true` in `<agent dir>/trust.json`.
   `--approve` on the command line was rejected: it would override a saved "do not trust".
 
-All three refuse to touch a file they cannot parse, never override an explicit
-"untrusted", and write through a temp file and a move. Trust entries pile up, one per
+All three refuse to touch a file they cannot parse. codex and pi never override an
+explicit "untrusted" and write through a temp file and a move; opencode rewrites
+`opencode.json` in place. Trust entries pile up, one per
 folder; fleet does not remove them. A profile without a capability skips that step:
 there is no hooks or permission writer for the three, and `HarnessCheck.Degraded` turns
 the missing flags into the `fleet doctor` text.
@@ -956,7 +958,9 @@ returns a `SendMessage` address only when the route is native and the target has
 inbox; otherwise it writes `.fleet/instruction.md` and types the read prompt. The caller's
 harness comes from the MCP `--caller` and its record. `ReportStatusHandler` follows the
 same rule upward: native pairs keep `PeerMessage.TellOwner`; otherwise the composition
-root's `OwnerNotices` types a `[fleet] ...` line into the owner's pane. The desktop
+root's `OwnerNotices` delivers a `[fleet] ...` line like a `tell_agent`: into the owner's
+`.fleet/instruction.md`, then the read prompt typed into its pane (or left to the nvim
+pump). The desktop
 notification is unchanged. A non-Claude owner cannot subscribe with `notify_when_idle`, so
 there is a `wait_for_agent` tool (`Features/Orchestrations/WaitForAgent`) and its
 instruction text says to use it (`OrchestrationText.WaitingForAgentsTyped`). Both
@@ -978,7 +982,8 @@ kickoff typed at the marker was lost. A fixed delay was not enough. So for a pro
 `InputRetry` (opencode, codex, pi) `Ports/Mux/TypedPrompt.UntilEchoedAsync` types, reads
 the pane, and retypes until the first 16 characters show, then sends Enter. Claude has
 `InputRetry` zero and keeps one typing. The nvim pump has no such check, which is why a
-sub on these profiles always starts outside nvim. If the echo never shows, Enter is still
+sub on these profiles is first started outside nvim (on reopen it follows the setting,
+unit-tested only). If the echo never shows, Enter is still
 sent and the caller is told the task was given.
 
 **Dispatch.** `DispatchCommand.Harness` goes through `Require`, then picks the profile's
@@ -994,11 +999,12 @@ unit.
 
 | Claim | Evidence |
 |---|---|
-| Routing, notices, idle, `wait_for_agent`, dispatch files in a mixed team | `EndToEnd/MixedTeamE2ETests`: the real `McpActions` per caller on a fake mux with scripted harnesses, for an opencode, codex and pi sub under a Claude main and an opencode worker under a Claude sub; each mixed step is paired with the Claude-to-Claude step |
-| opencode worker reads the typed task and calls `report` | live, opencode 1.19.5, real fleetd pty (u1) |
-| opencode, codex, pi load the fleet MCP server from the file fleet wrote, with the right caller | live: `opencode mcp list`, `codex mcp get fleet` (0.160.0), `pi mcp list` (1.5.2) |
-| Reopen resumes: `opencode --continue`, `codex resume --last`, `pi --continue` | live for workers |
-| Dispatched opencode and pi sub: files, MCP connected, kickoff submitted once | live, opencode 1.4.6 and pi 1.5.2 |
+| Routing, notices, idle, `wait_for_agent`, dispatch files in a mixed team | `EndToEnd/MixedTeamE2ETests`: a fake mux with scripted harnesses, for an opencode, codex and pi sub under a Claude main and an opencode worker under a Claude sub; each mixed step is paired with the Claude-to-Claude step. `tell_agent`, `report`, `wait_for_agent`, `list_agents`, `list_subs` and the opencode `new_agent` go through the real `McpActions`, one per caller |
+| opencode worker reads the typed task and calls `report` | live, opencode 1.19.5, real fleetd pty |
+| opencode and pi start the fleet MCP server from the file fleet wrote, with the right caller | live: `opencode mcp list` (connected), `pi mcp list` (1.5.2, connected) |
+| codex reads the entry fleet wrote | live: `codex mcp get fleet` (0.160.0); codex was never seen starting the server (not logged in) |
+| A reopened pane runs `opencode --continue`, `codex resume --last`, `pi --continue` | live for workers; a continued session was seen for opencode only |
+| Dispatched opencode and pi sub: files, MCP connected, kickoff submitted once | live, opencode 1.4.6 (not the version of the worker proof; behaviour differs between opencode versions) and pi 1.5.2 |
 
 Not proven on a real binary: a model turn of an opencode sub, and any model turn of codex
 or pi (no usable login in the sandbox), so "the sub reads AGENTS.md and calls `report`" is
@@ -1007,8 +1013,10 @@ a typed prompt arriving in codex (it was not logged in); that pi's echo check sa
 (pi does not keep a submitted message on screen); resume of a sub; a non-Claude sub
 reopened inside nvim; that codex's `approve` mode means no approval prompt (from its docs).
 The e2e test does not cover the permission gate (`McpDispatcher`) or the JSON-RPC
-transport, and it builds the dispatch handler itself, because the production wiring names
-the slug with the Claude CLI and its codex and pi writers edit the real user config.
+transport. It builds the dispatch handler itself, because the production wiring names
+the slug with the Claude CLI and its codex and pi writers edit the real user config, and
+it starts Claude workers through `NewAgentHandler` directly, because `McpActions.Start`
+would edit `~/.claude.json`.
 
 ## Open — not yet designed
 

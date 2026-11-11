@@ -71,7 +71,7 @@ Met:
 - AC-16: `tests/Fleet.Tests/EndToEnd/MixedTeamE2ETests.cs`.
 
 AC-10, delivered by the integration unit (u7), with these deviations:
-- A sub on opencode, codex or pi always starts outside nvim, whatever "Sub-orchestrators in nvim" says: the first typed prompt is checked against the pane, and the nvim pump cannot do that.
+- A sub on opencode, codex or pi is first started outside nvim, whatever "Sub-orchestrators in nvim" says: the first typed prompt is checked against the pane, and the nvim pump cannot do that. On reopen it follows the setting.
 - New: fleet types the first prompt of these harnesses again until the pane shows it (`HarnessProfile.InputRetry`), because the real opencode dropped a kickoff typed while it was starting.
 - Only the `dispatch` MCP tool takes a `harness`. The `,` hook and the dashboard's New sub-orchestrator card start Claude subs.
 - "Stage and gate behaviour the same" holds by construction (same instruction text, harness-neutral `report` and intent record); it was not observed with a real non-Claude model.

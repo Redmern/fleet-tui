@@ -946,12 +946,14 @@ They still talk to each other through fleet's MCP tools.
 - An existing agent: `m` on the dashboard, or the `change_harness` MCP tool.
 - The project default: fleet menu > settings > fleet config > **Agent harness** (`O`)
   cycles `auto`, `nvim`, `claude`, `opencode`, `codex`, `pi` (`defaultHarness` in the
-  project settings). `auto` is Claude, in nvim when the project's editor is nvim. The
-  default is what `new_agent` uses when it gets no `harness`.
+  project settings). The default is what `new_agent` uses when it gets no `harness`,
+  and what the New agent card preselects. With `auto` (or `nvim`), `new_agent` starts
+  Claude, in nvim when the project's editor is nvim; the card preselects `nvim`, which
+  there is the editor only.
 - From an orchestrator: `new_agent(repository, branch, task, harness)` and
   `dispatch(message, harness)`. With `dispatch`, the harness is the one the
-  sub-orchestrator runs (or the repo agent, when `repository` is given). In these tools
-  `nvim` means Claude in nvim.
+  sub-orchestrator runs (or the repo agent, when `repository` is given). For a repo
+  agent started by these tools, `nvim` means Claude in nvim.
 
 A name that is not registered is refused with the list of valid ones, and nothing is
 stored.
@@ -977,9 +979,9 @@ skipped steps. `fleet setup` reports a harness that agents use but that is not i
 with its install command. The fleet MCP server is registered with the right `--caller`
 in every one of these files, so `report`, `tell_agent` and the other fleet tools work
 in each harness. fleet merges its entry into a config file that already exists and
-leaves a file it cannot parse untouched. `dispatch` names such a failure in its result;
-`new_agent` and the dashboard do not show it yet, and the agent then starts without the
-fleet tools.
+leaves a file it cannot parse untouched. `dispatch` names such a failure in its result
+when it starts a sub-orchestrator; `new_agent`, `dispatch` with a `repository` and the
+dashboard do not show it yet, and the agent then starts without the fleet tools.
 
 **How a team with another harness works.**
 
@@ -990,15 +992,18 @@ fleet tools.
   pane shows it (for at most 60 seconds) before it sends Enter.
 - *`tell_agent` is typed* whenever the caller or the target is not Claude: there is no
   `SendMessage` address to hand out. Two Claude sessions keep using `SendMessage`.
-- *`report` reaches the owner as a typed line.* A `done` or `failed` is recorded and
+- *`report` reaches the owner through its pane.* A `done` or `failed` is recorded and
   raises the desktop notification as always. When the reporter or its owner is not
-  Claude, fleet also types `[fleet] <repository>/<branch>: done — <summary> ...` into the
-  owner's pane, and the report result says so. (A top-level sub-orchestrator's report is
+  Claude, fleet also writes `[fleet] <repository>/<branch>: done — <summary> (check it
+  with agent_status or list_agents, then review its work).` to the owner's
+  `.fleet/instruction.md` and types the usual read prompt into the owner's pane (an owner
+  in nvim gets it from nvim). The report result says so. (A top-level sub-orchestrator's report is
   not sent to the main orchestrator, whatever the harness; see
   [The orchestrator](#the-orchestrator).)
 - *Idle is a quiet pane.* A harness without hooks is `idle` in `list_agents` and on the
   dashboard when its pane text has not changed for 120 seconds and it has not reported
-  `done` or `failed`. Its owner gets a typed `[fleet] ...: idle` line.
+  `done` or `failed`. The running dashboard sends its owner a `[fleet] ...: idle` notice
+  the same way, once, when it sees the change.
 - *`wait_for_agent(repository, branch, timeout)`* returns when an agent reports `done` or
   `failed`, goes idle, or the timeout runs out (300 seconds by default; call it again).
   An orchestrator that is not Claude is told to use it instead of `notify_when_idle`.
@@ -1008,9 +1013,9 @@ fleet tools.
 - The main orchestrator is Claude only. So are the head orchestrator, the `,` dispatch
   hook and the dashboard's New sub-orchestrator card: they always start a Claude sub. A
   sub on another harness comes from the `dispatch` tool's `harness` argument.
-- A sub-orchestrator on opencode, codex or pi always starts on its own in its pane, also
-  when **Sub-orchestrators in nvim** is on: the echo check for the first prompt does not
-  work through nvim. An agent you start **In nvim** on one of these harnesses gets its
+- A sub-orchestrator on opencode, codex or pi is first started on its own in its pane,
+  also when **Sub-orchestrators in nvim** is on: the echo check for the first prompt
+  does not work through nvim. When it is reopened it follows that setting. An agent you start **In nvim** on one of these harnesses gets its
   first task from nvim without that check; send it again with `tell_agent` if the harness
   dropped it.
 - Trust. codex and pi ignore a project's MCP config until the folder is trusted, and show
@@ -1024,11 +1029,13 @@ fleet tools.
 - A repository that tracks its own `opencode.json`, `.codex/config.toml` or `.pi/mcp.json`
   shows it as modified, because fleet's git exclude does not apply to tracked files.
 - fleet passes no model, effort or session name to opencode, codex or pi: each uses its
-  own defaults, and fleet's model routing applies to Claude only. A start-up prompt of
+  own defaults, whatever fleet's model settings say. A start-up prompt of
   the harness itself (login, update notice) can swallow the typed task.
 - Idle is read from the pane text, so a harness that redraws a clock or spinner while it
   waits never goes idle. The 120 seconds are fixed.
-- A typed notice overwrites `.fleet/instruction.md` of the pane it goes to, like any
+- In one test `stop_agent` left a codex process running next to the resumed one; this
+  was not looked into.
+- A notice overwrites `.fleet/instruction.md` of the pane it goes to, like any
   `tell_agent`.
 - What was checked against the real CLIs, and what was not, is in
   [docs/DESIGN.md](docs/DESIGN.md#harness-profiles-and-mixed-teams--2026-11-11).
@@ -1272,9 +1279,9 @@ sub is told to do the work itself with subagents instead of starting repo agents
 dispatch (`,task`) always starts a sub-orchestrator.
 
 **A sub on another harness.** `dispatch` takes an optional `harness` (`claude`, `opencode`,
-`codex`, `pi`). The sub then gets `AGENTS.md` instead of `CLAUDE.md`, that harness's MCP
-config with the sub as caller, and the same process and gates; fleet remembers the harness
-and reopens the sub with it. See [Harnesses](#harnesses) for what differs.
+`codex`, `pi`). A sub on opencode, codex or pi gets `AGENTS.md` instead of `CLAUDE.md`,
+that harness's MCP config with the sub as caller, and the same process and gates; fleet
+remembers the harness and reopens the sub with it. See [Harnesses](#harnesses) for what differs.
 
 **Managing subs.** The orchestrator (or a sub) can manage sub-orchestrators with three
 MCP tools, each with its own row in the permissions screen:
@@ -1409,7 +1416,7 @@ finished: it subscribes to the agent's session with `SendMessage`'s `notify_when
 reports `done` or `failed`, the `report` tool's result tells it to send its one-line summary
 to its owner's session (its sub-orchestrator, or the project's main orchestrator) with
 `SendMessage`. The owner needs a live inbox; otherwise nothing extra happens. When the agent
-or its owner runs another harness, fleet types the report into the owner's pane instead,
+or its owner runs another harness, fleet delivers the report through the owner's pane instead,
 and the owner waits with `wait_for_agent` ([Harnesses](#harnesses)).
 
 **Remote machines.** `list_remote_projects` reads what fleetd already knows: the live
