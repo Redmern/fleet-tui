@@ -183,6 +183,19 @@ public static class AgentHarness
             ? [Nvim, "-c", NvimStartupClaudeOnly(NvimArguments(ClaudeArguments(resume, launch)))]
             : HarnessRegistry.Claude.Launch(ClaudeArguments(resume, launch));
 
+    public static IReadOnlyList<string> OrchestratorCommand(
+        HarnessProfile profile, bool resume, bool inNvim = true, ClaudeLaunch? launch = null)
+    {
+        if (profile.TakesClaudeLaunch)
+        {
+            return OrchestratorCommand(resume, inNvim, launch);
+        }
+
+        var started = resume ? profile.Resumed(profile.Launch([])) : profile.Launch([]);
+
+        return inNvim ? [Nvim, "-c", NvimStartupWithCommand(started)] : started;
+    }
+
     public static IReadOnlyList<string> Resumed(IReadOnlyList<string> command) =>
         HarnessRegistry.Running(command)?.Resumed(command) ?? ResumedHostedCommand(ResumedInNvim(command));
 
