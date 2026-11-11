@@ -1,3 +1,4 @@
+using Fleet.Platform.Harness;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Harness;
 using Fleet.Shared.Harness;
@@ -37,92 +38,17 @@ public sealed class CodexHarnessConfig(
 
     private Result Write(string folder, string project, string caller)
     {
-        var configured = Edit(
+        var configured = HarnessFiles.Edit(
             Path.Combine(folder, ProjectConfig),
-            text => CodexToml.WithServer(text, server(project, caller)));
+            text => CodexToml.WithServer(text ?? string.Empty, server(project, caller)));
 
         if (!configured.Succeeded)
         {
             return configured;
         }
 
-        WriteSkills(folder);
+        HarnessFiles.WriteSkills(folder, HarnessRegistry.Codex.SkillsDir, skills);
 
-        return Edit(userConfig, text => CodexToml.WithTrustedProject(text, Path.GetFullPath(folder)));
-    }
-
-    private static Result Edit(string path, Func<string, Result<string>> change)
-    {
-        string text;
-
-        try
-        {
-            text = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return Result.Fail($"fleet could not read {path}: {e.Message}");
-        }
-
-        var changed = change(text);
-
-        if (!changed.Succeeded)
-        {
-            return Result.Fail($"{path} was left untouched: {changed.Error}.");
-        }
-
-        if (changed.Value == text && File.Exists(path))
-        {
-            return Result.Ok();
-        }
-
-        var staged = path + ".fleet-tmp";
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(staged, changed.Value);
-            File.Move(staged, path, overwrite: true);
-            return Result.Ok();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            Discard(staged);
-            return Result.Fail($"fleet could not write {path}: {e.Message}");
-        }
-    }
-
-    private static void Discard(string staged)
-    {
-        try
-        {
-            File.Delete(staged);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
-
-    private void WriteSkills(string folder)
-    {
-        foreach (var (name, content) in skills)
-        {
-            var path = Path.Combine(folder, HarnessRegistry.Codex.SkillsDir, name, "SKILL.md");
-            var text = content.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-            try
-            {
-                if (File.Exists(path) && File.ReadAllText(path) == text)
-                {
-                    continue;
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                File.WriteAllText(path, text);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
-        }
+        return HarnessFiles.Edit(userConfig, text => CodexToml.WithTrustedProject(text ?? string.Empty, Path.GetFullPath(folder)));
     }
 }
