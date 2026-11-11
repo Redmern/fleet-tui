@@ -221,6 +221,21 @@ public sealed class TellAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task A_claude_caller_types_into_an_opencode_sub_orchestrator_even_when_it_has_an_inbox()
+    {
+        var sub = new AgentRecord(
+            _root, string.Empty, "sub", AgentHarness.Orchestrator, string.Empty, false, InNvim: false,
+            OrchestratorHarness: AgentHarness.Opencode);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes(_root, "uds:sub"));
+
+        Assert.Equal(AgentHarness.Opencode, TellAgentHandler.HarnessOf(sub));
+        Assert.Null(await teller.RouteAsync(sub, pane, "merge it", typed: false, callerHarness: AgentHarness.Claude));
+        Assert.Equal(1, Prompts(pane));
+        Assert.Equal("merge it", Inbox(sub));
+    }
+
+    [Fact]
     public void A_record_names_the_harness_its_pane_runs()
     {
         var nvimClaude = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false, HostInNvim: true);

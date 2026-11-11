@@ -16,7 +16,7 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
             ? agent.StartedInNvim
             : agent.HostedInNvim && agent.StartedInNvim;
 
-    public static string HarnessOf(AgentRecord agent) => HarnessRoute.Of(agent.Harness);
+    public static string HarnessOf(AgentRecord agent) => agent.RunningHarness;
 
     public async Task<string?> RouteAsync(
         AgentRecord agent,

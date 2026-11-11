@@ -1,7 +1,6 @@
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Hooks;
-using Fleet.Shared.Messaging;
 using Fleet.Shared.Status;
 using Fleet.Shared.Status.Enums;
 
@@ -28,7 +27,7 @@ public static class AgentActivity
     };
 
     public static bool WatchedByPane(AgentRecord agent) =>
-        HarnessRegistry.Find(HarnessRoute.Of(agent.Harness)) is { } profile
+        HarnessRegistry.Find(agent.RunningHarness) is { } profile
         && !profile.Has(HarnessCapabilities.Hooks);
 
     public static string Quiet(string folder, string paneText, DateTime now, TimeSpan? window = null)

@@ -18,6 +18,18 @@ public class AgentActivityTests
             watched,
             AgentActivity.WatchedByPane(new AgentRecord("/wt", "api", "x", harness, "origin/main", false, HostInNvim: true)));
 
+    [Theory]
+    [InlineData("opencode", true)]
+    [InlineData("codex", true)]
+    [InlineData("claude", false)]
+    [InlineData("", false)]
+    public void A_sub_orchestrator_is_watched_through_its_pane_when_its_own_harness_has_no_hooks(
+        string runs, bool watched) =>
+        Assert.Equal(
+            watched,
+            AgentActivity.WatchedByPane(new AgentRecord(
+                "/o", "", "sub", AgentHarness.Orchestrator, "", false, OrchestratorHarness: runs)));
+
     [Fact]
     public void A_pane_quiet_for_the_window_is_idle_and_new_output_is_working()
     {
