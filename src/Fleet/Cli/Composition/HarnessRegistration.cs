@@ -10,10 +10,10 @@ namespace Fleet.Cli.Composition;
 
 public static class HarnessRegistration
 {
-    public static IHarnessConfigs Configs() => new HarnessConfigs(
+    public static IHarnessConfigs ClaudeConfigs() => new HarnessConfigs(
         new Dictionary<string, IHarnessConfig>(StringComparer.Ordinal)
         {
-            [HarnessRegistry.OpencodeName] = Opencode(),
+            [HarnessRegistry.OpencodeName] = new NullHarnessConfig(),
         },
         new ClaudeHarnessConfig());
 

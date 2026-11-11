@@ -481,7 +481,7 @@ public static class DashboardWiring
 
         var spawner = new NewAgentHandler(
             git, mux, agents, name => settings.Load(name).Models, name => settings.Load(name).SubagentGuidance,
-            settings: settings);
+            settings: settings, configs: HarnessRegistration.NonClaudeConfigs());
         var hider = new HideAgentHandler(mux, agents);
         var editor = new OpenEditorHandler(mux, Adapters.EditorLauncher());
         var branches = new ListBranchesHandler(git);

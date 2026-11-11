@@ -62,7 +62,8 @@ public sealed class McpActions(
     private readonly ListBranchesHandler _branches = new(git);
 
     private readonly NewAgentHandler _spawner = new(
-        git, mux, store, Adapters.Models, Adapters.SubagentGuidance, Adapters.ModelRouter(), log);
+        git, mux, store, Adapters.Models, Adapters.SubagentGuidance, Adapters.ModelRouter(), log,
+        configs: HarnessRegistration.NonClaudeConfigs());
 
     private readonly HideAgentHandler _hider = new(mux, store);
 
@@ -281,7 +282,7 @@ public sealed class McpActions(
             store.Save(project, created.Value! with { Owner = owner });
         }
 
-        HarnessRegistration.Configs().For(created.Value!.Harness)
+        HarnessRegistration.ClaudeConfigs().For(created.Value!.Harness)
             .WriteForAgent(created.Value!.Worktree, project, repo.Name, branch);
 
         var name = SessionNames.RepoAgent(project, created.Value!.Repository, created.Value!.Branch);
