@@ -1,3 +1,4 @@
+using Fleet.Ports.Mux;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Mcp;
@@ -63,7 +64,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 
         // the kickoff was lost once by the starting TUI, typed again, and submitted exactly once
         Assert.Equal(1, sub.LostTypings);
-        Assert.Equal([profile.Kickoff, profile.Kickoff, "\r"], _team.Mux.TypedInto(sub));
+        Assert.Equal([profile.Kickoff, TypedPrompt.ClearLine, profile.Kickoff, "\r"], _team.Mux.TypedInto(sub));
         Assert.Equal([profile.Kickoff], sub.Submitted);
 
         var record = Assert.Single(_team.Store.List(_team.Project));

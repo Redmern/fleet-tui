@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Orchestrations;
@@ -9,7 +10,7 @@ namespace Fleet.Tests.EndToEnd.MixedTeam;
 // A scripted stand-in for a harness TUI in a pane. It does what fleet relies on and nothing more:
 // - it starts the fleet MCP server named in its own project-local config, which writes the ready marker (the real
 //   `fleet mcp --caller x` does that in McpWiring.ReadySignal);
-// - it shows typed text on its screen and submits the input line on Enter;
+// - it shows typed text on its screen, empties the input line on ctrl+u and submits it on Enter;
 // - a TUI without a ready hook (opencode, codex, pi) loses the first thing typed into it, as opencode 1.4.6 did
 //   in the u7 live proof.
 // The "model turn" is played by the test: it reads Submitted and calls fleet tools as Caller.
@@ -98,6 +99,10 @@ internal sealed partial class FakeHarness
                     _screen.Add($"user: {_input}");
                     _input = string.Empty;
                 }
+            }
+            else if (text == TypedPrompt.ClearLine)
+            {
+                _input = string.Empty;
             }
             else if (_losesNextTyping)
             {

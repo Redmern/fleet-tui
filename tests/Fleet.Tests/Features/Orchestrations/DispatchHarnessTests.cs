@@ -5,6 +5,7 @@ using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Harness;
+using Fleet.Ports.Mux;
 using Fleet.Ports.Settings;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
@@ -78,7 +79,10 @@ public sealed class DispatchHarnessTests : IDisposable
 
         var sent = _mux.SentTo(Assert.Single(await _mux.ListPanesAsync()).Id);
         Assert.True(sent.Count >= 3, string.Join(" | ", sent));
-        Assert.All(sent.Take(sent.Count - 1), text => Assert.Equal(HarnessRegistry.Opencode.Kickoff, text));
+        Assert.Equal(HarnessRegistry.Opencode.Kickoff, sent[0]);
+        Assert.All(
+            sent.Skip(1).Take(sent.Count - 2).Chunk(2),
+            again => Assert.Equal([TypedPrompt.ClearLine, HarnessRegistry.Opencode.Kickoff], again));
         Assert.Equal("\r", sent[^1]);
     }
 
