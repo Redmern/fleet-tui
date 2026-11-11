@@ -1,4 +1,6 @@
 using Fleet.Features.Agents.ListAgents;
+using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Status.Enums;
 
@@ -6,6 +8,36 @@ namespace Fleet.Tests.Features.Agents;
 
 public class AgentActivityTests
 {
+    [Theory]
+    [InlineData(AgentHarness.Opencode, true)]
+    [InlineData(AgentHarness.Claude, false)]
+    [InlineData(AgentHarness.Nvim, false)]
+    [InlineData(AgentHarness.Orchestrator, false)]
+    public void Only_a_harness_without_hooks_is_watched_through_its_pane(string harness, bool watched) =>
+        Assert.Equal(
+            watched,
+            AgentActivity.WatchedByPane(new AgentRecord("/wt", "api", "x", harness, "origin/main", false, Claude: true)));
+
+    [Fact]
+    public void A_pane_quiet_for_the_window_is_idle_and_new_output_is_working()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+        var t0 = new DateTime(2026, 10, 28, 12, 0, 0, DateTimeKind.Utc);
+        var window = TimeSpan.FromMinutes(2);
+
+        try
+        {
+            Assert.Equal(AgentActivity.Working, AgentActivity.Quiet(folder, "> ", t0, window));
+            Assert.Equal(AgentActivity.Idle, AgentActivity.Quiet(folder, "> ", t0.AddMinutes(3), window));
+            Assert.Equal(AgentActivity.Working, AgentActivity.Quiet(folder, "> hi", t0.AddMinutes(4), window));
+            Assert.Equal(string.Empty, AgentActivity.Quiet(folder, "  ", t0.AddMinutes(9), window));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     [Fact]
     public void A_claude_spinner_line_means_working()
     {

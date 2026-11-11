@@ -50,6 +50,65 @@ public class PaneActivityTests
     }
 
     [Fact]
+    public void An_opencode_agent_whose_pane_has_been_quiet_shows_idle_and_a_done_one_keeps_done()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+
+        try
+        {
+            var quiet = Agent("q", harness: AgentHarness.Opencode) with { Worktree = Path.Combine(root, "q") };
+            var done = Agent("d", harness: AgentHarness.Opencode, status: "done") with { Worktree = Path.Combine(root, "d") };
+            var busy = Agent("b", harness: AgentHarness.Opencode) with { Worktree = Path.Combine(root, "b") };
+            var mux = new TextMux { Text = "opencode > " };
+            var past = DateTime.UtcNow.AddHours(-1);
+            Fleet.Shared.Status.PaneQuiet.Observe(quiet.Worktree, mux.Text, past);
+            Fleet.Shared.Status.PaneQuiet.Observe(done.Worktree, mux.Text, past);
+
+            var live = new PaneActivity(mux).For([quiet, done, busy], [PaneOf(quiet), PaneOf(done), PaneOf(busy)], NoHook);
+
+            Assert.Equal([AgentActivity.Idle, "done", AgentActivity.Working], live.Select(a => a.Status));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void An_opencode_agent_going_quiet_is_reported_once_and_a_done_one_is_not()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+
+        try
+        {
+            var agent = Agent("q", harness: AgentHarness.Opencode) with { Worktree = Path.Combine(root, "q") };
+            var done = Agent("d", harness: AgentHarness.Opencode, status: "done") with { Worktree = Path.Combine(root, "d") };
+            var mux = new TextMux { Text = "opencode > " };
+            var idle = new List<string>();
+            var activity = new PaneActivity(mux, a => idle.Add(a.Branch));
+            var panes = new[] { PaneOf(agent), PaneOf(done) };
+
+            activity.For([agent, done], panes, NoHook);
+            Backdate(agent.Worktree, mux.Text);
+            Backdate(done.Worktree, mux.Text);
+            activity.For([agent, done], panes, NoHook);
+            activity.For([agent, done], panes, NoHook);
+
+            Assert.Equal(["q"], idle);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static void Backdate(string worktree, string text)
+    {
+        File.Delete(Path.Combine(worktree, ".fleet", Fleet.Shared.Status.PaneQuiet.FileName));
+        Fleet.Shared.Status.PaneQuiet.Observe(worktree, text, DateTime.UtcNow.AddHours(-1));
+    }
+
+    [Fact]
     public void A_hooked_agent_that_needs_no_pane_text_is_not_read()
     {
         var agent = Agent("a");

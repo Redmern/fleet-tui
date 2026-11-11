@@ -16,6 +16,7 @@ using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
 using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.ReportStatus;
+using Fleet.Features.Orchestrations.WaitForAgent;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Features.Repositories.ListRepositories;
@@ -36,6 +37,7 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
+using Fleet.Shared.Mcp;
 using Fleet.Shared.Messaging;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
@@ -85,7 +87,7 @@ public sealed class McpActions(
 
     private readonly SecretsHandler _secrets = new();
 
-    private readonly ReportStatusHandler _reporter = new(store, inboxes: Adapters.AgentInboxes(), tickets: Adapters.TicketStatus());
+    private const string MainHarness = AgentHarness.Claude;
 
     private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes());
 
@@ -99,7 +101,7 @@ public sealed class McpActions(
 
         return tool switch
         {
-            HarnessTool.ListAgents => Ok(ToolText.Agents(_agents.Handle(project))),
+            HarnessTool.ListAgents => Ok(ToolText.Agents(await WithQuietPanes(_agents.Handle(project), ct).ConfigureAwait(false))),
             HarnessTool.ListRepositories => await ListRepositories(ct).ConfigureAwait(false),
             HarnessTool.ListBranches => await ListBranches(request, ct).ConfigureAwait(false),
             HarnessTool.AgentStatus => AgentStatus(request),
@@ -122,6 +124,7 @@ public sealed class McpActions(
             HarnessTool.StopSub => await StopSub(request, ct).ConfigureAwait(false),
             HarnessTool.RemoveSub => await RemoveSub(request, ct).ConfigureAwait(false),
             HarnessTool.Report => await Report(request, ct).ConfigureAwait(false),
+            HarnessTool.WaitForAgent => await WaitForAgent(request, ct).ConfigureAwait(false),
             HarnessTool.ListForwards => await Forward(request, ForwardVerb.List, ct).ConfigureAwait(false),
             HarnessTool.ForwardPort => await Forward(request, ForwardVerb.Add, ct).ConfigureAwait(false),
             HarnessTool.UnforwardPort => await Forward(request, ForwardVerb.Remove, ct).ConfigureAwait(false),
@@ -286,7 +289,10 @@ public sealed class McpActions(
             .WriteForAgent(created.Value!.Worktree, project, repo.Name, branch);
 
         var name = SessionNames.RepoAgent(project, created.Value!.Repository, created.Value!.Branch);
-        var session = $" Its Claude session is named \"{name}\".";
+        var runs = TellAgentHandler.HarnessOf(created.Value!);
+        var session = HarnessRoute.Native(CallerHarness(), runs)
+            ? $" Its Claude session is named \"{name}\"."
+            : $" It runs {runs}: tell_agent types into its pane, and wait_for_agent waits for it to finish.";
 
         if (task.Length == 0)
         {
@@ -352,7 +358,7 @@ public sealed class McpActions(
 
         var message = ToolArguments.Text(request, ToolArguments.Message);
         var address = await _teller
-            .RouteAsync(agent, pane.Value, message, ToolArguments.Flag(request, ToolArguments.Typed), ct)
+            .RouteAsync(agent, pane.Value, message, ToolArguments.Flag(request, ToolArguments.Typed), CallerHarness(), ct)
             .ConfigureAwait(false);
 
         if (address is not null)
@@ -368,6 +374,90 @@ public sealed class McpActions(
         }
 
         return Ok($"sent to {Repo(request)}/{Branch(request)}.");
+    }
+
+    private OwnerNotices Owners() =>
+        new(project, root, mux, store, log, () => Adapters.Settings().Load(project).MainOrchestratorInNvim);
+
+    private string CallerHarness()
+    {
+        var id = caller.Trim();
+
+        if (id.Length == 0)
+        {
+            return MainHarness;
+        }
+
+        var isAgent = id.StartsWith(McpCaller.AgentPrefix, StringComparison.Ordinal);
+        var key = isAgent ? id[McpCaller.AgentPrefix.Length..] : id;
+        var record = _agents.Handle(project).FirstOrDefault(a => isAgent
+            ? !AgentHarness.IsOrchestrator(a.Harness)
+              && string.Equals($"{a.Repository}/{a.Branch}", key, StringComparison.OrdinalIgnoreCase)
+            : AgentHarness.IsOrchestrator(a.Harness)
+              && string.Equals(a.Branch, key, StringComparison.OrdinalIgnoreCase));
+
+        return record is null ? AgentHarness.Claude : TellAgentHandler.HarnessOf(record);
+    }
+
+    private async Task<IReadOnlyList<AgentRecord>> WithQuietPanes(IReadOnlyList<AgentRecord> agents, CancellationToken ct)
+    {
+        if (!agents.Any(AgentActivity.WatchedByPane))
+        {
+            return agents;
+        }
+
+        var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var shown = new List<AgentRecord>(agents.Count);
+
+        foreach (var agent in agents)
+        {
+            shown.Add(await WithQuietPane(agent, panes, ct).ConfigureAwait(false));
+        }
+
+        return shown;
+    }
+
+    private async Task<AgentRecord> WithQuietPane(AgentRecord agent, IReadOnlyList<Pane> panes, CancellationToken ct)
+    {
+        var pane = panes.FirstOrDefault(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p));
+
+        if (!AgentActivity.WatchedByPane(agent) || pane is null)
+        {
+            return agent;
+        }
+
+        var text = await mux.GetTextAsync(pane.Id, ct).ConfigureAwait(false);
+        var live = AgentActivity.Quiet(agent.Worktree, text, DateTime.UtcNow);
+        var finished = OrchestrationStatus.Normalize(agent.Status)
+            is OrchestrationStatus.Done or OrchestrationStatus.Failed;
+
+        return live.Length == 0 || (finished && live == AgentActivity.Idle) ? agent : agent with { Status = live };
+    }
+
+    private async Task<string?> PaneTextFor(AgentRecord agent, CancellationToken ct)
+    {
+        var pane = await PaneFor(agent, ct).ConfigureAwait(false);
+
+        return pane is null ? null : await mux.GetTextAsync(pane.Value, ct).ConfigureAwait(false);
+    }
+
+    private async Task<McpResult> WaitForAgent(McpRequest request, CancellationToken ct)
+    {
+        if (Missing(request, ToolArguments.Branch) is { } error)
+        {
+            return error;
+        }
+
+        var waited = await new WaitForAgentHandler(store, PaneTextFor)
+            .HandleAsync(
+                project,
+                Repo(request),
+                Branch(request),
+                WaitForAgentHandler.TimeoutFrom(ToolArguments.Count(request, ToolArguments.Timeout, 0)),
+                ct)
+            .ConfigureAwait(false);
+
+        return waited.Succeeded ? Ok(waited.Value!) : McpResult.Error(waited.Error!);
     }
 
     private async Task<PaneId?> PaneFor(AgentRecord agent, CancellationToken ct)
@@ -681,7 +771,14 @@ public sealed class McpActions(
     {
         var status = ToolArguments.Text(request, ToolArguments.Status);
 
-        var reported = await _reporter
+        var reporter = new ReportStatusHandler(
+            store,
+            inboxes: Adapters.AgentInboxes(),
+            tickets: Adapters.TicketStatus(),
+            typeToOwner: Owners().TypeAsync,
+            mainHarness: MainHarness);
+
+        var reported = await reporter
             .HandleAsync(project, root, caller, status, ToolArguments.Text(request, ToolArguments.Summary), ct)
             .ConfigureAwait(false);
 

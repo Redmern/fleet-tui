@@ -189,6 +189,47 @@ public sealed class TellAgentTests : IDisposable
         Assert.Equal($"z\n\n{AgentHarness.AgentReportRule}", Inbox(agent));
     }
 
+    [Theory]
+    [InlineData(AgentHarness.Claude, AgentHarness.Claude, true)]
+    [InlineData(AgentHarness.Claude, AgentHarness.Opencode, false)]
+    [InlineData(AgentHarness.Opencode, AgentHarness.Claude, false)]
+    [InlineData(AgentHarness.Opencode, AgentHarness.Opencode, false)]
+    public async Task Only_a_claude_caller_telling_a_claude_agent_gets_a_SendMessage_address(
+        string caller, string target, bool native)
+    {
+        var agent = new AgentRecord(_root, "backend", "a", target, string.Empty, false, Claude: true);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes(_root, "uds:pipe-a"));
+
+        var address = await teller.RouteAsync(agent, pane, "review the PR", typed: false, callerHarness: caller);
+
+        Assert.Equal(native ? "uds:pipe-a" : null, address);
+        Assert.Equal(native ? 0 : 1, Prompts(pane));
+        Assert.Equal(!native, File.Exists(Path.Combine(_root, ".fleet", AgentHarness.AgentInstructionFile)));
+    }
+
+    [Fact]
+    public async Task An_opencode_caller_types_into_a_claude_sub_orchestrator()
+    {
+        var sub = new AgentRecord(_root, string.Empty, "sub", AgentHarness.Orchestrator, string.Empty, false, InNvim: false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes(_root, "uds:sub"));
+
+        Assert.Null(await teller.RouteAsync(sub, pane, "merge it", typed: false, callerHarness: AgentHarness.Opencode));
+        Assert.Equal(1, Prompts(pane));
+        Assert.Equal("merge it", Inbox(sub));
+    }
+
+    [Fact]
+    public void A_record_names_the_harness_its_pane_runs()
+    {
+        var nvimClaude = new AgentRecord(_root, "backend", "a", AgentHarness.Nvim, string.Empty, false, Claude: true);
+
+        Assert.Equal(AgentHarness.Claude, TellAgentHandler.HarnessOf(nvimClaude));
+        Assert.Equal(AgentHarness.Opencode, TellAgentHandler.HarnessOf(nvimClaude with { Harness = AgentHarness.Opencode }));
+        Assert.Equal(AgentHarness.Claude, TellAgentHandler.HarnessOf(nvimClaude with { Harness = AgentHarness.Orchestrator }));
+    }
+
     [Fact]
     public void A_repo_agent_is_told_to_report_with_every_instruction_and_a_sub_is_not()
     {

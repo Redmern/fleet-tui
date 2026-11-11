@@ -14,6 +14,7 @@ public static class McpGate
         HarnessTool.OpenAgent,
         HarnessTool.SetAgentVisible,
         HarnessTool.StopAgent,
+        HarnessTool.WaitForAgent,
     ];
 
     public static IReadOnlyList<HarnessTool> Gated(HarnessTool tool, McpRequest request) =>
