@@ -127,18 +127,15 @@ internal sealed partial class FakeHarness
     {
         for (var i = 0; i < 500 && Caller is null; i++)
         {
-            if (File.Exists(config))
-            {
-                var text = await File.ReadAllTextAsync(config).ConfigureAwait(false);
-                var caller = CallerArgument().Match(text);
-                var project = ProjectArgument().Match(text);
+            var text = ReadOrEmpty(config);
+            var caller = CallerArgument().Match(text);
+            var project = ProjectArgument().Match(text);
 
-                if (caller.Success && project.Success)
-                {
-                    CallerProject = project.Groups[1].Value;
-                    Caller = caller.Groups[1].Value;
-                    break;
-                }
+            if (caller.Success && project.Success)
+            {
+                CallerProject = project.Groups[1].Value;
+                Caller = caller.Groups[1].Value;
+                break;
             }
 
             await Task.Delay(20).ConfigureAwait(false);
@@ -147,6 +144,19 @@ internal sealed partial class FakeHarness
         if (Caller is not null)
         {
             await Ready().ConfigureAwait(false);
+        }
+    }
+
+    // fleet may still be writing the file (it is written after the pane is spawned).
+    private static string ReadOrEmpty(string config)
+    {
+        try
+        {
+            return File.Exists(config) ? File.ReadAllText(config) : string.Empty;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
         }
     }
 

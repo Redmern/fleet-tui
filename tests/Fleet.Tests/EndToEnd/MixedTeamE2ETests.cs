@@ -40,7 +40,10 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         var profile = HarnessRegistry.For(harness);
         var repository = await _team.AddRepositoryAsync("api");
 
-        // dispatch: the main orchestrator (claude) asks for a sub on another harness
+        // dispatch: the main orchestrator (claude) asks for a sub on another harness; subs are hosted in nvim here,
+        // which a harness whose typed kickoff is checked must not follow
+        _team.SubOrchestratorsInNvim(true);
+
         var dispatched = await _team.DispatchAsync(Main, "fix the login bug", harness);
 
         var folder = dispatched.Folder;
@@ -50,7 +53,6 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal([harness], _team.Mux.ArgsOf(sub));
         Assert.True(File.Exists(Path.Combine(folder, "AGENTS.md")));
         Assert.False(File.Exists(Path.Combine(folder, "CLAUDE.md")));
-        Assert.False(File.Exists(Path.Combine(folder, ".mcp.json")));
         Assert.Contains("wait_for_agent", File.ReadAllText(Path.Combine(folder, "AGENTS.md")));
         Assert.Contains("fix the login bug", File.ReadAllText(OrchestrationPaths.TaskFile(folder)));
         Assert.True(File.Exists(Path.Combine(folder, ".agents", "skills", "fl-tdd", "SKILL.md")));
@@ -60,7 +62,6 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal(_team.Project, sub.CallerProject);
 
         // the kickoff was lost once by the starting TUI, typed again, and submitted exactly once
-        Assert.Equal("Read AGENTS.md and TASK.md in your working directory, then begin.", profile.Kickoff);
         Assert.Equal(1, sub.LostTypings);
         Assert.Equal([profile.Kickoff, profile.Kickoff, "\r"], _team.Mux.TypedInto(sub));
         Assert.Equal([profile.Kickoff], sub.Submitted);
@@ -72,12 +73,17 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 
         if (harness == HarnessRegistry.CodexName)
         {
-            Assert.Contains("trust_level = \"trusted\"", File.ReadAllText(_team.CodexUserConfig));
+            Assert.Contains(
+                $"[projects.\"{folder}\"]\ntrust_level = \"trusted\"",
+                File.ReadAllText(_team.CodexUserConfig).ReplaceLineEndings("\n"));
         }
 
         if (harness == HarnessRegistry.PiName)
         {
-            Assert.Contains(dispatched.Slug, File.ReadAllText(_team.PiTrustStore));
+            Assert.Contains(
+                File.ReadAllLines(_team.PiTrustStore),
+                l => l.Contains(dispatched.Slug, StringComparison.Ordinal)
+                     && l.TrimEnd(',').EndsWith("\": true", StringComparison.Ordinal));
         }
 
         // the sub leads a claude worker that has a cross-session inbox

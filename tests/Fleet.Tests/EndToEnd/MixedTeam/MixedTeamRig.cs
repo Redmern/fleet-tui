@@ -53,8 +53,11 @@ internal sealed class MixedTeamRig
     {
         Root = root;
         Directory.CreateDirectory(root);
-        Adapters.Settings().Save(Project, SettingsConfig.Default.WithSubOrchestratorsInNvim(false));
+        SubOrchestratorsInNvim(false);
     }
+
+    public void SubOrchestratorsInNvim(bool on) =>
+        Adapters.Settings().Save(Project, SettingsConfig.Default.WithSubOrchestratorsInNvim(on));
 
     public string Project { get; } = $"mixed-{Guid.NewGuid():N}"[..14];
 
