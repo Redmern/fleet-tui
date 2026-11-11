@@ -124,7 +124,7 @@ public sealed class OpenAgentHandler(
         }
 
         var args = orchestrator
-            ? Shared.Constants.AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
+            ? agent.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
             : Shared.Constants.AgentHarness.Resumed(hosted.Command(launch));
 
         var pane = await mux.SpawnAsync(
@@ -134,9 +134,7 @@ public sealed class OpenAgentHandler(
                 SessionName = project,
                 WindowId = window,
                 Args = args,
-                Env = orchestrator
-                    ? Shared.Constants.AgentHarness.SpawnEnv(hosted.Harness, subOrchestratorsInNvim)
-                    : Shared.Constants.AgentHarness.SpawnEnvFor(args),
+                Env = Shared.Constants.AgentHarness.SpawnEnvFor(args),
             },
             ct).ConfigureAwait(false);
 

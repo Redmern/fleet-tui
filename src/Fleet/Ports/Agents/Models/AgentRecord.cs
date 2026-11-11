@@ -25,6 +25,9 @@ public sealed record AgentRecord(
 {
     public HarnessProfile OrchestratorProfile => HarnessRegistry.For(OrchestratorHarness);
 
+    public IReadOnlyList<string> OrchestratorCommand(bool resume, bool inNvim, ClaudeLaunch? launch = null) =>
+        AgentHarness.OrchestratorCommand(OrchestratorProfile, resume, inNvim, launch);
+
     public bool StartedInNvim => InNvim ?? true;
 
     public bool RunsHarness => AgentHarness.RunsHarness(Harness);

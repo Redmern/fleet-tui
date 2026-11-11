@@ -170,10 +170,10 @@ public sealed class RestoreSessionHandler(
             WindowId = agent.Hidden ? null : window,
             NewWindow = agent.Hidden,
             Args = AgentHarness.IsOrchestrator(agent.Harness)
-                ? AgentHarness.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
+                ? agent.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
                 : agent.Command(launch),
             Env = AgentHarness.IsOrchestrator(agent.Harness)
-                ? AgentHarness.SpawnEnv(agent.Harness, subOrchestratorsInNvim)
+                ? AgentHarness.SpawnEnvFor(agent.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch))
                 : new Dictionary<string, string>(),
         };
 }
