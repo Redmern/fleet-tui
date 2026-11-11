@@ -98,6 +98,30 @@ public sealed class HarnessCheckTests
         Assert.DoesNotContain(degraded, d => d.Contains("skills", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("opencode")]
+    [InlineData("codex")]
+    [InlineData("pi")]
+    public void The_doctor_line_of_every_other_harness_states_what_fleet_skips_for_it(string harness)
+    {
+        var line = Assert.Single(
+            HarnessCheck.DoctorLines(_ => true, new Dictionary<string, int> { [harness] = 1 }),
+            l => l.StartsWith(harness + " ", StringComparison.Ordinal));
+
+        Assert.Contains("no status hooks: status comes from report and pane activity", line, StringComparison.Ordinal);
+        Assert.Contains("no permission policy: fleet's tool rules are not written for it", line, StringComparison.Ordinal);
+        Assert.Contains("no cross-session messages: tell_agent is typed into its pane", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("no skills", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_doctor_line_of_claude_states_no_degradation()
+    {
+        var line = HarnessCheck.DoctorLines(_ => true, new Dictionary<string, int> { ["claude"] = 1 })[0];
+
+        Assert.Equal("claude        on PATH, used by 1 agent(s)", line);
+    }
+
     [Fact]
     public void Doctor_lines_report_each_registered_harness_with_path_use_and_degradation()
     {
