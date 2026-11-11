@@ -8,4 +8,5 @@ public sealed record DispatchCommand(
     string? Profile = null,
     string? Repository = null,
     string? Branch = null,
-    bool Research = false);
+    bool Research = false,
+    string? Harness = null);

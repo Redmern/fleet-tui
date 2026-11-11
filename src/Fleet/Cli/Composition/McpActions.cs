@@ -245,7 +245,7 @@ public sealed class McpActions(
 
         return repo is null
             ? Result<string>.Fail($"No repository named '{request.Repository}' in this project.")
-            : await Start(repo, request.Branch, caller, request.Task, ct).ConfigureAwait(false);
+            : await Start(repo, request.Branch, caller, request.Task, ct, request.Harness).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyCollection<string>> BranchesAsync(
