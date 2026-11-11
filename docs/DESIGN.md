@@ -895,6 +895,121 @@ for two minutes when nobody can answer. Once an ask is picked up, a `.taken`
 marker exempts it from the heartbeat check, so a slow human decision is never
 mistaken for a dead dashboard.
 
+## Harness profiles and mixed teams — 2026-11-11
+
+Before this change a harness was one of three names (`claude`, `nvim`, `orchestrator`) and
+everything else assumed Claude: `.mcp.json`, hooks, `CLAUDE.md`, `SendMessage`. Now an
+agent or a sub-orchestrator can run `opencode`, `codex` or `pi`, mixed with Claude in one
+project. Spec and what was delivered: `docs/specs/multi-harness-interop.md`. User-facing
+table: README, "Harnesses".
+
+**The registry.** `Shared/Harness/HarnessProfile` is a record: name, binary, resume
+arguments, spawn env, instruction file, capability flags (`Mcp`, `Hooks`, `Skills`,
+`Permissions`, `NativeMessaging`), skills directory, install hint, `TakesClaudeLaunch` and
+`InputRetry`. `HarnessRegistry.Profiles` is the list (claude, opencode, codex, pi).
+`AgentHarness` keeps its public surface and delegates, so the Claude commands and env are
+byte-identical (`ClaudeGoldenTests`, hashes captured before the refactor). Nothing outside
+`Shared/Harness` may branch on a harness name: `HarnessSwitchTests` fails on a switch arm,
+case label or list pattern on a name constant. Code asks the profile a question instead
+(`Has(Hooks)`, `InputRetry > 0`, `TakesClaudeLaunch`). `HarnessRegistry.Require` is the
+only door for user input (`new_agent`, `change_harness`, `dispatch`, pickers): an unknown
+name fails with the valid list and stores nothing. `Normalize` stays lenient for stored
+state (unknown means `nvim`, the legacy rule). Rejected: reflection or plugin discovery
+(AOT), and per-harness subclasses spread over the slices.
+
+**Config writers.** `Ports/Harness/IHarnessConfig` has `WriteForAgent` and
+`WriteForOrchestration`; `IHarnessConfigs.For(name)` picks one. The implementations live
+in `Platform/Opencode`, `Platform/Codex`, `Platform/Pi` and are known only to the
+composition root (`HarnessRegistration`). Each writes the project-local MCP entry with
+`--caller`, the `fl-*` skills into `.agents/skills`, and git excludes for its own files.
+
+- opencode: `opencode.json`, `mcp.fleet = { type: local, command: [...] }`, merged through
+  `JsonNode`.
+- codex: `.codex/config.toml` `[mcp_servers.fleet]` with
+  `default_tools_approval_mode = "approve"`, plus `[projects."<folder>"] trust_level =
+  "trusted"` in the user config. Launch overrides (`-c mcp_servers...`) were rejected:
+  codex shows a trust prompt in an untrusted folder anyway, and the stored command has no
+  caller. There is no TOML library (AOT), so `CodexToml` is a small line scanner that edits
+  only those two tables and refuses anything it does not fully understand.
+- pi: `.pi/mcp.json` in the Claude format with `exposure: "direct"` (pi's default hides MCP
+  tools behind script calls), plus `"<real path>": true` in `<agent dir>/trust.json`.
+  `--approve` on the command line was rejected: it would override a saved "do not trust".
+
+All three refuse to touch a file they cannot parse, never override an explicit
+"untrusted", and write through a temp file and a move. Trust entries pile up, one per
+folder; fleet does not remove them. A profile without a capability skips that step:
+there is no hooks or permission writer for the three, and `HarnessCheck.Degraded` turns
+the missing flags into the `fleet doctor` text.
+
+**The record.** `AgentRecord.Claude`/`RunsClaude` is gone. A record has `Harness` (what
+runs), `HostInNvim` (whether nvim hosts it) and, for a sub-orchestrator,
+`OrchestratorHarness` (empty means Claude; `Harness` stays `orchestrator`).
+`RunningHarness` is the one answer to "what does this pane run". Migration is on read
+(`AgentRecord.Migrated`, `JsonAgentStore`): a legacy `nvim` record that ran Claude becomes
+`claude` + host; everything else keeps its harness with host false; writes drop the old
+field. Hosting any harness in nvim is generic: `NvimStartupWithCommand` runs the profile's
+command in an nvim terminal with the same instruction pump.
+
+**Messaging.** `Shared/Messaging/HarnessRoute.Native(caller, target)` is false when either
+side is a registered profile without `NativeMessaging`. `TellAgentHandler.RouteAsync`
+returns a `SendMessage` address only when the route is native and the target has an
+inbox; otherwise it writes `.fleet/instruction.md` and types the read prompt. The caller's
+harness comes from the MCP `--caller` and its record. `ReportStatusHandler` follows the
+same rule upward: native pairs keep `PeerMessage.TellOwner`; otherwise the composition
+root's `OwnerNotices` types a `[fleet] ...` line into the owner's pane. The desktop
+notification is unchanged. A non-Claude owner cannot subscribe with `notify_when_idle`, so
+there is a `wait_for_agent` tool (`Features/Orchestrations/WaitForAgent`) and its
+instruction text says to use it (`OrchestrationText.WaitingForAgentsTyped`). Both
+mechanisms ship: the typed line wakes an owner that is doing something else, the tool is
+for an owner that wants to block. Rejected: opencode's HTTP server API and ACP (one
+harness each, structured streams are out of scope).
+
+**Idle without hooks.** A profile without `Hooks` is watched by its pane
+(`AgentActivity.WatchedByPane`). `Shared/Status/PaneQuiet` keeps `<hash> <since>` in
+`<worktree>/.fleet/pane.mark`; the file is shared by the dashboard process and every
+`fleet mcp` process, so a first `list_agents` already sees a long quiet. Quiet for 120
+seconds without a `done`/`failed` report is `idle`; the dashboard's `PaneActivity` tells
+the owner once, on the change from working to idle. The check is on text, so a screen
+that redraws while waiting never goes idle.
+
+**Typed input needs an echo check.** Found on the real opencode: it starts the fleet MCP
+server, which writes fleet's ready marker, seconds before its prompt takes keys, and the
+kickoff typed at the marker was lost. A fixed delay was not enough. So for a profile with
+`InputRetry` (opencode, codex, pi) `Ports/Mux/TypedPrompt.UntilEchoedAsync` types, reads
+the pane, and retypes until the first 16 characters show, then sends Enter. Claude has
+`InputRetry` zero and keeps one typing. The nvim pump has no such check, which is why a
+sub on these profiles always starts outside nvim. If the echo never shows, Enter is still
+sent and the caller is told the task was given.
+
+**Dispatch.** `DispatchCommand.Harness` goes through `Require`, then picks the profile's
+instruction file, kickoff (`Read AGENTS.md and TASK.md ...`), launch command and config
+writer; the record stores `OrchestratorHarness`, and open, restore and routing read it
+back. The instruction text is the same agent-neutral text; only the "waiting for agents"
+part differs. The main orchestrator stays Claude: its pane is Claude-wired beyond the
+launch command (head brief, `UserPromptSubmit` dispatch hook, `RebuildDashboard`), and the
+spec only asks that it defaults to Claude. A non-Claude main needs its own setting and
+unit.
+
+**What is proven, and how.**
+
+| Claim | Evidence |
+|---|---|
+| Routing, notices, idle, `wait_for_agent`, dispatch files in a mixed team | `EndToEnd/MixedTeamE2ETests`: the real `McpActions` per caller on a fake mux with scripted harnesses, for an opencode, codex and pi sub under a Claude main and an opencode worker under a Claude sub; each mixed step is paired with the Claude-to-Claude step |
+| opencode worker reads the typed task and calls `report` | live, opencode 1.19.5, real fleetd pty (u1) |
+| opencode, codex, pi load the fleet MCP server from the file fleet wrote, with the right caller | live: `opencode mcp list`, `codex mcp get fleet` (0.160.0), `pi mcp list` (1.5.2) |
+| Reopen resumes: `opencode --continue`, `codex resume --last`, `pi --continue` | live for workers |
+| Dispatched opencode and pi sub: files, MCP connected, kickoff submitted once | live, opencode 1.4.6 and pi 1.5.2 |
+
+Not proven on a real binary: a model turn of an opencode sub, and any model turn of codex
+or pi (no usable login in the sandbox), so "the sub reads AGENTS.md and calls `report`" is
+shown only by the fake harness and by calling `report` through the sub's own MCP command;
+a typed prompt arriving in codex (it was not logged in); that pi's echo check saw the text
+(pi does not keep a submitted message on screen); resume of a sub; a non-Claude sub
+reopened inside nvim; that codex's `approve` mode means no approval prompt (from its docs).
+The e2e test does not cover the permission gate (`McpDispatcher`) or the JSON-RPC
+transport, and it builds the dispatch handler itself, because the production wiring names
+the slug with the Claude CLI and its codex and pi writers edit the real user config.
+
 ## Open — not yet designed
 
 - ~~**Agent state storage.**~~ Closed 2026-10-02: daemonless files behind
