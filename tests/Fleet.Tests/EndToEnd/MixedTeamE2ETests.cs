@@ -32,6 +32,29 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
     private static (string, string)[] Status(string status, string summary) =>
         [("status", status), ("summary", summary)];
 
+    // A caller fleet has no record of (an agent or sub that was removed while its harness still runs) may be any
+    // harness, so it must not be handed a SendMessage address it may be unable to use.
+    [Theory]
+    [InlineData("agent:api/gone")]
+    [InlineData("gone-sub")]
+    public async Task A_caller_fleet_has_no_record_of_has_its_message_typed_and_gets_no_SendMessage_address(string caller)
+    {
+        var repository = await _team.AddRepositoryAsync("api");
+        var fix = await _team.StartClaudeWorkerAsync(Main, "api", repository, "fix");
+        var worker = _team.Mux.HarnessIn(fix.Worktree);
+        await _team.ClaudeHookReportsInboxAsync(fix, "uds:fix");
+
+        var told = await _team.CallAsync(caller, HarnessTool.TellAgent, To("api", "fix", "find the bug"));
+
+        Assert.Equal("sent to api/fix.", told.Text);
+        Assert.Equal([AgentHarness.AgentInstructionPrompt], worker.Submitted);
+
+        var fromMain = await _team.CallAsync(Main, HarnessTool.TellAgent, To("api", "fix", "and test it"));
+
+        Assert.Contains("uds:fix", fromMain.Text);
+        Assert.Equal([AgentHarness.AgentInstructionPrompt], worker.Submitted);
+    }
+
     [Theory]
     [InlineData("opencode")]
     [InlineData("codex")]

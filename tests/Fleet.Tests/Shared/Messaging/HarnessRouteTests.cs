@@ -13,6 +13,12 @@ public sealed class HarnessRouteTests
     public void Only_two_native_messaging_harnesses_talk_natively(string caller, string target, bool native) =>
         Assert.Equal(native, HarnessRoute.Native(caller, target));
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void A_caller_of_an_unknown_harness_does_not_talk_natively(string caller) =>
+        Assert.False(HarnessRoute.Native(caller, AgentHarness.Claude));
+
     [Fact]
     public void An_editor_pane_leaves_the_route_to_its_inbox_as_before() =>
         Assert.True(HarnessRoute.Native(AgentHarness.Claude, AgentHarness.Nvim));
