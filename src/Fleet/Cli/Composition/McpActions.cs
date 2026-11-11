@@ -89,6 +89,8 @@ public sealed class McpActions(
 
     private const string MainHarness = AgentHarness.Claude;
 
+    private static readonly TimeSpan FirstTaskEchoWithin = TimeSpan.FromSeconds(60);
+
     private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes());
 
     private readonly BranchStates _states = new(git);
@@ -329,7 +331,7 @@ public sealed class McpActions(
             return false;
         }
 
-        await _teller.DeliverAsync(agent, pane.Value, message, ct).ConfigureAwait(false);
+        await _teller.DeliverAsync(agent, pane.Value, message, ct, FirstTaskEchoWithin).ConfigureAwait(false);
 
         return true;
     }

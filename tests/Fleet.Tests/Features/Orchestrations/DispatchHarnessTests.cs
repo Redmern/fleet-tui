@@ -66,6 +66,30 @@ public sealed class DispatchHarnessTests : IDisposable
     }
 
     [Fact]
+    public async Task A_kickoff_the_harness_did_not_show_is_typed_again_before_enter()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, _claude, TimeSpan.FromMilliseconds(40), TimeSpan.FromMilliseconds(1),
+            settings: new Settings(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)),
+            orchestrator: HarnessRegistry.Opencode with { InputRetry = TimeSpan.FromMilliseconds(1) });
+
+        await handler.HandleAsync(new DispatchCommand("techweb", _root, "do the thing"), "t");
+
+        var sent = _mux.SentTo(Assert.Single(await _mux.ListPanesAsync()).Id);
+        Assert.True(sent.Count >= 3, string.Join(" | ", sent));
+        Assert.All(sent.Take(sent.Count - 1), text => Assert.Equal(HarnessRegistry.Opencode.Kickoff, text));
+        Assert.Equal("\r", sent[^1]);
+    }
+
+    [Fact]
+    public void Only_harnesses_without_a_ready_hook_have_their_typed_prompt_checked()
+    {
+        Assert.Equal(TimeSpan.Zero, HarnessRegistry.Claude.InputRetry);
+        Assert.True(HarnessRegistry.Opencode.InputRetry > TimeSpan.Zero);
+        Assert.True(HarnessRegistry.Codex.InputRetry > TimeSpan.Zero);
+    }
+
+    [Fact]
     public async Task The_sub_record_stores_the_harness_it_runs()
     {
         await Handler().HandleAsync(Command("opencode"), "t");

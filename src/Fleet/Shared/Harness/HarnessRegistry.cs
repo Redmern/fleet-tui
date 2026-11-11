@@ -14,6 +14,8 @@ public static class HarnessRegistry
 
     public const string ResumeArgument = "--continue";
 
+    private static readonly TimeSpan TuiInputRetry = TimeSpan.FromSeconds(1);
+
     public static HarnessProfile Claude { get; } = new(
         ClaudeName,
         ClaudeName,
@@ -42,6 +44,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g opencode-ai",
+        InputRetry = TuiInputRetry,
     };
 
     public static HarnessProfile Codex { get; } = new(
@@ -51,7 +54,10 @@ public static class HarnessRegistry
         new Dictionary<string, string>(),
         "AGENTS.md",
         HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
-        Path.Combine(".agents", "skills"));
+        Path.Combine(".agents", "skills"))
+    {
+        InputRetry = TuiInputRetry,
+    };
 
     public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode, Codex];
 

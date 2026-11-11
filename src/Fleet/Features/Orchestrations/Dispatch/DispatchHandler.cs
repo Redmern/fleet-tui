@@ -212,7 +212,7 @@ public sealed class DispatchHandler(
 
         if (!inNvim)
         {
-            await TypeKickoff(folder, pane, runs.Kickoff, ct).ConfigureAwait(false);
+            await TypeKickoff(folder, pane, runs, ct).ConfigureAwait(false);
         }
 
         var note = DispatchNote.Dispatched(slug, aidlc?.Profile)
@@ -369,7 +369,7 @@ public sealed class DispatchHandler(
             .ConfigureAwait(false);
     }
 
-    private async Task TypeKickoff(string folder, PaneId pane, string kickoff, CancellationToken ct)
+    private async Task TypeKickoff(string folder, PaneId pane, HarnessProfile runs, CancellationToken ct)
     {
         var marker = OrchestrationPaths.ReadyMarker(folder);
 
@@ -382,8 +382,18 @@ public sealed class DispatchHandler(
             await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
         }
 
-        await mux.SendTextAsync(pane, kickoff, ct).ConfigureAwait(false);
-        await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
+        if (runs.InputRetry > TimeSpan.Zero)
+        {
+            await TypedPrompt
+                .UntilEchoedAsync(mux, pane, runs.Kickoff, runs.InputRetry, _readyTimeout, ct: ct)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await mux.SendTextAsync(pane, runs.Kickoff, ct).ConfigureAwait(false);
+            await Task.Delay(TypedPrompt.EchoDelay, ct).ConfigureAwait(false);
+        }
+
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 }
