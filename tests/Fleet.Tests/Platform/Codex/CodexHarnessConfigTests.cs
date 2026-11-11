@@ -59,7 +59,7 @@ public sealed class CodexHarnessConfigTests : IDisposable
     }
 
     [Fact]
-    public void An_existing_project_config_keeps_its_other_settings_and_loses_the_old_fleet_server()
+    public void An_existing_project_config_keeps_its_other_settings_and_gets_the_new_fleet_command()
     {
         Seed(
             ProjectConfig,
@@ -69,7 +69,8 @@ public sealed class CodexHarnessConfigTests : IDisposable
         Config().WriteForAgent(Folder, "proj", "api", "main");
 
         Assert.Equal(
-            "model = \"o3\"\n\n" + FleetSection("agent:api/main") + "\n[mcp_servers.other]\ncommand = \"other\"\n",
+            "model = \"o3\"\n\n" + FleetSection("agent:api/main") + "\n[mcp_servers.fleet.env]\nX = \"1\"\n\n"
+            + "[mcp_servers.other]\ncommand = \"other\"\n",
             File.ReadAllText(ProjectConfig));
     }
 

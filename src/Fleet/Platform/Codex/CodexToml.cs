@@ -14,7 +14,14 @@ public static class CodexToml
 
     private const string TrustedLine = TrustLevel + " = \"trusted\"";
 
-    private sealed record Entry(int Index, bool IsHeader, IReadOnlyList<string> Table, IReadOnlyList<string> Path, string Value);
+    private const string Command = "command";
+
+    private const string Args = "args";
+
+    private const string Approval = "default_tools_approval_mode";
+
+    private sealed record Entry(
+        int Index, int End, bool IsHeader, IReadOnlyList<string> Table, IReadOnlyList<string> Path, string Value);
 
     private sealed class ScanState
     {
@@ -25,11 +32,95 @@ public static class CodexToml
         public bool Continues => Depth > 0 || OpenMultiline is not null;
     }
 
+    private sealed class Document
+    {
+        private readonly List<string> _endings = [];
+
+        private Document()
+        {
+        }
+
+        public List<string> Lines { get; } = [];
+
+        private string Newline => _endings.FirstOrDefault(e => e.Length > 0) ?? "\n";
+
+        public static Document Of(string text)
+        {
+            var document = new Document();
+            var start = 0;
+
+            while (start < text.Length)
+            {
+                var at = text.IndexOf('\n', start);
+
+                if (at < 0)
+                {
+                    document.Add(text[start..], string.Empty);
+                    break;
+                }
+
+                var carriage = at > start && text[at - 1] == '\r';
+                document.Add(text[start..(carriage ? at - 1 : at)], carriage ? "\r\n" : "\n");
+                start = at + 1;
+            }
+
+            return document;
+        }
+
+        public void Remove(int index, int count)
+        {
+            Lines.RemoveRange(index, count);
+            _endings.RemoveRange(index, count);
+        }
+
+        public void InsertAfter(int index, IReadOnlyList<string> lines)
+        {
+            var newline = Terminated(index);
+            Lines.InsertRange(index + 1, lines);
+            _endings.InsertRange(index + 1, lines.Select(_ => newline));
+        }
+
+        public void Append(IReadOnlyList<string> section)
+        {
+            if (Lines.Count == 0)
+            {
+                InsertAfter(-1, section);
+                return;
+            }
+
+            var separated = Lines[^1].Trim().Length == 0;
+            InsertAfter(Lines.Count - 1, separated ? section : [string.Empty, .. section]);
+        }
+
+        public string Text() => string.Concat(Lines.Select((line, i) => line + _endings[i]));
+
+        private void Add(string line, string ending)
+        {
+            Lines.Add(line);
+            _endings.Add(ending);
+        }
+
+        private string Terminated(int index)
+        {
+            if (index < 0)
+            {
+                return Newline;
+            }
+
+            if (_endings[index].Length == 0)
+            {
+                _endings[index] = Newline;
+            }
+
+            return _endings[index];
+        }
+    }
+
     public static Result<string> WithServer(string text, McpServerEntry entry)
     {
-        var (lines, newline) = Lines(text);
+        var document = Document.Of(text);
 
-        if (Scan(lines) is not { } entries)
+        if (Scan(document.Lines) is not { } entries)
         {
             return Result<string>.Fail("it is not TOML fleet can edit");
         }
@@ -41,42 +132,38 @@ public static class CodexToml
             return Result<string>.Fail($"it defines {Servers}.{entry.Name} inline, which fleet does not rewrite");
         }
 
-        var headers = entries.Where(e => e.IsHeader).ToList();
-        var removed = new SortedSet<int>();
+        List<string> launch =
+        [
+            $"{Command} = {Quoted(entry.Command)}",
+            $"{Args} = [{string.Join(", ", entry.Args.Select(Quoted))}]",
+        ];
+        var approval = $"{Approval} = \"approve\"";
 
-        for (var h = 0; h < headers.Count; h++)
+        if (entries.FirstOrDefault(e => e.IsHeader && Equal(e.Path, own)) is not { } header)
         {
-            if (StartsWith(headers[h].Path, own))
-            {
-                var end = h + 1 < headers.Count ? headers[h + 1].Index : lines.Count;
-
-                for (var i = headers[h].Index; i < end; i++)
-                {
-                    removed.Add(i);
-                }
-            }
+            document.Append([$"[{Servers}.{Key(entry.Name)}]", .. launch, approval]);
+            return Result<string>.Ok(document.Text());
         }
 
-        var section = ServerSection(entry);
-        var kept = lines.Where((_, i) => !removed.Contains(i)).ToList();
+        var keys = entries
+            .Where(e => !e.IsHeader && Equal(e.Table, own) && e.Path.Count == own.Count + 1)
+            .ToList();
 
-        if (removed.Count == 0)
+        foreach (var stale in keys.Where(e => e.Path[^1] is Command or Args).OrderByDescending(e => e.Index))
         {
-            return Result<string>.Ok(Join(Appended(kept, section), newline, text));
+            document.Remove(stale.Index, stale.End - stale.Index + 1);
         }
 
-        var at = removed.Min;
-        var reachesEnd = removed.Max == lines.Count - 1;
-        kept.InsertRange(at, reachesEnd ? section : [.. section, string.Empty]);
+        document.InsertAfter(header.Index, keys.Any(e => e.Path[^1] == Approval) ? launch : [.. launch, approval]);
 
-        return Result<string>.Ok(Join(kept, newline, text));
+        return Result<string>.Ok(document.Text());
     }
 
     public static Result<string> WithTrustedProject(string text, string folder)
     {
-        var (lines, newline) = Lines(text);
+        var document = Document.Of(text);
 
-        if (Scan(lines) is not { } entries)
+        if (Scan(document.Lines) is not { } entries)
         {
             return Result<string>.Fail("it is not TOML fleet can edit");
         }
@@ -98,44 +185,14 @@ public static class CodexToml
 
         if (entries.FirstOrDefault(e => e.IsHeader && Equal(e.Path, project)) is { } header)
         {
-            var inserted = lines.ToList();
-            inserted.Insert(header.Index + 1, TrustedLine);
-            return Result<string>.Ok(Join(inserted, newline, text));
+            document.InsertAfter(header.Index, [TrustedLine]);
         }
-
-        return Result<string>.Ok(Join(Appended(lines, [$"[{Projects}.{Quoted(folder)}]", TrustedLine]), newline, text));
-    }
-
-    private static List<string> ServerSection(McpServerEntry entry) =>
-    [
-        $"[{Servers}.{Key(entry.Name)}]",
-        $"command = {Quoted(entry.Command)}",
-        $"args = [{string.Join(", ", entry.Args.Select(Quoted))}]",
-        "default_tools_approval_mode = \"approve\"",
-    ];
-
-    private static List<string> Appended(List<string> lines, List<string> section) =>
-        lines.Count == 0 ? section
-        : lines[^1].Trim().Length == 0 ? [.. lines, .. section]
-        : [.. lines, string.Empty, .. section];
-
-    private static (List<string> Lines, string Newline) Lines(string text)
-    {
-        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        var lines = text.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
-
-        if (lines[^1].Length == 0)
+        else
         {
-            lines.RemoveAt(lines.Count - 1);
+            document.Append([$"[{Projects}.{Quoted(folder)}]", TrustedLine]);
         }
 
-        return (lines, newline);
-    }
-
-    private static string Join(List<string> lines, string newline, string original)
-    {
-        var joined = string.Concat(lines.Select(l => l + newline));
-        return Lines(original).Lines.SequenceEqual(lines) ? original : joined;
+        return Result<string>.Ok(document.Text());
     }
 
     private static bool IsTrusted(string value)
@@ -193,6 +250,7 @@ public static class CodexToml
                     return null;
                 }
 
+                entries[^1] = entries[^1] with { End = index };
                 continue;
             }
 
@@ -213,7 +271,7 @@ public static class CodexToml
                 }
 
                 table = header;
-                entries.Add(new Entry(index, true, header, header, string.Empty));
+                entries.Add(new Entry(index, index, true, header, header, string.Empty));
                 continue;
             }
 
@@ -229,7 +287,7 @@ public static class CodexToml
                 return null;
             }
 
-            entries.Add(new Entry(index, false, table, [.. table, .. key], value));
+            entries.Add(new Entry(index, index, false, table, [.. table, .. key], value));
         }
 
         return state.Continues ? null : entries;
@@ -347,9 +405,21 @@ public static class CodexToml
                 case 'r':
                     text.Append('\r');
                     break;
+                case 'b':
+                    text.Append('\b');
+                    break;
+                case 'f':
+                    text.Append('\f');
+                    break;
                 case 'u' when j + 4 < line.Length && int.TryParse(line.AsSpan(j + 1, 4), System.Globalization.NumberStyles.HexNumber, null, out var code):
                     text.Append((char)code);
                     j += 4;
+                    break;
+                case 'U' when j + 8 < line.Length
+                    && int.TryParse(line.AsSpan(j + 1, 8), System.Globalization.NumberStyles.HexNumber, null, out var point)
+                    && point is >= 0 and <= 0x10FFFF and not (>= 0xD800 and <= 0xDFFF):
+                    text.Append(char.ConvertFromUtf32(point));
+                    j += 8;
                     break;
                 default:
                     text.Append(line[j]);
