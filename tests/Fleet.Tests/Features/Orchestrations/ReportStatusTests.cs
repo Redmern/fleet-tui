@@ -333,7 +333,7 @@ public sealed class ReportStatusTests
     public async Task A_finished_claude_agent_types_into_an_opencode_owner()
     {
         _store.Saved.Add(new AgentRecord(
-            "C:/repos/techweb/api/lead", "api", "lead", AgentHarness.Opencode, "origin/main", true, Claude: true));
+            "C:/repos/techweb/api/lead", "api", "lead", AgentHarness.Opencode, "origin/main", true));
         _store.Saved.Add(new AgentRecord(
             "C:/repos/techweb/api/x", "api", "x", AgentHarness.Claude, "origin/main", true, Owner: "agent:api/lead"));
         var typed = new List<OwnerNotice>();
@@ -350,7 +350,7 @@ public sealed class ReportStatusTests
     public async Task An_opencode_agent_without_an_owner_types_into_the_main_orchestrator()
     {
         _store.Saved.Add(new AgentRecord(
-            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Opencode, "origin/main", true, Claude: true));
+            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Opencode, "origin/main", true));
         var typed = new List<OwnerNotice>();
 
         await new ReportStatusHandler(_store, inboxes: new FakeInboxes { [Root] = "uds:main" }, typeToOwner: Typing(typed))

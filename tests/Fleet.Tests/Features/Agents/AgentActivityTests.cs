@@ -16,7 +16,7 @@ public class AgentActivityTests
     public void Only_a_harness_without_hooks_is_watched_through_its_pane(string harness, bool watched) =>
         Assert.Equal(
             watched,
-            AgentActivity.WatchedByPane(new AgentRecord("/wt", "api", "x", harness, "origin/main", false, Claude: true)));
+            AgentActivity.WatchedByPane(new AgentRecord("/wt", "api", "x", harness, "origin/main", false, HostInNvim: true)));
 
     [Fact]
     public void A_pane_quiet_for_the_window_is_idle_and_new_output_is_working()

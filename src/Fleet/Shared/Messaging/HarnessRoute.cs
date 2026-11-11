@@ -7,16 +7,11 @@ public static class HarnessRoute
 {
     public const string NoticePrefix = "[fleet] ";
 
-    public static string Of(string harness, bool runsClaude, string orchestrator = AgentHarness.Claude)
+    public static string Of(string harness, string orchestrator = AgentHarness.Claude)
     {
         var name = AgentHarness.Normalize(harness);
 
-        if (name == AgentHarness.Orchestrator)
-        {
-            return orchestrator;
-        }
-
-        return name == AgentHarness.Nvim && runsClaude ? AgentHarness.Claude : name;
+        return name == AgentHarness.Orchestrator ? orchestrator : name;
     }
 
     public static bool Native(string caller, string target) => !LacksNative(caller) && !LacksNative(target);

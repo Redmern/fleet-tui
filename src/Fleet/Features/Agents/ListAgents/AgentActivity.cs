@@ -28,7 +28,7 @@ public static class AgentActivity
     };
 
     public static bool WatchedByPane(AgentRecord agent) =>
-        HarnessRegistry.Find(HarnessRoute.Of(agent.Harness, agent.RunsClaude)) is { } profile
+        HarnessRegistry.Find(HarnessRoute.Of(agent.Harness)) is { } profile
         && !profile.Has(HarnessCapabilities.Hooks);
 
     public static string Quiet(string folder, string paneText, DateTime now, TimeSpan? window = null)

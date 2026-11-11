@@ -197,7 +197,7 @@ public sealed class TellAgentTests : IDisposable
     public async Task Only_a_claude_caller_telling_a_claude_agent_gets_a_SendMessage_address(
         string caller, string target, bool native)
     {
-        var agent = new AgentRecord(_root, "backend", "a", target, string.Empty, false, Claude: true);
+        var agent = new AgentRecord(_root, "backend", "a", target, string.Empty, false);
         var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
         var teller = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes(_root, "uds:pipe-a"));
 
@@ -223,11 +223,12 @@ public sealed class TellAgentTests : IDisposable
     [Fact]
     public void A_record_names_the_harness_its_pane_runs()
     {
-        var nvimClaude = new AgentRecord(_root, "backend", "a", AgentHarness.Nvim, string.Empty, false, Claude: true);
+        var nvimClaude = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false, HostInNvim: true);
 
         Assert.Equal(AgentHarness.Claude, TellAgentHandler.HarnessOf(nvimClaude));
         Assert.Equal(AgentHarness.Opencode, TellAgentHandler.HarnessOf(nvimClaude with { Harness = AgentHarness.Opencode }));
         Assert.Equal(AgentHarness.Claude, TellAgentHandler.HarnessOf(nvimClaude with { Harness = AgentHarness.Orchestrator }));
+        Assert.Equal(AgentHarness.Nvim, TellAgentHandler.HarnessOf(nvimClaude with { Harness = AgentHarness.Nvim, HostInNvim = false }));
     }
 
     [Fact]
