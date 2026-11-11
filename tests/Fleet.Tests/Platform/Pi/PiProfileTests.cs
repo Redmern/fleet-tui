@@ -56,4 +56,8 @@ public sealed class PiProfileTests
             Path.Combine("sub", "AGENTS.md"),
             OrchestrationPaths.InstructionsFile("sub", Pi));
     }
+
+    [Fact]
+    public void Pi_names_its_npm_package_as_the_install_hint() =>
+        Assert.Equal("npm install -g @earendil-works/pi-coding-agent", Pi.InstallHint);
 }

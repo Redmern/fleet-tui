@@ -68,7 +68,10 @@ public static class HarnessRegistry
         new Dictionary<string, string>(),
         "AGENTS.md",
         HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
-        Path.Combine(".agents", "skills"));
+        Path.Combine(".agents", "skills"))
+    {
+        InstallHint = "npm install -g @earendil-works/pi-coding-agent",
+    };
 
     public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode, Codex, Pi];
 
