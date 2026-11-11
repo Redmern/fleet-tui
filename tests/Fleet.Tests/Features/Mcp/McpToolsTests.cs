@@ -106,6 +106,18 @@ public sealed class McpToolsTests
     }
 
     [Fact]
+    public void Dispatch_takes_an_optional_harness_naming_every_registered_one()
+    {
+        var harness = Assert.Single(McpTools.Find("dispatch")!.Params, p => p.Name == "harness");
+
+        Assert.False(harness.Required);
+        Assert.All(
+            Fleet.Shared.Harness.HarnessRegistry.Profiles,
+            p => Assert.Contains(p.Name, harness.Description, StringComparison.Ordinal));
+        Assert.Contains("claude", harness.Description, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Todo_add_takes_a_required_title_and_an_optional_body_and_effort()
     {
         var spec = McpTools.Find("todo_add")!;

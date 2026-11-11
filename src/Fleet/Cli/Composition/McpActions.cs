@@ -699,7 +699,8 @@ public sealed class McpActions(
 
         var dispatcher = new DispatchHandler(
             mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(),
-            intents: Adapters.Intents(), starter: this, router: Adapters.ModelRouter(), log: log);
+            intents: Adapters.Intents(), starter: this, router: Adapters.ModelRouter(), log: log,
+            configs: HarnessRegistration.NonClaudeConfigs());
 
         var reply = await dispatcher
             .HandleAsync(
@@ -711,7 +712,8 @@ public sealed class McpActions(
                     ToolArguments.Text(request, ToolArguments.Profile),
                     Repo(request),
                     Branch(request),
-                    ToolArguments.Flag(request, ToolArguments.Research)),
+                    ToolArguments.Flag(request, ToolArguments.Research),
+                    ToolArguments.Text(request, ToolArguments.Harness)),
                 DateTimeOffset.UtcNow.ToString("O"))
             .ConfigureAwait(false);
 

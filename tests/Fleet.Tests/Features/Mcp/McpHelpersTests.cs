@@ -146,6 +146,23 @@ public sealed class McpHelpersTests
     }
 
     [Fact]
+    public void Listing_agents_names_what_each_one_runs_and_whether_nvim_hosts_it()
+    {
+        var agents = new[]
+        {
+            Agent("backend", "login") with { Harness = AgentHarness.Claude, HostInNvim = true, Open = true, Status = "working" },
+            Agent("backend", "search") with { Harness = AgentHarness.Opencode, Open = true },
+            Agent("backend", "notes") with { Harness = AgentHarness.Nvim, Open = false },
+        };
+
+        Assert.Equal(
+            "backend/login — claude in nvim, open [working]\n"
+            + "backend/search — opencode, open\n"
+            + "backend/notes — nvim, closed",
+            ToolText.Agents(agents));
+    }
+
+    [Fact]
     public void An_empty_project_says_so_rather_than_returning_nothing()
     {
         Assert.Equal("No agents yet.", ToolText.Agents([]));

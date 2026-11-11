@@ -142,6 +142,13 @@ public static class McpTools
                 "Optional: true for research; the sub-orchestrator does it itself without repository agents.",
                 false),
             new ToolParam(
+                ToolArguments.Harness,
+                "string",
+                $"Optional: the harness the sub-orchestrator (or the repository agent) runs "
+                + $"({string.Join(", ", HarnessRegistry.Profiles.Select(p => p.Name))}); defaults to claude "
+                + "for a sub-orchestrator and to the project's agent harness for a repository agent.",
+                false),
+            new ToolParam(
                 ToolArguments.Profile,
                 "string",
                 "Optional Ai-DLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this. Used only when Ai-DLC mode is on; in manual mode only a prefix applies Ai-DLC.",
