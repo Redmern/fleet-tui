@@ -294,6 +294,89 @@ public sealed class PiHarnessConfigTests : IDisposable
         Assert.Equal("{\n  " + Quoted(Folder) + ": true\n}\n", File.ReadAllText(TrustStore));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \n")]
+    public void An_empty_trust_store_is_left_alone_because_pi_may_be_writing_it(string text)
+    {
+        Seed(TrustStore, text);
+
+        var written = Config().WriteForAgent(Folder, "proj", "api", "main");
+
+        Assert.False(written.Succeeded);
+        Assert.Contains(TrustStore, written.Error);
+        Assert.Equal(text, File.ReadAllText(TrustStore));
+    }
+
+    [Fact]
+    public void A_trust_store_with_a_key_that_is_not_text_is_reported_and_left_alone()
+    {
+        var text = "{\"\\ud800\": true}";
+        Seed(TrustStore, text);
+
+        var written = Config().WriteForAgent(Folder, "proj", "api", "main");
+
+        Assert.False(written.Succeeded);
+        Assert.Equal(text, File.ReadAllText(TrustStore));
+    }
+
+    [Fact]
+    public void A_saved_decision_with_a_trailing_separator_still_counts()
+    {
+        var text = "{ " + Quoted(Folder + Path.DirectorySeparatorChar) + ": true }";
+        Seed(TrustStore, text);
+
+        var written = Config().WriteForAgent(Folder, "proj", "api", "main");
+
+        Assert.True(written.Succeeded, written.Error);
+        Assert.Equal(text, File.ReadAllText(TrustStore));
+    }
+
+    [Fact]
+    public void A_folder_behind_links_that_point_at_each_other_does_not_stop_fleet()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var a = Path.Combine(_root, "a");
+        var b = Path.Combine(_root, "b");
+        File.CreateSymbolicLink(a, Path.Combine(b, "x"));
+        File.CreateSymbolicLink(b, a);
+
+        Assert.Equal(Path.Combine(a, "y"), PiTrustStore.Canonical(Path.Combine(a, "y")));
+    }
+
+    [Fact]
+    public void A_trust_store_that_is_a_link_stays_a_link_and_its_target_gets_the_decision()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var real = Path.Combine(_root, "dotfiles", "trust.json");
+        Seed(real, "{}");
+        Directory.CreateDirectory(Path.GetDirectoryName(TrustStore)!);
+        File.CreateSymbolicLink(TrustStore, real);
+
+        var written = Config().WriteForAgent(Folder, "proj", "api", "main");
+
+        Assert.True(written.Succeeded, written.Error);
+        Assert.NotNull(new FileInfo(TrustStore).LinkTarget);
+        Assert.Equal("{\n  " + Quoted(Folder) + ": true\n}\n", File.ReadAllText(real));
+    }
+
+    [Fact]
+    public void No_staging_file_is_left_next_to_the_files_fleet_writes()
+    {
+        Config().WriteForAgent(Folder, "proj", "api", "main");
+
+        Assert.Equal(["mcp.json"], Directory.GetFiles(Path.Combine(Folder, ".pi")).Select(Path.GetFileName));
+        Assert.Equal(["trust.json"], Directory.GetFiles(Path.GetDirectoryName(TrustStore)!).Select(Path.GetFileName));
+    }
+
     [Fact]
     public void The_trust_store_follows_the_pi_agent_dir_and_falls_back_to_the_home_folder()
     {

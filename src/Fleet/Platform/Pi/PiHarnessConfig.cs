@@ -22,6 +22,10 @@ public sealed class PiHarnessConfig(
 
     private const string Servers = "mcpServers";
 
+    private const int WaitsForPi = 5;
+
+    private static readonly TimeSpan WaitForPi = TimeSpan.FromMilliseconds(20);
+
     private static readonly JsonSerializerOptions KeepAsWritten = new()
     {
         WriteIndented = true,
@@ -64,7 +68,7 @@ public sealed class PiHarnessConfig(
     {
         var configured = Edit(
             Path.Combine(folder, ProjectConfig),
-            text => WithServer(text, server(project, caller)));
+            text => WithServer(text ?? string.Empty, server(project, caller)));
 
         if (!configured.Succeeded)
         {
@@ -73,7 +77,9 @@ public sealed class PiHarnessConfig(
 
         WriteSkills(folder);
 
-        return Edit(trustStore, text => PiTrustStore.WithTrusted(text, PiTrustStore.Canonical(folder)));
+        var trusted = PiTrustStore.Canonical(folder);
+
+        return Edit(trustStore, text => PiTrustStore.WithTrusted(Settled(trustStore, text), trusted));
     }
 
     private static Result<string> WithServer(string text, McpServerEntry entry)
@@ -121,32 +127,55 @@ public sealed class PiHarnessConfig(
         }
     }
 
-    private static Result Edit(string path, Func<string, Result<string>> change)
+    private static string? Settled(string path, string? text)
     {
-        string text;
+        for (var attempt = 0; attempt < WaitsForPi && text is not null && string.IsNullOrWhiteSpace(text); attempt++)
+        {
+            Thread.Sleep(WaitForPi);
+
+            try
+            {
+                text = File.ReadAllText(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return text;
+            }
+        }
+
+        return text;
+    }
+
+    private static Result Edit(string link, Func<string?, Result<string>> change)
+    {
+        string path;
+        string? text;
 
         try
         {
-            text = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+            path = File.Exists(link)
+                ? File.ResolveLinkTarget(link, returnFinalTarget: true)?.FullName ?? link
+                : link;
+            text = File.Exists(path) ? File.ReadAllText(path) : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Result.Fail($"fleet could not read {path}: {e.Message}");
+            return Result.Fail($"fleet could not read {link}: {e.Message}");
         }
 
         var changed = change(text);
 
         if (!changed.Succeeded)
         {
-            return Result.Fail($"{path} was left untouched: {changed.Error}.");
+            return Result.Fail($"{link} was left untouched: {changed.Error}.");
         }
 
-        if (changed.Value == text && File.Exists(path))
+        if (changed.Value == text)
         {
             return Result.Ok();
         }
 
-        var staged = path + ".fleet-tmp";
+        var staged = $"{path}.{Guid.NewGuid():N}.fleet-tmp";
 
         try
         {
@@ -158,7 +187,7 @@ public sealed class PiHarnessConfig(
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             Discard(staged);
-            return Result.Fail($"fleet could not write {path}: {e.Message}");
+            return Result.Fail($"fleet could not write {link}: {e.Message}");
         }
     }
 

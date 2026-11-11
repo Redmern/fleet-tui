@@ -17,8 +17,13 @@ public static class PiTrustStore
     private static StringComparison PathComparison =>
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
-    public static Result<string> WithTrusted(string text, string folder)
+    public static Result<string> WithTrusted(string? text, string folder)
     {
+        if (text is not null && string.IsNullOrWhiteSpace(text))
+        {
+            return Result<string>.Fail("it is empty, which pi rejects; pi may be writing it right now");
+        }
+
         var read = Read(text);
 
         if (!read.Succeeded)
@@ -31,7 +36,7 @@ public static class PiTrustStore
 
         if (decided == true)
         {
-            return Result<string>.Ok(text);
+            return Result<string>.Ok(text ?? string.Empty);
         }
 
         if (decided == false)
@@ -49,7 +54,11 @@ public static class PiTrustStore
         return Result<string>.Ok(Written(decisions));
     }
 
-    public static string Canonical(string folder)
+    private const int DeepestLinkChain = 40;
+
+    public static string Canonical(string folder) => Canonical(folder, 0) ?? Path.GetFullPath(folder);
+
+    private static string? Canonical(string folder, int followed)
     {
         var full = Path.GetFullPath(folder);
         var root = Path.GetPathRoot(full) ?? string.Empty;
@@ -59,19 +68,31 @@ public static class PiTrustStore
             [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
             StringSplitOptions.RemoveEmptyEntries))
         {
-            current = Resolved(Path.Combine(current, part));
+            var resolved = Resolved(Path.Combine(current, part), followed);
+
+            if (resolved is null)
+            {
+                return null;
+            }
+
+            current = resolved;
         }
 
         return current;
     }
 
-    private static string Resolved(string path)
+    private static string? Resolved(string path, int followed)
     {
+        if (followed >= DeepestLinkChain)
+        {
+            return null;
+        }
+
         try
         {
             var target = new DirectoryInfo(path).ResolveLinkTarget(returnFinalTarget: true);
 
-            return target is null ? path : Canonical(target.FullName);
+            return target is null ? path : Canonical(target.FullName, followed + 1);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -79,11 +100,11 @@ public static class PiTrustStore
         }
     }
 
-    private static Result<Dictionary<string, bool?>> Read(string text)
+    private static Result<Dictionary<string, bool?>> Read(string? text)
     {
         var decisions = new Dictionary<string, bool?>(StringComparer.Ordinal);
 
-        if (string.IsNullOrWhiteSpace(text))
+        if (text is null)
         {
             return Result<Dictionary<string, bool?>>.Ok(decisions);
         }
@@ -110,7 +131,7 @@ public static class PiTrustStore
                     : entry.Value.GetBoolean();
             }
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
         {
             return Result<Dictionary<string, bool?>>.Fail("it is not JSON");
         }
