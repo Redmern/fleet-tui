@@ -44,6 +44,20 @@ public class TypedPromptTests
     }
 
     [Fact]
+    public async Task A_prompt_that_shows_late_is_not_typed_a_second_time()
+    {
+        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
+        var typing = TypedPrompt.UntilEchoedAsync(
+            _mux, pane, Prompt, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(30), Tick);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(150));
+        _mux.SetText(pane, "┃  " + Prompt);
+
+        Assert.True(await typing);
+        Assert.Equal([Prompt], _mux.SentTo(pane));
+    }
+
+    [Fact]
     public async Task A_pane_that_never_shows_the_prompt_stops_being_typed_into_after_the_limit()
     {
         var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });

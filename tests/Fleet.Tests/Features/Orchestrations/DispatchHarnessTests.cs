@@ -69,7 +69,7 @@ public sealed class DispatchHarnessTests : IDisposable
     public async Task A_kickoff_the_harness_did_not_show_is_typed_again_before_enter()
     {
         var handler = new DispatchHandler(
-            _mux, _store, _claude, TimeSpan.FromMilliseconds(40), TimeSpan.FromMilliseconds(1),
+            _mux, _store, _claude, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(50),
             settings: new Settings(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)),
             orchestrator: HarnessRegistry.Opencode with { InputRetry = TimeSpan.FromMilliseconds(1) });
 
@@ -101,18 +101,25 @@ public sealed class DispatchHarnessTests : IDisposable
     }
 
     [Fact]
-    public async Task Hosted_in_nvim_another_harness_runs_in_an_nvim_terminal_and_nvim_hands_it_the_kickoff()
+    public async Task With_subs_in_nvim_on_a_harness_whose_typed_kickoff_is_checked_still_starts_outside_nvim()
     {
         var reply = await Handler(subsInNvim: true).HandleAsync(Command("codex"), "t");
 
+        Assert.True(reply.Succeeded, reply.Error);
         var pane = Assert.Single(await _mux.ListPanesAsync());
-        var args = _mux.ArgsFor(pane.Id);
-        Assert.Equal(AgentHarness.Nvim, args[0]);
-        Assert.Contains("local fleet_cmd={'codex'} ", args[2], StringComparison.Ordinal);
+        Assert.Equal(["codex"], _mux.ArgsFor(pane.Id));
+        Assert.Equal([HarnessRegistry.Codex.Kickoff, "\r"], _mux.SentTo(pane.Id));
+        Assert.False(Assert.Single(_store.Saved).InNvim);
+    }
+
+    [Fact]
+    public async Task With_subs_in_nvim_on_a_claude_sub_is_still_hosted_in_nvim()
+    {
+        await Handler(subsInNvim: true).HandleAsync(Command("claude"), "t");
+
+        var pane = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
         Assert.Empty(_mux.SentTo(pane.Id));
-        Assert.Equal(
-            HarnessRegistry.Codex.Kickoff,
-            File.ReadAllText(Path.Combine(reply.Value!.Folder, ".fleet", AgentHarness.AgentInstructionFile)));
         Assert.True(Assert.Single(_store.Saved).InNvim);
     }
 
@@ -185,6 +192,18 @@ public sealed class DispatchHarnessTests : IDisposable
         Assert.True(reply.Succeeded, reply.Error);
         Assert.Equal("opencode", Assert.Single(starter.Started).Harness);
         Assert.Empty(_store.Saved);
+    }
+
+    [Theory]
+    [InlineData("nvim", "nvim")]
+    [InlineData("", "")]
+    public async Task A_direct_repository_agent_gets_the_harness_name_as_it_was_given(string given, string started)
+    {
+        var starter = new Starter();
+
+        await Handler(starter: starter).HandleAsync(Command(given) with { Repository = "api", Branch = "fix" }, "t");
+
+        Assert.Equal(started, Assert.Single(starter.Started).Harness);
     }
 
     private sealed class RecordingConfig(string name) : IHarnessConfig

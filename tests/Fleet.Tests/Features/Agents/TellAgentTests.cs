@@ -236,6 +236,29 @@ public sealed class TellAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task A_first_task_an_opencode_agent_dropped_is_typed_again_before_enter()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Opencode, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+
+        await Teller.DeliverAsync(agent, pane, "fix it", echoWithin: TimeSpan.FromMilliseconds(1300));
+
+        Assert.True(Prompts(pane) >= 2, string.Join(" | ", _mux.SentTo(pane)));
+        Assert.Equal("\r", _mux.SentTo(pane)[^1]);
+    }
+
+    [Fact]
+    public async Task A_follow_up_to_an_opencode_agent_is_typed_once()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Opencode, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+
+        await Teller.DeliverAsync(agent, pane, "fix it");
+
+        Assert.Equal([AgentHarness.AgentInstructionPrompt, "\r"], _mux.SentTo(pane));
+    }
+
+    [Fact]
     public void A_record_names_the_harness_its_pane_runs()
     {
         var nvimClaude = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false, HostInNvim: true);

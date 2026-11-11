@@ -96,7 +96,7 @@ public sealed class DispatchHandler(
 
         if (route.Target == DispatchTarget.RepoAgent)
         {
-            return await StartDirect(command, prompt, runs, ct).ConfigureAwait(false);
+            return await StartDirect(command, prompt, ct).ConfigureAwait(false);
         }
 
         var existing = store.List(command.ProjectName)
@@ -158,7 +158,8 @@ public sealed class DispatchHandler(
         await LeaveKickoff(folder, runs.Kickoff, ct).ConfigureAwait(false);
 
         var loaded = settings?.Load(command.ProjectName);
-        var inNvim = loaded?.SubOrchestratorsHostedInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
+        var inNvim = runs.InputRetry == TimeSpan.Zero
+            && (loaded?.SubOrchestratorsHostedInNvim ?? SettingsDefaults.SubOrchestratorsInNvim);
         var launch = ClaudeLaunch.ForAgent(command.ProjectName, string.Empty, slug, orchestrator: true, models);
 
         var record = new AgentRecord(
@@ -253,7 +254,7 @@ public sealed class DispatchHandler(
     }
 
     private async Task<Result<DispatchReply>> StartDirect(
-        DispatchCommand command, string prompt, HarnessProfile runs, CancellationToken ct)
+        DispatchCommand command, string prompt, CancellationToken ct)
     {
         if (starter is null)
         {
@@ -272,7 +273,7 @@ public sealed class DispatchHandler(
                     repository,
                     branch,
                     prompt,
-                    string.IsNullOrWhiteSpace(command.Harness) ? string.Empty : runs.Name),
+                    command.Harness?.Trim() ?? string.Empty),
                 ct)
             .ConfigureAwait(false);
 
