@@ -10,6 +10,8 @@ public static class HarnessRegistry
 
     public const string CodexName = "codex";
 
+    public const string PiName = "pi";
+
     public const string EditorName = "nvim";
 
     public const string ResumeArgument = "--continue";
@@ -59,7 +61,16 @@ public static class HarnessRegistry
         InputRetry = TuiInputRetry,
     };
 
-    public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode, Codex];
+    public static HarnessProfile Pi { get; } = new(
+        PiName,
+        PiName,
+        [ResumeArgument],
+        new Dictionary<string, string>(),
+        "AGENTS.md",
+        HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
+        Path.Combine(".agents", "skills"));
+
+    public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode, Codex, Pi];
 
     public static IReadOnlyList<string> Selectable { get; } =
         [EditorName, .. Profiles.Select(p => p.Name)];
