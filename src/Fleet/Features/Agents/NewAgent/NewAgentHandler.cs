@@ -3,6 +3,7 @@ using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Git;
+using Fleet.Ports.Harness;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
@@ -24,7 +25,8 @@ public sealed class NewAgentHandler(
     Func<string, bool>? subagentGuidance = null,
     IModelRouter? router = null,
     IFleetLog? log = null,
-    ISettingsStore? settings = null)
+    ISettingsStore? settings = null,
+    IHarnessConfigs? configs = null)
 {
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
@@ -110,6 +112,8 @@ public sealed class NewAgentHandler(
             agent.Worktree,
             (agent.RunsClaude || !AgentHarness.HostedInNvim(agent.Harness))
                 && subagentGuidance?.Invoke(command.ProjectName) == true);
+
+        configs?.For(agent.Harness).WriteForAgent(agent.Worktree, command.ProjectName, agent.Repository, agent.Branch);
 
         var active = (await mux.ListPanesAsync(ct).ConfigureAwait(false)).FirstOrDefault(p => p.IsActive);
 

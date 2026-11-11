@@ -1,5 +1,6 @@
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Harness;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
@@ -16,7 +17,8 @@ public sealed class OpenAgentHandler(
     bool subOrchestratorsInNvim = true,
     bool preferCaller = true,
     RoleModels? models = null,
-    bool agentsInNvim = true)
+    bool agentsInNvim = true,
+    IHarnessConfigs? configs = null)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -115,6 +117,11 @@ public sealed class OpenAgentHandler(
             project, agent.Repository, agent.Branch, orchestrator,
             agent.ModelsFrom(models ?? SettingsDefaults.Models, orchestrator),
             agent.Worktree);
+
+        if (!orchestrator)
+        {
+            configs?.For(hosted.Harness).WriteForAgent(agent.Worktree, project, agent.Repository, agent.Branch);
+        }
 
         var pane = await mux.SpawnAsync(
             new SpawnOptions

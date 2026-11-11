@@ -7,4 +7,7 @@ public sealed class ClaudeHarnessConfig : IHarnessConfig
 {
     public Result WriteForOrchestration(string folder, string project, string caller) =>
         ClaudeWiring.SyncFolder(project, folder, caller);
+
+    public Result WriteForAgent(string folder, string project, string repository, string branch) =>
+        ClaudeWiring.ApproveFolder(project, folder, repository, branch);
 }

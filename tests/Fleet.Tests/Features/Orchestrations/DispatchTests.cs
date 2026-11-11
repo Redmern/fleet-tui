@@ -12,6 +12,7 @@ using Fleet.Ports.Settings;
 using Fleet.Shared.Aidlc;
 using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -489,6 +490,28 @@ public sealed class DispatchTests : IDisposable
         Assert.True(Assert.Single(await mux.ListPanesAsync(), p => p.Id == visible).IsActive);
         Assert.DoesNotContain(mux.Calls, c => c == "show" || c.StartsWith("open-window", StringComparison.Ordinal));
         Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], mux.SentTo(sub.Id));
+    }
+
+    [Fact]
+    public async Task A_sub_of_another_harness_gets_its_instruction_file_and_a_kickoff_naming_it()
+    {
+        var opencode = HarnessRegistry.Opencode;
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            settings: new FakeSettingsStore(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)),
+            orchestrator: opencode);
+
+        var reply = await handler.HandleAsync(Command("do the thing"), "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        var folder = reply.Value!.Folder;
+        Assert.True(File.Exists(Path.Combine(folder, "AGENTS.md")));
+        Assert.False(File.Exists(Path.Combine(folder, "CLAUDE.md")));
+        Assert.Equal(
+            opencode.Kickoff,
+            File.ReadAllText(Path.Combine(folder, ".fleet", AgentHarness.AgentInstructionFile)));
+        var sub = Assert.Single(await _mux.ListPanesAsync());
+        Assert.Equal([opencode.Kickoff, "\r"], _mux.SentTo(sub.Id));
     }
 
     [Fact]

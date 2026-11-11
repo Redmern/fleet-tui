@@ -481,7 +481,7 @@ public static class DashboardWiring
 
         var spawner = new NewAgentHandler(
             git, mux, agents, name => settings.Load(name).Models, name => settings.Load(name).SubagentGuidance,
-            settings: settings);
+            settings: settings, configs: HarnessRegistration.NonClaudeConfigs());
         var hider = new HideAgentHandler(mux, agents);
         var editor = new OpenEditorHandler(mux, Adapters.EditorLauncher());
         var branches = new ListBranchesHandler(git);
@@ -533,7 +533,7 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim)
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim, configs: HarnessRegistration.NonClaudeConfigs())
                 .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 

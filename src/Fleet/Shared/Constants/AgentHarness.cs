@@ -1,12 +1,15 @@
+using Fleet.Shared.Harness;
 using Fleet.Shared.Keybinds;
 
 namespace Fleet.Shared.Constants;
 
 public static class AgentHarness
 {
-    public const string Claude = "claude";
+    public const string Claude = HarnessRegistry.ClaudeName;
 
-    public const string Nvim = "nvim";
+    public const string Opencode = HarnessRegistry.OpencodeName;
+
+    public const string Nvim = HarnessRegistry.EditorName;
 
     public const string Orchestrator = "orchestrator";
 
@@ -134,17 +137,19 @@ public static class AgentHarness
         bool resume, bool inNvim = true, ClaudeLaunch? launch = null) =>
         inNvim
             ? [Nvim, "-c", NvimStartupClaudeOnly(NvimArguments(ClaudeArguments(resume, launch)))]
-            : [Claude, .. ClaudeArguments(resume, launch)];
+            : HarnessRegistry.Claude.Launch(ClaudeArguments(resume, launch));
 
-    public static IReadOnlyList<string> Resumed(IReadOnlyList<string> command) => command switch
-    {
-        [Claude, ..] when !command.Contains(ResumeArgument) => [Claude, ResumeArgument, .. command.Skip(1)],
-        [Nvim, "-c", var startup]
-            when startup.Contains(ClaudeCodeCall, StringComparison.Ordinal)
-                && !startup.Contains(ClaudeCodeCall + " " + ResumeArgument, StringComparison.Ordinal) =>
-            [Nvim, "-c", startup.Replace(ClaudeCodeCall, ClaudeCodeCall + " " + ResumeArgument, StringComparison.Ordinal)],
-        _ => command,
-    };
+    public static IReadOnlyList<string> Resumed(IReadOnlyList<string> command) =>
+        HarnessRegistry.Running(command)?.Resumed(command) ?? ResumedInNvim(command);
+
+    private static IReadOnlyList<string> ResumedInNvim(IReadOnlyList<string> command) =>
+        command.Count == 3
+        && command[0] == Nvim
+        && command[1] == "-c"
+        && command[2].Contains(ClaudeCodeCall, StringComparison.Ordinal)
+        && !command[2].Contains(ClaudeCodeCall + " " + ResumeArgument, StringComparison.Ordinal)
+            ? [Nvim, "-c", command[2].Replace(ClaudeCodeCall, ClaudeCodeCall + " " + ResumeArgument, StringComparison.Ordinal)]
+            : command;
 
     private static IReadOnlyList<string> ClaudeArguments(bool resume, ClaudeLaunch? launch) =>
         [.. resume ? [ResumeArgument] : Array.Empty<string>(), .. launch?.Arguments ?? []];
@@ -179,19 +184,13 @@ public static class AgentHarness
     public const string OrchestratorKickoff =
         "Read CLAUDE.md and TASK.md in your working directory, then begin.";
 
-    public const string ResumeArgument = "--continue";
+    public const string ResumeArgument = HarnessRegistry.ResumeArgument;
 
-    public static IReadOnlyDictionary<string, string> SessionPersistence { get; } =
-        new Dictionary<string, string>
-        {
-            ["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"] = "1",
-            ["CLAUDE_CODE_CHILD_SESSION"] = string.Empty,
-        };
+    public static IReadOnlyDictionary<string, string> SessionPersistence => HarnessRegistry.Claude.SpawnEnv;
 
     public static IReadOnlyDictionary<string, string> SpawnEnv(string harness, bool orchestratorInNvim = true) =>
-        CommandFor(harness, orchestratorInNvim: orchestratorInNvim)[0] == Claude
-            ? SessionPersistence
-            : new Dictionary<string, string>();
+        HarnessRegistry.Running(CommandFor(harness, orchestratorInNvim: orchestratorInNvim))?.SpawnEnv
+            ?? new Dictionary<string, string>();
 
     public const string NvimAppNameVariable = "NVIM_APPNAME";
 
@@ -209,7 +208,7 @@ public static class AgentHarness
 
     public static IReadOnlyList<string> All { get; } = [Nvim, Claude];
 
-    public static IReadOnlyList<string> Known { get; } = [Nvim, Claude, Orchestrator];
+    public static IReadOnlyList<string> Known => [.. HarnessRegistry.Selectable, Orchestrator];
 
     public static string Describe(string harness) => Normalize(harness);
 
@@ -237,13 +236,24 @@ public static class AgentHarness
     public static bool IsOrchestrator(string harness) => Normalize(harness) == Orchestrator;
 
     public static IReadOnlyList<string> CommandFor(
-        string harness, bool withClaude = false, bool orchestratorInNvim = true, ClaudeLaunch? launch = null) =>
-        Normalize(harness) switch
+        string harness, bool withClaude = false, bool orchestratorInNvim = true, ClaudeLaunch? launch = null)
+    {
+        var name = Normalize(harness);
+
+        if (name == Nvim)
         {
-            Nvim => [Nvim, "-c", withClaude ? NvimStartupWithClaude(NvimArguments(ClaudeArguments(false, launch))) : NvimStartup],
-            Orchestrator => OrchestratorCommand(resume: false, inNvim: orchestratorInNvim, launch),
-            _ => [Claude, .. ClaudeArguments(false, launch)],
-        };
+            return [Nvim, "-c", withClaude ? NvimStartupWithClaude(NvimArguments(ClaudeArguments(false, launch))) : NvimStartup];
+        }
+
+        if (name == Orchestrator)
+        {
+            return OrchestratorCommand(resume: false, inNvim: orchestratorInNvim, launch);
+        }
+
+        var profile = HarnessRegistry.For(name);
+
+        return profile.Launch(profile.TakesClaudeLaunch ? ClaudeArguments(false, launch) : []);
+    }
 
     public static string Normalize(string harness) =>
         Known.Contains(harness.Trim()) ? harness.Trim() : Nvim;
