@@ -52,6 +52,12 @@ public sealed class OpencodeHarnessConfig(
         return configured;
     }
 
+    private static readonly JsonDocumentOptions Jsonc = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
     private static Result WriteServer(string path, McpServerEntry entry)
     {
         JsonObject? root;
@@ -61,7 +67,7 @@ public sealed class OpencodeHarnessConfig(
             var text = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
             root = string.IsNullOrWhiteSpace(text)
                 ? new JsonObject { ["$schema"] = "https://opencode.ai/config.json" }
-                : JsonNode.Parse(text) as JsonObject;
+                : JsonNode.Parse(text, documentOptions: Jsonc) as JsonObject;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
         {

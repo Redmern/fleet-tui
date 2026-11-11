@@ -60,6 +60,21 @@ public sealed class OpencodeHarnessConfigTests : IDisposable
     }
 
     [Fact]
+    public void A_config_with_comments_and_trailing_commas_is_still_merged()
+    {
+        File.WriteAllText(
+            Path.Combine(_dir, "opencode.json"),
+            "{\n  // the team model\n  \"model\": \"anthropic/x\",\n}\n");
+
+        var written = Config().WriteForAgent(_dir, "proj", "api", "main");
+
+        Assert.True(written.Succeeded, written.Error);
+        var root = Written();
+        Assert.Equal("anthropic/x", root["model"]!.GetValue<string>());
+        Assert.NotNull(root["mcp"]!["fleet"]);
+    }
+
+    [Fact]
     public void A_config_that_is_not_json_is_left_alone_and_reported()
     {
         File.WriteAllText(Path.Combine(_dir, "opencode.json"), "{ not json");
