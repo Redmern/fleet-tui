@@ -931,14 +931,24 @@ writes the project-local MCP entry with `--caller` and the `fl-*` skills into
   "trusted"` in the user config. Launch overrides (`-c mcp_servers...`) were rejected:
   codex shows a trust prompt in an untrusted folder anyway, and the stored command has no
   caller. There is no TOML library (AOT), so `CodexToml` is a small line scanner that edits
-  only those two tables and refuses anything it does not fully understand.
+  only those two tables and refuses anything it does not fully understand. In an existing
+  `[mcp_servers.fleet]` it replaces `command` and `args`, adds the approval mode only when
+  there is none, and leaves every other line (user keys, sub-tables, comments) with its
+  own line ending. The first version removed the block up to the next header and lost
+  those.
 - pi: `.pi/mcp.json` in the Claude format with `exposure: "direct"` (pi's default hides MCP
   tools behind script calls), plus `"<real path>": true` in `<agent dir>/trust.json`.
   `--approve` on the command line was rejected: it would override a saved "do not trust".
 
 All three refuse to touch a file they cannot parse. codex and pi never override an
-explicit "untrusted" and write through a temp file and a move; opencode rewrites
-`opencode.json` in place. Trust entries pile up, one per
+explicit "untrusted". Their edits go through `Platform/Harness/HarnessFiles.Edit`: a
+process-wide lock and a lock file (in the temp folder, named by a hash of the path, so
+nothing is left next to the user's file) around read, change and write, then a uniquely
+named temp file and a move. Without it two agents started together both read the user
+config and the last move won. The trust path is `HarnessFiles.Canonical` for both
+(symlinks resolved); whether codex itself resolves symlinks before its lookup was not
+checked. opencode rewrites `opencode.json` in place: it is one file per folder with one
+writer. Trust entries pile up, one per
 folder; fleet does not remove them. A profile without a capability skips that step:
 there is no hooks or permission writer for the three, and `HarnessCheck.Degraded` turns
 the missing flags into the `fleet doctor` text.
@@ -956,7 +966,9 @@ command in an nvim terminal with the same instruction pump.
 side is a registered profile without `NativeMessaging`. `TellAgentHandler.RouteAsync`
 returns a `SendMessage` address only when the route is native and the target has an
 inbox; otherwise it writes `.fleet/instruction.md` and types the read prompt. The caller's
-harness comes from the MCP `--caller` and its record. `ReportStatusHandler` follows the
+harness comes from the MCP `--caller` and its record. A caller without a record is not
+native (`HarnessRoute.Unknown`): it may be a removed agent on any harness, and typing
+works for every target. `ReportStatusHandler` follows the
 same rule upward: native pairs keep `PeerMessage.TellOwner`; otherwise the composition
 root's `OwnerNotices` delivers a `[fleet] ...` line like a `tell_agent`: into the owner's
 `.fleet/instruction.md`, then the read prompt typed into its pane (or left to the nvim
@@ -980,7 +992,11 @@ that redraws while waiting never goes idle.
 server, which writes fleet's ready marker, seconds before its prompt takes keys, and the
 kickoff typed at the marker was lost. A fixed delay was not enough. So for a profile with
 `InputRetry` (opencode, codex, pi) `Ports/Mux/TypedPrompt.UntilEchoedAsync` types, reads
-the pane, and retypes until the first 16 characters show, then sends Enter. Claude has
+the pane, and retypes until the first 16 characters show, then sends Enter. "Show" means
+one more occurrence than the pane had before the first typing, so the same prompt from an
+earlier message is not taken for the echo. Before each retyping it sends ctrl+u, so a
+slow harness that took every typing has one copy in its input line (ctrl+u was not tried
+on the real CLIs). Claude has
 `InputRetry` zero and keeps one typing. The nvim pump has no such check, which is why a
 sub on these profiles is first started outside nvim (on reopen it follows the setting,
 unit-tested only). If the echo never shows, Enter is still

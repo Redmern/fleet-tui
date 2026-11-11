@@ -82,6 +82,11 @@ Not proven on a real binary (details: docs/DESIGN.md, "Harness profiles and mixe
 - A typed prompt arriving in codex; that pi's first prompt was typed exactly once.
 - Resume of a sub-orchestrator; a non-Claude sub reopened in nvim.
 - Two real harnesses talking to each other. The mixed team is proven with a fake mux and scripted harnesses only.
+- A `wait_for_agent` call that blocks for minutes in the MCP client of opencode, codex or pi.
+- Idle on a real TUI: the pane-quiet window is a fixed 120 s, and a screen that redraws a spinner or clock reads as working.
+- The ctrl+u fleet sends before it types a prompt again.
+
+Known weakness: a notice overwrites the owner's `.fleet/instruction.md`, so a late notice from a child can make an owner's own `done` look stale to `wait_for_agent`.
 
 Out of scope, not delivered:
 - A main orchestrator on another harness (scope item 4 says "any role"). The main pane, the head orchestrator and the dispatch hook stay Claude; it needs its own setting and unit.

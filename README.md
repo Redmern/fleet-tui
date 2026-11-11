@@ -989,9 +989,13 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   "Read .fleet/instruction.md in this folder and do what it says." into the pane, then
   Enter. A TUI that is still starting can drop typed keys, so for the first prompt of an
   opencode, codex or pi pane fleet types it, reads the pane, and types it again until the
-  pane shows it (for at most 60 seconds) before it sends Enter.
+  pane shows it (for at most 60 seconds) before it sends Enter. A prompt that was already
+  on the screen from an earlier message does not count, and before fleet types again it
+  sends ctrl+u to empty the input line, so a slow harness does not get the prompt twice.
 - *`tell_agent` is typed* whenever the caller or the target is not Claude: there is no
-  `SendMessage` address to hand out. Two Claude sessions keep using `SendMessage`.
+  `SendMessage` address to hand out. Two Claude sessions keep using `SendMessage`. A
+  caller fleet has no record of (an agent that was removed while its harness still runs)
+  also gets its message typed.
 - *`report` reaches the owner through its pane.* A `done` or `failed` is recorded and
   raises the desktop notification as always. When the reporter or its owner is not
   Claude, fleet also writes `[fleet] <repository>/<branch>: done — <summary> (check it
@@ -1020,8 +1024,11 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   dropped it.
 - Trust. codex and pi ignore a project's MCP config until the folder is trusted, and show
   a prompt that would swallow the typed task. fleet therefore adds one trust entry per
-  worktree and orchestration folder to your codex and pi user config, and never removes
-  it. A trusted folder also lets the harness load what the repository itself ships: for
+  worktree and orchestration folder to your codex and pi user config, under the folder's
+  real path (symlinks resolved), and never removes it. Agents started together take turns
+  on those two files, so no entry is lost. In a `.codex/config.toml` that already has a
+  `[mcp_servers.fleet]` table, fleet replaces `command` and `args` and keeps your other
+  keys, comments and line endings. A trusted folder also lets the harness load what the repository itself ships: for
   pi that includes `.pi/extensions`, which is code that runs inside pi, and
   `.pi/settings.json`; for codex the project's `.codex/config.toml`. fleet never
   overrides a folder you marked untrusted: the harness then starts without the fleet
@@ -1031,12 +1038,23 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
 - fleet passes no model, effort or session name to opencode, codex or pi: each uses its
   own defaults, whatever fleet's model settings say. A start-up prompt of
   the harness itself (login, update notice) can swallow the typed task.
-- Idle is read from the pane text, so a harness that redraws a clock or spinner while it
-  waits never goes idle. The 120 seconds are fixed.
+- Idle is read from the pane text only: a pane whose text has not changed for 120 seconds
+  is idle. The 120 seconds are fixed, not a setting. A harness that redraws a clock,
+  spinner or cursor while it waits keeps changing the text, so it reads as working and
+  never goes idle. This was tested with fake panes only.
+- `wait_for_agent` holds one MCP call open for up to 300 seconds by default and 3600 at
+  most. Whether the MCP clients of opencode, codex and pi wait that long was not tested;
+  a client that gives up earlier has to call the tool again with a shorter timeout.
+- The ctrl+u that empties the input line before a prompt is typed again was not tested
+  against the real CLIs.
 - In one test `stop_agent` left a codex process running next to the resumed one; this
   was not looked into.
 - A notice overwrites `.fleet/instruction.md` of the pane it goes to, like any
-  `tell_agent`.
+  `tell_agent`, so an instruction the owner had not read yet is gone. It also makes that
+  file newer: `wait_for_agent` takes a `done` that is older than the agent's last
+  instruction for a report on earlier work. So when a sub-orchestrator reports `done` and
+  a late notice from one of its own agents arrives after that, `wait_for_agent` on the sub
+  can keep waiting until its timeout; `list_subs` still shows the `done`.
 - What was checked against the real CLIs, and what was not, is in
   [docs/DESIGN.md](docs/DESIGN.md#harness-profiles-and-mixed-teams--2026-11-11).
 
