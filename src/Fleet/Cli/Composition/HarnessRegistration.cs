@@ -26,6 +26,9 @@ public static class HarnessRegistration
         },
         new NullHarnessConfig());
 
+    public static IHarnessConfig OrchestrationConfig(HarnessProfile profile) =>
+        profile == HarnessRegistry.Claude ? new ClaudeHarnessConfig() : NonClaudeConfigs().For(profile.Name);
+
     private static OpencodeHarnessConfig Opencode() => new(
         (project, caller) => McpRegistration.For(Adapters.Executable, project, caller),
         FleetSkills.Embedded(),
