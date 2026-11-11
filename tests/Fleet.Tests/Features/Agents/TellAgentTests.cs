@@ -247,6 +247,19 @@ public sealed class TellAgentTests : IDisposable
         Assert.Equal("\r", _mux.SentTo(pane)[^1]);
     }
 
+    [Theory]
+    [InlineData("codex")]
+    [InlineData("pi")]
+    public async Task A_claude_caller_types_into_an_agent_of_another_harness(string harness)
+    {
+        var agent = new AgentRecord(_root, "backend", "a", harness, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, new FixedInboxes(_root, "uds:pipe-a"));
+
+        Assert.Null(await teller.RouteAsync(agent, pane, "review the PR", typed: false, callerHarness: AgentHarness.Claude));
+        Assert.Equal([AgentHarness.AgentInstructionPrompt, "\r"], _mux.SentTo(pane));
+    }
+
     [Fact]
     public async Task A_follow_up_to_an_opencode_agent_is_typed_once()
     {

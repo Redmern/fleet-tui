@@ -59,6 +59,29 @@ public sealed class HarnessCheckTests
     }
 
     [Fact]
+    public void Every_registered_harness_names_its_own_install_command()
+    {
+        Assert.All(HarnessRegistry.Profiles, p => Assert.NotEqual(string.Empty, p.InstallHint));
+        Assert.Contains("@earendil-works/pi-coding-agent", SetupHints.For("pi"), StringComparison.Ordinal);
+        Assert.Contains("@openai/codex", SetupHints.For("codex"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_missing_pi_in_use_is_reported_with_its_install_command_in_setup_and_doctor()
+    {
+        var step = Assert.Single(
+            Handler("git", "nvim", "claude", "yazi").Inspect("/cfg", inUse: ["pi"]).Steps, s => s.Name == "pi");
+        var line = Assert.Single(
+            HarnessCheck.DoctorLines(_ => false, new Dictionary<string, int> { ["pi"] = 2 }),
+            l => l.StartsWith("pi", StringComparison.Ordinal));
+
+        Assert.Contains("@earendil-works/pi-coding-agent", step.Fix, StringComparison.Ordinal);
+        Assert.Contains("NOT FOUND", line, StringComparison.Ordinal);
+        Assert.Contains("2 agent(s)", line, StringComparison.Ordinal);
+        Assert.Contains("@earendil-works/pi-coding-agent", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Claude_has_no_degraded_capabilities()
     {
         Assert.Empty(HarnessCheck.Degraded(HarnessRegistry.Claude));

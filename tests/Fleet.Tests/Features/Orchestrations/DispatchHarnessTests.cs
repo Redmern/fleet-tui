@@ -42,6 +42,7 @@ public sealed class DispatchHarnessTests : IDisposable
     [Theory]
     [InlineData("opencode")]
     [InlineData("codex")]
+    [InlineData("pi")]
     public async Task A_sub_dispatched_with_a_harness_gets_that_harness_instruction_file_config_and_kickoff(
         string harness)
     {
@@ -87,6 +88,7 @@ public sealed class DispatchHarnessTests : IDisposable
         Assert.Equal(TimeSpan.Zero, HarnessRegistry.Claude.InputRetry);
         Assert.True(HarnessRegistry.Opencode.InputRetry > TimeSpan.Zero);
         Assert.True(HarnessRegistry.Codex.InputRetry > TimeSpan.Zero);
+        Assert.Equal(HarnessRegistry.Opencode.InputRetry, HarnessRegistry.Pi.InputRetry);
     }
 
     [Fact]
@@ -196,6 +198,7 @@ public sealed class DispatchHarnessTests : IDisposable
 
     [Theory]
     [InlineData("nvim", "nvim")]
+    [InlineData("pi", "pi")]
     [InlineData("", "")]
     public async Task A_direct_repository_agent_gets_the_harness_name_as_it_was_given(string given, string started)
     {

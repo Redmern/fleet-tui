@@ -245,6 +245,7 @@ public sealed class RestoreSessionTests : IDisposable
     [Theory]
     [InlineData("opencode", new[] { "opencode", "--continue" })]
     [InlineData("codex", new[] { "codex", "resume", "--last" })]
+    [InlineData("pi", new[] { "pi", "--continue" })]
     public void A_sub_orchestrator_of_another_harness_is_restored_with_its_profiles_resume_command(
         string harness, string[] resumed)
     {

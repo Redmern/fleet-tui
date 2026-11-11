@@ -58,6 +58,7 @@ public static class HarnessRegistry
         HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
         Path.Combine(".agents", "skills"))
     {
+        InstallHint = "npm install -g @openai/codex",
         InputRetry = TuiInputRetry,
     };
 
@@ -71,6 +72,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g @earendil-works/pi-coding-agent",
+        InputRetry = TuiInputRetry,
     };
 
     public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode, Codex, Pi];

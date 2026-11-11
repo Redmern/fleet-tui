@@ -21,6 +21,7 @@ public class AgentActivityTests
     [Theory]
     [InlineData("opencode", true)]
     [InlineData("codex", true)]
+    [InlineData("pi", true)]
     [InlineData("claude", false)]
     [InlineData("", false)]
     public void A_sub_orchestrator_is_watched_through_its_pane_when_its_own_harness_has_no_hooks(
