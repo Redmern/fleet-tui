@@ -14,6 +14,7 @@ public static class HarnessRegistration
         new Dictionary<string, IHarnessConfig>(StringComparer.Ordinal)
         {
             [HarnessRegistry.OpencodeName] = new NullHarnessConfig(),
+            [HarnessRegistry.CodexName] = new NullHarnessConfig(),
         },
         new ClaudeHarnessConfig());
 
@@ -21,6 +22,7 @@ public static class HarnessRegistration
         new Dictionary<string, IHarnessConfig>(StringComparer.Ordinal)
         {
             [HarnessRegistry.OpencodeName] = Opencode(),
+            [HarnessRegistry.CodexName] = CodexRegistration.Config(),
         },
         new NullHarnessConfig());
 
