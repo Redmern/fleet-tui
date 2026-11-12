@@ -69,7 +69,7 @@ public sealed class RestoreSessionTests : IDisposable
         await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
 
         await new RestoreSessionHandler(_mux).HandleAsync(
-            "techweb", ProjectRoot, [Agent("health", open: true) with { Claude = true }, Agent("notes", open: true)]);
+            "techweb", ProjectRoot, [Agent("health", open: true) with { Harness = AgentHarness.Claude, HostInNvim = true }, Agent("notes", open: true)]);
 
         var panes = await _mux.ListPanesAsync();
         var health = panes.Single(p => p.Cwd.EndsWith("health", StringComparison.Ordinal));
@@ -240,6 +240,31 @@ public sealed class RestoreSessionTests : IDisposable
                 resume: true,
                 launch: new ClaudeLaunch("techweb-sub-sub", new("sonnet", "medium"))),
             options.Args);
+    }
+
+    [Theory]
+    [InlineData("opencode", new[] { "opencode", "--continue" })]
+    [InlineData("codex", new[] { "codex", "resume", "--last" })]
+    public void A_sub_orchestrator_of_another_harness_is_restored_with_its_profiles_resume_command(
+        string harness, string[] resumed)
+    {
+        var worktree = Path.Combine(ProjectRoot, "orchestrations", "sub");
+        Directory.CreateDirectory(worktree);
+        var sub = new AgentRecord(
+            worktree, "orchestrations", "sub", AgentHarness.Orchestrator, string.Empty, false, false, true,
+            OrchestratorHarness: harness);
+
+        var bare = RestoreSessionHandler.Options("techweb", sub, "w7", subOrchestratorsInNvim: false);
+        var hosted = RestoreSessionHandler.Options("techweb", sub, "w7", subOrchestratorsInNvim: true);
+
+        Assert.Equal(resumed, bare.Args);
+        Assert.Empty(bare.Env);
+        Assert.Equal(AgentHarness.Nvim, hosted.Args[0]);
+        Assert.Contains(
+            "local fleet_cmd={" + string.Join(",", resumed.Select(a => $"'{a}'")) + "}",
+            hosted.Args[2],
+            StringComparison.Ordinal);
+        Assert.Empty(hosted.Env);
     }
 
     [Fact]

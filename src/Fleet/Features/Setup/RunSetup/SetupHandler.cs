@@ -13,12 +13,17 @@ public sealed class SetupHandler(Func<string, bool> onPath)
 
     public static readonly IReadOnlyList<string> Optional = [EditorChoice.VscodeCommand];
 
-    public SetupReport Inspect(string configDirectory, NvimSetup? nvim = null, Editor editor = Editor.Nvim)
+    public SetupReport Inspect(
+        string configDirectory,
+        NvimSetup? nvim = null,
+        Editor editor = Editor.Nvim,
+        IReadOnlyCollection<string>? inUse = null)
     {
         List<SetupStep> steps =
         [
             .. Required.Select(t => Tool(t, required: true)),
             .. Harness.Select(t => Tool(t, required: false)),
+            .. HarnessCheck.Extra(Harness).Select(p => HarnessCheck.Step(p, onPath(p.Binary), inUse?.Contains(p.Name) == true)),
             Code(editor),
             new("config", true, configDirectory),
             .. nvim is null ? [] : new[] { Nvim(nvim) },

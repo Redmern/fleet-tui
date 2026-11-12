@@ -63,12 +63,13 @@ public sealed class JsonAgentStore : IAgentStore
             Open = agent.Open,
             Owner = agent.Owner,
             Status = agent.Status,
-            Claude = agent.Claude,
+            HostInNvim = agent.HostInNvim,
             InNvim = agent.InNvim,
             Summary = agent.Summary,
             ReportedAt = agent.ReportedAt,
             Model = agent.Model?.Model,
             Effort = agent.Model?.Effort,
+            OrchestratorHarness = agent.OrchestratorHarness.Length == 0 ? null : agent.OrchestratorHarness,
         };
 
     public IReadOnlyList<AgentRecord> List(string project)
@@ -81,25 +82,33 @@ public sealed class JsonAgentStore : IAgentStore
         }
 
         return Read(file).Agents
-            .Select(a => new AgentRecord(
-                HomePath.Expand(a.Worktree),
-                a.Repository,
-                a.Branch,
-                a.Harness,
-                a.BaseRef,
-                a.RepositoryWasBare,
-                a.Hidden,
-                a.Open,
-                a.Owner,
-                a.Status,
-                a.Claude,
-                a.InNvim,
-                a.Summary,
-                a.ReportedAt,
-                a.Model is null ? null : new RoleModel(a.Model, a.Effort ?? ModelChoice.Inherit)))
+            .Select(Record)
             .OrderBy(a => a.Repository, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.Branch, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static AgentRecord Record(AgentEntry a)
+    {
+        var (harness, hostInNvim) = AgentRecord.Migrated(a.Harness, a.HostInNvim, a.Claude, a.Owner);
+
+        return new AgentRecord(
+            HomePath.Expand(a.Worktree),
+            a.Repository,
+            a.Branch,
+            harness,
+            a.BaseRef,
+            a.RepositoryWasBare,
+            a.Hidden,
+            a.Open,
+            a.Owner,
+            a.Status,
+            hostInNvim,
+            a.InNvim,
+            a.Summary,
+            a.ReportedAt,
+            a.Model is null ? null : new RoleModel(a.Model, a.Effort ?? ModelChoice.Inherit),
+            a.OrchestratorHarness ?? string.Empty);
     }
 
     public bool Remove(string project, string worktree)

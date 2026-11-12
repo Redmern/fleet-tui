@@ -38,6 +38,8 @@ public static class ToolArguments
 
     public const string Typed = "typed";
 
+    public const string Timeout = "timeout";
+
     public const string Remote = "remote";
 
     public const string Port = "port";

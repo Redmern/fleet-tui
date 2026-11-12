@@ -65,6 +65,9 @@ public sealed class SettingsFile
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LastHarness { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DefaultHarness { get; set; }
 }
 
 public sealed class JiraSettingsFile

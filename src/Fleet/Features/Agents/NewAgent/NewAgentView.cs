@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Fleet.Features.Agents.NewAgent.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Results;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
@@ -35,6 +36,7 @@ public static class NewAgentView
         var (repository, harness) = Preselect(prompt, lastRepo, lastHarness);
         var chosenBase = prompt.Repositories[repository].DefaultBranch;
         var branch = string.Empty;
+        var hostInNvim = false;
 
         void ChooseRepository()
         {
@@ -83,15 +85,18 @@ public static class NewAgentView
             var picked = FleetPicker.Choose(
                 app,
                 "Opens",
-                AgentHarness.All.Select(AgentHarness.Describe).ToList(),
+                Harnesses.Select(AgentHarness.Describe).ToList(),
                 keymap,
-                AgentHarness.All.ToList().IndexOf(harness));
+                Harnesses.ToList().IndexOf(harness));
 
             if (picked is not null)
             {
-                harness = AgentHarness.All[picked.Value];
+                harness = Harnesses[picked.Value];
+                hostInNvim = prompt.NvimAllowed && Hosted(harness, hostInNvim);
             }
         }
+
+        void ToggleHost() => hostInNvim = prompt.NvimAllowed && Toggled(harness, hostInNvim);
 
         void EditBranch()
         {
@@ -113,10 +118,12 @@ public static class NewAgentView
                 branch.Length == 0 ? "(base itself)" : branch,
                 Shown(chosenBase),
                 AgentHarness.Describe(harness),
+                prompt.NvimAllowed ? HostShown(harness, hostInNvim) : NvimOff,
                 ChooseRepository,
                 EditBranch,
                 ChooseBase,
-                ChooseHarness),
+                ChooseHarness,
+                ToggleHost),
             Create,
             "Empty branch works on the base; empty base cuts from the default branch.");
 
@@ -127,7 +134,8 @@ public static class NewAgentView
                 prompt.Repositories[repository].Directory,
                 branch,
                 chosenBase,
-                harness)
+                harness,
+                HostInNvim: Hosted(harness, hostInNvim))
             : null;
     }
 
@@ -177,8 +185,8 @@ public static class NewAgentView
             : remembered.Index;
 
         var fallback = AgentHarness.Normalize(prompt.Harness);
-        var harness = AgentHarness.All.Contains(lastHarness)
-            ? AgentHarness.HostedFor(lastHarness, AgentHarness.HostedInNvim(fallback))
+        var harness = Harnesses.Contains(lastHarness)
+            ? AgentHarness.HostedFor(lastHarness, prompt.NvimAllowed)
             : fallback;
 
         return (repository, harness);
@@ -189,16 +197,30 @@ public static class NewAgentView
         string branch,
         string from,
         string opens,
+        string inNvim,
         Action chooseRepository,
         Action editBranch,
         Action chooseBase,
-        Action chooseHarness) =>
+        Action chooseHarness,
+        Action toggleHost) =>
     [
         new(FleetIcons.Repo, "Repo", repository, chooseRepository),
         new(FleetIcons.Branch, "Branch", branch, editBranch),
         new(FleetIcons.Base, "Base", from, chooseBase),
         new(FleetIcons.Harness, "Opens", opens, chooseHarness),
+        new(FleetIcons.Harness, "In nvim", inNvim, toggleHost),
     ];
+
+    public static IReadOnlyList<string> Harnesses => HarnessRegistry.Selectable;
+
+    public const string NvimOff = "(off: the editor is not nvim)";
+
+    public static bool Hosted(string harness, bool hostInNvim) => hostInNvim && AgentHarness.RunsHarness(harness);
+
+    public static bool Toggled(string harness, bool hostInNvim) => AgentHarness.RunsHarness(harness) && !hostInNvim;
+
+    public static string HostShown(string harness, bool hostInNvim) =>
+        !AgentHarness.RunsHarness(harness) ? "(nvim is the editor)" : Hosted(harness, hostInNvim) ? "yes" : "no";
 
     private static string Shown(string branch) =>
         branch.Length == 0 ? DefaultBase : branch;

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Fleet.Features.Orchestrations.ReportStatus.Models;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Todos;
@@ -14,7 +15,9 @@ public sealed class ReportStatusHandler(
     IAgentStore store,
     Func<DateTimeOffset>? clock = null,
     IAgentInboxes? inboxes = null,
-    ITicketStatusSink? tickets = null)
+    ITicketStatusSink? tickets = null,
+    Func<OwnerNotice, CancellationToken, Task<bool>>? typeToOwner = null,
+    string mainHarness = AgentHarness.Claude)
 {
     private readonly Func<DateTimeOffset> _now = clock ?? (() => DateTimeOffset.UtcNow);
 
@@ -28,19 +31,43 @@ public sealed class ReportStatusHandler(
         var recorded = Record(project, root, caller, status, summary, out var reporter);
 
         if (!recorded.Succeeded
-            || inboxes is null
             || OrchestrationStatus.Normalize(status) is not (OrchestrationStatus.Done or OrchestrationStatus.Failed)
             || IsTopLevelSub(reporter!))
         {
             return recorded;
         }
 
-        var (name, folder) = OwnerOf(project, root, reporter!);
+        var line = recorded.Value!.ReplaceLineEndings(" ");
+        var notice = NoticeFor(project, root, reporter!, line)!;
 
-        return await inboxes.AddressAsync(folder, ct).ConfigureAwait(false) is { } address
-            ? Result<string>.Ok(
-                $"{recorded.Value}\n\n{PeerMessage.TellOwner(name, address, recorded.Value!.ReplaceLineEndings(" "))}")
-            : recorded;
+        if (HarnessRoute.Native(HarnessOf(reporter!), notice.Owner is null ? mainHarness : HarnessOf(notice.Owner)))
+        {
+            return inboxes is not null
+                   && await inboxes.AddressAsync(notice.Folder, ct).ConfigureAwait(false) is { } address
+                ? Result<string>.Ok($"{recorded.Value}\n\n{PeerMessage.TellOwner(notice.Name, address, line)}")
+                : recorded;
+        }
+
+        if (typeToOwner is null)
+        {
+            return recorded;
+        }
+
+        var told = await typeToOwner(notice, ct).ConfigureAwait(false);
+
+        return Result<string>.Ok($"{recorded.Value}\n\n{PeerMessage.OwnerTyped(notice.Name, told)}");
+    }
+
+    public OwnerNotice? NoticeFor(string project, string root, AgentRecord reporter, string line)
+    {
+        if (IsTopLevelSub(reporter))
+        {
+            return null;
+        }
+
+        var (owner, name, folder) = OwnerOf(project, root, reporter);
+
+        return new OwnerNotice(owner, name, folder, HarnessRoute.OwnerNotice(line));
     }
 
     private Result<string> Record(
@@ -104,16 +131,18 @@ public sealed class ReportStatusHandler(
     private static bool IsTopLevelSub(AgentRecord reporter) =>
         AgentHarness.IsOrchestrator(reporter.Harness) && reporter.Owner.Trim().Length == 0;
 
-    private (string Name, string Folder) OwnerOf(string project, string root, AgentRecord reporter)
+    private static string HarnessOf(AgentRecord record) => record.RunningHarness;
+
+    private (AgentRecord? Owner, string Name, string Folder) OwnerOf(string project, string root, AgentRecord reporter)
     {
         var owner = reporter.Owner.Trim().Length == 0 ? null : Find(project, reporter.Owner.Trim());
 
         return owner switch
         {
-            null => (SessionNames.MainOrchestrator(project), root),
+            null => (null, SessionNames.MainOrchestrator(project), root),
             _ when AgentHarness.IsOrchestrator(owner.Harness) =>
-                (SessionNames.SubOrchestrator(project, owner.Branch), owner.Worktree),
-            _ => (SessionNames.RepoAgent(project, owner.Repository, owner.Branch), owner.Worktree),
+                (owner, SessionNames.SubOrchestrator(project, owner.Branch), owner.Worktree),
+            _ => (owner, SessionNames.RepoAgent(project, owner.Repository, owner.Branch), owner.Worktree),
         };
     }
 }

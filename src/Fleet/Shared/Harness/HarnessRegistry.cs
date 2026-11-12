@@ -8,9 +8,13 @@ public static class HarnessRegistry
 
     public const string OpencodeName = "opencode";
 
+    public const string CodexName = "codex";
+
     public const string EditorName = "nvim";
 
     public const string ResumeArgument = "--continue";
+
+    private static readonly TimeSpan TuiInputRetry = TimeSpan.FromSeconds(1);
 
     public static HarnessProfile Claude { get; } = new(
         ClaudeName,
@@ -27,6 +31,7 @@ public static class HarnessRegistry
         Path.Combine(".claude", "skills"))
     {
         TakesClaudeLaunch = true,
+        InstallHint = "npm install -g @anthropic-ai/claude-code",
     };
 
     public static HarnessProfile Opencode { get; } = new(
@@ -36,9 +41,25 @@ public static class HarnessRegistry
         new Dictionary<string, string>(),
         "AGENTS.md",
         HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
-        Path.Combine(".agents", "skills"));
+        Path.Combine(".agents", "skills"))
+    {
+        InstallHint = "npm install -g opencode-ai",
+        InputRetry = TuiInputRetry,
+    };
 
-    public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode];
+    public static HarnessProfile Codex { get; } = new(
+        CodexName,
+        CodexName,
+        ["resume", "--last"],
+        new Dictionary<string, string>(),
+        "AGENTS.md",
+        HarnessCapabilities.Mcp | HarnessCapabilities.Skills,
+        Path.Combine(".agents", "skills"))
+    {
+        InputRetry = TuiInputRetry,
+    };
+
+    public static IReadOnlyList<HarnessProfile> Profiles { get; } = [Claude, Opencode, Codex];
 
     public static IReadOnlyList<string> Selectable { get; } =
         [EditorName, .. Profiles.Select(p => p.Name)];

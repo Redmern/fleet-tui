@@ -127,17 +127,19 @@ public sealed class NewAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task An_agent_the_main_orchestrator_starts_runs_claude_even_without_an_owner()
+    public async Task An_agent_the_main_orchestrator_starts_runs_claude_hosted_in_nvim_even_without_an_owner()
     {
         var directory = await RepositoryAsync();
 
         var result = await Handler().HandleAsync(
-            new NewAgentCommand("techweb", "backend", directory, "feature/health", string.Empty, AgentHarness.Nvim, Owner: string.Empty, Claude: true));
+            new NewAgentCommand("techweb", "backend", directory, "feature/health", string.Empty, AgentHarness.Claude, Owner: string.Empty, HostInNvim: true));
 
         Assert.True(result.Succeeded, result.Error);
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.Contains(_mux.ArgsFor(pane.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
-        Assert.True(Assert.Single(_store.Saved).Agent.Claude);
+        var saved = Assert.Single(_store.Saved).Agent;
+        Assert.Equal(AgentHarness.Claude, saved.Harness);
+        Assert.True(saved.HostInNvim);
     }
 
     [Fact]
@@ -149,18 +151,19 @@ public sealed class NewAgentTests : IDisposable
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.DoesNotContain(_mux.ArgsFor(pane.Id), arg => arg.Contains("ClaudeCode", StringComparison.Ordinal));
-        Assert.False(Assert.Single(_store.Saved).Agent.Claude);
+        var saved = Assert.Single(_store.Saved).Agent;
+        Assert.Equal(AgentHarness.Nvim, saved.Harness);
+        Assert.False(saved.RunsHarness);
     }
 
     [Fact]
-    public void A_record_from_before_the_flag_runs_claude_when_a_sub_orchestrator_owns_it()
+    public void A_record_from_before_the_flag_runs_claude_in_nvim_when_a_sub_orchestrator_owns_it()
     {
-        var legacy = new AgentRecord("C:/w", "api", "b", AgentHarness.Nvim, "origin/main", false);
-
-        Assert.False(legacy.RunsClaude);
-        Assert.True((legacy with { Owner = "sub-1" }).RunsClaude);
-        Assert.True((legacy with { Claude = true }).RunsClaude);
-        Assert.False((legacy with { Owner = "sub-1", Claude = false }).RunsClaude);
+        Assert.Equal((AgentHarness.Nvim, false), AgentRecord.Migrated(AgentHarness.Nvim, null, null, string.Empty));
+        Assert.Equal((AgentHarness.Claude, true), AgentRecord.Migrated(AgentHarness.Nvim, null, null, "sub-1"));
+        Assert.Equal((AgentHarness.Claude, true), AgentRecord.Migrated(AgentHarness.Nvim, null, true, string.Empty));
+        Assert.Equal((AgentHarness.Nvim, false), AgentRecord.Migrated(AgentHarness.Nvim, null, false, "sub-1"));
+        Assert.Equal((AgentHarness.Nvim, false), AgentRecord.Migrated(AgentHarness.Nvim, false, true, "sub-1"));
     }
 
     [Fact]
@@ -453,7 +456,7 @@ public sealed class NewAgentTests : IDisposable
         var directory = await RepositoryAsync();
 
         await new NewAgentHandler(new GitRunner(), _mux, _store, subagentGuidance: _ => true).HandleAsync(
-            new NewAgentCommand("techweb", "backend", directory, "feat/direct", "main", AgentHarness.Nvim, "main", Claude: true));
+            new NewAgentCommand("techweb", "backend", directory, "feat/direct", "main", AgentHarness.Claude, "main", HostInNvim: true));
 
         var pane = Assert.Single(await _mux.ListPanesAsync());
 
@@ -630,10 +633,11 @@ public sealed class NewAgentTests : IDisposable
         var settings = new FakeSettings(SettingsConfig.Default.WithEditor(Editor.Vscode));
 
         var result = await new NewAgentHandler(new GitRunner(), _mux, _store, settings: settings)
-            .HandleAsync(Command(directory, "feature/x") with { Harness = AgentHarness.Nvim, Claude = true });
+            .HandleAsync(Command(directory, "feature/x") with { Harness = AgentHarness.Claude, HostInNvim = true });
 
         Assert.True(result.Succeeded, result.Error);
         Assert.Equal(AgentHarness.Claude, Assert.Single(_store.Saved).Agent.Harness);
+        Assert.False(Assert.Single(_store.Saved).Agent.HostInNvim);
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.Equal(AgentHarness.Claude, _mux.ArgsFor(pane.Id)[0]);
         Assert.Equal(AgentHarness.SessionPersistence, _mux.EnvFor(pane.Id));
@@ -646,10 +650,10 @@ public sealed class NewAgentTests : IDisposable
         var settings = new FakeSettings(SettingsConfig.Default);
 
         var result = await new NewAgentHandler(new GitRunner(), _mux, _store, settings: settings)
-            .HandleAsync(Command(directory, "feature/x") with { Harness = AgentHarness.Nvim, Claude = true });
+            .HandleAsync(Command(directory, "feature/x") with { Harness = AgentHarness.Claude, HostInNvim = true });
 
         Assert.True(result.Succeeded, result.Error);
-        Assert.Equal(AgentHarness.Nvim, Assert.Single(_store.Saved).Agent.Harness);
+        Assert.True(Assert.Single(_store.Saved).Agent.HostedInNvim);
         var pane = Assert.Single(await _mux.ListPanesAsync());
         Assert.Equal(AgentHarness.Nvim, _mux.ArgsFor(pane.Id)[0]);
     }
@@ -717,5 +721,14 @@ public sealed class NewAgentTests : IDisposable
         public void Write(string line) => Lines.Add(line);
 
         public IReadOnlyList<string> Tail(int lines) => Lines.TakeLast(lines).ToList();
+    }
+
+    [Theory]
+    [InlineData("claude", true, "nvim")]
+    [InlineData("claude", false, "claude")]
+    [InlineData("opencode", false, "opencode")]
+    public void The_remembered_harness_keeps_reading_nvim_for_an_agent_hosted_in_nvim(string harness, bool host, string expected)
+    {
+        Assert.Equal(expected, NewAgentHandler.Remembered(new NewAgentCommand("p", "r", "/r", "b", "", harness, HostInNvim: host)));
     }
 }

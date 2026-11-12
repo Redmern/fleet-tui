@@ -74,8 +74,9 @@ public static class McpTools
                 false)),
         Spec(
             HarnessTool.TellAgent,
-            "Send an instruction to a running agent's Claude. When that Claude takes cross-session messages, "
-            + "the result names its address and you send the instruction with SendMessage; otherwise fleet types it in.",
+            "Send an instruction to a running agent. When you and the agent are both Claude and it takes "
+            + "cross-session messages, the result names its address and you send the instruction with SendMessage; "
+            + "otherwise fleet types it into the agent's pane.",
             Repository,
             Branch,
             new ToolParam(ToolArguments.Message, "string", "The instruction to send.", true),
@@ -141,6 +142,13 @@ public static class McpTools
                 "Optional: true for research; the sub-orchestrator does it itself without repository agents.",
                 false),
             new ToolParam(
+                ToolArguments.Harness,
+                "string",
+                $"Optional: the harness the sub-orchestrator (or the repository agent) runs "
+                + $"({string.Join(", ", HarnessRegistry.Profiles.Select(p => p.Name))}); defaults to claude "
+                + "for a sub-orchestrator and to the project's agent harness for a repository agent.",
+                false),
+            new ToolParam(
                 ToolArguments.Profile,
                 "string",
                 "Optional Ai-DLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this. Used only when Ai-DLC mode is on; in manual mode only a prefix applies Ai-DLC.",
@@ -174,6 +182,18 @@ public static class McpTools
             + "a new task or follow-up, done only when it is fully implemented and verified, failed if you cannot finish it.",
             new ToolParam(ToolArguments.Status, "string", "working, done, or failed.", true),
             new ToolParam(ToolArguments.Summary, "string", "A one-line summary.", false)),
+        Spec(
+            HarnessTool.WaitForAgent,
+            "Wait until an agent reports done or failed, or goes idle (no pane output for a while), then say which. "
+            + "Works for every harness; use it instead of polling list_agents. For a sub-orchestrator, leave out "
+            + "repository and pass its slug as branch.",
+            new ToolParam(ToolArguments.Repository, "string", "The repository name; empty for a sub-orchestrator.", false),
+            new ToolParam(ToolArguments.Branch, "string", "The agent's branch, or the sub-orchestrator's slug.", true),
+            new ToolParam(
+                ToolArguments.Timeout,
+                "integer",
+                "Optional: seconds to wait at most (default 300, at most 3600). When it runs out, call it again.",
+                false)),
         Spec(
             HarnessTool.ListForwards,
             "List web app ports forwarded over fleet's ssh links (with their localhost URL) and listening ports "

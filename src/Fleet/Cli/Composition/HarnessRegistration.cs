@@ -14,6 +14,7 @@ public static class HarnessRegistration
         new Dictionary<string, IHarnessConfig>(StringComparer.Ordinal)
         {
             [HarnessRegistry.OpencodeName] = new NullHarnessConfig(),
+            [HarnessRegistry.CodexName] = new NullHarnessConfig(),
         },
         new ClaudeHarnessConfig());
 
@@ -21,8 +22,12 @@ public static class HarnessRegistration
         new Dictionary<string, IHarnessConfig>(StringComparer.Ordinal)
         {
             [HarnessRegistry.OpencodeName] = Opencode(),
+            [HarnessRegistry.CodexName] = CodexRegistration.Config(),
         },
         new NullHarnessConfig());
+
+    public static IHarnessConfig OrchestrationConfig(HarnessProfile profile) =>
+        profile == HarnessRegistry.Claude ? new ClaudeHarnessConfig() : NonClaudeConfigs().For(profile.Name);
 
     private static OpencodeHarnessConfig Opencode() => new(
         (project, caller) => McpRegistration.For(Adapters.Executable, project, caller),

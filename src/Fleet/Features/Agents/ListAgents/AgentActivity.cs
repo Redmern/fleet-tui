@@ -1,4 +1,7 @@
+using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Status;
 using Fleet.Shared.Status.Enums;
 
 namespace Fleet.Features.Agents.ListAgents;
@@ -22,6 +25,22 @@ public static class AgentActivity
         AgentState.Blocked when Classify(paneText) == Working && !Prompting(paneText) => AgentState.Working,
         _ => state,
     };
+
+    public static bool WatchedByPane(AgentRecord agent) =>
+        HarnessRegistry.Find(agent.RunningHarness) is { } profile
+        && !profile.Has(HarnessCapabilities.Hooks);
+
+    public static string Quiet(string folder, string paneText, DateTime now, TimeSpan? window = null)
+    {
+        if (paneText.Trim().Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var mark = PaneQuiet.Observe(folder, paneText, now);
+
+        return PaneQuiet.Quiet(mark, now, window ?? PaneQuiet.QuietAfter) ? Idle : Working;
+    }
 
     public static bool NeedsPane(AgentState state) => state is AgentState.Stalled or AgentState.Blocked;
 

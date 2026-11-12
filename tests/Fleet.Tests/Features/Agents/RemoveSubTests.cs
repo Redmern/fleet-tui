@@ -89,8 +89,8 @@ public sealed class RemoveSubTests : IDisposable
         await new GitRunner().RunAsync(_container, ["worktree", "add", "-b", branch, slug, "main"]);
 
         var child = new AgentRecord(
-            Path.Combine(_container, slug), "backend", branch, AgentHarness.Nvim, "main", true,
-            Owner: owner, Claude: null);
+            Path.Combine(_container, slug), "backend", branch, AgentHarness.Claude, "main", true,
+            Owner: owner, HostInNvim: true);
 
         _store.Save(Project, child);
 
@@ -223,7 +223,8 @@ public sealed class RemoveSubTests : IDisposable
         var stored = Stored(child)!;
 
         Assert.Equal(string.Empty, stored.Owner);
-        Assert.True(stored.RunsClaude);
+        Assert.Equal(AgentHarness.Claude, stored.Harness);
+        Assert.True(stored.HostInNvim);
     }
 
     [Fact]

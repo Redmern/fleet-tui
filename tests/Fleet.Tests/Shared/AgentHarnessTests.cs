@@ -38,7 +38,7 @@ public class AgentHarnessTests
     [Fact]
     public void The_setting_does_not_change_other_harnesses()
     {
-        foreach (var harness in AgentHarness.All)
+        foreach (var harness in Fleet.Shared.Harness.HarnessRegistry.Selectable)
         {
             Assert.Equal(
                 AgentHarness.CommandFor(harness),

@@ -51,6 +51,17 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_default_agent_harness_round_trips_and_is_not_written_while_auto()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+        Assert.DoesNotContain("defaultHarness", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")), StringComparison.OrdinalIgnoreCase);
+
+        Store.Save("techweb", SettingsConfig.Default.WithDefaultHarness("opencode"));
+
+        Assert.Equal("opencode", Store.Load("techweb").DefaultAgentHarness);
+    }
+
+    [Fact]
     public void No_last_repository_is_stored_until_one_is_used()
     {
         Store.Save("techweb", SettingsConfig.Default);

@@ -638,7 +638,7 @@ public sealed class HeadService(HeadDeps deps, HeadTiming? timing = null)
     {
         var what = AgentHarness.IsOrchestrator(agent.Harness)
             ? $"sub-orchestrator {agent.Branch}"
-            : $"{agent.Repository}/{agent.Branch}  {AgentHarness.Describe(agent.Harness)}";
+            : $"{agent.Repository}/{agent.Branch}  {AgentHarness.Describe(agent.Harness, agent.HostInNvim)}";
 
         var state = agent.Status.Length > 0 ? agent.Status : agent.Open ? "open" : "stopped";
 

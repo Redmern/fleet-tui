@@ -49,6 +49,24 @@ public class OrchestrationTextTests
     }
 
     [Fact]
+    public void A_claude_brief_also_says_how_to_wait_for_an_agent_that_is_not_claude()
+    {
+        var text = OrchestrationText.Instructions(Brief);
+
+        Assert.Contains("wait_for_agent", text);
+        Assert.Contains("[fleet]", text);
+    }
+
+    [Fact]
+    public void A_brief_for_a_harness_without_SendMessage_waits_with_wait_for_agent()
+    {
+        var text = OrchestrationText.Instructions(Brief, nativeMessaging: false);
+
+        Assert.Contains(OrchestrationText.WaitingForAgentsTyped, text);
+        Assert.DoesNotContain("notify_when_idle", text);
+    }
+
+    [Fact]
     public void The_header_and_reporting_sections_stay_fixed_regardless_of_the_override()
     {
         var text = OrchestrationText.Instructions(Brief, "Custom rules here.");

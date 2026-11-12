@@ -50,6 +50,7 @@ using Fleet.Platform.Uninstall;
 using Fleet.Platform.Uninstall.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -131,10 +132,29 @@ public static class Adapters
     {
         var settings = Settings().Load(project);
 
-        return AgentHarness.CommandFor(
-            AgentHarness.HostedFor(agent.Harness, settings.HostsInNvim),
-            orchestratorInNvim: settings.SubOrchestratorsHostedInNvim)[0];
+        if (AgentHarness.IsOrchestrator(agent.Harness))
+        {
+            IReadOnlyList<string> needed =
+            [
+                agent.OrchestratorCommand(resume: false, settings.SubOrchestratorsHostedInNvim)[0],
+                agent.OrchestratorProfile.Binary,
+            ];
+
+            return agent.OrchestratorProfile.TakesClaudeLaunch
+                ? needed[0]
+                : needed.FirstOrDefault(b => !OnPath(b)) ?? needed[0];
+        }
+
+        var hosted = agent.HostedFor(settings.HostsInNvim);
+        var binaries = hosted.Binaries();
+
+        return HarnessRegistry.For(hosted.Harness).TakesClaudeLaunch
+            ? binaries[0]
+            : binaries.FirstOrDefault(b => !OnPath(b)) ?? binaries[0];
     }
+
+    public static IReadOnlyDictionary<string, int> HarnessesInUse() =>
+        HarnessCheck.InUse(Projects().List().SelectMany(p => Agents().List(p.Name)));
 
     public static RoleModels Models(string project) => Settings().Load(project).Models;
 

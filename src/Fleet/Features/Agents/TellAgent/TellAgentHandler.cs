@@ -3,6 +3,8 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
+using Fleet.Shared.Messaging;
 
 namespace Fleet.Features.Agents.TellAgent;
 
@@ -13,12 +15,20 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
     public static bool PumpedByNvim(AgentRecord agent) =>
         AgentHarness.IsOrchestrator(agent.Harness)
             ? agent.StartedInNvim
-            : AgentHarness.HostedInNvim(agent.Harness) && agent.StartedInNvim;
+            : agent.HostedInNvim && agent.StartedInNvim;
+
+    public static string HarnessOf(AgentRecord agent) => agent.RunningHarness;
 
     public async Task<string?> RouteAsync(
-        AgentRecord agent, PaneId pane, string message, bool typed, CancellationToken ct = default)
+        AgentRecord agent,
+        PaneId pane,
+        string message,
+        bool typed,
+        string callerHarness = AgentHarness.Claude,
+        CancellationToken ct = default)
     {
         if (!typed
+            && HarnessRoute.Native(callerHarness, HarnessOf(agent))
             && inboxes is not null
             && await inboxes.AddressAsync(agent.Worktree, ct).ConfigureAwait(false) is { } address)
         {
@@ -30,20 +40,44 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
         return null;
     }
 
-    public async Task DeliverAsync(AgentRecord agent, PaneId pane, string message, CancellationToken ct = default)
+    public Task DeliverAsync(
+        AgentRecord agent,
+        PaneId pane,
+        string message,
+        CancellationToken ct = default,
+        TimeSpan? echoWithin = null) =>
+        TypeAsync(agent, pane, InstructionFor(agent, message), echoWithin ?? TimeSpan.Zero, ct);
+
+    public Task NotifyAsync(AgentRecord owner, PaneId pane, string notice, CancellationToken ct = default) =>
+        TypeAsync(owner, pane, notice, TimeSpan.Zero, ct);
+
+    private async Task TypeAsync(
+        AgentRecord agent, PaneId pane, string instruction, TimeSpan echoWithin, CancellationToken ct)
     {
         var dir = Path.Combine(agent.Worktree, ".fleet");
         Directory.CreateDirectory(dir);
         await File.WriteAllTextAsync(
-            Path.Combine(dir, AgentHarness.AgentInstructionFile), InstructionFor(agent, message), ct).ConfigureAwait(false);
+            Path.Combine(dir, AgentHarness.AgentInstructionFile), instruction, ct).ConfigureAwait(false);
 
         if (PumpedByNvim(agent))
         {
             return;
         }
 
-        await mux.SendTextAsync(pane, AgentHarness.AgentInstructionPrompt, ct).ConfigureAwait(false);
-        await Task.Delay(_enterDelay, ct).ConfigureAwait(false);
+        var retry = HarnessRegistry.For(agent.RunningHarness).InputRetry;
+
+        if (retry > TimeSpan.Zero && echoWithin > TimeSpan.Zero)
+        {
+            await TypedPrompt
+                .UntilEchoedAsync(mux, pane, AgentHarness.AgentInstructionPrompt, retry, echoWithin, _enterDelay, ct)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await mux.SendTextAsync(pane, AgentHarness.AgentInstructionPrompt, ct).ConfigureAwait(false);
+            await Task.Delay(_enterDelay, ct).ConfigureAwait(false);
+        }
+
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 

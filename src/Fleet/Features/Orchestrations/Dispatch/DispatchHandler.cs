@@ -38,7 +38,8 @@ public sealed class DispatchHandler(
     IAgentStarter? starter = null,
     IModelRouter? router = null,
     IFleetLog? log = null,
-    HarnessProfile? orchestrator = null)
+    HarnessProfile? orchestrator = null,
+    IHarnessConfigs? configs = null)
 {
     private readonly HarnessProfile _profile = orchestrator ?? HarnessRegistry.Claude;
 
@@ -54,6 +55,20 @@ public sealed class DispatchHandler(
         if (trimmed.Length == 0)
         {
             return Result<DispatchReply>.Fail(DispatchNote.Nothing);
+        }
+
+        var runs = _profile;
+
+        if (!string.IsNullOrWhiteSpace(command.Harness))
+        {
+            var required = HarnessRegistry.Require(command.Harness);
+
+            if (!required.Succeeded)
+            {
+                return Result<DispatchReply>.Fail(DispatchNote.UnknownHarness(required.Error!));
+            }
+
+            runs = HarnessRegistry.For(required.Value!);
         }
 
         var config = settings?.Load(command.ProjectName) ?? SettingsConfig.Default;
@@ -127,16 +142,24 @@ public sealed class DispatchHandler(
         }
 
         File.WriteAllText(
-            OrchestrationPaths.InstructionsFile(folder, _profile),
-            OrchestrationText.Instructions(brief, howYouWork, process, route.Research, config.SubagentGuidance));
+            OrchestrationPaths.InstructionsFile(folder, runs),
+            OrchestrationText.Instructions(
+                brief,
+                howYouWork,
+                process,
+                route.Research,
+                config.SubagentGuidance,
+                runs.Has(HarnessCapabilities.NativeMessaging)));
         File.WriteAllText(OrchestrationPaths.TaskFile(folder), OrchestrationText.Task(brief));
 
-        harness.WriteForOrchestration(folder, command.ProjectName, slug);
+        var written = (runs == _profile ? harness : configs?.For(runs.Name) ?? harness)
+            .WriteForOrchestration(folder, command.ProjectName, slug);
 
-        await LeaveKickoff(folder, ct).ConfigureAwait(false);
+        await LeaveKickoff(folder, runs.Kickoff, ct).ConfigureAwait(false);
 
         var loaded = settings?.Load(command.ProjectName);
-        var inNvim = loaded?.SubOrchestratorsHostedInNvim ?? SettingsDefaults.SubOrchestratorsInNvim;
+        var inNvim = runs.InputRetry == TimeSpan.Zero
+            && (loaded?.SubOrchestratorsHostedInNvim ?? SettingsDefaults.SubOrchestratorsInNvim);
         var launch = ClaudeLaunch.ForAgent(command.ProjectName, string.Empty, slug, orchestrator: true, models);
 
         var record = new AgentRecord(
@@ -151,12 +174,15 @@ public sealed class DispatchHandler(
             Owner: command.Caller,
             Status: OrchestrationStatus.Working,
             InNvim: inNvim,
-            Model: routed is not null && ModelRouting.IsValid(routed) ? routed : null);
+            Model: routed is not null && ModelRouting.IsValid(routed) ? routed : null,
+            OrchestratorHarness: runs == HarnessRegistry.Claude ? string.Empty : runs.Name);
 
         store.Save(command.ProjectName, record);
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
         var active = panes.FirstOrDefault(p => p.IsActive);
+
+        var args = AgentHarness.OrchestratorCommand(runs, resume: false, inNvim, launch);
 
         var pane = await mux.SpawnAsync(
             HiddenSpawn.Into(
@@ -165,8 +191,8 @@ public sealed class DispatchHandler(
                 new SpawnOptions
                 {
                     Cwd = folder,
-                    Args = AgentHarness.CommandFor(AgentHarness.Orchestrator, orchestratorInNvim: inNvim, launch: launch),
-                    Env = AgentHarness.SpawnEnv(AgentHarness.Orchestrator, inNvim),
+                    Args = args,
+                    Env = AgentHarness.SpawnEnvFor(args),
                 }),
             ct).ConfigureAwait(false);
 
@@ -187,11 +213,12 @@ public sealed class DispatchHandler(
 
         if (!inNvim)
         {
-            await TypeKickoff(folder, pane, ct).ConfigureAwait(false);
+            await TypeKickoff(folder, pane, runs, ct).ConfigureAwait(false);
         }
 
         var note = DispatchNote.Dispatched(slug, aidlc?.Profile)
-            + (string.IsNullOrWhiteSpace(command.Repository) ? string.Empty : DispatchNote.RepositoryLeftToSub(route.Research));
+            + (string.IsNullOrWhiteSpace(command.Repository) ? string.Empty : DispatchNote.RepositoryLeftToSub(route.Research))
+            + (written.Succeeded ? string.Empty : DispatchNote.ConfigNotWritten(runs.Name, written.Error!));
 
         return Result<DispatchReply>.Ok(new DispatchReply(slug, folder, note));
     }
@@ -240,7 +267,14 @@ public sealed class DispatchHandler(
             : command.Branch.Trim();
 
         var started = await starter
-            .StartAsync(new AgentStart(command.ProjectName, repository, branch, prompt), ct)
+            .StartAsync(
+                new AgentStart(
+                    command.ProjectName,
+                    repository,
+                    branch,
+                    prompt,
+                    command.Harness?.Trim() ?? string.Empty),
+                ct)
             .ConfigureAwait(false);
 
         if (!started.Succeeded)
@@ -321,7 +355,7 @@ public sealed class DispatchHandler(
         }
     }
 
-    private async Task LeaveKickoff(string folder, CancellationToken ct)
+    private static async Task LeaveKickoff(string folder, string kickoff, CancellationToken ct)
     {
         var inbox = Path.Combine(folder, ".fleet");
         Directory.CreateDirectory(inbox);
@@ -331,12 +365,12 @@ public sealed class DispatchHandler(
 
         await File.WriteAllTextAsync(
                 Path.Combine(inbox, AgentHarness.AgentInstructionFile),
-                _profile.Kickoff,
+                kickoff,
                 ct)
             .ConfigureAwait(false);
     }
 
-    private async Task TypeKickoff(string folder, PaneId pane, CancellationToken ct)
+    private async Task TypeKickoff(string folder, PaneId pane, HarnessProfile runs, CancellationToken ct)
     {
         var marker = OrchestrationPaths.ReadyMarker(folder);
 
@@ -349,8 +383,18 @@ public sealed class DispatchHandler(
             await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
         }
 
-        await mux.SendTextAsync(pane, _profile.Kickoff, ct).ConfigureAwait(false);
-        await Task.Delay(TimeSpan.FromMilliseconds(400), ct).ConfigureAwait(false);
+        if (runs.InputRetry > TimeSpan.Zero)
+        {
+            await TypedPrompt
+                .UntilEchoedAsync(mux, pane, runs.Kickoff, runs.InputRetry, _readyTimeout, ct: ct)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await mux.SendTextAsync(pane, runs.Kickoff, ct).ConfigureAwait(false);
+            await Task.Delay(TypedPrompt.EchoDelay, ct).ConfigureAwait(false);
+        }
+
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 }

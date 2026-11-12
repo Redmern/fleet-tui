@@ -8,6 +8,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Ui;
 
 namespace Fleet.Tests.Features.Agents;
@@ -214,11 +215,22 @@ public class HideAgentTests
     public void Changing_the_harness_records_it_against_the_same_agent()
     {
         var changed = new ChangeHarnessHandler(_store)
+            .Handle("techweb", Agent(), AgentHarness.Opencode);
+
+        Assert.True(changed.Succeeded, changed.Error);
+        Assert.Equal(AgentHarness.Opencode, changed.Value!.Harness);
+        Assert.Equal(AgentHarness.Opencode, Assert.Single(_store.Saved).Harness);
+    }
+
+    [Fact]
+    public void Changing_a_claude_agent_to_nvim_hosts_its_claude_in_nvim()
+    {
+        var changed = new ChangeHarnessHandler(_store)
             .Handle("techweb", Agent(), AgentHarness.Nvim);
 
         Assert.True(changed.Succeeded, changed.Error);
-        Assert.Equal(AgentHarness.Nvim, changed.Value!.Harness);
-        Assert.Equal(AgentHarness.Nvim, Assert.Single(_store.Saved).Harness);
+        Assert.Equal(AgentHarness.Claude, Assert.Single(_store.Saved).Harness);
+        Assert.True(Assert.Single(_store.Saved).HostInNvim);
     }
 
     [Fact]
@@ -348,7 +360,7 @@ public class HideAgentTests
     [Fact]
     public void Nvim_is_the_default_and_is_labelled_plainly()
     {
-        Assert.Equal(AgentHarness.Nvim, AgentHarness.All[0]);
+        Assert.Equal(AgentHarness.Nvim, HarnessRegistry.Selectable[0]);
         Assert.Equal("nvim", AgentHarness.Describe(AgentHarness.Nvim));
         Assert.Equal("claude", AgentHarness.Describe(AgentHarness.Claude));
     }

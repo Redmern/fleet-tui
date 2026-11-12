@@ -30,6 +30,12 @@ public static class PeerMessage
         + "Send it once, after this report. If a delivery notice says it was held or refused, "
         + "that is the receiving session's choice: leave it, don't retry.";
 
+    public static string OwnerTyped(string owner, bool told) =>
+        told
+            ? $"Fleet typed this report into your orchestrator's pane ({owner}); you don't need to message it."
+            : $"Fleet could not reach your orchestrator's pane ({owner}); it sees your status through list_agents "
+              + "and wait_for_agent.";
+
     public static string DispatchRequest(string task) =>
         "The head orchestrator asks you to dispatch a sub-orchestrator for the task below. "
         + "Call your fleet dispatch tool with it as the message; don't do the task yourself.\n\n"

@@ -9,11 +9,13 @@ using Fleet.Shared.Status.Models;
 
 namespace Fleet.Cli.Composition;
 
-public sealed class PaneActivity(IMuxDriver mux)
+public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle = null)
 {
     private const int AtOnce = 6;
 
     private readonly ConcurrentDictionary<string, string> _texts = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ConcurrentDictionary<string, string> _quiet = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyDictionary<string, string> Texts => _texts;
 
@@ -62,9 +64,23 @@ public sealed class PaneActivity(IMuxDriver mux)
 
         var text = await mux.GetTextAsync(pane.Id, ct).ConfigureAwait(false);
         _texts[agent.Worktree] = text;
-        var live = AgentActivity.Classify(text);
+        var live = AgentActivity.WatchedByPane(agent) ? Quiet(agent, text) : AgentActivity.Classify(text);
 
         return WithLive(agent, live, orchestrator);
+    }
+
+    private string Quiet(AgentRecord agent, string text)
+    {
+        var live = AgentActivity.Quiet(agent.Worktree, text, DateTime.UtcNow);
+        var before = _quiet.TryGetValue(agent.Worktree, out var seen) ? seen : string.Empty;
+        _quiet[agent.Worktree] = live;
+
+        if (before == AgentActivity.Working && live == AgentActivity.Idle && !Finished(agent))
+        {
+            wentIdle?.Invoke(agent);
+        }
+
+        return live;
     }
 
     private static AgentRecord WithLive(AgentRecord agent, string live, bool orchestrator) =>
