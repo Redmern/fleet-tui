@@ -1,5 +1,6 @@
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
+using Fleet.Shared.Messaging;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
 
@@ -24,6 +25,11 @@ public sealed record AgentRecord(
     string OrchestratorHarness = "")
 {
     public HarnessProfile OrchestratorProfile => HarnessRegistry.For(OrchestratorHarness);
+
+    public string RunningHarness => HarnessRoute.Of(Harness, OrchestratorProfile.Name);
+
+    public IReadOnlyList<string> OrchestratorCommand(bool resume, bool inNvim, ClaudeLaunch? launch = null) =>
+        AgentHarness.OrchestratorCommand(OrchestratorProfile, resume, inNvim, launch);
 
     public bool StartedInNvim => InNvim ?? true;
 

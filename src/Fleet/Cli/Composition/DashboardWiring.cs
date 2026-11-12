@@ -1194,7 +1194,8 @@ public static class DashboardWiring
                             return Noted(log, project.Name, sub.Error);
                         }
 
-                        ClaudeWiring.SyncFolder(project.Name, sub.Value!.Worktree, slug);
+                        HarnessRegistration.OrchestrationConfig(sub.Value!.OrchestratorProfile)
+                            .WriteForOrchestration(sub.Value!.Worktree, project.Name, slug);
                         ClaudeWiring.TrustFolder(sub.Value!.Worktree);
 
                         return Noted(log, project.Name, $"{agent.Branch} renamed to {slug}.");

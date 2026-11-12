@@ -18,20 +18,19 @@ public sealed class HarnessRouteTests
         Assert.True(HarnessRoute.Native(AgentHarness.Claude, AgentHarness.Nvim));
 
     [Theory]
-    [InlineData(AgentHarness.Claude, false, AgentHarness.Claude)]
-    [InlineData(AgentHarness.Opencode, true, AgentHarness.Opencode)]
-    [InlineData(AgentHarness.Nvim, true, AgentHarness.Claude)]
-    [InlineData(AgentHarness.Nvim, false, AgentHarness.Nvim)]
-    [InlineData(AgentHarness.Orchestrator, false, AgentHarness.Claude)]
-    [InlineData("bogus", false, AgentHarness.Nvim)]
-    public void A_record_runs_the_harness_its_pane_hosts(string harness, bool runsClaude, string runs) =>
-        Assert.Equal(runs, HarnessRoute.Of(harness, runsClaude));
+    [InlineData(AgentHarness.Claude, AgentHarness.Claude)]
+    [InlineData(AgentHarness.Opencode, AgentHarness.Opencode)]
+    [InlineData(AgentHarness.Nvim, AgentHarness.Nvim)]
+    [InlineData(AgentHarness.Orchestrator, AgentHarness.Claude)]
+    [InlineData("bogus", AgentHarness.Nvim)]
+    public void A_record_runs_the_harness_it_stores(string harness, string runs) =>
+        Assert.Equal(runs, HarnessRoute.Of(harness));
 
     [Fact]
     public void A_sub_orchestrator_runs_the_orchestrator_harness_it_is_given() =>
         Assert.Equal(
             AgentHarness.Opencode,
-            HarnessRoute.Of(AgentHarness.Orchestrator, false, orchestrator: AgentHarness.Opencode));
+            HarnessRoute.Of(AgentHarness.Orchestrator, orchestrator: AgentHarness.Opencode));
 
     [Fact]
     public void An_owner_notice_is_one_line_and_names_the_tools_to_follow_up_with()

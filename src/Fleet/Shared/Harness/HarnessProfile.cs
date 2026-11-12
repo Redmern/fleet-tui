@@ -13,6 +13,8 @@ public sealed record HarnessProfile(
 
     public string InstallHint { get; init; } = string.Empty;
 
+    public TimeSpan InputRetry { get; init; } = TimeSpan.Zero;
+
     public bool Has(HarnessCapabilities capability) => (Capabilities & capability) == capability;
 
     public IReadOnlyList<string> Launch(IReadOnlyList<string> arguments) => [Binary, .. arguments];

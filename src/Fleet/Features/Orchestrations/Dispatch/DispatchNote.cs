@@ -24,6 +24,12 @@ public static class DispatchNote
             ? " The repository was not used: research stays with the sub-orchestrator."
             : " The repository was not used: Ai-DLC applies, so the sub-orchestrator starts the agents.";
 
+    public static string UnknownHarness(string refusal) => $"fleet: {refusal}";
+
+    public static string ConfigNotWritten(string harness, string reason) =>
+        $" Warning: the {harness} configuration for it was not fully written ({reason}), "
+        + "so it may not reach the fleet tools.";
+
     public static string UnknownProfile(string given) =>
         $"fleet: '{given.Trim()}' is not an Ai-DLC profile. Use one of: "
         + string.Join(", ", ProfileCatalog.All.Select(p => Words.Of(p)))

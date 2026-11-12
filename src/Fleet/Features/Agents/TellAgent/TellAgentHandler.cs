@@ -3,6 +3,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Messaging;
 
 namespace Fleet.Features.Agents.TellAgent;
@@ -16,7 +17,7 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
             ? agent.StartedInNvim
             : agent.HostedInNvim && agent.StartedInNvim;
 
-    public static string HarnessOf(AgentRecord agent) => HarnessRoute.Of(agent.Harness, agent.RunsClaude);
+    public static string HarnessOf(AgentRecord agent) => agent.RunningHarness;
 
     public async Task<string?> RouteAsync(
         AgentRecord agent,
@@ -39,13 +40,19 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
         return null;
     }
 
-    public Task DeliverAsync(AgentRecord agent, PaneId pane, string message, CancellationToken ct = default) =>
-        TypeAsync(agent, pane, InstructionFor(agent, message), ct);
+    public Task DeliverAsync(
+        AgentRecord agent,
+        PaneId pane,
+        string message,
+        CancellationToken ct = default,
+        TimeSpan? echoWithin = null) =>
+        TypeAsync(agent, pane, InstructionFor(agent, message), echoWithin ?? TimeSpan.Zero, ct);
 
     public Task NotifyAsync(AgentRecord owner, PaneId pane, string notice, CancellationToken ct = default) =>
-        TypeAsync(owner, pane, notice, ct);
+        TypeAsync(owner, pane, notice, TimeSpan.Zero, ct);
 
-    private async Task TypeAsync(AgentRecord agent, PaneId pane, string instruction, CancellationToken ct)
+    private async Task TypeAsync(
+        AgentRecord agent, PaneId pane, string instruction, TimeSpan echoWithin, CancellationToken ct)
     {
         var dir = Path.Combine(agent.Worktree, ".fleet");
         Directory.CreateDirectory(dir);
@@ -57,8 +64,20 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
             return;
         }
 
-        await mux.SendTextAsync(pane, AgentHarness.AgentInstructionPrompt, ct).ConfigureAwait(false);
-        await Task.Delay(_enterDelay, ct).ConfigureAwait(false);
+        var retry = HarnessRegistry.For(agent.RunningHarness).InputRetry;
+
+        if (retry > TimeSpan.Zero && echoWithin > TimeSpan.Zero)
+        {
+            await TypedPrompt
+                .UntilEchoedAsync(mux, pane, AgentHarness.AgentInstructionPrompt, retry, echoWithin, _enterDelay, ct)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await mux.SendTextAsync(pane, AgentHarness.AgentInstructionPrompt, ct).ConfigureAwait(false);
+            await Task.Delay(_enterDelay, ct).ConfigureAwait(false);
+        }
+
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
     }
 

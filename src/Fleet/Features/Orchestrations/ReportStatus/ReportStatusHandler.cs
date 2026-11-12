@@ -131,7 +131,7 @@ public sealed class ReportStatusHandler(
     private static bool IsTopLevelSub(AgentRecord reporter) =>
         AgentHarness.IsOrchestrator(reporter.Harness) && reporter.Owner.Trim().Length == 0;
 
-    private static string HarnessOf(AgentRecord record) => HarnessRoute.Of(record.Harness, record.RunsClaude);
+    private static string HarnessOf(AgentRecord record) => record.RunningHarness;
 
     private (AgentRecord? Owner, string Name, string Folder) OwnerOf(string project, string root, AgentRecord reporter)
     {

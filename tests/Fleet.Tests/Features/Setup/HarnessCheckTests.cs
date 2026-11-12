@@ -80,7 +80,7 @@ public sealed class HarnessCheckTests
     {
         var lines = HarnessCheck.DoctorLines(t => t == "claude", new Dictionary<string, int> { ["claude"] = 3, ["opencode"] = 1 });
 
-        Assert.Equal(2, lines.Count);
+        Assert.Equal(HarnessRegistry.Profiles.Count, lines.Count);
         Assert.StartsWith("claude", lines[0], StringComparison.Ordinal);
         Assert.Contains("on PATH", lines[0], StringComparison.Ordinal);
         Assert.Contains("3 agent(s)", lines[0], StringComparison.Ordinal);

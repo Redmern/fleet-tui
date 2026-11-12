@@ -333,7 +333,7 @@ public sealed class ReportStatusTests
     public async Task A_finished_claude_agent_types_into_an_opencode_owner()
     {
         _store.Saved.Add(new AgentRecord(
-            "C:/repos/techweb/api/lead", "api", "lead", AgentHarness.Opencode, "origin/main", true, Claude: true));
+            "C:/repos/techweb/api/lead", "api", "lead", AgentHarness.Opencode, "origin/main", true));
         _store.Saved.Add(new AgentRecord(
             "C:/repos/techweb/api/x", "api", "x", AgentHarness.Claude, "origin/main", true, Owner: "agent:api/lead"));
         var typed = new List<OwnerNotice>();
@@ -350,7 +350,7 @@ public sealed class ReportStatusTests
     public async Task An_opencode_agent_without_an_owner_types_into_the_main_orchestrator()
     {
         _store.Saved.Add(new AgentRecord(
-            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Opencode, "origin/main", true, Claude: true));
+            "C:/repos/techweb/backend/fix", "backend", "fix", AgentHarness.Opencode, "origin/main", true));
         var typed = new List<OwnerNotice>();
 
         await new ReportStatusHandler(_store, inboxes: new FakeInboxes { [Root] = "uds:main" }, typeToOwner: Typing(typed))
@@ -360,6 +360,44 @@ public sealed class ReportStatusTests
         Assert.Null(notice.Owner);
         Assert.Equal(Root, notice.Folder);
         Assert.Equal("techweb-main", notice.Name);
+    }
+
+    [Fact]
+    public async Task A_finished_claude_agent_types_into_its_opencode_sub_orchestrator()
+    {
+        var sub = Seed("some-sub");
+        _store.Saved[_store.Saved.IndexOf(sub)] = sub with { OrchestratorHarness = AgentHarness.Opencode };
+        var agent = SeedAgent("backend", "feature/login");
+        _store.Saved[_store.Saved.IndexOf(agent)] = agent with { Harness = AgentHarness.Claude };
+        var inboxes = new FakeInboxes { [sub.Worktree] = "uds:sub" };
+        var typed = new List<OwnerNotice>();
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes, typeToOwner: Typing(typed)).HandleAsync(
+            "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Done, "endpoint added");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.DoesNotContain("SendMessage", result.Value);
+        Assert.Equal(sub.Worktree, Assert.Single(typed).Folder);
+        Assert.Empty(inboxes.Asked);
+    }
+
+    [Fact]
+    public async Task A_finished_opencode_sub_of_a_claude_sub_has_fleet_type_the_notice_into_its_owner()
+    {
+        var parent = Seed("parent");
+        var child = Seed("child");
+        _store.Saved[_store.Saved.IndexOf(child)] =
+            child with { Owner = "parent", OrchestratorHarness = AgentHarness.Opencode };
+        var inboxes = new FakeInboxes { [parent.Worktree] = "uds:parent" };
+        var typed = new List<OwnerNotice>();
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes, typeToOwner: Typing(typed)).HandleAsync(
+            "techweb", Root, "child", OrchestrationStatus.Done, "all merged");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.DoesNotContain("SendMessage", result.Value);
+        Assert.Equal(parent.Worktree, Assert.Single(typed).Folder);
+        Assert.Empty(inboxes.Asked);
     }
 
     [Fact]

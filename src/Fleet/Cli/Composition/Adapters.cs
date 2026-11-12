@@ -134,8 +134,15 @@ public static class Adapters
 
         if (AgentHarness.IsOrchestrator(agent.Harness))
         {
-            return AgentHarness.CommandFor(
-                agent.Harness, orchestratorInNvim: settings.SubOrchestratorsHostedInNvim)[0];
+            IReadOnlyList<string> needed =
+            [
+                agent.OrchestratorCommand(resume: false, settings.SubOrchestratorsHostedInNvim)[0],
+                agent.OrchestratorProfile.Binary,
+            ];
+
+            return agent.OrchestratorProfile.TakesClaudeLaunch
+                ? needed[0]
+                : needed.FirstOrDefault(b => !OnPath(b)) ?? needed[0];
         }
 
         var hosted = agent.HostedFor(settings.HostsInNvim);
