@@ -59,7 +59,7 @@ public sealed class CodexHarnessConfigTests : IDisposable
     }
 
     [Fact]
-    public void An_existing_project_config_keeps_its_other_settings_and_loses_the_old_fleet_server()
+    public void An_existing_project_config_keeps_its_other_settings_and_gets_the_new_fleet_command()
     {
         Seed(
             ProjectConfig,
@@ -69,7 +69,8 @@ public sealed class CodexHarnessConfigTests : IDisposable
         Config().WriteForAgent(Folder, "proj", "api", "main");
 
         Assert.Equal(
-            "model = \"o3\"\n\n" + FleetSection("agent:api/main") + "\n[mcp_servers.other]\ncommand = \"other\"\n",
+            "model = \"o3\"\n\n" + FleetSection("agent:api/main") + "\n[mcp_servers.fleet.env]\nX = \"1\"\n\n"
+            + "[mcp_servers.other]\ncommand = \"other\"\n",
             File.ReadAllText(ProjectConfig));
     }
 
@@ -179,6 +180,22 @@ public sealed class CodexHarnessConfigTests : IDisposable
         Config().WriteForAgent(odd, "proj", "api", "main");
 
         Assert.Equal(Trusted(odd), File.ReadAllText(UserConfig));
+    }
+
+    [Fact]
+    public void A_folder_reached_through_a_symlink_is_trusted_under_its_real_path()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var link = Path.Combine(_root, "link");
+        Directory.CreateSymbolicLink(link, _root);
+
+        Config().WriteForAgent(Path.Combine(link, "wt"), "proj", "api", "main");
+
+        Assert.Equal(Trusted(Folder), File.ReadAllText(UserConfig));
     }
 
     [Fact]

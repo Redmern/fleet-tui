@@ -399,7 +399,7 @@ public sealed class McpActions(
             : AgentHarness.IsOrchestrator(a.Harness)
               && string.Equals(a.Branch, key, StringComparison.OrdinalIgnoreCase));
 
-        return record is null ? AgentHarness.Claude : TellAgentHandler.HarnessOf(record);
+        return record is null ? HarnessRoute.Unknown : TellAgentHandler.HarnessOf(record);
     }
 
     private async Task<IReadOnlyList<AgentRecord>> WithQuietPanes(IReadOnlyList<AgentRecord> agents, CancellationToken ct)

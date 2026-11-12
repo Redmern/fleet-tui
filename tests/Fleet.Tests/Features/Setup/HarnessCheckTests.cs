@@ -59,6 +59,29 @@ public sealed class HarnessCheckTests
     }
 
     [Fact]
+    public void Every_registered_harness_names_its_own_install_command()
+    {
+        Assert.All(HarnessRegistry.Profiles, p => Assert.NotEqual(string.Empty, p.InstallHint));
+        Assert.Contains("@earendil-works/pi-coding-agent", SetupHints.For("pi"), StringComparison.Ordinal);
+        Assert.Contains("@openai/codex", SetupHints.For("codex"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_missing_pi_in_use_is_reported_with_its_install_command_in_setup_and_doctor()
+    {
+        var step = Assert.Single(
+            Handler("git", "nvim", "claude", "yazi").Inspect("/cfg", inUse: ["pi"]).Steps, s => s.Name == "pi");
+        var line = Assert.Single(
+            HarnessCheck.DoctorLines(_ => false, new Dictionary<string, int> { ["pi"] = 2 }),
+            l => l.StartsWith("pi", StringComparison.Ordinal));
+
+        Assert.Contains("@earendil-works/pi-coding-agent", step.Fix, StringComparison.Ordinal);
+        Assert.Contains("NOT FOUND", line, StringComparison.Ordinal);
+        Assert.Contains("2 agent(s)", line, StringComparison.Ordinal);
+        Assert.Contains("@earendil-works/pi-coding-agent", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Claude_has_no_degraded_capabilities()
     {
         Assert.Empty(HarnessCheck.Degraded(HarnessRegistry.Claude));
@@ -73,6 +96,30 @@ public sealed class HarnessCheckTests
         Assert.Contains(degraded, d => d.Contains("no permission policy", StringComparison.Ordinal));
         Assert.Contains(degraded, d => d.Contains("typed into its pane", StringComparison.Ordinal));
         Assert.DoesNotContain(degraded, d => d.Contains("skills", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("opencode")]
+    [InlineData("codex")]
+    [InlineData("pi")]
+    public void The_doctor_line_of_every_other_harness_states_what_fleet_skips_for_it(string harness)
+    {
+        var line = Assert.Single(
+            HarnessCheck.DoctorLines(_ => true, new Dictionary<string, int> { [harness] = 1 }),
+            l => l.StartsWith(harness + " ", StringComparison.Ordinal));
+
+        Assert.Contains("no status hooks: status comes from report and pane activity", line, StringComparison.Ordinal);
+        Assert.Contains("no permission policy: fleet's tool rules are not written for it", line, StringComparison.Ordinal);
+        Assert.Contains("no cross-session messages: tell_agent is typed into its pane", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("no skills", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_doctor_line_of_claude_states_no_degradation()
+    {
+        var line = HarnessCheck.DoctorLines(_ => true, new Dictionary<string, int> { ["claude"] = 1 })[0];
+
+        Assert.Equal("claude        on PATH, used by 1 agent(s)", line);
     }
 
     [Fact]

@@ -4,6 +4,15 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.30 (2026-11-12)
+
+- **Agents and sub-orchestrators can run opencode, codex or pi**, mixed with Claude in one project. Pick one in the New agent card (**Opens**), with `m` on the dashboard, as the project default (fleet menu > settings > fleet config > **Agent harness**, `O`), or with the new `harness` argument of `new_agent` and `dispatch`. An unknown name is refused with the valid list.
+- **"In nvim" is its own choice**: any harness can run on its own or in an nvim terminal next to the file tree. Existing agents keep what they had.
+- **Each harness gets its own setup**: the fleet MCP server in `opencode.json`, `.codex/config.toml` or `.pi/mcp.json`, fleet's skills in `.agents/skills`, and `AGENTS.md` for an orchestrator. For codex and pi fleet adds a trust entry for the folder to your user config (`~/.codex/config.toml`, `~/.pi/agent/trust.json`) and never overrides a folder you marked untrusted. A trusted folder also lets pi load that repository's own `.pi/extensions`.
+- **Mixed teams talk through fleet**: when either side is not Claude, `tell_agent` types into the pane, and a `done` or `failed` report reaches the owner through its pane as a `[fleet]` notice. The new `wait_for_agent` tool returns when an agent reports or goes idle. Two Claude sessions still use `SendMessage`.
+- **Status without hooks**: an opencode, codex or pi pane with no new output for 120 seconds and no done report shows as idle. `fleet doctor` lists each harness, whether its CLI is installed, and what fleet skips for it (hooks, permission rules, cross-session messages); `fleet setup` reports a missing harness CLI with its install command.
+- Limits: the main orchestrator, the `,` trigger and the New sub-orchestrator card stay Claude; a sub on another harness is first started outside nvim. Real model turns are proven for opencode agents only; see README, "Harnesses".
+
 ## 0.7.29 (2026-10-28)
 
 - **Dialogs of the tiled dashboard open over the whole window**: the base-branch picker, New agent card, prompts and confirmations float centred on the window, over the Claude pane too, with their border, title and filter, and the dashboard goes back to its tile when they close. Without fleetd they stay inside the pane as before.

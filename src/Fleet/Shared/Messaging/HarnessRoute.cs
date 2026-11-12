@@ -7,6 +7,8 @@ public static class HarnessRoute
 {
     public const string NoticePrefix = "[fleet] ";
 
+    public const string Unknown = "";
+
     public static string Of(string harness, string orchestrator = AgentHarness.Claude)
     {
         var name = AgentHarness.Normalize(harness);
@@ -21,5 +23,6 @@ public static class HarnessRoute
         + "(check it with agent_status or list_agents, then review its work).";
 
     private static bool LacksNative(string harness) =>
-        HarnessRegistry.Find(harness) is { } profile && !profile.Has(HarnessCapabilities.NativeMessaging);
+        string.IsNullOrWhiteSpace(harness)
+        || (HarnessRegistry.Find(harness) is { } profile && !profile.Has(HarnessCapabilities.NativeMessaging));
 }

@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Fleet.Platform.Harness;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Harness;
 using Fleet.Shared.Harness;
@@ -46,7 +47,7 @@ public sealed class OpencodeHarnessConfig(
 
         if (configured.Succeeded)
         {
-            WriteSkills(folder);
+            HarnessFiles.WriteSkills(folder, HarnessRegistry.Opencode.SkillsDir, skills);
         }
 
         return configured;
@@ -107,29 +108,6 @@ public sealed class OpencodeHarnessConfig(
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             return Result.Fail($"fleet could not write {path}: {e.Message}");
-        }
-    }
-
-    private void WriteSkills(string folder)
-    {
-        foreach (var (name, content) in skills)
-        {
-            var path = Path.Combine(folder, HarnessRegistry.Opencode.SkillsDir, name, "SKILL.md");
-            var text = content.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-            try
-            {
-                if (File.Exists(path) && File.ReadAllText(path) == text)
-                {
-                    continue;
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                File.WriteAllText(path, text);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
         }
     }
 }

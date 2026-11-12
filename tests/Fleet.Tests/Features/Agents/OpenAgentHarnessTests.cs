@@ -39,6 +39,22 @@ public sealed class OpenAgentHarnessTests : IDisposable
         Assert.Equal(["opencode", "--continue"], _mux.ArgsFor(pane.Id));
     }
 
+    [Theory]
+    [InlineData("codex", new[] { "codex", "resume", "--last" })]
+    [InlineData("pi", new[] { "pi", "--continue" })]
+    public async Task A_reopened_agent_of_another_harness_is_configured_and_resumed(string harness, string[] resumed)
+    {
+        var configs = new RecordingConfigs();
+        var agent = Agent(harness);
+
+        var opened = await new OpenAgentHandler(_mux, new NoStore(), configs: configs)
+            .HandleAsync("proj", agent, _root);
+
+        Assert.True(opened.Succeeded, opened.Error);
+        Assert.Equal([(harness, agent.Worktree, "proj", "api", "feat")], configs.Written);
+        Assert.Equal(resumed, _mux.ArgsFor(Assert.Single(await _mux.ListPanesAsync()).Id));
+    }
+
     [Fact]
     public async Task A_reopened_opencode_agent_hosted_in_nvim_resumes_inside_an_nvim_terminal()
     {
@@ -59,6 +75,7 @@ public sealed class OpenAgentHarnessTests : IDisposable
     [Theory]
     [InlineData("opencode", new[] { "opencode", "--continue" })]
     [InlineData("codex", new[] { "codex", "resume", "--last" })]
+    [InlineData("pi", new[] { "pi", "--continue" })]
     public async Task A_reopened_sub_orchestrator_of_another_harness_resumes_with_its_profile(
         string harness, string[] resumed)
     {

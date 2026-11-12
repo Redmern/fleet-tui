@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Fleet.Platform.Harness;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Harness;
 using Fleet.Shared.Harness;
@@ -66,7 +67,7 @@ public sealed class PiHarnessConfig(
 
     private Result Write(string folder, string project, string caller)
     {
-        var configured = Edit(
+        var configured = HarnessFiles.Edit(
             Path.Combine(folder, ProjectConfig),
             text => WithServer(text ?? string.Empty, server(project, caller)));
 
@@ -75,11 +76,11 @@ public sealed class PiHarnessConfig(
             return configured;
         }
 
-        WriteSkills(folder);
+        HarnessFiles.WriteSkills(folder, HarnessRegistry.Pi.SkillsDir, skills);
 
-        var trusted = PiTrustStore.Canonical(folder);
+        var trusted = HarnessFiles.Canonical(folder);
 
-        return Edit(trustStore, text => PiTrustStore.WithTrusted(Settled(trustStore, text), trusted));
+        return HarnessFiles.Edit(trustStore, text => PiTrustStore.WithTrusted(Settled(trustStore, text), trusted));
     }
 
     private static Result<string> WithServer(string text, McpServerEntry entry)
@@ -144,84 +145,5 @@ public sealed class PiHarnessConfig(
         }
 
         return text;
-    }
-
-    private static Result Edit(string link, Func<string?, Result<string>> change)
-    {
-        string path;
-        string? text;
-
-        try
-        {
-            path = File.Exists(link)
-                ? File.ResolveLinkTarget(link, returnFinalTarget: true)?.FullName ?? link
-                : link;
-            text = File.Exists(path) ? File.ReadAllText(path) : null;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return Result.Fail($"fleet could not read {link}: {e.Message}");
-        }
-
-        var changed = change(text);
-
-        if (!changed.Succeeded)
-        {
-            return Result.Fail($"{link} was left untouched: {changed.Error}.");
-        }
-
-        if (changed.Value == text)
-        {
-            return Result.Ok();
-        }
-
-        var staged = $"{path}.{Guid.NewGuid():N}.fleet-tmp";
-
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(staged, changed.Value);
-            File.Move(staged, path, overwrite: true);
-            return Result.Ok();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            Discard(staged);
-            return Result.Fail($"fleet could not write {link}: {e.Message}");
-        }
-    }
-
-    private static void Discard(string staged)
-    {
-        try
-        {
-            File.Delete(staged);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
-
-    private void WriteSkills(string folder)
-    {
-        foreach (var (name, content) in skills)
-        {
-            var path = Path.Combine(folder, HarnessRegistry.Pi.SkillsDir, name, "SKILL.md");
-            var text = content.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-            try
-            {
-                if (File.Exists(path) && File.ReadAllText(path) == text)
-                {
-                    continue;
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                File.WriteAllText(path, text);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-            }
-        }
     }
 }
