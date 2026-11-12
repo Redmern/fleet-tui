@@ -351,7 +351,7 @@ public class FleetMenusTests
         }
         while (settings.ChosenHarness.Length > 0);
 
-        Assert.Equal(["[nvim]", "[claude]", "[opencode]", "[codex]", "[auto]"], seen);
+        Assert.Equal(["[nvim]", "[claude]", "[opencode]", "[codex]", "[pi]", "[auto]"], seen);
     }
 
     [Fact]
