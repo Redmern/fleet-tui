@@ -76,3 +76,20 @@ Breaking one fails `dotnet test`, so check these before you write code:
   GitHub release text and Settings › What's new, and both `dotnet test` and `release.yml` fail without it.
 - A project hook (`.claude/settings.json`) whitespace-formats every `.cs` file Claude edits
   (`dotnet format whitespace --folder`, ~2 s). It needs `pwsh` on `PATH`.
+
+## Stacked PRs and delivery
+
+- Rebase a stacked unit with `git rebase --onto <base> <old-base> HEAD`, never onto main's tip, so it carries only
+  its own commits. Before handoff, check that `git log <base>..HEAD` lists nothing else.
+- Put push and PR permission in the unit's instruction file. A brief that says "do not push" leaves the agent
+  blocked at the push in Deliver, and the user has to push.
+- After the second PR merges into a shared stack base, build that base before anything else stacks on it: a PR
+  that removes a member and a PR that uses it each pass alone and break together.
+- When a stack lands through several PRs, diff the integration tip against main before re-cutting the last unit;
+  an integration commit can miss main without any PR showing it.
+- Merge on Forgejo only, never on GitHub: the mirror force-pushes Forgejo main over GitHub main, so a GitHub
+  merge makes the two mains diverge.
+- A stacked PR whose base is the previous feature branch merges into that branch, not into main. Target main, or
+  merge the stack top-down into main.
+- Before Deliver, run a read-only cross-cutting review (standards and spec) of the final tip. It finds defects
+  that per-unit reviews miss.
