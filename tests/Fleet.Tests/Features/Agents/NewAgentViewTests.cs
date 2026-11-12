@@ -55,7 +55,7 @@ public sealed class NewAgentViewTests
     [Fact]
     public void The_opens_picker_lists_every_registered_harness()
     {
-        Assert.Equal(["nvim", "claude", "opencode", "codex"], NewAgentView.Harnesses);
+        Assert.Equal(["nvim", "claude", "opencode", "codex", "pi"], NewAgentView.Harnesses);
         Assert.Equal(Fleet.Shared.Harness.HarnessRegistry.Selectable, NewAgentView.Harnesses);
     }
 

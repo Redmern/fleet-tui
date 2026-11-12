@@ -15,6 +15,7 @@ public static class HarnessRegistration
         {
             [HarnessRegistry.OpencodeName] = new NullHarnessConfig(),
             [HarnessRegistry.CodexName] = new NullHarnessConfig(),
+            [HarnessRegistry.PiName] = new NullHarnessConfig(),
         },
         new ClaudeHarnessConfig());
 
@@ -23,6 +24,7 @@ public static class HarnessRegistration
         {
             [HarnessRegistry.OpencodeName] = Opencode(),
             [HarnessRegistry.CodexName] = CodexRegistration.Config(),
+            [HarnessRegistry.PiName] = PiRegistration.Config(),
         },
         new NullHarnessConfig());
 
