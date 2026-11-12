@@ -903,6 +903,19 @@ agent or a sub-orchestrator can run `opencode`, `codex` or `pi`, mixed with Clau
 project. Spec and what was delivered: `docs/specs/multi-harness-interop.md`. User-facing
 table: README, "Harnesses".
 
+State on 2026-11-12: the registry and opencode (#41), codex (#42), the picker and nvim
+host (#43), messaging (#44), dispatch (#45, #46) and pi (#47) are in main. The last pull
+request adds the end-to-end test, the fixes from a review of the whole stack (the codex
+table merge, locked edits of the user files, the stricter echo check, the real path for
+codex trust, the unknown caller) and one change that was on the integration branch but
+not in main: pi has `InputRetry` like opencode and codex.
+
+Open and known: whether trusting a folder for pi (which lets pi load that repository's
+`.pi/extensions`) is acceptable is not decided; a notice overwrites the owner's
+`.fleet/instruction.md` and can make its own `done` look stale to `wait_for_agent`; long
+`wait_for_agent` calls, the 120 second idle window and ctrl+u are untested on the real
+TUIs; no sub-orchestrator on opencode, codex or pi has run a real model turn.
+
 **The registry.** `Shared/Harness/HarnessProfile` is a record: name, binary, resume
 arguments, spawn env, instruction file, capability flags (`Mcp`, `Hooks`, `Skills`,
 `Permissions`, `NativeMessaging`), skills directory, install hint, `TakesClaudeLaunch` and
@@ -946,9 +959,11 @@ process-wide lock and a lock file (in the temp folder, named by a hash of the pa
 nothing is left next to the user's file) around read, change and write, then a uniquely
 named temp file and a move. Without it two agents started together both read the user
 config and the last move won. The trust path is `HarnessFiles.Canonical` for both
-(symlinks resolved); whether codex itself resolves symlinks before its lookup was not
-checked. opencode rewrites `opencode.json` in place: it is one file per folder with one
-writer. Trust entries pile up, one per
+(symlinks resolved, at most 40 links deep); whether codex itself resolves symlinks before
+its lookup was not checked. A file that is itself a symlink is written through the link.
+pi's writer waits briefly on an empty trust store and then refuses it: pi rejects an empty
+file and may be in the middle of writing it. opencode rewrites `opencode.json` in place: it is one file per folder with one
+writer. It reads comments and trailing commas and writes plain JSON back. Trust entries pile up, one per
 folder; fleet does not remove them. A profile without a capability skips that step:
 there is no hooks or permission writer for the three, and `HarnessCheck.Degraded` turns
 the missing flags into the `fleet doctor` text.

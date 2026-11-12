@@ -58,7 +58,9 @@ Pty-based profiles; ACP out of scope; opencode skeleton; codex and pi follow; co
 
 ## Delivered vs not delivered
 
-Added at delivery (2026-11-11). The text above is the spec as approved; this section says what the code does.
+Added at delivery (2026-11-11, updated 2026-11-12). The text above is the spec as approved; this section says what the code does.
+
+Where it landed: the registry and opencode (#41), codex (#42), the picker, nvim host and doctor checks (#43), messaging (#44), dispatch and integration (#45, #46) and pi (#47) are in main. The end-to-end test, the fixes from the review of the whole stack and these documents are the last pull request.
 
 Met:
 - AC-1, AC-2, AC-3: `HarnessProfile`/`HarnessRegistry`; unknown names refused by `Require`; Claude commands, env and config unchanged (golden tests).
@@ -67,7 +69,7 @@ Met:
 - AC-11: `Harness` and `HostInNvim` stored and chosen separately; pickers and the **Agent harness** setting list the registry.
 - AC-12: steps a profile lacks are skipped; `fleet doctor` and the README table state them; skills go to `.agents/skills`.
 - AC-13, AC-14: doctor and setup report each harness CLI; reopen uses the profile's resume command.
-- AC-15: repo rules hold; build, tests and format pass (with `NuGetAudit=false` while the ILCompiler advisory NU1903 blocks restore; not part of this work).
+- AC-15: repo rules hold; build, tests and format pass with the NuGet audit on (NU1903 was fixed in main, #40).
 - AC-16: `tests/Fleet.Tests/EndToEnd/MixedTeamE2ETests.cs`.
 
 AC-10, delivered by the integration unit (u7), with these deviations:
@@ -85,6 +87,14 @@ Not proven on a real binary (details: docs/DESIGN.md, "Harness profiles and mixe
 - A `wait_for_agent` call that blocks for minutes in the MCP client of opencode, codex or pi.
 - Idle on a real TUI: the pane-quiet window is a fixed 120 s, and a screen that redraws a spinner or clock reads as working.
 - The ctrl+u fleet sends before it types a prompt again.
+
+Fixed after the review of the whole stack (tests in brackets):
+- The codex server table keeps the user's keys, sub-tables, comments and line endings; only `command` and `args` are replaced (`CodexTomlTests`).
+- Edits of `~/.codex/config.toml` and pi's `trust.json` take a process lock and a lock file and stage under a unique name, so agents started together all keep their trust entry (`HarnessFilesTests`).
+- The echo check counts only a prompt that is new on the screen, and fleet sends ctrl+u before it types a prompt again (`TypedPromptTests`).
+- The codex trust entry uses the real path, like pi (`CodexHarnessConfigTests`).
+- A `tell_agent` caller without a record is not taken for Claude; its message is typed (`MixedTeamE2ETests`, `HarnessRouteTests`).
+- pi's first prompt is checked like opencode's and codex names its npm package: this was on the integration branch but missing from main.
 
 Known weakness: a notice overwrites the owner's `.fleet/instruction.md`, so a late notice from a child can make an owner's own `done` look stale to `wait_for_agent`.
 

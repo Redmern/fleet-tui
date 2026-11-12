@@ -979,7 +979,10 @@ skipped steps. `fleet setup` reports a harness that agents use but that is not i
 with its install command. The fleet MCP server is registered with the right `--caller`
 in every one of these files, so `report`, `tell_agent` and the other fleet tools work
 in each harness. fleet merges its entry into a config file that already exists and
-leaves a file it cannot parse untouched. `dispatch` names such a failure in its result
+leaves a file it cannot parse untouched. An `opencode.json` with comments or trailing
+commas is read, but fleet writes it back without the comments. A user config or trust
+store that is a symlink is written through the link. An empty pi trust store is left
+alone, because pi may be writing it at that moment. `dispatch` names such a failure in its result
 when it starts a sub-orchestrator; `new_agent`, `dispatch` with a `repository` and the
 dashboard do not show it yet, and the agent then starts without the fleet tools.
 
@@ -1029,7 +1032,8 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   on those two files, so no entry is lost. In a `.codex/config.toml` that already has a
   `[mcp_servers.fleet]` table, fleet replaces `command` and `args` and keeps your other
   keys, comments and line endings. A trusted folder also lets the harness load what the repository itself ships: for
-  pi that includes `.pi/extensions`, which is code that runs inside pi, and
+  pi that includes `.pi/extensions`, which is code that runs inside pi without a question
+  (whether fleet should trust a folder for pi this way is still an open decision), and
   `.pi/settings.json`; for codex the project's `.codex/config.toml`. fleet never
   overrides a folder you marked untrusted: the harness then starts without the fleet
   tools.
@@ -1047,6 +1051,10 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   a client that gives up earlier has to call the tool again with a shorter timeout.
 - The ctrl+u that empties the input line before a prompt is typed again was not tested
   against the real CLIs.
+- No model turn of a sub-orchestrator on opencode, codex or pi was run for real: there was
+  no usable login where fleet was tested. A mixed team is tested with scripted harnesses on
+  a fake multiplexer; of the real CLIs only an opencode agent was seen to read its typed
+  task and call `report`.
 - In one test `stop_agent` left a codex process running next to the resumed one; this
   was not looked into.
 - A notice overwrites `.fleet/instruction.md` of the pane it goes to, like any
