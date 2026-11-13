@@ -3,6 +3,14 @@ using Fleet.Platform.Keybinds;
 
 namespace Fleet.Tests.Platform.Claude;
 
+// Serial: these tests set CLAUDE_CONFIG_DIR for the whole process, which ClaudeConfigHome reads in other tests.
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ClaudeConfigDirCollection
+{
+    public const string Name = "claude-config-dir (sets CLAUDE_CONFIG_DIR for the whole process)";
+}
+
+[Collection(ClaudeConfigDirCollection.Name)]
 public sealed class ClaudeConfigHomeTests
 {
     [Fact]
