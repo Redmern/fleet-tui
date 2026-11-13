@@ -13,6 +13,8 @@ using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Viewing;
+using Fleet.Shared.Viewing.Enums;
+using Fleet.Shared.Viewing.Models;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -473,6 +475,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         if (_model.Client(ClientFor(request, attachedClient) ?? string.Empty) is { } labelled)
                         {
                             labelled.Label = request.Text;
+                            labelled.LabelConfirmed = true;
                             if (request.Args is { Count: > 0 } announced)
                             {
                                 labelled.TakesBack = [.. announced];
@@ -1499,6 +1502,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     var opened = await waiting.Task.WaitAsync(gone).ConfigureAwait(false);
                     response.Text = opened.Action;
                     response.Cwd = opened.LaunchDir;
+                    response.ViewedFrom = opened.From?.Mark;
                 }
                 catch (OperationCanceledException) when (!gone.IsCancellationRequested)
                 {
@@ -3107,10 +3111,13 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
+        KillStaleParkedMenus();
+
         var shown = _model.Clients
             .Select(c => c.Showing)
             .OfType<string>()
             .Where(w => !Fleet.Shared.Constants.FleetWorkspaces.IsHidden(w) && _model.Workspace(w) is { Tabs.Count: > 0 })
+            .Where(w => !HasUnconfirmedLabel(w))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -3131,6 +3138,8 @@ public sealed class FleetDaemon(DaemonOptions options)
             var menu = _model.SpawnParked(
                 workspace, Environment.CurrentDirectory, MenuArgs(workspace), MuxModel.OverlayArea(cols, rows));
             _model.SetTitle(menu.Id, MenuTitle);
+            var mark = SharedMark(workspace);
+            _model.Float(menu.Id)!.Mark = mark;
             if (_menuFit is var (fitCols, fitRows))
             {
                 _model.FitFloat(menu.Id, fitCols, fitRows);
@@ -3140,12 +3149,49 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             try
             {
-                Start(menu, null);
+                Start(menu, mark is null ? null : new Dictionary<string, string> { [ViewedFrom.Variable] = mark });
                 options.Log($"warm menu {menu.Id} for {workspace}");
             }
             catch (InvalidOperationException e)
             {
                 options.Log($"warm menu for {workspace}: {e.Message}");
+            }
+        }
+    }
+
+    private ViewedFrom? ViewerMark(ClientState client) => client switch
+    {
+        { Label: { } label } => new ViewedFrom(ViewKind.View, RemoteLink.MachineOf(label)),
+        _ when _bridged.ContainsKey(client.Id) => new ViewedFrom(ViewKind.Ssh, Environment.MachineName),
+        _ => null,
+    };
+
+    private string? SharedMark(string workspace)
+    {
+        var marks = _model.Clients
+            .Where(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
+            .Select(c => ViewerMark(c)?.Mark)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return marks.Count == 1 ? marks[0] : null;
+    }
+
+    private bool HasUnconfirmedLabel(string workspace) =>
+        _model.Clients.Any(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase) && c.Label is not null && !c.LabelConfirmed);
+
+    private void KillStaleParkedMenus()
+    {
+        foreach (var workspace in _model.Clients.Select(c => c.Showing).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            if (!HasUnconfirmedLabel(workspace) && _model.Parked(workspace) is { } parked && parked.Mark != SharedMark(workspace))
+            {
+                Kill(parked.Pane);
+                if (_warmed.TryGetValue(workspace, out var warmed))
+                {
+                    _warmed[workspace] = warmed with { AgainFrom = DateTimeOffset.MinValue };
+                }
+
+                options.Log($"warm menu {parked.Pane} killed; the machine viewing {workspace} changed");
             }
         }
     }
@@ -3166,6 +3212,12 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         var env = new Dictionary<string, string> { [ClientVariable] = client };
+        var opener = ViewerMark(state);
+        if (opener is not null)
+        {
+            env[ViewedFrom.Variable] = opener.Mark;
+        }
+
         var launchDir = _launchDirOf.GetValueOrDefault(client);
         if (launchDir is not null)
         {
@@ -3197,7 +3249,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                 if (_menuWaits.Remove(warm.Pane, out var waiting))
                 {
-                    waiting.TrySetResult(new MenuOpened(action, launchDir));
+                    waiting.TrySetResult(new MenuOpened(action, launchDir, opener));
                 }
 
                 state.Menu = warm.Pane;

@@ -213,7 +213,12 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public static bool IsSecret(string prompt) => !prompt.Contains("yes/no", StringComparison.OrdinalIgnoreCase);
 
-    public static string Label(string name) => $" @{name}";
+    public const string LabelPrefix = " @";
+
+    public static string Label(string name) => LabelPrefix + name;
+
+    public static string MachineOf(string label) =>
+        label.StartsWith(LabelPrefix, StringComparison.Ordinal) ? label[LabelPrefix.Length..] : label.Trim();
 
     public (bool Pending, string? Answer) Ask(string prompt)
     {

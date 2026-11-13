@@ -1554,6 +1554,8 @@ public sealed class FloatState(string pane, Rect bounds)
 
     public bool Parked { get; set; }
 
+    public string? Mark { get; set; }
+
     public bool Hidden { get; set; }
 
     public DateTime HiddenSince { get; set; }
@@ -1600,6 +1602,8 @@ public sealed class ClientState(string id)
     public bool Leaving { get; set; }
 
     public string? Label { get; set; }
+
+    public bool LabelConfirmed { get; set; }
 
     public IReadOnlyList<string>? TakesBack { get; set; }
 
