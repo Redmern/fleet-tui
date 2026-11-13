@@ -20,6 +20,7 @@ public sealed partial class RemoteLinkTests : IAsyncLifetime
     private Endpoint _far = null!;
     private Func<string, string, RemoteChannel>? _open;
     private volatile List<NoticeDto> _farNotices = [];
+    private int _farNoticeReads;
     private readonly System.Collections.Concurrent.ConcurrentQueue<(string Project, IReadOnlyList<string> Keys)> _farDismissed = new();
     private readonly System.Collections.Concurrent.ConcurrentQueue<string> _toasts = new();
     private FleetDaemon _homeDaemon = null!;
@@ -44,7 +45,16 @@ public sealed partial class RemoteLinkTests : IAsyncLifetime
             Terminal = panes.NewTerminal,
             FleetExecutable = "fleet",
             RemoteOpen = open,
-            Notices = () => _farNotices,
+            RemoteRefreshEvery = TimeSpan.FromMilliseconds(200),
+            Notices = () =>
+            {
+                if (endpoint == _far)
+                {
+                    Interlocked.Increment(ref _farNoticeReads);
+                }
+
+                return _farNotices;
+            },
             DismissNotices = (project, keys) => _farDismissed.Enqueue((project, keys)),
             AlertSettings = () => (true, true),
             Toast = (title, _) => _toasts.Enqueue(title),
@@ -501,7 +511,8 @@ public sealed partial class RemoteLinkTests : IAsyncLifetime
         Assert.Empty(_toasts);
 
         _farNotices = [Notice("homelab", "old"), Notice("scraper", "elsewhere")];
-        await Task.Delay(TimeSpan.FromSeconds(3));
+        var read = Volatile.Read(ref _farNoticeReads);
+        await Eventually(() => Task.FromResult(Volatile.Read(ref _farNoticeReads) >= read + 3));
         Assert.DoesNotContain(window.Effects, e => e.Kind == HostEffects.Bell);
 
         _farNotices = [Notice("homelab", "old"), Notice("homelab", "new"), Notice("scraper", "elsewhere")];

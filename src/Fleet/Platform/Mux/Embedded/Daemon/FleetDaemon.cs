@@ -34,6 +34,8 @@ public sealed class DaemonOptions
 
     public TimeSpan SaveEvery { get; init; } = TimeSpan.FromSeconds(1);
 
+    public TimeSpan RemoteRefreshEvery { get; init; } = RemoteLink.RefreshEvery;
+
     public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
 
     public TimeSpan RevealWhenQuietRemote { get; init; } = TimeSpan.FromMilliseconds(15);
@@ -2333,7 +2335,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
-        var link = new RemoteLink(host, token => open(host, token), options.Log) { CanForward = _hub.For(host) is not null };
+        var link = new RemoteLink(host, token => open(host, token), options.Log)
+        {
+            CanForward = _hub.For(host) is not null,
+            RefreshPeriod = options.RemoteRefreshEvery,
+        };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);
         link.ClipboardImageRequested += asked => _ = Task.Run(() => RelayClipboardImageAsync(link, asked), CancellationToken.None);
