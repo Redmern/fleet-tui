@@ -34,7 +34,7 @@ Rules:
 - Show real command output, not "tests pass".
 - If a check failed or was skipped, say so.
 - Push the branch to origin as a plain branch (`git push origin <branch>`), not only as an AGit `refs/for/main` ref, so the mirror carries it to GitHub and CI runs there.
-- Put the run URL in the `GitHub CI:` line when you know it (`gh run list -R Redmern/fleet-tui --branch <branch>`); otherwise keep the branch query link.
+- Put the run URL in the `GitHub CI:` line when you know it (`gh run list -R Redmern/fleet-tui --branch <branch>`); otherwise keep the branch query link, with `/` in the branch name written as `%2F`.
 - Check that the git identity and remote match the profile before you push.
 - End the body with the attribution line from the harness.
 
