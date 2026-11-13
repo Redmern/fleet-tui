@@ -44,4 +44,9 @@ jobs:
         run: dotnet build Fleet.slnx --nologo -v minimal -maxcpucount:2
 
       - name: Test
-        run: dotnet test Fleet.slnx --no-build --nologo -v minimal
+        run: dotnet test Fleet.slnx --no-build --nologo -v minimal --filter "Category!=Perf"
+
+      - name: Perf
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: dotnet test Fleet.slnx --no-build --nologo -v minimal --filter "Category=Perf"
