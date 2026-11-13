@@ -8,10 +8,11 @@ using Attribute = Terminal.Gui.Drawing.Attribute;
 
 namespace Fleet.Tests.Ui;
 
+// Serial, because FleetTheme.Use recolors the process-wide palette that every view any other test draws reads.
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class PaletteCollection
 {
-    public const string Name = "palette";
+    public const string Name = "palette (recolors the process-wide FleetTheme)";
 }
 
 [Collection(PaletteCollection.Name)]
