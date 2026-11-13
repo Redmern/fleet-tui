@@ -61,6 +61,8 @@ jobs:
       # network. Windows also runs them on Windows PowerShell 5.1, which
       # get-fleet.ps1 has to support through irm | iex.
       - name: Installer output
+        id: installer
+        continue-on-error: true
         shell: pwsh
         run: |
           ./tests/scripts/installer-output.ps1
@@ -99,3 +101,12 @@ jobs:
           name: fleet-${{ matrix.rid }}
           path: out/${{ matrix.rid }}/fleet*
           if-no-files-found: error
+
+      # Installer output runs with continue-on-error so a failure there cannot
+      # hide the test results; this step makes the job fail afterwards.
+      - name: Fail the job if the installer output step failed
+        if: always() && steps.installer.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::error::Installer output failed; see that step. Test results are in the Test step."
+          exit 1
