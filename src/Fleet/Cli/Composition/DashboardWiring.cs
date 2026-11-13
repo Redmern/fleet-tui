@@ -1509,6 +1509,26 @@ public static class DashboardWiring
             OpenWebApp: async () => await DashboardWebPorts.OpenAsync(
                 webForwards,
                 webBrowser,
-                DashboardWebPorts.For(await webForwards.ListAsync().ConfigureAwait(false), project)).ConfigureAwait(false));
+                DashboardWebPorts.For(await webForwards.ListAsync().ConfigureAwait(false), project)).ConfigureAwait(false),
+
+            ChangeHarness: async (tab, index) =>
+            {
+                var agent = At(lister, project.Name, tab, index);
+
+                if (agent is null)
+                {
+                    return null;
+                }
+
+                if (AgentHarness.IsOrchestrator(agent.Harness))
+                {
+                    return $"{Label(agent)} is an orchestrator; fleet changes what agents open, not orchestrators.";
+                }
+
+                return Noted(
+                    log, project.Name, await FleetAsync
+                        .OnUi(app, () => ChooseHarness(app, keymap, harnesses, project.Name, agent))
+                        .ConfigureAwait(false));
+            });
     }
 }
