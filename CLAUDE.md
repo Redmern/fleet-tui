@@ -8,7 +8,7 @@ win-x64 and linux-x64. Design and rationale: `docs/DESIGN.md`; user-facing behav
 
 ```powershell
 dotnet build Fleet.slnx
-dotnet test Fleet.slnx --nologo -v minimal            # ~5,400 xunit tests, ~10-15 s; this is what CI runs
+dotnet test Fleet.slnx --nologo -v minimal            # ~5,400 xunit tests, ~10-15 s; CI runs it with --filter "Category!=Perf"
 dotnet format Fleet.slnx --verify-no-changes           # must pass; the solution is format-clean
 dotnet publish src/Fleet/Fleet.csproj -c Release -r win-x64 -o out/win-x64   # AOT: needs the MSVC build tools
 .\install.ps1                                          # build from source and install
@@ -16,6 +16,8 @@ fleet doctor                                           # end-to-end smoke test o
 ```
 
 "Done" means `dotnet build` and `dotnet test` pass. `TreatWarningsAsErrors` is on, so a warning fails the build.
+The SDK is pinned in `global.json` (10.0.113, patch roll-forward) and CI installs from it, so local and CI `dotnet format`
+agree: patch versions format differently. To bump it, change `global.json`, then update the local SDKs.
 Timing-sensitive tests live in the `Perf` category: CI runs them in a separate step that never fails the build, and
 `--filter "Category!=Perf"` is what gates.
 
