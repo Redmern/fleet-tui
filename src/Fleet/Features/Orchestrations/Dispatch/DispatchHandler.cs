@@ -39,8 +39,11 @@ public sealed class DispatchHandler(
     IModelRouter? router = null,
     IFleetLog? log = null,
     HarnessProfile? orchestrator = null,
-    IHarnessConfigs? configs = null)
+    IHarnessConfigs? configs = null,
+    TimeProvider? clock = null)
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     private readonly HarnessProfile _profile = orchestrator ?? HarnessRegistry.Claude;
 
     private readonly TimeSpan _readyTimeout = readyTimeout ?? TimeSpan.FromSeconds(60);
@@ -380,19 +383,19 @@ public sealed class DispatchHandler(
 
         for (var i = 0; i < attempts && !File.Exists(marker); i++)
         {
-            await Task.Delay(_pollInterval, ct).ConfigureAwait(false);
+            await Task.Delay(_pollInterval, _clock, ct).ConfigureAwait(false);
         }
 
         if (runs.InputRetry > TimeSpan.Zero)
         {
             await TypedPrompt
-                .UntilEchoedAsync(mux, pane, runs.Kickoff, runs.InputRetry, _readyTimeout, ct: ct)
+                .UntilEchoedAsync(mux, pane, runs.Kickoff, runs.InputRetry, _readyTimeout, clock: _clock, ct: ct)
                 .ConfigureAwait(false);
         }
         else
         {
             await mux.SendTextAsync(pane, runs.Kickoff, ct).ConfigureAwait(false);
-            await Task.Delay(TypedPrompt.EchoDelay, ct).ConfigureAwait(false);
+            await Task.Delay(TypedPrompt.EchoDelay, _clock, ct).ConfigureAwait(false);
         }
 
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);

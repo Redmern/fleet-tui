@@ -19,8 +19,10 @@ public static class TypedPrompt
         TimeSpan retry,
         TimeSpan within,
         TimeSpan? echoDelay = null,
+        TimeProvider? clock = null,
         CancellationToken ct = default)
     {
+        var time = clock ?? TimeProvider.System;
         var probe = prompt[..Math.Min(EchoLength, prompt.Length)];
         var pause = echoDelay is { } given && given > TimeSpan.Zero ? given : echoDelay is null ? EchoDelay : Shortest;
         var waited = TimeSpan.Zero;
@@ -41,7 +43,7 @@ public static class TypedPrompt
 
             do
             {
-                await Task.Delay(pause, ct).ConfigureAwait(false);
+                await Task.Delay(pause, time, ct).ConfigureAwait(false);
                 sinceTyped += pause;
 
                 var shown = await mux.GetTextAsync(pane, ct).ConfigureAwait(false);

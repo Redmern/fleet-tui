@@ -8,8 +8,11 @@ using Fleet.Shared.Messaging;
 
 namespace Fleet.Features.Agents.TellAgent;
 
-public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null, IAgentInboxes? inboxes = null)
+public sealed class TellAgentHandler(
+    IMuxDriver mux, TimeSpan? enterDelay = null, IAgentInboxes? inboxes = null, TimeProvider? clock = null)
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+
     private readonly TimeSpan _enterDelay = enterDelay ?? TimeSpan.FromMilliseconds(400);
 
     public static bool PumpedByNvim(AgentRecord agent) =>
@@ -69,13 +72,14 @@ public sealed class TellAgentHandler(IMuxDriver mux, TimeSpan? enterDelay = null
         if (retry > TimeSpan.Zero && echoWithin > TimeSpan.Zero)
         {
             await TypedPrompt
-                .UntilEchoedAsync(mux, pane, AgentHarness.AgentInstructionPrompt, retry, echoWithin, _enterDelay, ct)
+                .UntilEchoedAsync(
+                    mux, pane, AgentHarness.AgentInstructionPrompt, retry, echoWithin, _enterDelay, clock: _clock, ct: ct)
                 .ConfigureAwait(false);
         }
         else
         {
             await mux.SendTextAsync(pane, AgentHarness.AgentInstructionPrompt, ct).ConfigureAwait(false);
-            await Task.Delay(_enterDelay, ct).ConfigureAwait(false);
+            await Task.Delay(_enterDelay, _clock, ct).ConfigureAwait(false);
         }
 
         await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
