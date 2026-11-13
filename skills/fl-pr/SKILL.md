@@ -3,10 +3,10 @@ name: fl-pr
 description: Write the pull request text with evidence and a Merge Danger section, and a short retro for the Learn stage. Use in the Ai-DLC Deliver stage, before gh pr create, or when asked to write a PR or retro.
 ---
 
-Write the PR for a reviewer who has not seen the work. Open the PR only if the repo has a remote. Never merge.
+Write the PR for a reviewer who has not seen the work. Open the PR only if the repo has a remote, with `gh pr create` or the repository's own PR flow. Never merge.
 
 ## PR body
-Write it to a file in the worktree's `.fleet` folder (not committed) and use `gh pr create --body-file`. Do not use heredocs.
+Write it to a file in the worktree's `.fleet` folder (not committed) and pass it to the PR command (`gh pr create --body-file`, or the repository's equivalent). Do not use heredocs.
 
 ```
 ## Summary
@@ -26,11 +26,14 @@ Write it to a file in the worktree's `.fleet` folder (not committed) and use `gh
 
 ## Review
 <fl-review result: findings and how they were fixed>
+
+CI: <link to the CI run for this branch; leave out this line if the repository has no CI on branch pushes>
 ```
 
 Rules:
 - Show real command output, not "tests pass".
 - If a check failed or was skipped, say so.
+- If the repository's CLAUDE.md names a CI that runs on branch pushes (for example a mirror to GitHub), add a line `CI: <link to the run for this branch>`, using the run URL when you know it. Push the branch itself, not only a review ref, so that CI runs.
 - Check that the git identity and remote match the profile before you push.
 - End the body with the attribution line from the harness.
 
