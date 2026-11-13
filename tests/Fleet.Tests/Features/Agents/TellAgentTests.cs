@@ -11,6 +11,7 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Settings;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Settings.Models;
+using Fleet.Tests.EndToEnd.MixedTeam;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -241,7 +242,9 @@ public sealed class TellAgentTests : IDisposable
         var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Opencode, string.Empty, false);
         var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
 
-        await Teller.DeliverAsync(agent, pane, "fix it", echoWithin: TimeSpan.FromMilliseconds(1300));
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, clock: new SkippingClock());
+
+        await teller.DeliverAsync(agent, pane, "fix it", echoWithin: TimeSpan.FromMilliseconds(1300));
 
         Assert.True(Prompts(pane) >= 2, string.Join(" | ", _mux.SentTo(pane)));
         Assert.Equal("\r", _mux.SentTo(pane)[^1]);
