@@ -46,6 +46,44 @@ public sealed partial class RemoteLinkTests
     }
 
     [Fact]
+    public async Task The_remote_machines_chord_in_a_remote_view_opens_here_and_never_reaches_the_remote()
+    {
+        var (_, _, window, workspace) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu", "remotes");
+
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "remotes"])));
+        Assert.Null(_farPanes.ByProgram("fleet"));
+    }
+
+    [Theory]
+    [InlineData("switch-project")]
+    [InlineData("notifications")]
+    public async Task The_switch_project_and_notifications_chords_in_a_remote_view_open_on_the_machine_you_sit_at(string action)
+    {
+        var (_, _, window, workspace) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu", action);
+
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", action])));
+        Assert.Null(_farPanes.ByProgram("fleet"));
+    }
+
+    [Fact]
+    public async Task A_menu_chord_for_a_project_action_in_a_remote_view_still_reaches_the_remote()
+    {
+        var (_, _, window, _) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu", "list-agents");
+
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", "homelab", "--action", "list-agents"])));
+        Assert.Null(_homePanes.ByProgram("fleet"));
+    }
+
+    [Fact]
     public async Task An_older_viewer_that_announced_nothing_gets_switch_project_and_notifications_back_but_not_remote_machines()
     {
         await ShowingHomelabAsync();
@@ -84,4 +122,15 @@ public sealed partial class RemoteLinkTests
 
         Assert.True((await viewer.RequestAsync(new ControlRequest { Op = "hand-back", Client = viewer.Id, Text = "remotes" })).Pending);
     }
+
+    [Theory]
+    [InlineData("remotes", true)]
+    [InlineData("Remotes", true)]
+    [InlineData(" remotes ", true)]
+    [InlineData("SWITCH-PROJECT", true)]
+    [InlineData("list-agents", false)]
+    [InlineData(" Quit ", false)]
+    [InlineData(null, false)]
+    public void A_menu_chord_stays_here_when_its_action_reads_as_an_owned_screen(string? arg, bool stays) =>
+        Assert.Equal(stays, FleetDaemon.StaysHere(new CommandMessage { Name = "menu", Arg = arg }));
 }

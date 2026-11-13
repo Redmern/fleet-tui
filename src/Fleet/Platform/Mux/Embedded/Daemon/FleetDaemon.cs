@@ -11,6 +11,7 @@ using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
+using Fleet.Shared.Keymap;
 using Fleet.Shared.Viewing;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
@@ -2361,6 +2362,10 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string LocalCommands = "|switch-project|next-workspace|show|redraw|head|";
 
+    public static bool StaysHere(CommandMessage command) =>
+        LocalCommands.Contains($"|{command.Name}|", StringComparison.Ordinal)
+        || (command.Name == "menu" && command.Arg is { } arg && ViewerScreens.Owns(FleetActionIds.Parse(arg)));
+
     public static string RemoteWorkspace(string machine) => "@" + machine;
 
     private RemoteLink? RemoteTarget(AttachSession session, MessageType type, byte[] payload)
@@ -2380,8 +2385,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 return null;
             }
 
-            if (type == MessageType.Command
-                && LocalCommands.Contains($"|{Wire.Read(payload, WireJsonContext.Default.CommandMessage).Name}|", StringComparison.Ordinal))
+            if (type == MessageType.Command && StaysHere(Wire.Read(payload, WireJsonContext.Default.CommandMessage)))
             {
                 return null;
             }
