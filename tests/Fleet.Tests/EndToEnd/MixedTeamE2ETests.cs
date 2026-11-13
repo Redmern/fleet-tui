@@ -5,6 +5,7 @@ using Fleet.Shared.Mcp;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Tests.EndToEnd.MixedTeam;
+using Fleet.Tests.Platform.Codex;
 
 namespace Fleet.Tests.EndToEnd;
 
@@ -21,7 +22,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 
     private readonly MixedTeamRig _team;
 
-    public MixedTeamE2ETests() => _team = new MixedTeamRig(Path.Combine(ConfigHome, "project"));
+    public MixedTeamE2ETests() => _team = new MixedTeamRig(Path.Combine(ConfigHome, "pro\\ject"));
 
     private static (string, string)[] To(string repository, string branch, string message) =>
         [("repository", repository), ("branch", branch), ("message", message)];
@@ -98,7 +99,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         if (harness == HarnessRegistry.CodexName)
         {
             Assert.Contains(
-                $"[projects.\"{folder}\"]\ntrust_level = \"trusted\"",
+                $"[projects.{TomlKey.Quoted(folder)}]\ntrust_level = \"trusted\"",
                 File.ReadAllText(_team.CodexUserConfig).ReplaceLineEndings("\n"));
         }
 
