@@ -137,7 +137,7 @@ public sealed class NvimKeybindsTests : IDisposable
     {
         Directory.CreateDirectory(Path.Combine(_config, "lua", "fleet", NvimKeybinds.GeneratedFile));
 
-        Assert.True(FleetNvimConfig.Install(_config));
+        Assert.True(FleetNvimConfig.Install(_config, KeybindDefaults.Set, writePatience: TimeSpan.FromMilliseconds(50)));
 
         Assert.True(File.Exists(Path.Combine(_config, "init.lua")));
     }
