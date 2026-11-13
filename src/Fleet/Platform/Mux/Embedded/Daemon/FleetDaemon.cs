@@ -711,7 +711,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
                     var iso = options.Iso();
 
-                    if (!iso.On && ReachesPastExecute(request.Op) && ViewerRefusalLocked(request, session?.Client, bridged) is { } viewerRefusal)
+                    if ((!iso.On || (!bridged && ForwardHub.SlowOps.Contains(request.Op))) && ReachesPastExecute(request.Op) && ViewerRefusalLocked(request, session?.Client, bridged) is { } viewerRefusal)
                     {
                         await wire.SendAsync(
                             MessageType.Response,
