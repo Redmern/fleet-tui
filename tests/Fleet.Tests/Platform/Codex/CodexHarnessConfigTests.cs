@@ -13,7 +13,9 @@ public sealed class CodexHarnessConfigTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private string Folder => Path.Combine(_root, "wt");
+    private const string Leaf = "w\\t";
+
+    private string Folder => Path.Combine(_root, Leaf);
 
     private string ProjectConfig => Path.Combine(Folder, ".codex", "config.toml");
 
@@ -26,7 +28,7 @@ public sealed class CodexHarnessConfigTests : IDisposable
         UserConfig);
 
     private static string Trusted(string path) =>
-        $"[projects.\"{path.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"]\ntrust_level = \"trusted\"\n";
+        $"[projects.{TomlKey.Quoted(path)}]\ntrust_level = \"trusted\"\n";
 
     private static string FleetSection(string caller) =>
         "[mcp_servers.fleet]\n"
@@ -133,19 +135,19 @@ public sealed class CodexHarnessConfigTests : IDisposable
     [Fact]
     public void A_project_entry_without_a_trust_level_gets_one_under_its_header()
     {
-        Seed(UserConfig, $"[projects.\"{Folder}\"]\nnote = 1\n\n[tui]\nx = 1\n");
+        Seed(UserConfig, $"[projects.{TomlKey.Quoted(Folder)}]\nnote = 1\n\n[tui]\nx = 1\n");
 
         Config().WriteForAgent(Folder, "proj", "api", "main");
 
         Assert.Equal(
-            $"[projects.\"{Folder}\"]\ntrust_level = \"trusted\"\nnote = 1\n\n[tui]\nx = 1\n",
+            $"[projects.{TomlKey.Quoted(Folder)}]\ntrust_level = \"trusted\"\nnote = 1\n\n[tui]\nx = 1\n",
             File.ReadAllText(UserConfig));
     }
 
     [Fact]
     public void A_folder_the_user_marked_untrusted_stays_untrusted_and_is_reported()
     {
-        var text = $"[projects.\"{Folder}\"]\ntrust_level = \"untrusted\"\n";
+        var text = $"[projects.{TomlKey.Quoted(Folder)}]\ntrust_level = \"untrusted\"\n";
         Seed(UserConfig, text);
 
         var written = Config().WriteForAgent(Folder, "proj", "api", "main");
@@ -193,7 +195,7 @@ public sealed class CodexHarnessConfigTests : IDisposable
         var link = Path.Combine(_root, "link");
         Directory.CreateSymbolicLink(link, _root);
 
-        Config().WriteForAgent(Path.Combine(link, "wt"), "proj", "api", "main");
+        Config().WriteForAgent(Path.Combine(link, Leaf), "proj", "api", "main");
 
         Assert.Equal(Trusted(Folder), File.ReadAllText(UserConfig));
     }
