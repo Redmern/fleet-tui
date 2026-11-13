@@ -19,9 +19,11 @@ fleet doctor                                           # end-to-end smoke test o
 Timing-sensitive tests live in the `Perf` category: CI runs them in a separate step that never fails the build, and
 `--filter "Category!=Perf"` is what gates.
 
-Smoke-test fleet binaries under `env -i` with a sandbox `FLEET_ENDPOINT` and `XDG_RUNTIME_DIR` (plus sandbox HOME/XDG
-dirs). Fleet panes export the real `FLEET_ENDPOINT`; without this a smoke test of `fleet uninstall` or any daemon verb
-can stop the real daemon.
+Smoke-test fleet binaries with `scripts/sandbox-smoke.sh <fleet binary>` (Linux) or `scripts/sandbox-smoke.ps1`
+(Windows/pwsh), never by hand. Fleet panes export the real `FLEET_ENDPOINT`; without a sandbox a smoke test of
+`fleet uninstall` or any daemon verb can stop the real daemon. The scripts run the binary under `env -i` with a
+throwaway HOME, XDG dirs, `XDG_RUNTIME_DIR` and `FLEET_ENDPOINT`, and redirect `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and
+`PI_CODING_AGENT_DIR` too; any hand-made sandbox must do the same.
 
 ## Layout (`src/Fleet`)
 
