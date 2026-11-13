@@ -27,7 +27,10 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
+
+      - name: Show the SDK
+        run: dotnet --version
 
       # NativeAOT links with clang on Linux; Windows runners already have MSVC.
       - name: Install the native toolchain
