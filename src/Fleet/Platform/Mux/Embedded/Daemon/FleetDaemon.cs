@@ -12,6 +12,7 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
 using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Viewing;
 using Fleet.Shared.Viewing.Enums;
 using Fleet.Shared.Viewing.Models;
@@ -1122,6 +1123,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private bool IsSshWindow(string client) => _bridged.ContainsKey(client) && _model.Client(client)?.Label is null;
+
     private bool IsRemoteViewer(string client) => _bridged.ContainsKey(client) || _model.Client(client)?.Label is not null;
 
     private string? ActingClient(ControlRequest request, string? attachedClient) =>
@@ -2122,6 +2125,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     break;
                 case "float-new":
                     NewFloat(session.Client);
+                    break;
+                case "head" when IsSshWindow(session.Client):
+                    OpenMenu(session.Client, FleetActionIds.For(FleetAction.OpenHeadVoice));
                     break;
                 case "head":
                     ToggleHead(session.Client, command.Arg == "voice");

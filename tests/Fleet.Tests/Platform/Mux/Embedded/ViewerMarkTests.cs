@@ -86,6 +86,8 @@ public sealed class ViewerMarkTests : IAsyncLifetime
 
     private int Menus => _panes.Started.Count(p => p.Program == "fleet");
 
+    private bool HeadStarted => _panes.Started.Any(p => p.Program == "fleet" && p.Args is ["head", ..]);
+
     private static async Task Eventually(Func<bool> condition, TimeSpan? within = null)
     {
         var deadline = DateTime.UtcNow.Add(within ?? TimeSpan.FromSeconds(10));
@@ -342,5 +344,33 @@ public sealed class ViewerMarkTests : IAsyncLifetime
 
         Assert.False(parked.IsDisposed);
         Assert.Equal(1, Menus);
+    }
+
+    [Fact]
+    public async Task The_head_chord_from_an_ssh_window_opens_the_menu_with_the_head_action_instead_of_toggling_the_head()
+    {
+        await StartAsync(warm: false);
+        var ssh = await SshWindowAsync();
+        await ssh.WaitForFramesAsync(1);
+
+        await ssh.SendCommandAsync("head");
+
+        await Eventually(() => Menus == 1);
+        Assert.Equal(["menu", "--project", "techweb", "--action", "head-voice"], _panes.ByProgram("fleet")!.Args);
+        Assert.Equal(SshMark, _panes.ByProgram("fleet")!.Env[ViewedFrom.Variable]);
+        Assert.False(HeadStarted);
+    }
+
+    [Fact]
+    public async Task The_head_chord_from_a_client_sitting_at_the_machine_still_toggles_the_head()
+    {
+        await StartAsync(warm: false);
+        var local = await LocalAsync();
+        await local.WaitForFramesAsync(1);
+
+        await local.SendCommandAsync("head");
+
+        await Eventually(() => HeadStarted);
+        Assert.DoesNotContain(_panes.Started, p => p.Args.Contains("menu"));
     }
 }
