@@ -36,6 +36,8 @@ public sealed class DaemonOptions
 
     public TimeSpan RemoteRefreshEvery { get; init; } = RemoteLink.RefreshEvery;
 
+    public TimeSpan RemoteErrorLinesGrace { get; init; } = RemoteLink.ErrorLinesWithin;
+
     public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
 
     public TimeSpan RevealWhenQuietRemote { get; init; } = TimeSpan.FromMilliseconds(15);
@@ -2339,6 +2341,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             CanForward = _hub.For(host) is not null,
             RefreshPeriod = options.RemoteRefreshEvery,
+            ErrorLinesGrace = options.RemoteErrorLinesGrace,
         };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);

@@ -47,6 +47,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public TimeSpan RefreshPeriod { get; init; } = RefreshEvery;
 
+    public TimeSpan ErrorLinesGrace { get; init; } = ErrorLinesWithin;
+
     public string Name
     {
         get
@@ -403,7 +405,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                                       or TimeoutException or System.Text.Json.JsonException
                                       or System.ComponentModel.Win32Exception)
         {
-            await Task.Delay(300, CancellationToken.None).ConfigureAwait(false);
+            await Task.Delay(ErrorLinesGrace, CancellationToken.None).ConfigureAwait(false);
 
             lock (_gate)
             {

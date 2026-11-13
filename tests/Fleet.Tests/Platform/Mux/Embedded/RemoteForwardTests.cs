@@ -69,6 +69,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         var home = new FleetDaemon(new DaemonOptions
         {
             Endpoint = _home,
+            RemoteErrorLinesGrace = TimeSpan.FromMilliseconds(50),
             Pty = _homePanes.NewPty,
             Terminal = _homePanes.NewTerminal,
             RemoteOpen = (_, _) =>
@@ -104,6 +105,9 @@ public sealed class RemoteForwardTests : IAsyncLifetime
                 PendingAfter = TimeSpan.FromMilliseconds(300),
                 StackWithin = TimeSpan.FromSeconds(5),
                 ReconnectAfter = TimeSpan.FromMilliseconds(100),
+                ReconnectAtMost = TimeSpan.FromMilliseconds(200),
+                ConnectPollEvery = TimeSpan.FromMilliseconds(25),
+                SettlePollEvery = TimeSpan.FromMilliseconds(25),
             },
         });
 
@@ -246,8 +250,9 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     [Fact]
     public async Task A_fleet_viewer_that_never_answers_is_reported_as_not_answering()
     {
+        var far = ImpatientFar();
         await using var client = await DaemonTests.TestClient.ConnectAsync(
-            _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Label = RemoteLink.Label("laptop"));
+            far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Label = RemoteLink.Label("laptop"));
 
         var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
 
@@ -259,8 +264,9 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     [Fact]
     public async Task A_fleet_viewer_on_another_build_that_never_answers_names_both_builds()
     {
+        var far = ImpatientFar();
         await using var client = await DaemonTests.TestClient.ConnectAsync(
-            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
             {
                 hello.Label = RemoteLink.Label("laptop");
                 hello.Build = "0.0.1";
@@ -276,8 +282,9 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     [Fact]
     public async Task A_fleet_viewer_on_the_same_build_that_never_answers_gives_no_build_reason()
     {
+        var far = ImpatientFar();
         await using var client = await DaemonTests.TestClient.ConnectAsync(
-            _far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
+            far, ClientRoles.Attach, 80, 24, null, furnish: hello =>
             {
                 hello.Label = RemoteLink.Label("laptop");
                 hello.Build = FleetVersion.Current;
@@ -431,8 +438,9 @@ public sealed class RemoteForwardTests : IAsyncLifetime
     [Fact]
     public async Task A_viewer_that_does_not_say_whether_it_forwards_is_still_sent_the_forward()
     {
+        var far = ImpatientFar();
         await using var client = await DaemonTests.TestClient.ConnectAsync(
-            _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Label = RemoteLink.Label("laptop"));
+            far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Label = RemoteLink.Label("laptop"));
 
         var sent = await client.RequestAsync(new ControlRequest { Op = ForwardHub.ViewerForwardOp, Port = 5173, Client = client.Id });
 
@@ -530,6 +538,19 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         Assert.Null(sent.Viewer);
     }
 
+    private Endpoint ImpatientFar()
+    {
+        var endpoint = NewEndpoint();
+        _running.Add(new FleetDaemon(new DaemonOptions
+        {
+            Endpoint = endpoint,
+            Pty = _farPanes.NewPty,
+            Terminal = _farPanes.NewTerminal,
+            Forwards = new ForwardOptions { ViewerAnswerWithin = TimeSpan.FromMilliseconds(300) },
+        }).RunAsync(_stop.Token));
+        return endpoint;
+    }
+
     private Endpoint TunnellingViewer(FakeTunnels tunnels) => TunnellingViewer(tunnels, _stop.Token).Endpoint;
 
     private (Endpoint Endpoint, Task Running) TunnellingViewer(FakeTunnels tunnels, CancellationToken stop)
@@ -559,6 +580,8 @@ public sealed class RemoteForwardTests : IAsyncLifetime
                 ScanEvery = TimeSpan.FromMilliseconds(50),
                 ForwardWithin = TimeSpan.FromSeconds(5),
                 ReconnectAfter = TimeSpan.FromMilliseconds(100),
+                ConnectPollEvery = TimeSpan.FromMilliseconds(25),
+                SettlePollEvery = TimeSpan.FromMilliseconds(25),
             },
         }).RunAsync(stop);
         _running.Add(running);

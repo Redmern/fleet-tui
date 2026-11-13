@@ -41,6 +41,10 @@ public sealed class ForwardOptions
 
     public TimeSpan ReconnectAtMost { get; init; } = TimeSpan.FromMinutes(1);
 
+    public TimeSpan ConnectPollEvery { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    public TimeSpan SettlePollEvery { get; init; } = TimeSpan.FromMilliseconds(500);
+
     public Func<string, string?, CancellationToken, Task>? LinkUp { get; init; }
 }
 
@@ -226,7 +230,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
 
         forwards.Pin(port, null);
         await forwards.ForwardNowAsync(port, null, ct).ConfigureAwait(false);
-        var row = await SettledAsync(forwards, port, options.ForwardWithin, options.PendingAfter, ct).ConfigureAwait(false);
+        var row = await SettledAsync(forwards, port, options.SettlePollEvery, options.ForwardWithin, options.PendingAfter, ct).ConfigureAwait(false);
 
         if (row.Url is { } url)
         {
@@ -259,7 +263,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
     {
         try
         {
-            var row = await SettledAsync(forwards, port, options.OpenWhenListeningWithin, options.PendingAfter, ct, waitForListening: true)
+            var row = await SettledAsync(forwards, port, options.SettlePollEvery, options.OpenWhenListeningWithin, options.PendingAfter, ct, waitForListening: true)
                 .ConfigureAwait(false);
             if (row.Url is { } url && forwards.IsPinned(port))
             {
@@ -300,7 +304,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                     forwards.Pin(port, local);
                     try
                     {
-                        await ConnectedAsync(host, linkOf, connect, options.ForwardWithin, ct).ConfigureAwait(false);
+                        await ConnectedAsync(host, linkOf, connect, options.ForwardWithin, options.ConnectPollEvery, ct).ConfigureAwait(false);
                     }
                     catch (InvalidOperationException) when (!pinnedBefore)
                     {
@@ -309,7 +313,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                     }
 
                     await forwards.ForwardNowAsync(port, local, ct).ConfigureAwait(false);
-                    var row = await SettledAsync(forwards, port, options.ForwardWithin, options.PendingAfter, ct).ConfigureAwait(false);
+                    var row = await SettledAsync(forwards, port, options.SettlePollEvery, options.ForwardWithin, options.PendingAfter, ct).ConfigureAwait(false);
                     return new ControlResponse { Ok = true, Forwards = [ToDto(row)] };
                 }
 
@@ -449,7 +453,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         Action<string> connect,
         CancellationToken ct)
     {
-        var link = await ConnectedAsync(host, linkOf, connect, options.ForwardWithin, ct).ConfigureAwait(false);
+        var link = await ConnectedAsync(host, linkOf, connect, options.ForwardWithin, options.ConnectPollEvery, ct).ConfigureAwait(false);
         var config = link.Configs.FirstOrDefault(c => string.Equals(c.Name, project, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException(
                 $"{link.Name} has no project {project}, or its fleet is too old to share project settings; update fleet there");
@@ -520,7 +524,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
         }
 
         var stackClock = System.Diagnostics.Stopwatch.StartNew();
-        var row = await SettledAsync(forwards, port, options.StackWithin, options.PendingAfter, ct, waitForListening: true).ConfigureAwait(false);
+        var row = await SettledAsync(forwards, port, options.SettlePollEvery, options.StackWithin, options.PendingAfter, ct, waitForListening: true).ConfigureAwait(false);
         if (row.State != ForwardState.Forwarded)
         {
             throw new TimeoutException(
@@ -610,7 +614,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
     }
 
     private static async Task<RemoteLink> ConnectedAsync(
-        string host, Func<string, RemoteLink?> linkOf, Action<string> connect, TimeSpan within, CancellationToken ct)
+        string host, Func<string, RemoteLink?> linkOf, Action<string> connect, TimeSpan within, TimeSpan poll, CancellationToken ct)
     {
         if (linkOf(host) is not { } link || link.Snapshot().State == RemoteLink.Failed)
         {
@@ -644,12 +648,13 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                 throw new TimeoutException($"{host} is still connecting");
             }
 
-            await Task.Delay(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+            await Task.Delay(poll, ct).ConfigureAwait(false);
         }
     }
 
     private static async Task<PortForward> SettledAsync(
-        HostForwards forwards, int port, TimeSpan within, TimeSpan pendingAfter, CancellationToken ct, bool waitForListening = false)
+        HostForwards forwards, int port, TimeSpan poll, TimeSpan within, TimeSpan pendingAfter, CancellationToken ct,
+        bool waitForListening = false)
     {
         var waited = System.Diagnostics.Stopwatch.StartNew();
         while (true)
@@ -664,7 +669,7 @@ public sealed class ForwardHub(ForwardOptions options, Action<string> log)
                 return row;
             }
 
-            await Task.Delay(TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false);
+            await Task.Delay(poll, ct).ConfigureAwait(false);
         }
     }
 
