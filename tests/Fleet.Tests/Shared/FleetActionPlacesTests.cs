@@ -66,7 +66,6 @@ public class FleetActionPlacesTests
         Exempt(Place.Group, "no key: StopAgent is reached from the configure-agent card and the MCP stop_agent tool", FleetAction.StopAgent);
         Exempt(Place.KeybindsJson, "no key: ChangeHarness is reached from the dashboard menu item, the configure-agent card and the MCP change_harness tool", FleetAction.ChangeHarness);
         Exempt(Place.KeybindsJson, "no key: StopAgent is reached from the configure-agent card and the MCP stop_agent tool", FleetAction.StopAgent);
-        Exempt(Place.Handler, "GAP, not by design: the dashboard menu offers it (DashboardWiring.MenuActions) and the head can request it (DashboardActions.Served), but ShowDashboardView.Dispatch has no case and no default, so choosing it does nothing; the working path is the 'o' choice of the configure-agent card (ChooseHarness)", FleetAction.ChangeHarness);
         Exempt(Place.Handler, "never offered in the dashboard menu or served to the head; stopping runs from the configure-agent card (stopper) and the MCP stop_agent tool", FleetAction.StopAgent);
         Exempt(Place.Docs, "no key: ChangeHarness is reached from the dashboard menu item, the configure-agent card and the MCP change_harness tool", FleetAction.ChangeHarness);
         Exempt(Place.Docs, "no key: StopAgent is reached from the configure-agent card and the MCP stop_agent tool", FleetAction.StopAgent);
@@ -144,10 +143,10 @@ public class FleetActionPlacesTests
         Assert.Contains(Actions, MenuEligible);
     }
 
-    private static readonly FleetAction[] KnownUndispatched = [FleetAction.ChangeHarness];
+    private static readonly FleetAction[] KnownUndispatched = [];
 
     [Fact]
-    public void Every_action_the_dashboard_offers_has_a_case_in_dispatch_except_the_known_gap()
+    public void Every_action_the_dashboard_offers_has_a_case_in_dispatch()
     {
         var wiring = Source("Cli/Composition/DashboardWiring.cs");
         var menu = Regex.Match(wiring, @"MenuActions =\s*\[(.*?)\];", RegexOptions.Singleline).Groups[1].Value;

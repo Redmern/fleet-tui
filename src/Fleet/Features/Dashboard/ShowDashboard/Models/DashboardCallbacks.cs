@@ -48,4 +48,5 @@ public sealed record DashboardCallbacks(
     Func<bool>? Outdated = null,
     Func<Task<string?>>? HideAllAgents = null,
     Func<Task<string?>>? WebPorts = null,
-    Func<Task<string?>>? OpenWebApp = null);
+    Func<Task<string?>>? OpenWebApp = null,
+    Func<int, int, Task<string?>>? ChangeHarness = null);

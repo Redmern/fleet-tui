@@ -718,6 +718,35 @@ public static class ShowDashboardView
             });
         }
 
+        void ChangeHarness()
+        {
+            if (callbacks.ChangeHarness is not { } change)
+            {
+                return;
+            }
+
+            var tab = ActiveTab();
+            var row = ActiveRow();
+
+            busy = true;
+
+            Start(async () =>
+            {
+                try
+                {
+                    var message = await change(tab, row).ConfigureAwait(false);
+
+                    app.Invoke(() => status.Text = message ?? string.Empty);
+
+                    await RefreshAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    busy = false;
+                }
+            });
+        }
+
         RepositoryChoice? Highlighted()
         {
             if (repositories.Count == 0)
@@ -1006,6 +1035,10 @@ public static class ShowDashboardView
 
                 case FleetAction.HideAllAgents:
                     HideAll();
+                    break;
+
+                case FleetAction.ChangeHarness:
+                    ChangeHarness();
                     break;
 
                 case FleetAction.OpenEditor:
