@@ -1763,3 +1763,7 @@ A third attempt at the idea behind [`Redmern/fleet`](https://github.com/Redmern/
 is built once for both, with the multiplexer behind an interface. It shares no
 code with either; both were read as reference, and the traps they had already
 paid for are recorded in `DESIGN.md`.
+
+## License
+
+MIT; see [LICENSE](LICENSE).
