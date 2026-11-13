@@ -45,7 +45,8 @@ public sealed class RemoveAgentTests : IDisposable
         }
     }
 
-    private RemoveAgentHandler Handler() => new(new GitRunner(), _mux, _store, folderRetries: []);
+    private RemoveAgentHandler Handler() =>
+        new(new GitRunner(), _mux, _store, folderRetries: [], backoff: TimeSpan.FromMilliseconds(20));
 
     private async Task<AgentRecord> AgentAsync(string branch = "feature/login")
     {

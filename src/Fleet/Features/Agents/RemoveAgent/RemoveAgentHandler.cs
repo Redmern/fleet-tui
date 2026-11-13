@@ -10,11 +10,13 @@ using Fleet.Shared.Results;
 namespace Fleet.Features.Agents.RemoveAgent;
 
 public sealed class RemoveAgentHandler(
-    IGitRunner git, IMuxDriver mux, IAgentStore store, IReadOnlyList<TimeSpan>? folderRetries = null)
+    IGitRunner git, IMuxDriver mux, IAgentStore store, IReadOnlyList<TimeSpan>? folderRetries = null, TimeSpan? backoff = null)
 {
     private const int Attempts = 4;
 
-    private static readonly TimeSpan Backoff = TimeSpan.FromMilliseconds(400);
+    private static readonly TimeSpan DefaultBackoff = TimeSpan.FromMilliseconds(400);
+
+    private readonly TimeSpan _backoff = backoff ?? DefaultBackoff;
 
     private static readonly IReadOnlyList<TimeSpan> FolderPatience =
     [
@@ -148,14 +150,14 @@ public sealed class RemoveAgentHandler(
                 return $"git worktree remove: {removed.Message}";
             }
 
-            await Task.Delay(Backoff, ct).ConfigureAwait(false);
+            await Task.Delay(_backoff, ct).ConfigureAwait(false);
         }
 
         for (var attempt = 0; attempt < Attempts && Directory.Exists(worktree); attempt++)
         {
             if (attempt > 0)
             {
-                await Task.Delay(Backoff, ct).ConfigureAwait(false);
+                await Task.Delay(_backoff, ct).ConfigureAwait(false);
             }
 
             Discard(worktree);
