@@ -76,6 +76,8 @@ public sealed class DaemonOptions
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
 
+    public Func<string, string?> RemoteNickname { get; init; } = _ => null;
+
     public Func<IReadOnlyList<NoticeDto>> Notices { get; init; } = () => [];
 
     public Func<IReadOnlyList<string>> SavedProjects { get; init; } = () => [];
@@ -2452,6 +2454,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             CanForward = _hub.For(host) is not null,
             RefreshPeriod = options.RemoteRefreshEvery,
             ErrorLinesGrace = options.RemoteErrorLinesGrace,
+            Nickname = () => options.RemoteNickname(host),
         };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);

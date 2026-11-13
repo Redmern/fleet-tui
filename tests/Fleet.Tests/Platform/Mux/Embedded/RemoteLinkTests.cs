@@ -46,6 +46,7 @@ public sealed partial class RemoteLinkTests : IAsyncLifetime
             FleetExecutable = "fleet",
             RemoteOpen = open,
             RemoteRefreshEvery = TimeSpan.FromMilliseconds(200),
+            RemoteNickname = _ => _nickname,
             Notices = () =>
             {
                 if (endpoint == _far)

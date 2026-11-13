@@ -5,7 +5,9 @@ using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
+using Fleet.Platform.Mux.Embedded.Model;
 using Fleet.Shared.Viewing;
+using Fleet.Shared.Viewing.Models;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
@@ -410,6 +412,72 @@ public sealed partial class RemoteLinkTests
         Assert.DoesNotContain(Third, linked.Projects);
         Assert.Equal(panesOfThird, _farDaemon.Model.PanesIn(Third).Count());
         Assert.DoesNotContain(Third, Assert.Single(await RemotesAsync()).Running);
+    }
+
+    private volatile string? _nickname;
+
+    private ClientState FarLinkClient() => _farDaemon.Model.Clients.Single(c => c.Label is not null);
+
+    [Fact]
+    public async Task The_tab_bar_of_a_remote_view_reads_the_nickname_the_machine_you_sit_at_gave_the_remote()
+    {
+        _nickname = "barn";
+        var (_, home, _, workspace) = await ShowingHomelabAsync();
+
+        Assert.Equal(RemoteLink.Label("barn"), FarLinkClient().Label);
+        var remotePane = (await PanesAsync(home)).Single(p => p.Session == workspace).Id;
+        await Eventually(async () => (await home.RequestAsync(new ControlRequest { Op = "get-text", Pane = remotePane })).Text is { } text
+            && text.Contains("homelab @barn", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_menu_the_remote_opens_for_a_view_with_a_nickname_is_marked_with_the_nickname()
+    {
+        _nickname = "barn";
+        var (_, _, window, _) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu");
+
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is not null));
+        Assert.Equal("view:barn", _farPanes.ByProgram("fleet")!.Env[ViewedFrom.Variable]);
+    }
+
+    [Fact]
+    public async Task Without_a_nickname_the_remote_reads_its_machine_name()
+    {
+        var (_, _, window, _) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu");
+
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is not null));
+        Assert.Equal(RemoteLink.Label(Environment.MachineName), FarLinkClient().Label);
+        Assert.Equal($"view:{Environment.MachineName}", _farPanes.ByProgram("fleet")!.Env[ViewedFrom.Variable]);
+    }
+
+    [Fact]
+    public async Task A_nickname_given_after_connecting_is_sent_on_the_next_show_with_the_owned_screens()
+    {
+        var (_, home, window, _) = await ShowingHomelabAsync();
+        Assert.Equal(RemoteLink.Label(Environment.MachineName), FarLinkClient().Label);
+
+        _nickname = "barn";
+        Assert.True((await home.RequestAsync(new ControlRequest { Op = "show-remote", Client = window.Id, Host = "red@far", Workspace = "homelab" })).Ok);
+
+        await Eventually(() => Task.FromResult(FarLinkClient().Label == RemoteLink.Label("barn")));
+        Assert.Equal(ViewerScreens.Ids, FarLinkClient().TakesBack);
+    }
+
+    [Fact]
+    public async Task Remote_machines_still_comes_back_to_the_machine_you_sit_at_after_the_nickname_label()
+    {
+        _nickname = "barn";
+        var (far, _, _, workspace) = await ShowingHomelabAsync();
+
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = FarLinkClient().Id, Text = "remotes" });
+
+        Assert.True(handed.Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "remotes"])));
     }
 
     private static string ThirdWorkspace => FleetDaemon.RemoteWorkspace(Environment.MachineName);
