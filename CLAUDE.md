@@ -8,7 +8,7 @@ win-x64 and linux-x64. Design and rationale: `docs/DESIGN.md`; user-facing behav
 
 ```powershell
 dotnet build Fleet.slnx
-dotnet test Fleet.slnx --nologo -v minimal            # ~925 xunit tests, ~40 s; this is what CI runs
+dotnet test Fleet.slnx --nologo -v minimal            # ~5,400 xunit tests, ~10-15 s; this is what CI runs
 dotnet format Fleet.slnx --verify-no-changes           # must pass; the solution is format-clean
 dotnet publish src/Fleet/Fleet.csproj -c Release -r win-x64 -o out/win-x64   # AOT: needs the MSVC build tools
 .\install.ps1                                          # build from source and install
@@ -16,6 +16,8 @@ fleet doctor                                           # end-to-end smoke test o
 ```
 
 "Done" means `dotnet build` and `dotnet test` pass. `TreatWarningsAsErrors` is on, so a warning fails the build.
+Timing-sensitive tests live in the `Perf` category: CI runs them in a separate step that never fails the build, and
+`--filter "Category!=Perf"` is what gates.
 
 Smoke-test fleet binaries under `env -i` with a sandbox `FLEET_ENDPOINT` and `XDG_RUNTIME_DIR` (plus sandbox HOME/XDG
 dirs). Fleet panes export the real `FLEET_ENDPOINT`; without this a smoke test of `fleet uninstall` or any daemon verb
