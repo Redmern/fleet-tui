@@ -5,7 +5,6 @@ namespace Fleet.Tests.Cli;
 
 // ResyncWorktree only writes inside the folder. SyncFolder and ApproveFolder also write the user's
 // ~/.claude settings and trust file, so they are not called here; all three share the same step.
-[Collection(ConfigHomeCollection.Name)]
 public sealed class ClaudeWiringSkillsTests : ConfigHomeFixture
 {
     private readonly string _worktree = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());

@@ -4,7 +4,6 @@ using Fleet.Ports.Projects.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JsonProjectStoreTests : ConfigHomeFixture
 {
     private static JsonProjectStore Store => new();

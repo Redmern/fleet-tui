@@ -9,7 +9,6 @@ using Fleet.Ports.Remotes.Models;
 
 namespace Fleet.Tests.Features.Remotes;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class CreateRemoteProjectTests : ConfigHomeFixture
 {
     private const string Host = "user@homelab";

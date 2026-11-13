@@ -10,7 +10,6 @@ using Fleet.Shared.Status.Models;
 
 namespace Fleet.Tests.Features.Notifications;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class NoticeTests : ConfigHomeFixture
 {
     private static readonly DateTime T0 = new(2026, 9, 29, 12, 0, 0, DateTimeKind.Utc);

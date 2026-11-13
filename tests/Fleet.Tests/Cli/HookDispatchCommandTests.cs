@@ -7,7 +7,6 @@ using Fleet.Ports.Projects.Models;
 
 namespace Fleet.Tests.Cli;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class HookDispatchCommandTests : ConfigHomeFixture
 {
     private readonly StringWriter _out = new();

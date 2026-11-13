@@ -9,7 +9,15 @@ using Fleet.Ports.Projects.Models;
 
 namespace Fleet.Tests.Cli;
 
-[Collection(ConfigHomeCollection.Name)]
+// Serial, because EmbeddedWiring.HealthAsync reads FLEET_ENDPOINT from the process environment, so these tests
+// point it at a throwaway endpoint for the whole test process while they run.
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ProcessEndpointCollection
+{
+    public const string Name = "process-endpoint (swaps FLEET_ENDPOINT for the whole process)";
+}
+
+[Collection(ProcessEndpointCollection.Name)]
 public sealed class DoctorEmbeddedTests : ConfigHomeFixture
 {
     private const string Saved = """

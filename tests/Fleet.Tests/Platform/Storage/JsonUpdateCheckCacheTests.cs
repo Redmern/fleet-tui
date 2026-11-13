@@ -3,7 +3,6 @@ using Fleet.Ports.Releases.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JsonUpdateCheckCacheTests : ConfigHomeFixture
 {
     [Fact]

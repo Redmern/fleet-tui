@@ -5,7 +5,6 @@ using Fleet.Platform.Storage;
 
 namespace Fleet.Tests.Features.Projects;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class CreateProjectTests : ConfigHomeFixture
 {
     private CreateProjectHandler Handler() => new(new JsonProjectStore());

@@ -3,7 +3,6 @@ using Fleet.Shared.Keymap.Enums;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class FileActionRequestStoreTests : ConfigHomeFixture
 {
     private readonly FileActionRequestStore _store = new();

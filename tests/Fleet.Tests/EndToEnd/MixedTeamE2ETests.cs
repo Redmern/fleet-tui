@@ -12,7 +12,6 @@ namespace Fleet.Tests.EndToEnd;
 // real MCP composition root, one McpActions per caller (see MixedTeamRig for what is real and what is mirrored).
 // Each scenario pairs a mixed step with the same step between two claude sessions, so the assertions are the ones
 // that differ from claude-to-claude: typed delivery and typed [fleet] notices instead of a SendMessage address.
-[Collection(ConfigHomeCollection.Name)]
 public sealed class MixedTeamE2ETests : ConfigHomeFixture
 {
     private const string Main = "";

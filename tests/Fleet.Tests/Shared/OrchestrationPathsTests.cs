@@ -2,7 +2,6 @@ using Fleet.Shared.Orchestrations;
 
 namespace Fleet.Tests.Shared;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class OrchestrationPathsTests : ConfigHomeFixture
 {
     [Fact]

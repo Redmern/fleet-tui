@@ -3,7 +3,6 @@ using Fleet.Shared.Iso.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JsonIsoModeTests : ConfigHomeFixture
 {
     [Fact]
