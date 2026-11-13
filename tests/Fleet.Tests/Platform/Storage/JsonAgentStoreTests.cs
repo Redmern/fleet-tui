@@ -6,7 +6,11 @@ namespace Fleet.Tests.Platform.Storage;
 
 public sealed class JsonAgentStoreTests : ConfigHomeFixture
 {
+    private static readonly TimeSpan ShortPatience = TimeSpan.FromMilliseconds(150);
+
     private readonly JsonAgentStore _store = new();
+
+    private readonly JsonAgentStore _impatient = new(lockPatience: ShortPatience, busyPatience: ShortPatience);
 
     private static AgentRecord Agent(string worktree, string branch = "develop") =>
         new(worktree, "backend", branch, "claude", "origin/main", true);
@@ -183,7 +187,7 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
         // failed too, so there this guards the skip rather than reproducing the wipe.
         using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            await Task.Run(() => _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "third"), "third")));
+            await Task.Run(() => _impatient.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "third"), "third")));
         }
 
         Assert.Equal(["first", "second"], _store.List("techweb").Select(a => a.Branch));
@@ -261,7 +265,7 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
 
         using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            removed = await Task.Run(() => _store.Remove("techweb", worktree));
+            removed = await Task.Run(() => _impatient.Remove("techweb", worktree));
         }
 
         Assert.False(removed);
@@ -276,7 +280,7 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
 
         using (new FileStream(lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
         {
-            await Task.Run(() => _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop"))));
+            await Task.Run(() => _impatient.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop"))));
         }
 
         Assert.Single(_store.List("techweb"));
@@ -293,7 +297,7 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
 
         using (new FileStream(lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
         {
-            removed = await Task.Run(() => _store.Remove("techweb", worktree));
+            removed = await Task.Run(() => _impatient.Remove("techweb", worktree));
         }
 
         Assert.False(removed);
