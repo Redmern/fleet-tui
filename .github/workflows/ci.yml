@@ -86,6 +86,10 @@ jobs:
         continue-on-error: true
         run: dotnet test Fleet.slnx --no-build --nologo -v minimal --filter "Category=Perf"
 
+      - name: Format
+        if: ${{ !cancelled() }}
+        run: dotnet format Fleet.slnx --verify-no-changes
+
       - name: Publish (NativeAOT)
         run: >
           dotnet publish src/Fleet/Fleet.csproj
