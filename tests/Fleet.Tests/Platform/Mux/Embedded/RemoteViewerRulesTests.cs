@@ -480,6 +480,60 @@ public sealed partial class RemoteLinkTests
             && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "remotes"])));
     }
 
+    private async Task<DaemonTests.TestClient> OlderViewerAsync()
+    {
+        PlantViewOfThirdMachine();
+        Assert.True((await (await ClientAsync(_far, ClientRoles.Control)).RequestAsync(
+            new ControlRequest { Op = "spawn", Workspace = "homelab", Cwd = ".", Args = ["remote-claude"] })).Ok);
+        var viewer = await DaemonTests.TestClient.ConnectAsync(
+            _far, ClientRoles.Attach, 80, 24, "homelab", bridged: true, furnish: hello => hello.Label = RemoteLink.Label("older"));
+        _clients.Add(viewer);
+        Assert.Null(_farDaemon.Model.Client(viewer.Id)!.TakesBack);
+        return viewer;
+    }
+
+    [Theory]
+    [MemberData(nameof(ViewerRefusedOps))]
+    public async Task A_viewer_that_announced_nothing_is_refused_every_operation_that_reaches_a_third_machine(string op)
+    {
+        var viewer = await OlderViewerAsync();
+
+        AssertManagedWhereYouSit(await viewer.RequestAsync(ThirdMachine(op)));
+
+        Assert.Empty(_farOpened);
+    }
+
+    [Fact]
+    public async Task A_viewer_that_announced_nothing_is_not_listed_a_view_of_a_third_machine()
+    {
+        var viewer = await OlderViewerAsync();
+
+        var listed = await viewer.RequestAsync(new ControlRequest { Op = "list-workspaces" });
+
+        Assert.Equal(["homelab"], Names(listed));
+        AssertManagedWhereYouSit(await viewer.RequestAsync(new ControlRequest { Op = "show", Workspace = Third }));
+    }
+
+    [Fact]
+    public async Task A_viewer_that_announced_nothing_still_gets_the_operations_of_its_own_link()
+    {
+        var viewer = await OlderViewerAsync();
+
+        foreach (var op in (string[])["status", "list-projects", "list-notices", "project-configs", FleetDaemon.ClipboardTypesOp])
+        {
+            var response = await viewer.RequestAsync(new ControlRequest { Op = op, Pane = "none" });
+            Assert.NotEqual(ViewerHints.ManagedWhereYouSit, response.Error);
+        }
+
+        Assert.True((await viewer.RequestAsync(new ControlRequest { Op = "show", Workspace = "homelab" })).Ok);
+        Assert.True((await viewer.RequestAsync(new ControlRequest { Op = "set-label", Text = RemoteLink.Label("older") })).Ok);
+
+        var head = await viewer.RequestAsync(new ControlRequest { Op = RemoteLink.HeadOp, Text = "relay", Env = new Dictionary<string, string>() });
+
+        Assert.True(head.Ok, head.Error);
+        Assert.Equal("relayed", head.Text);
+    }
+
     private static string ThirdWorkspace => FleetDaemon.RemoteWorkspace(Environment.MachineName);
 
     private async Task<DaemonTests.TestClient> FarLinkedToThirdAsync()
