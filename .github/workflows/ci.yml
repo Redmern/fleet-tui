@@ -113,5 +113,5 @@ jobs:
         if: always() && steps.installer.outcome == 'failure'
         shell: bash
         run: |
-          echo "::error::Installer output failed; the steps after it still ran"
+          echo "::error::Installer output failed; see that step. Test results are in the Test step."
           exit 1
