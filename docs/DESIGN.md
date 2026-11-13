@@ -3910,7 +3910,7 @@ for the prefix. `prefix s r` reloads the file.
 | `[`, `]` | copy mode / paste the Windows clipboard |
 | `d` | detach |
 | `Q` | quit fleet (the menu's quit, as a float) |
-| `a` › `m l e f n` | **+agents**: dashboard / list agents / open editor / files / notifications |
+| `a` › `d l e f n t` | **+agents**: dashboard / list agents / open editor / files / notifications / todo board |
 | `s` › `p w R o d q r` | **+session**: switch project / save session / remotes / open port / detach / detach / reload keys |
 | `t` › `c n p 1–9 x` | **+tabs**: new tab / next / previous / go to tab / close tab (after a `y/n`) |
 | `g` › `k K t T` | **+configure**: edit keybinds / show keybinds / button hints / theme |
