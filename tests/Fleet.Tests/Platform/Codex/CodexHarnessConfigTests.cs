@@ -175,7 +175,8 @@ public sealed class CodexHarnessConfigTests : IDisposable
     [Fact]
     public void A_folder_path_with_quotes_and_backslashes_is_escaped()
     {
-        var odd = Path.Combine(_root, "we\"ird\\dir");
+        // Windows forbids '"' in file names, and its '\' is the separator; CodexTomlTests cover both on any OS.
+        var odd = Path.Combine(_root, OperatingSystem.IsWindows() ? "we'ird\\dir" : "we\"ird\\dir");
         Directory.CreateDirectory(odd);
 
         Config().WriteForAgent(odd, "proj", "api", "main");
