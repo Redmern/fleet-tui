@@ -185,7 +185,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
-    public ControlResponse Execute(ControlRequest request, string? attachedClient = null)
+    public ControlResponse Execute(ControlRequest request, string? attachedClient = null, bool bridged = false)
     {
         var response = new ControlResponse { Id = request.Id, Ok = true };
 
@@ -193,6 +193,13 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             lock (_gate)
             {
+                if (ViewerRefusal(request, attachedClient, bridged) is { } refused)
+                {
+                    response.Ok = false;
+                    response.Error = refused;
+                    return response;
+                }
+
                 switch (request.Op)
                 {
                     case "ping":
@@ -680,6 +687,16 @@ public sealed class FleetDaemon(DaemonOptions options)
                     var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
                     var iso = options.Iso();
 
+                    if (!iso.On && ReachesPastExecute(request.Op) && ViewerRefusalLocked(request, session?.Client, bridged) is { } viewerRefusal)
+                    {
+                        await wire.SendAsync(
+                            MessageType.Response,
+                            new ControlResponse { Id = request.Id, Ok = false, Error = viewerRefusal },
+                            WireJsonContext.Default.ControlResponse,
+                            ct).ConfigureAwait(false);
+                        break;
+                    }
+
                     if (request.Op == RemoteLink.HeadOp || (request.Op == RemoteHeadOp && !iso.On))
                     {
                         var redact = bridged && iso.On;
@@ -737,8 +754,8 @@ public sealed class FleetDaemon(DaemonOptions options)
                     var response = IsoRefusal(request.Op, iso) is { } refused
                         ? new ControlResponse { Id = request.Id, Ok = false, Error = refused }
                         : bridged && iso.On
-                            ? ExecuteIso(request, session?.Client, iso)
-                            : Execute(request, session?.Client);
+                            ? ExecuteIso(request, session?.Client, iso, bridged)
+                            : Execute(request, session?.Client, bridged);
 
                     if (response.AwaitingReply is { } awaiting)
                     {
@@ -1033,6 +1050,50 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string RemoteCreateProjectOp = "remote-create-project";
 
+    private static readonly HashSet<string> ViewerRefusedOps = new(StringComparer.Ordinal)
+    {
+        "list-remotes",
+        "remote-connect",
+        "remote-answer",
+        "remote-disconnect",
+        "askpass",
+        "show-remote",
+        "new-remote-project",
+        "remote-notices",
+        "remote-dismiss",
+        "open-remote-window",
+        RemoteHeadOp,
+        RemoteCreateProjectOp,
+    };
+
+    private static bool ReachesPastExecute(string op) =>
+        op is RemoteHeadOp or RemoteCreateProjectOp || ForwardHub.SlowOps.Contains(op);
+
+    private string? ViewerRefusal(ControlRequest request, string? attachedClient, bool bridged) =>
+        (ViewerRefusedOps.Contains(request.Op) || (ForwardHub.SlowOps.Contains(request.Op) && request.Host is { Length: > 0 }))
+        && FromViewer(request, attachedClient, bridged)
+            ? ViewerHints.ManagedWhereYouSit
+            : null;
+
+    private string? ViewerRefusalLocked(ControlRequest request, string? attachedClient, bool bridged)
+    {
+        lock (_gate)
+        {
+            return ViewerRefusal(request, attachedClient, bridged);
+        }
+    }
+
+    private bool FromViewer(ControlRequest request, string? attachedClient, bool bridged) =>
+        bridged || (ActingClient(request, attachedClient) is { } client && IsRemoteViewer(client));
+
+    private bool IsRemoteViewer(string client) => _bridged.ContainsKey(client) || _model.Client(client)?.Label is not null;
+
+    private string? ActingClient(ControlRequest request, string? attachedClient) =>
+        request.Client ?? attachedClient
+        ?? (request.Caller is { } caller
+            ? _model.Clients.FirstOrDefault(c => c.Menu == caller || c.Overlay == caller)?.Id
+            : null);
+
     private static bool RunsForward(string op, IsoConfig iso, bool bridged) =>
         ForwardHub.SlowOps.Contains(op)
         && (!iso.On || (!bridged && op is ForwardHub.RemoveOp or ForwardHub.StackStopOp));
@@ -1043,7 +1104,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         : ForwardHub.SlowOps.Contains(op) ? IsoGuard.Refusal(IsoGuard.Forward)
         : null;
 
-    private ControlResponse ExecuteIso(ControlRequest request, string? attachedClient, IsoConfig iso)
+    private ControlResponse ExecuteIso(ControlRequest request, string? attachedClient, IsoConfig iso, bool bridged)
     {
         var codes = IsoCodes.Assign(iso, options.SavedProjects(), options.Worktrees);
 
@@ -1052,7 +1113,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             return new ControlResponse { Id = request.Id, Ok = false, Error = refused };
         }
 
-        var response = Execute(request, attachedClient);
+        var response = Execute(request, attachedClient, bridged);
         IsoFilter.Outbound(response, codes);
         return response;
     }

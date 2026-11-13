@@ -88,7 +88,7 @@ public sealed partial class RemoteLinkTests : IAsyncLifetime
     {
         _home = NewEndpoint();
         _far = NewEndpoint();
-        _farDaemon = Start(_far, _farPanes);
+        _farDaemon = Start(_far, _farPanes, FarOpen);
         _homeDaemon = Start(_home, _homePanes, (host, token) => _open!(host, token));
         _open = (_, _) =>
         {
