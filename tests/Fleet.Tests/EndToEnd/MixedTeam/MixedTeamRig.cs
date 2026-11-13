@@ -91,7 +91,19 @@ internal sealed class MixedTeamRig
 
     public async Task<McpResult> CallAsync(string caller, HarnessTool tool, params (string Key, string Value)[] arguments)
     {
-        var actions = new McpActions(Project, Root, caller, _git, Mux, Store, new NullHarnessConfig(), Log);
+        var actions = new McpActions(
+            Project,
+            Root,
+            caller,
+            _git,
+            Mux,
+            Store,
+            HarnessRegistration.ClaudeConfigs(),
+            HarnessRegistration.NonClaudeConfigs(),
+            Adapters.SlugNamer(),
+            TimeProvider.System,
+            ClaudeWiring.TrustFolder,
+            Log);
 
         return await actions.PerformAsync(
             new McpRequest(HarnessToolIds.For(tool), arguments.ToDictionary(a => a.Key, a => a.Value)),
