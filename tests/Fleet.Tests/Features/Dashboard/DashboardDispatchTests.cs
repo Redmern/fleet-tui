@@ -5,11 +5,13 @@ using Fleet.Shared.Keymap.Enums;
 using Fleet.Ui;
 using Fleet.Ui.Models;
 using Terminal.Gui.App;
+using Terminal.Gui.Input;
 
 namespace Fleet.Tests.Features.Dashboard;
 
-// Opens the real dashboard on the ansi test driver and feeds it one action the way the
-// head (TakeRequest) or the fleet menu (OpenMenu -> ShowMenu) hands it over.
+// Opens the real dashboard on the ansi test driver and feeds it actions the way the
+// head (TakeRequest) or the fleet menu (OpenMenu -> ShowMenu) hands them over.
+// The requests end with Close, so a run ends once the dashboard has taken them all.
 [Collection(ModalDepthCollection.Name)]
 public sealed class DashboardDispatchTests
 {
@@ -18,7 +20,7 @@ public sealed class DashboardDispatchTests
     private static readonly AgentBoard TwoAgents = new(
         [FleetRow.Plain("api/main"), FleetRow.Plain("api/fix")], 2, [false, false]);
 
-    private sealed class Requests(params FleetAction[] actions)
+    private sealed class Requests(IEnumerable<FleetAction> actions)
     {
         private readonly Queue<FleetAction> _queue = new(actions);
 
@@ -31,19 +33,21 @@ public sealed class DashboardDispatchTests
         }
     }
 
-    private static (int Tab, int Row)? Run(
-        FleetAction request, FleetAction fromMenu, Func<int, int, Task<string?>>? changeHarness = null)
+    private static List<(int Tab, int Row)> Run(IReadOnlyList<Key> keys, params FleetAction[] requests)
     {
         using var app = Application.Create().Init("ansi");
-        var requests = new Requests(request);
-        (int Tab, int Row)? asked = null;
+        var asked = new List<(int Tab, int Row)>();
 
-        changeHarness ??= (tab, row) =>
+        Task<string?> ChangeHarness(int tab, int row)
         {
-            asked = (tab, row);
-            app.Invoke(() => app.RequestStop());
+            asked.Add((tab, row));
             return Task.FromResult<string?>(null);
-        };
+        }
+
+        foreach (var key in keys)
+        {
+            app.Invoke(() => app.Keyboard.RaiseKeyDownEvent(key));
+        }
 
         app.AddTimeout(GiveUp, () =>
         {
@@ -51,7 +55,11 @@ public sealed class DashboardDispatchTests
             return false;
         });
 
-        ShowDashboardView.Show(app, "proj", Keymap.Default, Callbacks(requests, fromMenu, changeHarness));
+        ShowDashboardView.Show(
+            app,
+            "proj",
+            Keymap.Default,
+            Callbacks(new Requests([.. requests, FleetAction.Close]), FleetAction.ChangeHarness, ChangeHarness));
 
         return asked;
     }
@@ -87,17 +95,24 @@ public sealed class DashboardDispatchTests
             AnswerApproval: (_, _) => { },
             Heartbeat: () => { },
             DrainSignals: () => { },
+            LoadAgentsFast: () => TwoAgents,
             ChangeHarness: changeHarness);
 
     [Fact]
     public void A_change_harness_request_from_the_head_asks_for_the_selected_agents_harness()
     {
-        Assert.Equal((DashboardTabs.AgentsTab, 0), Run(FleetAction.ChangeHarness, FleetAction.None));
+        Assert.Equal([(DashboardTabs.AgentsTab, 1)], Run([Key.CursorDown], FleetAction.ChangeHarness));
     }
 
     [Fact]
     public void Change_harness_chosen_in_the_fleet_menu_asks_for_the_selected_agents_harness()
     {
-        Assert.Equal((DashboardTabs.AgentsTab, 0), Run(FleetAction.OpenMenu, FleetAction.ChangeHarness));
+        Assert.Equal([(DashboardTabs.AgentsTab, 1)], Run([Key.CursorDown], FleetAction.OpenMenu));
+    }
+
+    [Fact]
+    public void Change_harness_on_the_repositories_tab_asks_for_no_agent()
+    {
+        Assert.Empty(Run([], FleetAction.NextTab, FleetAction.NextTab, FleetAction.ChangeHarness));
     }
 }

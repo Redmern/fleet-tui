@@ -726,6 +726,13 @@ public static class ShowDashboardView
             }
 
             var tab = ActiveTab();
+
+            if (tab is not (DashboardTabs.AgentsTab or DashboardTabs.SubsTab))
+            {
+                status.Text = "pick an agent on the agents or subs tab first.";
+                return;
+            }
+
             var row = ActiveRow();
 
             busy = true;
