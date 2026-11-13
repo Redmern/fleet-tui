@@ -411,19 +411,22 @@ public static class CodexToml
                 case 'f':
                     text.Append('\f');
                     break;
-                case 'u' when j + 4 < line.Length && int.TryParse(line.AsSpan(j + 1, 4), System.Globalization.NumberStyles.HexNumber, null, out var code):
+                case 'u' when j + 4 < line.Length && int.TryParse(line.AsSpan(j + 1, 4), System.Globalization.NumberStyles.AllowHexSpecifier, null, out var code)
+                    && code is not (>= 0xD800 and <= 0xDFFF):
                     text.Append((char)code);
                     j += 4;
                     break;
                 case 'U' when j + 8 < line.Length
-                    && int.TryParse(line.AsSpan(j + 1, 8), System.Globalization.NumberStyles.HexNumber, null, out var point)
+                    && int.TryParse(line.AsSpan(j + 1, 8), System.Globalization.NumberStyles.AllowHexSpecifier, null, out var point)
                     && point is >= 0 and <= 0x10FFFF and not (>= 0xD800 and <= 0xDFFF):
                     text.Append(char.ConvertFromUtf32(point));
                     j += 8;
                     break;
-                default:
+                case '"' or '\\':
                     text.Append(line[j]);
                     break;
+                default:
+                    return null;
             }
         }
 
