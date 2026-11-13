@@ -56,6 +56,7 @@ using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Themes;
 using Fleet.Shared.Todos.Models;
+using Fleet.Shared.Viewing;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
@@ -83,19 +84,29 @@ public static class MenuCommand
             : FleetAction.None;
 
 
-        if (project is null && requested is FleetAction.SwitchProject or FleetAction.Notifications
-            && invocation.Project is { } shown && shown.StartsWith(RemoteMark, StringComparison.Ordinal))
+        if (project is null && invocation.Project is { } shown
+            && ScreenForRemoteView(shown, requested) is var screen and not FleetAction.None)
         {
+            if (screen == FleetAction.Close)
+            {
+                Adapters.Log().Write($"menu for {shown}: {FleetActionIds.For(requested)} has no screen on this machine yet; closing");
+                return 1;
+            }
+
             using IApplication remoteApp = FleetUi.Start();
             var remoteKeymap = new Keymap(Adapters.Keymaps().Load());
-            if (requested == FleetAction.Notifications)
+            switch (screen)
             {
-                await ShowNotices(remoteApp, remoteKeymap, projects, null).ConfigureAwait(false);
-            }
-            else
-            {
-                await SwitchAcrossMachines(remoteApp, remoteKeymap, projects.List(), null, shown[RemoteMark.Length..])
-                    .ConfigureAwait(false);
+                case FleetAction.SwitchProject:
+                    await SwitchAcrossMachines(remoteApp, remoteKeymap, projects.List(), null, shown[RemoteMark.Length..])
+                        .ConfigureAwait(false);
+                    break;
+                case FleetAction.Notifications:
+                    await ShowNotices(remoteApp, remoteKeymap, projects, null).ConfigureAwait(false);
+                    break;
+                case FleetAction.Remotes:
+                    await ManageRemotes(remoteApp, remoteKeymap).ConfigureAwait(false);
+                    break;
             }
 
             return 0;
@@ -200,6 +211,19 @@ public static class MenuCommand
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
 
+    public static IReadOnlyList<FleetAction> ScreensForRemoteView { get; } =
+        [FleetAction.SwitchProject, FleetAction.Notifications, FleetAction.Remotes];
+
+    public static FleetAction ScreenForRemoteView(string? project, FleetAction requested) =>
+        ScreenForRemoteView(project, requested, ScreensForRemoteView);
+
+    public static FleetAction ScreenForRemoteView(string? project, FleetAction requested, IReadOnlyCollection<FleetAction> screens) =>
+        project is null || !project.StartsWith(RemoteMark, StringComparison.Ordinal) || !ViewerScreens.Owns(requested)
+            ? FleetAction.None
+            : screens.Contains(requested) ? requested : FleetAction.Close;
+
+    public static string? HandBackId(FleetAction action) => ViewerScreens.Owns(action) ? FleetActionIds.For(action) : null;
+
     public static bool RunsHeadless(FleetAction action) => FleetMenus.IsToggle(action);
 
     public static Pane? DashboardPane(IReadOnlyList<Pane> panes, string root, string? dashPane)
@@ -262,6 +286,11 @@ public static class MenuCommand
         Project project,
         FleetAction chosen)
     {
+        if (HandBackId(chosen) is { } handBack && EmbeddedWiring.HandBack(handBack))
+        {
+            return 0;
+        }
+
         switch (chosen)
         {
             case FleetAction.AddRepository:
@@ -337,9 +366,6 @@ public static class MenuCommand
 
             case FleetAction.FocusMain:
                 await FocusMain(project).ConfigureAwait(false);
-                break;
-
-            case FleetAction.SwitchProject when EmbeddedWiring.HandBack(FleetActionIds.For(FleetAction.SwitchProject)):
                 break;
 
             case FleetAction.SwitchProject when SwitchProjectHandler.Applies(Adapters.Mux(Adapters.Log()).Driver):
@@ -635,24 +661,7 @@ public static class MenuCommand
                 }
 
             case FleetAction.Remotes:
-                {
-                    var remotes = Adapters.Remotes();
-                    if (ManageRemotesView.Show(
-                        app,
-                        keymap,
-                        remotes,
-                        Adapters.KnownRemotes(),
-                        Adapters.Forwards(),
-                        Adapters.Browser(),
-                        (host, label) => CreateRemoteProjectView.Show(app, new CreateRemoteProjectHandler(remotes), host, label)) is { } made)
-                    {
-                        await ShowRemoteProject(app, remotes, made.Host, made.Project, newWindow: false).ConfigureAwait(false);
-                    }
-
-                    break;
-                }
-
-            case FleetAction.Notifications when EmbeddedWiring.HandBack(FleetActionIds.For(FleetAction.Notifications)):
+                await ManageRemotes(app, keymap).ConfigureAwait(false);
                 break;
 
             case FleetAction.Notifications:
@@ -1313,6 +1322,22 @@ public static class MenuCommand
         if (opened is not null)
         {
             FleetDialog.Error(app, "New project", opened);
+        }
+    }
+
+    private static async Task ManageRemotes(IApplication app, Keymap keymap)
+    {
+        var remotes = Adapters.Remotes();
+        if (ManageRemotesView.Show(
+            app,
+            keymap,
+            remotes,
+            Adapters.KnownRemotes(),
+            Adapters.Forwards(),
+            Adapters.Browser(),
+            (host, label) => CreateRemoteProjectView.Show(app, new CreateRemoteProjectHandler(remotes), host, label)) is { } made)
+        {
+            await ShowRemoteProject(app, remotes, made.Host, made.Project, newWindow: false).ConfigureAwait(false);
         }
     }
 
