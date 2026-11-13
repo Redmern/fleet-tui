@@ -172,7 +172,7 @@ public sealed class ClipboardE2ETests : IAsyncLifetime
             async () => (await far.RequestAsync(new ControlRequest { Op = "get-text", Pane = pane })).Text?.Contains(marker, StringComparison.Ordinal) == true
                 && File.Exists(Path.Combine(_root, $"{pane}.pid")),
             $"nvim shows {marker}");
-        await Task.Delay(300);
+        await Task.Delay(100);
         return pane;
     }
 
