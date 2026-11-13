@@ -12,8 +12,7 @@ namespace Fleet.Tests.Features.Repositories;
 // Drives the real dialog on the ansi test driver. Each key is its own queued
 // invoke, so the name prompt and URL picker the dialog opens take the keys
 // that follow, the way a terminal would deliver them.
-[Collection(ModalDepthCollection.Name)]
-public sealed class AddRepositoryDialogTests
+public sealed class AddRepositoryDialogTests : ModalDepthScope
 {
     private const string Root = "/projects/demo";
 

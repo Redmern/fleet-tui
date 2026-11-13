@@ -2,9 +2,41 @@ using Fleet.Ui;
 
 namespace Fleet.Tests.Ui;
 
-[Collection(ModalDepthCollection.Name)]
-public class FleetModalTests
+public sealed class FleetModalTests : ModalDepthScope
 {
+    [Fact]
+    public async Task A_scope_keeps_its_depth_from_other_flows()
+    {
+        var claim = FleetModal.Enter();
+
+        var elsewhere = await Task.Run(() =>
+        {
+            using var scope = FleetModal.Scope();
+            return FleetModal.Any;
+        });
+
+        Assert.False(elsewhere);
+        Assert.True(FleetModal.Owns(claim));
+        FleetModal.Leave();
+    }
+
+    [Fact]
+    public void Leaving_an_inner_scope_brings_back_the_depth_outside_it()
+    {
+        var claim = FleetModal.Enter();
+
+        using (FleetModal.Scope())
+        {
+            Assert.False(FleetModal.Any);
+            FleetModal.Enter();
+            FleetModal.Back();
+        }
+
+        Assert.True(FleetModal.Owns(claim));
+        Assert.False(FleetModal.WentBack());
+        FleetModal.Leave();
+    }
+
     [Fact]
     public void Nothing_is_open_until_a_view_claims_the_keys()
     {

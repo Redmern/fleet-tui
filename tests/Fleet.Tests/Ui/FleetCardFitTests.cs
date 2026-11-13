@@ -8,8 +8,7 @@ namespace Fleet.Tests.Ui;
 
 // The New agent card runs in the dashboard pane too: a long base branch must
 // stay readable inside a narrow card instead of running off its right edge.
-[Collection(ModalDepthCollection.Name)]
-public sealed class FleetCardFitTests
+public sealed class FleetCardFitTests : ModalDepthScope
 {
     private const string Long = "feature/ABC-2512-some-long-description-with-many-words-in-it";
 

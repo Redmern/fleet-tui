@@ -9,8 +9,7 @@ namespace Fleet.Tests.Features.Agents;
 // Drives the real New agent card on the ansi test driver, so the repository
 // and base-branch pickers it opens take the typed keys the way a terminal
 // would deliver them.
-[Collection(ModalDepthCollection.Name)]
-public sealed class NewAgentDialogTests
+public sealed class NewAgentDialogTests : ModalDepthScope
 {
     private static readonly NewAgentPrompt Prompt = new(
         "demo",

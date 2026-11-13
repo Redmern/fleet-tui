@@ -10,8 +10,7 @@ namespace Fleet.Tests.Ui;
 // must stay inside that pane's screen: a card wider than the screen is
 // centred at a negative column and loses its border, title, filter and the
 // start of every row.
-[Collection(ModalDepthCollection.Name)]
-public sealed class FleetPickerFitTests
+public sealed class FleetPickerFitTests : ModalDepthScope
 {
     private const int Cols = 50;
 
