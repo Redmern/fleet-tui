@@ -11,6 +11,7 @@ using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
+using Fleet.Shared.Viewing;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -448,6 +449,10 @@ public sealed class FleetDaemon(DaemonOptions options)
                         if (_model.Client(ClientFor(request, attachedClient) ?? string.Empty) is { } labelled)
                         {
                             labelled.Label = request.Text;
+                            if (request.Args is { Count: > 0 } announced)
+                            {
+                                labelled.TakesBack = [.. announced];
+                            }
                         }
 
                         break;
@@ -2454,11 +2459,6 @@ public sealed class FleetDaemon(DaemonOptions options)
         return Show(client, workspace);
     }
 
-    public const string HandedBack = "switch-project";
-
-    public static bool HandsBack(string? action) => action is HandedBack or NoticesMenu;
-
-
     private List<WindowEntryDto> Window(string? client)
     {
         if (_model.Client(client ?? string.Empty) is not { } c)
@@ -2526,7 +2526,8 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     private bool HandBack(string? client, string? action)
     {
-        if (!HandsBack(action) || client is null || _model.Client(client)?.Label is null
+        if (action is null || client is null || _model.Client(client) is not { Label: not null } labelled
+            || !ViewerScreens.TakenBackBy(labelled.TakesBack).Contains(action, StringComparer.Ordinal)
             || !_sessions.TryGetValue(client, out var viewer))
         {
             return false;
@@ -2683,7 +2684,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 if (effect.Kind == HostEffects.HandBack)
                 {
-                    if (HandsBack(effect.Value))
+                    if (ViewerScreens.Owns(effect.Value))
                     {
                         OpenMenu(session.Client, effect.Value);
                     }

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Viewing.Enums;
@@ -22,7 +23,7 @@ public static class ViewerScreens
         FleetActionIds.For(FleetAction.Notifications),
     ];
 
-    public static bool Owns(string? id) => id is not null && Ids.Contains(id, StringComparer.Ordinal);
+    public static bool Owns([NotNullWhen(true)] string? id) => id is not null && Ids.Contains(id, StringComparer.Ordinal);
 
     public static bool Owns(FleetAction action) => Owned.Contains(action);
 

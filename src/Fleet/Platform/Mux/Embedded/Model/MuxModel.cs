@@ -1601,6 +1601,8 @@ public sealed class ClientState(string id)
 
     public string? Label { get; set; }
 
+    public IReadOnlyList<string>? TakesBack { get; set; }
+
     public string? Build { get; set; }
 }
 
