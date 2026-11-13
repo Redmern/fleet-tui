@@ -23,6 +23,8 @@ public static class FloatBorder
 
     private static readonly List<FleetActionBar> Bars = [];
 
+    private static readonly Lock Gate = new();
+
     private static Func<IReadOnlyList<FloatBorderButton>, bool>? publish;
 
     private static IReadOnlyList<FloatBorderButton> published = [];
@@ -77,21 +79,27 @@ public static class FloatBorder
         publish = null;
         published = [];
         framedOnly = false;
-        Running.Clear();
-        Cornered.Clear();
-        InfoRight.Clear();
-        Bars.Clear();
+        lock (Gate)
+        {
+            Running.Clear();
+            Cornered.Clear();
+            InfoRight.Clear();
+            Bars.Clear();
+        }
     }
 
     public static void Run(View window, bool running)
     {
-        if (running)
+        lock (Gate)
         {
-            Running.Add(window);
-        }
-        else if (Running.LastIndexOf(window) is var at and >= 0)
-        {
-            Running.RemoveAt(at);
+            if (running)
+            {
+                Running.Add(window);
+            }
+            else if (Running.LastIndexOf(window) is var at and >= 0)
+            {
+                Running.RemoveAt(at);
+            }
         }
 
         Refresh();
@@ -99,18 +107,21 @@ public static class FloatBorder
 
     public static void Corners(View window, Action? close, bool infoRight = false)
     {
-        Cornered[window] = close;
-
-        if (infoRight)
+        lock (Gate)
         {
-            InfoRight.Add(window);
-        }
-        else
-        {
-            InfoRight.Remove(window);
+            Cornered[window] = close;
+
+            if (infoRight)
+            {
+                InfoRight.Add(window);
+            }
+            else
+            {
+                InfoRight.Remove(window);
+            }
         }
 
-        foreach (var bar in Bars.Where(b => Inside(b.Root, window)))
+        foreach (var bar in TrackedBars().Where(b => Inside(b.Root, window)))
         {
             bar.Root.Visible = false;
         }
@@ -118,9 +129,29 @@ public static class FloatBorder
         Refresh();
     }
 
-    public static void Track(FleetActionBar bar) => Bars.Add(bar);
+    public static void Track(FleetActionBar bar)
+    {
+        lock (Gate)
+        {
+            Bars.Add(bar);
+        }
+    }
 
-    public static void Forget(View root) => Bars.RemoveAll(b => b.Root == root);
+    public static void Forget(View root)
+    {
+        lock (Gate)
+        {
+            Bars.RemoveAll(b => b.Root == root);
+        }
+    }
+
+    private static List<FleetActionBar> TrackedBars()
+    {
+        lock (Gate)
+        {
+            return [.. Bars];
+        }
+    }
 
     public static void Refresh()
     {
@@ -159,21 +190,31 @@ public static class FloatBorder
 
     public static (IReadOnlyList<FloatBorderButton> Buttons, IReadOnlyList<Action> Actions) Current()
     {
-        if (Running.Count == 0)
+        FleetActionBar? bar;
+        bool cornered;
+        Action? close;
+        bool infoRight;
+
+        lock (Gate)
         {
-            return ([], []);
+            if (Running.Count == 0)
+            {
+                return ([], []);
+            }
+
+            var window = Running[^1];
+
+            if (framedOnly && !Cornered.ContainsKey(window))
+            {
+                return ([], []);
+            }
+
+            bar = Bars.LastOrDefault(b => b.Items.Count > 0 && Inside(b.Root, window));
+            cornered = Cornered.TryGetValue(window, out close);
+            infoRight = InfoRight.Contains(window);
         }
 
-        var window = Running[^1];
-
-        if (framedOnly && !Cornered.ContainsKey(window))
-        {
-            return ([], []);
-        }
-
-        var bar = Bars.LastOrDefault(b => b.Items.Count > 0 && Inside(b.Root, window));
         var items = bar?.Items ?? [];
-        var cornered = Cornered.TryGetValue(window, out var close);
 
         var buttons = For(
             cornered,
@@ -183,7 +224,7 @@ public static class FloatBorder
             FleetKeyHints.RevealKey,
             FleetButtonHints.Mode,
             close is not null,
-            InfoRight.Contains(window));
+            infoRight);
 
         var actions = new List<Action>();
 
