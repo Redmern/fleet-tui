@@ -56,6 +56,18 @@ Breaking one fails `dotnet test`, so check these before you write code:
 - Terminal.Gui views run on the UI thread. After an `await` in a dashboard callback, open modals through
   `FleetAsync.OnUi(app, ...)` (see `UiThreadTests`).
 
+## Writing tests
+
+- A test that changes process-wide state (environment variables, statics) uses an `AsyncLocal` scope
+  (`FleetHome.Scope`, `FleetModal.Scope`) or a serial collection named for that state; the suite runs in parallel.
+  Static mutable UI state needs a lock.
+- A test sandbox redirects `CLAUDE_CONFIG_DIR`, `CODEX_HOME` and `PI_CODING_AGENT_DIR` as well as HOME;
+  `CLAUDE_CONFIG_DIR` is set on the developer machine.
+- Tests that write paths into TOML or JSON build their expectations through an escaping helper, and temp folders
+  contain a backslash, so Linux CI catches Windows-path escaping.
+- A doc table that mirrors code (README and DESIGN key tables) gets a test that fails naming the key. Keep the
+  hand-kept `KeyExpectations` maps in step with the keymap, and check a new key-like table or exclude it with a reason.
+
 ## AOT
 
 `src/Fleet` has the AOT and trim analyzers on (`IsAotCompatible`, `InvariantGlobalization`). Avoid reflection,
@@ -67,7 +79,8 @@ Breaking one fails `dotnet test`, so check these before you write code:
 ## Conventions
 
 - Conventional commits, lower case: `feat:`, `fix:`, `docs:`, `chore:`, `perf:`, `refactor:` (in that order of
-  frequency). One change per commit.
+  frequency). One change per commit, review fix-ups included: fold them into the commit they fix before the first push,
+  give a new test file its own `test:` commit, and put a race fix before the commit that exposes the race (bisect).
 - The main repository is `redmer/fleet-tui` on the self-hosted Forgejo (`git.home.redmonet.nl`; `origin` is
   `git@192.168.0.213:redmer/fleet-tui.git`). It push-mirrors every branch and tag to `github.com/Redmern/fleet-tui`,
   so never push to GitHub directly: the mirror force-pushes and deletes refs that exist only there. The `github`
@@ -84,6 +97,7 @@ Breaking one fails `dotnet test`, so check these before you write code:
   platforms. The same commit adds a
   `## X.Y.Z (yyyy-mm-dd)` entry with 2-6 plain bullets to the top of `RELEASE_NOTES.md`: it becomes the
   GitHub release text and Settings › What's new, and both `dotnet test` and `release.yml` fail without it.
+- `skills/` is embedded and written into every repository fleet manages: no fleet-tui specifics in skill text.
 - A project hook (`.claude/settings.json`) whitespace-formats every `.cs` file Claude edits
   (`dotnet format whitespace --folder`, ~2 s). It needs `pwsh` on `PATH`.
 
