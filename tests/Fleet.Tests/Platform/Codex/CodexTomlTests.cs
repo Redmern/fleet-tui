@@ -168,6 +168,7 @@ public class CodexTomlTests
     [InlineData("[mcp_servers]\nfleet = { command = \"x\" }\n")]
     [InlineData("[mcp_servers]\nfleet.command = \"x\"\n")]
     [InlineData("mcp_servers.fleet.command = \"x\"\n")]
+    [InlineData("path = \"C:\\Users\\me\"\n")]
     public void A_file_fleet_cannot_edit_safely_is_refused(string text)
     {
         Assert.False(CodexToml.WithServer(text, Fleet).Succeeded);
@@ -197,6 +198,9 @@ public class CodexTomlTests
     [InlineData("[projects]\n\"/wt\" = { note = 1 }\n")]
     [InlineData("[projects.\"/wt\"]\ntrust_level = \"untrusted\"\n")]
     [InlineData("[projects\n")]
+    [InlineData("[projects.\"C:\\Users\\me\\wt\"]\ntrust_level = \"trusted\"\n")]
+    [InlineData("[projects.\"/a\\qb\"]\n")]
+    [InlineData("[projects.\"/a\\u00zz\"]\n")]
     public void A_trust_entry_fleet_cannot_add_safely_is_refused(string text)
     {
         Assert.False(CodexToml.WithTrustedProject(text, "/wt").Succeeded);
@@ -207,6 +211,7 @@ public class CodexTomlTests
     [InlineData("'C:\\Users\\me\\wt'", "C:\\Users\\me\\wt")]
     [InlineData("\"/home/\\u0041\\U00000042/w\\\"t\"", "/home/AB/w\"t")]
     [InlineData("\"/a\\tb\\bc\\fd\"", "/a\tb\bc\fd")]
+    [InlineData("\"/a\\eb\\x41\"", "/a\u001BbA")]
     public void A_quoted_path_key_is_read_with_its_escapes(string key, string folder)
     {
         var text = $"[projects.{key}]\ntrust_level = \"trusted\"\n";

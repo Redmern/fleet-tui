@@ -421,9 +421,18 @@ public static class CodexToml
                     text.Append(char.ConvertFromUtf32(point));
                     j += 8;
                     break;
-                default:
+                case 'e':
+                    text.Append('\u001B');
+                    break;
+                case 'x' when j + 2 < line.Length && int.TryParse(line.AsSpan(j + 1, 2), System.Globalization.NumberStyles.HexNumber, null, out var hex):
+                    text.Append((char)hex);
+                    j += 2;
+                    break;
+                case '"' or '\\':
                     text.Append(line[j]);
                     break;
+                default:
+                    return null;
             }
         }
 
