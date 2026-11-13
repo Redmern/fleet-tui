@@ -69,8 +69,12 @@ Breaking one fails `dotnet test`, so check these before you write code:
   so never push to GitHub directly: the mirror force-pushes and deletes refs that exist only there. The `github`
   remote is fetch-only. Open pull requests on Forgejo, without a token through AGit
   (`git push origin <branch>:refs/for/main -o topic=<branch> -o title="..." -o description="..."`) or with
-  `tea pr create --base main --head <branch>`. `.forgejo/workflows/ci.yml` runs a Linux-only build and test on
-  them, and the mirrored branch still runs the full `.github/workflows/ci.yml` on GitHub.
+  `tea pr create --base main --head <branch>`.
+- CI is two halves. `.forgejo/workflows/ci.yml` is the Linux light half on PRs and main: build, non-`Perf` test and
+  `Perf` (non-gating) with `DOTNET_gcServer=0`; no format check, no Windows, no AOT. `.github/workflows/ci.yml` runs on
+  every branch push the mirror carries to GitHub (no `pull_request` trigger; a newer push cancels the older run of the
+  same branch, except on main), on win-x64 and linux-x64: libghostty, installer output (its failure no longer skips the
+  tests but still fails the job), test, `Perf`, format, NativeAOT publish and smoke.
 - Releases: bump `<Version>` in `src/Fleet/Fleet.csproj` in its own `chore: bump version to X.Y.Z` commit, then
   push a `vX.Y.Z` tag to Forgejo; the mirror carries it to GitHub, where `release.yml` builds and publishes both
   platforms. The same commit adds a
