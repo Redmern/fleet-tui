@@ -201,6 +201,9 @@ public class CodexTomlTests
     [InlineData("[projects.\"C:\\Users\\me\\wt\"]\ntrust_level = \"trusted\"\n")]
     [InlineData("[projects.\"/a\\qb\"]\n")]
     [InlineData("[projects.\"/a\\u00zz\"]\n")]
+    [InlineData("[projects.\"/a\\u 41 \"]\n")]
+    [InlineData("[projects.\"/a\\x4 \"]\n")]
+    [InlineData("[projects.\"/a\\uD800\"]\n")]
     public void A_trust_entry_fleet_cannot_add_safely_is_refused(string text)
     {
         Assert.False(CodexToml.WithTrustedProject(text, "/wt").Succeeded);
