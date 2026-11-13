@@ -101,3 +101,7 @@ Breaking one fails `dotnet test`, so check these before you write code:
   merge the stack top-down into main.
 - Before Deliver, run a read-only cross-cutting review (standards and spec) of the final tip. It finds defects
   that per-unit reviews miss.
+- Push the branch itself to `origin` (`git push origin <branch>`), not only the AGit `refs/for/main` ref: the mirror
+  carries only real branches to GitHub, and GitHub is where the Windows and AOT CI runs. Put
+  `CI: https://github.com/Redmern/fleet-tui/actions?query=branch%3A<branch with / as %2F>` (or the run URL) in the PR
+  text, and check the run with `gh run list -R Redmern/fleet-tui --branch <branch>`.
