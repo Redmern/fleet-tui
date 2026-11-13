@@ -18,8 +18,8 @@ fleet doctor                                           # end-to-end smoke test o
 "Done" means `dotnet build` and `dotnet test` pass. `TreatWarningsAsErrors` is on, so a warning fails the build.
 The SDK is pinned in `global.json` (10.0.113, patch roll-forward) and CI installs from it, so local and CI `dotnet format`
 agree: patch versions format differently. To bump it, change `global.json`, then update the local SDKs.
-Timing-sensitive tests live in the `Perf` category: CI runs them in a separate step that never fails the build, and
-`--filter "Category!=Perf"` is what gates.
+A test that stays intermittent after its timing is fixed goes in `[Trait("Category", "Perf")]`: CI runs that category
+in a separate step that never fails the build, and `--filter "Category!=Perf"` is what gates.
 
 Smoke-test fleet binaries with `scripts/sandbox-smoke.sh <fleet binary>` (Linux) or `scripts/sandbox-smoke.ps1`
 (Windows/pwsh), never by hand. Fleet panes export the real `FLEET_ENDPOINT`; without a sandbox a smoke test of
