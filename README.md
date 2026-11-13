@@ -740,7 +740,10 @@ Navigation is Neovim-flavoured, and arrow keys work everywhere too.
 | `m` | configure an agent / configure a repository |
 | `e` | open nvim (neo-tree) in the selected agent's or sub's folder, beside its pane; focuses it if already open |
 | `p` | pull the highlighted repository |
-| `d` | remove a repository |
+| `d` | remove a repository / drop a project (picker) |
+| `x` | hide or show the selected agent in the terminal (dashboard) |
+| `w` | open the project's web app in the browser (dashboard) |
+| `space` | open the fleet menu (dashboard, project picker) |
 | `r` | refresh (dashboard) |
 | `q` | quit the picker — deliberately does nothing on the dashboard |
 | `esc` | cancel a dialog — never closes the dashboard |
@@ -843,7 +846,7 @@ the floats). Every fleet menu action has a key there:
 | `s` session | `p` switch project, `w` save session, `R` remotes, `o` open port, `d` / `q` detach, `r` reload keys |
 | `t` tabs | `c` new, `n` next, `p` previous, `1`-`9` go to tab, `x` close tab |
 | `g` configure | `k` edit keybinds, `K` show keybinds, `t` button hints, `T` theme, `c` › fleet config |
-| `g c` fleet config | `v` / `V` / `N` nvim toggles, `E` editor (nvim / vscode), `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
+| `g c` fleet config | `v` / `V` / `N` nvim toggles, `E` editor (nvim / vscode), `O` agent harness, `i` auto-close, `A` AI-DLC mode, `C` Claude profile, `e` edit fleet config, `H` / `M` / `S` / `R` head / main / sub / agent model, `p` permissions |
 | `m` maintenance | `b` rebuild dashboard, `x` clean up agents, `X` hide all agents, `l` view logs, `u` update, `v` version, `W` what's new |
 | `f` float | `f` new, `t` show or hide, `e` embed, `g` mode |
 | `w` project | `w` next workspace, `s` switch project |
