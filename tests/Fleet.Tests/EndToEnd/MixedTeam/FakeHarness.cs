@@ -24,6 +24,7 @@ internal sealed partial class FakeHarness
     };
 
     private readonly object _gate = new();
+    private readonly object _starting = new();
     private readonly FakeMuxDriver _mux;
     private readonly List<string> _screen = [];
     private readonly List<string> _submitted = [];
@@ -80,9 +81,14 @@ internal sealed partial class FakeHarness
     {
         var harness = new FakeHarness(mux, pane, profile, folder);
         harness.Render();
-        harness.Started = McpConfigFiles.TryGetValue(profile.Name, out var config)
-            ? Task.Run(() => harness.StartMcpServerAsync(Path.Combine(folder, config)))
-            : harness.Ready();
+        if (McpConfigFiles.ContainsKey(profile.Name))
+        {
+            harness.Started = Task.Run(harness.StartMcpServerAsync);
+        }
+        else
+        {
+            harness.Ready();
+        }
 
         return harness;
     }
@@ -128,27 +134,43 @@ internal sealed partial class FakeHarness
         Render();
     }
 
-    private async Task StartMcpServerAsync(string config)
+    private async Task StartMcpServerAsync()
     {
-        for (var i = 0; i < 500 && Caller is null; i++)
+        for (var i = 0; i < 500 && !TryStartMcpServer(); i++)
         {
-            var text = ReadOrEmpty(config);
+            await Task.Delay(20).ConfigureAwait(false);
+        }
+    }
+
+    // True once the harness has found the fleet MCP server in its config and started it (or needs none).
+    public bool TryStartMcpServer()
+    {
+        if (!McpConfigFiles.TryGetValue(Profile.Name, out var config))
+        {
+            return true;
+        }
+
+        lock (_starting)
+        {
+            if (Caller is not null)
+            {
+                return true;
+            }
+
+            var text = ReadOrEmpty(Path.Combine(Folder, config));
             var caller = CallerArgument().Match(text);
             var project = ProjectArgument().Match(text);
 
-            if (caller.Success && project.Success)
+            if (!caller.Success || !project.Success)
             {
-                CallerProject = project.Groups[1].Value;
-                Caller = caller.Groups[1].Value;
-                break;
+                return false;
             }
 
-            await Task.Delay(20).ConfigureAwait(false);
-        }
+            CallerProject = project.Groups[1].Value;
+            Caller = caller.Groups[1].Value;
+            Ready();
 
-        if (Caller is not null)
-        {
-            await Ready().ConfigureAwait(false);
+            return true;
         }
     }
 
@@ -165,13 +187,11 @@ internal sealed partial class FakeHarness
         }
     }
 
-    private Task Ready()
+    private void Ready()
     {
         var marker = OrchestrationPaths.ReadyMarker(Folder);
         Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
         File.WriteAllText(marker, string.Empty);
-
-        return Task.CompletedTask;
     }
 
     private void Render()

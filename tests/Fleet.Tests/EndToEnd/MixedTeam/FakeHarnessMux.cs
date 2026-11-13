@@ -14,6 +14,16 @@ internal sealed class FakeHarnessMux : IMuxDriver
 {
     private readonly ConcurrentDictionary<string, FakeHarness> _harnesses = new();
 
+    // While fleet waits on the clock, every harness gets a turn to finish starting.
+    public FakeHarnessMux(SkippingClock clock) =>
+        clock.Skipped += () =>
+        {
+            foreach (var harness in _harnesses.Values)
+            {
+                harness.TryStartMcpServer();
+            }
+        };
+
     public FakeMuxDriver Inner { get; } = new();
 
     public string Name => Inner.Name;
