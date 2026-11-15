@@ -102,7 +102,7 @@ public static class FleetNvimConfig
 
     public static bool Install(string target) => Install(target, KeybindDefaults.Set);
 
-    public static bool Install(string target, KeybindSet keybinds)
+    public static bool Install(string target, KeybindSet keybinds, TimeSpan? writePatience = null)
     {
         var assembly = typeof(FleetNvimConfig).Assembly;
         var names = assembly.GetManifestResourceNames()
@@ -139,7 +139,7 @@ public static class FleetNvimConfig
                 File.WriteAllText(path, content);
             }
 
-            new NvimKeybindFiles(target).WriteGenerated(keybinds);
+            new NvimKeybindFiles(target, writePatience: writePatience).WriteGenerated(keybinds);
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)

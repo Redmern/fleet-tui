@@ -227,7 +227,7 @@ public sealed class RemoteClipboardNvimTests : IDisposable
 
         using var process = Process.Start(start)!;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var output = ReadAnsweringTerminalQueriesAsync(process, timeout.Token);
         await process.WaitForExitAsync(timeout.Token);
         var text = await output;
 
@@ -238,6 +238,52 @@ public sealed class RemoteClipboardNvimTests : IDisposable
         var option = Path.Combine(_dir, "clipboard.txt");
         var clipboard = File.Exists(option) ? (await File.ReadAllLinesAsync(option)).FirstOrDefault() : null;
         return new Run(text, writes, lines, clipboard, File.Exists(copies) ? await File.ReadAllTextAsync(copies) : null);
+    }
+
+    // nvim's TUI asks the terminal for its primary device attributes (CSI c) at startup and waits up to a second
+    // for the answer before it exits. Answer the way a VT220-class terminal would so each run skips that second.
+    // An answer that lands before nvim has put the pty in raw mode is lost, so keep answering until it exits;
+    // nvim ignores the extra answers.
+    private static async Task<string> ReadAnsweringTerminalQueriesAsync(Process process, CancellationToken ct)
+    {
+        var exited = process.WaitForExitAsync(ct);
+        var text = new StringBuilder();
+        var buffer = new char[4096];
+        Task? answering = null;
+        int read;
+        while ((read = await process.StandardOutput.ReadAsync(buffer, ct)) > 0)
+        {
+            text.Append(buffer, 0, read);
+            if (answering is null && text.ToString().Contains("\e[c", StringComparison.Ordinal))
+            {
+                answering = AnswerDeviceAttributesAsync(process, exited);
+            }
+        }
+
+        if (answering is not null)
+        {
+            await answering;
+        }
+
+        return text.ToString();
+    }
+
+    private static async Task AnswerDeviceAttributesAsync(Process process, Task exited)
+    {
+        while (!exited.IsCompleted)
+        {
+            try
+            {
+                await process.StandardInput.WriteAsync("\e[?62;c");
+                await process.StandardInput.FlushAsync();
+            }
+            catch (IOException)
+            {
+                return;
+            }
+
+            await Task.WhenAny(exited, Task.Delay(50));
+        }
     }
 
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]

@@ -8,8 +8,7 @@ namespace Fleet.Tests.Ui;
 
 // Drives the real prompt on the ansi test driver. Each key is its own queued
 // invoke; a prompt still open after the keys is stopped and reported open.
-[Collection(ModalDepthCollection.Name)]
-public sealed class FleetPromptDialogTests
+public sealed class FleetPromptDialogTests : ModalDepthScope
 {
     private sealed record Outcome(
         FleetPrompt.Reply? Reply, bool WentBack, bool LeftOpen, int Width, IReadOnlyList<string> Rows);

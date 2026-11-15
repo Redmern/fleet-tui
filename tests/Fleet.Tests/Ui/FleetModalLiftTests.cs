@@ -11,10 +11,16 @@ namespace Fleet.Tests.Ui;
 // A dashboard tiled beside Claude asks the multiplexer to lift its pane over
 // the whole window while a dialog is open. The dialog then fills the lifted
 // pane (the multiplexer draws its border and title) and the pane goes back to
-// its tile size when the dialog closes. FLEET_FRAMED is process-wide, so this
-// runs in the serial ModalDepth collection.
-[Collection(ModalDepthCollection.Name)]
-public sealed class FleetModalLiftTests
+// its tile size when the dialog closes. FLEET_FRAMED and the FloatScreens lift
+// and drop hooks are process-wide, so this runs in its own serial collection.
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class FramedPaneCollection
+{
+    public const string Name = "framed-pane (sets FLEET_FRAMED and the FloatScreens hooks for the whole process)";
+}
+
+[Collection(FramedPaneCollection.Name)]
+public sealed class FleetModalLiftTests : ModalDepthScope
 {
     private const int TileCols = 50;
 

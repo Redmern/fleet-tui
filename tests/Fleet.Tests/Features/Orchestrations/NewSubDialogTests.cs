@@ -10,8 +10,7 @@ namespace Fleet.Tests.Features.Orchestrations;
 
 // Drives the real dialog on the ansi test driver: the keys are queued onto
 // the run loop, so they arrive the way a terminal would deliver them.
-[Collection(ModalDepthCollection.Name)]
-public sealed class NewSubDialogTests
+public sealed class NewSubDialogTests : ModalDepthScope
 {
     private static readonly IReadOnlyList<string> Past = ["fix the build", "write the release notes"];
 

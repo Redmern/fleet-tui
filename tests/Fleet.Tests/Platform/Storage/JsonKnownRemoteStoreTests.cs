@@ -2,7 +2,6 @@ using Fleet.Platform.Storage;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JsonKnownRemoteStoreTests : ConfigHomeFixture
 {
     private static readonly DateTimeOffset Monday = new(2026, 9, 28, 9, 0, 0, TimeSpan.Zero);

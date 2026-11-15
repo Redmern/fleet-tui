@@ -5,7 +5,6 @@ using Fleet.Shared.Keymap.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JsonKeymapStoreTests : ConfigHomeFixture
 {
     private static JsonKeymapStore Store => new();

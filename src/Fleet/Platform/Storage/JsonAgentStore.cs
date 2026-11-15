@@ -8,8 +8,15 @@ using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Platform.Storage;
 
-public sealed class JsonAgentStore : IAgentStore
+public sealed class JsonAgentStore(TimeSpan lockPatience, TimeSpan busyPatience) : IAgentStore
 {
+    public static readonly TimeSpan LockPatience = TimeSpan.FromSeconds(5);
+
+    public JsonAgentStore()
+        : this(LockPatience, BusyFiles.Patience)
+    {
+    }
+
     public void Save(string project, AgentRecord agent)
     {
         var file = FileFor(project);
@@ -130,13 +137,13 @@ public sealed class JsonAgentStore : IAgentStore
     private static bool SameWorktree(string stored, string candidate) =>
         PathKey.Same(stored, candidate);
 
-    private static bool Mutate(string file, bool unlockedIsFine, Func<SessionFile, bool> change)
+    private bool Mutate(string file, bool unlockedIsFine, Func<SessionFile, bool> change)
     {
         FleetPaths.EnsureDirs();
 
         using var gate = Lock(file + ".lock");
 
-        if ((gate is null && !unlockedIsFine) || TryRead(file, BusyFiles.Patience) is not { } session)
+        if ((gate is null && !unlockedIsFine) || TryRead(file, busyPatience) is not { } session)
         {
             return false;
         }
@@ -144,9 +151,9 @@ public sealed class JsonAgentStore : IAgentStore
         return change(session) && Write(file, session);
     }
 
-    private static FileStream? Lock(string lockPath)
+    private FileStream? Lock(string lockPath)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var deadline = DateTime.UtcNow + lockPatience;
 
         while (true)
         {

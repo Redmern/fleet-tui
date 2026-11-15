@@ -33,7 +33,7 @@ namespace Fleet.Tests.EndToEnd.MixedTeam;
 //
 // Real: McpActions (the object `fleet mcp --caller x` serves; one per caller, as in McpWiring) for dispatch,
 // new_agent, tell_agent, report, wait_for_agent, list_agents and list_subs, with the real settings store, inbox store
-// and notifier under a temp FLEET_CONFIG_HOME; the opencode/codex/pi config writers; NewAgentHandler on a real git
+// and notifier under a temp config home (FleetHome.Scope); the opencode/codex/pi config writers; NewAgentHandler on a real git
 // repository; PaneActivity + OwnerNotices (the dashboard's idle watch).
 //
 // Passed in where McpWiring passes the real thing (the McpActions seams):

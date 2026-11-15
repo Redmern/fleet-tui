@@ -9,8 +9,7 @@ namespace Fleet.Tests.Ui;
 
 // Drives the real card on the ansi test driver. Each key is its own queued
 // invoke so a nested prompt or picker can take the keys that follow.
-[Collection(ModalDepthCollection.Name)]
-public sealed class FleetCardDialogTests
+public sealed class FleetCardDialogTests : ModalDepthScope
 {
     private static (bool Submitted, List<string> Errors) Run(
         Func<IReadOnlyList<FleetCardField>> fields, Func<string?>? validate, params Key[] keys)

@@ -382,7 +382,7 @@ public sealed class RestoreSessionTests : IDisposable
         Directory.CreateDirectory(ProjectRoot);
         await _mux.SpawnAsync(new SpawnOptions { Cwd = ProjectRoot });
         var agents = Enumerable.Range(0, 9).Select(i => Agent($"h{i}", open: true, hidden: true)).ToList();
-        var slow = new SlowMux(_mux, agents.Count);
+        var slow = new SlowMux(_mux, agents.Count, watchTitles: false);
 
         var restored = await new RestoreSessionHandler(slow).HandleAsync("techweb", ProjectRoot, agents);
 
@@ -395,7 +395,7 @@ public sealed class RestoreSessionTests : IDisposable
 
     // Waits for the behaviour under test (the next spawn, a second hidden spawn) instead of a fixed delay,
     // so a slow CI runner can't make overlap look absent. A handler that serializes falls through on Fallback.
-    private sealed class SlowMux(FakeMuxDriver inner, int expected) : IMuxDriver
+    private sealed class SlowMux(FakeMuxDriver inner, int expected, bool watchTitles = true) : IMuxDriver
     {
         private static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(20);
         private static readonly TimeSpan Fallback = TimeSpan.FromSeconds(2);
@@ -519,7 +519,7 @@ public sealed class RestoreSessionTests : IDisposable
                 index = _order[id];
             }
 
-            if (index + 1 < expected && await WaitUntilAsync(() => Started > index + 1, ct))
+            if (watchTitles && index + 1 < expected && await WaitUntilAsync(() => Started > index + 1, ct))
             {
                 Volatile.Write(ref _nextSpawned, true);
             }

@@ -4,7 +4,6 @@ using Fleet.Platform.Jira;
 
 namespace Fleet.Tests.Cli;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JiraWiringTests : ConfigHomeFixture
 {
     private string Root => Path.Combine(ConfigHome, "root");

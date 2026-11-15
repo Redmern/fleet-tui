@@ -5,7 +5,6 @@ namespace Fleet.Tests.Platform.Mux.Embedded;
 
 // The folder an attach client was started from reaches the menu the daemon spawns for it, so
 // "New project" can default to it even when fleetd itself runs from somewhere else.
-[Collection(WallClockCollection.Name)]
 public sealed class LaunchDirDaemonTests : IAsyncLifetime
 {
     private readonly FakePanes _panes = new();

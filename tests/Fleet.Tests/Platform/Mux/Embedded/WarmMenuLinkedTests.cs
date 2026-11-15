@@ -38,6 +38,7 @@ public sealed class WarmMenuLinkedTests : IAsyncLifetime
             FleetExecutable = "fleet",
             WarmMenus = true,
             TimeMenus = true,
+            RevealAfterFit = TimeSpan.FromMilliseconds(50),
             Log = _farLog.Enqueue,
         }).RunAsync(_stop.Token));
         _running.Add(new FleetDaemon(new DaemonOptions
@@ -103,6 +104,7 @@ public sealed class WarmMenuLinkedTests : IAsyncLifetime
 
         var opened = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal("switch-project", opened.Text);
+        warm.Emit("projects\n");
         await window.WaitForAsync("FAR-MENU");
         Assert.Equal(1, FarMenus);
         await Eventually(() => Task.FromResult(_farLog.Any(l => l.StartsWith("menu timing ", StringComparison.Ordinal))));

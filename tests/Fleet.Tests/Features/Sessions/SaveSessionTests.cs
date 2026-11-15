@@ -4,7 +4,6 @@ using Fleet.Ports.Sessions.Models;
 
 namespace Fleet.Tests.Features.Sessions;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class SaveSessionTests : ConfigHomeFixture
 {
     private static readonly IReadOnlyList<WindowEntry> Window =

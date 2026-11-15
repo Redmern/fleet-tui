@@ -8,7 +8,6 @@ using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Cli;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class OrchestratorHostSettingsTests : ConfigHomeFixture
 {
     [Fact]

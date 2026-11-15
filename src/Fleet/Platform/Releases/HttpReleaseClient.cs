@@ -16,14 +16,31 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
 
     private readonly HttpClient _http;
 
+    private readonly TimeSpan _lookupWithin;
+
+    private readonly TimeSpan _downloadWithin;
+
     public HttpReleaseClient()
+        : this(LookupWithin, DownloadWithin)
     {
+    }
+
+    public HttpReleaseClient(TimeSpan lookupWithin, TimeSpan downloadWithin)
+    {
+        _lookupWithin = lookupWithin;
+        _downloadWithin = downloadWithin;
         _http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         _http.DefaultRequestHeaders.UserAgent.Add(
             new ProductInfoHeaderValue("fleet", FleetVersion.Current));
         _http.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
     }
+
+    public TimeSpan LookupLimit => _lookupWithin;
+
+    public TimeSpan DownloadLimit => _downloadWithin;
+
+    public TimeSpan RequestTimeout => _http.Timeout;
 
     public async Task<ReleaseInfo?> LatestAsync(string repo, CancellationToken ct = default) =>
         await FetchAsync($"https://api.github.com/repos/{repo}/releases/latest", ct)
@@ -46,7 +63,7 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
     {
         try
         {
-            using var limit = Within(LookupWithin, ct);
+            using var limit = Within(_lookupWithin, ct);
             using var response = await _http
                 .GetAsync(
                     $"https://api.github.com/repos/{repo}/releases?per_page=100", limit.Token)
@@ -79,7 +96,7 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
     {
         try
         {
-            using var limit = Within(LookupWithin, ct);
+            using var limit = Within(_lookupWithin, ct);
             using var response = await _http.GetAsync(url, limit.Token).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
@@ -113,7 +130,7 @@ public sealed class HttpReleaseClient : IReleaseClient, IDisposable
     {
         try
         {
-            using var limit = Within(DownloadWithin, ct);
+            using var limit = Within(_downloadWithin, ct);
             return await _http.GetByteArrayAsync(url, limit.Token).ConfigureAwait(false);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)

@@ -5,7 +5,7 @@ using Fleet.Shared.Keybinds.Enums;
 
 namespace Fleet.Platform.Nvim;
 
-public sealed class NvimKeybindFiles(string configDirectory, KeybindOs? os = null) : INvimKeybinds
+public sealed class NvimKeybindFiles(string configDirectory, KeybindOs? os = null, TimeSpan? writePatience = null) : INvimKeybinds
 {
     private readonly KeybindOs _os = os ?? KeybindNames.CurrentOs;
 
@@ -35,7 +35,7 @@ public sealed class NvimKeybindFiles(string configDirectory, KeybindOs? os = nul
         }
     }
 
-    private static bool Write(string path, string lua)
+    private bool Write(string path, string lua)
     {
         try
         {
@@ -44,7 +44,7 @@ public sealed class NvimKeybindFiles(string configDirectory, KeybindOs? os = nul
                 return true;
             }
 
-            FileThemeStore.WriteAtomically(Path.GetFullPath(path), lua);
+            FileThemeStore.WriteAtomically(Path.GetFullPath(path), lua, writePatience);
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)

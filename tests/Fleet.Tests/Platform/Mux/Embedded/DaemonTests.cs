@@ -1227,6 +1227,10 @@ public sealed class DaemonTests : IAsyncLifetime
         var menu = _panes.ByProgram("fleet")!;
         var id = menu.Env[FleetDaemon.PaneVariable];
         Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = id, Cols = 40, Rows = 8 })).Ok);
+        // Draw after fleetd has taken the fitted screen's baseline, as a real menu would, so the float shows on the
+        // draw instead of after the RevealAfterFit fallback. Only the speed depends on this pause: a draw that beats
+        // the baseline still shows, 1.2 s later, and every assert below holds either way.
+        await Task.Delay(100);
         menu.Emit("MENU-SCREEN\nitems\n");
         await client.WaitForAsync("MENU-SCREEN");
 

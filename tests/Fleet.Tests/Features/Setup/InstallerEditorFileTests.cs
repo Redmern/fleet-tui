@@ -4,7 +4,6 @@ using Fleet.Shared.Settings.Enums;
 namespace Fleet.Tests.Features.Setup;
 
 // install.sh and scripts/deps.ps1 write editor.json by hand; these are their exact bytes.
-[Collection(ConfigHomeCollection.Name)]
 public sealed class InstallerEditorFileTests : ConfigHomeFixture
 {
     [Theory]

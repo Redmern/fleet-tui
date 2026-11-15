@@ -1,25 +1,23 @@
-namespace Fleet.Tests;
+using Fleet.Shared;
 
-[CollectionDefinition(Name)]
-public sealed class ConfigHomeCollection
-{
-    public const string Name = "config-home";
-}
+namespace Fleet.Tests;
 
 public abstract class ConfigHomeFixture : IDisposable
 {
+    private readonly IDisposable _scope;
+
     protected ConfigHomeFixture()
     {
         ConfigHome = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
         Directory.CreateDirectory(ConfigHome);
-        Environment.SetEnvironmentVariable("FLEET_CONFIG_HOME", ConfigHome);
+        _scope = FleetHome.Scope(ConfigHome);
     }
 
     protected string ConfigHome { get; }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("FLEET_CONFIG_HOME", null);
+        _scope.Dispose();
         TryDelete(ConfigHome);
         GC.SuppressFinalize(this);
     }

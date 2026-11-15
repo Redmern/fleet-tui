@@ -31,7 +31,7 @@ public sealed class SimulatedLinkStream : Stream
         _downPump = Task.Run(PumpDownAsync);
     }
 
-    public TimeSpan OneWay { get; }
+    public TimeSpan OneWay { get; set; }
 
     public int InFlight => Volatile.Read(ref _inFlight);
 

@@ -9,7 +9,7 @@ namespace Fleet.Tests.Ui;
 // Opens each card on the ansi test driver in both corner modes (float-border
 // corners, FleetCorners.Rows == 0, and in-card corners with a margin) and
 // checks the pill rows sit inside the card and above the action bar.
-[Collection(ModalDepthCollection.Name)]
+[Collection(FloatBorderCollection.Name)]
 public sealed class FleetCardLayoutTests : IDisposable
 {
     public FleetCardLayoutTests() => FloatBorder.Reset();

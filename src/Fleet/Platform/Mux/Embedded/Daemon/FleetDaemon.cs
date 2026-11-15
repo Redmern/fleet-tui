@@ -34,9 +34,15 @@ public sealed class DaemonOptions
 
     public TimeSpan SaveEvery { get; init; } = TimeSpan.FromSeconds(1);
 
+    public TimeSpan RemoteRefreshEvery { get; init; } = RemoteLink.RefreshEvery;
+
+    public TimeSpan RemoteErrorLinesGrace { get; init; } = RemoteLink.ErrorLinesWithin;
+
     public TimeSpan RevealWhenQuiet { get; init; } = TimeSpan.FromMilliseconds(60);
 
     public TimeSpan RevealWhenQuietRemote { get; init; } = TimeSpan.FromMilliseconds(15);
+
+    public TimeSpan RevealAfterFit { get; init; } = FleetDaemon.RevealAfterFit;
 
     public bool WarmMenus { get; init; }
 
@@ -2333,7 +2339,12 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
-        var link = new RemoteLink(host, token => open(host, token), options.Log) { CanForward = _hub.For(host) is not null };
+        var link = new RemoteLink(host, token => open(host, token), options.Log)
+        {
+            CanForward = _hub.For(host) is not null,
+            RefreshPeriod = options.RemoteRefreshEvery,
+            ErrorLinesGrace = options.RemoteErrorLinesGrace,
+        };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);
         link.ClipboardImageRequested += asked => _ = Task.Run(() => RelayClipboardImageAsync(link, asked), CancellationToken.None);
@@ -2809,7 +2820,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         if (box.Hidden)
         {
             box.RevealAfterOutput = runtime.Outputs;
-            box.HiddenSince = DateTime.UtcNow - RevealAnyway + RevealAfterFit;
+            box.HiddenSince = DateTime.UtcNow - RevealAnyway + options.RevealAfterFit;
             box.NeedsBaseline = before != _model.FloatBounds(pane);
             box.Baseline = null;
             return;
@@ -2824,7 +2835,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         if (box.Held is not null)
         {
             box.ReleaseAfterOutput = runtime.Outputs;
-            box.HeldSince = DateTime.UtcNow - RevealAnyway + RevealAfterFit;
+            box.HeldSince = DateTime.UtcNow - RevealAnyway + options.RevealAfterFit;
         }
     }
 

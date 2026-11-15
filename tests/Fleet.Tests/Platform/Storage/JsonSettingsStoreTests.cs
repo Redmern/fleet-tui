@@ -6,7 +6,6 @@ using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JsonSettingsStoreTests : ConfigHomeFixture
 {
     private static JsonSettingsStore Store => new();

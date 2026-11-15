@@ -7,8 +7,7 @@ namespace Fleet.Tests.Ui;
 
 // Drives the real picker on the ansi test driver. Each key is its own queued
 // invoke; a picker still open after the keys is stopped and reported open.
-[Collection(ModalDepthCollection.Name)]
-public sealed class FleetPickerDialogTests
+public sealed class FleetPickerDialogTests : ModalDepthScope
 {
     private static readonly IReadOnlyList<PickerEntry> Entries =
         [new("alpha", Key: "x"), new("beta", Key: "y"), new("gamma", Key: "z")];

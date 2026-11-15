@@ -3,10 +3,12 @@ using Terminal.Gui.App;
 
 namespace Fleet.Tests.Cli.Composition;
 
+// Serial, because these tests set Terminal.Gui's static Application.MaximumIterationsPerSecond, which paces the main
+// loop of every application any other test runs.
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class FleetUiPacingCollection
 {
-    public const string Name = "fleet-ui-pacing";
+    public const string Name = "fleet-ui-pacing (sets the static Application.MaximumIterationsPerSecond)";
 }
 
 [Collection(FleetUiPacingCollection.Name)]

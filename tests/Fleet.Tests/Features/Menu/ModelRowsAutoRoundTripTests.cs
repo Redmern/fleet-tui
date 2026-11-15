@@ -6,7 +6,6 @@ using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Features.Menu;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class ModelRowsAutoRoundTripTests : ConfigHomeFixture
 {
     [Theory]

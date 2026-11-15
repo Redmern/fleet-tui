@@ -2,7 +2,6 @@ using Fleet.Platform.Storage;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class FileDispatchHistoryTests : ConfigHomeFixture
 {
     private readonly FileDispatchHistory _history = new();

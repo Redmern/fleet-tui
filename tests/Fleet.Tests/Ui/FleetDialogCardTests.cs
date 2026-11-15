@@ -10,8 +10,7 @@ namespace Fleet.Tests.Ui;
 // Drives the real confirm, choose and error dialogs on the ansi test driver.
 // Each key is its own queued invoke; a dialog still open after the keys is
 // stopped and reported open.
-[Collection(ModalDepthCollection.Name)]
-public sealed class FleetDialogCardTests
+public sealed class FleetDialogCardTests : ModalDepthScope
 {
     private sealed record Seen<T>(T Result, bool WentBack, bool LeftOpen, IReadOnlyList<string> Rows);
 

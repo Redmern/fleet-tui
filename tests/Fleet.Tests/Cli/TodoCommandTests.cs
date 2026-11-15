@@ -8,7 +8,6 @@ using Fleet.Shared.Todos;
 
 namespace Fleet.Tests.Cli;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class TodoCommandTests : ConfigHomeFixture
 {
     private readonly StringWriter _out = new();

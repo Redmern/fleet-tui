@@ -7,11 +7,12 @@ using Terminal.Gui.Views;
 
 namespace Fleet.Tests.Ui;
 
-// FloatBorder state is static like FleetModal's depth, and the card layout
-// tests turn the float border on, so both share one non-parallel collection.
-public static class FloatBorderCollection
+// Serial, because FloatBorder keeps its sink and the views it tracks in static state: while one of these tests has
+// the float border enabled, every view any other test builds would publish to it.
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class FloatBorderCollection
 {
-    public const string Name = ModalDepthCollection.Name;
+    public const string Name = "float-border (enables FloatBorder's process-wide sink)";
 }
 
 [Collection(FloatBorderCollection.Name)]

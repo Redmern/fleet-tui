@@ -21,13 +21,27 @@ public sealed class GitRunnerCancelTests : IDisposable
             return;
         }
 
+        var started = Path.Combine(_root, "started");
         var marker = Path.Combine(_root, "finished");
-        using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        using var cancel = new CancellationTokenSource();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new GitRunner("sh").RunAsync(string.Empty, ["-c", $"sleep 1 && touch '{marker}'"], null, cancel.Token));
+        var run = new GitRunner("sh").RunAsync(
+            string.Empty, ["-c", $"touch '{started}' && sleep 0.8 && touch '{marker}'"], null, cancel.Token);
+        while (!File.Exists(started) && !run.IsCompleted)
+        {
+            await Task.Delay(10);
+        }
 
-        await Task.Delay(TimeSpan.FromMilliseconds(1600));
+        var sinceStart = System.Diagnostics.Stopwatch.StartNew();
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+
+        // Long enough past the start that a child left running would have touched the marker.
+        var rest = TimeSpan.FromMilliseconds(1100) - sinceStart.Elapsed;
+        if (rest > TimeSpan.Zero)
+        {
+            await Task.Delay(rest);
+        }
 
         Assert.False(File.Exists(marker));
     }

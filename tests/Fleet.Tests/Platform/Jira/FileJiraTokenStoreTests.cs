@@ -2,7 +2,6 @@ using Fleet.Platform.Jira;
 
 namespace Fleet.Tests.Platform.Jira;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class FileJiraTokenStoreTests : ConfigHomeFixture
 {
     private const string Token = "s3cret-token";

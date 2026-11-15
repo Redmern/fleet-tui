@@ -4,7 +4,6 @@ using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Platform.Storage;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class JiraSettingsStoreTests : ConfigHomeFixture
 {
     private static JsonSettingsStore Store => new();

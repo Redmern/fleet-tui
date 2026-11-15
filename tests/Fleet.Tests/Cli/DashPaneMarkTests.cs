@@ -5,7 +5,6 @@ using Fleet.Ports.Mux.Models;
 
 namespace Fleet.Tests.Cli;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class DashPaneMarkTests : ConfigHomeFixture
 {
     private const string Root = "C:/repos/techweb";

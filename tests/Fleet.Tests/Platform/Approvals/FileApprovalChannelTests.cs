@@ -4,7 +4,6 @@ using Fleet.Ports.Approvals.Models;
 
 namespace Fleet.Tests.Platform.Approvals;
 
-[Collection(ConfigHomeCollection.Name)]
 public sealed class FileApprovalChannelTests : ConfigHomeFixture
 {
     private DateTimeOffset _now = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);

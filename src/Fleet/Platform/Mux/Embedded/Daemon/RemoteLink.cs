@@ -20,6 +20,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(2);
 
+    public static readonly TimeSpan ErrorLinesWithin = TimeSpan.FromMilliseconds(300);
+
     public static readonly TimeSpan AnswerWithin = TimeSpan.FromSeconds(10);
 
     private readonly Lock _gate = new();
@@ -42,6 +44,10 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
     public string Host => host;
 
     public bool CanForward { get; init; } = true;
+
+    public TimeSpan RefreshPeriod { get; init; } = RefreshEvery;
+
+    public TimeSpan ErrorLinesGrace { get; init; } = ErrorLinesWithin;
 
     public string Name
     {
@@ -386,7 +392,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 WasConnected = true;
                 TakeNotices(notices.Result);
 
-                if (await Task.WhenAny(reader, Task.Delay(RefreshEvery, ct)).ConfigureAwait(false) == reader)
+                if (await Task.WhenAny(reader, Task.Delay(RefreshPeriod, ct)).ConfigureAwait(false) == reader)
                 {
                     throw new IOException("the remote went away");
                 }
@@ -399,7 +405,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                                       or TimeoutException or System.Text.Json.JsonException
                                       or System.ComponentModel.Win32Exception)
         {
-            await Task.Delay(300, CancellationToken.None).ConfigureAwait(false);
+            await Task.Delay(ErrorLinesGrace, CancellationToken.None).ConfigureAwait(false);
 
             lock (_gate)
             {

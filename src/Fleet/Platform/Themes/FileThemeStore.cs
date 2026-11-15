@@ -142,7 +142,7 @@ public sealed class FileThemeStore(string config) : IThemeStore
         }
     }
 
-    public static void WriteAtomically(string file, string text)
+    public static void WriteAtomically(string file, string text, TimeSpan? patience = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
@@ -154,7 +154,7 @@ public sealed class FileThemeStore(string config) : IThemeStore
         {
             File.Move(temp, file, overwrite: true);
             return file;
-        }, BusyFiles.Patience);
+        }, patience ?? BusyFiles.Patience);
 
         if (moved is null)
         {

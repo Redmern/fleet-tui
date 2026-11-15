@@ -4,12 +4,13 @@ using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Mux.Models;
+using Fleet.Tests.Support;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
 
 // Warm menus on a frozen SimulatedLinkClock: time only moves when a test advances it, so a
-// warm menu that starts without the clock moving proves it skipped WarmAgainAfter.
-[Collection(WallClockCollection.Name)]
+// warm menu that starts without the clock moving proves it skipped WarmAgainAfter. A fitted
+// menu reveals after 50 ms here, not 1.2 s; the one real latency check retries once.
 public sealed class WarmMenuSpeedTests : IAsyncLifetime
 {
     private readonly FakePanes _panes = new();
@@ -17,8 +18,16 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
     private readonly ConcurrentQueue<string> _log = new();
     private readonly List<DaemonTests.TestClient> _clients = [];
     private readonly CancellationTokenSource _stop = new();
+    private readonly TimeSpan _revealAfterFit;
     private Endpoint _endpoint = null!;
     private Task _running = Task.CompletedTask;
+
+    public WarmMenuSpeedTests()
+        : this(TimeSpan.FromMilliseconds(50))
+    {
+    }
+
+    private WarmMenuSpeedTests(TimeSpan revealAfterFit) => _revealAfterFit = revealAfterFit;
 
     public Task InitializeAsync()
     {
@@ -31,6 +40,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
             Terminal = _panes.NewTerminal,
             FleetExecutable = "fleet",
             WarmMenus = true,
+            RevealAfterFit = _revealAfterFit,
             Clock = _clock,
             Log = _log.Enqueue,
         });
@@ -162,8 +172,25 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         await client.WaitForAsync("WARM-MENU");
     }
 
+    // Its own daemon reveals a fitted menu after 600 ms, so a plain open that waited for that fallback (or for
+    // RevealAnyway) would miss the bound of half of it.
     [Fact]
-    public async Task A_plain_open_shows_a_settled_waiting_warm_menu_at_once()
+    public Task A_plain_open_shows_a_settled_waiting_warm_menu_at_once() =>
+        Timing.RetryOnceAsync(async () =>
+        {
+            var rig = new WarmMenuSpeedTests(TimeSpan.FromMilliseconds(600));
+            await rig.InitializeAsync();
+            try
+            {
+                await rig.PlainOpenShowsASettledWaitingWarmMenuAtOnceAsync();
+            }
+            finally
+            {
+                await rig.DisposeAsync();
+            }
+        });
+
+    private async Task PlainOpenShowsASettledWaitingWarmMenuAtOnceAsync()
     {
         var (control, client, warm) = await WarmAsync();
         await Settled(warm);
@@ -174,7 +201,7 @@ public sealed class WarmMenuSpeedTests : IAsyncLifetime
         await client.SendCommandAsync("menu");
         await client.WaitForAsync("WARM-MENU");
 
-        Assert.True(clock.Elapsed < FleetDaemon.RevealAnyway / 2, $"shown after {clock.ElapsedMilliseconds} ms");
+        Assert.True(clock.Elapsed < _revealAfterFit / 2, $"shown after {clock.ElapsedMilliseconds} ms");
     }
 
     [Fact]
