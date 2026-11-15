@@ -24,6 +24,51 @@ public class ViewerWiringTests
         Assert.Null(ViewerWiring.For(mark, iso: true));
     }
 
+    private static Func<string, string?> Environment(params (string Name, string Value)[] variables) =>
+        name => variables.Where(v => v.Name == name).Select(v => v.Value).FirstOrDefault();
+
+    [Fact]
+    public void The_viewer_is_read_from_the_variable_fleetd_sets_and_from_no_other()
+    {
+        var onlyTheMark = Environment(("FLEET_VIEWED_FROM", "view:homelab"));
+        var everythingElse = Environment(("FLEET_CLIENT", "view:homelab"), ("FLEET_PANE", "ssh:homelab"), ("FLEET_VIEWED", "view:homelab"));
+
+        Assert.Equal("FLEET_VIEWED_FROM", ViewedFrom.Variable);
+        Assert.Equal("view:homelab", ViewerWiring.Mark(onlyTheMark));
+        Assert.Equal(new ViewedFrom(ViewKind.View, "homelab"), ViewerWiring.Current(onlyTheMark, () => false));
+        Assert.Null(ViewerWiring.Mark(everythingElse));
+        Assert.Null(ViewerWiring.Current(everythingElse, () => false));
+    }
+
+    [Fact]
+    public void An_empty_mark_is_no_mark()
+    {
+        Assert.Null(ViewerWiring.Mark(Environment(("FLEET_VIEWED_FROM", string.Empty))));
+        Assert.Null(ViewerWiring.Current(Environment(("FLEET_VIEWED_FROM", string.Empty)), () => true));
+    }
+
+    [Fact]
+    public void The_viewer_of_the_running_menu_loses_its_name_when_iso_is_on()
+    {
+        var marked = Environment(("FLEET_VIEWED_FROM", "ssh:homelab-box"));
+
+        Assert.Equal(new ViewedFrom(ViewKind.Ssh, "homelab-box"), ViewerWiring.Current(marked, () => false));
+        Assert.Equal(new ViewedFrom(ViewKind.Ssh, RemoteMenus.UnnamedMachine), ViewerWiring.Current(marked, () => true));
+    }
+
+    [Fact]
+    public void Iso_is_not_read_for_a_menu_nobody_views()
+    {
+        var asked = 0;
+
+        Assert.Null(ViewerWiring.Current(Environment(), () =>
+        {
+            asked++;
+            return true;
+        }));
+        Assert.Equal(0, asked);
+    }
+
     // With ISO on the remote hides its machine name from a bridged connection, and the label of a
     // view is the ssh host. Neither may show up in a group title.
     [Theory]
