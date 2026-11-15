@@ -342,11 +342,116 @@ public sealed class StdioMcpServerTests
         Assert.NotEmpty(_log.Swallows);
     }
 
+    [Fact]
+    public async Task A_long_call_with_a_progress_token_reports_progress_until_it_completes()
+    {
+        var clock = new ManualClock();
+        var output = new LineSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var run = new StdioMcpServer(
+                new StringReader(Call(1, ""","_meta":{"progressToken":"tok-1"}""") + "\n"), output, _log, clock)
+            .RunAsync(Blocking(release.Task, started));
+
+        await started.Task.WaitAsync(Patience);
+
+        clock.Advance(TimeSpan.FromSeconds(19));
+        clock.Advance(TimeSpan.FromSeconds(1));
+
+        Assert.Equal(
+            """{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"tok-1","progress":20}}""",
+            Assert.Single(await output.WaitForLines(1)));
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+
+        Assert.Contains("\"progress\":40", (await output.WaitForLines(2))[1]);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(0, clock.ActiveTimers);
+        Assert.Equal(3, output.Lines.Count);
+        Assert.Equal("1", IdOf(output.Lines[2]));
+    }
+
+    [Fact]
+    public async Task A_numeric_progress_token_goes_back_as_a_number()
+    {
+        var clock = new ManualClock();
+        var output = new LineSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var run = new StdioMcpServer(
+                new StringReader(Call(1, ""","_meta":{"progressToken":7}""") + "\n"), output, _log, clock)
+            .RunAsync(Blocking(release.Task, started));
+
+        await started.Task.WaitAsync(Patience);
+        clock.Advance(TimeSpan.FromSeconds(20));
+
+        Assert.Contains("\"progressToken\":7,", (await output.WaitForLines(1))[0]);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+    }
+
+    [Fact]
+    public async Task A_call_without_a_progress_token_reports_no_progress()
+    {
+        var clock = new ManualClock();
+        var output = new LineSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n"), output, _log, clock)
+            .RunAsync(Blocking(release.Task, started));
+
+        await started.Task.WaitAsync(Patience);
+
+        Assert.Equal(0, clock.ActiveTimers);
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
+    }
+
+    [Fact]
+    public async Task A_cancelled_call_stops_reporting_progress()
+    {
+        var clock = new ManualClock();
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1, ""","_meta":{"progressToken":"tok-1"}"""),
+            """{"method":"notifications/cancelled","params":{"requestId":1}}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct).WaitAsync(Patience, CancellationToken.None);
+
+            return McpResult.Ok("late");
+        });
+
+        await new StdioMcpServer(new StringReader(transcript), output, _log, clock)
+            .RunAsync(serving)
+            .WaitAsync(Patience);
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(0, clock.ActiveTimers);
+        Assert.Empty(output.Lines);
+    }
+
     private static string Call(int id, string meta = "") =>
         $"{{\"id\":{id},\"method\":\"tools/call\",\"params\":{{\"name\":\"list_agents\",\"arguments\":{{}}{meta}}}}}";
 
-    private static McpServing Blocking(Task release) => new("fleet", [], async (_, _) =>
+    private static McpServing Blocking(Task release, TaskCompletionSource? started = null) => new("fleet", [], async (_, _) =>
     {
+        started?.SetResult();
+
         await release.WaitAsync(Patience);
 
         return McpResult.Ok("ok");

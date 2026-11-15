@@ -210,7 +210,7 @@ public static class Adapters
             NewLine = "\n",
         };
 
-        return new StdioMcpServer(Console.In, stdout, log, oneCallAtATime);
+        return new StdioMcpServer(Console.In, stdout, log, oneCallAtATime: oneCallAtATime);
     }
 
     public static (string Text, string? Cwd) ReadHookPayload(TextReader input)

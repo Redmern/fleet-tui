@@ -7,11 +7,19 @@ using Fleet.Platform.Mcp.Models;
 namespace Fleet.Platform.Mcp;
 
 public sealed class StdioMcpServer(
-    TextReader input, TextWriter output, IFleetLog log, bool oneCallAtATime = false) : IMcpServer
+    TextReader input,
+    TextWriter output,
+    IFleetLog log,
+    TimeProvider? time = null,
+    bool oneCallAtATime = false) : IMcpServer
 {
     public const string ProtocolVersion = "2024-11-05";
 
     public const string Version = "0.1.0";
+
+    public static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(20);
+
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
 
     private readonly SemaphoreSlim _writing = new(1, 1);
 
@@ -119,13 +127,25 @@ public sealed class StdioMcpServer(
 
     private async Task RunCall(RpcCall call, McpServing serving, CancellationTokenSource cancel)
     {
+        var ct = cancel.Token;
+        var began = _time.GetTimestamp();
+        var finished = false;
+
+        using var progress = call.ProgressToken is { } progressToken
+            ? _time.CreateTimer(
+                _ => _ = ReportProgress(progressToken, began, () => !finished, ct),
+                null,
+                ProgressInterval,
+                ProgressInterval)
+            : null;
+
         try
         {
-            var reply = await CallReply(call, serving, cancel.Token).ConfigureAwait(false);
+            var reply = await CallReply(call, serving, ct).ConfigureAwait(false);
 
             if (!cancel.IsCancellationRequested)
             {
-                await Send(reply, cancel.Token).ConfigureAwait(false);
+                await Send(reply, ct, () => finished = true).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
@@ -137,8 +157,27 @@ public sealed class StdioMcpServer(
         }
         finally
         {
+            finished = true;
             _cancellable.TryRemove(new KeyValuePair<string, CancellationTokenSource>(call.Id.Raw, cancel));
             cancel.Dispose();
+        }
+    }
+
+    private async Task ReportProgress(
+        string progressToken, long began, Func<bool> stillRunning, CancellationToken ct)
+    {
+        try
+        {
+            var elapsed = (long)_time.GetElapsedTime(began).TotalSeconds;
+
+            await Send(JsonRpcCodec.Progress(progressToken, elapsed), ct, stillRunning).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception e)
+        {
+            log.Swallowed(e);
         }
     }
 
@@ -161,12 +200,17 @@ public sealed class StdioMcpServer(
         }
     }
 
-    private async Task Send(string message, CancellationToken ct)
+    private async Task Send(string message, CancellationToken ct, Func<bool>? unlessRefused = null)
     {
         await _writing.WaitAsync(ct).ConfigureAwait(false);
 
         try
         {
+            if (unlessRefused is not null && !unlessRefused())
+            {
+                return;
+            }
+
             await output.WriteAsync(message.AsMemory(), ct).ConfigureAwait(false);
             await output.WriteAsync('\n').ConfigureAwait(false);
             await output.FlushAsync(ct).ConfigureAwait(false);
