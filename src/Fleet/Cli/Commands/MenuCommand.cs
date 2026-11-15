@@ -8,6 +8,7 @@ using Fleet.Features.Agents.MoveProject;
 using Fleet.Features.Agents.OpenEditor;
 using Fleet.Features.Dashboard.ShowDashboard;
 using Fleet.Features.Diagnostics.ViewLogs;
+using Fleet.Features.Diagnostics.ViewLogs.Models;
 using Fleet.Features.Files.BrowseFiles;
 using Fleet.Features.Forwards.OpenPort;
 using Fleet.Features.Menu.EditAidlc;
@@ -85,36 +86,57 @@ public static class MenuCommand
             ? FleetActionIds.Parse(id)
             : FleetAction.None;
 
-        if (project is null && invocation.Project is { } shown
-            && ScreenForRemoteView(shown, requested) is var screen and not FleetAction.None)
+        return await StartAsync(
+                invocation.Project,
+                project is not null,
+                requested,
+                async (shown, screen) =>
+                {
+                    using var here = new OnThisMachine(projects, shown);
+                    return await ThisMachineSession.RunAsync(screen, here, FleetModal.WentBack).ConfigureAwait(false);
+                },
+                startNew => PickProjectCommand.RunAsync(startNew),
+                () =>
+                {
+                    var dispatch = new MenuDispatch(ViewerWiring.Current, EmbeddedWiring.HandBack);
+
+                    return dispatch.StartAsync(
+                        requested,
+                        () => Adapters.Toggles().Toggle(project!.Name, requested),
+                        message =>
+                        {
+                            using IApplication hinting = FleetUi.Start();
+                            Hint(hinting, message);
+                        },
+                        () => RunMenuAsync(invocation, projects, project!, requested, dispatch));
+                },
+                Adapters.Log().Write)
+            .ConfigureAwait(false);
+    }
+
+    public static Task<int> StartAsync(
+        string? named,
+        bool found,
+        FleetAction requested,
+        Func<string, FleetAction, Task<int>> onThisMachine,
+        Func<bool, Task<int>> pickProject,
+        Func<Task<int>> menu,
+        Action<string> log)
+    {
+        if (!found && named is not null && ScreenForRemoteView(named, requested) is var screen and not FleetAction.None)
         {
             if (screen == FleetAction.Close)
             {
-                Adapters.Log().Write($"menu for {shown}: {FleetActionIds.For(requested)} has no screen on this machine yet; closing");
-                return 1;
+                log($"menu for {named}: {FleetActionIds.For(requested)} has no screen on this machine yet; closing");
+                return Task.FromResult(1);
             }
 
-            return await RunOnThisMachineAsync(shown, screen, projects).ConfigureAwait(false);
+            return onThisMachine(named, screen);
         }
 
-        if (requested is FleetAction.OpenProject or FleetAction.NewProject || project is null)
-        {
-            return await PickProjectCommand.RunAsync(startNew: requested == FleetAction.NewProject).ConfigureAwait(false);
-        }
-
-        var dispatch = new MenuDispatch(ViewerWiring.Current, EmbeddedWiring.HandBack);
-
-        return await dispatch
-            .StartAsync(
-                requested,
-                () => Adapters.Toggles().Toggle(project.Name, requested),
-                message =>
-                {
-                    using IApplication hinting = FleetUi.Start();
-                    Hint(hinting, message);
-                },
-                () => RunMenuAsync(invocation, projects, project, requested, dispatch))
-            .ConfigureAwait(false);
+        return requested is FleetAction.OpenProject or FleetAction.NewProject || !found
+            ? pickProject(requested == FleetAction.NewProject)
+            : menu();
     }
 
     private static async Task<int> RunMenuAsync(
@@ -182,101 +204,69 @@ public static class MenuCommand
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
 
-    private sealed record ThisMachine(IApplication App, Keymap Keymap, IKeymapStore Keymaps, IProjectStore Projects, string Shown);
-
-    private static readonly Dictionary<FleetAction, Func<ThisMachine, Task>> OnThisMachine = new()
+    private sealed class OnThisMachine(IProjectStore projects, string shown) : IThisMachineScreens, IDisposable
     {
-        [FleetAction.SwitchProject] = m =>
-            SwitchAcrossMachines(m.App, m.Keymap, m.Projects.List(), null, m.Shown[RemoteMark.Length..]),
-        [FleetAction.Notifications] = m => ShowNotices(m.App, m.Keymap, m.Projects, null),
-        [FleetAction.Remotes] = m => ManageRemotes(m.App, m.Keymap),
-        [FleetAction.SaveSession] = m => Done(() => SaveSession(m.App, project: null)),
-        [FleetAction.EditKeybinds] = m => Done(() => EditKeybindsView.Show(m.App, m.Keymaps, m.Keymap)),
-        [FleetAction.EditTheme] = m => Done(() => ChooseTheme(m.App, m.Keymap, ThemeFolderWithoutProject)),
-        [FleetAction.EditShowMenuKeys] = _ => Done(() => ToggleOnThisMachine(FleetAction.EditShowMenuKeys)),
-        [FleetAction.EditButtonHints] = _ => Done(() => ToggleOnThisMachine(FleetAction.EditButtonHints)),
-        [FleetAction.ViewLogs] = m => Done(() => ViewLogsView.Show(
-            m.App, m.Keymap, ToggleSettingHandler.ThisMachine, LogParser.All(LogParser.Parse(Adapters.Log().Tail(LogTail))))),
-        [FleetAction.UpdateFleet] = m => Done(() => UpdateWiring.Install(m.App, FreshBuild.ThisProcess)),
-        [FleetAction.ShowVersion] = m => Done(() => ShowVersion(m.App, m.Keymap)),
-        [FleetAction.WhatsNew] = m => Done(() => ShowWhatsNew(m.App, m.Keymap)),
-    };
+        private readonly IKeymapStore _keymaps = Adapters.Keymaps();
 
-    public static IReadOnlyList<FleetAction> ScreensForRemoteView => [.. OnThisMachine.Keys, FleetAction.ThisMachineSettings];
+        private IApplication? _app;
 
-    private static string ThemeFolderWithoutProject => Adapters.LaunchDirectory ?? Adapters.HomeDirectory;
+        private IApplication App => _app ??= FleetUi.Start();
 
-    private static Task Done(Action run)
-    {
-        run();
-        return Task.CompletedTask;
+        private Keymap Keys => new(_keymaps.Load());
+
+        public Task SwitchProjectAsync() => SwitchAcrossMachines(App, Keys, projects.List(), null, shown[RemoteMark.Length..]);
+
+        public Task NotificationsAsync() => ShowNotices(App, Keys, projects, null);
+
+        public Task RemotesAsync() => ManageRemotes(App, Keys);
+
+        public void SaveSession() => MenuCommand.SaveSession(App, project: null);
+
+        public void Keybinds() => EditKeybindsView.Show(App, _keymaps, Keys);
+
+        public void Theme() => ChooseTheme(App, Keys, Adapters.LaunchDirectory ?? Adapters.HomeDirectory);
+
+        public void Toggle(FleetAction toggle) => Adapters.Toggles().ToggleShared(toggle, SharedSettings());
+
+        public void Log() => ViewLogsView.Show(App, Keys, ToggleSettingHandler.ThisMachine, ThisMachinesLog(Adapters.Log().Tail(LogTail)));
+
+        public void Update() => UpdateWiring.Install(App, FreshBuild.ThisProcess);
+
+        public void Version() => ShowVersion(App, Keys);
+
+        public void WhatsNew() => ShowWhatsNew(App, Keys);
+
+        public FleetAction ShowSettings(MenuScreen screen)
+        {
+            var shared = SharedSettings();
+            var toggles = Adapters.Toggles();
+
+            return FleetUi.Menu(
+                App,
+                Keys,
+                screen,
+                action => FleetMenus.Value(action, shared),
+                action =>
+                {
+                    shared = toggles.FlipShared(action, shared);
+                    return FleetMenus.Value(action, shared);
+                },
+                () => shared.ShowMenuKeys,
+                () => shared.ButtonHints);
+        }
+
+        public void Dispose() => _app?.Dispose();
     }
 
-    private static void ToggleOnThisMachine(FleetAction toggle) => Adapters.Toggles().ToggleShared(toggle, SharedSettings());
+    public static IReadOnlyList<FleetAction> ScreensForRemoteView => ThisMachineSession.Screens;
+
+    public static IReadOnlyList<LogEntry> ThisMachinesLog(IReadOnlyList<string> lines) => LogParser.All(LogParser.Parse(lines));
 
     private static SettingsConfig SharedSettings() =>
         SettingsConfig.Default
             .WithShowMenuKeys(Adapters.ShowMenuKeys())
             .WithButtonHints(Adapters.ButtonHints())
             .WithNvim(Adapters.LoadNvimConfig());
-
-    private static async Task<int> RunOnThisMachineAsync(string shown, FleetAction screen, IProjectStore projects)
-    {
-        if (RunsHeadless(screen))
-        {
-            ToggleOnThisMachine(screen);
-            return 0;
-        }
-
-        var keymaps = Adapters.Keymaps();
-        using IApplication app = FleetUi.Start();
-        var chosen = screen;
-        var fromSettings = false;
-
-        while (true)
-        {
-            var keymap = new Keymap(keymaps.Load());
-
-            if (chosen == FleetAction.ThisMachineSettings)
-            {
-                fromSettings = true;
-                chosen = ShowThisMachineSettings(app, keymap);
-
-                if (chosen == FleetAction.None)
-                {
-                    return 0;
-                }
-            }
-
-            await OnThisMachine[chosen](new ThisMachine(app, keymap, keymaps, projects, shown)).ConfigureAwait(false);
-
-            if (!FleetModal.WentBack() || !fromSettings)
-            {
-                return 0;
-            }
-
-            chosen = FleetAction.ThisMachineSettings;
-        }
-    }
-
-    private static FleetAction ShowThisMachineSettings(IApplication app, Keymap keymap)
-    {
-        var shared = SharedSettings();
-        var toggles = Adapters.Toggles();
-
-        return FleetUi.Menu(
-            app,
-            keymap,
-            RemoteMenus.ThisMachineScreen,
-            action => FleetMenus.Value(action, shared),
-            action =>
-            {
-                shared = toggles.FlipShared(action, shared);
-                return FleetMenus.Value(action, shared);
-            },
-            () => shared.ShowMenuKeys,
-            () => shared.ButtonHints);
-    }
 
     public static string SessionName(string? project, IReadOnlyList<WindowEntry> window) =>
         project ?? (window.FirstOrDefault(e => e.Shown) ?? window[0]).Project;

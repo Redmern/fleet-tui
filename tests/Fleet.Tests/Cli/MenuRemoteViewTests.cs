@@ -52,17 +52,6 @@ public class MenuRemoteViewTests
         Assert.Contains(action, MenuCommand.ScreensForRemoteView);
 
     [Fact]
-    public void The_screens_for_a_view_of_a_remote_are_read_from_the_handlers_not_kept_as_a_second_list()
-    {
-        var source = MenuSource();
-        var screens = source.IndexOf("ScreensForRemoteView =>", StringComparison.Ordinal);
-
-        Assert.True(screens > 0);
-        Assert.Contains("OnThisMachine.Keys", source[screens..source.IndexOf(';', screens)], StringComparison.Ordinal);
-        Assert.DoesNotContain("switch (screen)", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void A_session_saved_from_a_view_of_a_remote_is_first_named_after_the_project_shown()
     {
         WindowEntry[] window = [new("techweb", null, false), new("homelab-api", "red@homelab", true)];
@@ -92,16 +81,70 @@ public class MenuRemoteViewTests
         Assert.Contains("new MenuDispatch(ViewerWiring.Current, EmbeddedWiring.HandBack)", source, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void A_menu_started_for_a_view_of_a_remote_runs_this_machines_screen_before_it_looks_for_a_project_to_pick()
+    private sealed class Start
     {
-        var source = MenuSource();
-        var run = source.IndexOf("public static async Task<int> RunAsync", StringComparison.Ordinal);
-        var here = source.IndexOf("return await RunOnThisMachineAsync(shown, screen, projects)", run, StringComparison.Ordinal);
-        var pick = source.IndexOf("PickProjectCommand.RunAsync", run, StringComparison.Ordinal);
+        public List<string> Ran { get; } = [];
 
-        Assert.True(here > run && here < pick);
-        Assert.Contains("await OnThisMachine[chosen](", source, StringComparison.Ordinal);
+        public Task<int> For(string? named, bool found, FleetAction requested) =>
+            MenuCommand.StartAsync(
+                named,
+                found,
+                requested,
+                (shown, screen) => Done($"this machine: {screen} for {shown}", 0),
+                startNew => Done(startNew ? "new project" : "pick project", 0),
+                () => Done("menu", 0),
+                Ran.Add);
+
+        private Task<int> Done(string what, int code)
+        {
+            Ran.Add(what);
+            return Task.FromResult(code);
+        }
+    }
+
+    public static TheoryData<FleetAction> OwnedScreens { get; } = [.. ViewerScreens.Owned];
+
+    [Theory]
+    [MemberData(nameof(OwnedScreens))]
+    public async Task A_menu_started_for_a_view_of_a_remote_with_an_owned_screen_runs_that_screen_on_this_machine_and_picks_no_project(FleetAction screen)
+    {
+        var start = new Start();
+
+        await start.For("@far", found: false, screen);
+
+        Assert.Equal([$"this machine: {screen} for @far"], start.Ran);
+    }
+
+    [Theory]
+    [InlineData("@far", false, FleetAction.ListAgents, "pick project")]
+    [InlineData("@far", false, FleetAction.None, "pick project")]
+    [InlineData(null, false, FleetAction.Remotes, "pick project")]
+    [InlineData("gone", false, FleetAction.Remotes, "pick project")]
+    [InlineData("homelab", true, FleetAction.OpenProject, "pick project")]
+    [InlineData("homelab", true, FleetAction.NewProject, "new project")]
+    [InlineData("homelab", true, FleetAction.Remotes, "menu")]
+    [InlineData("homelab", true, FleetAction.None, "menu")]
+    [InlineData("homelab", true, FleetAction.EditShowMenuKeys, "menu")]
+    public async Task Any_other_start_of_the_menu_goes_where_it_went_before(string? named, bool found, FleetAction requested, string goes)
+    {
+        var start = new Start();
+
+        await start.For(named, found, requested);
+
+        Assert.Equal([goes], start.Ran);
+    }
+
+    [Fact]
+    public void This_machines_log_keeps_the_lines_of_every_project_and_of_none_newest_first()
+    {
+        string[] lines =
+        [
+            "2026-08-10T09:00:00.0000000+02:00 [techweb] started agent backend/dev",
+            "2026-08-10T09:01:00.0000000+02:00 [other] pulled something",
+            "2026-08-10T09:02:00.0000000+02:00 fleetd: listening",
+        ];
+
+        Assert.Equal(["", "other", "techweb"], MenuCommand.ThisMachinesLog(lines).Select(e => e.Project));
     }
 
     private static string MenuSource() =>
