@@ -103,23 +103,22 @@ public static class MenuCommand
 
         var dispatch = new MenuDispatch(ViewerWiring.Current, EmbeddedWiring.HandBack);
 
-        if (requested != FleetAction.None && dispatch.Settle(requested) is var settled and not ScreenRoute.Here)
-        {
-            if (settled == ScreenRoute.Hint)
-            {
-                using IApplication hinting = FleetUi.Start();
-                HintAtTheMachineYouSitAt(hinting);
-            }
+        return await dispatch
+            .StartAsync(
+                requested,
+                () => Adapters.Toggles().Toggle(project.Name, requested),
+                message =>
+                {
+                    using IApplication hinting = FleetUi.Start();
+                    Hint(hinting, message);
+                },
+                () => RunMenuAsync(invocation, projects, project, requested, dispatch))
+            .ConfigureAwait(false);
+    }
 
-            return 0;
-        }
-
-        if (RunsHeadless(requested))
-        {
-            Adapters.Toggles().Toggle(project.Name, requested);
-            return 0;
-        }
-
+    private static async Task<int> RunMenuAsync(
+        Invocation invocation, IProjectStore projects, Project project, FleetAction requested, MenuDispatch dispatch)
+    {
         var keymaps = Adapters.Keymaps();
         var adder = new AddRepositoryHandler(Adapters.Git());
 
@@ -190,7 +189,7 @@ public static class MenuCommand
                         .RunAsync(
                             chosen,
                             action => Perform(app, keymap, keymaps, adder, projects, project, action),
-                            () => HintAtTheMachineYouSitAt(app))
+                            message => Hint(app, message))
                         .ConfigureAwait(false);
 
                     if (route == ScreenRoute.Hint && pickedFrom is { } shownBefore)
@@ -250,8 +249,8 @@ public static class MenuCommand
 
     public static bool NeedsRegroup(string? drawnFor, string? openedBy) => !string.Equals(drawnFor, openedBy, StringComparison.Ordinal);
 
-    private static void HintAtTheMachineYouSitAt(IApplication app) =>
-        FleetDialog.Inform(app, FleetMenus.Title(FleetAction.None), [ViewerHints.ScreensWhereYouSit]);
+    private static void Hint(IApplication app, string message) =>
+        FleetDialog.Inform(app, FleetMenus.Title(FleetAction.None), [message]);
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
 

@@ -24,7 +24,32 @@ public sealed class MenuDispatch(Func<ViewedFrom?> viewer, Func<string, bool> ha
         };
     }
 
-    public async Task<(ScreenRoute Route, int Code)> RunAsync(FleetAction action, Func<FleetAction, Task<int>> here, Action hint)
+    public async Task<int> StartAsync(FleetAction requested, Action headless, Action<string> hint, Func<Task<int>> menu)
+    {
+        if (requested == FleetAction.None)
+        {
+            return await menu().ConfigureAwait(false);
+        }
+
+        switch (Settle(requested))
+        {
+            case ScreenRoute.HandBack:
+                return 0;
+            case ScreenRoute.Hint:
+                hint(ViewerHints.ScreensWhereYouSit);
+                return 0;
+        }
+
+        if (FleetMenus.IsToggle(requested))
+        {
+            headless();
+            return 0;
+        }
+
+        return await menu().ConfigureAwait(false);
+    }
+
+    public async Task<(ScreenRoute Route, int Code)> RunAsync(FleetAction action, Func<FleetAction, Task<int>> here, Action<string> hint)
     {
         var route = Settle(action);
 
@@ -35,7 +60,7 @@ public sealed class MenuDispatch(Func<ViewedFrom?> viewer, Func<string, bool> ha
 
         if (route == ScreenRoute.Hint)
         {
-            hint();
+            hint(ViewerHints.ScreensWhereYouSit);
         }
 
         return (route, 0);

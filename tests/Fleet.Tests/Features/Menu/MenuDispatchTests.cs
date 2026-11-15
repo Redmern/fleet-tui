@@ -47,7 +47,7 @@ public class MenuDispatchTests
                     RanOnTheRemote.Add(ran);
                     return Task.FromResult(code);
                 },
-                () => Hints++);
+                _ => Hints++);
     }
 
     public static TheoryData<FleetAction> FleetRows { get; } =
@@ -241,6 +241,134 @@ public class MenuDispatchTests
         Assert.Equal(0, machines.Hints);
     }
 
+    private sealed class Started(Machines machines)
+    {
+        public int Headless { get; private set; }
+
+        public int Ui { get; private set; }
+
+        public List<string> Hinted { get; } = [];
+
+        public Task<int> With(FleetAction requested, int uiCode = 0) =>
+            machines.Dispatch.StartAsync(
+                requested,
+                () => Headless++,
+                Hinted.Add,
+                () =>
+                {
+                    Ui++;
+                    return Task.FromResult(uiCode);
+                });
+    }
+
+    [Theory]
+    [InlineData(FleetAction.EditShowMenuKeys)]
+    [InlineData(FleetAction.EditButtonHints)]
+    public async Task An_owned_toggle_asked_for_in_a_remote_view_is_handed_back_and_is_not_flipped_on_the_remote(FleetAction toggle)
+    {
+        var machines = new Machines(View, ViewerScreens.Ids);
+        var started = new Started(machines);
+
+        var code = await started.With(toggle);
+
+        Assert.Equal(0, code);
+        Assert.Equal([FleetActionIds.For(toggle)], machines.HandedBack);
+        Assert.Equal((0, 0), (started.Headless, started.Ui));
+        Assert.Empty(started.Hinted);
+    }
+
+    public static TheoryData<ViewKind, bool, FleetAction> AskedWhereOnlyAHintHelps { get; } = new()
+    {
+        { ViewKind.Ssh, true, FleetAction.SwitchProject },
+        { ViewKind.Ssh, true, FleetAction.Notifications },
+        { ViewKind.Ssh, true, FleetAction.Remotes },
+        { ViewKind.Ssh, true, FleetAction.SaveSession },
+        { ViewKind.Ssh, true, FleetAction.OpenHeadVoice },
+        { ViewKind.Ssh, true, FleetAction.EditShowMenuKeys },
+        { ViewKind.View, false, FleetAction.Remotes },
+        { ViewKind.View, false, FleetAction.SaveSession },
+        { ViewKind.View, false, FleetAction.EditButtonHints },
+        { ViewKind.View, true, FleetAction.OpenHeadVoice },
+    };
+
+    [Theory]
+    [MemberData(nameof(AskedWhereOnlyAHintHelps))]
+    public async Task A_fleet_screen_asked_for_where_it_cannot_go_back_shows_the_one_line_hint_and_nothing_else(
+        ViewKind kind, bool announced, FleetAction requested)
+    {
+        var machines = new Machines(new ViewedFrom(kind, "homelab"), announced ? ViewerScreens.Ids : ViewerScreens.Legacy);
+        var started = new Started(machines);
+
+        var code = await started.With(requested, uiCode: 7);
+
+        Assert.Equal(0, code);
+        Assert.Equal([ViewerHints.ScreensWhereYouSit], started.Hinted);
+        Assert.Equal((0, 0), (started.Headless, started.Ui));
+        Assert.Empty(machines.HandedBack);
+        Assert.Empty(machines.RanOnTheRemote);
+    }
+
+    [Fact]
+    public void The_hint_for_a_chord_is_the_line_the_ssh_window_menu_shows() =>
+        Assert.Equal(ViewerHints.ScreensWhereYouSit, RemoteMenus.Note(Ssh, FleetAction.None));
+
+    [Theory]
+    [InlineData(FleetAction.EditShowMenuKeys)]
+    [InlineData(FleetAction.EditEditor)]
+    public async Task A_toggle_asked_for_by_someone_sitting_at_the_machine_flips_without_a_screen(FleetAction toggle)
+    {
+        var started = new Started(new Machines(null, []));
+
+        await started.With(toggle);
+
+        Assert.Equal((1, 0), (started.Headless, started.Ui));
+        Assert.Empty(started.Hinted);
+    }
+
+    [Theory]
+    [InlineData(ViewKind.View)]
+    [InlineData(ViewKind.Ssh)]
+    public async Task A_toggle_of_the_remotes_own_settings_asked_for_by_a_viewer_still_flips_on_the_remote(ViewKind kind)
+    {
+        var machines = new Machines(new ViewedFrom(kind, "homelab"), ViewerScreens.Ids);
+        var started = new Started(machines);
+
+        await started.With(FleetAction.EditEditor);
+
+        Assert.Equal((1, 0), (started.Headless, started.Ui));
+        Assert.Empty(machines.Asked);
+    }
+
+    [Theory]
+    [InlineData(FleetAction.None)]
+    [InlineData(FleetAction.ListAgents)]
+    [InlineData(FleetAction.ViewLogs)]
+    [InlineData(FleetAction.OpenSettings)]
+    public async Task Anything_else_asked_for_starts_the_menu_and_its_code_is_the_menus(FleetAction requested)
+    {
+        var machines = new Machines(View, ViewerScreens.Ids);
+        var started = new Started(machines);
+
+        var code = await started.With(requested, uiCode: 7);
+
+        Assert.Equal(7, code);
+        Assert.Equal((0, 1), (started.Headless, started.Ui));
+        Assert.Empty(started.Hinted);
+        Assert.Empty(machines.Asked);
+    }
+
+    [Fact]
+    public async Task A_screen_asked_for_and_handed_back_starts_no_menu_on_the_remote()
+    {
+        var machines = new Machines(View, ViewerScreens.Ids);
+        var started = new Started(machines);
+
+        await started.With(FleetAction.Remotes);
+
+        Assert.Equal(["remotes"], machines.HandedBack);
+        Assert.Equal((0, 0), (started.Headless, started.Ui));
+    }
+
     [Fact]
     public async Task The_viewer_is_read_when_the_action_is_chosen_so_a_regrouped_menu_routes_for_its_opener()
     {
@@ -248,7 +376,7 @@ public class MenuDispatchTests
         var dispatch = machines.Dispatch;
         machines.Viewer = View;
 
-        var (route, _) = await dispatch.RunAsync(FleetAction.Remotes, _ => Task.FromResult(0), () => { });
+        var (route, _) = await dispatch.RunAsync(FleetAction.Remotes, _ => Task.FromResult(0), _ => { });
 
         Assert.Equal(ScreenRoute.HandBack, route);
     }

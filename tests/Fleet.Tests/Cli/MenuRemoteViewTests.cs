@@ -106,18 +106,6 @@ public class MenuRemoteViewTests
     }
 
     [Fact]
-    public void A_requested_action_is_settled_for_the_viewer_before_a_toggle_runs_headless_or_the_ui_starts()
-    {
-        var source = MenuSource();
-        var run = source.IndexOf("public static async Task<int> RunAsync", StringComparison.Ordinal);
-        var settled = source.IndexOf("dispatch.Settle(requested)", run, StringComparison.Ordinal);
-        var headless = source.IndexOf("RunsHeadless(requested)", run, StringComparison.Ordinal);
-
-        Assert.True(settled > run, "RunAsync should settle the requested action for the viewer");
-        Assert.True(settled < headless, "a viewer's toggle must be settled before it can run headless on the remote");
-    }
-
-    [Fact]
     public void A_menu_started_for_a_view_of_a_remote_runs_this_machines_screen_before_it_looks_for_a_project_to_pick()
     {
         var source = MenuSource();
