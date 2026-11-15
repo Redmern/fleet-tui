@@ -168,6 +168,7 @@ public class CodexTomlTests
     [InlineData("[mcp_servers]\nfleet = { command = \"x\" }\n")]
     [InlineData("[mcp_servers]\nfleet.command = \"x\"\n")]
     [InlineData("mcp_servers.fleet.command = \"x\"\n")]
+    [InlineData("path = \"C:\\Users\\me\"\n")]
     public void A_file_fleet_cannot_edit_safely_is_refused(string text)
     {
         Assert.False(CodexToml.WithServer(text, Fleet).Succeeded);
@@ -197,6 +198,13 @@ public class CodexTomlTests
     [InlineData("[projects]\n\"/wt\" = { note = 1 }\n")]
     [InlineData("[projects.\"/wt\"]\ntrust_level = \"untrusted\"\n")]
     [InlineData("[projects\n")]
+    [InlineData("[projects.\"C:\\Users\\me\\wt\"]\ntrust_level = \"trusted\"\n")]
+    [InlineData("[projects.\"/a\\qb\"]\n")]
+    [InlineData("[projects.\"/a\\u00zz\"]\n")]
+    [InlineData("[projects.\"/a\\u 41 \"]\n")]
+    [InlineData("[projects.\"/a\\uD800\"]\n")]
+    [InlineData("[projects.\"/a\\eb\"]\n")]
+    [InlineData("[projects.\"/a\\x41\"]\n")]
     public void A_trust_entry_fleet_cannot_add_safely_is_refused(string text)
     {
         Assert.False(CodexToml.WithTrustedProject(text, "/wt").Succeeded);

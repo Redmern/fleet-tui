@@ -946,7 +946,8 @@ They still talk to each other through fleet's MCP tools.
 **Picking one.**
 
 - New agent card: **Opens** (`o`) and **In nvim** (`i`), as above.
-- An existing agent: `m` on the dashboard, or the `change_harness` MCP tool.
+- An existing agent: `m` on the dashboard, **Change what an agent opens** in the dashboard's fleet menu,
+  or the `change_harness` MCP tool.
 - The project default: fleet menu > settings > fleet config > **Agent harness** (`O`)
   cycles `auto`, `nvim`, `claude`, `opencode`, `codex`, `pi` (`defaultHarness` in the
   project settings). The default is what `new_agent` uses when it gets no `harness`,

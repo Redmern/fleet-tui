@@ -1,8 +1,10 @@
+using System.Text.Json.Nodes;
 using Fleet.Platform.Codex;
 using Fleet.Platform.Harness;
 using Fleet.Platform.Pi;
 using Fleet.Ports.Claude.Models;
 using Fleet.Shared.Results;
+using Fleet.Tests.Platform.Codex;
 
 namespace Fleet.Tests.Platform.Harness;
 
@@ -23,7 +25,7 @@ public sealed class HarnessFilesTests : IDisposable
 
     private string Worktree(int number)
     {
-        var folder = Path.Combine(_root, $"wt{number}");
+        var folder = Path.Combine(_root, $"w\\t{number}");
         Directory.CreateDirectory(folder);
 
         return folder;
@@ -108,7 +110,7 @@ public sealed class HarnessFilesTests : IDisposable
 
         Assert.All(written, result => Assert.True(result.Succeeded, result.Error));
         var text = File.ReadAllText(File_);
-        Assert.All(folders, folder => Assert.Contains($"[projects.\"{folder}\"]", text));
+        Assert.All(folders, folder => Assert.Contains($"[projects.{TomlKey.Quoted(folder)}]", text));
     }
 
     [Fact]
@@ -123,7 +125,7 @@ public sealed class HarnessFilesTests : IDisposable
             .ToList();
 
         Assert.All(written, result => Assert.True(result.Succeeded, result.Error));
-        var text = File.ReadAllText(store);
-        Assert.All(folders, folder => Assert.Contains($"\"{HarnessFiles.Canonical(folder)}\": true", text));
+        var trusted = JsonNode.Parse(File.ReadAllText(store))!.AsObject();
+        Assert.All(folders, folder => Assert.True((bool?)trusted[HarnessFiles.Canonical(folder)], folder));
     }
 }
