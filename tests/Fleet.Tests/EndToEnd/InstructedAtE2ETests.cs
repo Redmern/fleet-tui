@@ -119,6 +119,31 @@ public sealed class InstructedAtE2ETests : ConfigHomeFixture
     }
 
     [Fact]
+    public async Task A_done_report_that_lands_before_a_failed_delivery_is_undone_stays_done_and_finished()
+    {
+        await DoneWorkerAsync("first");
+        _team.Mux.BeforeSend = async _ =>
+        {
+            _team.Mux.BeforeSend = null;
+            _team.Clock.Advance(TimeSpan.FromMilliseconds(1));
+            await _team.CallAsync(McpCaller.ForAgent("api", "fix"), HarnessTool.Report, Status("done", "raced"));
+
+            throw new IOException("pane gone");
+        };
+
+        await Assert.ThrowsAsync<IOException>(
+            () => _team.CallAsync(Main, HarnessTool.TellAgent, To("api", "fix", "more")));
+
+        var after = _team.Record("api", "fix");
+        Assert.Equal(OrchestrationStatus.Done, after.Status);
+        Assert.Equal(string.Empty, after.InstructedAt);
+
+        var waited = await _team.CallAsync(Main, HarnessTool.WaitForAgent, Agent("api", "fix"));
+
+        Assert.Equal("api/fix: done — raced", waited.Text);
+    }
+
+    [Fact]
     public async Task A_done_report_that_lands_while_the_tell_is_being_typed_stays_current()
     {
         await DoneWorkerAsync("first");
