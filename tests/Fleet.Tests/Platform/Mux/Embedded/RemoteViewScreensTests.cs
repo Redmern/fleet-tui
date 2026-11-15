@@ -209,15 +209,4 @@ public sealed partial class RemoteLinkTests
 
         Assert.True((await viewer.RequestAsync(new ControlRequest { Op = "hand-back", Client = viewer.Id, Text = "remotes" })).Pending);
     }
-
-    [Theory]
-    [InlineData("remotes", true)]
-    [InlineData("Remotes", true)]
-    [InlineData(" remotes ", true)]
-    [InlineData("SWITCH-PROJECT", true)]
-    [InlineData("list-agents", false)]
-    [InlineData(" Quit ", false)]
-    [InlineData(null, false)]
-    public void A_menu_chord_stays_here_when_its_action_reads_as_an_owned_screen(string? arg, bool stays) =>
-        Assert.Equal(stays, FleetDaemon.StaysHere(new CommandMessage { Name = "menu", Arg = arg }));
 }

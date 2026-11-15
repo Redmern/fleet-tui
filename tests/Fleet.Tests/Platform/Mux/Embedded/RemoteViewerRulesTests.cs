@@ -787,6 +787,24 @@ public sealed partial class RemoteLinkTests
     [Theory]
     [InlineData(Way.BridgedConnection)]
     [InlineData(Way.LinkClient)]
+    public async Task A_viewer_cannot_split_its_own_pane_beside_a_pane_inside_a_view_of_a_third_machine(Way way)
+    {
+        var plantedPane = PlantedPaneOfThirdMachine();
+        var (asking, client) = await ViewerAsync(way);
+        var own = (await asking.RequestAsync(new ControlRequest { Op = "list-panes", Client = client })).Panes!.First(p => p.Session == "homelab").Id;
+
+        AssertManagedWhereYouSit(await asking.RequestAsync(
+            new ControlRequest { Op = "split", Pane = plantedPane, MovePane = own, Direction = "right", Percent = 50, Client = client }));
+
+        Assert.Contains(
+            (await asking.RequestAsync(new ControlRequest { Op = "list-panes", Client = client })).Panes!,
+            p => p.Id == own && p.Session == "homelab");
+        await AssertPaneOfThirdMachineStaysHiddenAsync(asking, client, plantedPane);
+    }
+
+    [Theory]
+    [InlineData(Way.BridgedConnection)]
+    [InlineData(Way.LinkClient)]
     public async Task A_viewer_cannot_move_an_own_pane_into_a_view_of_a_third_machine(Way way)
     {
         PlantViewOfThirdMachine();
