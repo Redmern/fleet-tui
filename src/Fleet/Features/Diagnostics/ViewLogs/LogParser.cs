@@ -48,6 +48,8 @@ public static class LogParser
                 .Reverse(),
         ];
 
+    public static IReadOnlyList<LogEntry> All(IReadOnlyList<LogEntry> entries) => [.. entries.Reverse()];
+
     private static (string Stamp, string Project, string Message, List<string> Details)? Stamped(
         string line)
     {

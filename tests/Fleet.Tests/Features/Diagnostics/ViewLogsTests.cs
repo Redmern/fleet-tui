@@ -42,6 +42,15 @@ public class ViewLogsTests
     }
 
     [Fact]
+    public void The_log_of_the_whole_machine_keeps_every_projects_entries_newest_first()
+    {
+        var shown = LogParser.All(LogParser.Parse(Lines));
+
+        Assert.Equal(["", "other", "techweb"], shown.Select(e => e.Project));
+        Assert.Equal("pulled something", shown[1].Message);
+    }
+
+    [Fact]
     public void Another_projects_entries_are_left_out_and_the_newest_comes_first()
     {
         var shown = LogParser.For("techweb", LogParser.Parse(Lines));
