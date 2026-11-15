@@ -3248,10 +3248,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
 
             if (_model.Parked(shown) is { } warm
-                && (action is null || _menuWaits.ContainsKey(warm.Pane))
+                && string.Equals(warm.Mark, opener?.Mark, StringComparison.Ordinal) is var drawnForOpener
+                && ((action is null && drawnForOpener) || _menuWaits.ContainsKey(warm.Pane))
                 && _model.Unpark(warm.Pane))
             {
-                if (action is not null)
+                if (action is not null || !drawnForOpener)
                 {
                     HideUntilRedrawn(warm);
                 }

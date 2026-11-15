@@ -7,8 +7,6 @@ using Fleet.Ports.Sessions.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Viewing;
-using Fleet.Shared.Viewing.Enums;
-using Fleet.Shared.Viewing.Models;
 
 namespace Fleet.Tests.Cli;
 
@@ -131,23 +129,22 @@ public class MenuRemoteViewTests
         Assert.Contains("await OnThisMachine[chosen](", source, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void A_menu_drawn_for_one_viewer_and_opened_by_another_regroups()
-    {
-        var view = new ViewedFrom(ViewKind.View, "homelab");
+    // fleetd hides a parked menu exactly when the mark it was started with differs from the
+    // opener's mark; the menu must then redraw, or the float waits for the reveal timeout.
+    [Theory]
+    [InlineData(null, "view:homelab")]
+    [InlineData("view:homelab", null)]
+    [InlineData("view:homelab", "view:barn")]
+    [InlineData("view:homelab", "ssh:homelab")]
+    public void A_menu_drawn_for_one_viewer_and_opened_by_another_regroups(string? drawnFor, string? openedBy) =>
+        Assert.True(MenuCommand.NeedsRegroup(drawnFor, openedBy));
 
-        Assert.True(MenuCommand.NeedsRegroup(null, view));
-        Assert.True(MenuCommand.NeedsRegroup(view, null));
-        Assert.True(MenuCommand.NeedsRegroup(view, new ViewedFrom(ViewKind.View, "barn")));
-        Assert.True(MenuCommand.NeedsRegroup(view, new ViewedFrom(ViewKind.Ssh, "homelab")));
-    }
-
-    [Fact]
-    public void A_menu_opened_by_the_viewer_it_was_drawn_for_does_not_redraw()
-    {
-        Assert.False(MenuCommand.NeedsRegroup(null, null));
-        Assert.False(MenuCommand.NeedsRegroup(new ViewedFrom(ViewKind.View, "homelab"), new ViewedFrom(ViewKind.View, "homelab")));
-    }
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("view:homelab", "view:homelab")]
+    [InlineData("ssh:homelab", "ssh:homelab")]
+    public void A_menu_opened_by_the_viewer_it_was_drawn_for_does_not_redraw(string? drawnFor, string? openedBy) =>
+        Assert.False(MenuCommand.NeedsRegroup(drawnFor, openedBy));
 
     private static string MenuSource() =>
         File.ReadAllText(Path.Combine(

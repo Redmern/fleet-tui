@@ -223,20 +223,84 @@ public sealed class ViewerMarkTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_menu_waiting_in_a_workspace_seen_by_the_machine_and_a_link_is_told_the_opener_and_shows_at_once()
+    public async Task A_menu_drawn_for_the_machine_and_opened_through_a_link_is_told_the_opener_and_stays_hidden_until_it_has_regrouped()
     {
         var control = await StartAsync(warm: true);
         var local = await LocalAsync();
         await local.WaitForFramesAsync(1);
         var link = await LinkAsync();
         await link.WaitForFramesAsync(1);
-        var (pane, waiting, _) = await ParkedAndWaitingAsync(control);
+        var (pane, waiting, warm) = await ParkedAndWaitingAsync(control);
 
         await link.SendCommandAsync("menu");
 
         var opened = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal("view:laptop", opened.ViewedFrom);
-        Assert.False(_daemon.Model.Float(pane)!.Hidden);
+        Assert.True(_daemon.Model.Float(pane) is { Parked: false, Hidden: true }, "the ungrouped menu must not be seen by the remote view");
+
+        var regrouping = System.Diagnostics.Stopwatch.StartNew();
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = pane, Cols = 44, Rows = 14 })).Ok);
+        await Eventually(() => _daemon.Model.Float(pane) is { NeedsBaseline: false });
+        Assert.True(_daemon.Model.Float(pane)!.Hidden, "a fit alone must not show the ungrouped menu");
+        warm.Emit("\e[2J\e[HPROJECT on laptop\nquit\nMACHINE laptop\nsettings\nFLEET this machine\nremote machines\n");
+
+        await Eventually(() => _daemon.Model.Float(pane) is { Hidden: false }, FleetDaemon.RevealAfterFit);
+        Assert.True(regrouping.Elapsed < FleetDaemon.RevealAfterFit, "the regrouped menu shows on its redraw, not on a timeout");
+    }
+
+    // A parked menu that has not asked to be told its opener yet cannot regroup: it would show
+    // the machine's own ungrouped menu to the remote view and run fleet rows on the remote.
+    [Fact]
+    public async Task A_menu_drawn_for_the_machine_that_is_not_waiting_yet_is_left_parked_and_a_remote_view_gets_a_fresh_menu_with_its_mark()
+    {
+        await StartAsync(warm: true);
+        var local = await LocalAsync();
+        await local.WaitForFramesAsync(1);
+        var link = await LinkAsync();
+        await link.WaitForFramesAsync(1);
+        await Eventually(() => Menus == 1);
+        var parked = _panes.ByProgram("fleet")!;
+        var parkedPane = parked.Env[FleetDaemon.PaneVariable];
+        Assert.DoesNotContain(ViewedFrom.Variable, parked.Env.Keys);
+
+        await link.SendCommandAsync("menu");
+
+        await Eventually(() => Menus == 2);
+        var fresh = _panes.ByProgram("fleet")!;
+        Assert.Equal("view:laptop", fresh.Env[ViewedFrom.Variable]);
+        Assert.Equal(["menu", "--project", "techweb"], fresh.Args);
+        Assert.True(_daemon.Model.Float(parkedPane) is { Parked: true });
+    }
+
+    [Fact]
+    public async Task A_menu_drawn_for_the_machine_that_is_not_waiting_yet_still_opens_at_once_for_the_machine()
+    {
+        await StartAsync(warm: true);
+        var local = await LocalAsync();
+        await local.WaitForFramesAsync(1);
+        await (await LinkAsync()).WaitForFramesAsync(1);
+        await Eventually(() => Menus == 1);
+        var parkedPane = _panes.ByProgram("fleet")!.Env[FleetDaemon.PaneVariable];
+
+        await local.SendCommandAsync("menu");
+
+        await Eventually(() => _daemon.Model.Float(parkedPane) is { Parked: false });
+        Assert.Equal(1, Menus);
+    }
+
+    [Fact]
+    public async Task A_menu_drawn_for_a_link_and_opened_by_the_same_link_is_not_hidden_for_a_redraw()
+    {
+        var control = await StartAsync(warm: true);
+        var link = await LinkAsync();
+        await link.WaitForFramesAsync(1);
+        var (pane, waiting, warm) = await ParkedAndWaitingAsync(control);
+        Assert.Equal("view:laptop", warm.Env[ViewedFrom.Variable]);
+
+        await link.SendCommandAsync("menu");
+
+        await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(_daemon.Model.Float(pane) is { Parked: false, Hidden: false });
     }
 
     [Fact]
@@ -246,11 +310,12 @@ public sealed class ViewerMarkTests : IAsyncLifetime
         var local = await LocalAsync();
         await local.WaitForFramesAsync(1);
         await (await LinkAsync()).WaitForFramesAsync(1);
-        var (_, waiting, _) = await ParkedAndWaitingAsync(control);
+        var (pane, waiting, _) = await ParkedAndWaitingAsync(control);
 
         await local.SendCommandAsync("menu");
 
         Assert.Null((await waiting.WaitAsync(TimeSpan.FromSeconds(5))).ViewedFrom);
+        Assert.True(_daemon.Model.Float(pane) is { Parked: false, Hidden: false });
     }
 
     [Fact]

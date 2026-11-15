@@ -58,7 +58,6 @@ using Fleet.Shared.Themes;
 using Fleet.Shared.Todos.Models;
 using Fleet.Shared.Viewing;
 using Fleet.Shared.Viewing.Enums;
-using Fleet.Shared.Viewing.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
@@ -138,7 +137,7 @@ public static class MenuCommand
             var switching = SwitchWhenOpenedAsync(
                 app,
                 invocation.Action is null ? WarmMenuWiring.WaitForOpenAsync(opening.Token) : Task.FromResult<string?>(null),
-                ViewerWiring.Current(),
+                ViewerWiring.Mark(),
                 action => switchedTo = action,
                 () => regroup = true);
 
@@ -224,10 +223,10 @@ public static class MenuCommand
     }
 
     private static async Task SwitchWhenOpenedAsync(
-        IApplication app, Task<string?> opened, ViewedFrom? drawnFor, Action<FleetAction> switchTo, Action regroup)
+        IApplication app, Task<string?> opened, string? drawnFor, Action<FleetAction> switchTo, Action regroup)
     {
         var action = await opened.ConfigureAwait(false) is { } id ? FleetActionIds.Parse(id) : FleetAction.None;
-        var regrouped = NeedsRegroup(drawnFor, ViewerWiring.Current());
+        var regrouped = NeedsRegroup(drawnFor, ViewerWiring.Mark());
 
         if (action != FleetAction.None || regrouped)
         {
@@ -248,7 +247,7 @@ public static class MenuCommand
         }
     }
 
-    public static bool NeedsRegroup(ViewedFrom? drawnFor, ViewedFrom? openedBy) => drawnFor != openedBy;
+    public static bool NeedsRegroup(string? drawnFor, string? openedBy) => !string.Equals(drawnFor, openedBy, StringComparison.Ordinal);
 
     private static void HintAtTheMachineYouSitAt(IApplication app) =>
         FleetDialog.Inform(app, FleetMenus.Title(FleetAction.None), [ViewerHints.ScreensWhereYouSit]);
