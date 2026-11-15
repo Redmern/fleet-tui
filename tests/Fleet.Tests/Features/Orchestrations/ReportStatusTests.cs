@@ -48,6 +48,21 @@ public sealed class ReportStatusTests
     }
 
     [Fact]
+    public void A_report_keeps_an_instruction_that_landed_after_the_record_was_read()
+    {
+        SeedAgent("backend", "feature/login");
+        _store.Landed = current => current with { InstructedAt = "2026-11-15T10:00:00.0000000+00:00" };
+
+        var result = Handler.Handle(
+            "techweb", "agent:backend/feature/login", OrchestrationStatus.Done, "endpoint added");
+
+        Assert.True(result.Succeeded, result.Error);
+        var written = Assert.Single(_store.Written);
+        Assert.Equal(OrchestrationStatus.Done, written.Status);
+        Assert.Equal("2026-11-15T10:00:00.0000000+00:00", written.InstructedAt);
+    }
+
+    [Fact]
     public void An_agent_reports_its_own_status_by_its_repository_and_branch()
     {
         SeedAgent("backend", "feature/login");
@@ -482,8 +497,11 @@ public sealed class ReportStatusTests
             return true;
         }
 
+        public Func<AgentRecord, AgentRecord>? Landed { get; set; }
+
         public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change) =>
-            List(project).FirstOrDefault(a => a.Worktree == worktree) is { } current && Replace(project, change(current));
+            List(project).FirstOrDefault(a => a.Worktree == worktree) is { } current
+            && Replace(project, change(Landed?.Invoke(current) ?? current));
 
         public bool Remove(string project, string worktree) => true;
     }
