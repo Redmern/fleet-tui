@@ -120,6 +120,25 @@ public sealed class McpDispatcherTests
         Assert.Contains(_log.Lines, l => l.Contains("git blew up"));
     }
 
+    [Fact]
+    public async Task Two_calls_that_ask_are_put_to_the_user_one_at_a_time()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        _approvals.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Dispatcher();
+
+        var first = dispatcher.HandleAsync(Request("new_agent"));
+        var second = dispatcher.HandleAsync(Request("new_agent"));
+
+        Assert.Single(_approvals.Asked);
+
+        _approvals.Hold.SetResult();
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(2, _approvals.Asked.Count);
+        Assert.Equal(2, _performed);
+    }
+
     private sealed class FakeSettings : ISettingsStore
     {
         public SettingsConfig Config { get; set; } = SettingsConfig.Default;
@@ -135,10 +154,18 @@ public sealed class McpDispatcherTests
 
         public List<ApprovalRequest> Asked { get; } = [];
 
-        public Task<ApprovalOutcome> AskAsync(ApprovalRequest request, CancellationToken ct = default)
+        public TaskCompletionSource? Hold { get; set; }
+
+        public async Task<ApprovalOutcome> AskAsync(ApprovalRequest request, CancellationToken ct = default)
         {
             Asked.Add(request);
-            return Task.FromResult(Answer);
+
+            if (Hold is not null)
+            {
+                await Hold.Task;
+            }
+
+            return Answer;
         }
     }
 
