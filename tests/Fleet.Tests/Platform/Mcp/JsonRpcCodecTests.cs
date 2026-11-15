@@ -99,4 +99,54 @@ public sealed class JsonRpcCodecTests
             """{"jsonrpc":"2.0","id":2,"error":{"code":-32601,"message":"Unknown method boom."}}""",
             envelope);
     }
+
+    [Theory]
+    [InlineData("""{"method":"notifications/cancelled","params":{"requestId":7}}""", "7")]
+    [InlineData("""{"method":"notifications/cancelled","params":{"requestId":"abc-1","reason":"gave up"}}""", "\"abc-1\"")]
+    public void A_cancellation_names_the_request_it_cancels_byte_for_byte(string line, string expectedRaw)
+    {
+        Assert.True(JsonRpcCodec.TryParse(line, out var call));
+
+        Assert.True(call.CancelledId.Present);
+        Assert.Equal(expectedRaw, call.CancelledId.Raw);
+    }
+
+    [Fact]
+    public void A_call_without_a_request_id_cancels_nothing()
+    {
+        Assert.True(JsonRpcCodec.TryParse("""{"id":1,"method":"tools/call","params":{"name":"x"}}""", out var call));
+
+        Assert.False(call.CancelledId.Present);
+    }
+
+    [Theory]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"x","_meta":{"progressToken":"tok-9"}}}""", "\"tok-9\"")]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"x","_meta":{"progressToken":42}}}""", "42")]
+    public void A_progress_token_is_kept_as_it_was_sent(string line, string expectedRaw)
+    {
+        Assert.True(JsonRpcCodec.TryParse(line, out var call));
+
+        Assert.Equal(expectedRaw, call.ProgressToken);
+    }
+
+    [Theory]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"x"}}""")]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"x","_meta":{}}}""")]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"x","_meta":{"progressToken":null}}}""")]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"x","_meta":{"progressToken":{"a":1}}}}""")]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"x","_meta":"nope"}}""")]
+    public void A_call_without_a_usable_progress_token_has_none(string line)
+    {
+        Assert.True(JsonRpcCodec.TryParse(line, out var call));
+
+        Assert.Null(call.ProgressToken);
+    }
+
+    [Theory]
+    [InlineData("\"tok-9\"", """{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"tok-9","progress":40}}""")]
+    [InlineData("42", """{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":42,"progress":40}}""")]
+    public void A_progress_notification_echoes_the_token_and_carries_the_elapsed_seconds(string token, string expected)
+    {
+        Assert.Equal(expected, JsonRpcCodec.Progress(token, 40));
+    }
 }

@@ -8,5 +8,9 @@ public sealed record RpcCall(
     string ToolName,
     IReadOnlyDictionary<string, string> Arguments)
 {
+    public RpcId CancelledId { get; init; } = RpcId.Absent;
+
+    public string? ProgressToken { get; init; }
+
     public bool WantsReply => Id.Present;
 }
