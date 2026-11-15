@@ -4582,6 +4582,9 @@ leave the remote's layout code alone:
   the same connection for control requests (the remote's `Execute` already accepts
   requests on attach connections). The remote does everything as for any client:
   layout, splits, floats, copy mode, its own menu, and it sends ordinary frames.
+  Superseded 2026-11-15: the menu is still drawn by the remote, but its rows are grouped by
+  the machine they run on and fleet's own screens come back to this machine (see *The machine
+  you sit at leads*).
 - **The local fleetd shows those frames.** `show-remote` creates one workspace per
   machine, `@<machine>`, flagged `RemoteHost`, whose single pane runs over a
   `RemotePty`: frames from the link are its output, its resizes go back as `Resize`.
@@ -4601,6 +4604,8 @@ leave the remote's layout code alone:
   the remote sends a `hand-back` host effect to the link, and the viewing fleetd
   opens its own switcher for the windows showing `@<machine>`. Without this the
   remote's switcher only knew the remote's projects and there was no way back.
+  Superseded 2026-11-15: Switch project is one of several screens handed back, and the set is
+  wider (see *The machine you sit at leads*).
 - **Ending.** When the link ends the whole `@<machine>` workspace goes, including a
   local menu float opened over it; its panes keep running on the remote.
 - **Limits.** One remote client per link, so one local window at a time follows a
@@ -4649,8 +4654,9 @@ A session is a named set of projects for one window, kept in
 Phase 3 was "the menu and agents for a remote project". Most of it came with phase 2:
 the fleet menu (`ctrl+enter`) is forwarded, so in `@<machine>` it is the remote's menu
 for the remote project, and its List agents is that project's dashboard, opening
-agents on the remote. What was left were the places where the remote's menu reaches
-outside the view:
+agents on the remote. (Superseded 2026-11-15: the menu is no longer the remote's as a
+whole; see *The machine you sit at leads*.) What was left were the places where the remote's
+menu reaches outside the view:
 
 - **The remote project quits.** The remote says goodbye to a client with no project
   left; the link now ends the local view on that `Bye` (`RemoteLink.EndView`), which
@@ -4717,6 +4723,9 @@ at, like the head chord (a `LocalCommands` entry) and Switch project:
   menu and after a click on the remote's pill opens the center at home; a client attached
   to the remote directly and a local window are not handed back. The `fleet menu` process
   itself (the `MenuCommand` side) is not exercised by the tests.
+- **Superseded 2026-11-15.** The menu in `@<machine>` is no longer the remote's as a whole.
+  Notifications is one row under `FLEET this machine`, and the other fleet screens come back
+  the same way (see *The machine you sit at leads*). The hand-back above still holds.
 ## Known remote machines, 2026-10-02
 
 fleetd keeps remote links in memory only, so a restart forgot every machine. The client
