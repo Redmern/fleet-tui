@@ -2806,7 +2806,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 {
                     if (ViewerScreens.Owns(effect.Value))
                     {
-                        OpenMenu(session.Client, effect.Value);
+                        OpenMenu(session.Client, ViewerScreens.OpenedWhenHandedBack(effect.Value));
                     }
 
                     continue;

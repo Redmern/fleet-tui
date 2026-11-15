@@ -71,6 +71,93 @@ public sealed partial class RemoteLinkTests
         Assert.Null(_farPanes.ByProgram("fleet"));
     }
 
+    [Theory]
+    [InlineData("save-session")]
+    [InlineData("keybinds")]
+    [InlineData("theme")]
+    [InlineData("this-machine-settings")]
+    public async Task Each_newly_owned_screen_is_announced_by_the_link_and_opens_on_the_machine_you_sit_at_when_handed_back(string id)
+    {
+        var (far, _, _, workspace) = await ShowingHomelabAsync();
+        var linked = _farDaemon.Model.Clients.Single(c => c.Label is not null);
+
+        Assert.Contains(id, linked.TakesBack!);
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = linked.Id, Text = id });
+
+        Assert.True(handed.Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", id])));
+    }
+
+    [Theory]
+    [InlineData("show-menu-keys")]
+    [InlineData("button-hints")]
+    public async Task A_setting_toggle_handed_back_by_a_remote_opens_this_machines_settings_and_flips_nothing(string id)
+    {
+        var (far, _, _, workspace) = await ShowingHomelabAsync();
+        var linked = _farDaemon.Model.Clients.Single(c => c.Label is not null);
+
+        Assert.Contains(id, linked.TakesBack!);
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Client = linked.Id, Text = id });
+
+        Assert.True(handed.Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "this-machine-settings"])));
+    }
+
+    [Theory]
+    [InlineData("save-session")]
+    [InlineData("keybinds")]
+    [InlineData("theme")]
+    [InlineData("show-menu-keys")]
+    [InlineData("button-hints")]
+    [InlineData("this-machine-settings")]
+    public async Task The_chord_for_a_newly_owned_screen_in_a_remote_view_opens_here_and_never_reaches_the_remote(string id)
+    {
+        var (_, _, window, workspace) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu", id);
+
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", id])));
+        Assert.Null(_farPanes.ByProgram("fleet"));
+    }
+
+    [Fact]
+    public async Task Save_session_picked_in_the_remotes_menu_opens_on_the_machine_you_sit_at_which_holds_the_remote_project_with_its_host()
+    {
+        var (far, home, window, workspace) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu");
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is not null));
+        var menuPane = _farPanes.ByProgram("fleet")!.Env[FleetDaemon.PaneVariable];
+        var handed = await far.RequestAsync(new ControlRequest { Op = "hand-back", Caller = menuPane, Text = "save-session" });
+
+        Assert.True(handed.Pending);
+        await Eventually(() => Task.FromResult(_homePanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", workspace, "--action", "save-session"])));
+        Assert.Single(_farPanes.Started, p => p.Program == "fleet");
+        Assert.Contains(
+            (await home.RequestAsync(new ControlRequest { Op = "window", Client = window.Id })).Window!,
+            e => e is { Name: "homelab", Host: "red@far", Shown: true });
+    }
+
+    [Theory]
+    [InlineData("viewlogs")]
+    [InlineData("update")]
+    [InlineData("version")]
+    [InlineData("whats-new")]
+    public async Task The_chords_for_the_log_update_version_and_whats_new_in_a_remote_view_still_reach_the_remote(string id)
+    {
+        var (_, _, window, _) = await ShowingHomelabAsync();
+
+        await window.SendCommandAsync("menu", id);
+
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", "homelab", "--action", id])));
+        Assert.Null(_homePanes.ByProgram("fleet"));
+    }
+
     [Fact]
     public async Task A_menu_chord_for_a_project_action_in_a_remote_view_still_reaches_the_remote()
     {

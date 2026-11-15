@@ -22,7 +22,8 @@ public class MenuRemoteViewTests
     [InlineData(FleetAction.QuitFleet)]
     [InlineData(FleetAction.ListAgents)]
     [InlineData(FleetAction.EditSettings)]
-    [InlineData(FleetAction.SaveSession)]
+    [InlineData(FleetAction.ViewLogs)]
+    [InlineData(FleetAction.OpenHeadVoice)]
     [InlineData(FleetAction.None)]
     public void A_menu_never_offers_a_screen_it_does_not_own_back(FleetAction action) =>
         Assert.Null(MenuCommand.HandBackId(action));
