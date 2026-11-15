@@ -147,17 +147,69 @@ public sealed class WaitForAgentTests : IDisposable
     [Fact]
     public async Task A_done_report_from_before_the_last_instruction_is_stale()
     {
-        var agent = Agent("x", OrchestrationStatus.Done) with { ReportedAt = "2026-10-28T11:00:00.0000000+00:00" };
+        var agent = Agent("x", OrchestrationStatus.Done) with
+        {
+            ReportedAt = "2026-10-28T11:00:00.0000000+00:00",
+            InstructedAt = "2026-10-28T11:30:00.0000000+00:00",
+        };
         _store.Agents[0] = agent;
-        var instruction = Path.Combine(agent.Worktree, ".fleet", AgentHarness.AgentInstructionFile);
-        Directory.CreateDirectory(Path.GetDirectoryName(instruction)!);
-        File.WriteAllText(instruction, "next task");
-        File.SetLastWriteTimeUtc(instruction, new DateTime(2026, 10, 28, 11, 30, 0, DateTimeKind.Utc));
         _texts[agent.Worktree] = "> ";
 
         var result = await Handler().HandleAsync("p", "api", "x", TimeSpan.FromMinutes(5));
 
         Assert.StartsWith("api/x: idle", result.Value);
+    }
+
+    [Fact]
+    public async Task A_done_report_after_the_last_instruction_is_current()
+    {
+        _store.Agents[0] = Agent("x", OrchestrationStatus.Done) with
+        {
+            Summary = "endpoint added",
+            ReportedAt = "2026-10-28T11:31:00.0000000+00:00",
+            InstructedAt = "2026-10-28T11:30:00.0000000+00:00",
+        };
+
+        var result = await Handler().HandleAsync("p", "api", "x", TimeSpan.FromMinutes(5));
+
+        Assert.Equal("api/x: done — endpoint added", result.Value);
+    }
+
+    [Fact]
+    public async Task A_done_report_for_an_agent_never_instructed_is_current()
+    {
+        _store.Agents[0] = Agent("x", OrchestrationStatus.Failed) with { ReportedAt = "2026-10-28T11:00:00.0000000+00:00" };
+
+        var result = await Handler().HandleAsync("p", "api", "x", TimeSpan.FromMinutes(5));
+
+        Assert.Equal("api/x: failed", result.Value);
+    }
+
+    [Fact]
+    public async Task A_done_without_a_report_time_after_an_instruction_is_stale()
+    {
+        var agent = Agent("x", OrchestrationStatus.Done) with { InstructedAt = "2026-10-28T11:30:00.0000000+00:00" };
+        _store.Agents[0] = agent;
+        _texts[agent.Worktree] = "> ";
+
+        var result = await Handler().HandleAsync("p", "api", "x", TimeSpan.FromMinutes(5));
+
+        Assert.StartsWith("api/x: idle", result.Value);
+    }
+
+    [Fact]
+    public async Task The_instruction_file_is_not_consulted_for_staleness()
+    {
+        var agent = Agent("x", OrchestrationStatus.Done) with { ReportedAt = "2026-10-28T11:00:00.0000000+00:00" };
+        _store.Agents[0] = agent;
+        var instruction = Path.Combine(agent.Worktree, ".fleet", AgentHarness.AgentInstructionFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(instruction)!);
+        File.WriteAllText(instruction, "a notice");
+        File.SetLastWriteTimeUtc(instruction, new DateTime(2026, 10, 28, 11, 30, 0, DateTimeKind.Utc));
+
+        var result = await Handler().HandleAsync("p", "api", "x", TimeSpan.FromMinutes(5));
+
+        Assert.Equal("api/x: done", result.Value);
     }
 
     [Theory]

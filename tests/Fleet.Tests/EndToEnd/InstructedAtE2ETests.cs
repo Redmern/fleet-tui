@@ -135,6 +135,10 @@ public sealed class InstructedAtE2ETests : ConfigHomeFixture
         var after = _team.Record("api", "fix");
         Assert.Equal(OrchestrationStatus.Done, after.Status);
         Assert.True(DateTimeOffset.Parse(after.ReportedAt, CultureInfo.InvariantCulture) > DateTimeOffset.Parse(after.InstructedAt, CultureInfo.InvariantCulture));
+
+        var waited = await _team.CallAsync(Main, HarnessTool.WaitForAgent, Agent("api", "fix"));
+
+        Assert.Equal("api/fix: done — raced", waited.Text);
     }
 
     [Fact]

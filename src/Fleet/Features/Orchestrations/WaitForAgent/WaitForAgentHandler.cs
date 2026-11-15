@@ -88,15 +88,14 @@ public sealed class WaitForAgentHandler(
         OrchestrationStatus.Normalize(agent.Status) is OrchestrationStatus.Done or OrchestrationStatus.Failed
         && !ReportedBeforeLastInstruction(agent);
 
-    private static bool ReportedBeforeLastInstruction(AgentRecord agent)
-    {
-        var instruction = Path.Combine(agent.Worktree, ".fleet", AgentHarness.AgentInstructionFile);
+    private static bool ReportedBeforeLastInstruction(AgentRecord agent) =>
+        Parsed(agent.InstructedAt) is { } instructed
+        && !(Parsed(agent.ReportedAt) is { } reported && reported > instructed);
 
-        return DateTimeOffset.TryParse(
-                   agent.ReportedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var reported)
-               && File.Exists(instruction)
-               && reported.UtcDateTime < File.GetLastWriteTimeUtc(instruction);
-    }
+    private static DateTimeOffset? Parsed(string stamp) =>
+        DateTimeOffset.TryParse(stamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)
+            ? at
+            : null;
 
     private static string Reported(string id, AgentRecord agent)
     {
