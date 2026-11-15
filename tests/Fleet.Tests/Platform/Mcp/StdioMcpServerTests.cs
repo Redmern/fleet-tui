@@ -1,11 +1,14 @@
 using Fleet.Platform.Mcp;
 using Fleet.Ports;
 using Fleet.Ports.Mcp.Models;
+using Fleet.Tests.Platform.Mcp.Support;
 
 namespace Fleet.Tests.Platform.Mcp;
 
 public sealed class StdioMcpServerTests
 {
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private readonly FakeLog _log = new();
 
     private static McpServing Serving(Func<McpRequest, McpResult> perform) => new(
@@ -15,12 +18,11 @@ public sealed class StdioMcpServerTests
 
     private async Task<IReadOnlyList<string>> Run(string transcript, McpServing serving)
     {
-        var output = new StringWriter();
+        var output = new LineSink();
 
-        await new StdioMcpServer(new StringReader(transcript), output, _log).RunAsync(serving);
+        await new StdioMcpServer(new StringReader(transcript), output, _log).RunAsync(serving).WaitAsync(Patience);
 
-        return output.ToString()
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return output.Lines;
     }
 
     [Fact]
