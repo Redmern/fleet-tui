@@ -49,6 +49,41 @@ public sealed class PiHarnessConfigTests : IDisposable
     }
 
     [Fact]
+    public void The_fleet_server_gets_an_explicit_tool_timeout_in_seconds()
+    {
+        Config().WriteForAgent(Folder, "proj", "api", "feat/x");
+
+        Assert.Equal(60, Written()["mcpServers"]!["fleet"]!["timeout"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void A_tool_timeout_the_user_set_on_the_fleet_server_is_kept()
+    {
+        Seed(ProjectConfig, """{"mcpServers":{"fleet":{"command":"old","timeout":120}}}""");
+
+        Config().WriteForAgent(Folder, "proj", "api", "main");
+
+        var fleet = Written()["mcpServers"]!["fleet"]!;
+        Assert.Equal(120, fleet["timeout"]!.GetValue<int>());
+        Assert.Equal("/bin/fleet", fleet["command"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("\"x\"")]
+    [InlineData("[1]")]
+    [InlineData("7")]
+    [InlineData("null")]
+    public void A_fleet_entry_that_is_not_an_object_is_overwritten(string entry)
+    {
+        Seed(ProjectConfig, "{\"mcpServers\":{\"fleet\":" + entry + "}}");
+
+        var written = Config().WriteForAgent(Folder, "proj", "api", "main");
+
+        Assert.True(written.Succeeded, written.Error);
+        Assert.Equal(60, Written()["mcpServers"]!["fleet"]!["timeout"]!.GetValue<int>());
+    }
+
+    [Fact]
     public void An_orchestration_folder_gets_the_server_with_the_given_caller_and_no_excludes()
     {
         var written = Config().WriteForOrchestration(Folder, "proj", "my-sub");
@@ -108,7 +143,7 @@ public sealed class PiHarnessConfigTests : IDisposable
     public void A_config_that_already_has_the_server_keeps_its_own_formatting()
     {
         var text = """
-            { "mcpServers": { "fleet": { "exposure": "direct", "command": "/bin/fleet",
+            { "mcpServers": { "fleet": { "exposure": "direct", "timeout": 60, "command": "/bin/fleet",
                 "args": ["mcp", "--project", "proj", "--caller", "agent:api/main"] } } }
             """;
         Seed(ProjectConfig, text);

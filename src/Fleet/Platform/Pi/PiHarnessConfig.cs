@@ -111,6 +111,8 @@ public sealed class PiHarnessConfig(
                 ["command"] = entry.Command,
                 ["args"] = new JsonArray([.. entry.Args.Select(argument => (JsonNode)JsonValue.Create(argument)!)]),
                 ["exposure"] = "direct",
+                ["timeout"] = (servers[entry.Name] as JsonObject)?["timeout"]?.DeepClone()
+                    ?? JsonValue.Create((int)HarnessRegistry.Pi.ClientToolTimeout!.Value.TotalSeconds),
             };
 
             if (JsonNode.DeepEquals(servers[entry.Name], wanted))
