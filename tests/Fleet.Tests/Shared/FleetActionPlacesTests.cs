@@ -77,6 +77,11 @@ public class FleetActionPlacesTests
         Exempt(Place.Handler, "a submenu: FleetMenus.IsSubmenu opens it, there is no case", FleetAction.OpenSettings, FleetAction.OpenFleetConfigMenu);
         Exempt(Place.Docs, "a submenu: the group tables name its group (g, g c), not the submenu action", FleetAction.OpenSettings, FleetAction.OpenFleetConfigMenu);
         Exempt(Place.Handler, "a menu toggle: MenuCommand.RunsHeadless flips it through Adapters.Toggles, there is no case", FleetAction.EditMainOrchestratorInNvim, FleetAction.EditSubOrchestratorsInNvim, FleetAction.EditNvimConfig, FleetAction.EditEditor, FleetAction.EditDefaultHarness, FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints);
+        Exempt(Place.DefaultKey, "no key: ThisMachineSettings is a row of the menu a remote viewer gets (RemoteMenus), under 'FLEET this machine'", FleetAction.ThisMachineSettings);
+        Exempt(Place.Group, "no key: ThisMachineSettings is a row of the menu a remote viewer gets (RemoteMenus), under 'FLEET this machine'", FleetAction.ThisMachineSettings);
+        Exempt(Place.KeybindsJson, "no key: ThisMachineSettings is a row of the menu a remote viewer gets (RemoteMenus), under 'FLEET this machine'", FleetAction.ThisMachineSettings);
+        Exempt(Place.Handler, "opened by ThisMachineSession when the row is chosen or a toggle is handed back, there is no case", FleetAction.ThisMachineSettings);
+        Exempt(Place.Docs, "no key: ThisMachineSettings is a row of the menu a remote viewer gets (RemoteMenus), under 'FLEET this machine'", FleetAction.ThisMachineSettings);
         return all;
     }
 

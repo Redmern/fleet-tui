@@ -138,6 +138,7 @@ public static class KeymapDefaults
             FleetAction.OpenWebApp => "web app",
             FleetAction.OpenPort => "open port",
             FleetAction.TodoBoard => "todos",
+            FleetAction.ThisMachineSettings => "this machine",
             _ => Describe(action).ToLowerInvariant(),
         };
 
@@ -211,6 +212,7 @@ public static class KeymapDefaults
             FleetAction.OpenWebApp => "Open the project's web app in the browser",
             FleetAction.OpenPort => "Open port",
             FleetAction.TodoBoard => "Todo board",
+            FleetAction.ThisMachineSettings => "This machine's settings",
             _ => action.ToString(),
         };
 }

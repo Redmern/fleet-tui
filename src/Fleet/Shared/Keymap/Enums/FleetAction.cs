@@ -70,4 +70,5 @@ public enum FleetAction
     OpenWebApp,
     OpenPort,
     TodoBoard,
+    ThisMachineSettings,
 }
