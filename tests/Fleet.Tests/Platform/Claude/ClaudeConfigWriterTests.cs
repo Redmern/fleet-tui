@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Fleet.Platform.Claude;
 using Fleet.Ports.Claude.Models;
 
@@ -49,6 +50,68 @@ public sealed class ClaudeConfigWriterTests : IDisposable
         Assert.Contains("\"fleet\"", mcp);
         Assert.Contains("\"type\": \"stdio\"", mcp);
         Assert.Contains("\"--project\"", mcp);
+    }
+
+    [Fact]
+    public void The_fleet_server_gets_an_explicit_tool_timeout_in_milliseconds()
+    {
+        new ClaudeConfigWriter().Sync(Plan());
+
+        var servers = JsonNode.Parse(File.ReadAllText(McpPath))!["mcpServers"]!;
+
+        Assert.Equal(600000, servers["fleet"]!["timeout"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void A_tool_timeout_the_user_set_on_the_fleet_server_is_kept()
+    {
+        File.WriteAllText(McpPath, """{"mcpServers":{"fleet":{"type":"stdio","command":"old","timeout":900000}}}""");
+
+        new ClaudeConfigWriter().Sync(Plan());
+
+        Assert.Equal(900000, JsonNode.Parse(File.ReadAllText(McpPath))!["mcpServers"]!["fleet"]!["timeout"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Another_teams_server_gets_no_tool_timeout()
+    {
+        File.WriteAllText(McpPath, """{"mcpServers":{"postgres":{"type":"stdio","command":"pg"}}}""");
+
+        new ClaudeConfigWriter().Sync(Plan());
+
+        Assert.Null(JsonNode.Parse(File.ReadAllText(McpPath))!["mcpServers"]!["postgres"]!["timeout"]);
+    }
+
+    [Theory]
+    [InlineData("\"60000\"")]
+    [InlineData("60000.5")]
+    [InlineData("99999999999")]
+    [InlineData("1e5")]
+    [InlineData("null")]
+    public void Another_teams_server_keeps_whatever_timeout_it_had_and_the_sync_still_works(string timeout)
+    {
+        File.WriteAllText(
+            McpPath,
+            "{\"mcpServers\":{\"postgres\":{\"command\":\"pg\",\"env\":{\"A\":\"1\"},\"timeout\":" + timeout + "}}}");
+
+        var synced = new ClaudeConfigWriter().Sync(Plan());
+
+        Assert.True(synced.Succeeded, synced.Error);
+        var mcp = File.ReadAllText(McpPath);
+        var postgres = JsonNode.Parse(mcp)!["mcpServers"]!["postgres"]!.AsObject();
+        Assert.Equal(["command", "env", "timeout"], postgres.Select(p => p.Key));
+        Assert.Equal(timeout == "null" ? "null" : JsonNode.Parse(timeout)!.ToJsonString(), postgres["timeout"]?.ToJsonString() ?? "null");
+    }
+
+    [Fact]
+    public void A_tool_timeout_of_another_shape_on_the_fleet_server_is_kept()
+    {
+        File.WriteAllText(McpPath, """{"mcpServers":{"fleet":{"type":"stdio","command":"old","timeout":"slow"}}}""");
+
+        var synced = new ClaudeConfigWriter().Sync(Plan());
+
+        Assert.True(synced.Succeeded, synced.Error);
+        Assert.Equal("slow", JsonNode.Parse(File.ReadAllText(McpPath))!["mcpServers"]!["fleet"]!["timeout"]!.GetValue<string>());
     }
 
     [Fact]

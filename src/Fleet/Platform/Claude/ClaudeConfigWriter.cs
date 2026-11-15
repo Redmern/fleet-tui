@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Fleet.Platform.Claude.Models;
 using Fleet.Platform.Storage;
 using Fleet.Ports.Claude;
 using Fleet.Ports.Claude.Models;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Hooks;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
@@ -121,6 +123,8 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
     }
 
     private const string ThemeKey = "theme";
+
+    private const string ToolTimeoutKey = "timeout";
 
     private static readonly JsonSerializerOptions KeepAsWritten = new()
     {
@@ -261,6 +265,13 @@ public sealed class ClaudeConfigWriter : IClaudeConfigStore
         entry.Type = "stdio";
         entry.Command = server.Command;
         entry.Args = [.. server.Args];
+
+        if (!entry.Extra.ContainsKey(ToolTimeoutKey))
+        {
+            entry.Extra[ToolTimeoutKey] = JsonDocument
+                .Parse(((long)HarnessRegistry.Claude.ClientToolTimeout!.Value.TotalMilliseconds).ToString(CultureInfo.InvariantCulture))
+                .RootElement.Clone();
+        }
     }
 
     private static void Apply(ClaudeSettingsFile file, ClaudePlan plan)
