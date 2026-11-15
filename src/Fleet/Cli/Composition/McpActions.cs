@@ -65,6 +65,8 @@ public sealed class McpActions(
 {
     private readonly ListAgentsHandler _agents = new(store);
 
+    private readonly CallerHarnesses _callers = new(project, caller, store);
+
     private readonly ListRepositoriesHandler _repos = new(git);
 
     private readonly ListBranchesHandler _branches = new(git);
@@ -93,7 +95,7 @@ public sealed class McpActions(
 
     private readonly SecretsHandler _secrets = new();
 
-    private const string MainHarness = AgentHarness.Claude;
+    private const string MainHarness = CallerHarnesses.MainHarness;
 
     private static readonly TimeSpan FirstTaskEchoWithin = TimeSpan.FromSeconds(60);
 
@@ -456,25 +458,7 @@ public sealed class McpActions(
     private OwnerNotices Owners() =>
         new(project, root, mux, store, log, () => Adapters.Settings().Load(project).MainOrchestratorInNvim, clock);
 
-    private string CallerHarness()
-    {
-        var id = caller.Trim();
-
-        if (id.Length == 0)
-        {
-            return MainHarness;
-        }
-
-        var isAgent = id.StartsWith(McpCaller.AgentPrefix, StringComparison.Ordinal);
-        var key = isAgent ? id[McpCaller.AgentPrefix.Length..] : id;
-        var record = _agents.Handle(project).FirstOrDefault(a => isAgent
-            ? !AgentHarness.IsOrchestrator(a.Harness)
-              && string.Equals($"{a.Repository}/{a.Branch}", key, StringComparison.OrdinalIgnoreCase)
-            : AgentHarness.IsOrchestrator(a.Harness)
-              && string.Equals(a.Branch, key, StringComparison.OrdinalIgnoreCase));
-
-        return record is null ? HarnessRoute.Unknown : TellAgentHandler.HarnessOf(record);
-    }
+    private string CallerHarness() => _callers.Current();
 
     private async Task<IReadOnlyList<AgentRecord>> WithQuietPanes(IReadOnlyList<AgentRecord> agents, CancellationToken ct)
     {
