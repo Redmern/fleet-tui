@@ -34,6 +34,7 @@ using Fleet.Ports.Harness;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
+using Fleet.Ports.Orchestrations;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
@@ -54,7 +55,11 @@ public sealed class McpActions(
     IGitRunner git,
     IMuxDriver mux,
     IAgentStore store,
-    IHarnessConfig harnessConfig,
+    IHarnessConfigs claudeConfigs,
+    IHarnessConfigs nonClaudeConfigs,
+    ISlugNamer namer,
+    TimeProvider clock,
+    Action<string> trustFolder,
     IFleetLog log) : IAgentStarter
 {
     private readonly ListAgentsHandler _agents = new(store);
@@ -65,7 +70,7 @@ public sealed class McpActions(
 
     private readonly NewAgentHandler _spawner = new(
         git, mux, store, Adapters.Models, Adapters.SubagentGuidance, Adapters.ModelRouter(), log,
-        configs: HarnessRegistration.NonClaudeConfigs());
+        configs: nonClaudeConfigs);
 
     private readonly HideAgentHandler _hider = new(mux, store);
 
@@ -91,7 +96,7 @@ public sealed class McpActions(
 
     private static readonly TimeSpan FirstTaskEchoWithin = TimeSpan.FromSeconds(60);
 
-    private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes());
+    private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes(), clock: clock);
 
     private readonly BranchStates _states = new(git);
 
@@ -288,7 +293,7 @@ public sealed class McpActions(
             store.Save(project, created.Value! with { Owner = owner });
         }
 
-        HarnessRegistration.ClaudeConfigs().For(created.Value!.Harness)
+        claudeConfigs.For(created.Value!.Harness)
             .WriteForAgent(created.Value!.Worktree, project, repo.Name, branch);
 
         var name = SessionNames.RepoAgent(project, created.Value!.Repository, created.Value!.Branch);
@@ -316,7 +321,7 @@ public sealed class McpActions(
 
         for (var i = 0; i < 80 && !File.Exists(marker); i++)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(300), ct).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(300), clock, ct).ConfigureAwait(false);
         }
 
         if (!File.Exists(marker))
@@ -380,7 +385,7 @@ public sealed class McpActions(
     }
 
     private OwnerNotices Owners() =>
-        new(project, root, mux, store, log, () => Adapters.Settings().Load(project).MainOrchestratorInNvim);
+        new(project, root, mux, store, log, () => Adapters.Settings().Load(project).MainOrchestratorInNvim, clock);
 
     private string CallerHarness()
     {
@@ -430,7 +435,7 @@ public sealed class McpActions(
         }
 
         var text = await mux.GetTextAsync(pane.Id, ct).ConfigureAwait(false);
-        var live = AgentActivity.Quiet(agent.Worktree, text, DateTime.UtcNow);
+        var live = AgentActivity.Quiet(agent.Worktree, text, clock.GetUtcNow().UtcDateTime);
         var finished = OrchestrationStatus.Normalize(agent.Status)
             is OrchestrationStatus.Done or OrchestrationStatus.Failed;
 
@@ -451,7 +456,8 @@ public sealed class McpActions(
             return error;
         }
 
-        var waited = await new WaitForAgentHandler(store, PaneTextFor)
+        var waited = await new WaitForAgentHandler(
+                store, PaneTextFor, () => clock.GetUtcNow().UtcDateTime, (span, token) => Task.Delay(span, clock, token))
             .HandleAsync(
                 project,
                 Repo(request),
@@ -487,11 +493,11 @@ public sealed class McpActions(
             return McpResult.Error(ToolText.NotFound(Repo(request), Branch(request)));
         }
 
-        ClaudeWiring.TrustFolder(agent.Worktree);
+        trustFolder(agent.Worktree);
 
         var outcome = await new OpenAgentHandler(
                 mux, store, SubOrchestratorsHostedInNvim(), models: Adapters.Models(project), agentsInNvim: Adapters.AgentsInNvim(project),
-                configs: HarnessRegistration.NonClaudeConfigs())
+                configs: nonClaudeConfigs)
             .HandleAsync(project, agent, root, ct)
             .ConfigureAwait(false);
 
@@ -700,9 +706,9 @@ public sealed class McpActions(
         }
 
         var dispatcher = new DispatchHandler(
-            mux, store, harnessConfig, namer: Adapters.SlugNamer(), settings: Adapters.Settings(),
+            mux, store, claudeConfigs.For(HarnessRegistry.ClaudeName), namer: namer, settings: Adapters.Settings(),
             intents: Adapters.Intents(), starter: this, router: Adapters.ModelRouter(), log: log,
-            configs: HarnessRegistration.NonClaudeConfigs());
+            configs: nonClaudeConfigs, clock: clock);
 
         var reply = await dispatcher
             .HandleAsync(
@@ -716,7 +722,7 @@ public sealed class McpActions(
                     Branch(request),
                     ToolArguments.Flag(request, ToolArguments.Research),
                     ToolArguments.Text(request, ToolArguments.Harness)),
-                DateTimeOffset.UtcNow.ToString("O"))
+                clock.GetUtcNow().ToString("O"))
             .ConfigureAwait(false);
 
         return reply.Succeeded ? Ok(reply.Value!.Note) : McpResult.Error(reply.Error!);
@@ -810,7 +816,7 @@ public sealed class McpActions(
             ToolArguments.Text(request, ToolArguments.Title),
             ToolArguments.Text(request, ToolArguments.Body),
             ToolArguments.Text(request, ToolArguments.Effort),
-            DateTimeOffset.UtcNow);
+            clock.GetUtcNow());
 
         if (!added.Succeeded)
         {

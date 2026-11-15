@@ -221,7 +221,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 
         Assert.Equal("working", (await _team.RefreshAsync(dashboard)).Single(a => a.Branch == "feat").Status);
 
-        MixedTeamRig.PaneStaysQuietFor(feat, TimeSpan.FromSeconds(121));
+        _team.Clock.Advance(TimeSpan.FromSeconds(121));
 
         Assert.Equal("idle", (await _team.RefreshAsync(dashboard)).Single(a => a.Branch == "feat").Status);
         await MixedTeamRig.UntilAsync(() => sub.Submitted.Count == 2, "the idle notice was not typed into the owner");

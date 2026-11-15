@@ -23,7 +23,11 @@ public static class McpWiring
             Adapters.Git(),
             mux.Driver,
             Adapters.Agents(),
-            Adapters.HarnessConfig(),
+            HarnessRegistration.ClaudeConfigs(),
+            HarnessRegistration.NonClaudeConfigs(),
+            Adapters.SlugNamer(),
+            TimeProvider.System,
+            ClaudeWiring.TrustFolder,
             log);
 
         var dispatcher = new McpDispatcher(

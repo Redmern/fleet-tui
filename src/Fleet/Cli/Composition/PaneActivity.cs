@@ -9,9 +9,11 @@ using Fleet.Shared.Status.Models;
 
 namespace Fleet.Cli.Composition;
 
-public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle = null)
+public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle = null, TimeProvider? clock = null)
 {
     private const int AtOnce = 6;
+
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
     private readonly ConcurrentDictionary<string, string> _texts = new(StringComparer.OrdinalIgnoreCase);
 
@@ -71,7 +73,7 @@ public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle =
 
     private string Quiet(AgentRecord agent, string text)
     {
-        var live = AgentActivity.Quiet(agent.Worktree, text, DateTime.UtcNow);
+        var live = AgentActivity.Quiet(agent.Worktree, text, _clock.GetUtcNow().UtcDateTime);
         var before = _quiet.TryGetValue(agent.Worktree, out var seen) ? seen : string.Empty;
         _quiet[agent.Worktree] = live;
 

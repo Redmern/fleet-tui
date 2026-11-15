@@ -20,9 +20,10 @@ public sealed class OwnerNotices(
     IMuxDriver mux,
     IAgentStore store,
     IFleetLog log,
-    Func<bool> mainInNvim)
+    Func<bool> mainInNvim,
+    TimeProvider? clock = null)
 {
-    private readonly TellAgentHandler _teller = new(mux);
+    private readonly TellAgentHandler _teller = new(mux, clock: clock);
 
     public async Task<bool> TypeAsync(OwnerNotice notice, CancellationToken ct = default)
     {
