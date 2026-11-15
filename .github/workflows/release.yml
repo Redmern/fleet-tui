@@ -49,7 +49,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Install the native toolchain
         if: runner.os == 'Linux'

@@ -18,7 +18,7 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   DOTNET_NOLOGO: 'true'
@@ -38,10 +38,15 @@ jobs:
 
       - uses: https://github.com/actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
 
       - name: Build
         run: dotnet build Fleet.slnx --nologo -v minimal -maxcpucount:2
 
       - name: Test
-        run: dotnet test Fleet.slnx --no-build --nologo -v minimal
+        run: dotnet test Fleet.slnx --no-build --nologo -v minimal --filter "Category!=Perf"
+
+      - name: Perf
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: dotnet test Fleet.slnx --no-build --nologo -v minimal --filter "Category=Perf"
