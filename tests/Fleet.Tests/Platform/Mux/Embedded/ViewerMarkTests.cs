@@ -238,14 +238,81 @@ public sealed class ViewerMarkTests : IAsyncLifetime
         Assert.Equal("view:laptop", opened.ViewedFrom);
         Assert.True(_daemon.Model.Float(pane) is { Parked: false, Hidden: true }, "the ungrouped menu must not be seen by the remote view");
 
-        var regrouping = System.Diagnostics.Stopwatch.StartNew();
+        var shownBefore = Reveals(pane).Count;
         Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = pane, Cols = 44, Rows = 14 })).Ok);
-        await Eventually(() => _daemon.Model.Float(pane) is { NeedsBaseline: false });
         Assert.True(_daemon.Model.Float(pane)!.Hidden, "a fit alone must not show the ungrouped menu");
         warm.Emit("\e[2J\e[HPROJECT on laptop\nquit\nMACHINE laptop\nsettings\nFLEET this machine\nremote machines\n");
 
-        await Eventually(() => _daemon.Model.Float(pane) is { Hidden: false }, FleetDaemon.RevealAfterFit);
-        Assert.True(regrouping.Elapsed < FleetDaemon.RevealAfterFit, "the regrouped menu shows on its redraw, not on a timeout");
+        Assert.Equal("drawing", await NextRevealAsync(pane, shownBefore));
+    }
+
+    // Why fleetd showed a float: "drawing" is the float's own redraw, "waiting" is the fallback.
+    private List<string> Reveals(string pane) =>
+        [.. _log.Where(l => l.StartsWith($"{pane} revealed after ", StringComparison.Ordinal)).Select(l => l[$"{pane} revealed after ".Length..])];
+
+    private async Task<string> NextRevealAsync(string pane, int after)
+    {
+        await Eventually(() => Reveals(pane).Count > after);
+        return Reveals(pane)[after];
+    }
+
+    // Output that draws nothing must not show a hidden float: the remote view would see the
+    // ungrouped menu it was hidden for. Only the fallback may show it then.
+    [Fact]
+    public async Task A_hidden_menu_fitted_to_a_new_size_is_not_shown_by_output_that_draws_nothing()
+    {
+        var control = await StartAsync(warm: true);
+        var local = await LocalAsync();
+        await local.WaitForFramesAsync(1);
+        var link = await LinkAsync();
+        await link.WaitForFramesAsync(1);
+        var (pane, waiting, warm) = await ParkedAndWaitingAsync(control);
+        await link.SendCommandAsync("menu");
+        await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(_daemon.Model.Float(pane) is { Parked: false, Hidden: true });
+
+        var shownBefore = Reveals(pane).Count;
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = pane, Cols = 44, Rows = 14 })).Ok);
+        warm.Emit(string.Empty);
+
+        Assert.Equal("waiting", await NextRevealAsync(pane, shownBefore));
+    }
+
+    [Fact]
+    public async Task A_local_warm_menu_switched_to_a_screen_and_fitted_is_not_shown_by_output_that_draws_nothing()
+    {
+        var control = await StartAsync(warm: true);
+        var local = await LocalAsync();
+        await local.WaitForFramesAsync(1);
+        var (pane, waiting, warm) = await ParkedAndWaitingAsync(control);
+
+        await local.SendCommandAsync("menu", "settings-menu");
+        Assert.Equal("settings-menu", (await waiting.WaitAsync(TimeSpan.FromSeconds(5))).Text);
+        Assert.True(_daemon.Model.Float(pane) is { Parked: false, Hidden: true });
+
+        var shownBefore = Reveals(pane).Count;
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = pane, Cols = 60, Rows = 20 })).Ok);
+        warm.Emit(string.Empty);
+
+        Assert.Equal("waiting", await NextRevealAsync(pane, shownBefore));
+    }
+
+    [Fact]
+    public async Task A_local_warm_menu_switched_to_a_screen_and_fitted_is_shown_by_the_draw_of_that_screen()
+    {
+        var control = await StartAsync(warm: true);
+        var local = await LocalAsync();
+        await local.WaitForFramesAsync(1);
+        var (pane, waiting, warm) = await ParkedAndWaitingAsync(control);
+
+        await local.SendCommandAsync("menu", "settings-menu");
+        await waiting.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var shownBefore = Reveals(pane).Count;
+        Assert.True((await control.RequestAsync(new ControlRequest { Op = "fit", Caller = pane, Cols = 60, Rows = 20 })).Ok);
+        warm.Emit("\e[2J\e[HSETTINGS\nsession\nconfigure\nmaintenance\n");
+
+        Assert.Equal("drawing", await NextRevealAsync(pane, shownBefore));
     }
 
     // A parked menu that has not asked to be told its opener yet cannot regroup: it would show

@@ -2942,8 +2942,20 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             box.RevealAfterOutput = runtime.Outputs;
             box.HiddenSince = DateTime.UtcNow - RevealAnyway + options.RevealAfterFit;
-            box.NeedsBaseline = before != _model.FloatBounds(pane);
-            box.Baseline = null;
+            var resized = before != _model.FloatBounds(pane);
+
+            if (box.Baseline is not null && resized)
+            {
+                ApplyResizes();
+                lock (runtime.Gate)
+                {
+                    runtime.Terminal.Snapshot(runtime.Screen);
+                }
+
+                box.Baseline = Signature(runtime.Screen);
+            }
+
+            box.NeedsBaseline = box.Baseline is null && resized;
             return;
         }
 
