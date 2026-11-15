@@ -357,6 +357,38 @@ public class MenuDispatchTests
         Assert.Empty(machines.Asked);
     }
 
+    // The remote's fleetd is older than its binary and sets no mark; a click on the notification
+    // pill in a remote view asks the remote's menu for the screen.
+    [Theory]
+    [MemberData(nameof(LegacyScreens))]
+    public async Task With_no_mark_a_legacy_screen_asked_for_and_granted_goes_back_and_starts_nothing_on_the_remote(FleetAction requested)
+    {
+        var machines = new Machines(null, ViewerScreens.Legacy);
+        var started = new Started(machines);
+
+        var code = await started.With(requested, uiCode: 7);
+
+        Assert.Equal(0, code);
+        Assert.Equal([FleetActionIds.For(requested)], machines.HandedBack);
+        Assert.Equal((0, 0), (started.Headless, started.Ui));
+        Assert.Empty(started.Hinted);
+    }
+
+    [Theory]
+    [MemberData(nameof(LegacyScreens))]
+    public async Task With_no_mark_a_legacy_screen_asked_for_and_refused_is_asked_once_and_then_the_menu_starts(FleetAction requested)
+    {
+        var machines = new Machines(null, []);
+        var started = new Started(machines);
+
+        var code = await started.With(requested, uiCode: 7);
+
+        Assert.Equal(7, code);
+        Assert.Equal([FleetActionIds.For(requested)], machines.Asked);
+        Assert.Equal((0, 1), (started.Headless, started.Ui));
+        Assert.Empty(started.Hinted);
+    }
+
     [Fact]
     public async Task A_screen_asked_for_and_handed_back_starts_no_menu_on_the_remote()
     {

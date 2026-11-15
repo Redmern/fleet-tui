@@ -227,6 +227,36 @@ public class MenuSessionTests
         Assert.Equal(0, asked);
     }
 
+    // Only the action the menu was started for was settled before the menu ran. A row picked
+    // later in the same menu must go through the viewer's rules again.
+    [Fact]
+    public async Task A_fleet_row_picked_after_the_screen_the_menu_was_started_for_is_still_handed_back()
+    {
+        var menu = new Menu(View) { Back = true };
+        menu.Picks(FleetAction.None, FleetAction.Remotes);
+
+        var end = await menu.Session.RunAsync(FleetAction.ViewLogs);
+
+        Assert.Equal([FleetAction.ViewLogs], menu.Ran);
+        Assert.Equal(["remotes"], menu.HandedBack);
+        Assert.Equal([FleetAction.OpenSettings, FleetAction.None], menu.Shown.Select(s => s.Submenu));
+        Assert.Equal(new MenuEnd(0), end);
+    }
+
+    [Fact]
+    public async Task A_fleet_row_picked_after_the_submenu_the_menu_was_started_on_is_handed_back_and_never_runs_on_the_remote()
+    {
+        var menu = new Menu(View) { Back = true };
+        menu.Picks(FleetAction.None, FleetAction.Remotes);
+
+        var end = await menu.Session.RunAsync(FleetAction.OpenSettings);
+
+        Assert.Empty(menu.Ran);
+        Assert.Equal(["remotes"], menu.HandedBack);
+        Assert.Equal([FleetAction.OpenSettings, FleetAction.None], menu.Shown.Select(s => s.Submenu));
+        Assert.Equal(new MenuEnd(0), end);
+    }
+
     [Fact]
     public async Task A_submenu_asked_for_at_the_start_opens_on_that_screen()
     {
