@@ -403,6 +403,10 @@ draws the buttons in a float's or the dashboard's frame.
 
 ### Remote machines
 
+One rule covers every remote machine: the machine you sit at owns the machine list, the head,
+sessions and fleet's own screens. A remote machine serves its own projects, and nothing else, to
+whoever views it. There are no installed roles; the role follows where you sit.
+
 **Remote machines** (`r` in the fleet menu's Settings) connects this fleet to fleet on another
 machine over ssh. `c` asks for the ssh host (for example `user@homelab`); fleet runs
 `ssh <host> fleet bridge` itself and, when ssh wants a password or asks to trust a new
@@ -438,20 +442,72 @@ here on this machine, and then shows the new project (in a new window on `SHIFT`
 project and its folder are made on the remote. A machine with no projects yet still
 has this entry, so its tab is never empty.
 
-A remote project shown here is drawn by the remote fleet and shown by yours: its tab bar
-reads `project @machine`, and keys, the mouse, splits, tabs, floats, copy mode and the
-fleet menu (`ctrl+enter`) all act on the remote. Switch project always opens this machine's
-switcher, from `ctrl+s s p` or from the remote's menu, so you can always get back to a project
-here. One window at a time follows a given remote machine;
+A remote project shown here is a **remote view**: the remote fleet draws it and yours shows it.
+Its tab bar reads `project @machine`, and keys, the mouse, splits, tabs, floats and copy mode
+all act on the remote. `machine` is the nickname you gave the machine, else its own machine
+name. One window at a time follows a given remote machine;
 disconnecting it closes its view here and leaves its panes running there.
+
+The fleet menu (`ctrl+enter`) in a remote view is drawn by the remote too, but its rows do not
+all run there. Its screens are split into groups that say which machine a row runs on, and
+the `PROJECT` and `MACHINE` titles name the machine as above. If the remote has ISO mode on,
+they carry no name: `PROJECT on the remote machine`, `MACHINE the remote machine`.
+
+- **PROJECT on `machine`**: the remote project's rows. At the top level they are Quit,
+  Dashboard, List agents, Open editor here (when the pane can open an editor), Todo board and
+  Files; on the Settings screen, Open port, Rebuild dashboard, Clean up agents and Hide all agents. They
+  run on the remote.
+- **MACHINE `machine`**: the remote's own settings. At the top level it is one row,
+  **Settings**; on the Settings screen it holds Fleet config, Show log, Update fleet, Version
+  and What's new. They run on the remote.
+- **FLEET this machine** (top level only): Switch, Notifications, Remote machines, Save
+  session and Settings. They run on this machine. Switch and Notifications open this machine's
+  switcher and notification center. Settings has no key; select it with the arrows and
+  `enter`.
+
+**Settings** under **FLEET this machine** opens this machine's settings screen. This machine
+draws it. Its rows are Save session, Remote machines, Keybinds, Show keybinds, Button hints,
+Theme, Show log, Update fleet, Version and What's new; they act on this machine's config,
+`remotes.json`, sessions, log and binary. `backspace` on a screen opened from there returns
+to this machine's settings. On this machine's settings it closes the menu, because the
+remote's menu closed when the screen opened here. On a screen opened straight from the FLEET
+group, or by a chord, it closes the menu too.
+
+Key chords follow the same split. The chords for fleet's own screens (Switch project,
+Notifications, Remote machines, Save session, keybinds and theme) open this machine's screen,
+and the head chord toggles this machine's head; none of them is sent to the remote. The
+chords for show keybinds and button hints flip this machine's value, as in a project on this
+machine. The chords for view log, update fleet, version and what's new mean the remote in a
+remote view; this machine's are on this machine's settings screen.
+
+A remote machine does not reach on to a third machine for you. Its Remote machines list, its
+head and its views of other machines are not offered to whoever views it, and a request for
+one is refused.
+
+`SHIFT` in Switch project and `fleet attach --ssh <host>` open an **ssh window** instead of a
+remote view: a terminal attached straight to the remote's fleet, showing its project. Its
+fleet menu has two groups only, **PROJECT on `machine`** and **MACHINE `machine`** (the
+remote's own machine name, as there is no nickname in that window), and one line: `Fleet's own
+screens are in the window on the machine you sit at.` The chords for fleet's own screens and
+the head chord show that same line and open nothing of the remote's.
+
+If the remote runs an older release, a remote view shows the project, and the remote's menu
+is undivided. Switch and Notifications in it open on this machine, and the chords for Remote
+machines and Save session act on this machine, but the Remote machines row stays the
+remote's until fleet there is updated. A remote that is updated while its fleetd is still the
+old build (after `fleet update`, before a restart) behaves the same way until fleetd restarts
+(`fleet daemon stop`, then `fleet attach`). If this fleet is the older one, the remote's menu
+is grouped, and every row under **FLEET this machine** except Switch and Notifications shows
+the line `Fleet's own screens are in the window on the machine you sit at.`
 
 The remote project a window shows here also counts as one of that window's projects for
 notifications: its open notices add to the pill's `+N`, a new one rings the bell and shows
 a toast (with this machine's settings), and the notification center gets a tab for it,
 `homelab @machine`, where `d` dismisses on the remote and `enter` shows the project here.
-Notifications always opens this machine's center, whether from the remote's menu (`n`) or a
-click on the remote's notice pill, the same way Switch project and the head stay here; only
-fleet used directly on the remote machine opens the remote's own center.
+Notifications always opens this machine's center, whether from the remote's menu (`n`, under
+**FLEET this machine**) or a click on the remote's notice pill, the same way Switch project
+and the head stay here; only fleet used directly on the remote machine opens the remote's own
+center.
 
 #### Clipboard, image paste and voice on a remote machine
 
