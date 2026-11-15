@@ -204,6 +204,15 @@ public class ShowMenuTests
     }
 
     [Fact]
+    public void An_empty_key_never_chooses_the_row_that_has_no_key()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items([FleetAction.Remotes, FleetAction.ThisMachineSettings]);
+
+        Assert.Equal(Terminal.Gui.Input.Key.Empty, Keymap.Default.KeyFor(FleetAction.ThisMachineSettings));
+        Assert.Equal(-1, ShowMenuView.RowFor(items, Keymap.Default, Terminal.Gui.Input.Key.Empty));
+    }
+
+    [Fact]
     public void A_menu_is_wide_enough_for_its_note()
     {
         Assert.Equal(52, ShowMenuView.FitCols(10, 20, null));

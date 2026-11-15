@@ -81,9 +81,14 @@ public static class ShowMenuView
 
     public static int RowFor(IReadOnlyList<FleetMenuItem> items, Keymap keymap, Key key)
     {
+        if (key == Key.Empty)
+        {
+            return -1;
+        }
+
         for (var i = 0; i < items.Count; i++)
         {
-            if (keymap.KeyFor(items[i].Action) == key)
+            if (keymap.KeyFor(items[i].Action) is var bound && bound != Key.Empty && bound == key)
             {
                 return i;
             }
