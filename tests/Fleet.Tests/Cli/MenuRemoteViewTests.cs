@@ -73,7 +73,7 @@ public class MenuRemoteViewTests
     }
 
     [Fact]
-    public void A_screen_is_handed_back_only_by_the_dispatch()
+    public void The_source_of_the_menu_command_names_the_hand_back_only_where_it_builds_the_dispatch()
     {
         var source = MenuSource();
 

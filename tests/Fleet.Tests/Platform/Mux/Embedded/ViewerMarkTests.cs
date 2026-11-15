@@ -504,7 +504,7 @@ public sealed class ViewerMarkTests : IAsyncLifetime
     [InlineData("switch-project", null)]
     [InlineData("head", null)]
     [InlineData("head", "voice")]
-    public async Task A_fleet_level_chord_from_an_ssh_window_starts_a_menu_that_only_hints(string command, string? arg)
+    public async Task A_fleet_level_chord_from_an_ssh_window_starts_the_remotes_menu_with_a_mark_and_an_action_that_route_to_the_hint(string command, string? arg)
     {
         await StartAsync(warm: false);
         var ssh = await SshWindowAsync();
