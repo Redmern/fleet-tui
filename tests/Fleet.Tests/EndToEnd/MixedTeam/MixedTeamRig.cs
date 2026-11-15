@@ -253,10 +253,17 @@ internal sealed class MixedTeamRig
             }
         }
 
+        public bool RefuseUpdates { get; set; }
+
         public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change)
         {
             lock (_gate)
             {
+                if (RefuseUpdates)
+                {
+                    return false;
+                }
+
                 var at = _agents.FindIndex(a => a.Worktree == worktree);
 
                 if (at < 0)

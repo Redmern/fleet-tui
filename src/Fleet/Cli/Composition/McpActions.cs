@@ -1,3 +1,4 @@
+using System.Globalization;
 using Fleet.Features.Agents;
 using Fleet.Features.Agents.ChangeHarness;
 using Fleet.Features.Agents.HideAgent;
@@ -365,9 +366,24 @@ public sealed class McpActions(
         }
 
         var message = ToolArguments.Text(request, ToolArguments.Message);
-        var address = await _teller
-            .RouteAsync(agent, pane.Value, message, ToolArguments.Flag(request, ToolArguments.Typed), CallerHarness(), ct)
-            .ConfigureAwait(false);
+        var stamped = MarkInstructed(agent);
+        string? address;
+
+        try
+        {
+            address = await _teller
+                .RouteAsync(agent, pane.Value, message, ToolArguments.Flag(request, ToolArguments.Typed), CallerHarness(), ct)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            if (stamped is not null)
+            {
+                UndoInstructed(agent, stamped);
+            }
+
+            throw;
+        }
 
         if (address is not null)
         {
@@ -382,6 +398,55 @@ public sealed class McpActions(
         }
 
         return Ok($"sent to {Repo(request)}/{Branch(request)}.");
+    }
+
+    private sealed record Stamped(string At, string PreviousAt, string PreviousStatus);
+
+    private Stamped? MarkInstructed(AgentRecord agent)
+    {
+        var at = clock.GetUtcNow().ToString("O", CultureInfo.InvariantCulture);
+        var previousAt = string.Empty;
+        var previousStatus = string.Empty;
+
+        var kept = store.Update(project, agent.Worktree, current =>
+        {
+            previousAt = current.InstructedAt;
+            previousStatus = current.Status;
+
+            return current with
+            {
+                InstructedAt = at,
+                Status = OrchestrationStatus.Normalize(current.Status) is OrchestrationStatus.Done or OrchestrationStatus.Failed
+                    ? OrchestrationStatus.Working
+                    : current.Status,
+            };
+        });
+
+        if (!kept)
+        {
+            log.Write(LogTag.For(
+                project, $"tell_agent could not record the instruction time of {agent.Repository}/{agent.Branch}"));
+        }
+
+        return kept ? new Stamped(at, previousAt, previousStatus) : null;
+    }
+
+    private void UndoInstructed(AgentRecord agent, Stamped stamped)
+    {
+        var undone = store.Update(project, agent.Worktree, current =>
+            current.InstructedAt != stamped.At
+                ? current
+                : current with
+                {
+                    InstructedAt = stamped.PreviousAt,
+                    Status = current.Status == OrchestrationStatus.Working ? stamped.PreviousStatus : current.Status,
+                });
+
+        if (!undone)
+        {
+            log.Write(LogTag.For(
+                project, $"tell_agent could not put back the record of {agent.Repository}/{agent.Branch}"));
+        }
     }
 
     private OwnerNotices Owners() =>

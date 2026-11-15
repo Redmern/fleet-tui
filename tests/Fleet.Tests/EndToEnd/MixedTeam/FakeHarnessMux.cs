@@ -51,8 +51,15 @@ internal sealed class FakeHarnessMux : IMuxDriver
         return pane;
     }
 
+    public Func<string, Task>? BeforeSend { get; set; }
+
     public async Task SendTextAsync(PaneId id, string text, CancellationToken ct = default)
     {
+        if (BeforeSend is { } before)
+        {
+            await before(text);
+        }
+
         await Inner.SendTextAsync(id, text, ct);
 
         if (_harnesses.TryGetValue(id.Value, out var harness))
