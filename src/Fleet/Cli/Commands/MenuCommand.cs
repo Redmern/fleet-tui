@@ -57,6 +57,8 @@ using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Themes;
 using Fleet.Shared.Todos.Models;
 using Fleet.Shared.Viewing;
+using Fleet.Shared.Viewing.Enums;
+using Fleet.Shared.Viewing.Models;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Enums;
@@ -100,6 +102,19 @@ public static class MenuCommand
             return await PickProjectCommand.RunAsync(startNew: requested == FleetAction.NewProject).ConfigureAwait(false);
         }
 
+        var dispatch = new MenuDispatch(ViewerWiring.Current, EmbeddedWiring.HandBack);
+
+        if (requested != FleetAction.None && dispatch.Settle(requested) is var settled and not ScreenRoute.Here)
+        {
+            if (settled == ScreenRoute.Hint)
+            {
+                using IApplication hinting = FleetUi.Start();
+                HintAtTheMachineYouSitAt(hinting);
+            }
+
+            return 0;
+        }
+
         if (RunsHeadless(requested))
         {
             Adapters.Toggles().Toggle(project.Name, requested);
@@ -117,11 +132,15 @@ public static class MenuCommand
 
             var chosen = requested;
             var switchedTo = FleetAction.None;
+            var regroup = false;
+            FleetAction? pickedFrom = null;
             using var opening = new CancellationTokenSource();
             var switching = SwitchWhenOpenedAsync(
                 app,
                 invocation.Action is null ? WarmMenuWiring.WaitForOpenAsync(opening.Token) : Task.FromResult<string?>(null),
-                action => switchedTo = action);
+                ViewerWiring.Current(),
+                action => switchedTo = action,
+                () => regroup = true);
 
             try
             {
@@ -132,6 +151,13 @@ public static class MenuCommand
                         var submenu = chosen;
 
                         chosen = await ShowMenu(app, keymap, project, submenu).ConfigureAwait(false);
+                        pickedFrom = submenu;
+
+                        if (regroup && chosen == FleetAction.None && submenu == FleetAction.None && switchedTo == FleetAction.None)
+                        {
+                            regroup = false;
+                            continue;
+                        }
 
                         if (chosen == FleetAction.None && submenu != FleetAction.None && FleetModal.WentBack())
                         {
@@ -142,6 +168,7 @@ public static class MenuCommand
                         if (chosen == FleetAction.None && submenu == FleetAction.None && switchedTo != FleetAction.None)
                         {
                             (chosen, switchedTo) = (switchedTo, FleetAction.None);
+                            pickedFrom = null;
                             if (chosen is FleetAction.OpenProject or FleetAction.NewProject)
                             {
                                 pick = chosen;
@@ -159,7 +186,23 @@ public static class MenuCommand
                         continue;
                     }
 
-                    var code = await Perform(app, keymap, keymaps, adder, projects, project, chosen).ConfigureAwait(false);
+                    var (route, code) = await dispatch
+                        .RunAsync(
+                            chosen,
+                            action => Perform(app, keymap, keymaps, adder, projects, project, action),
+                            () => HintAtTheMachineYouSitAt(app))
+                        .ConfigureAwait(false);
+
+                    if (route == ScreenRoute.Hint && pickedFrom is { } shownBefore)
+                    {
+                        chosen = shownBefore;
+                        continue;
+                    }
+
+                    if (route != ScreenRoute.Here)
+                    {
+                        return code;
+                    }
 
                     if (code != 0 || !FleetModal.WentBack())
                     {
@@ -180,17 +223,35 @@ public static class MenuCommand
         return await PickProjectCommand.RunAsync(startNew: pick == FleetAction.NewProject).ConfigureAwait(false);
     }
 
-    private static async Task SwitchWhenOpenedAsync(IApplication app, Task<string?> opened, Action<FleetAction> switchTo)
+    private static async Task SwitchWhenOpenedAsync(
+        IApplication app, Task<string?> opened, ViewedFrom? drawnFor, Action<FleetAction> switchTo, Action regroup)
     {
-        if (await opened.ConfigureAwait(false) is { } id && FleetActionIds.Parse(id) is var action and not FleetAction.None)
+        var action = await opened.ConfigureAwait(false) is { } id ? FleetActionIds.Parse(id) : FleetAction.None;
+        var regrouped = NeedsRegroup(drawnFor, ViewerWiring.Current());
+
+        if (action != FleetAction.None || regrouped)
         {
             app.Invoke(() =>
             {
-                switchTo(action);
+                if (action != FleetAction.None)
+                {
+                    switchTo(action);
+                }
+
+                if (regrouped)
+                {
+                    regroup();
+                }
+
                 app.RequestStop();
             });
         }
     }
+
+    public static bool NeedsRegroup(ViewedFrom? drawnFor, ViewedFrom? openedBy) => drawnFor != openedBy;
+
+    private static void HintAtTheMachineYouSitAt(IApplication app) =>
+        FleetDialog.Inform(app, FleetMenus.Title(FleetAction.None), [ViewerHints.ScreensWhereYouSit]);
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
 
@@ -347,8 +408,6 @@ public static class MenuCommand
             ? FleetAction.None
             : screens.Contains(requested) ? requested : FleetAction.Close;
 
-    public static string? HandBackId(FleetAction action) => ViewerScreens.Owns(action) ? FleetActionIds.For(action) : null;
-
     public static bool RunsHeadless(FleetAction action) => FleetMenus.IsToggle(action);
 
     public static Pane? DashboardPane(IReadOnlyList<Pane> panes, string root, string? dashPane)
@@ -363,7 +422,8 @@ public static class MenuCommand
     private static async Task<FleetAction> ShowMenu(
         IApplication app, Keymap keymap, Project project, FleetAction submenu)
     {
-        var sections = FleetMenus.For(submenu);
+        var viewer = ViewerWiring.Current();
+        var sections = RemoteMenus.For(viewer, submenu);
 
         if (submenu == FleetAction.None && !await CanOpenEditor(project).ConfigureAwait(false))
         {
@@ -387,7 +447,8 @@ public static class MenuCommand
                 return FleetMenus.Value(action, current, head);
             },
             () => current.ShowMenuKeys,
-            () => current.ButtonHints);
+            () => current.ButtonHints,
+            RemoteMenus.Note(viewer, submenu));
     }
 
     private static async Task<bool> CanOpenEditor(Project project)
@@ -411,11 +472,6 @@ public static class MenuCommand
         Project project,
         FleetAction chosen)
     {
-        if (HandBackId(chosen) is { } handBack && EmbeddedWiring.HandBack(handBack))
-        {
-            return 0;
-        }
-
         switch (chosen)
         {
             case FleetAction.AddRepository:
