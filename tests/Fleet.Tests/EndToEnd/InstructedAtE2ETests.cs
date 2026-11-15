@@ -164,4 +164,31 @@ public sealed class InstructedAtE2ETests : ConfigHomeFixture
 
         Assert.Equal("api/fix: done — second", waited.Text);
     }
+
+    // AC-4: the notice a child sends a sub is written to the sub's instruction.md after the sub reported done. The
+    // file is dated after the report, as wall clocks date it in life, which the old mtime test took for a new task.
+    [Fact]
+    public async Task A_notice_typed_into_a_sub_that_already_reported_done_does_not_make_its_report_stale()
+    {
+        var repository = await _team.AddRepositoryAsync("api");
+        var dispatched = await _team.DispatchAsync(Main, "fix the login bug", "opencode");
+        await _team.Mux.HarnessIn(dispatched.Folder).Started;
+        await _team.StartClaudeWorkerAsync(dispatched.Slug, "api", repository, "fix");
+
+        var finished = await _team.CallAsync(dispatched.Slug, HarnessTool.Report, Status("done", "all merged"));
+        Assert.False(finished.IsError, finished.Text);
+        var reportedAt = DateTimeOffset.Parse(
+            _team.Store.List(_team.Project).Single(a => a.Branch == dispatched.Slug).ReportedAt, CultureInfo.InvariantCulture);
+
+        var child = await _team.CallAsync(McpCaller.ForAgent("api", "fix"), HarnessTool.Report, Status("done", "late child"));
+        Assert.False(child.IsError, child.Text);
+        var instruction = Path.Combine(dispatched.Folder, ".fleet", AgentHarness.AgentInstructionFile);
+        Assert.Contains("late child", File.ReadAllText(instruction));
+        File.SetLastWriteTimeUtc(instruction, reportedAt.UtcDateTime.AddMinutes(1));
+
+        var waited = await _team.CallAsync(Main, HarnessTool.WaitForAgent, [("branch", dispatched.Slug)]);
+
+        Assert.Equal($"{dispatched.Slug}: done — all merged", waited.Text);
+        Assert.Equal(string.Empty, _team.Store.List(_team.Project).Single(a => a.Branch == dispatched.Slug).InstructedAt);
+    }
 }
