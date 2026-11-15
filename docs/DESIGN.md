@@ -6478,6 +6478,176 @@ both exit 2 with the note on stderr and `{"decision":"block","reason":...}` (the
   returns works only with a delay (immediately loses to the restore, 300 ms wins), and the
   delay can wipe text the user has started typing.
 
+## The machine you sit at leads, 2026-11-15
+
+A remote project's fleet menu was the remote's, whole: **Remote machines** in it showed the
+remote's links and `remotes.json`, and theme, keybinds, update, log and save session meant
+the remote too. Nothing stopped chains either: from the remote's menu you could link it to a
+third machine, and its view of that machine showed in your project list. Spec:
+`docs/specs/fleet-server-client-architecture.md`.
+
+### Decision
+
+> The machine you sit at owns the machine list, the head, sessions and fleet's own screens.
+> A remote machine serves its own projects, and nothing else, to whoever views it.
+
+- **No installed roles.** One install everywhere; the role follows where you sit. A machine you
+  sit at directly is a full fleet and may link out. Words: *this machine* and *remote machine*,
+  never server, client, hub or node.
+- **The remote keeps drawing its project**, and its menu, but the menu is split into groups
+  that name the machine each row runs on.
+- **Chains are impossible, not discouraged.** A machine reached through a link never shows,
+  uses or creates links of its own for that viewer.
+
+### How it works
+
+- **The viewer mark.** fleetd computes a mark per client (`FleetDaemon.ViewerMark`):
+  `view:<machine>` for a client with a link label, `ssh:<machine name>` for a bridged client
+  with no label (an ssh window), nothing for a client sitting at the machine. It reaches the
+  menu in `FLEET_VIEWED_FROM` (`ViewedFrom`); `ViewerWiring` reads it (the command may not name
+  `Platform`). A warm menu is started with the mark when every client showing its workspace has
+  the same one, so a project seen only through a link opens as fast as before. When a local
+  and a remote client show the same project, the parked menu is hidden until the menu has
+  redrawn for the opener's mark. A label change kills that workspace's parked menus.
+- **The name in a title** is the nickname this machine gave the remote, else its machine name.
+  `RemoteLink` sends it as the label with `set-label` at connect and on each show (the remote's
+  tab bar reads `project @<nickname>` as a side effect). In an ssh window it is the remote's own
+  machine name, as no nickname exists there. Under ISO mode the title carries none:
+  `ViewerWiring.For` replaces it with `the remote machine`.
+- **Which screens are this machine's.** `ViewerScreens.Owned` is Switch project, Notifications,
+  Remote machines, Save session, keybinds, theme, show keybinds, button hints and this machine's
+  settings. The head is this machine's too but is not in `Owned`: it is `ViewerScreens.Head`, and
+  a remote never hands it back. `ActionGroups` holds the ownership table (project, machine,
+  this machine).
+- **The wider hand-back.** `ViewerScreens.Route(viewer, action)` returns `Here`, `HandBack` or
+  `Hint` for a row picked in the remote's menu, before any action runs. Before this change the
+  remote handed back two ids (Switch project, Notifications); now it hands back any owned id, and
+  the viewing fleetd opens its own menu at that action. A viewer announces the ids it takes
+  back as arguments on the existing `set-label` request; the remote keeps them per client
+  (`ClientState.TakesBack`), and no arguments means the two legacy ids. The remote never
+  hands back an id the viewer did not announce: it shows the hint instead. Without this an
+  older viewer would drop the action without a word.
+- **Chords never leave this machine.** In a remote view `StaysHere` keeps the commands in
+  `LocalCommands` (switch-project, next-workspace, show, redraw, head) and `menu <id>` for an
+  owned id on this machine. `LocalCommands` matches names only, so the menu chord needed its
+  own test: `menu` must still travel for the remote's own actions. So the chords for Remote
+  machines and Save session act here against a remote older than this change. The chords for
+  view log, update fleet, version and what's new are not owned, and keep meaning the remote.
+- **Menu groups.** `RemoteMenus.For(viewer, submenu)` re-sections the main and Settings
+  screens: `PROJECT on <machine>`, `MACHINE <machine>` and, on the main screen only,
+  `FLEET this machine` (Switch project, Notifications, Remote machines, Save session,
+  Settings). With no viewer it returns `FleetMenus.For(submenu)` itself, so a menu on this
+  machine is the same object as before. Fleet config is the remote's and unchanged. The one
+  new action, `ThisMachineSettings` (id `this-machine-settings`), has no key, so the keybind
+  defaults and the README keybind table did not move.
+- **This machine's settings screen.** `ThisMachineSession` runs it on this machine: Save session,
+  Remote machines, Keybinds, Show keybinds, Button hints, Theme, View log, Update fleet,
+  Version and What's new, each against this machine's config, `remotes.json`, sessions, log
+  (`MenuCommand.ThisMachinesLog` keeps the lines of every project and of none) and binary.
+  A `fleet menu` for `@<machine>` that finds no such project runs the screen straight away and
+  picks no project (`MenuCommand.ScreenForRemoteView`, `OnThisMachine`).
+- **The ssh window.** The menu shows PROJECT and MACHINE only, plus one muted line, exactly
+  `ViewerHints.ScreensWhereYouSit`: "Fleet's own screens are in the window on the machine you
+  sit at." For a viewer in an ssh window, `Route` gives `Hint` for every owned screen and for
+  the head; the head chord opens the menu with the head action id, which shows the hint.
+- **After a hint.** A row picked on a screen returns to that screen; a chord closes the menu.
+- **Refusals for a viewer (no chains).** One guard in the daemon (`ViewerRefusal`): a request from
+  a bridged connection, or made for a client that is bridged or labelled (the menu the remote
+  opened for it counts), is refused with `ViewerHints.ManagedWhereYouSit` ("Remote machines are
+  managed from the machine you sit at.") for `list-remotes`, `remote-connect`, `remote-answer`,
+  `remote-disconnect`, `askpass`, `show-remote`, `new-remote-project`, `remote-notices`,
+  `remote-dismiss`, `open-remote-window`, `remote-head` and `remote-create-project`. The
+  port-forward and stack ops are refused only when they name another machine, so Open port
+  from a remote view still works. `list-workspaces` and the project list leave out workspaces
+  that are views of another machine; `show` and `open-window` refuse them; `Furnish` skips
+  them, and a viewer is never placed on one. ISO mode still filters first.
+- **Back on this machine.** A screen opened on this machine from the remote's menu cannot go
+  back to the remote's menu: that menu closed at the hand-back. Back returns to this
+  machine's settings screen when the user came through it, else it closes.
+- **A toggle handed back flips nothing.** `OpenedWhenHandedBack` opens this machine's
+  settings screen for show keybinds and button hints when the remote hands them back, and the
+  user flips the value there. The chord does not come this way: it stays here and flips this
+  machine's value, as in a project on this machine.
+
+### Differences from the spec
+
+- The head is not in `ViewerScreens.Owned` (above). The spec lists it among the owned screens;
+  the code keeps it separate because a remote never hands it back. In a remote view the head
+  chord is handled on this machine and not sent; in an ssh window it shows the hint.
+- The chord for show keybinds or button hints in a remote view flips the value on this machine
+  directly (above); only a hand-back opens this machine's settings screen instead.
+- Under ISO mode the titles read `PROJECT on the remote machine` and
+  `MACHINE the remote machine`; the spec does not word this.
+
+### Version skew
+
+| Piece | New this machine, old remote | Old this machine, new remote |
+|---|---|---|
+| Owned chords | handled here, never sent | forwarded; the remote hands back Switch project and Notifications, others show the hint |
+| Menu picks | the old undivided menu; Switch project and Notifications still come back; Remote machines picked there is still the remote's until its fleetd restarts | grouped; rows this machine did not announce show the hint |
+| `set-label` arguments, nickname | the old remote reads the text only; the nickname shows in its tab bar | none sent; the legacy two ids apply, and the titles show the remote's machine name |
+| Refusals, workspace filter | n/a | enforced; none of the link's own operations is refused |
+| Host effects | no new kinds | same |
+
+| Piece | New binary on the remote, its fleetd still the old build (after `fleet update`, before a restart) |
+|---|---|
+| Menu picks | The old fleetd sets no `FLEET_VIEWED_FROM`, so the new menu sees no viewer and draws the undivided menu. It still asks the daemon to hand back Switch project and Notifications, as 0.7.29 does; the daemon grants it for a labelled client and refuses it for someone sitting at the remote. Remote machines stays the remote's until fleetd restarts. |
+
+### Rejected
+
+| Option | Why not |
+|---|---|
+| This machine draws the whole menu of a remote project | Out of scope (todo 0006). The mouse on the remote's chrome would still open the remote's menu, and "back" would return to the undivided one. |
+| The remote draws the FLEET rows flat on the main screen | Key clashes, doubled rows, toggles showing the remote's values. |
+| Doubled rows, the menu returns a row index | Changes the shared menu view contract; leaves an ambiguous key. |
+| Menu chords in `LocalCommands` | It matches command names; `menu` must still travel for the remote's own actions. |
+| Gate on the peer's build number | No version bump in scope; nothing to compare with. |
+| A new Hello field for role or capabilities | Out of scope; `set-label` arguments carry what is needed. |
+| Refuse on the bridged connection only | Misses the remote's menu, which is a local process on the remote. |
+| A role flag per machine (`hub` / `node`) | Not needed once chains are refused per viewer. |
+
+### Verified
+
+- **Tests.** `RemoteMenusTests` (groups, titles, rows, the ISO name, the note),
+  `ViewerScreensTests` and `ActionGroupsTests` (the table, `Route`), `MenuDispatchTests` and
+  `MenuSessionTests` (hand-back, hint, back), `MenuRemoteViewTests` (the screen on this machine
+  picks no project), `RemoteViewerRulesTests` (the refusals, the workspace filter),
+  `ViewerMarkTests` and `RemoteViewScreensTests` (the mark, warm menus, the regroup) and
+  `StaysHereTests` (the chords). The suite passed 5888 tests with 1 skipped.
+- **Real binaries**, two sandboxed fleets on one machine (NativeAOT build, `env -i`, local
+  sockets in place of ssh, driven through tmux): the grouped menu in a remote view; Remote
+  machines, Save session and Settings under `FLEET this machine` opened this machine's screens
+  and left the remote with no `remotes.json` or sessions; the ten rows of this machine's
+  settings, each opened (the toggles and the keybind edit changed this machine's files only);
+  the view-log chord reaching the remote; a mixed workspace regrouping with no ungrouped
+  frame; the ssh window with two groups and the line, and its five chords each showing the line
+  and opening nothing; ISO titles without a machine name; an older fleetd under a new binary
+  (the undivided menu, Switch project and Notifications coming back); an older viewer against
+  the new remote (the hint after a picked row, back to the menu).
+
+### Not verified
+
+- A requested action on a remote with an old fleetd (a click on the notification pill) is
+  covered by tests only.
+- Under ISO with two link clients that carry different labels, a regroup waits for the reveal
+  timeout (reasoned, not run).
+- Under ISO only Remote machines was opened on this machine's side, not the other rows.
+- A fresh menu whose draw beats the baseline is shown by fleetd's 1.2 s fallback, so a
+  handed-back Remote machines or Save session took about 1.3 s to show. The wait predates this
+  change; the hand-back itself adds about 45 ms.
+- A key press on a menu toggle is ignored about one time in three; the released build does the
+  same.
+
+### Known limits
+
+- A menu opened by someone sitting at the remote is visible and usable from a remote view of
+  the same project, and acts as the remote's own (todo 0007; it predates this change).
+- The remote's dashboard key for the keybind editor still edits the remote's keybinds for a
+  viewer (todo 0008).
+- Not part of this change: your theme following you into remote views (todo 0004), installing
+  fleet on a remote over ssh (todo 0005), this machine drawing all chrome of a remote project
+  (todo 0006).
+
 ## Still to verify
 - Whether Tomlyn is AOT-clean, or whether harness config should be JSON with a
   source-generated context.
