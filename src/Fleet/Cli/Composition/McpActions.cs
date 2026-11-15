@@ -784,6 +784,7 @@ public sealed class McpActions(
 
         var reporter = new ReportStatusHandler(
             store,
+            clock.GetUtcNow,
             inboxes: Adapters.AgentInboxes(),
             tickets: Adapters.TicketStatus(),
             typeToOwner: Owners().TypeAsync,
