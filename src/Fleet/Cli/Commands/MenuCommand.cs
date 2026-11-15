@@ -15,6 +15,7 @@ using Fleet.Features.Menu.EditFleetConfig;
 using Fleet.Features.Menu.EditKeybinds;
 using Fleet.Features.Menu.EditSettings;
 using Fleet.Features.Menu.ShowMenu;
+using Fleet.Features.Menu.ShowMenu.Models;
 using Fleet.Features.Menu.ShowReleaseNotes;
 using Fleet.Features.Notifications.ShowNotices;
 using Fleet.Features.Notifications.SyncNotices;
@@ -122,132 +123,59 @@ public static class MenuCommand
         var keymaps = Adapters.Keymaps();
         var adder = new AddRepositoryHandler(Adapters.Git());
 
-        FleetAction pick;
+        MenuEnd end;
 
         using (IApplication app = FleetUi.Start())
         {
             var keymap = new Keymap(keymaps.Load());
+            var session = new MenuSession(
+                ViewerWiring.Current,
+                dispatch,
+                screen => Task.FromResult(ShowMenu(app, keymap, project, screen)),
+                () => CanOpenEditor(project),
+                async action =>
+                {
+                    var code = await Perform(app, keymap, keymaps, adder, projects, project, action).ConfigureAwait(false);
+                    keymap = new Keymap(keymaps.Load());
+                    return code;
+                },
+                FleetModal.WentBack,
+                message => Hint(app, message));
 
-            var chosen = requested;
-            var switchedTo = FleetAction.None;
-            var regroup = false;
-            FleetAction? pickedFrom = null;
             using var opening = new CancellationTokenSource();
-            var switching = SwitchWhenOpenedAsync(
+            var stopping = StopWhenOpenedAsync(
                 app,
+                session,
                 invocation.Action is null ? WarmMenuWiring.WaitForOpenAsync(opening.Token) : Task.FromResult<string?>(null),
-                ViewerWiring.Mark(),
-                action => switchedTo = action,
-                () => regroup = true);
+                ViewerWiring.Mark());
 
             try
             {
-                while (true)
-                {
-                    if (chosen == FleetAction.None || FleetMenus.IsSubmenu(chosen))
-                    {
-                        var submenu = chosen;
-
-                        chosen = await ShowMenu(app, keymap, project, submenu).ConfigureAwait(false);
-                        pickedFrom = submenu;
-
-                        if (regroup && chosen == FleetAction.None && submenu == FleetAction.None && switchedTo == FleetAction.None)
-                        {
-                            regroup = false;
-                            continue;
-                        }
-
-                        if (chosen == FleetAction.None && submenu != FleetAction.None && FleetModal.WentBack())
-                        {
-                            chosen = FleetMenus.Parent(submenu);
-                            continue;
-                        }
-
-                        if (chosen == FleetAction.None && submenu == FleetAction.None && switchedTo != FleetAction.None)
-                        {
-                            (chosen, switchedTo) = (switchedTo, FleetAction.None);
-                            pickedFrom = null;
-                            regroup = false;
-                            if (chosen is FleetAction.OpenProject or FleetAction.NewProject)
-                            {
-                                pick = chosen;
-                                break;
-                            }
-
-                            continue;
-                        }
-
-                        if (chosen == FleetAction.None)
-                        {
-                            return 0;
-                        }
-
-                        continue;
-                    }
-
-                    var (route, code) = await dispatch
-                        .RunAsync(
-                            chosen,
-                            action => Perform(app, keymap, keymaps, adder, projects, project, action),
-                            message => Hint(app, message))
-                        .ConfigureAwait(false);
-
-                    if (route == ScreenRoute.Hint && pickedFrom is { } shownBefore)
-                    {
-                        chosen = shownBefore;
-                        continue;
-                    }
-
-                    if (route != ScreenRoute.Here)
-                    {
-                        return code;
-                    }
-
-                    if (code != 0 || !FleetModal.WentBack())
-                    {
-                        return code;
-                    }
-
-                    keymap = new Keymap(keymaps.Load());
-                    chosen = Parent(chosen);
-                }
+                end = await session.RunAsync(requested).ConfigureAwait(false);
             }
             finally
             {
                 await opening.CancelAsync().ConfigureAwait(false);
-                await switching.ConfigureAwait(false);
+                await stopping.ConfigureAwait(false);
             }
         }
 
-        return await PickProjectCommand.RunAsync(startNew: pick == FleetAction.NewProject).ConfigureAwait(false);
+        return end.Pick == FleetAction.None
+            ? end.Code
+            : await PickProjectCommand.RunAsync(startNew: end.Pick == FleetAction.NewProject).ConfigureAwait(false);
     }
 
-    private static async Task SwitchWhenOpenedAsync(
-        IApplication app, Task<string?> opened, string? drawnFor, Action<FleetAction> switchTo, Action regroup)
+    private static async Task StopWhenOpenedAsync(IApplication app, MenuSession session, Task<string?> opened, string? drawnFor)
     {
-        var action = await opened.ConfigureAwait(false) is { } id ? FleetActionIds.Parse(id) : FleetAction.None;
-        var regrouped = NeedsRegroup(drawnFor, ViewerWiring.Mark());
-
-        if (action != FleetAction.None || regrouped)
+        if (session.Opened(await opened.ConfigureAwait(false), drawnFor, ViewerWiring.Mark()) is { } apply)
         {
             app.Invoke(() =>
             {
-                if (action != FleetAction.None)
-                {
-                    switchTo(action);
-                }
-
-                if (regrouped)
-                {
-                    regroup();
-                }
-
+                apply();
                 app.RequestStop();
             });
         }
     }
-
-    public static bool NeedsRegroup(string? drawnFor, string? openedBy) => !string.Equals(drawnFor, openedBy, StringComparison.Ordinal);
 
     private static void Hint(IApplication app, string message) =>
         FleetDialog.Inform(app, FleetMenus.Title(FleetAction.None), [message]);
@@ -339,8 +267,7 @@ public static class MenuCommand
         return FleetUi.Menu(
             app,
             keymap,
-            FleetAction.ThisMachineSettings,
-            RemoteMenus.ThisMachine,
+            RemoteMenus.ThisMachineScreen,
             action => FleetMenus.Value(action, shared),
             action =>
             {
@@ -420,17 +347,8 @@ public static class MenuCommand
         return shown.FirstOrDefault(p => p.Id.Value == dashPane) ?? shown.FirstOrDefault();
     }
 
-    private static async Task<FleetAction> ShowMenu(
-        IApplication app, Keymap keymap, Project project, FleetAction submenu)
+    private static FleetAction ShowMenu(IApplication app, Keymap keymap, Project project, MenuScreen screen)
     {
-        var viewer = ViewerWiring.Current();
-        var sections = RemoteMenus.For(viewer, submenu);
-
-        if (submenu == FleetAction.None && !await CanOpenEditor(project).ConfigureAwait(false))
-        {
-            sections = FleetMenus.Without(sections, FleetAction.OpenEditor);
-        }
-
         var settings = Adapters.Settings();
         var current = settings.Load(project.Name);
         var head = Adapters.HeadModel();
@@ -439,8 +357,7 @@ public static class MenuCommand
         return FleetUi.Menu(
             app,
             keymap,
-            submenu,
-            sections,
+            screen,
             action => FleetMenus.Value(action, current, head),
             action =>
             {
@@ -448,8 +365,7 @@ public static class MenuCommand
                 return FleetMenus.Value(action, current, head);
             },
             () => current.ShowMenuKeys,
-            () => current.ButtonHints,
-            RemoteMenus.Note(viewer, submenu));
+            () => current.ButtonHints);
     }
 
     private static async Task<bool> CanOpenEditor(Project project)

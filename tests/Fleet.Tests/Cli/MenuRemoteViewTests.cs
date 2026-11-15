@@ -83,19 +83,6 @@ public class MenuRemoteViewTests
         Assert.Contains(new SessionProject("homelab-api", "red@homelab"), session.Projects);
     }
 
-    // The body of `fleet menu` runs inside Terminal.Gui and has no test of its own. These pin its
-    // call sites: every action picked on the remote goes through MenuDispatch (tested in
-    // MenuDispatchTests), and a menu started for a view of a remote goes to this machine's screens.
-    [Fact]
-    public void Every_action_the_menu_runs_goes_through_the_dispatch_that_knows_the_viewer()
-    {
-        var source = MenuSource();
-
-        Assert.Equal(2, Regex.Count(source, @"\bPerform\("));
-        Assert.Contains("action => Perform(app, keymap, keymaps, adder, projects, project, action)", source, StringComparison.Ordinal);
-        Assert.Matches(@"await dispatch\s*\.RunAsync\(\s*chosen,\s*action => Perform\(", source);
-    }
-
     [Fact]
     public void A_screen_is_handed_back_only_by_the_dispatch()
     {
@@ -116,45 +103,6 @@ public class MenuRemoteViewTests
         Assert.True(here > run && here < pick);
         Assert.Contains("await OnThisMachine[chosen](", source, StringComparison.Ordinal);
     }
-
-    [Fact]
-    public void The_menu_draws_the_screens_and_the_note_of_its_viewer()
-    {
-        var source = MenuSource();
-        var show = source.IndexOf("private static async Task<FleetAction> ShowMenu(", StringComparison.Ordinal);
-        var body = source[show..source.IndexOf("private static async Task<bool> CanOpenEditor", show, StringComparison.Ordinal)];
-
-        Assert.Contains("RemoteMenus.For(viewer, submenu)", body, StringComparison.Ordinal);
-        Assert.Contains("RemoteMenus.Note(viewer, submenu)", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("FleetMenus.For(", body, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void An_action_that_arrives_with_a_regroup_clears_the_regroup_so_closing_the_menu_later_closes_it()
-    {
-        var source = MenuSource();
-        var taken = source.IndexOf("(chosen, switchedTo) = (switchedTo, FleetAction.None);", StringComparison.Ordinal);
-
-        Assert.True(taken > 0);
-        Assert.Contains("regroup = false;", source[taken..source.IndexOf("continue;", taken, StringComparison.Ordinal)], StringComparison.Ordinal);
-    }
-
-    // fleetd hides a parked menu exactly when the mark it was started with differs from the
-    // opener's mark; the menu must then redraw, or the float waits for the reveal timeout.
-    [Theory]
-    [InlineData(null, "view:homelab")]
-    [InlineData("view:homelab", null)]
-    [InlineData("view:homelab", "view:barn")]
-    [InlineData("view:homelab", "ssh:homelab")]
-    public void A_menu_drawn_for_one_viewer_and_opened_by_another_regroups(string? drawnFor, string? openedBy) =>
-        Assert.True(MenuCommand.NeedsRegroup(drawnFor, openedBy));
-
-    [Theory]
-    [InlineData(null, null)]
-    [InlineData("view:homelab", "view:homelab")]
-    [InlineData("ssh:homelab", "ssh:homelab")]
-    public void A_menu_opened_by_the_viewer_it_was_drawn_for_does_not_redraw(string? drawnFor, string? openedBy) =>
-        Assert.False(MenuCommand.NeedsRegroup(drawnFor, openedBy));
 
     private static string MenuSource() =>
         File.ReadAllText(Path.Combine(

@@ -1,4 +1,8 @@
 using Fleet.Features.Menu.ShowMenu;
+using Fleet.Features.Menu.ShowMenu.Models;
+using Fleet.Shared.Viewing;
+using Fleet.Shared.Viewing.Enums;
+using Fleet.Shared.Viewing.Models;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Keymap.Models;
@@ -151,6 +155,52 @@ public class ShowMenuTests
         Assert.Equal(note, line.Text);
         Assert.Equal(ShowMenuHandler.Padding, bar.Root.Frame.Y - line.Frame.Bottom);
         Assert.Equal(window.Viewport.Height - ShowMenuView.Footer, bar.Root.Frame.Y);
+    }
+
+    private static readonly MenuScreen SshMain = RemoteMenus.Screen(
+        new ViewedFrom(ViewKind.Ssh, "homelab-box"), FleetAction.None);
+
+    [Fact]
+    public void The_window_of_a_screen_with_a_note_holds_that_note_as_a_line_of_its_own()
+    {
+        var composed = ShowMenuView.Compose(Keymap.Default, SshMain, _ => null);
+        using var window = composed.Window;
+
+        var note = Assert.Single(window.SubViews.OfType<Label>(), l => l.Text == ViewerHints.ScreensWhereYouSit);
+        window.Layout();
+        Assert.Equal(composed.List.Frame.Bottom + 1, note.Frame.Y);
+        Assert.Contains(composed.List, window.SubViews);
+        Assert.Contains(composed.Bar.Root, window.SubViews);
+        Assert.Contains("fleet menu", window.Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_window_of_a_screen_without_a_note_holds_no_extra_line()
+    {
+        var composed = ShowMenuView.Compose(Keymap.Default, RemoteMenus.Screen(null, FleetAction.None), _ => null);
+        using var window = composed.Window;
+
+        Assert.Empty(window.SubViews.OfType<Label>());
+    }
+
+    [Fact]
+    public void The_rows_of_a_composed_screen_are_the_rows_of_that_screen_with_their_group_titles()
+    {
+        var composed = ShowMenuView.Compose(Keymap.Default, SshMain, a => a == FleetAction.OpenSettings ? "[x]" : null);
+        using var window = composed.Window;
+
+        Assert.Equal(FleetMenus.Actions(SshMain.Sections), composed.Items.Select(i => i.Action));
+        Assert.Equal(["PROJECT on homelab-box", "MACHINE homelab-box"], composed.Items.Select(i => i.Header).OfType<string>());
+        Assert.Equal("[x]", composed.Items.Single(i => i.Action == FleetAction.OpenSettings).Value);
+    }
+
+    [Fact]
+    public void A_key_chooses_the_row_bound_to_it()
+    {
+        var items = new ShowMenuHandler(Keymap.Default).Items([FleetAction.Remotes, FleetAction.SaveSession, FleetAction.ThisMachineSettings]);
+
+        Assert.Equal(1, ShowMenuView.RowFor(items, Keymap.Default, Keymap.Default.KeyFor(FleetAction.SaveSession)));
+        Assert.Equal(-1, ShowMenuView.RowFor(items, Keymap.Default, Keymap.Default.KeyFor(FleetAction.QuitFleet)));
     }
 
     [Fact]

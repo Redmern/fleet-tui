@@ -82,20 +82,10 @@ public static class FleetUi
     public static FleetAction Menu(
         IApplication app,
         Keymap keymap,
-        FleetAction submenu,
-        IReadOnlyList<MenuSection> sections,
+        MenuScreen screen,
         Func<FleetAction, string?> value,
         Func<FleetAction, string?> toggle,
         Func<bool> showKeys,
-        Func<ButtonHints> buttonHints,
-        string? note = null) =>
-        ShowMenuView.Show(
-            app,
-            keymap,
-            FleetMenus.Title(submenu),
-            new ShowMenuHandler(keymap).Items(sections, value),
-            toggle,
-            showKeys,
-            buttonHints,
-            note);
+        Func<ButtonHints> buttonHints) =>
+        ShowMenuView.Show(app, keymap, screen, value, toggle, showKeys, buttonHints);
 }

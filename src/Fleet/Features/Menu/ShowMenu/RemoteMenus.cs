@@ -60,6 +60,20 @@ public static class RemoteMenus
         ];
     }
 
+    public static MenuScreen ThisMachineScreen { get; } =
+        new(FleetAction.ThisMachineSettings, FleetMenus.Title(FleetAction.ThisMachineSettings), ThisMachine);
+
+    public static MenuScreen Screen(ViewedFrom? viewer, FleetAction submenu, bool editor = true)
+    {
+        var sections = For(viewer, submenu);
+
+        return new MenuScreen(
+            submenu,
+            FleetMenus.Title(submenu),
+            editor ? sections : FleetMenus.Without(sections, FleetAction.OpenEditor),
+            Note(viewer, submenu));
+    }
+
     public static string? Note(ViewedFrom? viewer, FleetAction submenu) =>
         viewer is { Kind: ViewKind.Ssh } && Regroups(submenu) ? ViewerHints.ScreensWhereYouSit : null;
 
