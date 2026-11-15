@@ -34,7 +34,8 @@ public sealed class CodexHarnessConfigTests : IDisposable
         "[mcp_servers.fleet]\n"
         + "command = \"/bin/fleet\"\n"
         + $"args = [\"mcp\", \"--project\", \"proj\", \"--caller\", \"{caller}\"]\n"
-        + "default_tools_approval_mode = \"approve\"\n";
+        + "default_tools_approval_mode = \"approve\"\n"
+        + "tool_timeout_sec = 60\n";
 
     private void Seed(string path, string text)
     {
