@@ -141,6 +141,40 @@ public class RemoteMenusTests
             a => Assert.True(local.Contains(a) || a == FleetAction.ThisMachineSettings, $"{a} is not a row of the local menu"));
     }
 
+    // A row without an owner is in no group, so a viewer would silently lose it.
+    [Fact]
+    public void Every_row_of_the_main_and_settings_screens_has_an_owner_so_no_row_is_lost_for_a_viewer()
+    {
+        var rows = FleetMenus.Actions(FleetMenus.Main).Concat(FleetMenus.Actions(FleetMenus.Settings)).ToList();
+
+        Assert.All(rows, row => Assert.True(ActionGroups.Of(row) is not null, $"{row} has no owner in ActionGroups"));
+    }
+
+    [Theory]
+    [InlineData(FleetAction.None)]
+    [InlineData(FleetAction.OpenSettings)]
+    public void A_remote_view_and_this_machines_settings_together_still_reach_every_row_of_the_local_menu(FleetAction submenu)
+    {
+        var reachable = FleetMenus.Actions(RemoteMenus.For(View, FleetAction.None))
+            .Concat(FleetMenus.Actions(RemoteMenus.For(View, FleetAction.OpenSettings)))
+            .Concat(FleetMenus.Actions(RemoteMenus.ThisMachine))
+            .ToHashSet();
+
+        Assert.All(FleetMenus.Actions(FleetMenus.For(submenu)), row => Assert.Contains(row, reachable));
+    }
+
+    // A setting that flips without a screen must never flip on a hand-back nobody asked for.
+    [Fact]
+    public void Every_owned_toggle_opens_this_machines_settings_when_handed_back_and_every_other_owned_screen_opens_itself()
+    {
+        var toggles = Fleet.Shared.Viewing.ViewerScreens.Owned.Where(FleetMenus.IsToggle).ToList();
+
+        Assert.Equal([FleetAction.EditShowMenuKeys, FleetAction.EditButtonHints], toggles);
+        Assert.All(Fleet.Shared.Viewing.ViewerScreens.Owned, screen => Assert.Equal(
+            FleetActionIds.For(FleetMenus.IsToggle(screen) ? FleetAction.ThisMachineSettings : screen),
+            Fleet.Shared.Viewing.ViewerScreens.OpenedWhenHandedBack(FleetActionIds.For(screen))));
+    }
+
     [Fact]
     public void This_machines_settings_screen_has_exactly_its_ten_rows()
     {
