@@ -426,6 +426,35 @@ public sealed class ViewerMarkTests : IAsyncLifetime
         Assert.False(HeadStarted);
     }
 
+    // What fleetd starts for an ssh window, fed to the rule the menu applies before anything runs:
+    // every fleet-level screen asked for there ends in the hint, never in a screen of the remote.
+    [Theory]
+    [InlineData("menu", "switch-project")]
+    [InlineData("menu", "notifications")]
+    [InlineData("menu", "remotes")]
+    [InlineData("menu", "save-session")]
+    [InlineData("menu", "this-machine-settings")]
+    [InlineData("switch-project", null)]
+    [InlineData("head", null)]
+    [InlineData("head", "voice")]
+    public async Task A_fleet_level_chord_from_an_ssh_window_starts_a_menu_that_only_hints(string command, string? arg)
+    {
+        await StartAsync(warm: false);
+        var ssh = await SshWindowAsync();
+        await ssh.WaitForFramesAsync(1);
+
+        await ssh.SendCommandAsync(command, arg);
+
+        await Eventually(() => Menus == 1);
+        var menu = _panes.ByProgram("fleet")!;
+        var viewer = ViewedFrom.Parse(menu.Env.GetValueOrDefault(ViewedFrom.Variable));
+        var asked = Fleet.Shared.Keymap.FleetActionIds.Parse(menu.Args[^1]);
+        Assert.Equal("--action", menu.Args[^2]);
+        Assert.Equal(new ViewedFrom(Fleet.Shared.Viewing.Enums.ViewKind.Ssh, Environment.MachineName), viewer);
+        Assert.Equal(Fleet.Shared.Viewing.Enums.ScreenRoute.Hint, Fleet.Shared.Viewing.ViewerScreens.Route(viewer, asked));
+        Assert.False(HeadStarted);
+    }
+
     [Fact]
     public async Task The_head_chord_from_a_client_sitting_at_the_machine_still_toggles_the_head()
     {
