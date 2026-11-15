@@ -400,18 +400,20 @@ public sealed class McpActions(
         return Ok($"sent to {Repo(request)}/{Branch(request)}.");
     }
 
-    private sealed record Stamped(string At, string PreviousAt, string PreviousStatus);
+    private sealed record Stamped(string At, string PreviousAt, string PreviousStatus, string ReportedAt);
 
     private Stamped? MarkInstructed(AgentRecord agent)
     {
         var at = clock.GetUtcNow().ToString("O", CultureInfo.InvariantCulture);
         var previousAt = string.Empty;
         var previousStatus = string.Empty;
+        var reportedAt = string.Empty;
 
         var kept = store.Update(project, agent.Worktree, current =>
         {
             previousAt = current.InstructedAt;
             previousStatus = current.Status;
+            reportedAt = current.ReportedAt;
 
             return current with
             {
@@ -428,7 +430,7 @@ public sealed class McpActions(
                 project, $"tell_agent could not record the instruction time of {agent.Repository}/{agent.Branch}"));
         }
 
-        return kept ? new Stamped(at, previousAt, previousStatus) : null;
+        return kept ? new Stamped(at, previousAt, previousStatus, reportedAt) : null;
     }
 
     private void UndoInstructed(AgentRecord agent, Stamped stamped)
@@ -439,7 +441,9 @@ public sealed class McpActions(
                 : current with
                 {
                     InstructedAt = stamped.PreviousAt,
-                    Status = current.Status == OrchestrationStatus.Working ? stamped.PreviousStatus : current.Status,
+                    Status = current.Status == OrchestrationStatus.Working && current.ReportedAt == stamped.ReportedAt
+                        ? stamped.PreviousStatus
+                        : current.Status,
                 });
 
         if (!undone)
