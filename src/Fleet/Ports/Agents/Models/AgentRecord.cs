@@ -22,7 +22,8 @@ public sealed record AgentRecord(
     string Summary = "",
     string ReportedAt = "",
     RoleModel? Model = null,
-    string OrchestratorHarness = "")
+    string OrchestratorHarness = "",
+    string InstructedAt = "")
 {
     public HarnessProfile OrchestratorProfile => HarnessRegistry.For(OrchestratorHarness);
 

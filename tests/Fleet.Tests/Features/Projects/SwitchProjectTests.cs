@@ -220,6 +220,9 @@ public class SwitchProjectTests
             return true;
         }
 
+        public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change) =>
+            List(project).FirstOrDefault(a => a.Worktree == worktree) is { } current && Replace(project, change(current));
+
         public bool Remove(string project, string worktree) => true;
     }
 }

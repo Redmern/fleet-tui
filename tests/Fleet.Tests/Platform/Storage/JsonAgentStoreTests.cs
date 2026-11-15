@@ -110,6 +110,76 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
     }
 
     [Fact]
+    public void The_time_an_agent_was_last_instructed_survives_the_round_trip()
+    {
+        _store.Save(
+            "techweb",
+            Agent(Path.Combine(ConfigHome, "backend", "develop")) with { InstructedAt = "2026-11-15T10:00:00.0000000+00:00" });
+
+        Assert.Equal("2026-11-15T10:00:00.0000000+00:00", Assert.Single(_store.List("techweb")).InstructedAt);
+    }
+
+    [Fact]
+    public void A_session_written_before_instructions_were_timed_loads_with_no_instruction_time()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Sessions, "techweb.json"),
+            """{"version":1,"agents":[{"worktree":"~/x","repository":"backend","branch":"dev","harness":"claude"}]}""");
+
+        Assert.Equal(string.Empty, Assert.Single(_store.List("techweb")).InstructedAt);
+    }
+
+    [Fact]
+    public void An_agent_never_instructed_leaves_no_instruction_time_in_the_file()
+    {
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop")));
+
+        Assert.DoesNotContain("instructedAt", File.ReadAllText(Path.Combine(FleetPaths.Sessions, "techweb.json")), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Update_changes_the_stored_record_in_one_locked_step()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+        _store.Save("techweb", Agent(worktree) with { Status = "done" });
+
+        var updated = _store.Update("techweb", worktree, a => a with { Status = "working", InstructedAt = "t1" });
+
+        Assert.True(updated);
+        var agent = Assert.Single(_store.List("techweb"));
+        Assert.Equal("working", agent.Status);
+        Assert.Equal("t1", agent.InstructedAt);
+    }
+
+    [Fact]
+    public void Update_of_an_agent_that_is_gone_changes_nothing()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+
+        Assert.False(_store.Update("techweb", worktree, a => a with { Status = "working" }));
+        Assert.Empty(_store.List("techweb"));
+    }
+
+    [Fact]
+    public void Concurrent_updates_of_different_fields_do_not_lose_each_other()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+        _store.Save("techweb", Agent(worktree));
+
+        Parallel.For(0, 20, i =>
+        {
+            new JsonAgentStore().Update("techweb", worktree, a => i % 2 == 0
+                ? a with { Summary = a.Summary + "x" }
+                : a with { ReportedAt = a.ReportedAt + "y" });
+        });
+
+        var agent = Assert.Single(_store.List("techweb"));
+        Assert.Equal(10, agent.Summary.Length);
+        Assert.Equal(10, agent.ReportedAt.Length);
+    }
+
+    [Fact]
     public void The_worktree_path_is_the_identity_so_saving_twice_updates_rather_than_duplicates()
     {
         var worktree = Path.Combine(ConfigHome, "backend", "develop");

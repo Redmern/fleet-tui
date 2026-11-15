@@ -246,6 +246,22 @@ internal sealed class MixedTeamRig
             }
         }
 
+        public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change)
+        {
+            lock (_gate)
+            {
+                var at = _agents.FindIndex(a => a.Worktree == worktree);
+
+                if (at < 0)
+                {
+                    return false;
+                }
+
+                _agents[at] = change(_agents[at]);
+                return true;
+            }
+        }
+
         public bool Remove(string project, string worktree)
         {
             lock (_gate)
