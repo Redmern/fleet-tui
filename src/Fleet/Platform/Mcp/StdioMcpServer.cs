@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Fleet.Ports;
 using Fleet.Ports.Mcp;
 using Fleet.Ports.Mcp.Models;
@@ -13,6 +14,8 @@ public sealed class StdioMcpServer(
     public const string Version = "0.1.0";
 
     private readonly SemaphoreSlim _writing = new(1, 1);
+
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _cancellable = new();
 
     public async Task RunAsync(McpServing serving, CancellationToken ct = default)
     {
@@ -38,7 +41,14 @@ public sealed class StdioMcpServer(
                 if (call.Method == "tools/call")
                 {
                     running.RemoveWhere(task => task.IsCompleted);
-                    running.Add(Task.Run(() => RunCall(call, served, ct), CancellationToken.None));
+                    running.Add(Start(call, served, ct));
+
+                    continue;
+                }
+
+                if (call.Method == "notifications/cancelled")
+                {
+                    Cancel(call.CancelledId);
 
                     continue;
                 }
@@ -82,11 +92,54 @@ public sealed class StdioMcpServer(
         }
     }
 
-    private async Task RunCall(RpcCall call, McpServing serving, CancellationToken ct)
+    private Task Start(RpcCall call, McpServing serving, CancellationToken ct)
     {
-        var reply = await CallReply(call, serving, ct).ConfigureAwait(false);
+        var cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        await Send(reply, ct).ConfigureAwait(false);
+        _cancellable.TryAdd(call.Id.Raw, cancel);
+
+        return Task.Run(() => RunCall(call, serving, cancel), CancellationToken.None);
+    }
+
+    private void Cancel(RpcId id)
+    {
+        if (!id.Present || !_cancellable.TryGetValue(id.Raw, out var cancel))
+        {
+            return;
+        }
+
+        try
+        {
+            cancel.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private async Task RunCall(RpcCall call, McpServing serving, CancellationTokenSource cancel)
+    {
+        try
+        {
+            var reply = await CallReply(call, serving, cancel.Token).ConfigureAwait(false);
+
+            if (!cancel.IsCancellationRequested)
+            {
+                await Send(reply, cancel.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+        }
+        catch (Exception e)
+        {
+            log.Swallowed(e);
+        }
+        finally
+        {
+            _cancellable.TryRemove(new KeyValuePair<string, CancellationTokenSource>(call.Id.Raw, cancel));
+            cancel.Dispose();
+        }
     }
 
     private async Task<string> CallReply(RpcCall call, McpServing serving, CancellationToken ct)
@@ -99,7 +152,7 @@ public sealed class StdioMcpServer(
 
             return JsonRpcCodec.Result(call.Id, JsonRpcCodec.Call(result));
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             log.Swallowed(e);
 

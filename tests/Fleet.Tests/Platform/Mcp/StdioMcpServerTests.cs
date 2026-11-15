@@ -240,6 +240,108 @@ public sealed class StdioMcpServerTests
         Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
     }
 
+    [Theory]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"list_agents"}}""", "1")]
+    [InlineData("""{"id":"call-1","method":"tools/call","params":{"name":"list_agents"}}""", "\"call-1\"")]
+    public async Task A_cancelled_call_has_its_work_cancelled_and_sends_no_result(string call, string requestId)
+    {
+        var cancelled = false;
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct).WaitAsync(Patience, CancellationToken.None);
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = ct.IsCancellationRequested;
+
+                throw;
+            }
+
+            return McpResult.Ok("late");
+        });
+
+        var transcript = string.Join('\n',
+            call,
+            """{"method":"notifications/cancelled","params":{"reason":"gave up","requestId":""" + requestId + "}}",
+            """{"id":2,"method":"ping"}""") + "\n";
+
+        var replies = await Run(transcript, serving);
+
+        Assert.True(cancelled);
+        Assert.Equal("2", IdOf(Assert.Single(replies)));
+        Assert.Empty(_log.Swallows);
+    }
+
+    [Fact]
+    public async Task A_cancelled_call_that_finishes_anyway_still_sends_no_result()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            """{"method":"notifications/cancelled","params":{"requestId":1}}""") + "\n";
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log)
+            .RunAsync(Blocking(release.Task));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Empty(output.Lines);
+    }
+
+    [Fact]
+    public async Task Cancelling_one_call_leaves_the_others_running()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            Call(2),
+            """{"method":"notifications/cancelled","params":{"requestId":1}}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            await release.Task.WaitAsync(Patience, ct);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log).RunAsync(serving);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("2", IdOf(Assert.Single(output.Lines)));
+    }
+
+    [Fact]
+    public async Task A_cancellation_for_a_request_that_is_not_running_is_ignored()
+    {
+        var transcript = string.Join('\n',
+            """{"method":"notifications/cancelled","params":{"requestId":41}}""",
+            Call(1),
+            """{"method":"notifications/cancelled"}""") + "\n";
+
+        var replies = await Run(transcript, Serving(_ => McpResult.Ok("ok")));
+
+        Assert.Equal("1", IdOf(Assert.Single(replies)));
+    }
+
+    [Fact]
+    public async Task A_handler_that_gives_up_on_its_own_is_reported_as_an_error()
+    {
+        var replies = await Run(
+            Call(1) + "\n",
+            Serving(_ => throw new TaskCanceledException("an inner timeout")));
+
+        Assert.Contains("\"isError\":true", Assert.Single(replies));
+        Assert.NotEmpty(_log.Swallows);
+    }
+
     private static string Call(int id, string meta = "") =>
         $"{{\"id\":{id},\"method\":\"tools/call\",\"params\":{{\"name\":\"list_agents\",\"arguments\":{{}}{meta}}}}}";
 
