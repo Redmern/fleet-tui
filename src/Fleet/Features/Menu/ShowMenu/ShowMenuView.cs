@@ -16,14 +16,36 @@ public static class ShowMenuView
 
     public const int Header = Footer;
 
-    public static int FitRows(int height) =>
-        height + (2 * ShowMenuHandler.Padding) + Header + Footer + FleetCorners.Rows;
+    public const int NoteRows = 2;
 
-    public static (ListView List, FleetActionBar Bar) Place(int width, int height)
+    private const int NoteMargin = 4;
+
+    private const int NarrowestMenu = 52;
+
+    private const int RoomBesideRows = 20;
+
+    public static int FitRows(int height, bool noted = false) =>
+        height + (2 * ShowMenuHandler.Padding) + Header + Footer + FleetCorners.Rows + (noted ? NoteRows : 0);
+
+    public static int FitCols(int rowsWidth, int barWidth, string? note) =>
+        Math.Max(
+            Math.Max(Math.Max(rowsWidth + RoomBesideRows, NarrowestMenu), barWidth + 4),
+            note is null ? 0 : note.Length + NoteMargin);
+
+    public static (ListView List, FleetActionBar Bar) Place(int width, int height, bool noted = false)
     {
-        var list = FleetTheme.CenteredRows(width, height);
+        var list = FleetTheme.CenteredRows(width, height, noted ? NoteRows : 0);
 
-        return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding));
+        return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding + (noted ? NoteRows : 0)));
+    }
+
+    public static Label PlaceNote(ListView list, string note)
+    {
+        var line = FleetTheme.FullLine(Pos.Bottom(list) + 1, 1);
+        line.Text = note;
+        line.TextAlignment = Alignment.Center;
+
+        return line;
     }
 
     public static FleetAction Show(
@@ -37,7 +59,8 @@ public static class ShowMenuView
         IReadOnlyList<FleetMenuItem> items,
         Func<FleetAction, string?>? toggle,
         Func<bool>? showKeys = null,
-        Func<ButtonHints>? buttonHints = null)
+        Func<ButtonHints>? buttonHints = null,
+        string? note = null)
     {
         var chosen = FleetAction.None;
         var shown = items.ToList();
@@ -47,12 +70,12 @@ public static class ShowMenuView
         var keyedHeaders = ShowMenuHandler.Headers(shown);
         var width = ShowMenuHandler.Width([.. rows, .. keyedHeaders.Values]);
         var height = ShowMenuHandler.Height(rows, keyedHeaders.Count, gaps.Count);
-        var (list, bar) = Place(width, height);
+        var (list, bar) = Place(width, height, note is not null);
 
         var window = FleetTheme.Overlay(
             title,
-            Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(Nothing, Nothing), ButtonHints.Text) + 4),
-            FitRows(height));
+            FitCols(width, FleetActionBar.Measure(Buttons(Nothing, Nothing), ButtonHints.Text), note),
+            FitRows(height, note is not null));
 
         void Refill(int index)
         {
@@ -156,6 +179,11 @@ public static class ShowMenuView
         app.Keyboard.KeyDown += Keys;
 
         window.Add(list, bar.Root);
+        if (note is not null)
+        {
+            window.Add(PlaceNote(list, note));
+        }
+
         FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try

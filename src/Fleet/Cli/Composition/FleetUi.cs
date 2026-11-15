@@ -87,7 +87,8 @@ public static class FleetUi
         Func<FleetAction, string?> value,
         Func<FleetAction, string?> toggle,
         Func<bool> showKeys,
-        Func<ButtonHints> buttonHints) =>
+        Func<ButtonHints> buttonHints,
+        string? note = null) =>
         ShowMenuView.Show(
             app,
             keymap,
@@ -95,5 +96,6 @@ public static class FleetUi
             new ShowMenuHandler(keymap).Items(sections, value),
             toggle,
             showKeys,
-            buttonHints);
+            buttonHints,
+            note);
 }

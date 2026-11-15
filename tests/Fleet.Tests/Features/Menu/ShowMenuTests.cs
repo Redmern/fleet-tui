@@ -130,6 +130,37 @@ public class ShowMenuTests
         Assert.Equal(window.Frame.Height - FleetCorners.Rows, window.Viewport.Height);
     }
 
+    [Theory]
+    [InlineData(3)]
+    [InlineData(8)]
+    public void A_note_sits_one_row_under_the_last_row_and_the_bar_keeps_its_distance(int height)
+    {
+        const string note = "Fleet's own screens are in the window on the machine you sit at.";
+        var (list, bar) = ShowMenuView.Place(30, height, noted: true);
+        var line = ShowMenuView.PlaceNote(list, note);
+        using var window = new Window { Width = 80, Height = ShowMenuView.FitRows(height, noted: true), BorderStyle = LineStyle.None };
+        window.Add(list, line, bar.Root);
+        FleetCorners.Attach(window, () => { });
+
+        window.Layout();
+
+        Assert.Equal(ShowMenuView.FitRows(height) + ShowMenuView.NoteRows, ShowMenuView.FitRows(height, noted: true));
+        Assert.Equal(ShowMenuView.Header + ShowMenuHandler.Padding, list.Frame.Y);
+        Assert.Equal(list.Frame.Bottom + 1, line.Frame.Y);
+        Assert.Equal(1, line.Frame.Height);
+        Assert.Equal(note, line.Text);
+        Assert.Equal(ShowMenuHandler.Padding, bar.Root.Frame.Y - line.Frame.Bottom);
+        Assert.Equal(window.Viewport.Height - ShowMenuView.Footer, bar.Root.Frame.Y);
+    }
+
+    [Fact]
+    public void A_menu_is_wide_enough_for_its_note()
+    {
+        Assert.Equal(52, ShowMenuView.FitCols(10, 20, null));
+        Assert.Equal(64 + 4, ShowMenuView.FitCols(10, 20, new string('x', 64)));
+        Assert.Equal(90, ShowMenuView.FitCols(70, 20, new string('x', 64)));
+    }
+
     [Fact]
     public void The_action_bar_measures_its_chips_and_the_gaps_between_them()
     {
