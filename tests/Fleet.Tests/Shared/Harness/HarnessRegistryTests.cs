@@ -39,6 +39,30 @@ public sealed class HarnessRegistryTests
         Assert.False(opencode.Has(HarnessCapabilities.NativeMessaging));
     }
 
+    [Theory]
+    [InlineData("claude", 300, 600)]
+    [InlineData("opencode", 55, null)]
+    [InlineData("codex", 55, 60)]
+    [InlineData("pi", 55, 60)]
+    public void Each_harness_has_a_wait_cap_and_the_tool_timeout_fleet_writes(string name, int cap, int? timeout)
+    {
+        var profile = HarnessRegistry.Find(name)!;
+
+        Assert.Equal(TimeSpan.FromSeconds(cap), profile.WaitCap);
+        Assert.Equal(timeout is null ? null : TimeSpan.FromSeconds(timeout.Value), profile.ClientToolTimeout);
+    }
+
+    [Theory]
+    [InlineData("claude", 300)]
+    [InlineData("codex", 55)]
+    [InlineData("pi", 55)]
+    [InlineData("opencode", 55)]
+    [InlineData("", 55)]
+    [InlineData("   ", 55)]
+    [InlineData("unknown", 55)]
+    public void The_wait_cap_of_an_unknown_or_blank_harness_is_the_strictest(string harness, int seconds) =>
+        Assert.Equal(TimeSpan.FromSeconds(seconds), HarnessRegistry.WaitCapFor(harness));
+
     [Fact]
     public void An_unregistered_name_is_refused_with_the_valid_harnesses()
     {

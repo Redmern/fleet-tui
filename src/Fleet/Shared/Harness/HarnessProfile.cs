@@ -9,11 +9,17 @@ public sealed record HarnessProfile(
     HarnessCapabilities Capabilities,
     string SkillsDir)
 {
+    public static readonly TimeSpan StrictestWaitCap = TimeSpan.FromSeconds(55);
+
     public bool TakesClaudeLaunch { get; init; }
 
     public string InstallHint { get; init; } = string.Empty;
 
     public TimeSpan InputRetry { get; init; } = TimeSpan.Zero;
+
+    public TimeSpan WaitCap { get; init; } = StrictestWaitCap;
+
+    public TimeSpan? ClientToolTimeout { get; init; }
 
     public bool Has(HarnessCapabilities capability) => (Capabilities & capability) == capability;
 
