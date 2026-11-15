@@ -515,7 +515,7 @@ public sealed class McpActions(
                 project,
                 Repo(request),
                 Branch(request),
-                WaitForAgentHandler.TimeoutFrom(ToolArguments.Count(request, ToolArguments.Timeout, 0)),
+                WaitForAgentHandler.TimeoutFrom(ToolArguments.Count(request, ToolArguments.Timeout, 0), CallerHarness()),
                 ct)
             .ConfigureAwait(false);
 
