@@ -83,7 +83,6 @@ public static class MenuCommand
             ? FleetActionIds.Parse(id)
             : FleetAction.None;
 
-
         if (project is null && invocation.Project is { } shown
             && ScreenForRemoteView(shown, requested) is var screen and not FleetAction.None)
         {
@@ -93,23 +92,7 @@ public static class MenuCommand
                 return 1;
             }
 
-            using IApplication remoteApp = FleetUi.Start();
-            var remoteKeymap = new Keymap(Adapters.Keymaps().Load());
-            switch (screen)
-            {
-                case FleetAction.SwitchProject:
-                    await SwitchAcrossMachines(remoteApp, remoteKeymap, projects.List(), null, shown[RemoteMark.Length..])
-                        .ConfigureAwait(false);
-                    break;
-                case FleetAction.Notifications:
-                    await ShowNotices(remoteApp, remoteKeymap, projects, null).ConfigureAwait(false);
-                    break;
-                case FleetAction.Remotes:
-                    await ManageRemotes(remoteApp, remoteKeymap).ConfigureAwait(false);
-                    break;
-            }
-
-            return 0;
+            return await RunOnThisMachineAsync(shown, screen, projects).ConfigureAwait(false);
         }
 
         if (requested is FleetAction.OpenProject or FleetAction.NewProject || project is null)
@@ -211,8 +194,150 @@ public static class MenuCommand
 
     public static FleetAction Parent(FleetAction action) => FleetMenus.Parent(action);
 
-    public static IReadOnlyList<FleetAction> ScreensForRemoteView { get; } =
-        [FleetAction.SwitchProject, FleetAction.Notifications, FleetAction.Remotes];
+    private sealed record ThisMachine(IApplication App, Keymap Keymap, IKeymapStore Keymaps, IProjectStore Projects, string Shown);
+
+    private static readonly Dictionary<FleetAction, Func<ThisMachine, Task>> OnThisMachine = new()
+    {
+        [FleetAction.SwitchProject] = m =>
+            SwitchAcrossMachines(m.App, m.Keymap, m.Projects.List(), null, m.Shown[RemoteMark.Length..]),
+        [FleetAction.Notifications] = m => ShowNotices(m.App, m.Keymap, m.Projects, null),
+        [FleetAction.Remotes] = m => ManageRemotes(m.App, m.Keymap),
+        [FleetAction.SaveSession] = m => Done(() => SaveSession(m.App, project: null)),
+        [FleetAction.EditKeybinds] = m => Done(() => EditKeybindsView.Show(m.App, m.Keymaps, m.Keymap)),
+        [FleetAction.EditTheme] = m => Done(() => ChooseTheme(m.App, m.Keymap, ThemeFolderWithoutProject)),
+        [FleetAction.EditShowMenuKeys] = _ => Done(() => ToggleOnThisMachine(FleetAction.EditShowMenuKeys)),
+        [FleetAction.EditButtonHints] = _ => Done(() => ToggleOnThisMachine(FleetAction.EditButtonHints)),
+        [FleetAction.ViewLogs] = m => Done(() => ViewLogsView.Show(
+            m.App, m.Keymap, ToggleSettingHandler.ThisMachine, LogParser.All(LogParser.Parse(Adapters.Log().Tail(LogTail))))),
+        [FleetAction.UpdateFleet] = m => Done(() => UpdateWiring.Install(m.App, FreshBuild.ThisProcess)),
+        [FleetAction.ShowVersion] = m => Done(() => ShowVersion(m.App, m.Keymap)),
+        [FleetAction.WhatsNew] = m => Done(() => ShowWhatsNew(m.App, m.Keymap)),
+    };
+
+    public static IReadOnlyList<FleetAction> ScreensForRemoteView => [.. OnThisMachine.Keys, FleetAction.ThisMachineSettings];
+
+    private static string ThemeFolderWithoutProject => Adapters.LaunchDirectory ?? Adapters.HomeDirectory;
+
+    private static Task Done(Action run)
+    {
+        run();
+        return Task.CompletedTask;
+    }
+
+    private static void ToggleOnThisMachine(FleetAction toggle) => Adapters.Toggles().ToggleShared(toggle, SharedSettings());
+
+    private static SettingsConfig SharedSettings() =>
+        SettingsConfig.Default
+            .WithShowMenuKeys(Adapters.ShowMenuKeys())
+            .WithButtonHints(Adapters.ButtonHints())
+            .WithNvim(Adapters.LoadNvimConfig());
+
+    private static async Task<int> RunOnThisMachineAsync(string shown, FleetAction screen, IProjectStore projects)
+    {
+        if (RunsHeadless(screen))
+        {
+            ToggleOnThisMachine(screen);
+            return 0;
+        }
+
+        var keymaps = Adapters.Keymaps();
+        using IApplication app = FleetUi.Start();
+        var chosen = screen;
+
+        while (true)
+        {
+            var keymap = new Keymap(keymaps.Load());
+
+            if (chosen == FleetAction.ThisMachineSettings)
+            {
+                chosen = ShowThisMachineSettings(app, keymap);
+
+                if (chosen == FleetAction.None)
+                {
+                    return 0;
+                }
+            }
+
+            await OnThisMachine[chosen](new ThisMachine(app, keymap, keymaps, projects, shown)).ConfigureAwait(false);
+
+            if (!FleetModal.WentBack() || !FleetMenus.Actions(RemoteMenus.ThisMachine).Contains(chosen))
+            {
+                return 0;
+            }
+
+            chosen = FleetAction.ThisMachineSettings;
+        }
+    }
+
+    private static FleetAction ShowThisMachineSettings(IApplication app, Keymap keymap)
+    {
+        var shared = SharedSettings();
+        var toggles = Adapters.Toggles();
+
+        return FleetUi.Menu(
+            app,
+            keymap,
+            FleetAction.ThisMachineSettings,
+            RemoteMenus.ThisMachine,
+            action => FleetMenus.Value(action, shared),
+            action =>
+            {
+                shared = toggles.FlipShared(action, shared);
+                return FleetMenus.Value(action, shared);
+            },
+            () => shared.ShowMenuKeys,
+            () => shared.ButtonHints);
+    }
+
+    public static string SessionName(string? project, IReadOnlyList<WindowEntry> window) =>
+        project ?? (window.FirstOrDefault(e => e.Shown) ?? window[0]).Project;
+
+    private static void SaveSession(IApplication app, string? project)
+    {
+        var window = EmbeddedWiring.CurrentWindow().Select(e => new WindowEntry(e.Name, e.Host, e.Shown)).ToList();
+        if (window.Count == 0)
+        {
+            FleetDialog.Error(app, "Save window as session", "Sessions need the built-in multiplexer; fleet sees no projects in this window.");
+            return;
+        }
+
+        var name = FleetDialog.Ask(
+            app,
+            "Save window as session",
+            $"Name for {SaveSessionHandler.Describe(SaveSessionHandler.For("window", window))}",
+            initial: SessionName(project, window));
+
+        if (name is null)
+        {
+            return;
+        }
+
+        var saved = new SaveSessionHandler(Adapters.Sessions()).Handle(name, window);
+        if (!saved.Succeeded)
+        {
+            FleetDialog.Error(app, "Save window as session", saved.Error!);
+        }
+    }
+
+    private static void ShowVersion(IApplication app, Keymap keymap)
+    {
+        var screen = FleetDialog.Wait(
+            app,
+            "fleet version",
+            ["Checking github.com for releases..."],
+            UpdateWiring.VersionScreenAsync);
+
+        if (ShowVersionView.Show(app, keymap, screen) is { } release)
+        {
+            UpdateWiring.Install(app, FreshBuild.ThisProcess, release == ShowVersionView.Latest ? null : release);
+        }
+    }
+
+    private static void ShowWhatsNew(IApplication app, Keymap keymap) =>
+        ReleaseNotesView.Show(
+            app,
+            keymap,
+            ReleaseNotes.Group(ReleaseNotes.Parse(ReleaseNotes.Embedded())));
 
     public static FleetAction ScreenForRemoteView(string? project, FleetAction requested) =>
         ScreenForRemoteView(project, requested, ScreensForRemoteView);
@@ -431,7 +556,7 @@ public static class MenuCommand
                 break;
 
             case FleetAction.EditTheme:
-                ChooseTheme(app, keymap, project);
+                ChooseTheme(app, keymap, project.Root);
                 break;
 
             case FleetAction.EditSettings:
@@ -588,33 +713,8 @@ public static class MenuCommand
                 }
 
             case FleetAction.SaveSession:
-                {
-                    var window = EmbeddedWiring.CurrentWindow().Select(e => new WindowEntry(e.Name, e.Host, e.Shown)).ToList();
-                    if (window.Count == 0)
-                    {
-                        FleetDialog.Error(app, "Save window as session", "Sessions need the built-in multiplexer; fleet sees no projects in this window.");
-                        break;
-                    }
-
-                    var name = FleetDialog.Ask(
-                        app,
-                        "Save window as session",
-                        $"Name for {SaveSessionHandler.Describe(SaveSessionHandler.For("window", window))}",
-                        initial: project.Name);
-
-                    if (name is null)
-                    {
-                        break;
-                    }
-
-                    var saved = new SaveSessionHandler(Adapters.Sessions()).Handle(name, window);
-                    if (!saved.Succeeded)
-                    {
-                        FleetDialog.Error(app, "Save window as session", saved.Error!);
-                    }
-
-                    break;
-                }
+                SaveSession(app, project.Name);
+                break;
 
             case FleetAction.OpenPort:
                 {
@@ -826,20 +926,8 @@ public static class MenuCommand
                 break;
 
             case FleetAction.ShowVersion:
-                {
-                    var screen = FleetDialog.Wait(
-                        app,
-                        "fleet version",
-                        ["Checking github.com for releases..."],
-                        UpdateWiring.VersionScreenAsync);
-
-                    if (ShowVersionView.Show(app, keymap, screen) is { } release)
-                    {
-                        UpdateWiring.Install(app, FreshBuild.ThisProcess, release == ShowVersionView.Latest ? null : release);
-                    }
-
-                    break;
-                }
+                ShowVersion(app, keymap);
+                break;
 
             case FleetAction.CleanupProject:
                 {
@@ -862,11 +950,7 @@ public static class MenuCommand
                 break;
 
             case FleetAction.WhatsNew:
-                ReleaseNotesView.Show(
-                    app,
-                    keymap,
-                    ReleaseNotes.Group(ReleaseNotes.Parse(ReleaseNotes.Embedded())));
-
+                ShowWhatsNew(app, keymap);
                 break;
 
             case FleetAction.ListAgents:
@@ -912,7 +996,7 @@ public static class MenuCommand
     private static readonly TabbedAction DeleteThemeKey =
         new(Key.Delete, "del", FleetIcons.Delete, FleetThemeTabs.Custom);
 
-    private static void ChooseTheme(IApplication app, Keymap keymap, Project project)
+    private static void ChooseTheme(IApplication app, Keymap keymap, string folder)
     {
         var themes = Adapters.Themes();
         string? select = null;
@@ -930,7 +1014,7 @@ public static class MenuCommand
 
             if (tabs.IsNew(pick.Tab, pick.Index))
             {
-                select = pick.Action is null ? NewCustomTheme(app, keymap, project, themes) : null;
+                select = pick.Action is null ? NewCustomTheme(app, keymap, folder, themes) : null;
                 continue;
             }
 
@@ -938,22 +1022,22 @@ public static class MenuCommand
 
             if (pick.Action == EditThemeKey)
             {
-                select = EditCustomTheme(app, keymap, project, themes, theme) ?? theme.Name;
+                select = EditCustomTheme(app, keymap, folder, themes, theme) ?? theme.Name;
             }
             else if (pick.Action == DeleteThemeKey)
             {
-                DeleteCustomTheme(app, project, themes, theme);
+                DeleteCustomTheme(app, folder, themes, theme);
                 select = null;
             }
             else
             {
-                UseTheme(app, project, themes, theme.Name);
+                UseTheme(app, folder, themes, theme.Name);
                 return;
             }
         }
     }
 
-    private static string? NewCustomTheme(IApplication app, Keymap keymap, Project project, ManageThemesHandler themes)
+    private static string? NewCustomTheme(IApplication app, Keymap keymap, string folder, ManageThemesHandler themes)
     {
         var bases = FleetThemeTabs.For(themes.List(), themes.IsCustom, themes.Active().Name);
 
@@ -967,12 +1051,12 @@ public static class MenuCommand
 
         return CustomThemeName(app, themes, "New custom theme") is var (name, title)
             ? EditTheme(
-                app, keymap, project, themes, name, title, FleetThemeEditor.Inheritable(basis.Name), basis with { Name = name, Title = title })
+                app, keymap, folder, themes, name, title, FleetThemeEditor.Inheritable(basis.Name), basis with { Name = name, Title = title })
             : null;
     }
 
     private static string? EditCustomTheme(
-        IApplication app, Keymap keymap, Project project, ManageThemesHandler themes, ThemePalette theme)
+        IApplication app, Keymap keymap, string folder, ManageThemesHandler themes, ThemePalette theme)
     {
         if (!themes.IsCustom(theme))
         {
@@ -981,12 +1065,12 @@ public static class MenuCommand
 
         if (!FleetThemeEditor.SavesAs(theme.Name))
         {
-            return EditTheme(app, keymap, project, themes, theme.Name, theme.Title, themes.BaseOf(theme.Name), theme);
+            return EditTheme(app, keymap, folder, themes, theme.Name, theme.Title, themes.BaseOf(theme.Name), theme);
         }
 
         return CustomThemeName(app, themes, $"Save {theme.Title} as") is var (name, title)
             ? EditTheme(
-                app, keymap, project, themes, name, title, FleetThemeEditor.Inheritable(theme.Name), theme with { Name = name, Title = title })
+                app, keymap, folder, themes, name, title, FleetThemeEditor.Inheritable(theme.Name), theme with { Name = name, Title = title })
             : null;
     }
 
@@ -1016,7 +1100,7 @@ public static class MenuCommand
     private static string? EditTheme(
         IApplication app,
         Keymap keymap,
-        Project project,
+        string folder,
         ManageThemesHandler themes,
         string name,
         string title,
@@ -1039,17 +1123,17 @@ public static class MenuCommand
 
         if (edit.Use)
         {
-            UseTheme(app, project, themes, saved.Value.Name);
+            UseTheme(app, folder, themes, saved.Value.Name);
         }
         else
         {
-            ReapplyIfChanged(app, project, themes, before);
+            ReapplyIfChanged(app, folder, themes, before);
         }
 
         return saved.Value.Name;
     }
 
-    private static void DeleteCustomTheme(IApplication app, Project project, ManageThemesHandler themes, ThemePalette theme)
+    private static void DeleteCustomTheme(IApplication app, string folder, ManageThemesHandler themes, ThemePalette theme)
     {
         if (!themes.IsCustom(theme)
             || !FleetDialog.Confirm(app, "Delete theme", [$"Delete the custom theme {theme.Title} ({theme.Name})?", "Its file is removed."], "Delete"))
@@ -1066,20 +1150,20 @@ public static class MenuCommand
             return;
         }
 
-        ReapplyIfChanged(app, project, themes, before);
+        ReapplyIfChanged(app, folder, themes, before);
     }
 
-    private static void ReapplyIfChanged(IApplication app, Project project, ManageThemesHandler themes, ThemePalette before)
+    private static void ReapplyIfChanged(IApplication app, string folder, ManageThemesHandler themes, ThemePalette before)
     {
         var after = themes.Active();
 
         if (after.Name != before.Name || FleetThemeEditor.Changed(before, after))
         {
-            ApplyTheme(app, project, after);
+            ApplyTheme(app, folder, after);
         }
     }
 
-    private static void UseTheme(IApplication app, Project project, ManageThemesHandler themes, string name)
+    private static void UseTheme(IApplication app, string folder, ManageThemesHandler themes, string name)
     {
         var set = themes.Set(name);
 
@@ -1089,12 +1173,12 @@ public static class MenuCommand
             return;
         }
 
-        ApplyTheme(app, project, set.Value);
+        ApplyTheme(app, folder, set.Value);
     }
 
-    private static void ApplyTheme(IApplication app, Project project, ThemePalette theme)
+    private static void ApplyTheme(IApplication app, string folder, ThemePalette theme)
     {
-        var problems = ThemeWiring.Apply(theme, project.Root)
+        var problems = ThemeWiring.Apply(theme, folder)
             .Where(a => a.Outcome == ThemeOutcome.Failed)
             .Select(a => a.Line)
             .ToList();

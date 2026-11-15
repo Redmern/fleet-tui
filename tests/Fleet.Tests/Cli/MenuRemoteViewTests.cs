@@ -1,4 +1,8 @@
+using System.Reflection;
 using Fleet.Cli.Commands;
+using Fleet.Features.Menu.ShowMenu;
+using Fleet.Features.Sessions.SaveSession;
+using Fleet.Ports.Sessions.Models;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Viewing;
@@ -49,6 +53,56 @@ public class MenuRemoteViewTests
     [InlineData(null)]
     public void A_project_that_is_not_a_view_of_a_remote_runs_no_screen_here(string? project) =>
         Assert.Equal(FleetAction.None, MenuCommand.ScreenForRemoteView(project, FleetAction.Remotes));
+
+    public static TheoryData<FleetAction> ThisMachinesRows { get; } = [.. FleetMenus.Actions(RemoteMenus.ThisMachine)];
+
+    [Theory]
+    [MemberData(nameof(ThisMachinesRows))]
+    [InlineData(FleetAction.SwitchProject)]
+    [InlineData(FleetAction.Notifications)]
+    [InlineData(FleetAction.ThisMachineSettings)]
+    public void Every_fleet_row_and_every_row_of_this_machines_settings_has_a_screen_that_needs_no_project(FleetAction action) =>
+        Assert.Contains(action, MenuCommand.ScreensForRemoteView);
+
+    [Fact]
+    public void The_screens_for_a_view_of_a_remote_are_read_from_the_handlers_not_kept_as_a_second_list()
+    {
+        var source = MenuSource();
+        var screens = source.IndexOf("ScreensForRemoteView =>", StringComparison.Ordinal);
+
+        Assert.True(screens > 0);
+        Assert.Contains("OnThisMachine.Keys", source[screens..source.IndexOf(';', screens)], StringComparison.Ordinal);
+        Assert.DoesNotContain("switch (screen)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_session_saved_from_a_view_of_a_remote_is_first_named_after_the_project_shown()
+    {
+        WindowEntry[] window = [new("techweb", null, false), new("homelab-api", "red@homelab", true)];
+
+        Assert.Equal("homelab-api", MenuCommand.SessionName(null, window));
+        Assert.Equal("techweb", MenuCommand.SessionName(null, [window[0]]));
+        Assert.Equal("techweb", MenuCommand.SessionName("techweb", window));
+    }
+
+    [Fact]
+    public void A_session_saved_from_a_view_of_a_remote_records_the_remote_project_with_its_host()
+    {
+        WindowEntry[] window = [new("techweb", null, false), new("homelab-api", "red@homelab", true)];
+
+        var session = SaveSessionHandler.For(MenuCommand.SessionName(null, window), window);
+
+        Assert.Equal(new SessionProject("homelab-api", "red@homelab"), session.Showing);
+        Assert.Contains(new SessionProject("homelab-api", "red@homelab"), session.Projects);
+    }
+
+    private static string MenuSource() =>
+        File.ReadAllText(Path.Combine(
+            typeof(MenuRemoteViewTests).Assembly
+                .GetCustomAttributes<AssemblyMetadataAttribute>()
+                .First(a => a.Key == "RepoRoot")
+                .Value!,
+            "src", "Fleet", "Cli", "Commands", "MenuCommand.cs"));
 
     [Fact]
     public void An_owned_screen_with_no_screen_on_this_machine_closes_instead_of_opening_another() =>
