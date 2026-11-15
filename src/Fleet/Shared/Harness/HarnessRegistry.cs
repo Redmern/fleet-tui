@@ -18,7 +18,7 @@ public static class HarnessRegistry
 
     private static readonly TimeSpan TuiInputRetry = TimeSpan.FromSeconds(1);
 
-    private static readonly TimeSpan CodexPiToolTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan SixtySecondToolTimeout = TimeSpan.FromSeconds(60);
 
     public static HarnessProfile Claude { get; } = new(
         ClaudeName,
@@ -50,6 +50,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g opencode-ai",
+        ClientToolTimeout = SixtySecondToolTimeout,
         InputRetry = TuiInputRetry,
     };
 
@@ -63,7 +64,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g @openai/codex",
-        ClientToolTimeout = CodexPiToolTimeout,
+        ClientToolTimeout = SixtySecondToolTimeout,
         InputRetry = TuiInputRetry,
     };
 
@@ -77,7 +78,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g @earendil-works/pi-coding-agent",
-        ClientToolTimeout = CodexPiToolTimeout,
+        ClientToolTimeout = SixtySecondToolTimeout,
         InputRetry = TuiInputRetry,
     };
 

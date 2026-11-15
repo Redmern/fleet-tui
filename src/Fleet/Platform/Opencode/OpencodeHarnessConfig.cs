@@ -20,6 +20,8 @@ public sealed class OpencodeHarnessConfig(
     public static readonly IReadOnlyList<string> Excludes =
         ["/" + ConfigFile, "/.agents/", "/.fleet/", "/.fleet-ready"];
 
+    private static readonly int ToolTimeoutMilliseconds = (int)HarnessRegistry.Opencode.ClientToolTimeout!.Value.TotalMilliseconds;
+
     private static readonly JsonSerializerOptions KeepAsWritten = new()
     {
         WriteIndented = true,
@@ -93,11 +95,14 @@ public sealed class OpencodeHarnessConfig(
             command.Add((JsonNode)JsonValue.Create(argument));
         }
 
+        var timeout = (servers[entry.Name] as JsonObject)?["timeout"]?.DeepClone() ?? JsonValue.Create(ToolTimeoutMilliseconds);
+
         servers[entry.Name] = new JsonObject
         {
             ["type"] = "local",
             ["command"] = command,
             ["enabled"] = true,
+            ["timeout"] = timeout,
         };
 
         try

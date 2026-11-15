@@ -41,7 +41,7 @@ public sealed class HarnessRegistryTests
 
     [Theory]
     [InlineData("claude", 300, 600)]
-    [InlineData("opencode", 55, null)]
+    [InlineData("opencode", 55, 60)]
     [InlineData("codex", 55, 60)]
     [InlineData("pi", 55, 60)]
     public void Each_harness_has_a_wait_cap_and_the_tool_timeout_fleet_writes(string name, int cap, int? timeout)
