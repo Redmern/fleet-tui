@@ -168,6 +168,7 @@ public static class MenuCommand
                         {
                             (chosen, switchedTo) = (switchedTo, FleetAction.None);
                             pickedFrom = null;
+                            regroup = false;
                             if (chosen is FleetAction.OpenProject or FleetAction.NewProject)
                             {
                                 pick = chosen;
@@ -303,6 +304,7 @@ public static class MenuCommand
         var keymaps = Adapters.Keymaps();
         using IApplication app = FleetUi.Start();
         var chosen = screen;
+        var fromSettings = false;
 
         while (true)
         {
@@ -310,6 +312,7 @@ public static class MenuCommand
 
             if (chosen == FleetAction.ThisMachineSettings)
             {
+                fromSettings = true;
                 chosen = ShowThisMachineSettings(app, keymap);
 
                 if (chosen == FleetAction.None)
@@ -320,7 +323,7 @@ public static class MenuCommand
 
             await OnThisMachine[chosen](new ThisMachine(app, keymap, keymaps, projects, shown)).ConfigureAwait(false);
 
-            if (!FleetModal.WentBack() || !FleetMenus.Actions(RemoteMenus.ThisMachine).Contains(chosen))
+            if (!FleetModal.WentBack() || !fromSettings)
             {
                 return 0;
             }

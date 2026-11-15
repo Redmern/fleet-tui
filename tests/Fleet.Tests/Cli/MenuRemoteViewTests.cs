@@ -129,6 +129,28 @@ public class MenuRemoteViewTests
         Assert.Contains("await OnThisMachine[chosen](", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void The_menu_draws_the_screens_and_the_note_of_its_viewer()
+    {
+        var source = MenuSource();
+        var show = source.IndexOf("private static async Task<FleetAction> ShowMenu(", StringComparison.Ordinal);
+        var body = source[show..source.IndexOf("private static async Task<bool> CanOpenEditor", show, StringComparison.Ordinal)];
+
+        Assert.Contains("RemoteMenus.For(viewer, submenu)", body, StringComparison.Ordinal);
+        Assert.Contains("RemoteMenus.Note(viewer, submenu)", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("FleetMenus.For(", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_action_that_arrives_with_a_regroup_clears_the_regroup_so_closing_the_menu_later_closes_it()
+    {
+        var source = MenuSource();
+        var taken = source.IndexOf("(chosen, switchedTo) = (switchedTo, FleetAction.None);", StringComparison.Ordinal);
+
+        Assert.True(taken > 0);
+        Assert.Contains("regroup = false;", source[taken..source.IndexOf("continue;", taken, StringComparison.Ordinal)], StringComparison.Ordinal);
+    }
+
     // fleetd hides a parked menu exactly when the mark it was started with differs from the
     // opener's mark; the menu must then redraw, or the float waits for the reveal timeout.
     [Theory]
