@@ -19,9 +19,22 @@ public sealed class McpDispatcher(
     Func<McpRequest, CancellationToken, Task<McpResult>> perform,
     INotifier? notifier = null)
 {
-    private readonly SemaphoreSlim _gate = new(1, 1);
+    private static readonly HashSet<HarnessTool> ReadOnly =
+    [
+        HarnessTool.ListAgents,
+        HarnessTool.ListRepositories,
+        HarnessTool.ListBranches,
+        HarnessTool.AgentStatus,
+        HarnessTool.RepositoryStatus,
+        HarnessTool.LogTail,
+        HarnessTool.ListSubs,
+        HarnessTool.WaitForAgent,
+        HarnessTool.ListForwards,
+    ];
 
     private readonly SemaphoreSlim _oneAskAtATime = new(1, 1);
+
+    private readonly SemaphoreSlim _oneChangeAtATime = new(1, 1);
 
     public async Task<McpResult> HandleAsync(McpRequest request, CancellationToken ct = default)
     {
@@ -44,21 +57,28 @@ public sealed class McpDispatcher(
             }
         }
 
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        var result = ReadOnly.Contains(tool)
+            ? await perform(request, ct).ConfigureAwait(false)
+            : await PerformInTurnAsync(request, ct).ConfigureAwait(false);
+
+        Log(result.IsError
+            ? McpAudit.Denied(caller.Caller, tool, result.Text)
+            : McpAudit.Allowed(caller.Caller, tool));
+
+        return result;
+    }
+
+    private async Task<McpResult> PerformInTurnAsync(McpRequest request, CancellationToken ct)
+    {
+        await _oneChangeAtATime.WaitAsync(ct).ConfigureAwait(false);
 
         try
         {
-            var result = await perform(request, ct).ConfigureAwait(false);
-
-            Log(result.IsError
-                ? McpAudit.Denied(caller.Caller, tool, result.Text)
-                : McpAudit.Allowed(caller.Caller, tool));
-
-            return result;
+            return await perform(request, ct).ConfigureAwait(false);
         }
         finally
         {
-            _gate.Release();
+            _oneChangeAtATime.Release();
         }
     }
 
