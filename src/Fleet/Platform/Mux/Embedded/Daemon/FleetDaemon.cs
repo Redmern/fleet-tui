@@ -2806,7 +2806,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                 {
                     if (ViewerScreens.Owns(effect.Value))
                     {
-                        OpenMenu(session.Client, effect.Value);
+                        OpenMenu(session.Client, ViewerScreens.OpenedWhenHandedBack(effect.Value));
                     }
 
                     continue;
@@ -2942,8 +2942,20 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             box.RevealAfterOutput = runtime.Outputs;
             box.HiddenSince = DateTime.UtcNow - RevealAnyway + options.RevealAfterFit;
-            box.NeedsBaseline = before != _model.FloatBounds(pane);
-            box.Baseline = null;
+            var resized = before != _model.FloatBounds(pane);
+
+            if (box.Baseline is not null && resized)
+            {
+                ApplyResizes();
+                lock (runtime.Gate)
+                {
+                    runtime.Terminal.Snapshot(runtime.Screen);
+                }
+
+                box.Baseline = Signature(runtime.Screen);
+            }
+
+            box.NeedsBaseline = box.Baseline is null && resized;
             return;
         }
 
@@ -3248,10 +3260,11 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
 
             if (_model.Parked(shown) is { } warm
-                && (action is null || _menuWaits.ContainsKey(warm.Pane))
+                && string.Equals(warm.Mark, opener?.Mark, StringComparison.Ordinal) is var drawnForOpener
+                && ((action is null && drawnForOpener) || _menuWaits.ContainsKey(warm.Pane))
                 && _model.Unpark(warm.Pane))
             {
-                if (action is not null)
+                if (action is not null || !drawnForOpener)
                 {
                     HideUntilRedrawn(warm);
                 }

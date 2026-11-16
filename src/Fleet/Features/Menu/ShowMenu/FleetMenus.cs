@@ -73,6 +73,7 @@ public static class FleetMenus
         FleetAction.EditTheme,
         FleetAction.ShowVersion,
         FleetAction.WhatsNew,
+        FleetAction.ThisMachineSettings,
     ];
 
     private static readonly FleetAction[] Toggles =
@@ -95,6 +96,7 @@ public static class FleetMenus
     {
         FleetAction.OpenSettings => "fleet menu › settings",
         FleetAction.OpenFleetConfigMenu => "fleet menu › settings › fleet config",
+        FleetAction.ThisMachineSettings => "fleet menu › this machine",
         _ => "fleet menu",
     };
 
@@ -122,6 +124,7 @@ public static class FleetMenus
         FleetAction.CleanupProject => "Clean up agents",
         FleetAction.EditShowMenuKeys => "Show keybinds",
         FleetAction.EditButtonHints => "Button hints",
+        FleetAction.ThisMachineSettings => "Settings",
         _ => KeymapDefaults.Describe(action),
     };
 

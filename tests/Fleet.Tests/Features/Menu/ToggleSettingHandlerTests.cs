@@ -102,6 +102,36 @@ public class ToggleSettingHandlerTests
     }
 
     [Fact]
+    public void A_flip_with_no_project_changes_the_shared_values_and_saves_no_project()
+    {
+        var (handler, settings, seen) = Build(SettingsConfig.Default);
+        var shared = SettingsConfig.Default.WithShowMenuKeys(true).WithButtonHints(ButtonHints.Text).WithNvim(NvimConfig.User);
+
+        var keys = handler.FlipShared(FleetAction.EditShowMenuKeys, shared);
+        var hints = handler.FlipShared(FleetAction.EditButtonHints, keys);
+
+        Assert.False(keys.ShowMenuKeys);
+        Assert.Equal(ButtonHints.Tooltips, hints.ButtonHints);
+        Assert.Equal([false, false], seen.Shared.Select(s => s.ShowMenuKeys));
+        Assert.Equal([ButtonHints.Text, ButtonHints.Tooltips], seen.Shared.Select(s => s.ButtonHints));
+        Assert.All(seen.Shared, s => Assert.Equal(NvimConfig.User, s.Nvim));
+        Assert.Null(settings.SavedFor);
+    }
+
+    [Fact]
+    public void A_toggle_with_no_project_says_its_new_state_under_this_machine()
+    {
+        var (handler, settings, seen) = Build(SettingsConfig.Default);
+
+        var said = handler.ToggleShared(FleetAction.EditButtonHints, SettingsConfig.Default.WithButtonHints(ButtonHints.Text));
+
+        Assert.Equal("button hints: tooltips", said);
+        Assert.Equal(ButtonHints.Tooltips, Assert.Single(seen.Shared).ButtonHints);
+        Assert.Equal(("fleet · this machine", "button hints: tooltips"), Assert.Single(seen.Toasts));
+        Assert.Null(settings.SavedFor);
+    }
+
+    [Fact]
     public void Every_menu_toggle_is_handled()
     {
         var toggles = Enum.GetValues<FleetAction>().Where(FleetMenus.IsToggle).ToList();

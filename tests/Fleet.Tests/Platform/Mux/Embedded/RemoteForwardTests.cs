@@ -507,7 +507,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         await using var client = await DaemonTests.TestClient.ConnectAsync(
             _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Forwards = true);
 
-        var handed = await client.RequestAsync(new ControlRequest { Op = "hand-back", Text = ViewerScreens.Ids[0], Client = client.Id });
+        var handed = await client.RequestAsync(new ControlRequest { Op = "hand-back", Text = ViewerScreens.Legacy[0], Client = client.Id });
 
         Assert.False(handed.Pending is true);
     }

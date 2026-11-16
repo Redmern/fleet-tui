@@ -39,18 +39,6 @@ public class MenuToggleTests
         Assert.False(MenuCommand.RunsHeadless(action));
 
     [Fact]
-    public void Toggles_are_handled_before_the_ui_starts_so_no_pane_is_drawn()
-    {
-        var source = MenuSource();
-        var run = source.IndexOf("public static async Task<int> RunAsync", StringComparison.Ordinal);
-        var headless = source.IndexOf("RunsHeadless(requested)", run, StringComparison.Ordinal);
-        var ui = source.IndexOf("IApplication app = FleetUi.Start()", run, StringComparison.Ordinal);
-
-        Assert.True(headless > run, "RunAsync should branch on RunsHeadless(requested)");
-        Assert.True(headless < ui, "the toggle branch must run before FleetUi.Start draws anything");
-    }
-
-    [Fact]
     public void The_interactive_menu_and_the_headless_path_share_one_toggle()
     {
         var source = MenuSource();

@@ -167,6 +167,7 @@ public static class FleetIcons
         FleetAction.BrowseFiles => "",
         FleetAction.Notifications => "",
         FleetAction.OpenSettings => "",
+        FleetAction.ThisMachineSettings => "",
         FleetAction.SaveSession => "",
         FleetAction.Remotes => "",
         FleetAction.OpenFleetConfigMenu => "",

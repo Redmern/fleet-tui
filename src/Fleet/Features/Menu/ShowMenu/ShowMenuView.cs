@@ -16,19 +16,96 @@ public static class ShowMenuView
 
     public const int Header = Footer;
 
-    public static int FitRows(int height) =>
-        height + (2 * ShowMenuHandler.Padding) + Header + Footer + FleetCorners.Rows;
+    public const int NoteRows = 2;
 
-    public static (ListView List, FleetActionBar Bar) Place(int width, int height)
+    private const int NoteMargin = 4;
+
+    private const int NarrowestMenu = 52;
+
+    private const int RoomBesideRows = 20;
+
+    public static int FitRows(int height, bool noted = false) =>
+        height + (2 * ShowMenuHandler.Padding) + Header + Footer + FleetCorners.Rows + (noted ? NoteRows : 0);
+
+    public static int FitCols(int rowsWidth, int barWidth, string? note) =>
+        Math.Max(
+            Math.Max(Math.Max(rowsWidth + RoomBesideRows, NarrowestMenu), barWidth + 4),
+            note is null ? 0 : note.Length + NoteMargin);
+
+    public static (ListView List, FleetActionBar Bar) Place(int width, int height, bool noted = false)
     {
-        var list = FleetTheme.CenteredRows(width, height);
+        var list = FleetTheme.CenteredRows(width, height, noted ? NoteRows : 0);
 
-        return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding));
+        return (list, new FleetActionBar(Pos.Bottom(list) + ShowMenuHandler.Padding + (noted ? NoteRows : 0)));
+    }
+
+    public static Label PlaceNote(ListView list, string note)
+    {
+        var line = FleetTheme.FullLine(Pos.Bottom(list) + 1, 1);
+        line.Text = note;
+        line.TextAlignment = Alignment.Center;
+
+        return line;
     }
 
     public static FleetAction Show(
         IApplication app, Keymap keymap, IReadOnlyList<FleetMenuItem> items) =>
         Show(app, keymap, "fleet menu", items, toggle: null);
+
+    public sealed record Composed(Window Window, ListView List, FleetActionBar Bar, IReadOnlyList<FleetMenuItem> Items);
+
+    public static Composed Compose(Keymap keymap, MenuScreen screen, Func<FleetAction, string?> value) =>
+        Compose(screen.Title, new ShowMenuHandler(keymap).Items(screen.Sections, value), screen.Note);
+
+    public static Composed Compose(string title, IReadOnlyList<FleetMenuItem> items, string? note)
+    {
+        var rows = ShowMenuHandler.Rows(items);
+        var keyedHeaders = ShowMenuHandler.Headers(items);
+        var width = ShowMenuHandler.Width([.. rows, .. keyedHeaders.Values]);
+        var height = ShowMenuHandler.Height(rows, keyedHeaders.Count, ShowMenuHandler.Gaps(items).Count);
+        var (list, bar) = Place(width, height, note is not null);
+
+        var window = FleetTheme.Overlay(
+            title,
+            FitCols(width, FleetActionBar.Measure(Buttons(Nothing, Nothing), ButtonHints.Text), note),
+            FitRows(height, note is not null));
+
+        window.Add(list, bar.Root);
+        if (note is not null)
+        {
+            window.Add(PlaceNote(list, note));
+        }
+
+        return new Composed(window, list, bar, items);
+    }
+
+    public static int RowFor(IReadOnlyList<FleetMenuItem> items, Keymap keymap, Key key)
+    {
+        if (key == Key.Empty)
+        {
+            return -1;
+        }
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (keymap.KeyFor(items[i].Action) is var bound && bound != Key.Empty && bound == key)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    public static FleetAction Show(
+        IApplication app,
+        Keymap keymap,
+        MenuScreen screen,
+        Func<FleetAction, string?> value,
+        Func<FleetAction, string?>? toggle,
+        Func<bool>? showKeys = null,
+        Func<ButtonHints>? buttonHints = null) =>
+        Run(app, keymap, Compose(keymap, screen, value), toggle, showKeys, buttonHints);
 
     public static FleetAction Show(
         IApplication app,
@@ -37,22 +114,21 @@ public static class ShowMenuView
         IReadOnlyList<FleetMenuItem> items,
         Func<FleetAction, string?>? toggle,
         Func<bool>? showKeys = null,
-        Func<ButtonHints>? buttonHints = null)
+        Func<ButtonHints>? buttonHints = null) =>
+        Run(app, keymap, Compose(title, items, note: null), toggle, showKeys, buttonHints);
+
+    private static FleetAction Run(
+        IApplication app,
+        Keymap keymap,
+        Composed composed,
+        Func<FleetAction, string?>? toggle,
+        Func<bool>? showKeys,
+        Func<ButtonHints>? buttonHints)
     {
         var chosen = FleetAction.None;
-        var shown = items.ToList();
-
+        var shown = composed.Items.ToList();
         var gaps = ShowMenuHandler.Gaps(shown);
-        var rows = ShowMenuHandler.Rows(shown);
-        var keyedHeaders = ShowMenuHandler.Headers(shown);
-        var width = ShowMenuHandler.Width([.. rows, .. keyedHeaders.Values]);
-        var height = ShowMenuHandler.Height(rows, keyedHeaders.Count, gaps.Count);
-        var (list, bar) = Place(width, height);
-
-        var window = FleetTheme.Overlay(
-            title,
-            Math.Max(Math.Max(width + 20, 52), FleetActionBar.Measure(Buttons(Nothing, Nothing), ButtonHints.Text) + 4),
-            FitRows(height));
+        var (window, list, bar, _) = composed;
 
         void Refill(int index)
         {
@@ -142,20 +218,15 @@ public static class ShowMenuView
                 return;
             }
 
-            for (var i = 0; i < shown.Count; i++)
+            if (RowFor(shown, keymap, key) is var row and >= 0)
             {
-                if (keymap.KeyFor(shown[i].Action) == key)
-                {
-                    Choose(i);
-                    key.Handled = true;
-                    return;
-                }
+                Choose(row);
+                key.Handled = true;
             }
         }
 
         app.Keyboard.KeyDown += Keys;
 
-        window.Add(list, bar.Root);
         FleetCorners.Attach(window, () => app.RequestStop(window));
 
         try
