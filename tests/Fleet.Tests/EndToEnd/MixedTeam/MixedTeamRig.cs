@@ -220,9 +220,9 @@ internal sealed class MixedTeamRig
     public string InboxAddress(string address) =>
         "uds:" + Path.Combine(Root, ".sockets", address.StartsWith("uds:", StringComparison.Ordinal) ? address[4..] : address);
 
-    // The dashboard's status refresh (DashboardWiring: new PaneActivity(mux, new OwnerNotices(...).WentIdle)).
+    // The dashboard's status refresh (DashboardWiring: new OwnerNotices(...).Watch()).
     public PaneActivity Dashboard() =>
-        new(Mux, new OwnerNotices(Project, Root, Mux, Store, Log, () => false, Clock).WentIdle, Clock);
+        new OwnerNotices(Project, Root, Mux, Store, Log, () => false, Clock).Watch();
 
     public async Task<IReadOnlyList<AgentRecord>> RefreshAsync(PaneActivity dashboard) =>
         dashboard.For(Store.List(Project), await Mux.ListPanesAsync(), _ => null);
