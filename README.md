@@ -1087,10 +1087,12 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   hook and the dashboard's New sub-orchestrator card: they always start a Claude sub. A
   sub on another harness comes from the `dispatch` tool's `harness` argument.
 - A sub-orchestrator on opencode, codex or pi is first started on its own in its pane,
-  also when **Sub-orchestrators in nvim** is on: the echo check for the first prompt
-  does not work through nvim. When it is reopened it follows that setting. An agent you start **In nvim** on one of these harnesses gets its
-  first task from nvim without that check; send it again with `tell_agent` if the harness
-  dropped it.
+  also when **Sub-orchestrators in nvim** is on: fleet types and checks its first prompt
+  itself there, and tells you when it could not confirm it. When it is reopened it follows
+  that setting. An agent you start **In nvim** on one of these harnesses gets its first task
+  from nvim, which checks the terminal for the prompt, retypes at most once and leaves
+  `.fleet/instruction.unconfirmed` when it could not confirm it; when `new_agent` or
+  `dispatch` says delivery was not confirmed, send it again with `tell_agent`.
 - Trust. codex and pi ignore a project's MCP config until the folder is trusted, and show
   a prompt that would swallow the typed task. fleet therefore adds one trust entry per
   worktree and orchestration folder to your codex and pi user config, under the folder's

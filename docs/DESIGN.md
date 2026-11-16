@@ -1043,16 +1043,31 @@ that redraws while waiting never goes idle.
 **Typed input needs an echo check.** Found on the real opencode: it starts the fleet MCP
 server, which writes fleet's ready marker, seconds before its prompt takes keys, and the
 kickoff typed at the marker was lost. A fixed delay was not enough. So for a profile with
-`InputRetry` (opencode, codex, pi) `Ports/Mux/TypedPrompt.UntilEchoedAsync` types, reads
-the pane, and retypes until the first 16 characters show, then sends Enter. "Show" means
-one more occurrence than the pane had before the first typing, so the same prompt from an
-earlier message is not taken for the echo. Before each retyping it sends ctrl+u, so a
-slow harness that took every typing has one copy in its input line (ctrl+u was not tried
-on the real CLIs). Claude has
-`InputRetry` zero and keeps one typing. The nvim pump has no such check, which is why a
-sub on these profiles is first started outside nvim (on reopen it follows the setting,
-unit-tested only). If the echo never shows, Enter is still
-sent and the caller is told the task was given.
+`InputRetry` (opencode, codex, pi) `Ports/Mux/TypedPrompt.UntilEchoedAsync` types and reads
+the pane for the first 16 characters. "Show" means one more occurrence than the pane had
+before the typing, so the same prompt from an earlier message (scrollback) is not taken for
+the echo. If no new occurrence shows within the retry period it sends ctrl+u and types once
+more, so a slow harness that took the first typing has one copy in its input line (ctrl+u
+was not tried on the real CLIs). It never types a third time. A blank pane is a pane that
+has not shown the prompt yet: the port cannot tell a failed read from blank text, so it gets
+the same treatment. It answers `Echoed`; `Lost` (nothing new after the retype: it sends
+ctrl+u so nothing stays in the line, and callers do not send Enter); or `TimedOut` (the time
+given ran out: the line is left as it is and callers send Enter once). Claude has
+`InputRetry` zero and keeps one typing, counted as delivered when its MCP ready marker
+exists. The nvim pump (`NvimBoot` in `AgentHarness`) does the same on the terminal buffer: it
+marks `instruction.seen` only for an echoed prompt and otherwise writes
+`instruction.unconfirmed` with the file time, so the same instruction is never typed twice.
+
+`new_agent` and `dispatch` answer within one deadline: the caller's client tool limit
+(`ClientToolTimeout` of its harness, the strictest one for a caller fleet does not know) less
+ten seconds, covering the ready wait, the typing and the wait for nvim's pump together. They
+say "gave it its first task" only for an echoed typing, a Claude typing with its ready
+marker, or a pump that marked the file seen; otherwise they say the task is written to
+`.fleet/instruction.md` and delivery was not confirmed, with the reason (the pane never
+showed it, fleet stopped waiting, nvim could not see it arrive). Running out of time never
+fails the call and never retypes. A sub dispatched into nvim from the `,` hook or the
+dashboard has no deadline and does not wait for the pump. The MCP dispatch path passes the
+cancellation token, so a caller that gives up stops the wait.
 
 **Dispatch.** `DispatchCommand.Harness` goes through `Require`, then picks the profile's
 instruction file, kickoff (`Read AGENTS.md and TASK.md ...`), launch command and config
