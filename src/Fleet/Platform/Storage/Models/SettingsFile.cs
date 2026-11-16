@@ -110,6 +110,13 @@ public sealed class NvimSettingsFile
     public string Config { get; set; } = string.Empty;
 }
 
+public sealed class IdleSettingsFile
+{
+    public int Version { get; set; } = 1;
+
+    public int? IdleWindowSeconds { get; set; }
+}
+
 public sealed class EditorSettingsFile
 {
     public int Version { get; set; } = 1;

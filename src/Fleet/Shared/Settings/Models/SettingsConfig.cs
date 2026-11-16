@@ -35,6 +35,8 @@ public sealed record SettingsConfig(
 
     public bool Iso { get; init; } = SettingsDefaults.Iso;
 
+    public int? IdleWindowSeconds { get; init; }
+
     public NvimConfig Nvim { get; init; } = SettingsDefaults.Nvim;
     public ButtonHints ButtonHints { get; init; } = SettingsDefaults.ButtonHints;
 

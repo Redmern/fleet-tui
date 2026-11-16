@@ -23,6 +23,8 @@ public sealed record HarnessProfile(
 
     public TimeSpan? ClientToolTimeout { get; init; }
 
+    public TimeSpan? IdleWindow { get; init; }
+
     public IReadOnlyList<Regex> VolatilePatterns { get; init; } = [];
 
     public bool Has(HarnessCapabilities capability) => (Capabilities & capability) == capability;

@@ -743,4 +743,53 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
         Assert.Equal(Editor.Nvim, onlyCode.Load("techweb").WithEditor(Editor.Nvim).ResolvedEditor);
         Assert.Equal(Editor.Nvim, new JsonSettingsStore(() => null).Load("techweb").ResolvedEditor);
     }
+
+    [Fact]
+    public void The_idle_window_is_not_set_without_its_file() =>
+        Assert.Null(Store.Load("techweb").IdleWindowSeconds);
+
+    [Fact]
+    public void The_idle_window_is_one_setting_for_every_project()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(FleetPaths.IdleSettingsFile, """{"version":1,"idleWindowSeconds":300}""");
+
+        Assert.Equal(300, Store.Load("techweb").IdleWindowSeconds);
+        Assert.Equal(300, Store.Load("other").IdleWindowSeconds);
+    }
+
+    [Fact]
+    public void A_reload_of_a_saved_project_carries_the_idle_window()
+    {
+        Store.Save("techweb", SettingsConfig.Default);
+        File.WriteAllText(FleetPaths.IdleSettingsFile, """{"version":1,"idleWindowSeconds":300}""");
+
+        Assert.Equal(300, Assert.IsType<SettingsConfig>(Store.Reload("techweb")).IdleWindowSeconds);
+    }
+
+    [Fact]
+    public void Saving_a_project_keeps_the_idle_window_out_of_its_file()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(FleetPaths.IdleSettingsFile, """{"version":1,"idleWindowSeconds":300}""");
+
+        Store.Save("techweb", Store.Load("techweb"));
+
+        Assert.DoesNotContain("idleWindow", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+        Assert.Equal(300, Store.Load("techweb").IdleWindowSeconds);
+    }
+
+    [Theory]
+    [InlineData("""{"version":1}""")]
+    [InlineData("""{"version":1,"idleWindowSeconds":0}""")]
+    [InlineData("""{"version":1,"idleWindowSeconds":-3}""")]
+    [InlineData("""{"version":1,"idleWindowSeconds":"soon"}""")]
+    [InlineData("not json")]
+    public void An_idle_window_file_without_a_usable_value_counts_as_not_set(string content)
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(FleetPaths.IdleSettingsFile, content);
+
+        Assert.Null(Store.Load("techweb").IdleWindowSeconds);
+    }
 }
