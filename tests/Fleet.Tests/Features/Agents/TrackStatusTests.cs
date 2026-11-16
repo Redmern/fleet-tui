@@ -21,6 +21,8 @@ public sealed class TrackStatusTests
 
         public Task<AgentSnapshot> GetSnapshotAsync(CancellationToken ct = default) =>
             Task.FromResult(new AgentSnapshot(Reported));
+
+        public Task ForgetAsync(string worktree, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private static readonly DateTime Now = new(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);

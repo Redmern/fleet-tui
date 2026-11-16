@@ -515,8 +515,8 @@ public static class DashboardWiring
         var branches = new ListBranchesHandler(git);
         var fetcher = new FetchRemoteBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
-        var stopper = new StopAgentHandler(mux, agents);
-        var remover = new RemoveAgentHandler(git, mux, agents);
+        var stopper = new StopAgentHandler(mux, agents, Adapters.AgentStates());
+        var remover = new RemoveAgentHandler(git, mux, agents, hookState: Adapters.AgentStates());
         var agentRenamer = new RenameAgentHandler(git, agents);
         var subRenamer = new RenameOrchestrationHandler(agents, mux);
         var repoRenamer = new RenameRepositoryHandler();

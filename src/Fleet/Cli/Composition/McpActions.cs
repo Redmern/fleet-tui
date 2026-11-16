@@ -79,11 +79,11 @@ public sealed class McpActions(
 
     private readonly HideAgentHandler _hider = new(mux, store);
 
-    private readonly StopAgentHandler _stopper = new(mux, store);
+    private readonly StopAgentHandler _stopper = new(mux, store, Adapters.AgentStates());
 
-    private readonly RemoveAgentHandler _remover = new(git, mux, store);
+    private readonly RemoveAgentHandler _remover = new(git, mux, store, hookState: Adapters.AgentStates());
 
-    private readonly RemoveSubHandler _subRemover = new(new RemoveAgentHandler(git, mux, store), store, mux);
+    private readonly RemoveSubHandler _subRemover = new(new RemoveAgentHandler(git, mux, store, hookState: Adapters.AgentStates()), store, mux);
 
     private readonly ChangeHarnessHandler _harnesses = new(store);
 

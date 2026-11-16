@@ -109,6 +109,38 @@ public sealed class FileAgentStateStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Forgetting_a_worktree_drops_every_session_of_it_and_no_other()
+    {
+        var store = new FileAgentStateStore(_dir);
+        await store.ReportAsync(Report(AgentState.Idle, "s1") with { Inbox = "uds:a" });
+        await store.ReportAsync(Report(AgentState.Working, "s2"));
+        await store.ReportAsync(Report(AgentState.Idle, "s3", "C:/w/b"));
+
+        await store.ForgetAsync("C:/w/a");
+
+        var left = Assert.Single((await store.GetSnapshotAsync()).Reports);
+        Assert.Equal("C:/w/b", left.Worktree);
+    }
+
+    [Fact]
+    public async Task Forgetting_a_worktree_also_drops_the_state_written_from_a_folder_below_it()
+    {
+        var store = new FileAgentStateStore(_dir);
+        await store.ReportAsync(Report(AgentState.Working, "s1", "C:/w/a/src/deep"));
+        await store.ReportAsync(Report(AgentState.Working, "s2", "C:/w/a-other"));
+
+        await store.ForgetAsync("C:/w/a");
+
+        Assert.Equal("C:/w/a-other", Assert.Single((await store.GetSnapshotAsync()).Reports).Worktree);
+    }
+
+    [Fact]
+    public async Task Forgetting_a_worktree_that_has_no_state_is_fine()
+    {
+        await new FileAgentStateStore(_dir).ForgetAsync("C:/w/a");
+    }
+
+    [Fact]
     public async Task One_file_per_session_and_the_latest_report_wins()
     {
         var store = new FileAgentStateStore(_dir);

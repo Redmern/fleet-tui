@@ -358,11 +358,74 @@ public sealed class RemoveAgentTests : IDisposable
     {
         var agent = await AgentAsync();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _store.Known.Add(agent with { Open = true });
 
         await new StopAgentHandler(_mux, _store)
             .HandleAsync("techweb", agent with { Open = true });
 
         Assert.False(Assert.Single(_store.Saved).Open);
+    }
+
+    [Fact]
+    public async Task Stopping_clears_the_agents_hook_state_and_its_pane_mark()
+    {
+        var agent = await AgentAsync();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var mark = Path.Combine(agent.Worktree, ".fleet", "pane.mark");
+        Directory.CreateDirectory(Path.GetDirectoryName(mark)!);
+        await File.WriteAllTextAsync(mark, "x");
+        var hooks = new RecordingHookState();
+
+        await new StopAgentHandler(_mux, _store, hooks).HandleAsync("techweb", agent with { Open = true });
+
+        Assert.Equal([agent.Worktree], hooks.Forgotten);
+        Assert.False(File.Exists(mark));
+    }
+
+    [Fact]
+    public async Task Removing_clears_the_agents_hook_state_and_its_pane_mark()
+    {
+        var agent = await AgentAsync();
+        var mark = Path.Combine(agent.Worktree, ".fleet", "pane.mark");
+        Directory.CreateDirectory(Path.GetDirectoryName(mark)!);
+        await File.WriteAllTextAsync(mark, "x");
+        var hooks = new RecordingHookState();
+
+        var result = await new RemoveAgentHandler(
+                new GitRunner(), _mux, _store, folderRetries: [], backoff: TimeSpan.FromMilliseconds(20), hookState: hooks)
+            .HandleAsync("techweb", agent, deleteWorktree: false);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal([agent.Worktree], hooks.Forgotten);
+        Assert.False(File.Exists(mark));
+    }
+
+    [Fact]
+    public async Task A_refused_removal_leaves_the_hook_state_alone()
+    {
+        var agent = await AgentAsync();
+        _store.RefuseRemove = true;
+        var hooks = new RecordingHookState();
+
+        await new RemoveAgentHandler(
+                new GitRunner(), _mux, _store, folderRetries: [], backoff: TimeSpan.FromMilliseconds(20), hookState: hooks)
+            .HandleAsync("techweb", agent, deleteWorktree: false);
+
+        Assert.Empty(hooks.Forgotten);
+    }
+
+    [Fact]
+    public async Task Stopping_marks_the_agent_closed_before_its_pane_is_killed()
+    {
+        var agent = await AgentAsync();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _store.Known.Add(agent with { Open = true });
+        var panesWhenClosed = -1;
+        _store.OnSaved = _ => panesWhenClosed = _mux.ListPanesAsync().GetAwaiter().GetResult().Count;
+
+        await new StopAgentHandler(_mux, _store).HandleAsync("techweb", agent with { Open = true });
+
+        Assert.Equal(1, panesWhenClosed);
     }
 
     [Fact]
@@ -384,9 +447,17 @@ public sealed class RemoveAgentTests : IDisposable
 
         public bool RefuseRemove { get; set; }
 
-        public void Save(string project, AgentRecord agent) => Saved.Add(agent);
+        public Action<AgentRecord>? OnSaved { get; set; }
 
-        public IReadOnlyList<AgentRecord> List(string project) => [];
+        public void Save(string project, AgentRecord agent)
+        {
+            Saved.Add(agent);
+            OnSaved?.Invoke(agent);
+        }
+
+        public List<AgentRecord> Known { get; } = [];
+
+        public IReadOnlyList<AgentRecord> List(string project) => Known;
 
         public bool Replace(string project, AgentRecord agent)
         {
@@ -395,7 +466,7 @@ public sealed class RemoveAgentTests : IDisposable
         }
 
         public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change) =>
-            List(project).FirstOrDefault(a => a.Worktree == worktree) is { } current && Replace(project, change(current));
+            Known.FirstOrDefault(a => a.Worktree == worktree) is { } current && Replace(project, change(current));
 
         public bool Remove(string project, string worktree)
         {

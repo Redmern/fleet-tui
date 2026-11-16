@@ -10,7 +10,12 @@ using Fleet.Shared.Results;
 namespace Fleet.Features.Agents.RemoveAgent;
 
 public sealed class RemoveAgentHandler(
-    IGitRunner git, IMuxDriver mux, IAgentStore store, IReadOnlyList<TimeSpan>? folderRetries = null, TimeSpan? backoff = null)
+    IGitRunner git,
+    IMuxDriver mux,
+    IAgentStore store,
+    IReadOnlyList<TimeSpan>? folderRetries = null,
+    TimeSpan? backoff = null,
+    IAgentStateStore? hookState = null)
 {
     private const int Attempts = 4;
 
@@ -93,6 +98,7 @@ public sealed class RemoveAgentHandler(
         }
 
         var unterminated = await StopAsync(agent, ct).ConfigureAwait(false);
+        await AgentTraces.ForgetAsync(hookState, agent.Worktree, ct).ConfigureAwait(false);
 
         if (!deleteWorktree)
         {
