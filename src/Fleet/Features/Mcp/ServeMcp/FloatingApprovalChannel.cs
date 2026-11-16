@@ -18,6 +18,11 @@ public sealed class FloatingApprovalChannel(
     {
         var over = mux.CurrentPane;
 
+        if (await NobodyCanSeeAsync(request.Project, over, ct).ConfigureAwait(false))
+        {
+            return ApprovalOutcome.NoDashboard($"approval needed in project {request.Project}; open it to answer");
+        }
+
         if (over.IsNone || !mux.Caps.HasFlag(MuxCaps.Popup))
         {
             return await inner.AskAsync(request, ct).ConfigureAwait(false);
@@ -43,6 +48,44 @@ public sealed class FloatingApprovalChannel(
                 await CloseAsync(popup).ConfigureAwait(false);
             }
         }
+    }
+
+    private async Task<bool> NobodyCanSeeAsync(string project, PaneId over, CancellationToken ct)
+    {
+        if (!mux.Caps.HasFlag(MuxCaps.Workspaces))
+        {
+            return false;
+        }
+
+        try
+        {
+            var workspaces = await mux.ListWorkspacesAsync(ct).ConfigureAwait(false);
+            var places = new List<string> { project };
+
+            if (!over.IsNone
+                && (await mux.ListPanesAsync(ct).ConfigureAwait(false)).FirstOrDefault(p => p.Id == over) is { } pane)
+            {
+                places.Add(pane.SessionName);
+            }
+
+            return places.All(place => Seen(workspaces, place) == false);
+        }
+        catch (MuxUnavailableException)
+        {
+            return false;
+        }
+    }
+
+    private static bool? Seen(IReadOnlyList<Workspace> workspaces, string name)
+    {
+        var listed = workspaces.Where(w => string.Equals(w.Name, name, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (listed.Any(w => w.ShownAnywhere == true))
+        {
+            return true;
+        }
+
+        return listed.Any(w => w.ShownAnywhere is null) ? null : false;
     }
 
     private async Task<PaneId> OpenAsync(PaneId over, string project, CancellationToken ct)
