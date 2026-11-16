@@ -39,7 +39,16 @@ public sealed class OwnerNotices(
             return false;
         }
 
-        await _teller.NotifyAsync(owner, pane.Id, notice.Message, ct).ConfigureAwait(false);
+        try
+        {
+            await _teller.NotifyAsync(owner, pane.Id, notice.Message, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.Write(LogTag.For(project, $"could not write the notice for {notice.Name}: {e.Message}"));
+            return false;
+        }
+
         log.Write(LogTag.For(project, $"typed into {notice.Name}: {notice.Message}"));
 
         return true;

@@ -91,6 +91,23 @@ public sealed class OwnerNoticesTests : IDisposable
         Path.Combine(owner.Worktree, ".fleet", AgentHarness.NoticesFile);
 
     [Fact]
+    public async Task A_notice_that_cannot_be_appended_is_not_told_and_the_failure_is_logged_not_thrown()
+    {
+        var sub = Sub("lead");
+        var pane = await _mux.SpawnAsync(new() { Cwd = sub.Worktree, NewWindow = true });
+        Directory.CreateDirectory(Path.GetDirectoryName(NoticesOf(sub))!);
+        using var holder = new FileStream(NoticesOf(sub), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var notices = new OwnerNotices("techweb", _root, _mux, _store, _log, () => false, new ImmediateClock());
+
+        var told = await notices.TypeAsync(new OwnerNotice(sub, "techweb-sub-lead", sub.Worktree, "[fleet] api/x: done"));
+
+        Assert.False(told);
+        Assert.Contains(
+            _log.Lines, l => l.Contains("could not write the notice for techweb-sub-lead", StringComparison.Ordinal));
+        Assert.Empty(_mux.SentTo(pane));
+    }
+
+    [Fact]
     public async Task An_owner_without_a_pane_is_not_told_and_the_miss_is_logged()
     {
         var sub = Sub("lead");
@@ -99,6 +116,12 @@ public sealed class OwnerNoticesTests : IDisposable
 
         Assert.False(told);
         Assert.Contains(_log.Lines, l => l.Contains("could not reach techweb-sub-lead", StringComparison.Ordinal));
+    }
+
+    private sealed class ImmediateClock : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            base.CreateTimer(callback, state, dueTime == Timeout.InfiniteTimeSpan ? dueTime : TimeSpan.Zero, period);
     }
 
     private sealed class Store : IAgentStore
