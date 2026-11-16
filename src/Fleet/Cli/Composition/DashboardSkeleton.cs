@@ -4,6 +4,7 @@ using Fleet.Features.Notifications.ShowNotices;
 using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Approvals.Models;
 using Fleet.Ports.Notifications.Models;
 using Fleet.Shared;
 
@@ -58,6 +59,10 @@ public static class DashboardSkeleton
             }
         });
     }
+
+    public static NoticeBoard Notices(
+        IReadOnlyList<Notice> stored, IReadOnlyList<PendingApproval> pending, DateTime now) =>
+        Notices([.. ApprovalNotices.For(pending), .. stored], now);
 
     public static NoticeBoard Notices(IReadOnlyList<Notice> all, DateTime now) =>
         new(NoticeRows.For(all, withProject: false, now),
