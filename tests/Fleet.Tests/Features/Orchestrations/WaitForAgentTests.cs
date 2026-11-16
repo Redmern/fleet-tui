@@ -30,7 +30,7 @@ public sealed class WaitForAgentTests : IDisposable
         }
     }
 
-    private WaitForAgentHandler Handler(Action<int>? onPoll = null) => new(
+    private WaitForAgentHandler Handler(Action<int>? onPoll = null, int quietSeconds = 60) => new(
         _store,
         (agent, _) => Task.FromResult(_texts.TryGetValue(agent.Worktree, out var text) ? text : null),
         () => _now,
@@ -42,7 +42,7 @@ public sealed class WaitForAgentTests : IDisposable
             return Task.CompletedTask;
         },
         TimeSpan.FromSeconds(10),
-        TimeSpan.FromSeconds(60));
+        TimeSpan.FromSeconds(quietSeconds));
 
     private AgentRecord Agent(string branch, string status = OrchestrationStatus.Working, string harness = AgentHarness.Opencode)
     {
@@ -213,12 +213,140 @@ public sealed class WaitForAgentTests : IDisposable
     }
 
     [Theory]
-    [InlineData(0, 300)]
-    [InlineData(-5, 300)]
-    [InlineData(30, 30)]
-    [InlineData(99999, 3600)]
-    public void The_timeout_defaults_and_is_capped(int asked, int seconds) =>
-        Assert.Equal(TimeSpan.FromSeconds(seconds), WaitForAgentHandler.TimeoutFrom(asked));
+    [InlineData("claude", 0)]
+    [InlineData("claude", -5)]
+    [InlineData("codex", 0)]
+    [InlineData("pi", 0)]
+    [InlineData("opencode", 0)]
+    [InlineData("", 0)]
+    public void Without_a_timeout_the_wait_is_45_seconds_and_not_clamped(string harness, int asked)
+    {
+        var timeout = WaitForAgentHandler.TimeoutFrom(asked, harness);
+
+        Assert.Equal(TimeSpan.FromSeconds(45), timeout.Value);
+        Assert.False(timeout.Clamped);
+    }
+
+    [Theory]
+    [InlineData("codex", 30, 30, false)]
+    [InlineData("codex", 55, 55, false)]
+    [InlineData("codex", 56, 55, true)]
+    [InlineData("codex", 300, 55, true)]
+    [InlineData("pi", 3600, 55, true)]
+    [InlineData("opencode", 120, 55, true)]
+    [InlineData("claude", 120, 120, false)]
+    [InlineData("claude", 300, 300, false)]
+    [InlineData("claude", 301, 300, true)]
+    [InlineData("claude", 99999, 300, true)]
+    [InlineData("", 300, 55, true)]
+    [InlineData("somethingelse", 300, 55, true)]
+    public void A_timeout_is_clamped_to_the_cap_of_the_calling_harness(
+        string harness, int asked, int seconds, bool clamped)
+    {
+        var timeout = WaitForAgentHandler.TimeoutFrom(asked, harness);
+
+        Assert.Equal(TimeSpan.FromSeconds(seconds), timeout.Value);
+        Assert.Equal(clamped, timeout.Clamped);
+    }
+
+    [Fact]
+    public async Task A_clamped_wait_that_runs_out_says_it_was_clamped_and_for_which_harness()
+    {
+        var agent = Agent("x");
+        var text = 0;
+        _texts[agent.Worktree] = "start";
+
+        var result = await Handler(_ => _texts[agent.Worktree] = $"line {++text}")
+            .HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(300, "codex"));
+
+        Assert.StartsWith("api/x: still working after 55s", result.Value);
+        Assert.Contains("clamped to 55s for codex", result.Value);
+        Assert.Contains("wait_for_agent again", result.Value);
+    }
+
+    [Fact]
+    public async Task A_clamped_wait_says_so_in_a_done_report()
+    {
+        var agent = Agent("x", OrchestrationStatus.Done) with { Summary = "endpoint added" };
+        _store.Agents[0] = agent;
+
+        var result = await Handler().HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(300, "codex"));
+
+        Assert.StartsWith("api/x: done — endpoint added", result.Value);
+        Assert.Contains("clamped to 55s for codex", result.Value);
+    }
+
+    [Fact]
+    public async Task A_clamped_wait_says_so_in_a_failed_report()
+    {
+        Agent("x", OrchestrationStatus.Failed);
+
+        var result = await Handler().HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(300, "pi"));
+
+        Assert.StartsWith("api/x: failed", result.Value);
+        Assert.Contains("clamped to 55s for pi", result.Value);
+    }
+
+    [Fact]
+    public async Task A_clamped_wait_says_so_when_the_agent_goes_idle()
+    {
+        var agent = Agent("x");
+        _texts[agent.Worktree] = "> ";
+
+        var result = await Handler(quietSeconds: 30)
+            .HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(300, "opencode"));
+
+        Assert.StartsWith("api/x: idle", result.Value);
+        Assert.Contains("clamped to 55s for opencode", result.Value);
+    }
+
+    [Fact]
+    public async Task A_clamped_wait_says_so_for_an_agent_that_is_not_open()
+    {
+        Agent("x");
+
+        var result = await Handler().HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(300, "codex"));
+
+        Assert.StartsWith("api/x: not open", result.Value);
+        Assert.Contains("clamped to 55s for codex", result.Value);
+    }
+
+    [Fact]
+    public async Task A_wait_that_is_not_clamped_says_nothing_in_a_done_report()
+    {
+        Agent("x", OrchestrationStatus.Done);
+
+        var result = await Handler().HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(30, "codex"));
+
+        Assert.Equal("api/x: done", result.Value);
+    }
+
+    [Fact]
+    public async Task A_clamped_wait_for_an_unknown_caller_names_it_as_unknown()
+    {
+        var agent = Agent("x");
+        var text = 0;
+        _texts[agent.Worktree] = "start";
+
+        var result = await Handler(_ => _texts[agent.Worktree] = $"line {++text}")
+            .HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(300, string.Empty));
+
+        Assert.Contains("clamped to 55s for an unknown harness", result.Value);
+    }
+
+    [Fact]
+    public async Task A_wait_that_is_not_clamped_does_not_mention_clamping()
+    {
+        var agent = Agent("x");
+        var text = 0;
+        _texts[agent.Worktree] = "start";
+
+        var result = await Handler(_ => _texts[agent.Worktree] = $"line {++text}")
+            .HandleAsync("p", "api", "x", WaitForAgentHandler.TimeoutFrom(30, "codex"));
+
+        Assert.StartsWith("api/x: still working after 30s", result.Value);
+        Assert.DoesNotContain("clamped", result.Value);
+    }
 
     private sealed class Store : IAgentStore
     {

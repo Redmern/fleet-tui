@@ -36,6 +36,16 @@ public static class McpTools
     private static readonly ToolParam Project =
         new(ToolArguments.Project, "string", "The project on the remote machine.", true);
 
+    private static string WaitCaps() => string.Join(
+        ", ",
+        HarnessRegistry.Profiles
+            .GroupBy(p => p.WaitCap)
+            .OrderBy(g => g.Key)
+            .Select(g => $"{(int)g.Key.TotalSeconds} s for {Names(g.Select(p => p.Name).ToList())}"));
+
+    private static string Names(IReadOnlyList<string> names) =>
+        names.Count == 1 ? names[0] : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
+
     public static string RuleId(HarnessTool tool) => McpServerId.RuleId(tool);
 
     public static IReadOnlyList<ToolSpec> All { get; } =
@@ -192,7 +202,9 @@ public static class McpTools
             new ToolParam(
                 ToolArguments.Timeout,
                 "integer",
-                "Optional: seconds to wait at most (default 300, at most 3600). When it runs out, call it again.",
+                "Optional: seconds to wait at most (default 45, clamped to the caller's limit: "
+                + WaitCaps()
+                + "; the result says when it was clamped). When it runs out, call it again.",
                 false)),
         Spec(
             HarnessTool.ListForwards,

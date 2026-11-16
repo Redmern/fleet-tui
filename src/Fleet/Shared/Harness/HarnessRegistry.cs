@@ -18,6 +18,8 @@ public static class HarnessRegistry
 
     private static readonly TimeSpan TuiInputRetry = TimeSpan.FromSeconds(1);
 
+    private static readonly TimeSpan SixtySecondToolTimeout = TimeSpan.FromSeconds(60);
+
     public static HarnessProfile Claude { get; } = new(
         ClaudeName,
         ClaudeName,
@@ -34,6 +36,8 @@ public static class HarnessRegistry
     {
         TakesClaudeLaunch = true,
         InstallHint = "npm install -g @anthropic-ai/claude-code",
+        WaitCap = TimeSpan.FromSeconds(300),
+        ClientToolTimeout = TimeSpan.FromSeconds(600),
     };
 
     public static HarnessProfile Opencode { get; } = new(
@@ -46,6 +50,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g opencode-ai",
+        ClientToolTimeout = SixtySecondToolTimeout,
         InputRetry = TuiInputRetry,
     };
 
@@ -59,6 +64,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g @openai/codex",
+        ClientToolTimeout = SixtySecondToolTimeout,
         InputRetry = TuiInputRetry,
     };
 
@@ -72,6 +78,7 @@ public static class HarnessRegistry
         Path.Combine(".agents", "skills"))
     {
         InstallHint = "npm install -g @earendil-works/pi-coding-agent",
+        ClientToolTimeout = SixtySecondToolTimeout,
         InputRetry = TuiInputRetry,
     };
 
@@ -85,6 +92,8 @@ public static class HarnessRegistry
 
     public static HarnessProfile? Running(IReadOnlyList<string> command) =>
         Profiles.FirstOrDefault(p => p.Runs(command));
+
+    public static TimeSpan WaitCapFor(string harness) => Find(harness)?.WaitCap ?? HarnessProfile.StrictestWaitCap;
 
     public static HarnessProfile For(string harness) => Find(harness) ?? Claude;
 

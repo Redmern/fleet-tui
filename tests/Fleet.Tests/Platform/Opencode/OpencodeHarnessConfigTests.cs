@@ -34,6 +34,54 @@ public sealed class OpencodeHarnessConfigTests : IDisposable
     }
 
     [Fact]
+    public void The_fleet_server_gets_an_explicit_tool_timeout_in_milliseconds()
+    {
+        Config().WriteForAgent(_dir, "proj", "api", "feat/x");
+
+        Assert.Equal(60000, Written()["mcp"]!["fleet"]!["timeout"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void A_tool_timeout_the_user_set_on_the_fleet_server_is_kept()
+    {
+        File.WriteAllText(
+            Path.Combine(_dir, "opencode.json"),
+            """{"mcp":{"fleet":{"type":"local","command":["old"],"timeout":120000}}}""");
+
+        Config().WriteForAgent(_dir, "proj", "api", "main");
+
+        var fleet = Written()["mcp"]!["fleet"]!;
+        Assert.Equal(120000, fleet["timeout"]!.GetValue<int>());
+        Assert.Equal("/bin/fleet", fleet["command"]![0]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("\"x\"")]
+    [InlineData("[1]")]
+    [InlineData("7")]
+    [InlineData("null")]
+    public void A_fleet_entry_that_is_not_an_object_is_overwritten(string entry)
+    {
+        File.WriteAllText(Path.Combine(_dir, "opencode.json"), "{\"mcp\":{\"fleet\":" + entry + "}}");
+
+        var written = Config().WriteForAgent(_dir, "proj", "api", "main");
+
+        Assert.True(written.Succeeded, written.Error);
+        Assert.Equal(60000, Written()["mcp"]!["fleet"]!["timeout"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Writing_twice_leaves_the_same_config()
+    {
+        Config().WriteForAgent(_dir, "proj", "api", "main");
+        var first = File.ReadAllText(Path.Combine(_dir, "opencode.json"));
+
+        Config().WriteForAgent(_dir, "proj", "api", "main");
+
+        Assert.Equal(first, File.ReadAllText(Path.Combine(_dir, "opencode.json")));
+    }
+
+    [Fact]
     public void An_orchestration_folder_gets_the_server_with_the_given_caller()
     {
         Config().WriteForOrchestration(_dir, "proj", "my-sub");

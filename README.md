@@ -1077,7 +1077,8 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   the same way, once, when it sees the change. A top-level sub-orchestrator's idle notice
   is not sent to the main orchestrator.
 - *`wait_for_agent(repository, branch, timeout)`* returns when an agent reports `done` or
-  `failed`, goes idle, or the timeout runs out (300 seconds by default; call it again).
+  `failed`, goes idle, or the timeout runs out (45 seconds by default, at most the calling
+  harness's cap; call it again).
   An orchestrator that is not Claude is told to use it instead of `notify_when_idle`.
 
 **Known limits.**
@@ -1111,9 +1112,14 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   is idle. The 120 seconds are fixed, not a setting. A harness that redraws a clock,
   spinner or cursor while it waits keeps changing the text, so it reads as working and
   never goes idle. This was tested with fake panes only.
-- `wait_for_agent` holds one MCP call open for up to 300 seconds by default and 3600 at
-  most. Whether the MCP clients of opencode, codex and pi wait that long was not tested;
-  a client that gives up earlier has to call the tool again with a shorter timeout.
+- `wait_for_agent` holds one MCP call open for 45 seconds by default. A longer timeout is
+  clamped to the caller's cap, and the result says so: 55 seconds for codex, pi and
+  opencode (they abort a tool call at 60 seconds by default), 300 seconds for Claude. A
+  caller fleet cannot identify gets 55 seconds. Fleet writes each client's tool timeout
+  into the MCP config it generates: `timeout` 600000 (milliseconds) in Claude's
+  `.mcp.json`, `tool_timeout_sec = 60` for codex, `timeout` 60 (seconds) for pi and
+  `timeout` 60000 (milliseconds) for opencode. A value you set on fleet's server entry is
+  kept. Call the tool again when it runs out.
 - The ctrl+u that empties the input line before a prompt is typed again was not tested
   against the real CLIs.
 - No model turn of a sub-orchestrator on opencode, codex or pi was run for real: there was

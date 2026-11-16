@@ -1,5 +1,6 @@
 using System.Text;
 using Fleet.Ports.Claude.Models;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Results;
 
 namespace Fleet.Platform.Codex;
@@ -19,6 +20,8 @@ public static class CodexToml
     private const string Args = "args";
 
     private const string Approval = "default_tools_approval_mode";
+
+    private const string ToolTimeout = "tool_timeout_sec";
 
     private sealed record Entry(
         int Index, int End, bool IsHeader, IReadOnlyList<string> Table, IReadOnlyList<string> Path, string Value);
@@ -138,10 +141,11 @@ public static class CodexToml
             $"{Args} = [{string.Join(", ", entry.Args.Select(Quoted))}]",
         ];
         var approval = $"{Approval} = \"approve\"";
+        var timeout = $"{ToolTimeout} = {(int)HarnessRegistry.Codex.ClientToolTimeout!.Value.TotalSeconds}";
 
         if (entries.FirstOrDefault(e => e.IsHeader && Equal(e.Path, own)) is not { } header)
         {
-            document.Append([$"[{Servers}.{Key(entry.Name)}]", .. launch, approval]);
+            document.Append([$"[{Servers}.{Key(entry.Name)}]", .. launch, approval, timeout]);
             return Result<string>.Ok(document.Text());
         }
 
@@ -154,7 +158,19 @@ public static class CodexToml
             document.Remove(stale.Index, stale.End - stale.Index + 1);
         }
 
-        document.InsertAfter(header.Index, keys.Any(e => e.Path[^1] == Approval) ? launch : [.. launch, approval]);
+        List<string> absent = [];
+
+        if (!keys.Any(e => e.Path[^1] == Approval))
+        {
+            absent.Add(approval);
+        }
+
+        if (!keys.Any(e => e.Path[^1] == ToolTimeout))
+        {
+            absent.Add(timeout);
+        }
+
+        document.InsertAfter(header.Index, [.. launch, .. absent]);
 
         return Result<string>.Ok(document.Text());
     }

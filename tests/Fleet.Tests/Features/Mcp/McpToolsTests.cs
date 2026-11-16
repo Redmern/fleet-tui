@@ -1,4 +1,6 @@
 using Fleet.Features.Mcp.ServeMcp;
+using Fleet.Features.Orchestrations.WaitForAgent;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 
@@ -25,6 +27,20 @@ public sealed class McpToolsTests
         var remove = McpTools.Find("remove_agent")!;
 
         Assert.Contains(remove.Params, p => p.Name == "delete_worktree");
+    }
+
+    [Fact]
+    public void The_wait_tool_describes_its_default_and_the_cap_of_every_harness()
+    {
+        var timeout = McpTools.Find("wait_for_agent")!.Params.Single(p => p.Name == "timeout").Description;
+
+        Assert.Contains($"default {(int)WaitForAgentHandler.DefaultTimeout.TotalSeconds},", timeout);
+        Assert.Contains("clamped", timeout);
+
+        foreach (var profile in HarnessRegistry.Profiles)
+        {
+            Assert.Matches($@"{(int)profile.WaitCap.TotalSeconds} s for [^;]*\b{profile.Name}\b", timeout);
+        }
     }
 
     [Fact]

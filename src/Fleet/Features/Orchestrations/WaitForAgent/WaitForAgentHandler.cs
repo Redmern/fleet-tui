@@ -2,6 +2,7 @@ using System.Globalization;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Results;
 using Fleet.Shared.Status;
 
@@ -15,9 +16,7 @@ public sealed class WaitForAgentHandler(
     TimeSpan? poll = null,
     TimeSpan? quietAfter = null)
 {
-    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(300);
-
-    public static readonly TimeSpan MaxTimeout = TimeSpan.FromSeconds(3600);
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
 
     private readonly Func<DateTime> _now = clock ?? (() => DateTime.UtcNow);
 
@@ -27,8 +26,32 @@ public sealed class WaitForAgentHandler(
 
     private readonly TimeSpan _quietAfter = quietAfter ?? PaneQuiet.QuietAfter;
 
-    public static TimeSpan TimeoutFrom(int seconds) =>
-        seconds <= 0 ? DefaultTimeout : TimeSpan.FromSeconds(Math.Min(seconds, MaxTimeout.TotalSeconds));
+    public static WaitTimeout TimeoutFrom(int seconds, string harness)
+    {
+        var cap = HarnessRegistry.WaitCapFor(harness);
+
+        if (seconds <= 0)
+        {
+            return new WaitTimeout(Min(DefaultTimeout, cap), string.Empty);
+        }
+
+        var asked = TimeSpan.FromSeconds(seconds);
+        var name = HarnessRegistry.Find(harness)?.Name ?? "an unknown harness";
+
+        return asked > cap
+            ? new WaitTimeout(cap, $"clamped to {Seconds(cap)} for {name}")
+            : new WaitTimeout(asked, string.Empty);
+    }
+
+    public async Task<Result<string>> HandleAsync(
+        string project, string repository, string branch, WaitTimeout timeout, CancellationToken ct = default)
+    {
+        var waited = await HandleAsync(project, repository, branch, timeout.Value, ct).ConfigureAwait(false);
+
+        return waited.Succeeded && timeout.Clamped
+            ? Result<string>.Ok($"{waited.Value} ({timeout.ClampNote})")
+            : waited;
+    }
 
     public async Task<Result<string>> HandleAsync(
         string project, string repository, string branch, TimeSpan timeout, CancellationToken ct = default)

@@ -9,7 +9,7 @@ public class CodexTomlTests
         "command = \"/bin/fleet\"\nargs = [\"mcp\", \"--caller\", \"sub\"]\n";
 
     private const string Section =
-        "[mcp_servers.fleet]\n" + Launch + "default_tools_approval_mode = \"approve\"\n";
+        "[mcp_servers.fleet]\n" + Launch + "default_tools_approval_mode = \"approve\"\ntool_timeout_sec = 60\n";
 
     private static readonly McpServerEntry Fleet = new("fleet", "/bin/fleet", ["mcp", "--caller", "sub"]);
 
@@ -94,8 +94,26 @@ public class CodexTomlTests
         var text = "[mcp_servers.fleet]\ndefault_tools_approval_mode = \"prompt\"\n";
 
         Assert.Equal(
-            "[mcp_servers.fleet]\n" + Launch + "default_tools_approval_mode = \"prompt\"\n",
+            "[mcp_servers.fleet]\n" + Launch + "tool_timeout_sec = 60\ndefault_tools_approval_mode = \"prompt\"\n",
             WithServer(text));
+    }
+
+    [Fact]
+    public void A_tool_timeout_the_user_chose_is_kept()
+    {
+        var text = "[mcp_servers.fleet]\ntool_timeout_sec = 120\n";
+
+        Assert.Equal(
+            "[mcp_servers.fleet]\n" + Launch + "default_tools_approval_mode = \"approve\"\ntool_timeout_sec = 120\n",
+            WithServer(text));
+    }
+
+    [Fact]
+    public void Writing_the_server_twice_changes_nothing_the_second_time()
+    {
+        var once = WithServer("model = \"o3\"\n");
+
+        Assert.Equal(once, WithServer(once));
     }
 
     [Fact]
@@ -112,7 +130,7 @@ public class CodexTomlTests
         var text = "[ mcp_servers . \"fleet\" ] # mine\ncommand = \"old\"\n";
 
         Assert.Equal(
-            "[ mcp_servers . \"fleet\" ] # mine\n" + Launch + "default_tools_approval_mode = \"approve\"\n",
+            "[ mcp_servers . \"fleet\" ] # mine\n" + Launch + "default_tools_approval_mode = \"approve\"\ntool_timeout_sec = 60\n",
             WithServer(text));
     }
 
