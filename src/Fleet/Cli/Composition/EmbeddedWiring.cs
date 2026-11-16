@@ -102,6 +102,7 @@ public static class EmbeddedWiring
                 DefaultShell.WindowsTerminalSettings,
                 OperatingSystem.IsWindows()),
             RemoteOpen = (host, token) => RemoteChannelOver(RemoteSsh(host, token, Endpoint.Default())),
+            RemoteNickname = NicknameOf,
             Notices = LocalNotices,
             SavedProjects = () => [.. Adapters.Projects().List().Select(p => p.Name)],
             OpenProject = ProjectOpener.EnsureOpenAsync,
@@ -124,6 +125,10 @@ public static class EmbeddedWiring
         await daemon.RunAsync().ConfigureAwait(false);
         return 0;
     }
+
+    public static string? NicknameOf(string host) =>
+        Adapters.KnownRemotes().Load()
+            .FirstOrDefault(r => string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase))?.Nickname;
 
     public static bool HasAgentRecord(IProjectStore projects, IAgentStore agents, string cwd) =>
         projects.List().Any(p => agents.List(p.Name).Any(a => PathKey.Same(a.Worktree, cwd)));

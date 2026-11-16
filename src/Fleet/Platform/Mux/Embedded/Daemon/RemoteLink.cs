@@ -50,6 +50,8 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public TimeSpan ErrorLinesGrace { get; init; } = ErrorLinesWithin;
 
+    public Func<string?> Nickname { get; init; } = () => null;
+
     public string Name
     {
         get
@@ -213,7 +215,12 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public static bool IsSecret(string prompt) => !prompt.Contains("yes/no", StringComparison.OrdinalIgnoreCase);
 
-    public static string Label(string name) => $" @{name}";
+    public const string LabelPrefix = " @";
+
+    public static string Label(string name) => LabelPrefix + name;
+
+    public static string MachineOf(string label) =>
+        label.StartsWith(LabelPrefix, StringComparison.Ordinal) ? label[LabelPrefix.Length..] : label.Trim();
 
     public (bool Pending, string? Answer) Ask(string prompt)
     {
@@ -245,9 +252,20 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
 
     public string? Showing { get; private set; }
 
+    private Task AnnounceAsync(CancellationToken ct) =>
+        RequestAsync(
+            new ControlRequest
+            {
+                Op = "set-label",
+                Text = Label(Nickname() is { Length: > 0 } nickname ? nickname : Name),
+                Args = [.. ViewerScreens.Ids],
+            },
+            ct);
+
     public async Task ShowAsync(string project)
     {
         await EnsureOpenAsync(project).ConfigureAwait(false);
+        await AnnounceAsync(_stop.Token).ConfigureAwait(false);
         await RequestAsync(new ControlRequest { Op = "show", Workspace = project }, _stop.Token).ConfigureAwait(false);
         Showing = project;
     }
@@ -370,7 +388,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 _name = status.Status?.Host is { Length: > 0 } name ? name : host;
             }
 
-            await RequestAsync(new ControlRequest { Op = "set-label", Text = Label(Name), Args = [.. ViewerScreens.Ids] }, ct).ConfigureAwait(false);
+            await AnnounceAsync(ct).ConfigureAwait(false);
             log($"remote {host}: connected to {Name}");
 
             while (!ct.IsCancellationRequested)

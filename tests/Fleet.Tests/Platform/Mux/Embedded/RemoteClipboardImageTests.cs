@@ -90,7 +90,7 @@ public sealed class RemoteClipboardImageTests : IAsyncLifetime
         var home = await ControlAsync(_home);
         Assert.True((await home.RequestAsync(new ControlRequest { Op = "spawn", Workspace = "local", Cwd = ".", Args = ["shell"] })).Ok);
         var clipboard = new FakeClipboardImageSource(Png);
-        var viewer = await ClipboardViewer.ConnectAsync(_home, "local", clipboard);
+        var viewer = await ClipboardViewer.ConnectAsync(_home, "local", clipboard, bridged: false);
         _clients.Add(viewer);
         await Eventually(() => viewer.Frames > 0);
 

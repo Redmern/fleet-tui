@@ -12,7 +12,10 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Iso;
 using Fleet.Shared.Iso.Models;
 using Fleet.Shared.Keymap;
+using Fleet.Shared.Keymap.Enums;
 using Fleet.Shared.Viewing;
+using Fleet.Shared.Viewing.Enums;
+using Fleet.Shared.Viewing.Models;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -73,6 +76,8 @@ public sealed class DaemonOptions
     public Func<IReadOnlyList<string>> Shell { get; init; } = () => [FleetDaemon.DefaultShell()];
 
     public Func<string, string, RemoteChannel>? RemoteOpen { get; init; }
+
+    public Func<string, string?> RemoteNickname { get; init; } = _ => null;
 
     public Func<IReadOnlyList<NoticeDto>> Notices { get; init; } = () => [];
 
@@ -185,7 +190,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
-    public ControlResponse Execute(ControlRequest request, string? attachedClient = null)
+    public ControlResponse Execute(ControlRequest request, string? attachedClient = null, bool bridged = false)
     {
         var response = new ControlResponse { Id = request.Id, Ok = true };
 
@@ -193,6 +198,13 @@ public sealed class FleetDaemon(DaemonOptions options)
         {
             lock (_gate)
             {
+                if (ViewerRefusal(request, attachedClient, bridged) is { } refused)
+                {
+                    response.Ok = false;
+                    response.Error = refused;
+                    return response;
+                }
+
                 switch (request.Op)
                 {
                     case "ping":
@@ -212,20 +224,23 @@ public sealed class FleetDaemon(DaemonOptions options)
                         };
                         break;
                     case "list-panes":
-                        response.Panes = _model.ListPanes().Select(p => new PaneDto
-                        {
-                            Id = p.Id.Value,
-                            Window = p.WindowId,
-                            Tab = p.TabId,
-                            Session = p.SessionName,
-                            Title = p.Title,
-                            Cwd = p.Cwd,
-                            Active = p.IsActive,
-                            PaneTitle = p.PaneTitle,
-                        }).ToList();
+                        response.Panes = _model.ListPanes()
+                            .Where(p => !HiddenFromViewer(request, attachedClient, bridged, p.SessionName))
+                            .Select(p => new PaneDto
+                            {
+                                Id = p.Id.Value,
+                                Window = p.WindowId,
+                                Tab = p.TabId,
+                                Session = p.SessionName,
+                                Title = p.Title,
+                                Cwd = p.Cwd,
+                                Active = p.IsActive,
+                                PaneTitle = p.PaneTitle,
+                            }).ToList();
                         break;
                     case "list-workspaces":
                         response.Workspaces = _model.ListWorkspaces(ClientFor(request, attachedClient))
+                            .Where(w => !HiddenFromViewer(request, attachedClient, bridged, w.Name))
                             .Select(w => new WorkspaceDto
                             {
                                 Name = w.Name,
@@ -280,6 +295,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                             break;
                         }
                     case "split":
+                        if (request.MovePane is { Length: > 0 } joining)
+                        {
+                            RefuseViewOfOtherMachine(request, attachedClient, bridged, CallerWorkspace(request.Pane));
+                            RefuseViewOfOtherMachine(request, attachedClient, bridged, CallerWorkspace(joining));
+                        }
+
                         response.Pane = Split(request);
                         break;
                     case "kill":
@@ -290,6 +311,8 @@ public sealed class FleetDaemon(DaemonOptions options)
                             break;
                         }
                     case "move":
+                        RefuseViewOfOtherMachine(request, attachedClient, bridged, CallerWorkspace(request.Pane));
+                        RefuseViewOfOtherMachine(request, attachedClient, bridged, request.Workspace ?? request.Window ?? request.Session);
                         Require(_model.Move(Pane(request), MoveTarget(request)), request);
                         break;
                     case "title":
@@ -299,10 +322,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                         Require(_model.Focus(Pane(request)), request);
                         break;
                     case "send-text":
+                        RefuseViewOfOtherMachine(request, attachedClient, bridged, CallerWorkspace(request.Pane));
                         Runtime(request).Send(Encoding.UTF8.GetBytes(request.Text ?? string.Empty));
                         break;
                     case "get-text":
                         {
+                            RefuseViewOfOtherMachine(request, attachedClient, bridged, CallerWorkspace(request.Pane));
                             var runtime = Runtime(request);
                             lock (runtime.Gate)
                             {
@@ -313,9 +338,11 @@ public sealed class FleetDaemon(DaemonOptions options)
                         }
 
                     case "show":
+                        RefuseViewOfOtherMachine(request, attachedClient, bridged, request.Workspace);
                         response.Ms = Show(ClientFor(request, attachedClient), request.Workspace);
                         break;
                     case "open-window":
+                        RefuseViewOfOtherMachine(request, attachedClient, bridged, request.Workspace);
                         OpenWindow(ClientFor(request, attachedClient), request.Workspace);
                         break;
                     case "close-workspace":
@@ -420,6 +447,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     case "open-project":
                         {
                             var opening = request.Workspace ?? throw new InvalidOperationException("open-project needs a project");
+                            RefuseViewOfOtherMachine(request, attachedClient, bridged, opening);
                             _ = Task.Run(async () =>
                             {
                                 var failed = await options.OpenProject(opening).ConfigureAwait(false);
@@ -450,6 +478,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         if (_model.Client(ClientFor(request, attachedClient) ?? string.Empty) is { } labelled)
                         {
                             labelled.Label = request.Text;
+                            labelled.LabelConfirmed = true;
                             if (request.Args is { Count: > 0 } announced)
                             {
                                 labelled.TakesBack = [.. announced];
@@ -528,7 +557,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             {
                 lock (_gate)
                 {
-                    var client = _model.Connect(hello.Cols, hello.Rows, hello.Workspace);
+                    var client = _model.Connect(hello.Cols, hello.Rows, hello.Workspace, IsViewerHello(hello));
                     client.Label = hello.Label;
                     client.Build = hello.Build;
                     clientId = client.Id;
@@ -561,7 +590,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                         _tunnelsItself.Add(client.Id);
                     }
 
-                    Furnish(client.Id, hello);
+                    Furnish(client.Id, hello, IsViewerHello(hello));
                     ApplyResizes();
                 }
 
@@ -667,6 +696,8 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
     }
 
+    private static bool IsViewerHello(Hello hello) => hello.Bridged || hello.Label is not null;
+
     private bool MayView(Hello hello) =>
         !hello.Bridged || options.Iso() is not { On: true } iso || iso.MayAttachFrom(hello.Origin);
 
@@ -679,6 +710,16 @@ public sealed class FleetDaemon(DaemonOptions options)
                 {
                     var request = Wire.Read(payload, WireJsonContext.Default.ControlRequest);
                     var iso = options.Iso();
+
+                    if ((!iso.On || (!bridged && ForwardHub.SlowOps.Contains(request.Op))) && ReachesPastExecute(request.Op) && ViewerRefusalLocked(request, session?.Client, bridged) is { } viewerRefusal)
+                    {
+                        await wire.SendAsync(
+                            MessageType.Response,
+                            new ControlResponse { Id = request.Id, Ok = false, Error = viewerRefusal },
+                            WireJsonContext.Default.ControlResponse,
+                            ct).ConfigureAwait(false);
+                        break;
+                    }
 
                     if (request.Op == RemoteLink.HeadOp || (request.Op == RemoteHeadOp && !iso.On))
                     {
@@ -737,8 +778,8 @@ public sealed class FleetDaemon(DaemonOptions options)
                     var response = IsoRefusal(request.Op, iso) is { } refused
                         ? new ControlResponse { Id = request.Id, Ok = false, Error = refused }
                         : bridged && iso.On
-                            ? ExecuteIso(request, session?.Client, iso)
-                            : Execute(request, session?.Client);
+                            ? ExecuteIso(request, session?.Client, iso, bridged)
+                            : Execute(request, session?.Client, bridged);
 
                     if (response.AwaitingReply is { } awaiting)
                     {
@@ -1033,6 +1074,65 @@ public sealed class FleetDaemon(DaemonOptions options)
 
     public const string RemoteCreateProjectOp = "remote-create-project";
 
+    private static readonly HashSet<string> ViewerRefusedOps = new(StringComparer.Ordinal)
+    {
+        "list-remotes",
+        "remote-connect",
+        "remote-answer",
+        "remote-disconnect",
+        "askpass",
+        "show-remote",
+        "new-remote-project",
+        "remote-notices",
+        "remote-dismiss",
+        "open-remote-window",
+        RemoteHeadOp,
+        RemoteCreateProjectOp,
+    };
+
+    private static bool ReachesPastExecute(string op) =>
+        op is RemoteHeadOp or RemoteCreateProjectOp || ForwardHub.SlowOps.Contains(op);
+
+    private string? ViewerRefusal(ControlRequest request, string? attachedClient, bool bridged) =>
+        (ViewerRefusedOps.Contains(request.Op) || (ForwardHub.SlowOps.Contains(request.Op) && request.Host is { Length: > 0 }))
+        && FromViewer(request, attachedClient, bridged)
+            ? ViewerHints.ManagedWhereYouSit
+            : null;
+
+    private string? ViewerRefusalLocked(ControlRequest request, string? attachedClient, bool bridged)
+    {
+        lock (_gate)
+        {
+            return ViewerRefusal(request, attachedClient, bridged);
+        }
+    }
+
+    private bool FromViewer(ControlRequest request, string? attachedClient, bool bridged) =>
+        bridged || (ActingClient(request, attachedClient) is { } client && IsRemoteViewer(client));
+
+    private bool IsViewOfOtherMachine(string? workspace) => workspace is not null && _model.Workspace(workspace)?.RemoteHost is not null;
+
+    private bool HiddenFromViewer(ControlRequest request, string? attachedClient, bool bridged, string? workspace) =>
+        IsViewOfOtherMachine(workspace) && FromViewer(request, attachedClient, bridged);
+
+    private void RefuseViewOfOtherMachine(ControlRequest request, string? attachedClient, bool bridged, string? workspace)
+    {
+        if (HiddenFromViewer(request, attachedClient, bridged, workspace))
+        {
+            throw new InvalidOperationException(ViewerHints.ManagedWhereYouSit);
+        }
+    }
+
+    private bool IsSshWindow(string client) => _bridged.ContainsKey(client) && _model.Client(client)?.Label is null;
+
+    private bool IsRemoteViewer(string client) => _bridged.ContainsKey(client) || _model.Client(client)?.Label is not null;
+
+    private string? ActingClient(ControlRequest request, string? attachedClient) =>
+        request.Client ?? attachedClient
+        ?? (request.Caller is { } caller
+            ? _model.Clients.FirstOrDefault(c => c.Menu == caller || c.Overlay == caller)?.Id
+            : null);
+
     private static bool RunsForward(string op, IsoConfig iso, bool bridged) =>
         ForwardHub.SlowOps.Contains(op)
         && (!iso.On || (!bridged && op is ForwardHub.RemoveOp or ForwardHub.StackStopOp));
@@ -1043,7 +1143,7 @@ public sealed class FleetDaemon(DaemonOptions options)
         : ForwardHub.SlowOps.Contains(op) ? IsoGuard.Refusal(IsoGuard.Forward)
         : null;
 
-    private ControlResponse ExecuteIso(ControlRequest request, string? attachedClient, IsoConfig iso)
+    private ControlResponse ExecuteIso(ControlRequest request, string? attachedClient, IsoConfig iso, bool bridged)
     {
         var codes = IsoCodes.Assign(iso, options.SavedProjects(), options.Worktrees);
 
@@ -1052,7 +1152,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             return new ControlResponse { Id = request.Id, Ok = false, Error = refused };
         }
 
-        var response = Execute(request, attachedClient);
+        var response = Execute(request, attachedClient, bridged);
         IsoFilter.Outbound(response, codes);
         return response;
     }
@@ -1407,6 +1507,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                     var opened = await waiting.Task.WaitAsync(gone).ConfigureAwait(false);
                     response.Text = opened.Action;
                     response.Cwd = opened.LaunchDir;
+                    response.ViewedFrom = opened.From?.Mark;
                 }
                 catch (OperationCanceledException) when (!gone.IsCancellationRequested)
                 {
@@ -1955,6 +2056,12 @@ public sealed class FleetDaemon(DaemonOptions options)
                     NextWorkspace(session.Client);
                     break;
                 case "show" when command.Arg is { } workspace:
+                    if (IsRemoteViewer(session.Client) && IsViewOfOtherMachine(workspace))
+                    {
+                        options.Log($"{session.Client}: {workspace} is a view of another machine; not shown to a remote viewer");
+                        break;
+                    }
+
                     Show(session.Client, workspace);
                     break;
                 case "menu":
@@ -2018,6 +2125,9 @@ public sealed class FleetDaemon(DaemonOptions options)
                     break;
                 case "float-new":
                     NewFloat(session.Client);
+                    break;
+                case "head" when IsSshWindow(session.Client):
+                    OpenMenu(session.Client, FleetActionIds.For(FleetAction.OpenHeadVoice));
                     break;
                 case "head":
                     ToggleHead(session.Client, command.Arg == "voice");
@@ -2350,6 +2460,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             CanForward = _hub.For(host) is not null,
             RefreshPeriod = options.RemoteRefreshEvery,
             ErrorLinesGrace = options.RemoteErrorLinesGrace,
+            Nickname = () => options.RemoteNickname(host),
         };
         link.Effect += effect => Forward(link, effect);
         link.Noticed += fresh => Noticed(link, fresh);
@@ -2494,10 +2605,15 @@ public sealed class FleetDaemon(DaemonOptions options)
         return entries;
     }
 
-    private void Furnish(string client, Hello hello)
+    private void Furnish(string client, Hello hello, bool viewer)
     {
         foreach (var entry in hello.Window ?? [])
         {
+            if (viewer && (entry.Host is not null || IsViewOfOtherMachine(entry.Name)))
+            {
+                continue;
+            }
+
             try
             {
                 if (entry.Host is { } host)
@@ -2515,7 +2631,7 @@ public sealed class FleetDaemon(DaemonOptions options)
             }
         }
 
-        if (hello.Showing is { } showing)
+        if (hello.Showing is { } showing && !(viewer && (showing.Host is not null || IsViewOfOtherMachine(showing.Name))))
         {
             var target = showing.Host is { } host && _remotes.GetValueOrDefault(host) is { } link
                 ? RemoteWorkspace(link.Name)
@@ -3004,10 +3120,13 @@ public sealed class FleetDaemon(DaemonOptions options)
             return;
         }
 
+        KillStaleParkedMenus();
+
         var shown = _model.Clients
             .Select(c => c.Showing)
             .OfType<string>()
             .Where(w => !Fleet.Shared.Constants.FleetWorkspaces.IsHidden(w) && _model.Workspace(w) is { Tabs.Count: > 0 })
+            .Where(w => !HasUnconfirmedLabel(w))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -3028,6 +3147,8 @@ public sealed class FleetDaemon(DaemonOptions options)
             var menu = _model.SpawnParked(
                 workspace, Environment.CurrentDirectory, MenuArgs(workspace), MuxModel.OverlayArea(cols, rows));
             _model.SetTitle(menu.Id, MenuTitle);
+            var mark = SharedMark(workspace);
+            _model.Float(menu.Id)!.Mark = mark;
             if (_menuFit is var (fitCols, fitRows))
             {
                 _model.FitFloat(menu.Id, fitCols, fitRows);
@@ -3037,12 +3158,49 @@ public sealed class FleetDaemon(DaemonOptions options)
 
             try
             {
-                Start(menu, null);
+                Start(menu, mark is null ? null : new Dictionary<string, string> { [ViewedFrom.Variable] = mark });
                 options.Log($"warm menu {menu.Id} for {workspace}");
             }
             catch (InvalidOperationException e)
             {
                 options.Log($"warm menu for {workspace}: {e.Message}");
+            }
+        }
+    }
+
+    private ViewedFrom? ViewerMark(ClientState client) => client switch
+    {
+        { Label: { } label } => new ViewedFrom(ViewKind.View, RemoteLink.MachineOf(label)),
+        _ when _bridged.ContainsKey(client.Id) => new ViewedFrom(ViewKind.Ssh, Environment.MachineName),
+        _ => null,
+    };
+
+    private string? SharedMark(string workspace)
+    {
+        var marks = _model.Clients
+            .Where(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase))
+            .Select(c => ViewerMark(c)?.Mark)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        return marks.Count == 1 ? marks[0] : null;
+    }
+
+    private bool HasUnconfirmedLabel(string workspace) =>
+        _model.Clients.Any(c => string.Equals(c.Showing, workspace, StringComparison.OrdinalIgnoreCase) && c.Label is not null && !c.LabelConfirmed);
+
+    private void KillStaleParkedMenus()
+    {
+        foreach (var workspace in _model.Clients.Select(c => c.Showing).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList())
+        {
+            if (!HasUnconfirmedLabel(workspace) && _model.Parked(workspace) is { } parked && parked.Mark != SharedMark(workspace))
+            {
+                Kill(parked.Pane);
+                if (_warmed.TryGetValue(workspace, out var warmed))
+                {
+                    _warmed[workspace] = warmed with { AgainFrom = DateTimeOffset.MinValue };
+                }
+
+                options.Log($"warm menu {parked.Pane} killed; the machine viewing {workspace} changed");
             }
         }
     }
@@ -3063,6 +3221,12 @@ public sealed class FleetDaemon(DaemonOptions options)
         }
 
         var env = new Dictionary<string, string> { [ClientVariable] = client };
+        var opener = ViewerMark(state);
+        if (opener is not null)
+        {
+            env[ViewedFrom.Variable] = opener.Mark;
+        }
+
         var launchDir = _launchDirOf.GetValueOrDefault(client);
         if (launchDir is not null)
         {
@@ -3094,7 +3258,7 @@ public sealed class FleetDaemon(DaemonOptions options)
 
                 if (_menuWaits.Remove(warm.Pane, out var waiting))
                 {
-                    waiting.TrySetResult(new MenuOpened(action, launchDir));
+                    waiting.TrySetResult(new MenuOpened(action, launchDir, opener));
                 }
 
                 state.Menu = warm.Pane;

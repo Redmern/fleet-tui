@@ -592,6 +592,9 @@ public sealed class ControlResponse
     [JsonPropertyName("cwd")]
     public string? Cwd { get; set; }
 
+    [JsonPropertyName("viewedFrom")]
+    public string? ViewedFrom { get; set; }
+
     [JsonPropertyName("ms")]
     public double Ms { get; set; }
 

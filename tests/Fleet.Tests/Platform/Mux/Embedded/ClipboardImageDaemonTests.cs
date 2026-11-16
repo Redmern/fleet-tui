@@ -416,12 +416,13 @@ public sealed class ClipboardImageDaemonTests : IAsyncLifetime
 
         public ConcurrentQueue<string> Notices { get; } = new();
 
-        public static async Task<ClipboardViewer> ConnectAsync(Endpoint endpoint, string workspace, IClipboardImageSource clipboard)
+        public static async Task<ClipboardViewer> ConnectAsync(
+            Endpoint endpoint, string workspace, IClipboardImageSource clipboard, bool bridged = true)
         {
             var wire = new Wire(await endpoint.ConnectAsync(TimeSpan.FromSeconds(5)));
             await wire.SendAsync(
                 MessageType.Hello,
-                new Hello { Version = Wire.Version, Role = ClientRoles.Attach, Cols = 60, Rows = 12, Workspace = workspace, Os = "test", Bridged = true },
+                new Hello { Version = Wire.Version, Role = ClientRoles.Attach, Cols = 60, Rows = 12, Workspace = workspace, Os = "test", Bridged = bridged },
                 WireJsonContext.Default.Hello);
             var welcome = (await wire.ReceiveAsync())!.Value;
             Assert.Equal(MessageType.Welcome, welcome.Type);

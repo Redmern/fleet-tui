@@ -10,6 +10,7 @@ using Fleet.Ports.Mux.Exceptions;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Viewing.Models;
 
 namespace Fleet.Platform.Mux.Embedded;
 
@@ -288,7 +289,7 @@ public sealed class EmbeddedDriver(
         var response = await RequestAsync(
             new ControlRequest { Op = FleetDaemon.MenuWaitOp, Caller = menu.Value }, ct, Timeout.InfiniteTimeSpan)
             .ConfigureAwait(false);
-        return new MenuOpened(response.Text, response.Cwd);
+        return new MenuOpened(response.Text, response.Cwd, ViewedFrom.Parse(response.ViewedFrom));
     }
 
     public async Task<bool> HandBackAsync(string action, CancellationToken ct = default) =>

@@ -433,7 +433,7 @@ public sealed class MuxModel
         return true;
     }
 
-    public ClientState Connect(int cols, int rows, string? showing)
+    public ClientState Connect(int cols, int rows, string? showing, bool viewer = false)
     {
         var client = new ClientState($"c{++_nextClient}")
         {
@@ -442,9 +442,9 @@ public sealed class MuxModel
             LastActive = ++_clock,
         };
 
-        client.Showing = showing is not null && Workspace(showing) is not null
-            ? Workspace(showing)!.Name
-            : _workspaces.FirstOrDefault(w => !FleetWorkspaces.IsHidden(w.Name) && !Same(w.Name, OverlayWorkspace))?.Name;
+        client.Showing = showing is not null && Workspace(showing) is { } asked && (!viewer || asked.RemoteHost is null)
+            ? asked.Name
+            : _workspaces.FirstOrDefault(w => !FleetWorkspaces.IsHidden(w.Name) && !Same(w.Name, OverlayWorkspace) && (!viewer || w.RemoteHost is null))?.Name;
         Remember(client, client.Showing);
 
         _clients[client.Id] = client;
@@ -1554,6 +1554,8 @@ public sealed class FloatState(string pane, Rect bounds)
 
     public bool Parked { get; set; }
 
+    public string? Mark { get; set; }
+
     public bool Hidden { get; set; }
 
     public DateTime HiddenSince { get; set; }
@@ -1600,6 +1602,8 @@ public sealed class ClientState(string id)
     public bool Leaving { get; set; }
 
     public string? Label { get; set; }
+
+    public bool LabelConfirmed { get; set; }
 
     public IReadOnlyList<string>? TakesBack { get; set; }
 

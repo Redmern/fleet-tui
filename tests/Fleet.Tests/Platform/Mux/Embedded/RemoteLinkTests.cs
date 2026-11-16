@@ -5,6 +5,7 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Platform.Mux.Embedded.Render;
 using Fleet.Ports.Remotes.Enums;
 using Fleet.Ports.Remotes.Models;
+using Fleet.Shared.Iso.Models;
 using Fleet.Ui.Models;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
@@ -46,6 +47,8 @@ public sealed partial class RemoteLinkTests : IAsyncLifetime
             FleetExecutable = "fleet",
             RemoteOpen = open,
             RemoteRefreshEvery = TimeSpan.FromMilliseconds(200),
+            RemoteNickname = _ => _nickname,
+            Iso = () => endpoint == _far ? _farIso : IsoConfig.Off,
             Notices = () =>
             {
                 if (endpoint == _far)
@@ -88,7 +91,7 @@ public sealed partial class RemoteLinkTests : IAsyncLifetime
     {
         _home = NewEndpoint();
         _far = NewEndpoint();
-        _farDaemon = Start(_far, _farPanes);
+        _farDaemon = Start(_far, _farPanes, FarOpen);
         _homeDaemon = Start(_home, _homePanes, (host, token) => _open!(host, token));
         _open = (_, _) =>
         {

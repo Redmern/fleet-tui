@@ -1,6 +1,7 @@
 using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Ports.Mux.Exceptions;
+using Fleet.Shared.Viewing.Models;
 
 namespace Fleet.Cli.Composition;
 
@@ -23,6 +24,7 @@ public static class WarmMenuWiring
                 Environment.SetEnvironmentVariable(FleetDaemon.LaunchDirVariable, launchDir);
             }
 
+            Environment.SetEnvironmentVariable(ViewedFrom.Variable, opened.From?.Mark);
             return opened.Action;
         }
         catch (Exception e) when (e is MuxUnavailableException or OperationCanceledException or IOException)
