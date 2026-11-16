@@ -50,7 +50,7 @@ public sealed class FileApprovalChannel(
         }
 
         var wait = request.Timeout ?? _timeout;
-        var deadline = _clock() + wait;
+        var deadline = (request.Arrived ?? _clock()) + wait;
 
         try
         {

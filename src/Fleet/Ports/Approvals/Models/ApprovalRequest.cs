@@ -8,7 +8,8 @@ public sealed record ApprovalRequest(
     string Summary,
     string? Pane = null,
     string Caller = "",
-    TimeSpan? Timeout = null)
+    TimeSpan? Timeout = null,
+    DateTimeOffset? Arrived = null)
 {
     public static readonly TimeSpan DefaultWait = TimeSpan.FromSeconds(120);
 

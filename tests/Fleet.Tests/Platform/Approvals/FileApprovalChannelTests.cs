@@ -7,6 +7,8 @@ namespace Fleet.Tests.Platform.Approvals;
 
 public sealed class FileApprovalChannelTests : ConfigHomeFixture
 {
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private DateTimeOffset _now = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
 
     private static ApprovalRequest Ask(string project = "techweb") =>
@@ -36,7 +38,7 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
 
         await Answer(channel, ApprovalDecision.Allowed);
 
-        Assert.True((await asking).Allowed);
+        Assert.True((await asking.WaitAsync(Patience)).Allowed);
     }
 
     [Fact]
@@ -49,7 +51,7 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
 
         await Answer(channel, ApprovalDecision.Denied);
 
-        var outcome = await asking;
+        var outcome = await asking.WaitAsync(Patience);
 
         Assert.Equal(ApprovalDecision.Denied, outcome.Decision);
         Assert.False(outcome.Allowed);
@@ -168,7 +170,7 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
         SpinForPending(channel, "techweb");
 
         _now += TimeSpan.FromSeconds(91);
-        var outcome = await asking;
+        var outcome = await asking.WaitAsync(Patience);
 
         Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
         Assert.Equal(
@@ -190,7 +192,7 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
 
         Assert.Equal(
             "No one answered the approval prompt (shown over orchestrator in techweb) within 90 s",
-            (await asking).Reason);
+            (await asking.WaitAsync(Patience)).Reason);
     }
 
     [Fact]
@@ -203,7 +205,27 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
         SpinForPending(channel, "techweb");
 
         _now += TimeSpan.FromSeconds(56);
-        var outcome = await asking;
+        var outcome = await asking.WaitAsync(Patience);
+
+        Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
+        Assert.EndsWith("within 55 s", outcome.Reason);
+    }
+
+    [Fact]
+    public async Task A_request_that_arrived_earlier_has_only_the_time_that_is_left()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(120));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask() with
+        {
+            Timeout = TimeSpan.FromSeconds(55),
+            Arrived = _now - TimeSpan.FromSeconds(50),
+        });
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(6);
+        var outcome = await asking.WaitAsync(Patience);
 
         Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
         Assert.EndsWith("within 55 s", outcome.Reason);
@@ -219,7 +241,7 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
         var pending = SpinForPending(channel, "techweb");
 
         _now += TimeSpan.FromSeconds(56);
-        var outcome = await asking;
+        var outcome = await asking.WaitAsync(Patience);
 
         channel.Answer("techweb", pending!.Id, ApprovalDecision.Allowed);
 

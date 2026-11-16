@@ -17,7 +17,9 @@ public sealed class McpDispatcher(
     IApprovalChannel approvals,
     IFleetLog log,
     Func<McpRequest, CancellationToken, Task<McpResult>> perform,
-    INotifier? notifier = null)
+    INotifier? notifier = null,
+    Func<TimeSpan?>? approvalTimeout = null,
+    TimeProvider? time = null)
 {
     private static readonly HashSet<HarnessTool> ReadOnly =
     [
@@ -32,12 +34,15 @@ public sealed class McpDispatcher(
         HarnessTool.ListForwards,
     ];
 
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+
     private readonly SemaphoreSlim _oneAskAtATime = new(1, 1);
 
     private readonly SemaphoreSlim _oneChangeAtATime = new(1, 1);
 
     public async Task<McpResult> HandleAsync(McpRequest request, CancellationToken ct = default)
     {
+        var arrived = _time.GetUtcNow();
         var tool = HarnessToolIds.Parse(request.Tool);
 
         if (tool == HarnessTool.None)
@@ -49,9 +54,11 @@ public sealed class McpDispatcher(
 
         var config = settings.Load(caller.Project).MergedOverDefaults();
 
+        var asking = new Asking(arrived);
+
         foreach (var gated in McpGate.Gated(tool, request))
         {
-            if (await PassAsync(gated, request, config, ct).ConfigureAwait(false) is { } refused)
+            if (await PassAsync(gated, request, config, asking, ct).ConfigureAwait(false) is { } refused)
             {
                 return refused;
             }
@@ -59,7 +66,7 @@ public sealed class McpDispatcher(
 
         var result = ReadOnly.Contains(tool)
             ? await perform(request, ct).ConfigureAwait(false)
-            : await PerformInTurnAsync(request, ct).ConfigureAwait(false);
+            : await PerformInTurnAsync(request, asking, ct).ConfigureAwait(false);
 
         Log(result.IsError
             ? McpAudit.Denied(caller.Caller, tool, result.Text)
@@ -68,13 +75,18 @@ public sealed class McpDispatcher(
         return result;
     }
 
-    private async Task<McpResult> PerformInTurnAsync(McpRequest request, CancellationToken ct)
+    private async Task<McpResult> PerformInTurnAsync(McpRequest request, Asking asking, CancellationToken ct)
     {
-        await _oneChangeAtATime.WaitAsync(ct).ConfigureAwait(false);
+        if (!await TakeTurnAsync(asking, ct).ConfigureAwait(false))
+        {
+            return McpResult.Error(ApprovalOutcome.TooLate(asking.Request!, asking.Wait!.Value).Reason);
+        }
 
         try
         {
-            return await perform(request, ct).ConfigureAwait(false);
+            return asking.Late(_time.GetUtcNow())
+                ? McpResult.Error(ApprovalOutcome.TooLate(asking.Request!, asking.Wait!.Value).Reason)
+                : await perform(request, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -82,8 +94,22 @@ public sealed class McpDispatcher(
         }
     }
 
+    private async Task<bool> TakeTurnAsync(Asking asking, CancellationToken ct)
+    {
+        if (asking.Wait is not { } wait)
+        {
+            await _oneChangeAtATime.WaitAsync(ct).ConfigureAwait(false);
+
+            return true;
+        }
+
+        var left = wait - (_time.GetUtcNow() - asking.Arrived);
+
+        return left > TimeSpan.Zero && await _oneChangeAtATime.WaitAsync(left, ct).ConfigureAwait(false);
+    }
+
     private async Task<McpResult?> PassAsync(
-        HarnessTool tool, McpRequest request, SettingsConfig config, CancellationToken ct)
+        HarnessTool tool, McpRequest request, SettingsConfig config, Asking asking, CancellationToken ct)
     {
         var decision = McpGate.Decide(tool, config, caller.IsSub);
 
@@ -100,7 +126,7 @@ public sealed class McpDispatcher(
             return null;
         }
 
-        var outcome = await AskAsync(tool, request, ct).ConfigureAwait(false);
+        var outcome = await AskAsync(tool, request, asking, ct).ConfigureAwait(false);
 
         if (outcome.Allowed)
         {
@@ -112,7 +138,8 @@ public sealed class McpDispatcher(
         return McpResult.Error(outcome.Reason);
     }
 
-    private async Task<ApprovalOutcome> AskAsync(HarnessTool tool, McpRequest request, CancellationToken ct)
+    private async Task<ApprovalOutcome> AskAsync(
+        HarnessTool tool, McpRequest request, Asking asking, CancellationToken ct)
     {
         await _oneAskAtATime.WaitAsync(ct).ConfigureAwait(false);
 
@@ -121,19 +148,36 @@ public sealed class McpDispatcher(
             notifier?.Notify(
                 $"approval needed: {HarnessToolIds.For(tool)} by {caller.Caller}");
 
-            return await approvals
-                .AskAsync(
-                    new ApprovalRequest(
-                        caller.Project,
-                        HarnessToolIds.For(tool),
-                        ApprovalPrompt.For(tool, request, caller.Caller)),
-                    ct)
-                .ConfigureAwait(false);
+            var asked = new ApprovalRequest(
+                caller.Project,
+                HarnessToolIds.For(tool),
+                ApprovalPrompt.For(tool, request, caller.Caller),
+                Caller: caller.Caller,
+                Timeout: approvalTimeout?.Invoke(),
+                Arrived: asking.Arrived);
+
+            asking.Request = asked;
+            asking.Wait = asked.Timeout ?? ApprovalRequest.DefaultWait;
+
+            return asking.Late(_time.GetUtcNow())
+                ? ApprovalOutcome.NeverShown(asked, asking.Wait.Value)
+                : await approvals.AskAsync(asked, ct).ConfigureAwait(false);
         }
         finally
         {
             _oneAskAtATime.Release();
         }
+    }
+
+    private sealed class Asking(DateTimeOffset arrived)
+    {
+        public DateTimeOffset Arrived { get; } = arrived;
+
+        public ApprovalRequest? Request { get; set; }
+
+        public TimeSpan? Wait { get; set; }
+
+        public bool Late(DateTimeOffset now) => Wait is { } wait && now - Arrived >= wait;
     }
 
     private void Log(string message) => log.Write(LogTag.For(caller.Project, message));

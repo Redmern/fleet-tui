@@ -4,6 +4,7 @@ using Fleet.Platform.Mcp;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Orchestrations;
 
@@ -30,13 +31,16 @@ public static class McpWiring
             ClaudeWiring.TrustFolder,
             log);
 
+        var harnesses = new CallerHarnesses(project.Name, caller, Adapters.Agents());
+
         var dispatcher = new McpDispatcher(
             new McpCaller(project.Name, project.Root, caller),
             Adapters.Settings(),
             new FloatingApprovalChannel(Adapters.Approvals(), mux.Driver, ApproveArgs),
             log,
             actions.PerformAsync,
-            Adapters.Notifier());
+            Adapters.Notifier(),
+            ApprovalTimeout(harnesses));
 
         var serving = new McpServing(McpTools.ServerName, ToolInfos(), dispatcher.HandleAsync)
         {
@@ -47,6 +51,15 @@ public static class McpWiring
 
         return 0;
     }
+
+    public static Func<TimeSpan?> ApprovalTimeout(CallerHarnesses harnesses) =>
+        () => ApprovalDeadline.For(
+            HarnessRegistry.Find(harnesses.Current())?.ClientToolTimeout ?? StrictestClientLimit);
+
+    private static TimeSpan StrictestClientLimit { get; } = HarnessRegistry.Profiles
+        .Select(p => p.ClientToolTimeout)
+        .OfType<TimeSpan>()
+        .Min();
 
     private static IReadOnlyList<string> ApproveArgs(string project, string pane) =>
         [Adapters.Executable, "approve", CommandLine.ProjectFlag, project, pane];
