@@ -1,0 +1,35 @@
+
+  ┃                                                                                                           New session - 2026-11-16T13:08:51.
+  ┃  Reply with the single word ok                                                                            210Z
+  ┃
+                                                                                                              Context
+     ▣  Build · Big Pickle                                                                   0 tokens
+                                                                                                              0% used
+                                                                                                              $0.00 spent
+
+                                                                                                              ▼ MCP
+                                               Free limit reached                                   esc       • server-1 Connected
+                                                                                                              • server-2 MCP error -32000:
+                                               Subscribe to OpenCode Go to keep going with reliable             Connection closed
+                                               access to the best open-source models, starting at $5/         • server-3 Connected
+                                               month.                                                         • server-4 Connected
+                                                                                                              • server-5 SSE error: Non-200
+                                               https://opencode.ai/go                                           status code (405)
+  ┃                                                                                                           • server-6 Connected
+  ┃                                                                                                           • server-7 Connected
+  ┃                                                                 subscribe       don't show again          • server-8 Connected
+  ┃  Build  Big Pickle OpenC
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀    LSP
+   ■■■■■⬝⬝⬝ Free usage exceeded, subscribe to Go https://opencode.ai/go [retrying in 10h 49m attempt #1] e    LSPs will activate as files are read
+                                                                                                         s
+                                                                                                         c
+
+                                                                                                         i
+                                                                                                         n
+                                                                                                         t    /work/demo/a-rather-long-
+                                                                                                         e    folder-name/with-several-parts-
+                                                                                                         r    that-wrap/00000000-0000-0000-
+                                                                                                         r    work:
+                                                                                                         u    master
+                                                                                                         p
+                                                                                                         t    • OpenCode 1.4.6
