@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Ports;
 using Fleet.Ports.Approvals;
@@ -12,6 +13,8 @@ namespace Fleet.Tests.Features.Mcp;
 
 public sealed class McpDispatcherTests
 {
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private readonly FakeSettings _settings = new();
 
     private readonly FakeApprovals _approvals = new();
@@ -32,6 +35,9 @@ public sealed class McpDispatcherTests
             _performed++;
             return Task.FromResult(McpResult.Ok("done"));
         });
+
+    private McpDispatcher Performing(Func<McpRequest, CancellationToken, Task<McpResult>> perform) => new(
+        McpCaller.AtRoot("techweb", "C:/repos/techweb"), _settings, _approvals, _log, perform);
 
     [Fact]
     public async Task An_unknown_tool_never_reaches_the_handler()
@@ -120,11 +126,6 @@ public sealed class McpDispatcherTests
         Assert.Contains(_log.Lines, l => l.Contains("git blew up"));
     }
 
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
-
-    private McpDispatcher Performing(Func<McpRequest, CancellationToken, Task<McpResult>> perform) => new(
-        McpCaller.AtRoot("techweb", "C:/repos/techweb"), _settings, _approvals, _log, perform);
-
     [Theory]
     [InlineData("wait_for_agent")]
     [InlineData("list_agents")]
@@ -192,11 +193,11 @@ public sealed class McpDispatcherTests
     public async Task Two_changing_calls_run_one_at_a_time(string first, string second)
     {
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var started = new List<string>();
+        var started = new ConcurrentQueue<string>();
 
         var dispatcher = Performing(async (request, _) =>
         {
-            started.Add(request.Tool);
+            started.Enqueue(request.Tool);
 
             await release.Task.WaitAsync(Patience);
 
@@ -219,11 +220,11 @@ public sealed class McpDispatcherTests
     {
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancel = new CancellationTokenSource();
-        var started = new List<string>();
+        var started = new ConcurrentQueue<string>();
 
         var dispatcher = Performing(async (request, _) =>
         {
-            started.Add(request.Tool);
+            started.Enqueue(request.Tool);
 
             await release.Task.WaitAsync(Patience);
 
@@ -282,7 +283,7 @@ public sealed class McpDispatcherTests
         Assert.Single(_approvals.Asked);
 
         _approvals.Hold.SetResult();
-        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.WhenAll(first, second).WaitAsync(Patience);
 
         Assert.Equal(2, _approvals.Asked.Count);
         Assert.Equal(2, _performed);
@@ -301,13 +302,13 @@ public sealed class McpDispatcherTests
     {
         public ApprovalOutcome Answer { get; set; } = ApprovalOutcome.Allow;
 
-        public List<ApprovalRequest> Asked { get; } = [];
+        public ConcurrentQueue<ApprovalRequest> Asked { get; } = [];
 
         public TaskCompletionSource? Hold { get; set; }
 
         public async Task<ApprovalOutcome> AskAsync(ApprovalRequest request, CancellationToken ct = default)
         {
-            Asked.Add(request);
+            Asked.Enqueue(request);
 
             if (Hold is not null)
             {
@@ -320,13 +321,13 @@ public sealed class McpDispatcherTests
 
     private sealed class FakeLog : IFleetLog
     {
-        public List<string> Lines { get; } = [];
+        public ConcurrentQueue<string> Lines { get; } = [];
 
         public void Swallowed(Exception e) { }
 
-        public void Write(string line) => Lines.Add(line);
+        public void Write(string line) => Lines.Enqueue(line);
 
-        public IReadOnlyList<string> Tail(int lines) => Lines;
+        public IReadOnlyList<string> Tail(int lines) => [.. Lines];
     }
 
     private static McpRequest Dispatch(string? repository = null) =>
