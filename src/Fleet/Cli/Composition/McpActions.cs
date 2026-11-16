@@ -34,11 +34,13 @@ using Fleet.Ports.Git;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
+using Fleet.Shared.Harness.Enums;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Messaging;
 using Fleet.Shared.Orchestrations;
@@ -98,6 +100,8 @@ public sealed class McpActions(
     private const string MainHarness = CallerHarnesses.MainHarness;
 
     private static readonly TimeSpan FirstTaskEchoWithin = TimeSpan.FromSeconds(60);
+
+    private static readonly TimeSpan AnswerMargin = TimeSpan.FromSeconds(10);
 
     private readonly TellAgentHandler _teller = new(mux, inboxes: Adapters.AgentInboxes(), clock: clock);
 
@@ -255,7 +259,7 @@ public sealed class McpActions(
 
         return repo is null
             ? Result<string>.Fail($"No repository named '{request.Repository}' in this project.")
-            : await Start(repo, request.Branch, caller, request.Task, ct, request.Harness).ConfigureAwait(false);
+            : await Start(repo, request.Branch, caller, request.Task, ct, request.Harness, request.By).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyCollection<string>> BranchesAsync(
@@ -274,8 +278,10 @@ public sealed class McpActions(
     }
 
     private async Task<Result<string>> Start(
-        RepositorySummary repo, string branch, string owner, string task, CancellationToken ct, string harness = "")
+        RepositorySummary repo, string branch, string owner, string task, CancellationToken ct, string harness = "",
+        DateTimeOffset? by = null)
     {
+        var deadline = by ?? clock.GetUtcNow() + CallBudget();
         var (chosen, hostInNvim) = AgentHarness.RunningAi(
             harness.Length > 0 ? harness : Adapters.Settings().Load(project).DefaultAgentHarness);
         var created = await _spawner
@@ -310,39 +316,78 @@ public sealed class McpActions(
             return Result<string>.Ok($"started {repo.Name}/{branch}.{session}");
         }
 
-        var delivered = await SendWhenReady(created.Value!, task, ct).ConfigureAwait(false);
+        var delivered = await SendWhenReady(created.Value!, task, deadline, ct).ConfigureAwait(false);
 
-        return Result<string>.Ok(delivered
-            ? $"started {repo.Name}/{branch} and gave it its first task.{session}"
-            : $"started {repo.Name}/{branch}, but it was not ready to take the task; "
-              + $"use tell_agent once it is up.{session}");
+        return Result<string>.Ok(delivered switch
+        {
+            null => $"started {repo.Name}/{branch}, but it was not ready to take the task; "
+                + $"use tell_agent once it is up.{session}",
+            { } done when DispatchNote.Confirmed(done) =>
+                $"started {repo.Name}/{branch} and gave it its first task.{session}",
+            { } doubted =>
+                $"started {repo.Name}/{branch}; its first task is written to .fleet/instruction.md but delivery was "
+                + $"not confirmed ({DispatchNote.Reason(doubted)}); use tell_agent to check on it.{session}",
+        });
     }
 
-    private async Task<bool> SendWhenReady(AgentRecord agent, string message, CancellationToken ct)
+    private TimeSpan CallBudget() =>
+        (HarnessRegistry.Find(CallerHarness())?.ClientToolTimeout
+            ?? HarnessRegistry.Profiles.Select(p => p.ClientToolTimeout).OfType<TimeSpan>().Min())
+        - AnswerMargin;
+
+    private TimeSpan Remaining(DateTimeOffset deadline) =>
+        TimeSpan.FromTicks(Math.Max(0, (deadline - clock.GetUtcNow()).Ticks));
+
+    private async Task<PromptDelivery?> SendWhenReady(
+        AgentRecord agent, string message, DateTimeOffset deadline, CancellationToken ct)
     {
         var marker = OrchestrationPaths.ReadyMarker(agent.Worktree);
 
-        for (var i = 0; i < 80 && !File.Exists(marker); i++)
+        for (var i = 0; i < 80 && !File.Exists(marker) && Remaining(deadline) > TimeSpan.Zero; i++)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(300), clock, ct).ConfigureAwait(false);
         }
 
         if (!File.Exists(marker))
         {
-            return false;
+            return null;
         }
 
         var pane = await PaneFor(agent, ct).ConfigureAwait(false);
 
         if (pane is null)
         {
-            return false;
+            return null;
         }
 
-        await _teller.DeliverAsync(agent, pane.Value, message, ct, FirstTaskEchoWithin).ConfigureAwait(false);
+        var echoWithin = Min(FirstTaskEchoWithin, Remaining(deadline));
+        var delivery = await _teller
+            .DeliverAsync(agent, pane.Value, message, ct, echoWithin > TimeSpan.Zero ? echoWithin : TimeSpan.FromMilliseconds(1))
+            .ConfigureAwait(false);
 
-        return true;
+        if (delivery == PromptDelivery.Unchecked)
+        {
+            return PromptDelivery.Echoed;
+        }
+
+        if (delivery != PromptDelivery.Pumped)
+        {
+            return delivery;
+        }
+
+        var outcome = await PumpMarkers
+            .SeenAsync(agent.Worktree, Min(FirstTaskEchoWithin, Remaining(deadline)), TimeSpan.FromMilliseconds(300), clock, ct)
+            .ConfigureAwait(false);
+
+        return outcome switch
+        {
+            PumpOutcome.Seen => PromptDelivery.Pumped,
+            PumpOutcome.Unconfirmed => PromptDelivery.PumpUnconfirmed,
+            _ => PromptDelivery.PumpUnseen,
+        };
     }
+
+    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
 
     private async Task<McpResult> TellAgent(McpRequest request, CancellationToken ct)
     {
@@ -774,8 +819,10 @@ public sealed class McpActions(
                     Repo(request),
                     Branch(request),
                     ToolArguments.Flag(request, ToolArguments.Research),
-                    ToolArguments.Text(request, ToolArguments.Harness)),
-                clock.GetUtcNow().ToString("O"))
+                    ToolArguments.Text(request, ToolArguments.Harness),
+                    CallBudget()),
+                clock.GetUtcNow().ToString("O"),
+                ct)
             .ConfigureAwait(false);
 
         return reply.Succeeded ? Ok(reply.Value!.Note) : McpResult.Error(reply.Error!);

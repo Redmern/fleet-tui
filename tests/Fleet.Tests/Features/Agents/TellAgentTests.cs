@@ -7,6 +7,8 @@ using Fleet.Platform.Harness;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Settings;
 using Fleet.Shared.Constants;
@@ -237,17 +239,74 @@ public sealed class TellAgentTests : IDisposable
     }
 
     [Fact]
-    public async Task A_first_task_an_opencode_agent_dropped_is_typed_again_before_enter()
+    public async Task A_first_task_an_opencode_agent_dropped_is_typed_again_once_before_enter()
     {
         var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Opencode, string.Empty, false);
         var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var clock = new SkippingClock();
+        clock.Skipped += () =>
+            _mux.SetText(pane, Prompts(pane) == 2 ? "> " + AgentHarness.AgentInstructionPrompt : "opencode is starting");
 
-        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, clock: new SkippingClock());
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, clock: clock);
 
         await teller.DeliverAsync(agent, pane, "fix it", echoWithin: TimeSpan.FromMilliseconds(1300));
 
-        Assert.True(Prompts(pane) >= 2, string.Join(" | ", _mux.SentTo(pane)));
-        Assert.Equal("\r", _mux.SentTo(pane)[^1]);
+        Assert.Equal(
+            [AgentHarness.AgentInstructionPrompt, TypedPrompt.ClearLine, AgentHarness.AgentInstructionPrompt, "\r"],
+            _mux.SentTo(pane));
+    }
+
+    [Fact]
+    public async Task A_first_task_an_opencode_agent_never_showed_is_typed_twice_at_most_and_not_submitted()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Opencode, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var clock = new SkippingClock();
+        clock.Skipped += () => _mux.SetText(pane, "opencode is starting");
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, clock: clock);
+
+        var delivery = await teller.DeliverAsync(agent, pane, "fix it", echoWithin: TimeSpan.FromSeconds(30));
+
+        Assert.Equal(PromptDelivery.Lost, delivery);
+        Assert.Equal(
+            [AgentHarness.AgentInstructionPrompt, TypedPrompt.ClearLine, AgentHarness.AgentInstructionPrompt, TypedPrompt.ClearLine],
+            _mux.SentTo(pane));
+    }
+
+    [Fact]
+    public async Task A_first_task_that_runs_out_of_time_is_typed_once_and_submitted_once()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Opencode, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        _mux.SetText(pane, "opencode is starting");
+        var teller = new TellAgentHandler(_mux, TimeSpan.Zero, clock: new SkippingClock());
+
+        var delivery = await teller.DeliverAsync(agent, pane, "fix it", echoWithin: TimeSpan.FromMilliseconds(1));
+
+        Assert.Equal(PromptDelivery.Deadline, delivery);
+        Assert.Equal([AgentHarness.AgentInstructionPrompt, "\r"], _mux.SentTo(pane));
+    }
+
+    [Fact]
+    public async Task A_first_task_for_a_harness_without_an_echo_check_is_typed_once_and_reported_unchecked()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Claude, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+
+        var delivery = await Teller.DeliverAsync(agent, pane, "fix it", echoWithin: TimeSpan.FromSeconds(60));
+
+        Assert.Equal(PromptDelivery.Unchecked, delivery);
+        Assert.Equal([AgentHarness.AgentInstructionPrompt, "\r"], _mux.SentTo(pane));
+    }
+
+    [Fact]
+    public async Task An_instruction_for_an_nvim_agent_is_left_to_its_pump()
+    {
+        var agent = new AgentRecord(_root, "backend", "a", AgentHarness.Nvim, string.Empty, false);
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+
+        Assert.Equal(PromptDelivery.Pumped, await Teller.DeliverAsync(agent, pane, "fix it"));
+        Assert.Empty(_mux.SentTo(pane));
     }
 
     [Theory]

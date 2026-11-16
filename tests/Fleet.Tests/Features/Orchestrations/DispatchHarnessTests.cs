@@ -13,6 +13,7 @@ using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
+using Fleet.Tests.EndToEnd.MixedTeam;
 
 namespace Fleet.Tests.Features.Orchestrations;
 
@@ -68,22 +69,129 @@ public sealed class DispatchHarnessTests : IDisposable
     }
 
     [Fact]
-    public async Task A_kickoff_the_harness_did_not_show_is_typed_again_before_enter()
+    public async Task A_kickoff_the_harness_did_not_show_is_typed_again_once_before_enter()
     {
+        var clock = new SkippingClock();
         var handler = new DispatchHandler(
             _mux, _store, _claude, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(50),
             settings: new Settings(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)),
-            orchestrator: HarnessRegistry.Opencode with { InputRetry = TimeSpan.FromMilliseconds(1) });
+            orchestrator: HarnessRegistry.Opencode with { InputRetry = TimeSpan.FromMilliseconds(1) },
+            clock: clock);
+        var kickoff = HarnessRegistry.Opencode.Kickoff;
 
-        await handler.HandleAsync(new DispatchCommand("techweb", _root, "do the thing"), "t");
+        clock.Skipped += () =>
+        {
+            foreach (var pane in _mux.ListPanesAsync().Result)
+            {
+                _mux.SetText(pane.Id, _mux.SentTo(pane.Id).Count(s => s == kickoff) == 2 ? "> " + kickoff : "opencode is starting");
+            }
+        };
+
+        var reply = await handler.HandleAsync(new DispatchCommand("techweb", _root, "do the thing"), "t");
 
         var sent = _mux.SentTo(Assert.Single(await _mux.ListPanesAsync()).Id);
-        Assert.True(sent.Count >= 3, string.Join(" | ", sent));
-        Assert.Equal(HarnessRegistry.Opencode.Kickoff, sent[0]);
-        Assert.All(
-            sent.Skip(1).Take(sent.Count - 2).Chunk(2),
-            again => Assert.Equal([TypedPrompt.ClearLine, HarnessRegistry.Opencode.Kickoff], again));
-        Assert.Equal("\r", sent[^1]);
+        Assert.Equal([kickoff, TypedPrompt.ClearLine, kickoff, "\r"], sent);
+        Assert.DoesNotContain("not confirmed", reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task A_kickoff_the_harness_never_showed_is_typed_twice_at_most_and_not_submitted()
+    {
+        var clock = new SkippingClock();
+        var handler = new DispatchHandler(
+            _mux, _store, _claude, TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50),
+            settings: new Settings(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)),
+            orchestrator: HarnessRegistry.Opencode with { InputRetry = TimeSpan.FromMilliseconds(1) },
+            clock: clock);
+        clock.Skipped += () =>
+        {
+            foreach (var pane in _mux.ListPanesAsync().Result)
+            {
+                _mux.SetText(pane.Id, "opencode is starting");
+            }
+        };
+
+        var reply = await handler.HandleAsync(new DispatchCommand("techweb", _root, "do the thing"), "t");
+
+        var kickoff = HarnessRegistry.Opencode.Kickoff;
+        var sent = _mux.SentTo(Assert.Single(await _mux.ListPanesAsync()).Id);
+        Assert.Equal([kickoff, TypedPrompt.ClearLine, kickoff, TypedPrompt.ClearLine], sent);
+        Assert.Contains(
+            "written to .fleet/instruction.md, but delivery was not confirmed (its pane never showed the typed prompt (a pane fleet cannot read looks the same)",
+            reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task A_kickoff_that_runs_out_of_time_is_typed_once_submitted_once_and_said_to_be_unconfirmed()
+    {
+        var reply = await Handler().HandleAsync(Command("opencode"), "t");
+
+        var sent = _mux.SentTo(Assert.Single(await _mux.ListPanesAsync()).Id);
+        Assert.Equal([HarnessRegistry.Opencode.Kickoff, "\r"], sent);
+        Assert.Contains(
+            "delivery was not confirmed (fleet stopped waiting for the prompt to show, before the caller's tool call would time out, and pressed Enter once)",
+            reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task A_claude_kickoff_is_not_doubted_once_its_mcp_server_reported_ready()
+    {
+        var clock = new SkippingClock();
+        clock.Skipped += () =>
+        {
+            foreach (var file in Directory.GetFiles(_root, AgentHarness.AgentInstructionFile, SearchOption.AllDirectories))
+            {
+                File.WriteAllText(OrchestrationPaths.ReadyMarker(Path.GetDirectoryName(Path.GetDirectoryName(file))!), string.Empty);
+            }
+        };
+        var handler = new DispatchHandler(
+            _mux, _store, _claude, TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50),
+            settings: new Settings(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)), clock: clock);
+
+        var reply = await handler.HandleAsync(new DispatchCommand("techweb", _root, "do the thing"), "t");
+
+        Assert.DoesNotContain("not confirmed", reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task A_claude_kickoff_is_doubted_when_its_mcp_server_never_reported_ready()
+    {
+        var handler = new DispatchHandler(
+            _mux, _store, _claude, TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50),
+            settings: new Settings(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)), clock: new SkippingClock());
+
+        var reply = await handler.HandleAsync(new DispatchCommand("techweb", _root, "do the thing"), "t");
+
+        Assert.Contains(
+            "delivery was not confirmed (its harness has no check for typed input and its MCP server never reported ready)",
+            reply.Value!.Note);
+    }
+
+    // A caller with a 60 s tool limit gets its answer inside 50 s even when the sub's MCP server never reports ready.
+    [Theory]
+    [InlineData("opencode")]
+    [InlineData("claude")]
+    public async Task A_bare_sub_that_never_reports_ready_is_answered_inside_the_callers_budget(string harness)
+    {
+        var clock = new SkippingClock();
+        var handler = new DispatchHandler(
+            _mux, _store, _claude, TimeSpan.FromSeconds(60), TimeSpan.FromMilliseconds(200),
+            settings: new Settings(SettingsConfig.Default.WithSubOrchestratorsInNvim(false)),
+            configs: _configs, clock: clock);
+        clock.Skipped += () =>
+        {
+            foreach (var pane in _mux.ListPanesAsync().Result)
+            {
+                _mux.SetText(pane.Id, "starting");
+            }
+        };
+        var started = clock.GetUtcNow();
+
+        var reply = await handler.HandleAsync(Command(harness) with { Within = TimeSpan.FromSeconds(50) }, "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.InRange(clock.GetUtcNow() - started, TimeSpan.FromSeconds(49), TimeSpan.FromSeconds(51));
+        Assert.Contains("delivery was not confirmed", reply.Value!.Note);
     }
 
     [Fact]

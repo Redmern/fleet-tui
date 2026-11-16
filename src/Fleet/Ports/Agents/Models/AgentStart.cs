@@ -1,3 +1,9 @@
 namespace Fleet.Ports.Agents.Models;
 
-public sealed record AgentStart(string Project, string Repository, string Branch, string Task, string Harness = "");
+public sealed record AgentStart(
+    string Project,
+    string Repository,
+    string Branch,
+    string Task,
+    string Harness = "",
+    DateTimeOffset? By = null);

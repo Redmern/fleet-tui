@@ -1,6 +1,8 @@
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Tests.EndToEnd.MixedTeam;
 
 namespace Fleet.Tests.Ports.Mux;
 
@@ -8,120 +10,175 @@ public class TypedPromptTests
 {
     private const string Prompt = "Read AGENTS.md and TASK.md in your working directory, then begin.";
 
-    private readonly FakeMuxDriver _mux = new();
-
     private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(5);
 
-    private int Typings(PaneId pane) => _mux.SentTo(pane).Count(sent => sent == Prompt);
+    private static readonly TimeSpan Retry = TimeSpan.FromMilliseconds(20);
 
-    private async Task UntilTypedAsync(PaneId pane, int times, Task typing)
+    private static readonly TimeSpan Within = TimeSpan.FromSeconds(30);
+
+    private readonly FakeMuxDriver _mux = new();
+
+    private readonly SkippingClock _clock = new();
+
+    private async Task<PaneId> PaneAsync(string? text = null)
     {
-        while (Typings(pane) < times && !typing.IsCompleted)
+        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
+
+        if (text is not null)
         {
-            await Task.Delay(Tick);
+            _mux.SetText(pane, text);
         }
+
+        return pane;
     }
 
-    // What a TUI that takes every key has in its input line: ctrl+u empties it, anything else is appended.
-    private string InputLine(PaneId pane) =>
-        _mux.SentTo(pane).Aggregate(string.Empty, (line, sent) => sent == TypedPrompt.ClearLine ? string.Empty : line + sent);
+    private Task<PromptEcho> TypeAsync(PaneId pane, TimeSpan? within = null) =>
+        TypedPrompt.UntilEchoedAsync(_mux, pane, Prompt, Retry, within ?? Within, Tick, _clock);
+
+    private void OnPoll(Action<int> script)
+    {
+        var polls = 0;
+        _clock.Skipped += () => script(++polls);
+    }
 
     [Fact]
     public async Task A_prompt_the_pane_shows_is_typed_once()
     {
-        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
-        var typing = TypedPrompt.UntilEchoedAsync(_mux, pane, Prompt, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), Tick);
+        var pane = await PaneAsync();
+        OnPoll(_ => _mux.SetText(pane, "┃  Read AGENTS.md and TASK.md in your working\n┃  directory, then begin."));
 
-        await UntilTypedAsync(pane, 1, typing);
-        _mux.SetText(pane, "┃  Read AGENTS.md and TASK.md in your working\n┃  directory, then begin.");
-
-        Assert.True(await typing);
+        Assert.Equal(PromptEcho.Echoed, await TypeAsync(pane));
         Assert.Equal([Prompt], _mux.SentTo(pane));
     }
 
     [Fact]
-    public async Task A_prompt_the_pane_dropped_is_typed_again_until_it_shows()
+    public async Task A_prompt_the_pane_dropped_is_typed_again_once_after_clearing_the_line()
     {
-        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
-        _mux.SetText(pane, "opencode is starting");
-        var typing = TypedPrompt.UntilEchoedAsync(_mux, pane, Prompt, Tick, TimeSpan.FromSeconds(30), Tick);
+        var pane = await PaneAsync("opencode is starting");
+        OnPoll(poll =>
+        {
+            if (_mux.SentTo(pane).Count(s => s == Prompt) == 2)
+            {
+                _mux.SetText(pane, "┃  " + Prompt);
+            }
+        });
 
-        await UntilTypedAsync(pane, 3, typing);
-        _mux.SetText(pane, "┃  " + Prompt);
-
-        Assert.True(await typing);
-        Assert.True(Typings(pane) >= 3);
-        Assert.Equal(Prompt, _mux.SentTo(pane)[0]);
-        Assert.All(
-            _mux.SentTo(pane).Skip(1).Chunk(2),
-            again => Assert.Equal([TypedPrompt.ClearLine, Prompt], again));
+        Assert.Equal(PromptEcho.Echoed, await TypeAsync(pane));
+        Assert.Equal([Prompt, TypedPrompt.ClearLine, Prompt], _mux.SentTo(pane));
     }
 
     [Fact]
-    public async Task A_slow_pane_that_took_every_typing_has_the_prompt_in_its_input_once()
+    public async Task A_pane_that_never_shows_the_prompt_is_typed_into_twice_at_most()
     {
-        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
-        var typing = TypedPrompt.UntilEchoedAsync(_mux, pane, Prompt, Tick, TimeSpan.FromSeconds(30), Tick);
+        var pane = await PaneAsync("opencode is starting");
 
-        await UntilTypedAsync(pane, 3, typing);
-        _mux.SetText(pane, "> " + InputLine(pane));
-
-        Assert.True(await typing);
-        Assert.Equal(Prompt, InputLine(pane));
+        Assert.Equal(PromptEcho.Lost, await TypeAsync(pane));
+        Assert.Equal([Prompt, TypedPrompt.ClearLine, Prompt, TypedPrompt.ClearLine], _mux.SentTo(pane));
     }
 
     [Fact]
-    public async Task The_same_prompt_still_on_screen_from_an_earlier_message_is_not_taken_for_the_echo()
+    public async Task A_blank_pane_is_a_pane_that_has_not_shown_the_prompt_yet_so_it_is_retyped_once()
     {
-        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
-        _mux.SetText(pane, $"user: {Prompt}\nopencode: done\n> ");
-        var typing = TypedPrompt.UntilEchoedAsync(_mux, pane, Prompt, Tick, TimeSpan.FromSeconds(30), Tick);
+        var pane = await PaneAsync();
 
-        await UntilTypedAsync(pane, 2, typing);
+        Assert.Equal(PromptEcho.Lost, await TypeAsync(pane));
+        Assert.Equal([Prompt, TypedPrompt.ClearLine, Prompt, TypedPrompt.ClearLine], _mux.SentTo(pane));
+    }
 
-        Assert.False(typing.IsCompleted);
+    [Fact]
+    public async Task A_prompt_that_shows_during_the_second_wait_is_not_typed_a_third_time()
+    {
+        var pane = await PaneAsync("opencode is starting");
+        OnPoll(poll =>
+        {
+            if (poll == 6)
+            {
+                _mux.SetText(pane, "┃  " + Prompt);
+            }
+        });
 
-        _mux.SetText(pane, $"user: {Prompt}\nopencode: done\n> {Prompt}");
+        Assert.Equal(PromptEcho.Echoed, await TypeAsync(pane));
+        Assert.Equal([Prompt, TypedPrompt.ClearLine, Prompt], _mux.SentTo(pane));
+    }
 
-        Assert.True(await typing);
+    [Fact]
+    public async Task A_prompt_that_shows_late_in_the_first_wait_is_not_typed_again()
+    {
+        var pane = await PaneAsync("opencode is starting");
+        OnPoll(poll =>
+        {
+            if (poll == 3)
+            {
+                _mux.SetText(pane, "┃  " + Prompt);
+            }
+        });
+
+        Assert.Equal(PromptEcho.Echoed, await TypeAsync(pane));
+        Assert.Equal([Prompt], _mux.SentTo(pane));
+    }
+
+    [Fact]
+    public async Task The_same_prompt_on_screen_from_an_earlier_message_is_not_taken_for_the_echo_and_a_dropped_typing_is_retyped_once()
+    {
+        var pane = await PaneAsync($"user: {Prompt}\nopencode: done\n> ");
+
+        Assert.Equal(PromptEcho.Lost, await TypeAsync(pane));
+        Assert.Equal([Prompt, TypedPrompt.ClearLine, Prompt, TypedPrompt.ClearLine], _mux.SentTo(pane));
+    }
+
+    [Fact]
+    public async Task The_same_prompt_on_screen_from_an_earlier_message_and_a_retype_that_shows_is_submitted_once()
+    {
+        var pane = await PaneAsync($"user: {Prompt}\nopencode: done\n> ");
+        OnPoll(_ =>
+        {
+            if (_mux.SentTo(pane).Count(s => s == Prompt) == 2)
+            {
+                _mux.SetText(pane, $"user: {Prompt}\nopencode: done\n> {Prompt}");
+            }
+        });
+
+        Assert.Equal(PromptEcho.Echoed, await TypeAsync(pane));
+        Assert.Equal([Prompt, TypedPrompt.ClearLine, Prompt], _mux.SentTo(pane));
     }
 
     [Fact]
     public async Task A_second_prompt_shown_next_to_the_earlier_one_is_typed_once()
     {
-        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
-        _mux.SetText(pane, $"user: {Prompt}\n> ");
-        var typing = TypedPrompt.UntilEchoedAsync(_mux, pane, Prompt, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), Tick);
+        var pane = await PaneAsync($"user: {Prompt}\n> ");
+        OnPoll(_ => _mux.SetText(pane, $"user: {Prompt}\n> {Prompt}"));
 
-        await UntilTypedAsync(pane, 1, typing);
-        _mux.SetText(pane, $"user: {Prompt}\n> {Prompt}");
-
-        Assert.True(await typing);
+        Assert.Equal(PromptEcho.Echoed, await TypeAsync(pane));
         Assert.Equal([Prompt], _mux.SentTo(pane));
     }
 
     [Fact]
-    public async Task A_prompt_that_shows_late_is_not_typed_a_second_time()
+    public async Task No_time_to_wait_types_the_prompt_once_leaves_it_in_the_line_and_does_not_retry()
     {
-        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
-        var typing = TypedPrompt.UntilEchoedAsync(
-            _mux, pane, Prompt, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(30), Tick);
+        var pane = await PaneAsync("opencode is starting");
 
-        await Task.Delay(TimeSpan.FromMilliseconds(150));
-        _mux.SetText(pane, "┃  " + Prompt);
-
-        Assert.True(await typing);
+        Assert.Equal(PromptEcho.TimedOut, await TypeAsync(pane, TimeSpan.Zero));
         Assert.Equal([Prompt], _mux.SentTo(pane));
     }
 
     [Fact]
-    public async Task A_pane_that_never_shows_the_prompt_stops_being_typed_into_after_the_limit()
+    public async Task Time_that_runs_out_during_the_second_wait_does_not_clear_the_line()
     {
-        var pane = await _mux.SpawnAsync(new SpawnOptions { NewWindow = true });
+        var pane = await PaneAsync("opencode is starting");
 
-        var echoed = await TypedPrompt.UntilEchoedAsync(_mux, pane, Prompt, Tick, TimeSpan.Zero, Tick);
+        Assert.Equal(PromptEcho.TimedOut, await TypeAsync(pane, TimeSpan.FromMilliseconds(30)));
+        Assert.Equal([Prompt, TypedPrompt.ClearLine, Prompt], _mux.SentTo(pane));
+    }
 
-        Assert.False(echoed);
-        Assert.Equal([Prompt], _mux.SentTo(pane));
+    [Fact]
+    public async Task Every_wait_runs_on_the_given_clock()
+    {
+        var pane = await PaneAsync("opencode is starting");
+
+        await TypeAsync(pane);
+
+        Assert.NotEmpty(_clock.Delays);
+        Assert.All(_clock.Delays, delay => Assert.Equal(Tick, delay));
+        Assert.True(_clock.Delays.Count <= 10);
     }
 }

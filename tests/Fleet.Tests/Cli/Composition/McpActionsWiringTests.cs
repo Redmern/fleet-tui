@@ -1,5 +1,10 @@
 using System.Globalization;
+using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
+using Fleet.Shared.Mcp;
+using Fleet.Shared.Settings;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Settings.Enums;
@@ -163,6 +168,239 @@ public sealed class McpActionsWiringTests : IDisposable
     }
 
     [Fact]
+    public async Task New_agent_says_the_first_task_is_written_but_not_confirmed_when_the_pane_never_shows_the_prompt()
+    {
+        await _team.AddRepositoryAsync("api");
+        _team.Mux.HarnessesLoseEveryTyping = true;
+
+        var started = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat"), ("harness", "opencode"), ("task", "build the form"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.DoesNotContain("gave it its first task", started.Text);
+        Assert.Contains("started api/feat; its first task is written to .fleet/instruction.md", started.Text);
+        Assert.Contains("delivery was not confirmed (its pane never showed the typed prompt", started.Text);
+
+        var feat = _team.Record("api", "feat");
+
+        Assert.Equal("build the form\n\n" + AgentHarness.AgentReportRule, _team.Mux.HarnessIn(feat.Worktree).Instruction);
+        Assert.Empty(_team.Mux.HarnessIn(feat.Worktree).Submitted);
+        Assert.Equal(2, _team.Mux.HarnessIn(feat.Worktree).LostTypings);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Dispatch_straight_to_a_repository_agent_says_the_first_task_was_not_confirmed_too()
+    {
+        await _team.AddRepositoryAsync("api");
+        _team.Mux.HarnessesLoseEveryTyping = true;
+
+        var reply = await _team.CallAsync(
+            string.Empty, HarnessTool.Dispatch,
+            ("message", "build the form"), ("repository", "api"), ("branch", "feat"), ("harness", "opencode"));
+
+        Assert.False(reply.IsError, reply.Text);
+        Assert.Contains("started a repository agent on api/feat", reply.Text);
+        Assert.DoesNotContain("gave it its first task", reply.Text);
+        Assert.Contains("delivery was not confirmed", reply.Text);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task New_agent_on_claude_with_a_ready_marker_gives_the_first_task_without_a_doubt()
+    {
+        await _team.AddRepositoryAsync("api");
+
+        var started = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat"), ("harness", "claude"), ("task", "build the form"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.Contains("started api/feat and gave it its first task.", started.Text);
+        Assert.DoesNotContain("not confirmed", started.Text);
+        Assert.Equal([AgentInstructionPrompt, "\r"], _team.Mux.TypedInto(_team.Mux.HarnessIn(_team.Record("api", "feat").Worktree)));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task New_agent_on_an_agent_hosted_in_nvim_gives_the_first_task_once_the_pump_marked_it_seen()
+    {
+        await _team.AddRepositoryAsync("api");
+        _team.Clock.Skipped += () => PumpActs(seen: true);
+
+        var started = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat"), ("harness", "nvim"), ("task", "build the form"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.Contains("started api/feat and gave it its first task.", started.Text);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task New_agent_on_an_agent_hosted_in_nvim_says_not_confirmed_when_the_pump_never_marks_it_seen()
+    {
+        await _team.AddRepositoryAsync("api");
+        _team.Clock.Skipped += () => PumpActs(seen: false);
+
+        var started = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat"), ("harness", "nvim"), ("task", "build the form"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.DoesNotContain("gave it its first task", started.Text);
+        Assert.Contains(
+            "delivery was not confirmed (fleet stopped waiting for nvim to report it; nvim delivers it once the agent is ready)",
+            started.Text);
+
+        NothingLeftTheSandbox();
+    }
+
+    // One deadline per call: the caller's client tool limit less ten seconds, covering the ready wait, the typing and
+    // the pump wait together. A codex caller (60 s) is answered inside 50 s, a claude caller (600 s) keeps the full wait.
+    [Fact]
+    public async Task New_agent_stops_waiting_for_the_pump_inside_the_codex_callers_tool_limit_and_not_for_claude()
+    {
+        await _team.AddRepositoryAsync("api");
+        var lead = (await _team.DispatchAsync(string.Empty, "lead the work", "codex")).Slug;
+        _team.Clock.Skipped += () => PumpActs(seen: false);
+
+        var before = _team.Clock.GetUtcNow();
+        var fromCodex = await _team.CallAsync(
+            lead, HarnessTool.NewAgent, ("repository", "api"), ("branch", "a"), ("harness", "nvim"), ("task", "build a"));
+        var codexWaited = _team.Clock.GetUtcNow() - before;
+
+        before = _team.Clock.GetUtcNow();
+        var fromClaude = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent, ("repository", "api"), ("branch", "b"), ("harness", "nvim"), ("task", "build b"));
+        var claudeWaited = _team.Clock.GetUtcNow() - before;
+
+        Assert.Contains("fleet stopped waiting for nvim to report it", fromCodex.Text);
+        Assert.Contains("fleet stopped waiting for nvim to report it", fromClaude.Text);
+        Assert.InRange(codexWaited, TimeSpan.FromSeconds(49), TimeSpan.FromSeconds(50.5));
+        Assert.InRange(claudeWaited, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(62));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Dispatch_to_an_nvim_sub_stops_waiting_for_the_pump_inside_the_codex_callers_tool_limit_and_not_for_claude()
+    {
+        _team.SubOrchestratorsInNvim(true);
+        var lead = (await _team.DispatchAsync(string.Empty, "lead the work", "codex")).Slug;
+
+        var before = _team.Clock.GetUtcNow();
+        var fromCodex = await _team.CallAsync(lead, HarnessTool.Dispatch, ("message", "fix the login bug"));
+        var codexWaited = _team.Clock.GetUtcNow() - before;
+
+        before = _team.Clock.GetUtcNow();
+        var fromClaude = await _team.CallAsync(string.Empty, HarnessTool.Dispatch, ("message", "fix the signup bug"));
+        var claudeWaited = _team.Clock.GetUtcNow() - before;
+
+        Assert.False(fromCodex.IsError, fromCodex.Text);
+        Assert.Contains("delivery was not confirmed (fleet stopped waiting for nvim to report it", fromCodex.Text);
+        Assert.Contains("delivery was not confirmed (fleet stopped waiting for nvim to report it", fromClaude.Text);
+        Assert.InRange(codexWaited, TimeSpan.FromSeconds(49), TimeSpan.FromSeconds(50.5));
+        Assert.InRange(claudeWaited, TimeSpan.FromSeconds(59), TimeSpan.FromSeconds(62));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_dispatch_whose_caller_gave_up_stops_where_it_is_and_starts_nothing_more()
+    {
+        _team.SubOrchestratorsInNvim(true);
+        using var gaveUp = new CancellationTokenSource();
+        var polls = 0;
+        _team.Clock.Skipped += () =>
+        {
+            if (++polls == 20)
+            {
+                gaveUp.Cancel();
+            }
+        };
+
+        var request = new McpRequest(
+            HarnessToolIds.For(HarnessTool.Dispatch), new Dictionary<string, string> { ["message"] = "fix the login bug" });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _team.Actions(string.Empty).PerformAsync(request, gaveUp.Token));
+
+        var panes = await _team.Mux.ListPanesAsync();
+        var delays = _team.Clock.Delays.Count;
+        _team.Clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Single(_team.Store.List(_team.Project));
+        Assert.Single(panes);
+        Assert.Equal(delays, _team.Clock.Delays.Count);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task New_agent_on_an_agent_hosted_in_nvim_says_what_nvim_reported_when_the_pump_could_not_see_the_prompt_arrive()
+    {
+        await _team.AddRepositoryAsync("api");
+        _team.Clock.Skipped += () => PumpActs(seen: false, unconfirmed: true);
+
+        var started = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat"), ("harness", "nvim"), ("task", "build the form"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.DoesNotContain("gave it its first task", started.Text);
+        Assert.Contains(
+            "delivery was not confirmed (nvim typed it twice, could not see it arrive, cleared the line and left it unsubmitted; send it again with tell_agent)",
+            started.Text);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_direct_dispatch_hands_its_one_deadline_to_the_agent_it_starts()
+    {
+        await _team.AddRepositoryAsync("api");
+        _team.Clock.Skipped += () => PumpActs(seen: false);
+        var by = _team.Clock.GetUtcNow() + TimeSpan.FromSeconds(20);
+
+        var before = _team.Clock.GetUtcNow();
+        var started = await _team.Actions(string.Empty).StartAsync(
+            new AgentStart(_team.Project, "api", "feat", "build the form", "nvim", by));
+
+        Assert.True(started.Succeeded, started.Error);
+        Assert.InRange(_team.Clock.GetUtcNow() - before, TimeSpan.FromSeconds(19), TimeSpan.FromSeconds(21));
+        Assert.Contains("fleet stopped waiting for nvim to report it", started.Value);
+
+        NothingLeftTheSandbox();
+    }
+
+    // The ready marker claude's MCP server writes, and the seen marker nvim's pump leaves for the instruction file.
+    private void PumpActs(bool seen, bool unconfirmed = false)
+    {
+        foreach (var agent in _team.Store.List(_team.Project))
+        {
+            var marker = OrchestrationPaths.ReadyMarker(agent.Worktree);
+            Directory.CreateDirectory(Path.GetDirectoryName(marker)!);
+            File.WriteAllText(marker, string.Empty);
+
+            var instruction = Path.Combine(agent.Worktree, ".fleet", "instruction.md");
+
+            if ((seen || unconfirmed) && File.Exists(instruction))
+            {
+                var written = new DateTimeOffset(File.GetLastWriteTimeUtc(instruction)).ToUnixTimeSeconds();
+                File.WriteAllText(
+                    Path.Combine(agent.Worktree, ".fleet", unconfirmed ? "instruction.unconfirmed" : "instruction.seen"),
+                    written.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+    }
+
+    [Fact]
     public async Task Open_agent_trusts_the_folder_through_the_injected_writer()
     {
         await _team.AddRepositoryAsync("api");
@@ -182,7 +420,7 @@ public sealed class McpActionsWiringTests : IDisposable
     // ready-marker polls are 200 ms and 300 ms), so these four are the retry itself.
     private const int EchoPollsOfOneLostTyping = 4;
 
-    private const string AgentInstructionPrompt = Fleet.Shared.Constants.AgentHarness.AgentInstructionPrompt;
+    private const string AgentInstructionPrompt = AgentHarness.AgentInstructionPrompt;
 
     // What the real writers edit on this machine: claude's folder trust, codex's project trust and pi's trust store,
     // each in the home folder and in the folder its own variable names.

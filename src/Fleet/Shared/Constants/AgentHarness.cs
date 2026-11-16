@@ -232,13 +232,19 @@ public static class AgentHarness
 
     public const string InstructionSeenFile = "instruction.seen";
 
+    public const string InstructionUnconfirmedFile = "instruction.unconfirmed";
+
     public const string NoticesFile = "notices.md";
 
     public const string NoticesSeenFile = "notices.seen";
 
+    public const string NoticesUnconfirmedFile = "notices.unconfirmed";
+
     public const string ClaudeReadyFile = "claude.ready";
 
     public const string InstructionSettleSeconds = "2";
+
+    public const int EchoProbeLength = 16;
 
     public const string ReadyFallbackSeconds = "60";
 
