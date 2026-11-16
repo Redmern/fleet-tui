@@ -39,8 +39,9 @@ public static class OrchestrationText
         ask it with tell_agent what it needs, or tell your user. Don't keep
         subscribing to a session that has stopped; the notice comes straight back.
         An agent that does not run Claude has no session to subscribe to: wait for it
-        with wait_for_agent instead, and when it reports, fleet types a line starting
-        with [fleet] into your pane.
+        with wait_for_agent instead. When it reports, fleet
+        appends a line to .fleet/notices.md in your folder and
+        types a prompt asking you to read the new lines at the end of that file.
         A summary is a status line, not a task or a dispatch.
         """;
 
@@ -50,9 +51,11 @@ public static class OrchestrationText
         agent or tell it something, call wait_for_agent with its repository and
         branch: it returns when the agent reports done or failed, or goes idle (no
         pane output for a while), or when its timeout runs out (then call it again).
-        When an agent reports done or failed, fleet also types a line starting with
-        [fleet] into your pane. A done or failed reported after your last instruction
-        to it means finished; idle without a report means it is waiting on something
+        When an agent reports done or failed, fleet also
+        appends a line to .fleet/notices.md in your folder and
+        types a prompt asking you to read the new lines at the end of that file.
+        A done or failed reported after your last instruction to it means finished;
+        idle without a report means it is waiting on something
         (a question, a refusal): ask it with tell_agent what it needs, or tell your
         user. tell_agent always types into the agent's pane; there is no SendMessage
         address to send. A summary is a status line, not a task or a dispatch.

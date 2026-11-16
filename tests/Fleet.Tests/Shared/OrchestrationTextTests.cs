@@ -54,7 +54,21 @@ public class OrchestrationTextTests
         var text = OrchestrationText.Instructions(Brief);
 
         Assert.Contains("wait_for_agent", text);
-        Assert.Contains("[fleet]", text);
+        Assert.Contains(".fleet/notices.md", text);
+        Assert.DoesNotContain("[fleet]", text);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_text_describes_the_notices_file_and_the_typed_read_prompt_not_a_typed_fleet_line(bool native)
+    {
+        var text = OrchestrationText.Instructions(Brief, nativeMessaging: native);
+
+        Assert.Contains("appends a line to .fleet/notices.md", text);
+        Assert.Contains("types a prompt", text);
+        Assert.DoesNotContain("[fleet]", text);
+        Assert.DoesNotContain("types a line", text);
     }
 
     [Fact]
