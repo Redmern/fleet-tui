@@ -1,3 +1,4 @@
+using Fleet.Ports;
 using Fleet.Ports.Approvals;
 using Fleet.Ports.Approvals.Models;
 using Fleet.Ports.Mux;
@@ -10,7 +11,8 @@ namespace Fleet.Features.Mcp.ServeMcp;
 public sealed class FloatingApprovalChannel(
     IApprovalChannel inner,
     IMuxDriver mux,
-    Func<string, string, IReadOnlyList<string>> approveCommand) : IApprovalChannel
+    Func<string, string, IReadOnlyList<string>> approveCommand,
+    INotifier? notifier = null) : IApprovalChannel
 {
     public const string Title = "approve?";
 
@@ -22,6 +24,9 @@ public sealed class FloatingApprovalChannel(
         {
             return ApprovalOutcome.NoDashboard($"approval needed in project {request.Project}; open it to answer");
         }
+
+        notifier?.Notify(
+            $"approval needed in {request.Project}: {request.Tool} by {request.CallerName}");
 
         if (over.IsNone || !mux.Caps.HasFlag(MuxCaps.Popup))
         {

@@ -17,7 +17,6 @@ public sealed class McpDispatcher(
     IApprovalChannel approvals,
     IFleetLog log,
     Func<McpRequest, CancellationToken, Task<McpResult>> perform,
-    INotifier? notifier = null,
     Func<TimeSpan?>? approvalTimeout = null,
     TimeProvider? time = null)
 {
@@ -145,9 +144,6 @@ public sealed class McpDispatcher(
 
         try
         {
-            notifier?.Notify(
-                $"approval needed: {HarnessToolIds.For(tool)} by {caller.Caller}");
-
             var asked = new ApprovalRequest(
                 caller.Project,
                 HarnessToolIds.For(tool),

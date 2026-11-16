@@ -1,5 +1,6 @@
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports;
 using Fleet.Ports.Approvals;
 using Fleet.Ports.Approvals.Models;
 using Fleet.Ports.Mux.Models;
@@ -13,8 +14,10 @@ public class FloatingApprovalChannelTests
 
     private readonly Inner _inner = new();
 
+    private readonly List<string> _notices = [];
+
     private FloatingApprovalChannel Channel(FakeMuxDriver mux) =>
-        new(_inner, mux, (project, pane) => ["fleet", "approve", "--project", project, pane]);
+        new(_inner, mux, (project, pane) => ["fleet", "approve", "--project", project, pane], new Notices(_notices));
 
     private static ApprovalRequest Ask() => new("techweb", "new_agent", "upgrade wants to start backend/login");
 
@@ -194,6 +197,48 @@ public class FloatingApprovalChannelTests
         var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
 
         Assert.True(outcome.Allowed);
+    }
+
+    [Fact]
+    public async Task The_desktop_notice_for_a_pending_approval_names_the_caller_the_project_and_the_action()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.ShowWorkspaceAsync("techweb");
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        await Channel(mux).AskAsync(Ask() with { Caller = "agent:backend/login" }).WaitAsync(Patience);
+
+        Assert.Equal(["approval needed in techweb: new_agent by agent:backend/login"], _notices);
+    }
+
+    [Fact]
+    public async Task The_desktop_notice_names_the_orchestrator_when_the_main_pane_asks()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.ShowWorkspaceAsync("techweb");
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.Equal(["approval needed in techweb: new_agent by orchestrator"], _notices);
+    }
+
+    [Fact]
+    public async Task A_call_that_fails_at_once_sends_no_desktop_notice()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+
+        await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.Empty(_notices);
+    }
+
+    private sealed class Notices(List<string> into) : INotifier
+    {
+        public void Notify(string message) => into.Add(message);
     }
 
     private sealed class Inner : IApprovalChannel

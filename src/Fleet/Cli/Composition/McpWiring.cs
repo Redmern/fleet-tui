@@ -36,10 +36,9 @@ public static class McpWiring
         var dispatcher = new McpDispatcher(
             new McpCaller(project.Name, project.Root, caller),
             Adapters.Settings(),
-            new FloatingApprovalChannel(Adapters.Approvals(), mux.Driver, ApproveArgs),
+            new FloatingApprovalChannel(Adapters.Approvals(), mux.Driver, ApproveArgs, Adapters.Notifier()),
             log,
             actions.PerformAsync,
-            Adapters.Notifier(),
             ApprovalTimeout(harnesses));
 
         var serving = new McpServing(McpTools.ServerName, ToolInfos(), dispatcher.HandleAsync)
