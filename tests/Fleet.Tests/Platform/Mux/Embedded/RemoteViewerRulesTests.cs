@@ -401,12 +401,18 @@ public sealed partial class RemoteLinkTests
         var panesOfThird = _farDaemon.Model.PanesIn(Third).Count();
 
         await home.RequestAsync(new ControlRequest { Op = "show-remote", Client = window.Id, Host = "red@far", Workspace = Third });
+        await window.SendCommandAsync("menu", "list-agents");
+        await Eventually(() => Task.FromResult(_farPanes.ByProgram("fleet") is { } menu
+            && menu.Args.SequenceEqual(["menu", "--project", "homelab", "--action", "list-agents"])));
+        Assert.Null(_homePanes.ByProgram("fleet"));
         await window.SendCommandAsync("show", Third);
         await window.SendCommandAsync("next-workspace");
-        await window.SendCommandAsync("menu", "list-agents");
         var listed = await far.RequestAsync(new ControlRequest { Op = "list-workspaces", Client = linked.Id });
         await Eventually(async () => (await far.RequestAsync(new ControlRequest { Op = "ping" })).Ok);
 
+        Assert.True((await window.RequestAsync(new ControlRequest { Op = "ping" })).Ok);
+        var seen = (await home.RequestAsync(new ControlRequest { Op = "list-workspaces", Client = window.Id })).Workspaces!;
+        Assert.Equal("local", seen.Single(w => w.ShownHere).Name);
         Assert.DoesNotContain(Third, Names(listed));
         Assert.NotEqual(Third, linked.Showing);
         Assert.DoesNotContain(Third, linked.Projects);
