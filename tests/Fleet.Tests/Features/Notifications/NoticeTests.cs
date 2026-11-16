@@ -5,6 +5,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Notifications.Enums;
 using Fleet.Ports.Notifications.Models;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Status;
 using Fleet.Shared.Status.Enums;
 using Fleet.Shared.Status.Models;
 
@@ -174,8 +175,8 @@ public sealed class NoticeTests : ConfigHomeFixture
     [Fact]
     public void Stalling_ignores_the_spinners_running_timer()
     {
-        var before = NoticeDetector.Settled("output line\n* Churning... (12s · esc to interrupt)\n  3 tokens");
-        var after = NoticeDetector.Settled("output line\n* Churning... (84s · esc to interrupt)\n  97 tokens");
+        var before = PaneSettled.Text("output line\n* Churning... (12s · esc to interrupt)\n  3 tokens");
+        var after = PaneSettled.Text("output line\n* Churning... (84s · esc to interrupt)\n  97 tokens");
 
         Assert.Equal(before, after);
     }
