@@ -91,6 +91,8 @@ public sealed class RemoveAgentHandler(
         bool deleteWorktree,
         CancellationToken ct = default)
     {
+        var current = store.List(project).FirstOrDefault(a => PathKey.Same(a.Worktree, agent.Worktree)) ?? agent;
+
         if (!store.Remove(project, agent.Worktree))
         {
             return AgentRemoval.Refused(
@@ -119,7 +121,7 @@ public sealed class RemoveAgentHandler(
             return Removed(unterminated);
         }
 
-        store.Save(project, agent with { Open = false });
+        store.Save(project, current with { Open = false });
 
         return AgentRemoval.Refused(Locked(failure, unterminated));
     }

@@ -83,7 +83,11 @@ public sealed class McpActions(
 
     private readonly RemoveAgentHandler _remover = new(git, mux, store, hookState: Adapters.AgentStates());
 
-    private readonly RemoveSubHandler _subRemover = new(new RemoveAgentHandler(git, mux, store, hookState: Adapters.AgentStates()), store, mux);
+    private readonly RemoveSubHandler _subRemover = new(
+        new RemoveAgentHandler(git, mux, store, hookState: Adapters.AgentStates()),
+        store,
+        mux,
+        (project, sub, ct) => new StopAgentHandler(mux, store, Adapters.AgentStates()).HandleAsync(project, sub, ct));
 
     private readonly ChangeHarnessHandler _harnesses = new(store);
 
@@ -874,7 +878,8 @@ public sealed class McpActions(
                     ToolArguments.Text(request, ToolArguments.Slug),
                     caller,
                     ToolArguments.Flag(request, ToolArguments.DeleteFolder),
-                    ToolArguments.Flag(request, ToolArguments.RemoveAgents)),
+                    ToolArguments.Flag(request, ToolArguments.RemoveAgents),
+                    ToolArguments.Flag(request, ToolArguments.Stop)),
                 ct)
             .ConfigureAwait(false);
 

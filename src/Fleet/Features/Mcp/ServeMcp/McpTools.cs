@@ -173,8 +173,14 @@ public static class McpTools
         Spec(
             HarnessTool.RemoveSub,
             "Remove a sub-orchestrator that is done or failed. Its agents stay registered as "
-            + "top-level agents unless remove_agents is set.",
+            + "top-level agents unless remove_agents is set. A sub that is still working is refused "
+            + "unless stop is set.",
             Slug,
+            new ToolParam(
+                ToolArguments.Stop,
+                "boolean",
+                "true to stop a sub that is still running and remove it in the same call.",
+                false),
             new ToolParam(
                 ToolArguments.DeleteFolder,
                 "boolean",

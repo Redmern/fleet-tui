@@ -1,7 +1,7 @@
 namespace Fleet.Features.Agents.RemoveAgent.Models;
 
 public sealed record RemoveSubCommand(
-    string Project, string Slug, string Caller, bool DeleteFolder, bool RemoveAgents);
+    string Project, string Slug, string Caller, bool DeleteFolder, bool RemoveAgents, bool Stop = false);
 
 public sealed record SubRemoval(
     string Slug,
