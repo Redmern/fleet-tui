@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Fleet.Shared.Status.Models;
 
 namespace Fleet.Shared.Status;
@@ -11,22 +12,25 @@ public static class PaneQuiet
 
     public const string FileName = "pane.mark";
 
-    public static string Hash(string text) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Normalized(text))));
+    public static string Hash(string text, IReadOnlyList<Regex>? volatilePatterns = null) =>
+        Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(PaneSettled.Text(text, volatilePatterns))));
 
-    public static PaneMark Next(PaneMark? previous, string text, DateTime now)
+    public static PaneMark Next(
+        PaneMark? previous, string text, DateTime now, IReadOnlyList<Regex>? volatilePatterns = null)
     {
-        var hash = Hash(text);
+        var hash = Hash(text, volatilePatterns);
 
         return previous is not null && previous.Hash == hash ? previous : new PaneMark(hash, now);
     }
 
     public static bool Quiet(PaneMark mark, DateTime now, TimeSpan window) => now - mark.Since >= window;
 
-    public static PaneMark Observe(string folder, string text, DateTime now)
+    public static PaneMark Observe(
+        string folder, string text, DateTime now, IReadOnlyList<Regex>? volatilePatterns = null)
     {
         var path = Path.Combine(folder, ".fleet", FileName);
-        var mark = Next(Read(path), text, now);
+        var mark = Next(Read(path), text, now, volatilePatterns);
 
         try
         {
@@ -70,13 +74,10 @@ public static class PaneQuiet
     {
         var parts = text.Trim().Split(' ');
 
-        return parts.Length == 2
+        return parts.Length >= 2
                && DateTime.TryParse(
                    parts[1], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var since)
             ? new PaneMark(parts[0], since)
             : null;
     }
-
-    private static string Normalized(string text) =>
-        string.Join('\n', text.ReplaceLineEndings("\n").Split('\n').Select(l => l.TrimEnd())).TrimEnd();
 }
