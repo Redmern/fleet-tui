@@ -56,6 +56,22 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
     }
 
     [Theory]
+    [InlineData("agent:api/gone")]
+    [InlineData("gone-sub")]
+    public async Task A_caller_fleet_has_no_record_of_is_told_a_new_claude_agent_takes_typed_messages_only(string caller)
+    {
+        await _team.AddRepositoryAsync("api");
+
+        var started = await _team.CallAsync(
+            caller, HarnessTool.NewAgent, ("repository", "api"), ("branch", "fix"), ("harness", "claude"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.Contains("It runs claude: tell_agent types into its pane", started.Text);
+        Assert.DoesNotContain("Claude session", started.Text);
+        Assert.DoesNotContain("SendMessage", started.Text);
+    }
+
+    [Theory]
     [InlineData("opencode")]
     [InlineData("codex")]
     [InlineData("pi")]
