@@ -37,6 +37,28 @@ public static class DashboardSkeleton
             SubRows.Statuses(listing));
     }
 
+    public static void ToastQueued(
+        Func<IReadOnlyList<string>> drain,
+        Func<bool> toastOn,
+        Action<string, string> toast,
+        Action<Action> run)
+    {
+        var queued = drain();
+
+        if (queued.Count == 0 || !toastOn())
+        {
+            return;
+        }
+
+        run(() =>
+        {
+            foreach (var line in queued)
+            {
+                toast("fleet", line);
+            }
+        });
+    }
+
     public static NoticeBoard Notices(IReadOnlyList<Notice> all, DateTime now) =>
         new(NoticeRows.For(all, withProject: false, now),
             [.. all.Select(n => n.Key)],

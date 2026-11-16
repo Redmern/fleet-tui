@@ -275,7 +275,7 @@ public static class Adapters
 
     public static IModelRouter ModelRouter() => new ClaudeModelRouter();
 
-    public static INotifier Notifier() => new FileNotifyStore();
+    public static INotifier Notifier() => new FileNotifyStore(Log());
 
     public static MuxSelection Mux(IFleetLog log)
     {
@@ -335,7 +335,7 @@ public static class Adapters
 
     public static string? DashPane(string project) => DashPaneMarker.Read(project);
 
-    public static string NotifyFile => FileNotifyStore.File;
+    public static IReadOnlyList<string> DrainNotices() => FileNotifyStore.Drain();
 
     public static string WorkspaceFile => FileWorkspaceRequestStore.File;
 

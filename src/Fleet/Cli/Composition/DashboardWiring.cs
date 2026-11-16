@@ -543,7 +543,12 @@ public static class DashboardWiring
 
         void DrainSignals()
         {
-            DrainFile(Adapters.NotifyFile);
+            DashboardSkeleton.ToastQueued(
+                Adapters.DrainNotices,
+                () => Adapters.Notices().Settings().Toast,
+                Adapters.Toast,
+                work => _ = Task.Run(work));
+
             DrainFile(Adapters.WorkspaceFile);
         }
 
