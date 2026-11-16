@@ -141,9 +141,9 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal("login fixed", _team.Record("api", "fix").Summary);
         Assert.Contains("agent:api/fix: done", _team.DesktopNotifications);
 
-        // orchestrator notification: a [fleet] line submitted in the sub's pane
-        Assert.Equal([profile.Kickoff, AgentHarness.AgentInstructionPrompt], sub.Submitted);
-        Assert.Equal($"[fleet] api/fix: done — login fixed{NoticeTail}", sub.Instruction);
+        // orchestrator notification: a line appended to notices.md and the read prompt submitted in the sub's pane
+        Assert.Equal([profile.Kickoff, AgentHarness.NoticesPrompt], sub.Submitted);
+        Assert.Equal($"[fleet] api/fix: done — login fixed{NoticeTail}", sub.LastNotice);
 
         // wait_for_agent returns the report
         var waited = await _team.CallAsync(sub.Caller!, HarnessTool.WaitForAgent, Agent("api", "fix"));
@@ -226,7 +226,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal("idle", (await _team.RefreshAsync(dashboard)).Single(a => a.Branch == "feat").Status);
         await MixedTeamRig.UntilAsync(() => sub.Submitted.Count == 2, "the idle notice was not typed into the owner");
         Assert.Equal(
-            $"[fleet] api/feat: idle — no pane output for 120s and no done report{NoticeTail}", sub.Instruction);
+            $"[fleet] api/feat: idle — no pane output for 120s and no done report{NoticeTail}", sub.LastNotice);
 
         var listed = await _team.CallAsync(lead, HarnessTool.ListAgents);
 
@@ -271,7 +271,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal("done", _team.Record("api", "feat").Status);
         Assert.Contains("agent:api/feat: done", _team.DesktopNotifications);
         Assert.Equal(3, sub.Submitted.Count);
-        Assert.Equal($"[fleet] api/feat: done — form built{NoticeTail}", sub.Instruction);
+        Assert.Equal($"[fleet] api/feat: done — form built{NoticeTail}", sub.LastNotice);
 
         var waited = await _team.CallAsync(lead, HarnessTool.WaitForAgent, Agent("api", "feat"));
 

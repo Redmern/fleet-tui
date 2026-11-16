@@ -331,6 +331,68 @@ public sealed class TellAgentTests : IDisposable
         }
     }
 
+    private AgentRecord Owner() =>
+        new(_root, string.Empty, string.Empty, AgentHarness.Orchestrator, string.Empty, false, InNvim: false);
+
+    [Fact]
+    public async Task Notices_written_at_the_same_time_are_all_kept_whole()
+    {
+        var owner = Owner();
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        const int Count = 200;
+
+        await Task.WhenAll(Enumerable.Range(0, Count).Select(i =>
+            Task.Run(() => Teller.NotifyAsync(owner, pane, $"[fleet] notice-{i}-{new string('x', 200)}-end"))));
+
+        var lines = File.ReadAllLines(Path.Combine(_root, ".fleet", AgentHarness.NoticesFile));
+        Assert.Equal(Count, lines.Length);
+        Assert.Equal(
+            Enumerable.Range(0, Count).Order(),
+            lines.Select(l => int.Parse(l.Split("notice-")[1].Split('-')[0], System.Globalization.CultureInfo.InvariantCulture)).Order());
+        Assert.All(lines, l => Assert.EndsWith($"{new string('x', 200)}-end", l, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_notice_waits_for_another_process_that_holds_the_file_and_is_then_appended()
+    {
+        var owner = Owner();
+        var pane = await _mux.SpawnAsync(new() { Cwd = _root, NewWindow = true });
+        var dir = Path.Combine(_root, ".fleet");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, AgentHarness.NoticesFile);
+        File.WriteAllText(path, "2026-11-15T10:00:00.0000000+00:00 [fleet] earlier\n");
+        var holder = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var clock = new ReleasingClock(holder);
+
+        await new TellAgentHandler(_mux, TimeSpan.Zero, clock: clock).NotifyAsync(owner, pane, "[fleet] later");
+
+        Assert.Equal(1, clock.Waits);
+        var lines = File.ReadAllLines(path);
+        Assert.Equal(2, lines.Length);
+        Assert.EndsWith(" [fleet] earlier", lines[0], StringComparison.Ordinal);
+        Assert.EndsWith(" [fleet] later", lines[1], StringComparison.Ordinal);
+    }
+
+    private sealed class ReleasingClock(IDisposable holder) : TimeProvider
+    {
+        private int _waits;
+
+        public int Waits => _waits;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            if (dueTime == Timeout.InfiniteTimeSpan)
+            {
+                return base.CreateTimer(callback, state, dueTime, period);
+            }
+
+            Interlocked.Increment(ref _waits);
+            holder.Dispose();
+
+            return base.CreateTimer(callback, state, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
+        }
+    }
+
     private sealed class MutableSettings : ISettingsStore
     {
         public SettingsConfig Config { get; set; } = SettingsConfig.Default;

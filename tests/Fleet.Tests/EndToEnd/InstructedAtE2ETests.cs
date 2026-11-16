@@ -212,7 +212,7 @@ public sealed class InstructedAtE2ETests : ConfigHomeFixture
         Assert.Equal("api/fix: done — second", waited.Text);
     }
 
-    // AC-4: the notice a child sends a sub is written to the sub's instruction.md after the sub reported done. The
+    // AC-4: the notice a child sends a sub is appended to the sub's notices.md after the sub reported done. The
     // file is dated after the report, as wall clocks date it in life, which the old mtime test took for a new task.
     [Fact]
     public async Task A_notice_typed_into_a_sub_that_already_reported_done_does_not_make_its_report_stale()
@@ -229,9 +229,9 @@ public sealed class InstructedAtE2ETests : ConfigHomeFixture
 
         var child = await _team.CallAsync(McpCaller.ForAgent("api", "fix"), HarnessTool.Report, Status("done", "late child"));
         Assert.False(child.IsError, child.Text);
-        var instruction = Path.Combine(dispatched.Folder, ".fleet", AgentHarness.AgentInstructionFile);
-        Assert.Contains("late child", File.ReadAllText(instruction));
-        File.SetLastWriteTimeUtc(instruction, reportedAt.UtcDateTime.AddMinutes(1));
+        var notices = Path.Combine(dispatched.Folder, ".fleet", AgentHarness.NoticesFile);
+        Assert.Contains("late child", File.ReadAllText(notices));
+        File.SetLastWriteTimeUtc(notices, reportedAt.UtcDateTime.AddMinutes(1));
 
         var waited = await _team.CallAsync(Main, HarnessTool.WaitForAgent, [("branch", dispatched.Slug)]);
 
