@@ -34,6 +34,7 @@ public class ProcessTextTests
         Assert.Contains(gated, l => l.Contains("**Deliver**", StringComparison.Ordinal));
         Assert.DoesNotContain(gated, l => l.Contains("**Specify**", StringComparison.Ordinal));
         Assert.Contains("stop, give the user a short summary", text);
+        Assert.Contains("status \"working\" and a summary such as \"waiting on user\"", text);
     }
 
     [Fact]
@@ -43,6 +44,7 @@ public class ProcessTextTests
 
         Assert.DoesNotContain($"Gate: **{ProcessText.ApprovalMark}**", text);
         Assert.Contains("No stage needs the user's approval", text);
+        Assert.DoesNotContain("waiting on user", text);
     }
 
     [Fact]

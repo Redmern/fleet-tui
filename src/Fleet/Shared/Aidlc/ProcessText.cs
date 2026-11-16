@@ -76,7 +76,8 @@ public static class ProcessText
             $"Stages marked \"{ApprovalMark}\" are human gates. At each one: stop, give the user a short "
             + "summary and the path of the stage's artifact, ask them to approve it or request changes, and "
             + "wait for their reply. Do not start the next stage, or any agent for it, until they approve. "
-            + "If they request changes, revise and ask again. Note each decision in REPORT.md.";
+            + "If they request changes, revise and ask again. Note each decision in REPORT.md. While you wait, "
+            + "call fleet_report with status \"working\" and a summary such as \"waiting on user\".";
     }
 
     private static string What(Stage stage, EffectivePlan plan) => stage switch

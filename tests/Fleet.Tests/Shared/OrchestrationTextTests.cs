@@ -72,6 +72,17 @@ public class OrchestrationTextTests
     }
 
     [Fact]
+    public void The_reporting_section_asks_for_done_or_failed_at_the_end_and_working_at_each_human_gate()
+    {
+        var text = OrchestrationText.Instructions(Brief);
+        var reporting = text[text.IndexOf("## Reporting", StringComparison.Ordinal)..];
+
+        Assert.Contains("status \"done\" or \"failed\"", reporting);
+        Assert.Contains("status \"working\" and a summary such as \"waiting on user\"", reporting);
+        Assert.Contains("human gate", reporting);
+    }
+
+    [Fact]
     public void A_brief_for_a_harness_without_SendMessage_waits_with_wait_for_agent()
     {
         var text = OrchestrationText.Instructions(Brief, nativeMessaging: false);

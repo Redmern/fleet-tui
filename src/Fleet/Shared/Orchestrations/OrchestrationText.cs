@@ -127,8 +127,10 @@ public static class OrchestrationText
             Write REPORT.md in this folder as you go: what you decided, which agents you
             started, what is left. Longer artefacts go in reports/.
             When you have finished — successfully or not — call fleet_report with
-            status "done" or "failed" and a one-sentence summary. Until you call it,
-            fleet shows this task as working.
+            status "done" or "failed" and a one-sentence summary. At each human gate,
+            where you stop and wait for the user, call fleet_report with
+            status "working" and a summary such as "waiting on user". Until you call
+            done or failed, fleet shows this task as working.
             """;
 
         var sections = new List<string> { header };
