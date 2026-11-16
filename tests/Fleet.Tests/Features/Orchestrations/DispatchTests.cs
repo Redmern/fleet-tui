@@ -488,7 +488,7 @@ public sealed class DispatchTests : IDisposable
             $"if vim.fn.getftime(readyf)<fleet_boot and age<{AgentHarness.ReadyFallbackSeconds} then return end", boot);
         Assert.True(
             boot.IndexOf("local age=", StringComparison.Ordinal)
-            < boot.IndexOf("pcall(vim.fn.writefile,{tostring(m)},seenf)", StringComparison.Ordinal));
+            < boot.IndexOf("return fleet_send(b,c,prompt", StringComparison.Ordinal));
     }
 
     [Fact]

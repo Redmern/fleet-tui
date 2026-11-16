@@ -5,6 +5,7 @@ using Fleet.Features.Agents.RemoveAgent.Models;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
@@ -347,12 +348,47 @@ public class HideAgentTests
     }
 
     [Fact]
-    public void FleetTell_sends_the_enter_separately_so_claude_submits_it()
+    public void Nvim_reads_the_terminal_buffer_for_the_prompt_before_it_sends_enter_or_marks_the_file_seen()
     {
-        Assert.Contains("vim.fn.chansend(c, o.args)", AgentHarness.NvimStartup);
-        Assert.Contains("vim.defer_fn(", AgentHarness.NvimStartup);
-        Assert.Contains("vim.fn.chansend(c, '\\r')", AgentHarness.NvimStartup);
-        Assert.DoesNotContain("o.args..'\\r'", AgentHarness.NvimStartup);
+        var boot = AgentHarness.NvimStartup;
+
+        Assert.Contains("vim.api.nvim_buf_get_lines(b,0,-1,false)", boot);
+        Assert.Contains($"prompt:sub(1,{TypedPrompt.EchoLength})", boot);
+        Assert.Contains("state=='echoed' and seenf or unconfirmedf", boot);
+        Assert.Contains("instruction.unconfirmed", boot);
+        Assert.Contains("notices.unconfirmed", boot);
+        Assert.Equal(2, Occurrences(boot, "'\\21'"));
+        Assert.DoesNotContain("vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400)", boot);
+    }
+
+    [Fact]
+    public void The_probe_length_of_the_pump_is_the_one_the_typed_prompt_checks()
+    {
+        Assert.Equal(TypedPrompt.EchoLength, AgentHarness.EchoProbeLength);
+        Assert.Contains($"prompt:sub(1,{AgentHarness.EchoProbeLength})", AgentHarness.NvimStartup);
+    }
+
+    private static int Occurrences(string text, string part) =>
+        text.Split(part).Length - 1;
+
+    [Fact]
+    public void FleetTell_goes_through_the_same_checked_delivery_as_the_pump()
+    {
+        var boot = AgentHarness.NvimStartup;
+
+        Assert.Contains("nvim_create_user_command('FleetTell'", boot);
+        Assert.Contains("fleet_send(b,c,o.args,", boot);
+        Assert.DoesNotContain("chansend(c, o.args)", boot);
+        Assert.DoesNotContain("o.args..'\\r'", boot);
+    }
+
+    [Fact]
+    public void Every_deferred_step_of_the_pump_is_guarded_so_an_error_ends_the_delivery()
+    {
+        var boot = AgentHarness.NvimStartup;
+
+        Assert.Contains("local function guarded(step) return function() if not pcall(step) then stop('lost') end end end", boot);
+        Assert.Contains("vim.fn.jobwait({c},0)[1]==-1", boot);
     }
 
     [Fact]

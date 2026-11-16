@@ -15,37 +15,67 @@ public static class AgentHarness
 
     private const string NvimBoot =
         "lua vim.env.CLAUDE_CODE_FORCE_SESSION_PERSISTENCE='1' vim.env.CLAUDE_CODE_CHILD_SESSION=nil "
-        + "vim.api.nvim_create_user_command('FleetTell', function(o) "
-        + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
-        + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
-        + "if c then vim.fn.chansend(c, o.args) "
-        + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) end end end end, {nargs='+'}) "
         + "local readyf='.fleet/" + ClaudeReadyFile + "' local fleet_boot=os.time() "
         + "local function fleet_seen_init(file,seenf) "
         + "if vim.fn.filereadable(seenf)==0 then pcall(vim.fn.mkdir,'.fleet','p') "
         + "pcall(vim.fn.writefile,{tostring(math.max(0,vim.fn.getftime(file)))},seenf) end end "
-        + "local function fleet_pump(file,seenf,prompt) "
+        + "local fleet_busy=false "
+        + "local function fleet_count(b,probe) "
+        + "local text=table.concat(vim.api.nvim_buf_get_lines(b,0,-1,false),'\\n') "
+        + "local n,at=0,1 while true do local s,e=string.find(text,probe,at,true) "
+        + "if not s then return n end n=n+1 at=e+1 end end "
+        + "local function fleet_deliver(b,c,prompt,finish) "
+        + "local probe=prompt:sub(1," + EchoProbeLengthText + ") local before=fleet_count(b,probe) local ended=false "
+        + "local function stop(state) if ended then return end ended=true finish(state) end "
+        + "local function guarded(step) return function() if not pcall(step) then stop('lost') end end end "
+        + "local function wait(done) local tries=0 local poll "
+        + "poll=guarded(function() tries=tries+1 "
+        + "if fleet_count(b,probe)>before then return done(true) end "
+        + "if tries>=" + NvimEchoPolls + " then return done(false) end "
+        + "vim.defer_fn(poll," + NvimEchoPollMs + ") end) "
+        + "vim.defer_fn(poll," + NvimEchoFirstPollMs + ") end "
+        + "vim.fn.chansend(c,prompt) "
+        + "wait(function(echoed) if echoed then return stop('echoed') end "
+        + "vim.fn.chansend(c,'\\21') vim.fn.chansend(c,prompt) "
+        + "wait(function(again) stop(again and 'echoed' or 'lost') end) end) end "
+        + "local function fleet_terminal() "
+        + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
+        + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
+        + "if c and vim.fn.jobwait({c},0)[1]==-1 then return b,c end end end end "
+        + "local function fleet_send(b,c,prompt,after) fleet_busy=true "
+        + "local ok=pcall(fleet_deliver,b,c,prompt,function(state) "
+        + "if state~='lost' then pcall(vim.fn.chansend,c,'\\r') else pcall(vim.fn.chansend,c,'\\21') end "
+        + "after(state) fleet_busy=false end) "
+        + "if not ok then fleet_busy=false end return ok end "
+        + "vim.api.nvim_create_user_command('FleetTell', function(o) "
+        + "if fleet_busy then return end local b,c=fleet_terminal() "
+        + "if b then fleet_send(b,c,o.args,function() end) end end, {nargs='+'}) "
+        + "local function fleet_pump(file,seenf,unconfirmedf,prompt) "
+        + "if fleet_busy then return true end "
         + "local m=vim.fn.getftime(file) "
         + "if m<=0 then return end "
         + "local seen=vim.fn.filereadable(seenf)==1 "
         + "and tonumber(vim.fn.readfile(seenf)[1]) or 0 "
         + "if m<=(seen or 0) then return end "
+        + "local gave=vim.fn.filereadable(unconfirmedf)==1 "
+        + "and tonumber(vim.fn.readfile(unconfirmedf)[1]) or 0 "
+        + "if m<=(gave or 0) then return end "
         + "local age=os.time()-m "
         + "if age<" + InstructionSettleSeconds + " then return end "
         + "if vim.fn.getftime(readyf)<fleet_boot and age<" + ReadyFallbackSeconds + " then return end "
-        + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
-        + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
-        + "if c then vim.fn.chansend(c, prompt) "
-        + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) "
-        + "pcall(vim.fn.writefile,{tostring(m)},seenf) return true end end end return false end "
+        + "local b,c=fleet_terminal() if not b then return false end "
+        + "return fleet_send(b,c,prompt,function(state) "
+        + "pcall(vim.fn.writefile,{tostring(m)},state=='echoed' and seenf or unconfirmedf) end) end "
         + "local instructionf='.fleet/" + AgentInstructionFile + "' "
         + "local instructionseenf='.fleet/" + InstructionSeenFile + "' "
+        + "local instructionunconfirmedf='.fleet/" + InstructionUnconfirmedFile + "' "
         + "local noticesf='.fleet/" + NoticesFile + "' "
         + "local noticesseenf='.fleet/" + NoticesSeenFile + "' "
+        + "local noticesunconfirmedf='.fleet/" + NoticesUnconfirmedFile + "' "
         + "fleet_seen_init(instructionf,instructionseenf) fleet_seen_init(noticesf,noticesseenf) "
         + "local function fleet_pumps() "
-        + "if not fleet_pump(instructionf,instructionseenf,'" + AgentInstructionPrompt + "') then "
-        + "fleet_pump(noticesf,noticesseenf,'" + NoticesPrompt + "') end end "
+        + "if not fleet_pump(instructionf,instructionseenf,instructionunconfirmedf,'" + AgentInstructionPrompt + "') then "
+        + "fleet_pump(noticesf,noticesseenf,noticesunconfirmedf,'" + NoticesPrompt + "') end end "
         + "local fleet_timer=(vim.uv or vim.loop).new_timer() "
         + "fleet_timer:start(3000, 3000, vim.schedule_wrap(fleet_pumps)) "
         + RemoteClipboard;
@@ -244,7 +274,15 @@ public static class AgentHarness
 
     public const string InstructionSettleSeconds = "2";
 
+    private const string NvimEchoFirstPollMs = "400";
+
+    private const string NvimEchoPollMs = "200";
+
+    private const string NvimEchoPolls = "5";
+
     public const int EchoProbeLength = 16;
+
+    private const string EchoProbeLengthText = "16";
 
     public const string ReadyFallbackSeconds = "60";
 
