@@ -1,4 +1,5 @@
 using Fleet.Platform.Approvals;
+using Fleet.Platform.Storage;
 using Fleet.Ports.Approvals.Enums;
 using Fleet.Ports.Approvals.Models;
 
@@ -155,6 +156,86 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
         _now += TimeSpan.FromSeconds(6);
 
         Assert.NotNull(channel.TakePending("techweb"));
+    }
+
+    [Fact]
+    public async Task An_expired_request_names_who_it_was_shown_over_and_how_long_it_waited()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(90));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask() with { Caller = "upgrade" });
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(91);
+        var outcome = await asking;
+
+        Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
+        Assert.Equal(
+            "No one answered the approval prompt (shown over upgrade in techweb) within 90 s",
+            outcome.Reason);
+        Assert.DoesNotContain("dashboard", outcome.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task An_expired_request_from_the_main_pane_says_it_was_shown_over_the_orchestrator()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(90));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask());
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(91);
+
+        Assert.Equal(
+            "No one answered the approval prompt (shown over orchestrator in techweb) within 90 s",
+            (await asking).Reason);
+    }
+
+    [Fact]
+    public async Task A_request_cannot_wait_past_its_own_timeout()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(120));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask() with { Caller = "upgrade", Timeout = TimeSpan.FromSeconds(55) });
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(56);
+        var outcome = await asking;
+
+        Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
+        Assert.EndsWith("within 55 s", outcome.Reason);
+    }
+
+    [Fact]
+    public async Task An_answer_after_the_deadline_leaves_no_reply_behind()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(55));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask());
+        var pending = SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(56);
+        var outcome = await asking;
+
+        channel.Answer("techweb", pending!.Id, ApprovalDecision.Allowed);
+
+        Assert.False(outcome.Allowed);
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(FleetPaths.Approvals, "techweb")));
+    }
+
+    [Fact]
+    public void The_pending_request_carries_the_caller_to_the_dashboard()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Caller = "upgrade" });
+
+        Assert.Equal("upgrade", SpinForPending(channel, "techweb")!.Request.Caller);
     }
 
     private async Task Answer(FileApprovalChannel channel, ApprovalDecision decision)

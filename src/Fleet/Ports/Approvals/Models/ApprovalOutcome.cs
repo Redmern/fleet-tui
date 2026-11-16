@@ -12,6 +12,10 @@ public sealed record ApprovalOutcome(ApprovalDecision Decision, string Reason)
 
     public static ApprovalOutcome Expired(string reason) => new(ApprovalDecision.Expired, reason);
 
+    public static ApprovalOutcome NoAnswer(ApprovalRequest request, TimeSpan waited) =>
+        Expired(
+            $"No one answered the approval prompt (shown over {request.CallerName} in {request.Project}) within {(int)waited.TotalSeconds} s");
+
     public static ApprovalOutcome NoDashboard(string reason) =>
         new(ApprovalDecision.NoDashboard, reason);
 }

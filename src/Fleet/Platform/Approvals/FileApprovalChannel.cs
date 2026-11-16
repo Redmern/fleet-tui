@@ -16,7 +16,7 @@ public sealed class FileApprovalChannel(
 {
     private readonly TimeSpan _poll = poll ?? TimeSpan.FromMilliseconds(100);
 
-    private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(120);
+    private readonly TimeSpan _timeout = timeout ?? ApprovalRequest.DefaultWait;
 
     private readonly TimeSpan _stale = stale ?? TimeSpan.FromSeconds(12);
 
@@ -49,7 +49,8 @@ public sealed class FileApprovalChannel(
             return ApprovalOutcome.NoDashboard("fleet could not record the approval request.");
         }
 
-        var deadline = _clock() + _timeout;
+        var wait = request.Timeout ?? _timeout;
+        var deadline = _clock() + wait;
 
         try
         {
@@ -73,7 +74,7 @@ public sealed class FileApprovalChannel(
                 await Task.Delay(_poll, ct).ConfigureAwait(false);
             }
 
-            return ApprovalOutcome.Expired("Timed out waiting for the dashboard to answer.");
+            return ApprovalOutcome.NoAnswer(request, wait);
         }
         finally
         {
@@ -133,7 +134,7 @@ public sealed class FileApprovalChannel(
 
             var file = ReadAsk(taken);
 
-            return new PendingApproval(stem, new ApprovalRequest(project, file.Tool, file.Summary, file.Pane));
+            return new PendingApproval(stem, new ApprovalRequest(project, file.Tool, file.Summary, file.Pane, file.Caller));
         }
 
         return null;
@@ -143,7 +144,7 @@ public sealed class FileApprovalChannel(
     {
         var dir = DirFor(project);
 
-        if (dir is not null)
+        if (dir is not null && (File.Exists(Path.Combine(dir, id + ".taken")) || File.Exists(Path.Combine(dir, id + ".ask"))))
         {
             TryWrite(Path.Combine(dir, id + ".reply"), decision.ToString());
         }
@@ -189,7 +190,7 @@ public sealed class FileApprovalChannel(
 
     private static string Serialize(ApprovalRequest request) =>
         JsonSerializer.Serialize(
-            new AskFile { Tool = request.Tool, Summary = request.Summary, Pane = request.Pane },
+            new AskFile { Tool = request.Tool, Summary = request.Summary, Pane = request.Pane, Caller = request.Caller },
             FleetJsonContext.Default.AskFile);
 
     private static AskFile ReadAsk(string path)

@@ -7,4 +7,6 @@ public sealed class AskFile
     public string Summary { get; set; } = string.Empty;
 
     public string? Pane { get; set; }
+
+    public string Caller { get; set; } = string.Empty;
 }
