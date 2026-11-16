@@ -531,6 +531,37 @@ public sealed class StdioMcpServerTests
         Assert.Equal(["1", "3", "4"], output.Lines.Select(IdOf).Order());
     }
 
+    [Fact]
+    public async Task A_call_that_reuses_the_id_of_a_running_call_is_refused()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var invoked = 0;
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            Interlocked.Increment(ref invoked);
+
+            await release.Task.WaitAsync(Patience);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n" + Call(1) + "\n"), output, _log)
+            .RunAsync(serving);
+
+        var refusal = Assert.Single(await output.WaitForLines(1));
+
+        Assert.Contains("-32600", refusal);
+        Assert.Equal("1", IdOf(refusal));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(1, invoked);
+        Assert.Contains("\"result\"", output.Lines[1]);
+    }
+
     private static string Call(int id, string meta = "") =>
         $"{{\"id\":{id},\"method\":\"tools/call\",\"params\":{{\"name\":\"list_agents\",\"arguments\":{{}}{meta}}}}}";
 

@@ -104,9 +104,15 @@ public sealed class StdioMcpServer(
     {
         var cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        _cancellable.TryAdd(call.Id.Raw, cancel);
+        if (_cancellable.TryAdd(call.Id.Raw, cancel))
+        {
+            return Task.Run(() => RunCall(call, serving, cancel), CancellationToken.None);
+        }
 
-        return Task.Run(() => RunCall(call, serving, cancel), CancellationToken.None);
+        cancel.Dispose();
+
+        return Send(
+            JsonRpcCodec.Error(call.Id, -32600, "A request with this id is still running."), ct);
     }
 
     private void Cancel(RpcId id)
