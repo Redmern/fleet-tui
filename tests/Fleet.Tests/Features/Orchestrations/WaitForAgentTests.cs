@@ -2,6 +2,10 @@ using Fleet.Features.Orchestrations.WaitForAgent;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
+using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Status;
+using Fleet.Tests.Support;
 
 namespace Fleet.Tests.Features.Orchestrations;
 
@@ -30,7 +34,7 @@ public sealed class WaitForAgentTests : IDisposable
         }
     }
 
-    private WaitForAgentHandler Handler(Action<int>? onPoll = null, int quietSeconds = 60) => new(
+    private WaitForAgentHandler Handler(Action<int>? onPoll = null, int? quietSeconds = 60) => new(
         _store,
         (agent, _) => Task.FromResult(_texts.TryGetValue(agent.Worktree, out var text) ? text : null),
         () => _now,
@@ -42,7 +46,7 @@ public sealed class WaitForAgentTests : IDisposable
             return Task.CompletedTask;
         },
         TimeSpan.FromSeconds(10),
-        TimeSpan.FromSeconds(quietSeconds));
+        () => SettingsConfig.Default with { IdleWindowSeconds = quietSeconds });
 
     private AgentRecord Agent(string branch, string status = OrchestrationStatus.Working, string harness = AgentHarness.Opencode)
     {
@@ -346,6 +350,35 @@ public sealed class WaitForAgentTests : IDisposable
 
         Assert.StartsWith("api/x: still working after 30s", result.Value);
         Assert.DoesNotContain("clamped", result.Value);
+    }
+
+    [Fact]
+    public async Task Without_a_setting_the_wait_uses_the_default_idle_window_and_names_it()
+    {
+        var agent = Agent("x");
+        _texts[agent.Worktree] = "opencode > ";
+        PaneQuiet.Observe(agent.Worktree, "opencode > ", _now.AddSeconds(-119));
+
+        var early = await Handler(quietSeconds: null).HandleAsync("p", "api", "x", TimeSpan.Zero);
+        _now = _now.AddSeconds(1);
+        var idle = await Handler(quietSeconds: null).HandleAsync("p", "api", "x", TimeSpan.Zero);
+
+        Assert.Contains("still working", early.Value);
+        Assert.StartsWith("api/x: idle — no pane output for 120s", idle.Value);
+    }
+
+    [Fact]
+    public async Task The_wait_ignores_the_running_harnesss_volatile_lines()
+    {
+        var agent = Agent("x");
+        var first = PaneCaptures.Read("opencode", "idle-120-a");
+        var second = PaneCaptures.Read("opencode", "idle-120-c");
+        PaneQuiet.Observe(agent.Worktree, first, _now.AddSeconds(-90), HarnessRegistry.Opencode.VolatilePatterns);
+        _texts[agent.Worktree] = second;
+
+        var idle = await Handler().HandleAsync("p", "api", "x", TimeSpan.Zero);
+
+        Assert.StartsWith("api/x: idle — no pane output for 60s", idle.Value);
     }
 
     private sealed class Store : IAgentStore

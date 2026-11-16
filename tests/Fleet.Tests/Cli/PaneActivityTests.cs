@@ -85,7 +85,7 @@ public class PaneActivityTests
             var done = Agent("d", harness: AgentHarness.Opencode, status: "done") with { Worktree = Path.Combine(root, "d") };
             var mux = new TextMux { Text = "opencode > " };
             var idle = new List<string>();
-            var activity = new PaneActivity(mux, a => idle.Add(a.Branch));
+            var activity = new PaneActivity(mux, (a, _) => idle.Add(a.Branch));
             var panes = new[] { PaneOf(agent), PaneOf(done) };
 
             activity.For([agent, done], panes, NoHook);

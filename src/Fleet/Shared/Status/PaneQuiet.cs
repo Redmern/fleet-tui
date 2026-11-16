@@ -8,8 +8,6 @@ namespace Fleet.Shared.Status;
 
 public static class PaneQuiet
 {
-    public static readonly TimeSpan QuietAfter = TimeSpan.FromSeconds(120);
-
     public const string FileName = "pane.mark";
 
     public static string Hash(string text, IReadOnlyList<Regex>? volatilePatterns = null) =>

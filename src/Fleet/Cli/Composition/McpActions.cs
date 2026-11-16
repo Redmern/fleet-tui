@@ -47,6 +47,8 @@ using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
+using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Status;
 using Fleet.Shared.Todos;
 
 namespace Fleet.Cli.Composition;
@@ -520,17 +522,19 @@ public sealed class McpActions(
         }
 
         var panes = await mux.ListPanesAsync(ct).ConfigureAwait(false);
+        var settings = Adapters.Settings().Load(project);
         var shown = new List<AgentRecord>(agents.Count);
 
         foreach (var agent in agents)
         {
-            shown.Add(await WithQuietPane(agent, panes, ct).ConfigureAwait(false));
+            shown.Add(await WithQuietPane(agent, panes, settings, ct).ConfigureAwait(false));
         }
 
         return shown;
     }
 
-    private async Task<AgentRecord> WithQuietPane(AgentRecord agent, IReadOnlyList<Pane> panes, CancellationToken ct)
+    private async Task<AgentRecord> WithQuietPane(
+        AgentRecord agent, IReadOnlyList<Pane> panes, SettingsConfig settings, CancellationToken ct)
     {
         var pane = panes.FirstOrDefault(p => AgentPanes.Owns(p, agent) && !SubBrowse.Is(p));
 
@@ -540,7 +544,8 @@ public sealed class McpActions(
         }
 
         var text = await mux.GetTextAsync(pane.Id, ct).ConfigureAwait(false);
-        var live = AgentActivity.Quiet(agent.Worktree, text, clock.GetUtcNow().UtcDateTime);
+        var live = AgentActivity.Quiet(
+            agent.Worktree, text, clock.GetUtcNow().UtcDateTime, PaneIdleRule.For(settings, agent.RunningHarness));
         var finished = OrchestrationStatus.Normalize(agent.Status)
             is OrchestrationStatus.Done or OrchestrationStatus.Failed;
 
@@ -562,7 +567,8 @@ public sealed class McpActions(
         }
 
         var waited = await new WaitForAgentHandler(
-                store, PaneTextFor, () => clock.GetUtcNow().UtcDateTime, (span, token) => Task.Delay(span, clock, token))
+                store, PaneTextFor, () => clock.GetUtcNow().UtcDateTime, (span, token) => Task.Delay(span, clock, token),
+                settings: () => Adapters.Settings().Load(project))
             .HandleAsync(
                 project,
                 Repo(request),

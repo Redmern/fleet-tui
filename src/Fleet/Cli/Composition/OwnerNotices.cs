@@ -11,7 +11,6 @@ using Fleet.Ports.Mux;
 using Fleet.Ports.Todos;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
-using Fleet.Shared.Status;
 
 namespace Fleet.Cli.Composition;
 
@@ -56,10 +55,10 @@ public sealed class OwnerNotices(
         return true;
     }
 
-    public void WentIdle(AgentRecord agent)
+    public void WentIdle(AgentRecord agent, TimeSpan window)
     {
         var line = $"{agent.Repository}/{agent.Branch}: idle — no pane output for "
-                   + $"{(int)PaneQuiet.QuietAfter.TotalSeconds}s and no done report";
+                   + $"{(int)window.TotalSeconds}s and no done report";
 
         if (new ReportStatusHandler(store).NoticeFor(project, root, agent, line) is not { } notice)
         {
@@ -90,7 +89,8 @@ public sealed class OwnerNotices(
             WentIdle,
             clock,
             lost ?? SessionLost,
-            panes => panes.Count > 0 && (Adapters.DashPane(project) is not { } dashboard || panes.Any(p => p.Id.Value == dashboard)));
+            panes => panes.Count > 0 && (Adapters.DashPane(project) is not { } dashboard || panes.Any(p => p.Id.Value == dashboard)),
+            () => Adapters.Settings().Load(project));
 
     public void SessionLost(AgentRecord agent) =>
         _ = Task.Run(async () =>

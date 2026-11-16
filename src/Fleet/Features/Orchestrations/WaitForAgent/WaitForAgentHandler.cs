@@ -4,6 +4,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings.Models;
 using Fleet.Shared.Status;
 
 namespace Fleet.Features.Orchestrations.WaitForAgent;
@@ -14,7 +15,7 @@ public sealed class WaitForAgentHandler(
     Func<DateTime>? clock = null,
     Func<TimeSpan, CancellationToken, Task>? delay = null,
     TimeSpan? poll = null,
-    TimeSpan? quietAfter = null)
+    Func<SettingsConfig>? settings = null)
 {
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(45);
 
@@ -23,8 +24,6 @@ public sealed class WaitForAgentHandler(
     private readonly Func<TimeSpan, CancellationToken, Task> _delay = delay ?? Task.Delay;
 
     private readonly TimeSpan _poll = poll ?? TimeSpan.FromSeconds(3);
-
-    private readonly TimeSpan _quietAfter = quietAfter ?? PaneQuiet.QuietAfter;
 
     public static WaitTimeout TimeoutFrom(int seconds, string harness)
     {
@@ -58,6 +57,7 @@ public sealed class WaitForAgentHandler(
     {
         var id = repository.Trim().Length == 0 ? branch.Trim() : $"{repository.Trim()}/{branch.Trim()}";
         var deadline = _now() + timeout;
+        var config = settings?.Invoke() ?? SettingsConfig.Default;
 
         while (true)
         {
@@ -82,10 +82,12 @@ public sealed class WaitForAgentHandler(
 
             var now = _now();
 
-            if (PaneQuiet.Quiet(PaneQuiet.Observe(agent.Worktree, text, now), now, _quietAfter))
+            var rule = PaneIdleRule.For(config, agent.RunningHarness);
+
+            if (rule.Quiet(agent.Worktree, text, now))
             {
                 return Result<string>.Ok(
-                    $"{id}: idle — no pane output for {Seconds(_quietAfter)} and no done report. "
+                    $"{id}: idle — no pane output for {Seconds(rule.Window)} and no done report. "
                     + "It may be waiting on a question: ask it with tell_agent what it needs.");
             }
 

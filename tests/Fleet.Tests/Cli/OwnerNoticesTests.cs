@@ -10,6 +10,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Messaging;
+using Fleet.Tests.EndToEnd.MixedTeam;
 
 namespace Fleet.Tests.Cli;
 
@@ -179,6 +180,63 @@ public sealed class OwnerNoticesTests : IDisposable
         activity.For([worker], new List<Pane> { Of(dash), Of(other) }, _ => null);
 
         Assert.Equal("fix", Assert.Single(lost).Branch);
+    }
+
+    [Fact]
+    public async Task The_idle_notice_names_the_window_that_applied()
+    {
+        var sub = Sub("lead");
+        _store.Agents.Add(sub);
+        await _mux.SpawnAsync(new() { Cwd = sub.Worktree, NewWindow = true });
+        var worker = new AgentRecord(
+            Path.Combine(_root, "api", "feat"), "api", "feat", AgentHarness.Opencode, "origin/main", true,
+            Owner: "lead", Open: true, Status: OrchestrationStatus.Working);
+        _store.Agents.Add(worker);
+
+        Notices.WentIdle(worker, TimeSpan.FromSeconds(45));
+
+        // The notice is written on another thread, and the writer holds the file while it appends.
+        string[] Written()
+        {
+            try
+            {
+                return File.Exists(NoticesOf(sub)) ? File.ReadAllLines(NoticesOf(sub)) : [];
+            }
+            catch (IOException)
+            {
+                return [];
+            }
+        }
+
+        var lines = Array.Empty<string>();
+        await MixedTeamRig.UntilAsync(
+            () => (lines = Written()).Length > 0, "the idle notice was not written for the owner");
+
+        Assert.Contains(
+            "api/feat: idle — no pane output for 45s and no done report", Assert.Single(lines), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_dashboard_watch_takes_its_idle_window_from_the_settings_file()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(FleetPaths.IdleSettingsFile, """{"version":1,"idleWindowSeconds":45}""");
+        var clock = new SkippingClock();
+        var worker = new AgentRecord(
+            Path.Combine(_root, "api", "feat"), "api", "feat", AgentHarness.Opencode, "origin/main", true, Open: true);
+        Directory.CreateDirectory(worker.Worktree);
+        var id = await _mux.SpawnAsync(new() { Cwd = worker.Worktree });
+        _mux.SetText(id, "opencode > ");
+        var panes = await _mux.ListPanesAsync();
+        var activity = new OwnerNotices("techweb", _root, _mux, _store, _log, () => false, clock).Watch();
+
+        var first = activity.For([worker], panes, _ => null).Single().Status;
+        clock.Advance(TimeSpan.FromSeconds(44));
+        var early = activity.For([worker], panes, _ => null).Single().Status;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var idle = activity.For([worker], panes, _ => null).Single().Status;
+
+        Assert.Equal(["working", "working", "idle"], [first, early, idle]);
     }
 
     private sealed class ImmediateClock : TimeProvider

@@ -30,16 +30,14 @@ public static class AgentActivity
         HarnessRegistry.Find(agent.RunningHarness) is { } profile
         && !profile.Has(HarnessCapabilities.Hooks);
 
-    public static string Quiet(string folder, string paneText, DateTime now, TimeSpan? window = null)
+    public static string Quiet(string folder, string paneText, DateTime now, PaneIdleRule rule)
     {
         if (paneText.Trim().Length == 0)
         {
             return string.Empty;
         }
 
-        var mark = PaneQuiet.Observe(folder, paneText, now);
-
-        return PaneQuiet.Quiet(mark, now, window ?? PaneQuiet.QuietAfter) ? Idle : Working;
+        return rule.Quiet(folder, paneText, now) ? Idle : Working;
     }
 
     public static bool NeedsPane(AgentState state) => state is AgentState.Stalled or AgentState.Blocked;
