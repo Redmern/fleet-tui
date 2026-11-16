@@ -1051,10 +1051,12 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
 - *Instructions are typed.* fleet writes the task to `.fleet/instruction.md` and types
   "Read .fleet/instruction.md in this folder and do what it says." into the pane, then
   Enter. A TUI that is still starting can drop typed keys, so for the first prompt of an
-  opencode, codex or pi pane fleet types it, reads the pane, and types it again until the
-  pane shows it (for at most 60 seconds) before it sends Enter. A prompt that was already
-  on the screen from an earlier message does not count, and before fleet types again it
-  sends ctrl+u to empty the input line, so a slow harness does not get the prompt twice.
+  opencode, codex or pi pane fleet types it, reads the pane, and types it once more if the
+  pane does not show it, before it sends Enter. A prompt that was already on the screen from
+  an earlier message does not count, and before fleet types again it sends ctrl+u to empty the
+  input line, so a slow harness does not get the prompt twice. If the pane still does not show
+  it, fleet clears the line and leaves it unsubmitted, and `new_agent` says delivery was not
+  confirmed.
 - *`tell_agent` is typed* whenever the caller or the target is not Claude: there is no
   `SendMessage` address to hand out. Two Claude sessions keep using `SendMessage`. A
   caller fleet has no record of (an agent that was removed while its harness still runs)
