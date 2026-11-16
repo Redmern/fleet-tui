@@ -838,8 +838,19 @@ public sealed class FleetDaemon(DaemonOptions options)
                 }
 
             case MessageType.Command when session is not null:
-                Command(session, Wire.Read(payload, WireJsonContext.Default.CommandMessage));
-                break;
+                {
+                    var command = Wire.Read(payload, WireJsonContext.Default.CommandMessage);
+                    try
+                    {
+                        Command(session, command);
+                    }
+                    catch (InvalidOperationException e)
+                    {
+                        options.Log($"{session.Client}: {command.Name} failed: {e.Message}");
+                    }
+
+                    break;
+                }
 
             case MessageType.ClipboardImageResponse when session is not null:
                 {

@@ -1309,6 +1309,20 @@ public sealed class DaemonTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_command_to_show_a_workspace_that_does_not_exist_keeps_the_window_attached()
+    {
+        var control = await ControlAsync();
+        await SpawnAsync(control, "fleet", "fleet-shell");
+        var client = await AttachAsync(workspace: "fleet");
+
+        await client.SendCommandAsync("show", "no-such-workspace");
+
+        Assert.True((await client.RequestAsync(new ControlRequest { Op = "ping" })).Ok);
+        var seen = (await control.RequestAsync(new ControlRequest { Op = "list-workspaces", Client = client.Id })).Workspaces!;
+        Assert.Equal("fleet", seen.Single(w => w.ShownHere).Name);
+    }
+
+    [Fact]
     public async Task Open_window_asks_the_window_to_open_one_and_moves_the_project_out_of_it()
     {
         var control = await ControlAsync();
