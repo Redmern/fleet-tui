@@ -1,8 +1,9 @@
+using System.Text.RegularExpressions;
 using Fleet.Shared.Results;
 
 namespace Fleet.Shared.Harness;
 
-public static class HarnessRegistry
+public static partial class HarnessRegistry
 {
     public const string ClaudeName = "claude";
 
@@ -52,6 +53,7 @@ public static class HarnessRegistry
         InstallHint = "npm install -g opencode-ai",
         ClientToolTimeout = SixtySecondToolTimeout,
         InputRetry = TuiInputRetry,
+        VolatilePatterns = [OpencodeProgressBar()],
     };
 
     public static HarnessProfile Codex { get; } = new(
@@ -106,4 +108,7 @@ public static class HarnessRegistry
             : Result<string>.Fail(
                 $"'{wanted}' is not a registered harness. Valid harnesses: {string.Join(", ", Selectable)}.");
     }
+
+    [GeneratedRegex("[⬝■]", RegexOptions.CultureInvariant)]
+    private static partial Regex OpencodeProgressBar();
 }
