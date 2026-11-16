@@ -247,7 +247,8 @@ public sealed class McpActions(
         }
 
         var started = await Start(
-                repo, Branch(request), caller, ToolArguments.Text(request, ToolArguments.Task), ct, harness)
+                repo, Branch(request), caller, ToolArguments.Text(request, ToolArguments.Task), ct, harness,
+                DeadlineOf(request))
             .ConfigureAwait(false);
 
         return started.Succeeded ? Ok(started.Value!) : McpResult.Error(started.Error!);
@@ -329,6 +330,8 @@ public sealed class McpActions(
                 + $"not confirmed ({DispatchNote.Reason(doubted)}); use tell_agent to check on it.{session}",
         });
     }
+
+    private DateTimeOffset DeadlineOf(McpRequest request) => (request.Arrived ?? clock.GetUtcNow()) + CallBudget();
 
     private TimeSpan CallBudget() =>
         (HarnessRegistry.Find(CallerHarness())?.ClientToolTimeout
@@ -820,7 +823,7 @@ public sealed class McpActions(
                     Branch(request),
                     ToolArguments.Flag(request, ToolArguments.Research),
                     ToolArguments.Text(request, ToolArguments.Harness),
-                    CallBudget()),
+                    Remaining(DeadlineOf(request))),
                 clock.GetUtcNow().ToString("O"),
                 ct)
             .ConfigureAwait(false);

@@ -1060,7 +1060,8 @@ marks `instruction.seen` only for an echoed prompt and otherwise writes
 
 `new_agent` and `dispatch` answer within one deadline: the caller's client tool limit
 (`ClientToolTimeout` of its harness, the strictest one for a caller fleet does not know) less
-ten seconds, covering the ready wait, the typing and the wait for nvim's pump together. They
+ten seconds, counted from the moment the call reaches fleet and covering the approval prompt, the
+wait for an earlier change, the ready wait, the typing and the wait for nvim's pump together. They
 say "gave it its first task" only for an echoed typing, a Claude typing with its ready
 marker, or a pump that marked the file seen; otherwise they say the task is written to
 `.fleet/instruction.md` and delivery was not confirmed, with the reason (the pane never

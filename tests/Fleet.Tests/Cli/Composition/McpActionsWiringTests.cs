@@ -312,6 +312,63 @@ public sealed class McpActionsWiringTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_agent_waiting_on_an_approval_answers_inside_a_sixty_second_callers_tool_limit_counted_from_its_arrival()
+    {
+        await _team.AddRepositoryAsync("api");
+        _team.Clock.Skipped += () => PumpActs(seen: false);
+
+        var arrived = _team.Clock.GetUtcNow();
+        var started = await _team.CallAskedAsync(
+            "agent:api/ghost", HarnessTool.NewAgent, TimeSpan.FromSeconds(40),
+            ("repository", "api"), ("branch", "feat"), ("harness", "nvim"), ("task", "build the form"));
+        var answered = _team.Clock.GetUtcNow() - arrived;
+
+        Assert.False(started.IsError, started.Text);
+        Assert.Contains("delivery was not confirmed", started.Text);
+        Assert.InRange(answered, TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(50.5));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_dispatch_waiting_on_an_approval_answers_inside_the_codex_callers_tool_limit_counted_from_its_arrival()
+    {
+        _team.SubOrchestratorsInNvim(true);
+        var lead = (await _team.DispatchAsync(string.Empty, "lead the work", "codex")).Slug;
+        _team.Clock.Skipped += () => PumpActs(seen: false);
+
+        var arrived = _team.Clock.GetUtcNow();
+        var sent = await _team.CallAskedAsync(
+            lead, HarnessTool.Dispatch, TimeSpan.FromSeconds(40), ("message", "fix the login bug"));
+        var answered = _team.Clock.GetUtcNow() - arrived;
+
+        Assert.False(sent.IsError, sent.Text);
+        Assert.Contains("delivery was not confirmed", sent.Text);
+        Assert.InRange(answered, TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(50.5));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_dispatch_whose_approval_used_up_the_whole_budget_still_answers_not_confirmed_without_waiting_more()
+    {
+        _team.SubOrchestratorsInNvim(true);
+        var lead = (await _team.DispatchAsync(string.Empty, "lead the work", "codex")).Slug;
+        _team.Clock.Skipped += () => PumpActs(seen: false);
+
+        var arrived = _team.Clock.GetUtcNow();
+        var sent = await _team.CallAskedAsync(
+            lead, HarnessTool.Dispatch, TimeSpan.FromSeconds(52), ("message", "fix the login bug"));
+        var answered = _team.Clock.GetUtcNow() - arrived;
+
+        Assert.False(sent.IsError, sent.Text);
+        Assert.Contains("delivery was not confirmed", sent.Text);
+        Assert.InRange(answered, TimeSpan.FromSeconds(52), TimeSpan.FromSeconds(52.5));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
     public async Task A_dispatch_whose_caller_gave_up_stops_where_it_is_and_starts_nothing_more()
     {
         _team.SubOrchestratorsInNvim(true);

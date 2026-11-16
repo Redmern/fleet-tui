@@ -1,6 +1,6 @@
 namespace Fleet.Ports.Mcp.Models;
 
-public sealed record McpRequest(string Tool, IReadOnlyDictionary<string, string> Arguments)
+public sealed record McpRequest(string Tool, IReadOnlyDictionary<string, string> Arguments, DateTimeOffset? Arrived = null)
 {
     public string Value(string key) => Arguments.TryGetValue(key, out var value) ? value : string.Empty;
 
