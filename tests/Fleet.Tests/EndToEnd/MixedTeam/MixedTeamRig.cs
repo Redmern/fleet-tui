@@ -206,9 +206,19 @@ internal sealed class MixedTeamRig
     }
 
     // What claude's status hook does for a running session: it leaves the session's cross-session inbox address.
-    public Task ClaudeHookReportsInboxAsync(AgentRecord agent, string address) =>
-        Adapters.AgentStates().ReportAsync(
-            new AgentReport(agent.Worktree, "session-1", AgentState.Idle, DateTime.UtcNow, Inbox: address));
+    // The address is a real socket file under the project root, because fleet hands out only sockets that exist.
+    public Task ClaudeHookReportsInboxAsync(AgentRecord agent, string address)
+    {
+        var socket = InboxAddress(address);
+        Directory.CreateDirectory(Path.GetDirectoryName(socket["uds:".Length..])!);
+        File.WriteAllText(socket["uds:".Length..], string.Empty);
+
+        return Adapters.AgentStates().ReportAsync(
+            new AgentReport(agent.Worktree, "session-1", AgentState.Idle, DateTime.UtcNow, Inbox: socket));
+    }
+
+    public string InboxAddress(string address) =>
+        "uds:" + Path.Combine(Root, ".sockets", address.StartsWith("uds:", StringComparison.Ordinal) ? address[4..] : address);
 
     // The dashboard's status refresh (DashboardWiring: new PaneActivity(mux, new OwnerNotices(...).WentIdle)).
     public PaneActivity Dashboard() =>
