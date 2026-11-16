@@ -445,6 +445,26 @@ public sealed class StdioMcpServerTests
         Assert.Empty(output.Lines);
     }
 
+    [Fact]
+    public async Task A_cancellation_that_arrives_during_a_write_still_leaves_a_whole_line()
+    {
+        var letGo = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        using var stop = new CancellationTokenSource();
+
+        output.HoldNextWriteUntil(letGo.Task);
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n"), output, _log)
+            .RunAsync(Serving(_ => McpResult.Ok("ok")), stop.Token);
+
+        await output.Holding.WaitAsync(Patience);
+        await stop.CancelAsync();
+        letGo.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
+    }
+
     private static string Call(int id, string meta = "") =>
         $"{{\"id\":{id},\"method\":\"tools/call\",\"params\":{{\"name\":\"list_agents\",\"arguments\":{{}}{meta}}}}}";
 

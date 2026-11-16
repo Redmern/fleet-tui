@@ -211,9 +211,9 @@ public sealed class StdioMcpServer(
                 return;
             }
 
-            await output.WriteAsync(message.AsMemory(), ct).ConfigureAwait(false);
+            await output.WriteAsync(message.AsMemory(), CancellationToken.None).ConfigureAwait(false);
             await output.WriteAsync('\n').ConfigureAwait(false);
-            await output.FlushAsync(ct).ConfigureAwait(false);
+            await output.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
