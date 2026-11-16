@@ -7,6 +7,7 @@ using Fleet.Platform.Mux.Embedded.Protocol;
 using Fleet.Ports.Forwards.Enums;
 using Fleet.Ports.Forwards.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Viewing;
 using Fleet.Tests.Platform.Forwards;
 
 namespace Fleet.Tests.Platform.Mux.Embedded;
@@ -506,7 +507,7 @@ public sealed class RemoteForwardTests : IAsyncLifetime
         await using var client = await DaemonTests.TestClient.ConnectAsync(
             _far, ClientRoles.Attach, 80, 24, null, furnish: hello => hello.Forwards = true);
 
-        var handed = await client.RequestAsync(new ControlRequest { Op = "hand-back", Text = FleetDaemon.HandedBack, Client = client.Id });
+        var handed = await client.RequestAsync(new ControlRequest { Op = "hand-back", Text = ViewerScreens.Ids[0], Client = client.Id });
 
         Assert.False(handed.Pending is true);
     }

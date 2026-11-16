@@ -6,6 +6,7 @@ using Fleet.Ports.Remotes.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
+using Fleet.Shared.Viewing;
 
 namespace Fleet.Platform.Mux.Embedded.Daemon;
 
@@ -369,7 +370,7 @@ public sealed class RemoteLink(string host, Func<string, RemoteChannel> open, Ac
                 _name = status.Status?.Host is { Length: > 0 } name ? name : host;
             }
 
-            await RequestAsync(new ControlRequest { Op = "set-label", Text = Label(Name) }, ct).ConfigureAwait(false);
+            await RequestAsync(new ControlRequest { Op = "set-label", Text = Label(Name), Args = [.. ViewerScreens.Ids] }, ct).ConfigureAwait(false);
             log($"remote {host}: connected to {Name}");
 
             while (!ct.IsCancellationRequested)
