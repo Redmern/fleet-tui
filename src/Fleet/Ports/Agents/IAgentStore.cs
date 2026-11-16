@@ -13,4 +13,6 @@ public interface IAgentStore
     IReadOnlyList<AgentRecord> List(string project);
 
     bool Remove(string project, string worktree);
+
+    AgentLocation? FindByWorktree(string worktree) => null;
 }
