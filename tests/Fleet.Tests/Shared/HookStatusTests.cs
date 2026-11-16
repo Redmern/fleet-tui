@@ -138,3 +138,44 @@ public sealed class HookStatusTests
         Assert.Null(HookStatus.ReportFor(Event("Notification", notification: "auth_success"), Now));
     }
 }
+
+public sealed class SessionEndReasonTests
+{
+    private static HookEvent End(string reason, string agentId = "", string name = "SessionEnd") =>
+        new(name, "C:/w/a", "s1", Reason: reason, AgentId: agentId);
+
+    [Theory]
+    [InlineData("logout")]
+    [InlineData("prompt_input_exit")]
+    [InlineData("bypass_permissions_disabled")]
+    [InlineData("other")]
+    [InlineData("")]
+    public void A_session_that_exits_for_good_counts_as_ended(string reason)
+    {
+        Assert.True(HookStatus.EndsForGood(End(reason)));
+    }
+
+    [Theory]
+    [InlineData("clear")]
+    [InlineData("resume")]
+    public void A_session_that_carries_on_in_the_same_pane_does_not(string reason)
+    {
+        Assert.False(HookStatus.EndsForGood(End(reason)));
+    }
+
+    [Fact]
+    public void A_subagent_or_another_event_does_not_end_the_session()
+    {
+        Assert.False(HookStatus.EndsForGood(End("other", agentId: "sub-1")));
+        Assert.False(HookStatus.EndsForGood(End("other", name: "Stop")));
+    }
+
+    [Fact]
+    public void The_reason_claude_sends_reaches_the_hook_event()
+    {
+        var payload = Fleet.Platform.Hooks.HookIo.Read(new StringReader(
+            """{"session_id":"s1","cwd":"C:/w/a","hook_event_name":"SessionEnd","reason":"logout"}"""));
+
+        Assert.Equal("logout", Fleet.Platform.Hooks.HookIo.Event(payload).Reason);
+    }
+}

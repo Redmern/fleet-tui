@@ -31,5 +31,8 @@ public sealed class HookPayload
     [JsonPropertyName("source")]
     public string? Source { get; set; }
 
+    [JsonPropertyName("reason")]
+    public string? Reason { get; set; }
+
     public string Text => Prompt ?? UserPrompt ?? string.Empty;
 }
