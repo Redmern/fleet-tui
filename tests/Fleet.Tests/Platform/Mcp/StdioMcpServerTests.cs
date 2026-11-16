@@ -465,6 +465,72 @@ public sealed class StdioMcpServerTests
         Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
     }
 
+    [Fact]
+    public async Task A_progress_tick_that_waits_behind_the_result_is_dropped()
+    {
+        var clock = new ManualClock();
+        var output = new LineSink();
+        var letGo = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishSlow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var transcript = string.Join('\n',
+            Call(1, ""","_meta":{"progressToken":"tok-1"}"""),
+            """{"id":2,"method":"tools/call","params":{"name":"slow"}}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (request, _) =>
+        {
+            if (request.Tool == "slow")
+            {
+                await finishSlow.Task.WaitAsync(Patience);
+            }
+
+            return McpResult.Ok("ok");
+        });
+
+        output.HoldNextWriteUntil(letGo.Task);
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log, clock).RunAsync(serving);
+
+        // The first result is half written and holds the write lock: the tick queues behind it, and the second
+        // result queues behind the tick, so a tick that is written anyway lands between the two results.
+        await output.Holding.WaitAsync(Patience);
+        clock.Advance(TimeSpan.FromSeconds(20));
+        finishSlow.SetResult();
+        letGo.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["1", "2"], output.Lines.Select(IdOf));
+    }
+
+    [Fact]
+    public async Task A_cancelled_call_on_a_one_at_a_time_server_sends_no_result_and_leaves_the_turn_free()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            Call(2),
+            Call(3),
+            """{"method":"notifications/cancelled","params":{"requestId":2}}""",
+            """{"id":4,"method":"ping"}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            await release.Task.WaitAsync(Patience, ct);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log, oneCallAtATime: true)
+            .RunAsync(serving);
+
+        Assert.Equal("4", IdOf(Assert.Single(await output.WaitForLines(1))));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["1", "3", "4"], output.Lines.Select(IdOf).Order());
+    }
+
     private static string Call(int id, string meta = "") =>
         $"{{\"id\":{id},\"method\":\"tools/call\",\"params\":{{\"name\":\"list_agents\",\"arguments\":{{}}{meta}}}}}";
 
