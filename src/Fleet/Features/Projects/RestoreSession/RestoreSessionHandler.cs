@@ -1,8 +1,10 @@
+using Fleet.Features.Agents;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Status;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Settings;
@@ -15,7 +17,8 @@ public sealed class RestoreSessionHandler(
     bool subOrchestratorsInNvim = true,
     IAgentStore? store = null,
     RoleModels? models = null,
-    bool agentsInNvim = true)
+    bool agentsInNvim = true,
+    bool statusHooks = true)
 {
     private const int AtOnce = 4;
 
@@ -114,10 +117,14 @@ public sealed class RestoreSessionHandler(
         return true;
     }
 
-    private Task<PaneId> SpawnAsync(string project, AgentRecord agent, string? window, CancellationToken ct) =>
-        mux.SpawnAsync(
+    private Task<PaneId> SpawnAsync(string project, AgentRecord agent, string? window, CancellationToken ct)
+    {
+        AgentTraces.Opened(HostedBy(agent, agentsInNvim), statusHooks);
+
+        return mux.SpawnAsync(
             Options(project, agent, window, mux.Caps.HasFlag(MuxCaps.Workspaces), subOrchestratorsInNvim, models, agentsInNvim),
             ct);
+    }
 
     private Task TitleAsync(PaneId pane, AgentRecord agent, CancellationToken ct) =>
         mux.SetTitleAsync(pane, AgentTitle.For(agent.Repository, agent.Branch), ct);

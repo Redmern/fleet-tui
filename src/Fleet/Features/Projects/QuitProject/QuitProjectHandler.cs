@@ -6,6 +6,7 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Status;
 
 namespace Fleet.Features.Projects.QuitProject;
 
@@ -27,6 +28,11 @@ public sealed class QuitProjectHandler(IMuxDriver mux, IAgentStore store)
         }
 
         Remember(project, agents, panes);
+
+        foreach (var agent in agents.Where(a => panes.Any(p => AgentPaneMatch.Owns(p, a))))
+        {
+            ClosingMark.Write(agent.Worktree);
+        }
 
         foreach (var pane in doomed)
         {

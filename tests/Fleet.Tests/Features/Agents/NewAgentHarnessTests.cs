@@ -7,8 +7,11 @@ using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Harness;
+using Fleet.Ports.Settings;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Status;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -56,6 +59,38 @@ public sealed class NewAgentHarnessTests : IDisposable
         var written = Assert.Single(configs.Written);
         Assert.Equal((AgentHarness.Opencode, result.Value!.Worktree, "techweb", "backend", "feat", 0), written);
         Assert.Single(await _mux.ListPanesAsync());
+    }
+
+    [Theory]
+    [InlineData(AgentHarness.Opencode, true, false)]
+    [InlineData(AgentHarness.Claude, true, true)]
+    [InlineData(AgentHarness.Claude, false, false)]
+    public async Task A_new_agent_keeps_the_closing_mark_only_while_its_claude_session_can_still_clear_it(
+        string harness, bool statusHooks, bool markKept)
+    {
+        var directory = await RepositoryAsync();
+        var settings = new Settings(SettingsConfig.Default.WithStatusHooks(statusHooks));
+        var store = new NoStore();
+        var handler = new NewAgentHandler(new GitRunner(), _mux, store, settings: settings);
+        var command = new NewAgentCommand("techweb", "backend", directory, "feat", "", harness);
+        var first = await handler.HandleAsync(command);
+        Assert.True(first.Succeeded, first.Error);
+        ClosingMark.Write(first.Value!.Worktree);
+
+        var again = await handler.HandleAsync(command);
+
+        Assert.True(again.Succeeded, again.Error);
+        Assert.Equal(first.Value.Worktree, again.Value!.Worktree);
+        Assert.Equal(markKept, ClosingMark.Exists(first.Value.Worktree));
+    }
+
+    private sealed class Settings(SettingsConfig config) : ISettingsStore
+    {
+        public SettingsConfig Load(string project) => config;
+
+        public void Save(string project, SettingsConfig config)
+        {
+        }
     }
 
     private sealed class RecordingConfigs(FakeMuxDriver mux) : IHarnessConfigs, IHarnessConfig

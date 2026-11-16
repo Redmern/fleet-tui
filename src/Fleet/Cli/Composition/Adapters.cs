@@ -128,6 +128,8 @@ public static class Adapters
 
     public static bool AgentsInNvim(string project) => Settings().Load(project).HostsInNvim;
 
+    public static bool StatusHooks(string project) => Settings().Load(project).StatusHooks;
+
     public static string Opens(string project, AgentRecord agent)
     {
         var settings = Settings().Load(project);

@@ -471,6 +471,8 @@ public static class EmbeddedWiring
             return 0;
         }
 
+        ClosingAgents.MarkAll(Adapters.Projects(), Adapters.Agents());
+
         using var asked = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         try
         {

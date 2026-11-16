@@ -6,6 +6,7 @@ using Fleet.Ports.Mux;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Status;
 
 namespace Fleet.Features.Agents.RemoveAgent;
 
@@ -99,6 +100,7 @@ public sealed class RemoveAgentHandler(
                 $"{agent.Branch} was not removed: fleet could not update its session file. Try again.");
         }
 
+        ClosingMark.Write(agent.Worktree);
         var unterminated = await StopAsync(agent, ct).ConfigureAwait(false);
         await AgentTraces.ForgetAsync(hookState, agent.Worktree, ct).ConfigureAwait(false);
 

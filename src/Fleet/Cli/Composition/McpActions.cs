@@ -79,7 +79,7 @@ public sealed class McpActions(
 
     private readonly HideAgentHandler _hider = new(mux, store);
 
-    private readonly StopAgentHandler _stopper = new(mux, store, Adapters.AgentStates());
+    private readonly StopAgentHandler _stopper = new(mux, store, Adapters.AgentStates(), log);
 
     private readonly RemoveAgentHandler _remover = new(git, mux, store, hookState: Adapters.AgentStates());
 
@@ -87,7 +87,7 @@ public sealed class McpActions(
         new RemoveAgentHandler(git, mux, store, hookState: Adapters.AgentStates()),
         store,
         mux,
-        (project, sub, ct) => new StopAgentHandler(mux, store, Adapters.AgentStates()).HandleAsync(project, sub, ct));
+        (project, sub, ct) => new StopAgentHandler(mux, store, Adapters.AgentStates(), log).HandleAsync(project, sub, ct));
 
     private readonly ChangeHarnessHandler _harnesses = new(store);
 
@@ -602,7 +602,7 @@ public sealed class McpActions(
 
         var outcome = await new OpenAgentHandler(
                 mux, store, SubOrchestratorsHostedInNvim(), models: Adapters.Models(project), agentsInNvim: Adapters.AgentsInNvim(project),
-                configs: nonClaudeConfigs)
+                configs: nonClaudeConfigs, statusHooks: Adapters.StatusHooks(project))
             .HandleAsync(project, agent, root, ct)
             .ConfigureAwait(false);
 

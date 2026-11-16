@@ -31,7 +31,8 @@ public static class HeadPanes
                         preferCaller: false,
                         Adapters.Models(project.Name),
                         Adapters.AgentsInNvim(project.Name),
-                        HarnessRegistration.NonClaudeConfigs())
+                        HarnessRegistration.NonClaudeConfigs(),
+                        Adapters.StatusHooks(project.Name))
                     .HandleAsync(project.Name, agent, project.Root, ct)
                     .ConfigureAwait(false);
 

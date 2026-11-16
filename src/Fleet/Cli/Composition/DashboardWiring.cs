@@ -515,7 +515,7 @@ public static class DashboardWiring
         var branches = new ListBranchesHandler(git);
         var fetcher = new FetchRemoteBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
-        var stopper = new StopAgentHandler(mux, agents, Adapters.AgentStates());
+        var stopper = new StopAgentHandler(mux, agents, Adapters.AgentStates(), log);
         var remover = new RemoveAgentHandler(git, mux, agents, hookState: Adapters.AgentStates());
         var agentRenamer = new RenameAgentHandler(git, agents);
         var subRenamer = new RenameOrchestrationHandler(agents, mux);
@@ -565,7 +565,7 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim, configs: HarnessRegistration.NonClaudeConfigs())
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim, configs: HarnessRegistration.NonClaudeConfigs(), statusHooks: loaded.StatusHooks)
                 .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 

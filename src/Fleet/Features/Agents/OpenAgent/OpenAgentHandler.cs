@@ -6,6 +6,7 @@ using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Results;
+using Fleet.Shared.Status;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
 
@@ -18,7 +19,8 @@ public sealed class OpenAgentHandler(
     bool preferCaller = true,
     RoleModels? models = null,
     bool agentsInNvim = true,
-    IHarnessConfigs? configs = null)
+    IHarnessConfigs? configs = null,
+    bool statusHooks = true)
 {
     public async Task<Result> HandleAsync(
         string project,
@@ -67,6 +69,8 @@ public sealed class OpenAgentHandler(
 
                 return Result.Ok();
             }
+
+            ClosingMark.Write(agent.Worktree);
 
             foreach (var stale in mine)
             {
@@ -126,6 +130,8 @@ public sealed class OpenAgentHandler(
         var args = orchestrator
             ? agent.OrchestratorCommand(resume: true, inNvim: subOrchestratorsInNvim, launch)
             : Shared.Constants.AgentHarness.Resumed(hosted.Command(launch));
+
+        AgentTraces.Opened(hosted, statusHooks);
 
         var pane = await mux.SpawnAsync(
             new SpawnOptions

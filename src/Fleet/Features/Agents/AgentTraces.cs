@@ -17,9 +17,9 @@ public static class AgentTraces
         PaneQuiet.Forget(worktree);
     }
 
-    public static void Opened(AgentRecord agent)
+    public static void Opened(AgentRecord agent, bool statusHooks = true)
     {
-        if (agent.RunningHarness != AgentHarness.Claude)
+        if (agent.RunningHarness != AgentHarness.Claude || !statusHooks)
         {
             ClosingMark.Clear(agent.Worktree);
         }
