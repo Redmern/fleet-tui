@@ -9,6 +9,8 @@ public interface IApprovalInbox
 
     void Retire(string project);
 
+    IReadOnlyList<PendingApproval> Pending(string project);
+
     PendingApproval? TakePending(string project, string? pane = null);
 
     void Answer(string project, string id, ApprovalDecision decision);

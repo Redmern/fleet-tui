@@ -103,6 +103,41 @@ public sealed class FileApprovalChannel(
         }
     }
 
+    public IReadOnlyList<PendingApproval> Pending(string project)
+    {
+        var dir = DirFor(project);
+
+        if (dir is null || !Directory.Exists(dir))
+        {
+            return [];
+        }
+
+        var files = Directory.EnumerateFiles(dir, "*.ask").Concat(Directory.EnumerateFiles(dir, "*.taken"))
+            .GroupBy(f => Path.GetFileNameWithoutExtension(f) ?? string.Empty)
+            .Where(g => !File.Exists(Path.Combine(dir, g.Key + ".reply")))
+            .OrderBy(g => g.Key, StringComparer.Ordinal);
+
+        var pending = new List<PendingApproval>();
+
+        foreach (var group in files)
+        {
+            var path = group.OrderByDescending(f => f.EndsWith(".taken", StringComparison.Ordinal)).First();
+            var file = ReadAsk(path);
+
+            if (AskedAt(group.Key) is { } asked
+                && file.Tool.Length > 0
+                && _clock() - asked < (file.TimeoutSeconds > 0 ? TimeSpan.FromSeconds(file.TimeoutSeconds) : _timeout))
+            {
+                pending.Add(new PendingApproval(
+                    group.Key,
+                    new ApprovalRequest(project, file.Tool, file.Summary, file.Pane, file.Caller),
+                    asked));
+            }
+        }
+
+        return pending;
+    }
+
     public PendingApproval? TakePending(string project, string? pane = null)
     {
         var dir = DirFor(project);
@@ -170,6 +205,9 @@ public sealed class FileApprovalChannel(
         }
     }
 
+    private static DateTimeOffset? AskedAt(string stem) =>
+        long.TryParse(stem.Split('-')[0], out var ticks) ? new DateTimeOffset(ticks, TimeSpan.Zero) : null;
+
     private bool ForTaker(string? asker, string stem, string? taker)
     {
         if (taker is not null)
@@ -188,9 +226,9 @@ public sealed class FileApprovalChannel(
             ? ApprovalOutcome.Allow
             : ApprovalOutcome.Deny("Declined by the user in fleet.");
 
-    private static string Serialize(ApprovalRequest request) =>
+    private string Serialize(ApprovalRequest request) =>
         JsonSerializer.Serialize(
-            new AskFile { Tool = request.Tool, Summary = request.Summary, Pane = request.Pane, Caller = request.Caller },
+            new AskFile { Tool = request.Tool, Summary = request.Summary, Pane = request.Pane, Caller = request.Caller, TimeoutSeconds = (int)(request.Timeout ?? _timeout).TotalSeconds },
             FleetJsonContext.Default.AskFile);
 
     private static AskFile ReadAsk(string path)

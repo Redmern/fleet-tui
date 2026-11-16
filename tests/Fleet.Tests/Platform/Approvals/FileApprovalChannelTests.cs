@@ -260,6 +260,114 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
         Assert.Equal("upgrade", SpinForPending(channel, "techweb")!.Request.Caller);
     }
 
+    [Fact]
+    public void Peeking_lists_a_waiting_request_without_taking_it()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Caller = "upgrade" });
+
+        var first = Assert.Single(channel.Pending("techweb"));
+        Assert.Equal("upgrade", first.Request.Caller);
+        Assert.Equal("new_agent", first.Request.Tool);
+        Assert.Equal(_now, first.Asked);
+        Assert.Single(channel.Pending("techweb"));
+        Assert.NotNull(channel.TakePending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_still_lists_a_request_the_dashboard_has_taken_until_it_is_answered()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask());
+        var taken = SpinForPending(channel, "techweb");
+
+        Assert.Single(channel.Pending("techweb"));
+
+        channel.Answer("techweb", taken!.Id, ApprovalDecision.Allowed);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public async Task Peeking_stops_listing_a_request_once_it_expired()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(55));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask());
+        Assert.Single(channel.Pending("techweb"));
+
+        _now += TimeSpan.FromSeconds(56);
+        await asking.WaitAsync(Patience);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_ignores_a_request_left_behind_by_a_dead_caller()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(55));
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask());
+        _now += TimeSpan.FromMinutes(10);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_stops_listing_a_request_at_its_own_timeout_not_the_channels()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(120));
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Timeout = TimeSpan.FromSeconds(55) });
+        Assert.Single(channel.Pending("techweb"));
+
+        _now += TimeSpan.FromSeconds(56);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_skips_a_request_file_it_cannot_read()
+    {
+        var channel = Channel();
+        var dir = Path.Combine(FleetPaths.Approvals, "techweb");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, $"{_now.UtcTicks:D19}-broken.ask"), "not json");
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_lists_a_request_once_even_when_it_is_taken_while_listed()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+        _ = channel.AskAsync(Ask());
+        var taken = SpinForPending(channel, "techweb");
+        var dir = Path.Combine(FleetPaths.Approvals, "techweb");
+        File.WriteAllText(Path.Combine(dir, taken!.Id + ".ask"), File.ReadAllText(Path.Combine(dir, taken.Id + ".taken")));
+
+        Assert.Single(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_never_lists_another_projects_requests()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask());
+
+        Assert.Empty(channel.Pending("other"));
+    }
+
     private async Task Answer(FileApprovalChannel channel, ApprovalDecision decision)
     {
         var pending = SpinForPending(channel, "techweb");
