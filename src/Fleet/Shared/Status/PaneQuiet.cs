@@ -40,6 +40,17 @@ public static class PaneQuiet
         return mark;
     }
 
+    public static void Forget(string folder)
+    {
+        try
+        {
+            File.Delete(Path.Combine(folder, ".fleet", FileName));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+        }
+    }
+
     private static PaneMark? Read(string path)
     {
         try

@@ -1,4 +1,6 @@
 using Fleet.Ports.Agents;
+using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Status;
 
 namespace Fleet.Features.Agents;
@@ -12,12 +14,14 @@ public static class AgentTraces
             await hookState.ForgetAsync(worktree, ct).ConfigureAwait(false);
         }
 
-        try
+        PaneQuiet.Forget(worktree);
+    }
+
+    public static void Opened(AgentRecord agent)
+    {
+        if (agent.RunningHarness != AgentHarness.Claude)
         {
-            File.Delete(Path.Combine(worktree, ".fleet", PaneQuiet.FileName));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
+            ClosingMark.Clear(agent.Worktree);
         }
     }
 }
