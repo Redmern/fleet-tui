@@ -847,14 +847,6 @@ public sealed class McpActions(
             .HandleAsync(project, root, caller, status, ToolArguments.Text(request, ToolArguments.Summary), ct)
             .ConfigureAwait(false);
 
-        if (reported.Succeeded
-            && OrchestrationStatus.Normalize(status)
-                is OrchestrationStatus.Done or OrchestrationStatus.Failed)
-        {
-            Adapters.Notifier().Notify(
-                $"{caller}: {OrchestrationStatus.Normalize(status)}");
-        }
-
         return reported.Succeeded ? Ok(reported.Value!) : McpResult.Error(reported.Error!);
     }
 

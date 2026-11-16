@@ -59,6 +59,33 @@ public class MuxModelTests
     }
 
     [Fact]
+    public void A_workspace_is_shown_anywhere_when_any_attached_client_shows_it()
+    {
+        Project("techweb");
+        Project("fleet");
+        var laptop = _model.Connect(100, 40, "techweb");
+        _model.Connect(100, 40, "fleet");
+
+        var seenFromLaptop = _model.ListWorkspaces(laptop.Id).ToDictionary(w => w.Name);
+        var seenWithoutAClient = _model.ListWorkspaces(null).ToDictionary(w => w.Name);
+
+        Assert.False(seenFromLaptop["fleet"].ShownHere);
+        Assert.True(seenFromLaptop["fleet"].ShownAnywhere);
+        Assert.True(seenFromLaptop["techweb"].ShownAnywhere);
+        Assert.True(seenWithoutAClient["fleet"].ShownAnywhere);
+    }
+
+    [Fact]
+    public void A_workspace_no_client_shows_is_not_shown_anywhere()
+    {
+        Project("techweb");
+        Project("fleet");
+        _model.Connect(100, 40, "techweb");
+
+        Assert.False(_model.ListWorkspaces(null).Single(w => w.Name == "fleet").ShownAnywhere);
+    }
+
+    [Fact]
     public void Showing_a_workspace_that_does_not_exist_changes_nothing()
     {
         Project("techweb");

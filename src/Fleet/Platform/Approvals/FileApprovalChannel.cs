@@ -16,7 +16,7 @@ public sealed class FileApprovalChannel(
 {
     private readonly TimeSpan _poll = poll ?? TimeSpan.FromMilliseconds(100);
 
-    private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(120);
+    private readonly TimeSpan _timeout = timeout ?? ApprovalRequest.DefaultWait;
 
     private readonly TimeSpan _stale = stale ?? TimeSpan.FromSeconds(12);
 
@@ -49,7 +49,8 @@ public sealed class FileApprovalChannel(
             return ApprovalOutcome.NoDashboard("fleet could not record the approval request.");
         }
 
-        var deadline = _clock() + _timeout;
+        var wait = request.Timeout ?? _timeout;
+        var deadline = (request.Arrived ?? _clock()) + wait;
 
         try
         {
@@ -73,7 +74,7 @@ public sealed class FileApprovalChannel(
                 await Task.Delay(_poll, ct).ConfigureAwait(false);
             }
 
-            return ApprovalOutcome.Expired("Timed out waiting for the dashboard to answer.");
+            return ApprovalOutcome.NoAnswer(request, wait);
         }
         finally
         {
@@ -100,6 +101,41 @@ public sealed class FileApprovalChannel(
         {
             Discard(alive);
         }
+    }
+
+    public IReadOnlyList<PendingApproval> Pending(string project)
+    {
+        var dir = DirFor(project);
+
+        if (dir is null || !Directory.Exists(dir))
+        {
+            return [];
+        }
+
+        var files = Directory.EnumerateFiles(dir, "*.ask").Concat(Directory.EnumerateFiles(dir, "*.taken"))
+            .GroupBy(f => Path.GetFileNameWithoutExtension(f) ?? string.Empty)
+            .Where(g => !File.Exists(Path.Combine(dir, g.Key + ".reply")))
+            .OrderBy(g => g.Key, StringComparer.Ordinal);
+
+        var pending = new List<PendingApproval>();
+
+        foreach (var group in files)
+        {
+            var path = group.OrderByDescending(f => f.EndsWith(".taken", StringComparison.Ordinal)).First();
+            var file = ReadAsk(path);
+
+            if (AskedAt(group.Key) is { } asked
+                && file.Tool.Length > 0
+                && _clock() - asked < (file.TimeoutSeconds > 0 ? TimeSpan.FromSeconds(file.TimeoutSeconds) : _timeout))
+            {
+                pending.Add(new PendingApproval(
+                    group.Key,
+                    new ApprovalRequest(project, file.Tool, file.Summary, file.Pane, file.Caller),
+                    asked));
+            }
+        }
+
+        return pending;
     }
 
     public PendingApproval? TakePending(string project, string? pane = null)
@@ -133,7 +169,7 @@ public sealed class FileApprovalChannel(
 
             var file = ReadAsk(taken);
 
-            return new PendingApproval(stem, new ApprovalRequest(project, file.Tool, file.Summary, file.Pane));
+            return new PendingApproval(stem, new ApprovalRequest(project, file.Tool, file.Summary, file.Pane, file.Caller));
         }
 
         return null;
@@ -143,7 +179,7 @@ public sealed class FileApprovalChannel(
     {
         var dir = DirFor(project);
 
-        if (dir is not null)
+        if (dir is not null && (File.Exists(Path.Combine(dir, id + ".taken")) || File.Exists(Path.Combine(dir, id + ".ask"))))
         {
             TryWrite(Path.Combine(dir, id + ".reply"), decision.ToString());
         }
@@ -169,6 +205,9 @@ public sealed class FileApprovalChannel(
         }
     }
 
+    private static DateTimeOffset? AskedAt(string stem) =>
+        long.TryParse(stem.Split('-')[0], out var ticks) ? new DateTimeOffset(ticks, TimeSpan.Zero) : null;
+
     private bool ForTaker(string? asker, string stem, string? taker)
     {
         if (taker is not null)
@@ -187,9 +226,9 @@ public sealed class FileApprovalChannel(
             ? ApprovalOutcome.Allow
             : ApprovalOutcome.Deny("Declined by the user in fleet.");
 
-    private static string Serialize(ApprovalRequest request) =>
+    private string Serialize(ApprovalRequest request) =>
         JsonSerializer.Serialize(
-            new AskFile { Tool = request.Tool, Summary = request.Summary, Pane = request.Pane },
+            new AskFile { Tool = request.Tool, Summary = request.Summary, Pane = request.Pane, Caller = request.Caller, TimeoutSeconds = (int)(request.Timeout ?? _timeout).TotalSeconds },
             FleetJsonContext.Default.AskFile);
 
     private static AskFile ReadAsk(string path)

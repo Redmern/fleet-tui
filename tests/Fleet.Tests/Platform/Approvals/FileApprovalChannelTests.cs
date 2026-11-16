@@ -1,4 +1,5 @@
 using Fleet.Platform.Approvals;
+using Fleet.Platform.Storage;
 using Fleet.Ports.Approvals.Enums;
 using Fleet.Ports.Approvals.Models;
 
@@ -6,6 +7,8 @@ namespace Fleet.Tests.Platform.Approvals;
 
 public sealed class FileApprovalChannelTests : ConfigHomeFixture
 {
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private DateTimeOffset _now = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
 
     private static ApprovalRequest Ask(string project = "techweb") =>
@@ -35,7 +38,7 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
 
         await Answer(channel, ApprovalDecision.Allowed);
 
-        Assert.True((await asking).Allowed);
+        Assert.True((await asking.WaitAsync(Patience)).Allowed);
     }
 
     [Fact]
@@ -48,7 +51,7 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
 
         await Answer(channel, ApprovalDecision.Denied);
 
-        var outcome = await asking;
+        var outcome = await asking.WaitAsync(Patience);
 
         Assert.Equal(ApprovalDecision.Denied, outcome.Decision);
         Assert.False(outcome.Allowed);
@@ -155,6 +158,214 @@ public sealed class FileApprovalChannelTests : ConfigHomeFixture
         _now += TimeSpan.FromSeconds(6);
 
         Assert.NotNull(channel.TakePending("techweb"));
+    }
+
+    [Fact]
+    public async Task An_expired_request_names_who_it_was_shown_over_and_how_long_it_waited()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(90));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask() with { Caller = "upgrade" });
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(91);
+        var outcome = await asking.WaitAsync(Patience);
+
+        Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
+        Assert.Equal(
+            "No one answered the approval prompt (shown over upgrade in techweb) within 90 s",
+            outcome.Reason);
+        Assert.DoesNotContain("dashboard", outcome.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task An_expired_request_from_the_main_pane_says_it_was_shown_over_the_orchestrator()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(90));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask());
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(91);
+
+        Assert.Equal(
+            "No one answered the approval prompt (shown over orchestrator in techweb) within 90 s",
+            (await asking.WaitAsync(Patience)).Reason);
+    }
+
+    [Fact]
+    public async Task A_request_cannot_wait_past_its_own_timeout()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(120));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask() with { Caller = "upgrade", Timeout = TimeSpan.FromSeconds(55) });
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(56);
+        var outcome = await asking.WaitAsync(Patience);
+
+        Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
+        Assert.EndsWith("within 55 s", outcome.Reason);
+    }
+
+    [Fact]
+    public async Task A_request_that_arrived_earlier_has_only_the_time_that_is_left()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(120));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask() with
+        {
+            Timeout = TimeSpan.FromSeconds(55),
+            Arrived = _now - TimeSpan.FromSeconds(50),
+        });
+        SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(6);
+        var outcome = await asking.WaitAsync(Patience);
+
+        Assert.Equal(ApprovalDecision.Expired, outcome.Decision);
+        Assert.EndsWith("within 55 s", outcome.Reason);
+    }
+
+    [Fact]
+    public async Task An_answer_after_the_deadline_leaves_no_reply_behind()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(55));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask());
+        var pending = SpinForPending(channel, "techweb");
+
+        _now += TimeSpan.FromSeconds(56);
+        var outcome = await asking.WaitAsync(Patience);
+
+        channel.Answer("techweb", pending!.Id, ApprovalDecision.Allowed);
+
+        Assert.False(outcome.Allowed);
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(FleetPaths.Approvals, "techweb")));
+    }
+
+    [Fact]
+    public void The_pending_request_carries_the_caller_to_the_dashboard()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Caller = "upgrade" });
+
+        Assert.Equal("upgrade", SpinForPending(channel, "techweb")!.Request.Caller);
+    }
+
+    [Fact]
+    public void Peeking_lists_a_waiting_request_without_taking_it()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Caller = "upgrade" });
+
+        var first = Assert.Single(channel.Pending("techweb"));
+        Assert.Equal("upgrade", first.Request.Caller);
+        Assert.Equal("new_agent", first.Request.Tool);
+        Assert.Equal(_now, first.Asked);
+        Assert.Single(channel.Pending("techweb"));
+        Assert.NotNull(channel.TakePending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_still_lists_a_request_the_dashboard_has_taken_until_it_is_answered()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask());
+        var taken = SpinForPending(channel, "techweb");
+
+        Assert.Single(channel.Pending("techweb"));
+
+        channel.Answer("techweb", taken!.Id, ApprovalDecision.Allowed);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public async Task Peeking_stops_listing_a_request_once_it_expired()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(55));
+        channel.Heartbeat("techweb");
+
+        var asking = channel.AskAsync(Ask());
+        Assert.Single(channel.Pending("techweb"));
+
+        _now += TimeSpan.FromSeconds(56);
+        await asking.WaitAsync(Patience);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_ignores_a_request_left_behind_by_a_dead_caller()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(55));
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask());
+        _now += TimeSpan.FromMinutes(10);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_stops_listing_a_request_at_its_own_timeout_not_the_channels()
+    {
+        var channel = Channel(timeout: TimeSpan.FromSeconds(120));
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask() with { Timeout = TimeSpan.FromSeconds(55) });
+        Assert.Single(channel.Pending("techweb"));
+
+        _now += TimeSpan.FromSeconds(56);
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_skips_a_request_file_it_cannot_read()
+    {
+        var channel = Channel();
+        var dir = Path.Combine(FleetPaths.Approvals, "techweb");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, $"{_now.UtcTicks:D19}-broken.ask"), "not json");
+
+        Assert.Empty(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_lists_a_request_once_even_when_it_is_taken_while_listed()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+        _ = channel.AskAsync(Ask());
+        var taken = SpinForPending(channel, "techweb");
+        var dir = Path.Combine(FleetPaths.Approvals, "techweb");
+        File.WriteAllText(Path.Combine(dir, taken!.Id + ".ask"), File.ReadAllText(Path.Combine(dir, taken.Id + ".taken")));
+
+        Assert.Single(channel.Pending("techweb"));
+    }
+
+    [Fact]
+    public void Peeking_never_lists_another_projects_requests()
+    {
+        var channel = Channel();
+        channel.Heartbeat("techweb");
+
+        _ = channel.AskAsync(Ask());
+
+        Assert.Empty(channel.Pending("other"));
     }
 
     private async Task Answer(FileApprovalChannel channel, ApprovalDecision decision)

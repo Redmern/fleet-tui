@@ -7,7 +7,7 @@ using Fleet.Shared.Constants;
 
 namespace Fleet.Platform.Mux.Fake;
 
-public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
+public sealed class FakeMuxDriver(bool workspaces = false, bool reportsWhoShows = true) : IMuxDriver
 {
     private readonly ConcurrentDictionary<string, string> _showing = new();
     private readonly ConcurrentQueue<string> _calls = new();
@@ -253,7 +253,12 @@ public sealed class FakeMuxDriver(bool workspaces = false) : IMuxDriver
             .Select(e => e.Pane.SessionName)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
-            .Select(n => new Workspace(n, string.Equals(n, shown, StringComparison.OrdinalIgnoreCase)))
+            .Select(n => new Workspace(
+                n,
+                string.Equals(n, shown, StringComparison.OrdinalIgnoreCase),
+                ShownAnywhere: reportsWhoShows
+                    ? _showing.Values.Any(v => string.Equals(v, n, StringComparison.OrdinalIgnoreCase))
+                    : null))
             .ToList();
 
         return Task.FromResult(list);

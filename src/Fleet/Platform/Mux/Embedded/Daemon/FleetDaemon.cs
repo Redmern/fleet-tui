@@ -247,6 +247,7 @@ public sealed class FleetDaemon(DaemonOptions options)
                                 ShownHere = w.ShownHere,
                                 InWindow = w.InWindow,
                                 InOtherWindow = w.InOtherWindow,
+                                ShownAnywhere = w.ShownAnywhere,
                             })
                             .ToList();
                         break;

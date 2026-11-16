@@ -46,6 +46,7 @@ public static class NoticeRows
         NoticeKind.Done => ("✓", FleetTones.Good),
         NoticeKind.Failed => ("✗", FleetTones.Bad),
         NoticeKind.Stalled => ("…", FleetTones.Warn),
+        NoticeKind.Approval => ("▸", FleetTones.Warn),
         _ => ("↕", FleetTones.Bad),
     };
 

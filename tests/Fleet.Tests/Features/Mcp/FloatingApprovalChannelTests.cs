@@ -1,17 +1,23 @@
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Platform.Mux.Fake;
+using Fleet.Ports;
 using Fleet.Ports.Approvals;
 using Fleet.Ports.Approvals.Models;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Tests.Features.Mcp;
 
 public class FloatingApprovalChannelTests
 {
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private readonly Inner _inner = new();
 
+    private readonly List<string> _notices = [];
+
     private FloatingApprovalChannel Channel(FakeMuxDriver mux) =>
-        new(_inner, mux, (project, pane) => ["fleet", "approve", "--project", project, pane]);
+        new(_inner, mux, (project, pane) => ["fleet", "approve", "--project", project, pane], new Notices(_notices));
 
     private static ApprovalRequest Ask() => new("techweb", "new_agent", "upgrade wants to start backend/login");
 
@@ -21,8 +27,9 @@ public class FloatingApprovalChannelTests
         var mux = new FakeMuxDriver(workspaces: true);
         var agent = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
         mux.CurrentPane = agent;
+        await mux.ShowWorkspaceAsync("techweb");
 
-        var asking = Channel(mux).AskAsync(Ask());
+        var asking = Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
 
         Assert.Equal(agent.Value, _inner.Asked!.Pane);
         var popup = (await mux.ListPanesAsync()).Single(p => p.TabId == "float");
@@ -39,9 +46,11 @@ public class FloatingApprovalChannelTests
     public async Task Outside_a_pane_the_request_goes_to_the_dashboard_as_before()
     {
         var mux = new FakeMuxDriver(workspaces: true);
+        await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.ShowWorkspaceAsync("techweb");
         _inner.Reply.SetResult(ApprovalOutcome.Allow);
 
-        await Channel(mux).AskAsync(Ask());
+        await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
 
         Assert.Null(_inner.Asked!.Pane);
         Assert.DoesNotContain("spawn-float", mux.Calls);
@@ -54,10 +63,182 @@ public class FloatingApprovalChannelTests
         mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
         _inner.Reply.SetResult(ApprovalOutcome.Allow);
 
-        await Channel(mux).AskAsync(Ask());
+        await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
 
         Assert.Null(_inner.Asked!.Pane);
         Assert.DoesNotContain("spawn-float", mux.Calls);
+    }
+
+    [Fact]
+    public async Task A_request_for_a_project_no_client_shows_fails_at_once_without_waiting()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        var agent = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.SpawnAsync(new SpawnOptions { SessionName = "fleet", Args = ["claude"] });
+        mux.CurrentPane = agent;
+        await mux.ShowWorkspaceAsync("fleet");
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.False(outcome.Allowed);
+        Assert.Equal("approval needed in project techweb; open it to answer", outcome.Reason);
+        Assert.Null(_inner.Asked);
+        Assert.DoesNotContain("spawn-float", mux.Calls);
+    }
+
+    [Fact]
+    public async Task A_project_another_client_shows_still_gets_the_prompt()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        var agent = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        mux.CurrentPane = agent;
+        mux.CurrentClient = "desktop";
+        await mux.ShowWorkspaceAsync("techweb");
+        mux.CurrentClient = "mcp-server";
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.True(outcome.Allowed);
+        Assert.NotNull(_inner.Asked);
+    }
+
+    [Fact]
+    public async Task A_multiplexer_without_workspaces_keeps_waiting_for_an_answer()
+    {
+        var mux = new FakeMuxDriver();
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.True(outcome.Allowed);
+        Assert.NotNull(_inner.Asked);
+    }
+
+    [Fact]
+    public async Task A_daemon_that_does_not_say_who_shows_the_project_keeps_the_prompt_waiting()
+    {
+        var mux = new FakeMuxDriver(workspaces: true, reportsWhoShows: false);
+        var agent = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        mux.CurrentPane = agent;
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.True(outcome.Allowed);
+        Assert.NotNull(_inner.Asked);
+    }
+
+    [Fact]
+    public async Task A_project_with_no_workspace_at_all_fails_at_once_because_nobody_can_show_it()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        await mux.SpawnAsync(new SpawnOptions { SessionName = "fleet", Args = ["claude"] });
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.Equal("approval needed in project techweb; open it to answer", outcome.Reason);
+        Assert.Null(_inner.Asked);
+    }
+
+    [Fact]
+    public async Task A_hidden_sub_nobody_shows_fails_at_once()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(
+            new SpawnOptions { SessionName = FleetWorkspaces.HiddenFor("techweb"), Args = ["claude"] });
+        await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.Equal("approval needed in project techweb; open it to answer", outcome.Reason);
+        Assert.Null(_inner.Asked);
+    }
+
+    [Fact]
+    public async Task A_hidden_sub_still_gets_its_prompt_in_the_dashboard_of_a_project_someone_shows()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(
+            new SpawnOptions { SessionName = FleetWorkspaces.HiddenFor("techweb"), Args = ["claude"] });
+        await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.ShowWorkspaceAsync("techweb");
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.True(outcome.Allowed);
+        Assert.NotNull(_inner.Asked);
+    }
+
+    [Fact]
+    public async Task A_caller_whose_own_workspace_is_shown_keeps_the_prompt_even_when_the_project_is_not()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "side", Args = ["claude"] });
+        await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.ShowWorkspaceAsync("side");
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.True(outcome.Allowed);
+        Assert.NotNull(_inner.Asked);
+    }
+
+    [Fact]
+    public async Task A_mux_that_cannot_answer_the_question_keeps_the_prompt_waiting()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        mux.Available = false;
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        var outcome = await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.True(outcome.Allowed);
+    }
+
+    [Fact]
+    public async Task The_desktop_notice_for_a_pending_approval_names_the_caller_the_project_and_the_action()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.ShowWorkspaceAsync("techweb");
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        await Channel(mux).AskAsync(Ask() with { Caller = "agent:backend/login" }).WaitAsync(Patience);
+
+        Assert.Equal(["approval needed in techweb: new_agent by agent:backend/login"], _notices);
+    }
+
+    [Fact]
+    public async Task The_desktop_notice_names_the_orchestrator_when_the_main_pane_asks()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+        await mux.ShowWorkspaceAsync("techweb");
+        _inner.Reply.SetResult(ApprovalOutcome.Allow);
+
+        await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.Equal(["approval needed in techweb: new_agent by orchestrator"], _notices);
+    }
+
+    [Fact]
+    public async Task A_call_that_fails_at_once_sends_no_desktop_notice()
+    {
+        var mux = new FakeMuxDriver(workspaces: true);
+        mux.CurrentPane = await mux.SpawnAsync(new SpawnOptions { SessionName = "techweb", Args = ["claude"] });
+
+        await Channel(mux).AskAsync(Ask()).WaitAsync(Patience);
+
+        Assert.Empty(_notices);
+    }
+
+    private sealed class Notices(List<string> into) : INotifier
+    {
+        public void Notify(string message) => into.Add(message);
     }
 
     private sealed class Inner : IApprovalChannel

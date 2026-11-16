@@ -139,7 +139,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.DoesNotContain("SendMessage", reported.Text);
         Assert.Equal("done", _team.Record("api", "fix").Status);
         Assert.Equal("login fixed", _team.Record("api", "fix").Summary);
-        Assert.Contains("agent:api/fix: done", _team.DesktopNotifications);
+        Assert.Empty(_team.DesktopNotifications);
 
         // orchestrator notification: a line appended to notices.md and the read prompt submitted in the sub's pane
         Assert.Equal([profile.Kickoff, AgentHarness.NoticesPrompt], sub.Submitted);
@@ -150,11 +150,11 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 
         Assert.Equal("api/fix: done — login fixed", waited.Text);
 
-        // the sub reports to the main orchestrator: recorded, desktop notice, shown in list_subs
+        // the sub reports to the main orchestrator: recorded, shown in list_subs
         var finished = await _team.CallAsync(sub.Caller!, HarnessTool.Report, Status("done", "bug fixed and merged"));
 
         Assert.False(finished.IsError, finished.Text);
-        Assert.Contains($"{dispatched.Slug}: done", _team.DesktopNotifications);
+        Assert.Empty(_team.DesktopNotifications);
 
         var subs = await _team.CallAsync(Main, HarnessTool.ListSubs);
 
@@ -269,7 +269,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Contains("Fleet typed this report into your orchestrator's pane", reported.Text);
         Assert.DoesNotContain("SendMessage", reported.Text);
         Assert.Equal("done", _team.Record("api", "feat").Status);
-        Assert.Contains("agent:api/feat: done", _team.DesktopNotifications);
+        Assert.Empty(_team.DesktopNotifications);
         Assert.Equal(3, sub.Submitted.Count);
         Assert.Equal($"[fleet] api/feat: done — form built{NoticeTail}", sub.LastNotice);
 

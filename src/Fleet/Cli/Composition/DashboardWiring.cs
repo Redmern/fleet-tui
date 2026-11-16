@@ -543,7 +543,12 @@ public static class DashboardWiring
 
         void DrainSignals()
         {
-            DrainFile(Adapters.NotifyFile);
+            DashboardSkeleton.ToastQueued(
+                Adapters.DrainNotices,
+                () => Adapters.Notices().Settings().Toast,
+                Adapters.Toast,
+                work => _ = Task.Run(work));
+
             DrainFile(Adapters.WorkspaceFile);
         }
 
@@ -612,8 +617,6 @@ public static class DashboardWiring
             return known ? (last.Behind, last.Conflicts) : (0, false);
         }
 
-        NoticeBoard Board(IReadOnlyList<Notice> all, DateTime now) => DashboardSkeleton.Notices(all, now);
-
         NoticeBoard LoadNotices()
         {
             var now = DateTime.UtcNow;
@@ -649,9 +652,11 @@ public static class DashboardWiring
                 noticeStore.Save(project.Name, next);
             }
 
-            Alert(next.Count(n => n.IsOpen), NoticeSync.Fresh(stored, next));
+            var board = DashboardSkeleton.Notices(next, approvals.Pending(project.Name), now);
+
+            Alert(board.Open, NoticeSync.Fresh(stored, next));
             CloseIdle(next, panes, now);
-            return Board(next, now);
+            return board;
         }
 
         void CloseIdle(IReadOnlyList<Notice> notices, IReadOnlyList<Pane> panes, DateTime now)
@@ -755,6 +760,11 @@ public static class DashboardWiring
 
         async Task<string?> OpenNotice(string worktree)
         {
+            if (ApprovalNotices.Hint(worktree, approvals.Pending(project.Name)) is { } hint)
+            {
+                return hint;
+            }
+
             var agent = lister.Handle(project.Name).FirstOrDefault(a => PathKey.Same(a.Worktree, worktree));
             return agent is null ? $"that agent is gone ({worktree})" : await OpenFlow(agent).ConfigureAwait(false);
         }
@@ -1490,7 +1500,7 @@ public static class DashboardWiring
             LoadSubsFast: () => DashboardSkeleton.Subs(
                 lister.Handle(project.Name), settings.Load(project.Name).Trigger),
 
-            LoadNoticesFast: () => DashboardSkeleton.Notices(noticeStore.Load(project.Name), DateTime.UtcNow),
+            LoadNoticesFast: () => DashboardSkeleton.Notices(noticeStore.Load(project.Name), approvals.Pending(project.Name), DateTime.UtcNow),
 
             HideAllAgents: async () =>
             {

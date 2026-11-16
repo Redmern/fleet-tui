@@ -895,6 +895,34 @@ for two minutes when nobody can answer. Once an ask is picked up, a `.taken`
 marker exempts it from the heartbeat check, so a slow human decision is never
 mistaken for a dead dashboard.
 
+An ask waits at most two minutes, or the calling harness's client tool timeout
+minus five seconds when that is shorter (codex and pi give up at 60 s; a caller
+fleet cannot place gets the strictest limit). The clock starts when the call
+arrives, so time spent queued behind another ask counts, and a queued ask whose
+time has run out expires without a prompt and says it was never shown. After the
+deadline the request files are deleted, so a late answer writes nothing and never
+runs the action; the error says no one answered the prompt shown over the caller
+in the project. After an Allow the wait for the one-change-at-a-time turn is
+bounded by the time that is left, and an action whose turn comes after the
+client limit is not run.
+
+When the multiplexer has workspaces, the ask fails at once with "approval needed
+in project X; open it to answer" if no attached client shows either the
+workspace holding the caller's pane or the project's own workspace (a hidden sub
+lives in `X~hidden`, and the dashboard of a shown X still answers for it), or if
+no workspace is listed at all. The daemon reports this as `shownAnywhere` in
+`list-workspaces`; an older fleetd leaves the field out, which reads as unknown
+and keeps the ask waiting. The "approval needed" desktop notice is sent only for
+an ask that is really made.
+
+While an ask waits the dashboard lists it as an alerts-strip row. The desktop
+notice reaches the desktop because the dashboard shows the lines of
+`notify.request` as toasts, off the UI thread, before it empties the file; the
+file is opened exclusively for both appending and draining. The drain is one
+non-blocking attempt, so a locked file is retried on the next dashboard tick
+instead of waiting on the UI thread, and a notice that cannot be appended is
+logged.
+
 ## Harness profiles and mixed teams — 2026-11-11
 
 Before this change a harness was one of three names (`claude`, `nvim`, `orchestrator`) and

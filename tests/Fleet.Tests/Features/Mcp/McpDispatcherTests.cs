@@ -84,6 +84,180 @@ public sealed class McpDispatcherTests
     }
 
     [Fact]
+    public async Task An_ask_names_the_caller_and_carries_the_deadline_the_wiring_chose()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        var dispatcher = new McpDispatcher(
+            McpCaller.AtRoot("techweb", "C:/repos/techweb") with { Caller = "agent:backend/login" },
+            _settings,
+            _approvals,
+            _log,
+            (_, _) => Task.FromResult(McpResult.Ok("done")),
+            approvalTimeout: () => TimeSpan.FromSeconds(55));
+
+        await dispatcher.HandleAsync(Request("new_agent"));
+
+        var asked = Assert.Single(_approvals.Asked);
+        Assert.Equal("agent:backend/login", asked.Caller);
+        Assert.Equal(TimeSpan.FromSeconds(55), asked.Timeout);
+    }
+
+    [Fact]
+    public async Task A_queued_ask_counts_the_time_it_waited_for_its_turn_and_expires_without_a_prompt()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        _approvals.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clock = new Clock();
+        var dispatcher = new McpDispatcher(
+            McpCaller.AtRoot("techweb", "C:/repos/techweb") with { Caller = "agent:backend/login" },
+            _settings,
+            _approvals,
+            _log,
+            (_, _) =>
+            {
+                _performed++;
+                return Task.FromResult(McpResult.Ok("done"));
+            },
+            approvalTimeout: () => TimeSpan.FromSeconds(55),
+            time: clock);
+
+        var first = dispatcher.HandleAsync(Request("new_agent"));
+        var second = dispatcher.HandleAsync(Request("new_agent"));
+        await Until(() => _approvals.Asked.Count == 1);
+
+        clock.Now += TimeSpan.FromSeconds(56);
+        _approvals.Hold.SetResult();
+        var late = await second.WaitAsync(Patience);
+        var refused = await first.WaitAsync(Patience);
+
+        Assert.True(refused.IsError);
+        Assert.Contains("so the action was not run", refused.Text);
+        Assert.Equal(0, _performed);
+        Assert.True(late.IsError);
+        Assert.Equal(
+            "The approval prompt for agent:backend/login in techweb was never shown: the 55 s it was allowed ran out while it waited behind other approvals",
+            late.Text);
+        Assert.Single(_approvals.Asked);
+    }
+
+    [Fact]
+    public async Task An_allowed_action_that_waited_for_its_turn_past_the_deadline_is_not_run()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new ConcurrentQueue<string>();
+        var clock = new Clock();
+        var dispatcher = new McpDispatcher(
+            McpCaller.AtRoot("techweb", "C:/repos/techweb") with { Caller = "agent:backend/login" },
+            _settings,
+            _approvals,
+            _log,
+            async (request, _) =>
+            {
+                started.Enqueue(request.Tool);
+                await release.Task.WaitAsync(Patience);
+
+                return McpResult.Ok("done");
+            },
+            approvalTimeout: () => TimeSpan.FromSeconds(55),
+            time: clock);
+
+        var holding = dispatcher.HandleAsync(Request("tell_agent"));
+        await Until(() => started.Count == 1);
+        var allowed = dispatcher.HandleAsync(Request("new_agent"));
+        await Until(() => _approvals.Asked.Count == 1);
+
+        clock.Now += TimeSpan.FromSeconds(56);
+        release.SetResult();
+        var result = await allowed.WaitAsync(Patience);
+        await holding.WaitAsync(Patience);
+
+        Assert.True(result.IsError);
+        Assert.Contains("so the action was not run", result.Text);
+        Assert.Equal(["tell_agent"], started);
+    }
+
+    [Fact]
+    public async Task A_call_cancelled_while_it_waits_for_its_turn_after_an_allow_never_runs_and_holds_nothing()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new ConcurrentQueue<string>();
+        using var cancel = new CancellationTokenSource();
+        var dispatcher = new McpDispatcher(
+            McpCaller.AtRoot("techweb", "C:/repos/techweb"),
+            _settings,
+            _approvals,
+            _log,
+            async (request, _) =>
+            {
+                started.Enqueue(request.Tool);
+                await release.Task.WaitAsync(Patience);
+
+                return McpResult.Ok("done");
+            },
+            approvalTimeout: () => TimeSpan.FromSeconds(55),
+            time: new Clock());
+
+        var holding = dispatcher.HandleAsync(Request("tell_agent"));
+        await Until(() => started.Count == 1);
+        var waiting = dispatcher.HandleAsync(Request("new_agent"), cancel.Token);
+        await Until(() => _approvals.Asked.Count == 1);
+
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+
+        release.SetResult();
+        await holding.WaitAsync(Patience);
+        var after = await dispatcher.HandleAsync(Request("stop_agent")).WaitAsync(Patience);
+
+        Assert.False(after.IsError);
+        Assert.Equal(["tell_agent", "stop_agent"], started);
+    }
+
+    [Fact]
+    public async Task An_allowed_action_that_gets_its_turn_in_time_runs()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        var dispatcher = new McpDispatcher(
+            McpCaller.AtRoot("techweb", "C:/repos/techweb"),
+            _settings,
+            _approvals,
+            _log,
+            (_, _) =>
+            {
+                _performed++;
+                return Task.FromResult(McpResult.Ok("done"));
+            },
+            approvalTimeout: () => TimeSpan.FromSeconds(55),
+            time: new Clock());
+
+        var result = await dispatcher.HandleAsync(Request("new_agent")).WaitAsync(Patience);
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, _performed);
+    }
+
+    [Fact]
+    public async Task An_ask_carries_the_moment_the_call_arrived_so_the_deadline_starts_there()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        var clock = new Clock();
+        var dispatcher = new McpDispatcher(
+            McpCaller.AtRoot("techweb", "C:/repos/techweb"),
+            _settings,
+            _approvals,
+            _log,
+            (_, _) => Task.FromResult(McpResult.Ok("done")),
+            approvalTimeout: () => TimeSpan.FromSeconds(55),
+            time: clock);
+
+        await dispatcher.HandleAsync(Request("new_agent"));
+
+        Assert.Equal(clock.Now, Assert.Single(_approvals.Asked).Arrived);
+    }
+
+    [Fact]
     public async Task A_denied_ask_returns_the_reason_and_skips_the_handler()
     {
         _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
@@ -287,6 +461,24 @@ public sealed class McpDispatcherTests
 
         Assert.Equal(2, _approvals.Asked.Count);
         Assert.Equal(2, _performed);
+    }
+
+    private static async Task Until(Func<bool> condition)
+    {
+        using var cancel = new CancellationTokenSource(Patience);
+
+        while (!condition())
+        {
+            await Task.Yield();
+            cancel.Token.ThrowIfCancellationRequested();
+        }
+    }
+
+    private sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = new(2026, 11, 16, 12, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => Now;
     }
 
     private sealed class FakeSettings : ISettingsStore

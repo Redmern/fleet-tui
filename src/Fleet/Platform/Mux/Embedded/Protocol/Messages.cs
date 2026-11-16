@@ -570,6 +570,9 @@ public sealed class WorkspaceDto
 
     [JsonPropertyName("inOtherWindow")]
     public bool InOtherWindow { get; set; }
+
+    [JsonPropertyName("shownAnywhere")]
+    public bool? ShownAnywhere { get; set; }
 }
 
 public sealed class ControlResponse

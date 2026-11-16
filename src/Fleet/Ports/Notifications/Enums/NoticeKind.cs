@@ -8,4 +8,5 @@ public enum NoticeKind
     Failed,
     Stalled,
     BranchTrouble,
+    Approval,
 }
