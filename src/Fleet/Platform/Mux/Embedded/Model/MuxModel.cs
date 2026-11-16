@@ -1086,7 +1086,8 @@ public sealed class MuxModel
                 w.Name,
                 Same(w.Name, mine?.Showing),
                 mine is not null && (Same(w.Name, mine.Showing) || mine.Projects.Any(p => Same(p, w.Name))),
-                _clients.Values.Any(c => c != mine && (Same(c.Showing, w.Name) || c.Projects.Any(p => Same(p, w.Name))))))
+                _clients.Values.Any(c => c != mine && (Same(c.Showing, w.Name) || c.Projects.Any(p => Same(p, w.Name)))),
+                _clients.Values.Any(c => Same(c.Showing, w.Name))))
             .ToList();
     }
 

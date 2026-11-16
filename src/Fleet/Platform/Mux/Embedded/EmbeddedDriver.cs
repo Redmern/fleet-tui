@@ -153,8 +153,11 @@ public sealed class EmbeddedDriver(
         var response = await RequestAsync(
             new ControlRequest { Op = "list-workspaces", Client = CurrentClient }, ct).ConfigureAwait(false);
 
-        return (response.Workspaces ?? []).Select(w => new Workspace(w.Name, w.ShownHere, w.InWindow, w.InOtherWindow)).ToList();
+        return (response.Workspaces ?? []).Select(ToWorkspace).ToList();
     }
+
+    public static Workspace ToWorkspace(WorkspaceDto w) =>
+        new(w.Name, w.ShownHere, w.InWindow, w.InOtherWindow, w.ShownAnywhere);
 
     public async Task ShowWorkspaceAsync(string name, CancellationToken ct = default)
     {

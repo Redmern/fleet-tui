@@ -1,3 +1,3 @@
 namespace Fleet.Ports.Mux.Models;
 
-public sealed record Workspace(string Name, bool ShownHere, bool InWindow = false, bool InOtherWindow = false);
+public sealed record Workspace(string Name, bool ShownHere, bool InWindow = false, bool InOtherWindow = false, bool? ShownAnywhere = null);
