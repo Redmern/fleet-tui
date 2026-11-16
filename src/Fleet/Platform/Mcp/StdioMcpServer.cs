@@ -129,17 +129,21 @@ public sealed class StdioMcpServer(
         catch (ObjectDisposedException)
         {
         }
+        catch (AggregateException e)
+        {
+            log.Swallowed(e);
+        }
     }
 
     private async Task RunCall(RpcCall call, McpServing serving, CancellationTokenSource cancel)
     {
         var ct = cancel.Token;
         var began = _time.GetTimestamp();
-        var finished = false;
+        var lines = new CallLines();
 
-        using var progress = call.ProgressToken is { } progressToken
+        var progress = call.ProgressToken is { } progressToken
             ? _time.CreateTimer(
-                _ => _ = ReportProgress(progressToken, began, () => !finished, ct),
+                _ => _ = ReportProgress(progressToken, began, lines, ct),
                 null,
                 ProgressInterval,
                 ProgressInterval)
@@ -149,10 +153,7 @@ public sealed class StdioMcpServer(
         {
             var reply = await CallReply(call, serving, ct).ConfigureAwait(false);
 
-            if (!cancel.IsCancellationRequested)
-            {
-                await Send(reply, ct, () => finished = true).ConfigureAwait(false);
-            }
+            await Send(reply, ct, lines.TakeTheLast).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {
@@ -163,20 +164,21 @@ public sealed class StdioMcpServer(
         }
         finally
         {
-            finished = true;
+            progress?.Dispose();
+            lines.TakeTheLast();
             _cancellable.TryRemove(new KeyValuePair<string, CancellationTokenSource>(call.Id.Raw, cancel));
             cancel.Dispose();
         }
     }
 
-    private async Task ReportProgress(
-        string progressToken, long began, Func<bool> stillRunning, CancellationToken ct)
+    private async Task ReportProgress(string progressToken, long began, CallLines lines, CancellationToken ct)
     {
         try
         {
             var elapsed = (long)_time.GetElapsedTime(began).TotalSeconds;
 
-            await Send(JsonRpcCodec.Progress(progressToken, elapsed), ct, stillRunning).ConfigureAwait(false);
+            await Send(JsonRpcCodec.Progress(progressToken, elapsed), ct, lines.MayTakeOneMore)
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -206,13 +208,13 @@ public sealed class StdioMcpServer(
         }
     }
 
-    private async Task Send(string message, CancellationToken ct, Func<bool>? unlessRefused = null)
+    private async Task Send(string message, CancellationToken ct, Func<bool>? mayWrite = null)
     {
         await _writing.WaitAsync(ct).ConfigureAwait(false);
 
         try
         {
-            if (unlessRefused is not null && !unlessRefused())
+            if (mayWrite is not null && !mayWrite())
             {
                 return;
             }
@@ -245,5 +247,19 @@ public sealed class StdioMcpServer(
                 turn.Release();
             }
         };
+    }
+
+    private sealed class CallLines
+    {
+        private volatile bool _lastTaken;
+
+        public bool MayTakeOneMore() => !_lastTaken;
+
+        public bool TakeTheLast()
+        {
+            _lastTaken = true;
+
+            return true;
+        }
     }
 }
