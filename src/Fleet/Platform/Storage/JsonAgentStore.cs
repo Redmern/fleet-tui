@@ -57,6 +57,29 @@ public sealed class JsonAgentStore(TimeSpan lockPatience, TimeSpan busyPatience)
         });
     }
 
+    public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change)
+    {
+        var file = FileFor(project);
+
+        if (file is null || worktree.Length == 0)
+        {
+            return false;
+        }
+
+        return Mutate(file, unlockedIsFine: false, session =>
+        {
+            var index = session.Agents.FindIndex(a => SameWorktree(a.Worktree, worktree));
+
+            if (index < 0)
+            {
+                return false;
+            }
+
+            session.Agents[index] = Entry(change(Record(session.Agents[index])));
+            return true;
+        });
+    }
+
     private static AgentEntry Entry(AgentRecord agent) =>
         new()
         {
@@ -77,6 +100,7 @@ public sealed class JsonAgentStore(TimeSpan lockPatience, TimeSpan busyPatience)
             Model = agent.Model?.Model,
             Effort = agent.Model?.Effort,
             OrchestratorHarness = agent.OrchestratorHarness.Length == 0 ? null : agent.OrchestratorHarness,
+            InstructedAt = agent.InstructedAt.Length == 0 ? null : agent.InstructedAt,
         };
 
     public IReadOnlyList<AgentRecord> List(string project)
@@ -115,7 +139,8 @@ public sealed class JsonAgentStore(TimeSpan lockPatience, TimeSpan busyPatience)
             a.Summary,
             a.ReportedAt,
             a.Model is null ? null : new RoleModel(a.Model, a.Effort ?? ModelChoice.Inherit),
-            a.OrchestratorHarness ?? string.Empty);
+            a.OrchestratorHarness ?? string.Empty,
+            a.InstructedAt ?? string.Empty);
     }
 
     public bool Remove(string project, string worktree)

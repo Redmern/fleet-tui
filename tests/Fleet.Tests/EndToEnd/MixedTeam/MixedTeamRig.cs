@@ -38,6 +38,7 @@ namespace Fleet.Tests.EndToEnd.MixedTeam;
 //
 // Passed in where McpWiring passes the real thing (the McpActions seams):
 // - the clock: a SkippingClock, so the Enter delay, the echo polls and the quiet window take no real time;
+//   it moves on 1 ms after every call, so a stamp written by one call is earlier than the next call's;
 // - the slug namer: McpWiring's asks the claude CLI; this one answers what the test sets, or nothing;
 // - the config writers: claude's write nothing (the real ones edit ~/.claude.json), and the codex and pi writers
 //   keep their user-level files (~/.codex/config.toml, ~/.pi/agent/trust.json) under the project root;
@@ -128,10 +129,16 @@ internal sealed class MixedTeamRig
         Trust,
         Log);
 
-    public Task<McpResult> CallAsync(string caller, HarnessTool tool, params (string Key, string Value)[] arguments) =>
-        Actions(caller).PerformAsync(
+    public async Task<McpResult> CallAsync(string caller, HarnessTool tool, params (string Key, string Value)[] arguments)
+    {
+        var result = await Actions(caller).PerformAsync(
             new McpRequest(HarnessToolIds.For(tool), arguments.ToDictionary(a => a.Key, a => a.Value)),
             CancellationToken.None);
+
+        Clock.Advance(TimeSpan.FromMilliseconds(1));
+
+        return result;
+    }
 
     public async Task<DispatchReply> DispatchAsync(string caller, string message, string harness)
     {
@@ -242,6 +249,29 @@ internal sealed class MixedTeamRig
                 }
 
                 _agents[at] = agent;
+                return true;
+            }
+        }
+
+        public bool RefuseUpdates { get; set; }
+
+        public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change)
+        {
+            lock (_gate)
+            {
+                if (RefuseUpdates)
+                {
+                    return false;
+                }
+
+                var at = _agents.FindIndex(a => a.Worktree == worktree);
+
+                if (at < 0)
+                {
+                    return false;
+                }
+
+                _agents[at] = change(_agents[at]);
                 return true;
             }
         }

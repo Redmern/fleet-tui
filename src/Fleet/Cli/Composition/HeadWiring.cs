@@ -45,7 +45,7 @@ public static class HeadWiring
 
         var serving = new McpServing(McpServerId.ServerName, ToolInfos(), service.HandleAsync);
 
-        await Adapters.McpServer(log).RunAsync(serving, ct).ConfigureAwait(false);
+        await Adapters.McpServer(log, oneCallAtATime: true).RunAsync(serving, ct).ConfigureAwait(false);
 
         return 0;
     }

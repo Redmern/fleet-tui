@@ -166,6 +166,9 @@ public sealed class StaleRecordTests : IDisposable
 
         public IReadOnlyList<AgentRecord> List(string project) => stale;
 
+        public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change) =>
+            List(project).FirstOrDefault(a => a.Worktree == worktree) is { } current && Replace(project, change(current));
+
         public bool Remove(string project, string worktree)
         {
             Live.RemoveAll(a => PathKey.Same(a.Worktree, worktree));

@@ -31,6 +31,8 @@ public static class JsonRpcCodec
             var id = RpcId.From(root);
             var name = string.Empty;
             var arguments = new Dictionary<string, string>();
+            var cancelled = RpcId.Absent;
+            string? progressToken = null;
 
             if (root.TryGetProperty("params", out var parameters)
                 && parameters.ValueKind == JsonValueKind.Object)
@@ -49,9 +51,16 @@ public static class JsonRpcCodec
                         arguments[field.Name] = Flatten(field.Value);
                     }
                 }
+
+                cancelled = RpcId.From(parameters, "requestId");
+                progressToken = ProgressTokenOf(parameters);
             }
 
-            call = new RpcCall(method.GetString() ?? string.Empty, id, name, arguments);
+            call = new RpcCall(method.GetString() ?? string.Empty, id, name, arguments)
+            {
+                CancelledId = cancelled,
+                ProgressToken = progressToken,
+            };
 
             return true;
         }
@@ -71,6 +80,10 @@ public static class JsonRpcCodec
 
         return $"{{\"jsonrpc\":\"2.0\",\"id\":{id.Raw},\"error\":{body}}}";
     }
+
+    public static string Progress(string progressToken, long elapsedSeconds) =>
+        $"{{\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\","
+        + $"\"params\":{{\"progressToken\":{progressToken},\"progress\":{elapsedSeconds}}}}}";
 
     public static string Initialize(string protocolVersion, string serverName, string version) =>
         JsonSerializer.Serialize(
@@ -110,6 +123,20 @@ public static class JsonRpcCodec
                 IsError = result.IsError,
             },
             McpJsonContext.Default.CallResult);
+
+    private static string? ProgressTokenOf(JsonElement parameters)
+    {
+        if (!parameters.TryGetProperty("_meta", out var meta)
+            || meta.ValueKind != JsonValueKind.Object
+            || !meta.TryGetProperty("progressToken", out var token))
+        {
+            return null;
+        }
+
+        return token.ValueKind is JsonValueKind.String or JsonValueKind.Number
+            ? token.GetRawText()
+            : null;
+    }
 
     private static string Str(string value) =>
         JsonSerializer.Serialize(value, McpJsonContext.Default.String);

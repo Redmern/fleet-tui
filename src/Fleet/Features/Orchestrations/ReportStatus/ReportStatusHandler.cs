@@ -94,11 +94,12 @@ public sealed class ReportStatusHandler(
 
         var normalized = OrchestrationStatus.Normalize(status);
 
-        var kept = store.Replace(project, record with
+        var reportedAt = _now().ToString("O", CultureInfo.InvariantCulture);
+        var kept = store.Update(project, record.Worktree, current => current with
         {
             Status = normalized,
             Summary = summary.Trim(),
-            ReportedAt = _now().ToString("O", CultureInfo.InvariantCulture),
+            ReportedAt = reportedAt,
         });
 
         if (!kept)

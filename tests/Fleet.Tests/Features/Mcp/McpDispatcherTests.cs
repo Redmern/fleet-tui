@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Ports;
 using Fleet.Ports.Approvals;
@@ -12,6 +13,8 @@ namespace Fleet.Tests.Features.Mcp;
 
 public sealed class McpDispatcherTests
 {
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private readonly FakeSettings _settings = new();
 
     private readonly FakeApprovals _approvals = new();
@@ -32,6 +35,9 @@ public sealed class McpDispatcherTests
             _performed++;
             return Task.FromResult(McpResult.Ok("done"));
         });
+
+    private McpDispatcher Performing(Func<McpRequest, CancellationToken, Task<McpResult>> perform) => new(
+        McpCaller.AtRoot("techweb", "C:/repos/techweb"), _settings, _approvals, _log, perform);
 
     [Fact]
     public async Task An_unknown_tool_never_reaches_the_handler()
@@ -120,6 +126,169 @@ public sealed class McpDispatcherTests
         Assert.Contains(_log.Lines, l => l.Contains("git blew up"));
     }
 
+    [Theory]
+    [InlineData("wait_for_agent")]
+    [InlineData("list_agents")]
+    [InlineData("agent_status")]
+    [InlineData("list_subs")]
+    [InlineData("list_repositories")]
+    [InlineData("list_branches")]
+    [InlineData("repository_status")]
+    [InlineData("list_forwards")]
+    [InlineData("log_tail")]
+    public async Task A_read_only_call_runs_while_a_changing_call_is_still_running(string readOnly)
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var dispatcher = Performing(async (request, _) =>
+        {
+            if (request.Tool == "new_agent")
+            {
+                await release.Task.WaitAsync(Patience);
+            }
+
+            return McpResult.Ok(request.Tool);
+        });
+
+        var changing = dispatcher.HandleAsync(Request("new_agent"));
+        var read = await dispatcher.HandleAsync(Request(readOnly)).WaitAsync(Patience);
+
+        Assert.Equal(readOnly, read.Text);
+        Assert.False(changing.IsCompleted);
+
+        release.SetResult();
+
+        Assert.Equal("new_agent", (await changing.WaitAsync(Patience)).Text);
+    }
+
+    [Fact]
+    public async Task Two_read_only_calls_run_at_the_same_time()
+    {
+        var bothRunning = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var running = 0;
+
+        var dispatcher = Performing(async (_, _) =>
+        {
+            if (Interlocked.Increment(ref running) == 2)
+            {
+                bothRunning.SetResult();
+            }
+
+            await bothRunning.Task.WaitAsync(Patience);
+
+            return McpResult.Ok("done");
+        });
+
+        var results = await Task.WhenAll(
+            dispatcher.HandleAsync(Request("wait_for_agent")),
+            dispatcher.HandleAsync(Request("wait_for_agent")));
+
+        Assert.All(results, result => Assert.False(result.IsError));
+    }
+
+    [Theory]
+    [InlineData("tell_agent", "tell_agent")]
+    [InlineData("new_agent", "open_agent")]
+    [InlineData("dispatch", "report")]
+    public async Task Two_changing_calls_run_one_at_a_time(string first, string second)
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new ConcurrentQueue<string>();
+
+        var dispatcher = Performing(async (request, _) =>
+        {
+            started.Enqueue(request.Tool);
+
+            await release.Task.WaitAsync(Patience);
+
+            return McpResult.Ok("done");
+        });
+
+        var one = dispatcher.HandleAsync(Request(first));
+        var two = dispatcher.HandleAsync(Request(second));
+
+        Assert.Equal([first], started);
+
+        release.SetResult();
+        await Task.WhenAll(one, two).WaitAsync(Patience);
+
+        Assert.Equal([first, second], started);
+    }
+
+    [Fact]
+    public async Task A_changing_call_cancelled_while_it_waits_its_turn_never_runs_and_holds_nothing()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancel = new CancellationTokenSource();
+        var started = new ConcurrentQueue<string>();
+
+        var dispatcher = Performing(async (request, _) =>
+        {
+            started.Enqueue(request.Tool);
+
+            await release.Task.WaitAsync(Patience);
+
+            return McpResult.Ok("done");
+        });
+
+        var running = dispatcher.HandleAsync(Request("new_agent"));
+        var waiting = dispatcher.HandleAsync(Request("tell_agent"), cancel.Token);
+
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+
+        release.SetResult();
+        await running.WaitAsync(Patience);
+        await dispatcher.HandleAsync(Request("stop_agent")).WaitAsync(Patience);
+
+        Assert.Equal(["new_agent", "stop_agent"], started);
+    }
+
+    [Fact]
+    public async Task A_changing_call_cancelled_while_it_runs_lets_the_next_one_run()
+    {
+        using var cancel = new CancellationTokenSource();
+
+        var dispatcher = Performing(async (request, ct) =>
+        {
+            if (request.Tool == "new_agent")
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct).WaitAsync(Patience, CancellationToken.None);
+            }
+
+            return McpResult.Ok(request.Tool);
+        });
+
+        var running = dispatcher.HandleAsync(Request("new_agent"), cancel.Token);
+        var next = dispatcher.HandleAsync(Request("tell_agent"));
+
+        Assert.False(next.IsCompleted);
+
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+
+        Assert.Equal("tell_agent", (await next.WaitAsync(Patience)).Text);
+    }
+
+    [Fact]
+    public async Task Two_calls_that_ask_are_put_to_the_user_one_at_a_time()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.NewAgent, ActionPolicy.Ask);
+        _approvals.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = Dispatcher();
+
+        var first = dispatcher.HandleAsync(Request("new_agent"));
+        var second = dispatcher.HandleAsync(Request("new_agent"));
+
+        Assert.Single(_approvals.Asked);
+
+        _approvals.Hold.SetResult();
+        await Task.WhenAll(first, second).WaitAsync(Patience);
+
+        Assert.Equal(2, _approvals.Asked.Count);
+        Assert.Equal(2, _performed);
+    }
+
     private sealed class FakeSettings : ISettingsStore
     {
         public SettingsConfig Config { get; set; } = SettingsConfig.Default;
@@ -133,24 +302,32 @@ public sealed class McpDispatcherTests
     {
         public ApprovalOutcome Answer { get; set; } = ApprovalOutcome.Allow;
 
-        public List<ApprovalRequest> Asked { get; } = [];
+        public ConcurrentQueue<ApprovalRequest> Asked { get; } = [];
 
-        public Task<ApprovalOutcome> AskAsync(ApprovalRequest request, CancellationToken ct = default)
+        public TaskCompletionSource? Hold { get; set; }
+
+        public async Task<ApprovalOutcome> AskAsync(ApprovalRequest request, CancellationToken ct = default)
         {
-            Asked.Add(request);
-            return Task.FromResult(Answer);
+            Asked.Enqueue(request);
+
+            if (Hold is not null)
+            {
+                await Hold.Task;
+            }
+
+            return Answer;
         }
     }
 
     private sealed class FakeLog : IFleetLog
     {
-        public List<string> Lines { get; } = [];
+        public ConcurrentQueue<string> Lines { get; } = [];
 
         public void Swallowed(Exception e) { }
 
-        public void Write(string line) => Lines.Add(line);
+        public void Write(string line) => Lines.Enqueue(line);
 
-        public IReadOnlyList<string> Tail(int lines) => Lines;
+        public IReadOnlyList<string> Tail(int lines) => [.. Lines];
     }
 
     private static McpRequest Dispatch(string? repository = null) =>

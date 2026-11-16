@@ -8,6 +8,8 @@ public interface IAgentStore
 
     bool Replace(string project, AgentRecord agent);
 
+    bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change);
+
     IReadOnlyList<AgentRecord> List(string project);
 
     bool Remove(string project, string worktree);

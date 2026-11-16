@@ -8,6 +8,17 @@ public sealed class SimulatedLinkClock : TimeProvider
     private readonly List<Timer> _timers = [];
     private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+    public int ActiveTimers
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _timers.Count;
+            }
+        }
+    }
+
     public override DateTimeOffset GetUtcNow()
     {
         lock (_gate)

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Fleet.Ports;
 using Fleet.Ports.Mcp;
 using Fleet.Ports.Mcp.Models;
@@ -5,38 +6,74 @@ using Fleet.Platform.Mcp.Models;
 
 namespace Fleet.Platform.Mcp;
 
-public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLog log) : IMcpServer
+public sealed class StdioMcpServer(
+    TextReader input,
+    TextWriter output,
+    IFleetLog log,
+    TimeProvider? time = null,
+    bool oneCallAtATime = false) : IMcpServer
 {
     public const string ProtocolVersion = "2024-11-05";
 
     public const string Version = "0.1.0";
 
+    public static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(20);
+
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+
+    private readonly SemaphoreSlim _writing = new(1, 1);
+
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _cancellable = new();
+
     public async Task RunAsync(McpServing serving, CancellationToken ct = default)
     {
-        while (!ct.IsCancellationRequested)
+        var running = new HashSet<Task>();
+        var served = oneCallAtATime ? serving with { Invoke = InTurn(serving.Invoke) } : serving;
+
+        try
         {
-            var line = await input.ReadLineAsync(ct).ConfigureAwait(false);
-
-            if (line is null)
+            while (!ct.IsCancellationRequested)
             {
-                return;
-            }
+                var line = await input.ReadLineAsync(ct).ConfigureAwait(false);
 
-            if (!JsonRpcCodec.TryParse(line, out var call))
-            {
-                continue;
-            }
+                if (line is null)
+                {
+                    return;
+                }
 
-            var reply = await ReplyFor(call, serving, ct).ConfigureAwait(false);
+                if (!JsonRpcCodec.TryParse(line, out var call))
+                {
+                    continue;
+                }
 
-            if (reply is not null)
-            {
-                await Send(reply, ct).ConfigureAwait(false);
+                if (call.Method == "tools/call")
+                {
+                    running.RemoveWhere(task => task.IsCompleted);
+                    running.Add(Start(call, served, ct));
+
+                    continue;
+                }
+
+                if (call.Method == "notifications/cancelled")
+                {
+                    Cancel(call.CancelledId);
+
+                    continue;
+                }
+
+                if (ReplyFor(call, serving) is { } reply)
+                {
+                    await Send(reply, ct).ConfigureAwait(false);
+                }
             }
+        }
+        finally
+        {
+            await Task.WhenAll(running).ConfigureAwait(false);
         }
     }
 
-    private async Task<string?> ReplyFor(RpcCall call, McpServing serving, CancellationToken ct)
+    private static string? ReplyFor(RpcCall call, McpServing serving)
     {
         switch (call.Method)
         {
@@ -48,9 +85,6 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
 
             case "tools/list":
                 return JsonRpcCodec.Result(call.Id, JsonRpcCodec.ToolList(serving.Tools));
-
-            case "tools/call":
-                return await CallReply(call, serving, ct).ConfigureAwait(false);
 
             case "ping":
                 return JsonRpcCodec.Result(call.Id, "{}");
@@ -66,7 +100,96 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
         }
     }
 
-    private async Task<string?> CallReply(RpcCall call, McpServing serving, CancellationToken ct)
+    private Task Start(RpcCall call, McpServing serving, CancellationToken ct)
+    {
+        var cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        if (_cancellable.TryAdd(call.Id.Raw, cancel))
+        {
+            return Task.Run(() => RunCall(call, serving, cancel), CancellationToken.None);
+        }
+
+        cancel.Dispose();
+
+        return Send(
+            JsonRpcCodec.Error(call.Id, -32600, "A request with this id is still running."), ct);
+    }
+
+    private void Cancel(RpcId id)
+    {
+        if (!id.Present || !_cancellable.TryGetValue(id.Raw, out var cancel))
+        {
+            return;
+        }
+
+        try
+        {
+            cancel.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (AggregateException e)
+        {
+            log.Swallowed(e);
+        }
+    }
+
+    private async Task RunCall(RpcCall call, McpServing serving, CancellationTokenSource cancel)
+    {
+        var ct = cancel.Token;
+        var began = _time.GetTimestamp();
+        var lines = new CallLines();
+
+        var progress = call.ProgressToken is { } progressToken
+            ? _time.CreateTimer(
+                _ => _ = ReportProgress(progressToken, began, lines, ct),
+                null,
+                ProgressInterval,
+                ProgressInterval)
+            : null;
+
+        try
+        {
+            var reply = await CallReply(call, serving, ct).ConfigureAwait(false);
+
+            await Send(reply, ct, lines.TakeTheLast).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+        }
+        catch (Exception e)
+        {
+            log.Swallowed(e);
+        }
+        finally
+        {
+            progress?.Dispose();
+            lines.TakeTheLast();
+            _cancellable.TryRemove(new KeyValuePair<string, CancellationTokenSource>(call.Id.Raw, cancel));
+            cancel.Dispose();
+        }
+    }
+
+    private async Task ReportProgress(string progressToken, long began, CallLines lines, CancellationToken ct)
+    {
+        try
+        {
+            var elapsed = (long)_time.GetElapsedTime(began).TotalSeconds;
+
+            await Send(JsonRpcCodec.Progress(progressToken, elapsed), ct, lines.MayTakeOneMore)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception e)
+        {
+            log.Swallowed(e);
+        }
+    }
+
+    private async Task<string> CallReply(RpcCall call, McpServing serving, CancellationToken ct)
     {
         try
         {
@@ -76,7 +199,7 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
 
             return JsonRpcCodec.Result(call.Id, JsonRpcCodec.Call(result));
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             log.Swallowed(e);
 
@@ -85,10 +208,58 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
         }
     }
 
-    private async Task Send(string message, CancellationToken ct)
+    private async Task Send(string message, CancellationToken ct, Func<bool>? mayWrite = null)
     {
-        await output.WriteAsync(message.AsMemory(), ct).ConfigureAwait(false);
-        await output.WriteAsync('\n').ConfigureAwait(false);
-        await output.FlushAsync(ct).ConfigureAwait(false);
+        await _writing.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            if (mayWrite is not null && !mayWrite())
+            {
+                return;
+            }
+
+            await output.WriteAsync(message.AsMemory(), CancellationToken.None).ConfigureAwait(false);
+            await output.WriteAsync('\n').ConfigureAwait(false);
+            await output.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            _writing.Release();
+        }
+    }
+
+    private static Func<McpRequest, CancellationToken, Task<McpResult>> InTurn(
+        Func<McpRequest, CancellationToken, Task<McpResult>> invoke)
+    {
+        var turn = new SemaphoreSlim(1, 1);
+
+        return async (request, ct) =>
+        {
+            await turn.WaitAsync(ct).ConfigureAwait(false);
+
+            try
+            {
+                return await invoke(request, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                turn.Release();
+            }
+        };
+    }
+
+    private sealed class CallLines
+    {
+        private volatile bool _lastTaken;
+
+        public bool MayTakeOneMore() => !_lastTaken;
+
+        public bool TakeTheLast()
+        {
+            _lastTaken = true;
+
+            return true;
+        }
     }
 }

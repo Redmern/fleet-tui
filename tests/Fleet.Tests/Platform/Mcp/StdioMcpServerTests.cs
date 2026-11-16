@@ -1,11 +1,18 @@
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Text.Json;
 using Fleet.Platform.Mcp;
 using Fleet.Ports;
 using Fleet.Ports.Mcp.Models;
+using Fleet.Tests.Platform.Mcp.Support;
+using Fleet.Tests.Platform.Mux.Embedded;
 
 namespace Fleet.Tests.Platform.Mcp;
 
 public sealed class StdioMcpServerTests
 {
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private readonly FakeLog _log = new();
 
     private static McpServing Serving(Func<McpRequest, McpResult> perform) => new(
@@ -15,12 +22,11 @@ public sealed class StdioMcpServerTests
 
     private async Task<IReadOnlyList<string>> Run(string transcript, McpServing serving)
     {
-        var output = new StringWriter();
+        var output = new LineSink();
 
-        await new StdioMcpServer(new StringReader(transcript), output, _log).RunAsync(serving);
+        await new StdioMcpServer(new StringReader(transcript), output, _log).RunAsync(serving).WaitAsync(Patience);
 
-        return output.ToString()
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return output.Lines;
     }
 
     [Fact]
@@ -90,7 +96,56 @@ public sealed class StdioMcpServerTests
     }
 
     [Fact]
-    public async Task A_whole_session_replies_in_order_and_skips_the_notification()
+    public async Task A_one_at_a_time_server_runs_its_calls_in_turn_and_still_answers_a_ping()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var running = 0;
+        var mostAtOnce = 0;
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            var now = Interlocked.Increment(ref running);
+            InterlockedMax(ref mostAtOnce, now);
+
+            await release.Task.WaitAsync(Patience);
+
+            Interlocked.Decrement(ref running);
+
+            return McpResult.Ok("ok");
+        });
+
+        var transcript = string.Join('\n',
+            Call(1),
+            Call(2),
+            Call(3),
+            """{"id":4,"method":"ping"}""") + "\n";
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log, oneCallAtATime: true)
+            .RunAsync(serving);
+
+        Assert.Equal("4", IdOf(Assert.Single(await output.WaitForLines(1))));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(1, mostAtOnce);
+        Assert.Equal(["1", "2", "3", "4"], output.Lines.Select(IdOf).Order());
+    }
+
+    private static void InterlockedMax(ref int most, int now)
+    {
+        int seen;
+
+        do
+        {
+            seen = Volatile.Read(ref most);
+        }
+        while (now > seen && Interlocked.CompareExchange(ref most, now, seen) != seen);
+    }
+
+    [Fact]
+    public async Task A_whole_session_answers_every_id_exactly_once_and_skips_the_notification()
     {
         var transcript = string.Join('\n',
             """{"id":0,"method":"initialize"}""",
@@ -101,9 +156,470 @@ public sealed class StdioMcpServerTests
         var replies = await Run(transcript, Serving(_ => McpResult.Ok("ok")));
 
         Assert.Equal(3, replies.Count);
-        Assert.Contains("serverInfo", replies[0]);
-        Assert.Contains("list_agents", replies[1]);
-        Assert.Contains("\"id\":2", replies[2]);
+        Assert.Contains("serverInfo", Assert.Single(replies, r => IdOf(r) == "0"));
+        Assert.Contains("list_agents", Assert.Single(replies, r => IdOf(r) == "1"));
+        Assert.Contains("\"text\":\"ok\"", Assert.Single(replies, r => IdOf(r) == "2"));
+    }
+
+    [Fact]
+    public async Task A_ping_is_answered_while_a_call_is_still_running()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            """{"id":2,"method":"ping"}""") + "\n";
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log)
+            .RunAsync(Blocking(release.Task));
+
+        var early = await output.WaitForLines(1);
+
+        Assert.Equal("2", IdOf(Assert.Single(early)));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["2", "1"], output.Lines.Select(IdOf));
+    }
+
+    [Fact]
+    public async Task Two_calls_run_at_the_same_time()
+    {
+        var bothRunning = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var running = 0;
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            if (Interlocked.Increment(ref running) == 2)
+            {
+                bothRunning.SetResult();
+            }
+
+            await bothRunning.Task.WaitAsync(Patience);
+
+            return McpResult.Ok("ok");
+        });
+
+        var replies = await Run(Call(1) + "\n" + Call(2) + "\n", serving);
+
+        Assert.Equal(["1", "2"], replies.Select(IdOf).Order());
+    }
+
+    [Fact]
+    public async Task Replies_written_at_the_same_time_never_share_a_line()
+    {
+        var transcript = string.Concat(Enumerable.Range(0, 60).Select(id => Call(id) + "\n"));
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            await Task.Yield();
+
+            return McpResult.Ok("ok");
+        });
+
+        var replies = await Run(transcript, serving);
+
+        Assert.Equal(
+            Enumerable.Range(0, 60).Select(id => id.ToString(CultureInfo.InvariantCulture)),
+            replies.Select(IdOf).OrderBy(int.Parse));
+    }
+
+    [Fact]
+    public async Task The_server_waits_for_running_calls_when_its_input_ends()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n"), output, _log)
+            .RunAsync(Blocking(release.Task));
+
+        Assert.False(run.IsCompleted);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
+    }
+
+    [Theory]
+    [InlineData("""{"id":1,"method":"tools/call","params":{"name":"list_agents"}}""", "1")]
+    [InlineData("""{"id":"call-1","method":"tools/call","params":{"name":"list_agents"}}""", "\"call-1\"")]
+    public async Task A_cancelled_call_has_its_work_cancelled_and_sends_no_result(string call, string requestId)
+    {
+        var cancelled = false;
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct).WaitAsync(Patience, CancellationToken.None);
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = ct.IsCancellationRequested;
+
+                throw;
+            }
+
+            return McpResult.Ok("late");
+        });
+
+        var transcript = string.Join('\n',
+            call,
+            """{"method":"notifications/cancelled","params":{"reason":"gave up","requestId":""" + requestId + "}}",
+            """{"id":2,"method":"ping"}""") + "\n";
+
+        var replies = await Run(transcript, serving);
+
+        Assert.True(cancelled);
+        Assert.Equal("2", IdOf(Assert.Single(replies)));
+        Assert.Empty(_log.Swallows);
+    }
+
+    [Fact]
+    public async Task A_cancelled_call_that_finishes_anyway_still_sends_no_result()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            """{"method":"notifications/cancelled","params":{"requestId":1}}""") + "\n";
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log)
+            .RunAsync(Blocking(release.Task));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Empty(output.Lines);
+    }
+
+    [Fact]
+    public async Task Cancelling_one_call_leaves_the_others_running()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            Call(2),
+            """{"method":"notifications/cancelled","params":{"requestId":1}}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            await release.Task.WaitAsync(Patience, ct);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log).RunAsync(serving);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("2", IdOf(Assert.Single(output.Lines)));
+    }
+
+    [Fact]
+    public async Task A_cancellation_for_a_request_that_is_not_running_is_ignored()
+    {
+        var transcript = string.Join('\n',
+            """{"method":"notifications/cancelled","params":{"requestId":41}}""",
+            Call(1),
+            """{"method":"notifications/cancelled"}""") + "\n";
+
+        var replies = await Run(transcript, Serving(_ => McpResult.Ok("ok")));
+
+        Assert.Equal("1", IdOf(Assert.Single(replies)));
+    }
+
+    [Fact]
+    public async Task A_handler_that_gives_up_on_its_own_is_reported_as_an_error()
+    {
+        var replies = await Run(
+            Call(1) + "\n",
+            Serving(_ => throw new TaskCanceledException("an inner timeout")));
+
+        Assert.Contains("\"isError\":true", Assert.Single(replies));
+        Assert.NotEmpty(_log.Swallows);
+    }
+
+    [Fact]
+    public async Task A_long_call_with_a_progress_token_reports_progress_until_it_completes()
+    {
+        var clock = new SimulatedLinkClock();
+        var output = new LineSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var run = new StdioMcpServer(
+                new StringReader(Call(1, ""","_meta":{"progressToken":"tok-1"}""") + "\n"), output, _log, clock)
+            .RunAsync(Blocking(release.Task, started));
+
+        await started.Task.WaitAsync(Patience);
+
+        clock.Advance(TimeSpan.FromSeconds(19));
+        clock.Advance(TimeSpan.FromSeconds(1));
+
+        Assert.Equal(
+            """{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"tok-1","progress":20}}""",
+            Assert.Single(await output.WaitForLines(1)));
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+
+        Assert.Contains("\"progress\":40", (await output.WaitForLines(2))[1]);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(0, clock.ActiveTimers);
+        Assert.Equal(3, output.Lines.Count);
+        Assert.Equal("1", IdOf(output.Lines[2]));
+    }
+
+    [Fact]
+    public async Task A_numeric_progress_token_goes_back_as_a_number()
+    {
+        var clock = new SimulatedLinkClock();
+        var output = new LineSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var run = new StdioMcpServer(
+                new StringReader(Call(1, ""","_meta":{"progressToken":7}""") + "\n"), output, _log, clock)
+            .RunAsync(Blocking(release.Task, started));
+
+        await started.Task.WaitAsync(Patience);
+        clock.Advance(TimeSpan.FromSeconds(20));
+
+        Assert.Contains("\"progressToken\":7,", (await output.WaitForLines(1))[0]);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+    }
+
+    [Fact]
+    public async Task A_call_without_a_progress_token_reports_no_progress()
+    {
+        var clock = new SimulatedLinkClock();
+        var output = new LineSink();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n"), output, _log, clock)
+            .RunAsync(Blocking(release.Task, started));
+
+        await started.Task.WaitAsync(Patience);
+
+        Assert.Equal(0, clock.ActiveTimers);
+
+        clock.Advance(TimeSpan.FromMinutes(2));
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
+    }
+
+    [Fact]
+    public async Task A_cancelled_call_stops_reporting_progress()
+    {
+        var clock = new SimulatedLinkClock();
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1, ""","_meta":{"progressToken":"tok-1"}"""),
+            """{"method":"notifications/cancelled","params":{"requestId":1}}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct).WaitAsync(Patience, CancellationToken.None);
+
+            return McpResult.Ok("late");
+        });
+
+        await new StdioMcpServer(new StringReader(transcript), output, _log, clock)
+            .RunAsync(serving)
+            .WaitAsync(Patience);
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        Assert.Equal(0, clock.ActiveTimers);
+        Assert.Empty(output.Lines);
+    }
+
+    [Fact]
+    public async Task A_cancellation_that_arrives_during_a_write_still_leaves_a_whole_line()
+    {
+        var letGo = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        using var stop = new CancellationTokenSource();
+
+        output.HoldNextWriteUntil(letGo.Task);
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n"), output, _log)
+            .RunAsync(Serving(_ => McpResult.Ok("ok")), stop.Token);
+
+        await output.Holding.WaitAsync(Patience);
+        await stop.CancelAsync();
+        letGo.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
+    }
+
+    [Fact]
+    public async Task A_progress_tick_that_waits_behind_the_result_is_dropped()
+    {
+        var clock = new SimulatedLinkClock();
+        var output = new LineSink();
+        var letGo = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishSlow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var transcript = string.Join('\n',
+            Call(1, ""","_meta":{"progressToken":"tok-1"}"""),
+            """{"id":2,"method":"tools/call","params":{"name":"slow"}}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (request, _) =>
+        {
+            if (request.Tool == "slow")
+            {
+                await finishSlow.Task.WaitAsync(Patience);
+            }
+
+            return McpResult.Ok("ok");
+        });
+
+        output.HoldNextWriteUntil(letGo.Task);
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log, clock).RunAsync(serving);
+
+        // The first result is half written and holds the write lock: the tick queues behind it, and the second
+        // result queues behind the tick, so a tick that is written anyway lands between the two results.
+        await output.Holding.WaitAsync(Patience);
+        clock.Advance(TimeSpan.FromSeconds(20));
+        finishSlow.SetResult();
+        letGo.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["1", "2"], output.Lines.Select(IdOf));
+    }
+
+    [Fact]
+    public async Task A_cancelled_call_on_a_one_at_a_time_server_sends_no_result_and_leaves_the_turn_free()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            Call(2),
+            Call(3),
+            """{"method":"notifications/cancelled","params":{"requestId":2}}""",
+            """{"id":4,"method":"ping"}""") + "\n";
+
+        var serving = new McpServing("fleet", [], async (_, ct) =>
+        {
+            await release.Task.WaitAsync(Patience, ct);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log, oneCallAtATime: true)
+            .RunAsync(serving);
+
+        Assert.Equal("4", IdOf(Assert.Single(await output.WaitForLines(1))));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["1", "3", "4"], output.Lines.Select(IdOf).Order());
+    }
+
+    [Fact]
+    public async Task A_call_that_reuses_the_id_of_a_running_call_is_refused()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var invoked = 0;
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            Interlocked.Increment(ref invoked);
+
+            await release.Task.WaitAsync(Patience);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n" + Call(1) + "\n"), output, _log)
+            .RunAsync(serving);
+
+        var refusal = Assert.Single(await output.WaitForLines(1));
+
+        Assert.Contains("-32600", refusal);
+        Assert.Equal("1", IdOf(refusal));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(1, invoked);
+        Assert.Contains("\"result\"", output.Lines[1]);
+    }
+
+    [Fact]
+    public async Task A_call_cancelled_while_it_waits_its_turn_is_never_invoked_even_if_handlers_ignore_the_token()
+    {
+        var input = new FedReader();
+        var output = new LineSink();
+        var invoked = new ConcurrentQueue<string>();
+        var holdingTheTurn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var serving = new McpServing("fleet", [], async (request, _) =>
+        {
+            invoked.Enqueue(request.Tool);
+            holdingTheTurn.TrySetResult();
+
+            await release.Task.WaitAsync(Patience, CancellationToken.None);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(input, output, _log, oneCallAtATime: true).RunAsync(serving);
+
+        input.Feed("""{"id":1,"method":"tools/call","params":{"name":"holds_the_turn"}}""");
+        await holdingTheTurn.Task.WaitAsync(Patience);
+
+        input.Feed("""{"id":2,"method":"tools/call","params":{"name":"waits_its_turn"}}""");
+        input.Feed("""{"method":"notifications/cancelled","params":{"requestId":2}}""");
+        input.Feed("""{"id":3,"method":"ping"}""");
+
+        Assert.Equal("3", IdOf(Assert.Single(await output.WaitForLines(1))));
+
+        release.SetResult();
+        input.End();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["holds_the_turn"], invoked);
+        Assert.Equal(["1", "3"], output.Lines.Select(IdOf).Order());
+    }
+
+    private static string Call(int id, string meta = "") =>
+        $"{{\"id\":{id},\"method\":\"tools/call\",\"params\":{{\"name\":\"list_agents\",\"arguments\":{{}}{meta}}}}}";
+
+    private static McpServing Blocking(Task release, TaskCompletionSource? started = null) => new("fleet", [], async (_, _) =>
+    {
+        started?.SetResult();
+
+        await release.WaitAsync(Patience);
+
+        return McpResult.Ok("ok");
+    });
+
+    // Parsing fails the test when a line is not one whole JSON message.
+    private static string IdOf(string line)
+    {
+        using var message = JsonDocument.Parse(line);
+
+        return message.RootElement.TryGetProperty("id", out var id) ? id.GetRawText() : string.Empty;
     }
 
     private sealed class FakeLog : IFleetLog

@@ -16,9 +16,11 @@ public readonly struct RpcId
 
     public static RpcId Absent => new("null", false);
 
-    public static RpcId From(JsonElement parent)
+    public static RpcId From(JsonElement parent) => From(parent, "id");
+
+    public static RpcId From(JsonElement parent, string property)
     {
-        if (!parent.TryGetProperty("id", out var id) || id.ValueKind == JsonValueKind.Null)
+        if (!parent.TryGetProperty(property, out var id) || id.ValueKind == JsonValueKind.Null)
         {
             return Absent;
         }
