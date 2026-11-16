@@ -9,9 +9,16 @@ using Fleet.Shared.Status.Models;
 
 namespace Fleet.Cli.Composition;
 
-public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle = null, TimeProvider? clock = null)
+public sealed class PaneActivity(
+    IMuxDriver mux,
+    Action<AgentRecord>? wentIdle = null,
+    TimeProvider? clock = null,
+    Action<AgentRecord>? lost = null,
+    Func<IReadOnlyList<Pane>, bool>? listingIsWhole = null)
 {
     private const int AtOnce = 6;
+
+    private const int MissedRefreshes = 2;
 
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
@@ -19,17 +26,24 @@ public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle =
 
     private readonly ConcurrentDictionary<string, string> _quiet = new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly ConcurrentDictionary<string, bool> _seen = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ConcurrentDictionary<string, int> _missed = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly ConcurrentDictionary<string, IReadOnlyList<Pane>> _counted = new(StringComparer.OrdinalIgnoreCase);
+
     public IReadOnlyDictionary<string, string> Texts => _texts;
 
     public IReadOnlyList<AgentRecord> For(
         IReadOnlyList<AgentRecord> agents, IReadOnlyList<Pane> panes, Func<AgentRecord, AgentReport?> hooked)
     {
         var live = new AgentRecord[agents.Count];
+        var countable = listingIsWhole?.Invoke(panes) ?? panes.Count > 0;
 
         Parallel.ForEachAsync(
                 Enumerable.Range(0, agents.Count),
                 new ParallelOptions { MaxDegreeOfParallelism = AtOnce },
-                async (i, ct) => live[i] = await WithActivityAsync(agents[i], panes, hooked, ct).ConfigureAwait(false))
+                async (i, ct) => live[i] = await WithActivityAsync(agents[i], panes, hooked, countable, ct).ConfigureAwait(false))
             .GetAwaiter()
             .GetResult();
 
@@ -37,7 +51,7 @@ public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle =
     }
 
     private async Task<AgentRecord> WithActivityAsync(
-        AgentRecord agent, IReadOnlyList<Pane> panes, Func<AgentRecord, AgentReport?> hooked, CancellationToken ct)
+        AgentRecord agent, IReadOnlyList<Pane> panes, Func<AgentRecord, AgentReport?> hooked, bool countable, CancellationToken ct)
     {
         var orchestrator = AgentHarness.IsOrchestrator(agent.Harness);
 
@@ -52,8 +66,16 @@ public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle =
 
         if (pane is null)
         {
+            if (countable)
+            {
+                Missing(agent, panes);
+            }
+
             return agent;
         }
+
+        _seen[agent.Worktree] = true;
+        _missed.TryRemove(agent.Worktree, out _);
 
         if (hooked(agent) is { } report)
         {
@@ -69,6 +91,27 @@ public sealed class PaneActivity(IMuxDriver mux, Action<AgentRecord>? wentIdle =
         var live = AgentActivity.WatchedByPane(agent) ? Quiet(agent, text) : AgentActivity.Classify(text);
 
         return WithLive(agent, live, orchestrator);
+    }
+
+    private void Missing(AgentRecord agent, IReadOnlyList<Pane> panes)
+    {
+        if (!agent.Open
+            || OrchestrationStatus.Normalize(agent.Status) != OrchestrationStatus.Working
+            || !_seen.ContainsKey(agent.Worktree)
+            || ReferenceEquals(_counted.GetValueOrDefault(agent.Worktree), panes))
+        {
+            return;
+        }
+
+        _counted[agent.Worktree] = panes;
+
+        if (_missed.AddOrUpdate(agent.Worktree, 1, (_, n) => n + 1) == MissedRefreshes)
+        {
+            _seen.TryRemove(agent.Worktree, out _);
+            _missed.TryRemove(agent.Worktree, out _);
+            _counted.TryRemove(agent.Worktree, out _);
+            lost?.Invoke(agent);
+        }
     }
 
     private string Quiet(AgentRecord agent, string text)

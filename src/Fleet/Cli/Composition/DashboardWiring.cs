@@ -459,11 +459,10 @@ public static class DashboardWiring
 
         IReadOnlyList<Pane>? barPanes = null;
         var barPanesAt = DateTime.MinValue;
-        var activity = new PaneActivity(
-            mux,
-            new OwnerNotices(
-                project.Name, project.Root, mux, agents, log,
-                () => settings.Load(project.Name).MainOrchestratorInNvim).WentIdle);
+        var ownerNotices = new OwnerNotices(
+            project.Name, project.Root, mux, agents, log,
+            () => settings.Load(project.Name).MainOrchestratorInNvim, tickets: Adapters.TicketStatus());
+        var activity = ownerNotices.Watch();
         var paneTexts = activity.Texts;
 
         IReadOnlyList<AgentRecord> WithBarState(IReadOnlyList<AgentRecord> records)

@@ -183,6 +183,184 @@ public class PaneActivityTests
         Assert.Equal(4, listing.Board.Count + listing.Flat.Count);
     }
 
+    private static AgentRecord Running(string branch = "gone", string status = "working", bool open = true, bool hidden = false) =>
+        Agent(branch, status: status) with { Open = open, Hidden = hidden };
+
+    private static IReadOnlyList<Pane> Elsewhere() => [PaneOf(Agent("elsewhere"))];
+
+    private static (PaneActivity Activity, List<AgentRecord> Lost) Watching()
+    {
+        var lost = new List<AgentRecord>();
+
+        return (new PaneActivity(new TextMux(), lost: lost.Add), lost);
+    }
+
+    [Fact]
+    public void A_working_agent_whose_seen_pane_is_missing_on_two_refreshes_in_a_row_is_lost_once()
+    {
+        var (activity, lost) = Watching();
+        var agent = Running();
+
+        activity.For([agent], [PaneOf(agent)], NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Empty(lost);
+
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Equal(agent.Branch, Assert.Single(lost).Branch);
+
+        activity.For([agent], Elsewhere(), NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Single(lost);
+    }
+
+    [Fact]
+    public void An_empty_pane_listing_is_a_failed_listing_not_a_missing_pane()
+    {
+        var (activity, lost) = Watching();
+        var agent = Running();
+
+        activity.For([agent], [PaneOf(agent)], NoHook);
+
+        for (var i = 0; i < 4; i++)
+        {
+            activity.For([agent], new List<Pane>(), NoHook);
+        }
+
+        Assert.Empty(lost);
+    }
+
+    [Fact]
+    public void Two_refreshes_that_reuse_one_pane_listing_count_as_one()
+    {
+        var (activity, lost) = Watching();
+        var agent = Running();
+        var cached = Elsewhere();
+
+        activity.For([agent], [PaneOf(agent)], NoHook);
+        activity.For([agent], cached, NoHook);
+        activity.For([agent], cached, NoHook);
+
+        Assert.Empty(lost);
+
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Single(lost);
+    }
+
+    [Fact]
+    public void Two_agent_sets_checked_against_one_pane_listing_each_count_that_listing_once()
+    {
+        var (activity, lost) = Watching();
+        var board = Running("board");
+        var owned = Running("owned");
+        IReadOnlyList<Pane> both = [PaneOf(board), PaneOf(owned)];
+
+        activity.For([board], both, NoHook);
+        activity.For([owned], both, NoHook);
+
+        var first = Elsewhere();
+        activity.For([board], first, NoHook);
+        activity.For([owned], first, NoHook);
+
+        Assert.Empty(lost);
+
+        var second = Elsewhere();
+        activity.For([board], second, NoHook);
+        activity.For([owned], second, NoHook);
+
+        Assert.Equal(["board", "owned"], lost.Select(a => a.Branch).Order());
+    }
+
+    [Fact]
+    public void A_listing_that_the_caller_says_is_incomplete_is_not_counted()
+    {
+        var lost = new List<AgentRecord>();
+        var activity = new PaneActivity(new TextMux(), lost: lost.Add, listingIsWhole: panes => panes.Count > 1);
+        var agent = Running();
+
+        activity.For([agent], [PaneOf(agent), PaneOf(Agent("x"))], NoHook);
+
+        for (var i = 0; i < 4; i++)
+        {
+            activity.For([agent], Elsewhere(), NoHook);
+        }
+
+        Assert.Empty(lost);
+    }
+
+    [Fact]
+    public void A_pane_that_comes_back_clears_the_count()
+    {
+        var (activity, lost) = Watching();
+        var agent = Running();
+
+        activity.For([agent], [PaneOf(agent)], NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+        activity.For([agent], [PaneOf(agent)], NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Empty(lost);
+    }
+
+    [Fact]
+    public void An_agent_whose_pane_was_never_seen_is_not_lost()
+    {
+        var (activity, lost) = Watching();
+        var agent = Running();
+
+        for (var i = 0; i < 4; i++)
+        {
+            activity.For([agent], Elsewhere(), NoHook);
+        }
+
+        Assert.Empty(lost);
+    }
+
+    [Theory]
+    [InlineData("done", true)]
+    [InlineData("failed", true)]
+    [InlineData("working", false)]
+    public void Only_an_open_working_agent_can_be_lost(string status, bool open)
+    {
+        var (activity, lost) = Watching();
+        var agent = Running(status: status, open: open);
+
+        activity.For([agent], [PaneOf(agent)], NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Empty(lost);
+    }
+
+    [Fact]
+    public void A_hidden_agent_is_lost_like_any_other_because_hiding_keeps_the_pane_listed()
+    {
+        var (activity, lost) = Watching();
+        var agent = Running(hidden: true);
+
+        activity.For([agent], [PaneOf(agent)], NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Single(lost);
+    }
+
+    [Fact]
+    public void An_agent_that_never_reported_counts_as_working()
+    {
+        var (activity, lost) = Watching();
+        var agent = Running(status: string.Empty);
+
+        activity.For([agent], [PaneOf(agent)], NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+        activity.For([agent], Elsewhere(), NoHook);
+
+        Assert.Single(lost);
+    }
+
     private sealed class TextMux : IMuxDriver
     {
         private readonly ConcurrentDictionary<PaneId, int> _reads = new();
