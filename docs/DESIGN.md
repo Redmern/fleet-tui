@@ -911,8 +911,7 @@ codex trust, the unknown caller) and one change that was on the integration bran
 not in main: pi has `InputRetry` like opencode and codex.
 
 Open and known: whether trusting a folder for pi (which lets pi load that repository's
-`.pi/extensions`) is acceptable is not decided; a notice overwrites the owner's
-`.fleet/instruction.md` and can make its own `done` look stale to `wait_for_agent`; long
+`.pi/extensions`) is acceptable is not decided; long
 `wait_for_agent` calls, the 120 second idle window and ctrl+u are untested on the real
 TUIs; no sub-orchestrator on opencode, codex or pi has run a real model turn.
 
@@ -985,13 +984,23 @@ harness comes from the MCP `--caller` and its record. A caller without a record 
 native (`HarnessRoute.Unknown`): it may be a removed agent on any harness, and typing
 works for every target. `ReportStatusHandler` follows the
 same rule upward: native pairs keep `PeerMessage.TellOwner`; otherwise the composition
-root's `OwnerNotices` delivers a `[fleet] ...` line like a `tell_agent`: into the owner's
-`.fleet/instruction.md`, then the read prompt typed into its pane (or left to the nvim
-pump). The desktop
+root's `OwnerNotices` hands the notice to `TellAgentHandler.NotifyAsync`, which appends
+`<ISO-8601 UTC time> [fleet] ...` to the owner's `.fleet/notices.md` (one line, never truncated;
+the file is opened exclusively, retried briefly while another process holds it, and written in
+one call at the end, because `FileMode.Append` is not atomic on Unix) and types `AgentHarness.NoticesPrompt` into its pane. A notice does
+not write `.fleet/instruction.md` or stamp `InstructedAt`, so an unread instruction survives
+and a late notice cannot make a finished report look stale. An owner hosted in nvim gets the
+prompt from the pump, which watches `.fleet/notices.md` against its own marker
+`.fleet/notices.seen`, after the instruction file has had its turn. The main orchestrator's
+notices file is `<project root>/.fleet/notices.md`, the folder `MainPane.Find` matches its
+pane by. A top-level sub-orchestrator used to send nothing to main, because a notice held up
+a Claude main; one whose harness lacks native messaging (`HarnessRoute.LacksNative`) now sends
+its `done` and `failed` this way, since main has no other way to learn it. Claude top-level
+subs, `working` reports and idle notices for top-level subs still send nothing to main. The desktop
 notification is unchanged. A non-Claude owner cannot subscribe with `notify_when_idle`, so
 there is a `wait_for_agent` tool (`Features/Orchestrations/WaitForAgent`) and its
 instruction text says to use it (`OrchestrationText.WaitingForAgentsTyped`). Both
-mechanisms ship: the typed line wakes an owner that is doing something else, the tool is
+mechanisms ship: the typed prompt wakes an owner that is doing something else, the tool is
 for an owner that wants to block. Rejected: opencode's HTTP server API and ACP (one
 harness each, structured streams are out of scope).
 

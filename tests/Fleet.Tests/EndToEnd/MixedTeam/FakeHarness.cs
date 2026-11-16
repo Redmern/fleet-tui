@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Orchestrations;
 
@@ -76,6 +77,26 @@ internal sealed partial class FakeHarness
     }
 
     public string Instruction => File.ReadAllText(Path.Combine(Folder, ".fleet", "instruction.md"));
+
+    public IReadOnlyList<string> Notices
+    {
+        get
+        {
+            var file = Path.Combine(Folder, ".fleet", AgentHarness.NoticesFile);
+
+            return File.Exists(file) ? File.ReadAllLines(file) : [];
+        }
+    }
+
+    public string LastNotice
+    {
+        get
+        {
+            var last = Notices.Last();
+
+            return last[(last.IndexOf(' ', StringComparison.Ordinal) + 1)..];
+        }
+    }
 
     public static FakeHarness Start(FakeMuxDriver mux, PaneId pane, HarnessProfile profile, string folder)
     {

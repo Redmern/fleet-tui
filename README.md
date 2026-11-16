@@ -1061,16 +1061,21 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   also gets its message typed.
 - *`report` reaches the owner through its pane.* A `done` or `failed` is recorded and
   raises the desktop notification as always. When the reporter or its owner is not
-  Claude, fleet also writes `[fleet] <repository>/<branch>: done — <summary> (check it
-  with agent_status or list_agents, then review its work).` to the owner's
-  `.fleet/instruction.md` and types the usual read prompt into the owner's pane (an owner
-  in nvim gets it from nvim). The report result says so. (A top-level sub-orchestrator's report is
-  not sent to the main orchestrator, whatever the harness; see
-  [The orchestrator](#the-orchestrator).)
+  Claude, fleet also appends one timestamped line to the owner's `.fleet/notices.md`:
+  `[fleet] <repository>/<branch>: done — <summary> (check it with agent_status or
+  list_agents, then review its work).` It types "Read the new lines at the end of
+  .fleet/notices.md in this folder." into the owner's pane (an owner in nvim gets it from
+  nvim, which watches `.fleet/notices.md` next to `.fleet/instruction.md`). The owner's
+  `.fleet/instruction.md` is not touched, and two notices in a row are both kept. The
+  report result says so. A top-level sub-orchestrator that is not Claude also sends its
+  `done` or `failed` to the main orchestrator this way; the notices file is then in the
+  project folder, where the main orchestrator runs. A Claude top-level sub-orchestrator
+  does not; see [The orchestrator](#the-orchestrator).
 - *Idle is a quiet pane.* A harness without hooks is `idle` in `list_agents` and on the
   dashboard when its pane text has not changed for 120 seconds and it has not reported
   `done` or `failed`. The running dashboard sends its owner a `[fleet] ...: idle` notice
-  the same way, once, when it sees the change.
+  the same way, once, when it sees the change. A top-level sub-orchestrator's idle notice
+  is not sent to the main orchestrator.
 - *`wait_for_agent(repository, branch, timeout)`* returns when an agent reports `done` or
   `failed`, goes idle, or the timeout runs out (300 seconds by default; call it again).
   An orchestrator that is not Claude is told to use it instead of `notify_when_idle`.
@@ -1117,12 +1122,6 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   task and call `report`.
 - In one test `stop_agent` left a codex process running next to the resumed one; this
   was not looked into.
-- A notice overwrites `.fleet/instruction.md` of the pane it goes to, like any
-  `tell_agent`, so an instruction the owner had not read yet is gone. It also makes that
-  file newer: `wait_for_agent` takes a `done` that is older than the agent's last
-  instruction for a report on earlier work. So when a sub-orchestrator reports `done` and
-  a late notice from one of its own agents arrives after that, `wait_for_agent` on the sub
-  can keep waiting until its timeout; `list_subs` still shows the `done`.
 - What was checked against the real CLIs, and what was not, is in
   [docs/DESIGN.md](docs/DESIGN.md#harness-profiles-and-mixed-teams--2026-11-11).
 

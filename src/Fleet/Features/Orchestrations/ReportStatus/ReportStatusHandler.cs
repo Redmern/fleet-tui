@@ -32,13 +32,13 @@ public sealed class ReportStatusHandler(
 
         if (!recorded.Succeeded
             || OrchestrationStatus.Normalize(status) is not (OrchestrationStatus.Done or OrchestrationStatus.Failed)
-            || IsTopLevelSub(reporter!))
+            || (IsTopLevelSub(reporter!) && HasNativeMessaging(reporter!)))
         {
             return recorded;
         }
 
         var line = recorded.Value!.ReplaceLineEndings(" ");
-        var notice = NoticeFor(project, root, reporter!, line)!;
+        var notice = BuildNotice(project, root, reporter!, line);
 
         if (HarnessRoute.Native(HarnessOf(reporter!), notice.Owner is null ? mainHarness : HarnessOf(notice.Owner)))
         {
@@ -65,6 +65,11 @@ public sealed class ReportStatusHandler(
             return null;
         }
 
+        return BuildNotice(project, root, reporter, line);
+    }
+
+    private OwnerNotice BuildNotice(string project, string root, AgentRecord reporter, string line)
+    {
         var (owner, name, folder) = OwnerOf(project, root, reporter);
 
         return new OwnerNotice(owner, name, folder, HarnessRoute.OwnerNotice(line));
@@ -131,6 +136,8 @@ public sealed class ReportStatusHandler(
 
     private static bool IsTopLevelSub(AgentRecord reporter) =>
         AgentHarness.IsOrchestrator(reporter.Harness) && reporter.Owner.Trim().Length == 0;
+
+    private static bool HasNativeMessaging(AgentRecord record) => !HarnessRoute.LacksNative(HarnessOf(record));
 
     private static string HarnessOf(AgentRecord record) => record.RunningHarness;
 

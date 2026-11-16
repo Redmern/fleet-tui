@@ -18,15 +18,15 @@ public sealed class ClaudeGoldenTests
     {
         { "claude", "eb4c5efb8ca2fd22b7ffc121af31bd4f0fd19aa2e42947743f39c08e80f4d6e5" },
         { "claude-launch", "9e2809841c1b312e212a402a5de4cbab4bce58b928bf26d5b876c0f3ba0fbdab" },
-        { "nvim", "15e0a263b22b4d7137cafbe88e81ebfc67a23b6c3b858247aeb2b174a780551f" },
-        { "nvim-with-claude", "5bf06bc49d3947dc2a2156911c3a9e6ae067692b4647f690f2868d39fb6bf5de" },
-        { "orchestrator-nvim", "720b72ba5f0bb65c7f8520cab6a00bd07bc0b873c707cb0f31743d83c95c5aa9" },
+        { "nvim", "5005e6b258d09d4764f0535e22580e00a1dd645e9761ab02e8a656278c332c80" },
+        { "nvim-with-claude", "7f812136f199c54890c5af46680c2cf0ca4fa5bd9068090b5bd593127ca5f13c" },
+        { "orchestrator-nvim", "2562b3ec6beae1b2091d15f014ecb0dadfed808f1d619fd99606a2c9bb3440e2" },
         { "orchestrator-bare", "9e2809841c1b312e212a402a5de4cbab4bce58b928bf26d5b876c0f3ba0fbdab" },
-        { "orchestrator-resume-nvim", "039f716505c34f1a1b0f740c2bdcc36ee10322aec068f0b0abee941739f1ac61" },
+        { "orchestrator-resume-nvim", "31de4ad35c6e8f4f5ab7e9f3d1b3899e07f49be5e41485ee4fb8f5df153645f9" },
         { "orchestrator-resume-bare", "bce80fece7de036d33a98e3ec1ddca5ec861ed99d2affe13b8aebb7b0f512185" },
         { "resumed-claude", "bce80fece7de036d33a98e3ec1ddca5ec861ed99d2affe13b8aebb7b0f512185" },
-        { "resumed-nvim-with-claude", "b3d6c9409941a40b137b21005872693b0031882e9c99970dc918b3fc625d0160" },
-        { "resumed-plain-nvim", "15e0a263b22b4d7137cafbe88e81ebfc67a23b6c3b858247aeb2b174a780551f" },
+        { "resumed-nvim-with-claude", "26d2de35bbe36e8d2795b44ff9cf068c00a889e23eea572e55d263d6c7f66537" },
+        { "resumed-plain-nvim", "5005e6b258d09d4764f0535e22580e00a1dd645e9761ab02e8a656278c332c80" },
     };
 
     private static string Actual(string name) => name switch

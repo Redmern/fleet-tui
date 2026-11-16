@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
@@ -11,6 +13,12 @@ namespace Fleet.Features.Agents.TellAgent;
 public sealed class TellAgentHandler(
     IMuxDriver mux, TimeSpan? enterDelay = null, IAgentInboxes? inboxes = null, TimeProvider? clock = null)
 {
+    private const int AppendAttempts = 50;
+
+    private static readonly TimeSpan AppendRetry = TimeSpan.FromMilliseconds(20);
+
+    private static readonly SemaphoreSlim AppendGate = new(1, 1);
+
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
     private readonly TimeSpan _enterDelay = enterDelay ?? TimeSpan.FromMilliseconds(400);
@@ -43,25 +51,73 @@ public sealed class TellAgentHandler(
         return null;
     }
 
-    public Task DeliverAsync(
+    public async Task DeliverAsync(
         AgentRecord agent,
         PaneId pane,
         string message,
         CancellationToken ct = default,
-        TimeSpan? echoWithin = null) =>
-        TypeAsync(agent, pane, InstructionFor(agent, message), echoWithin ?? TimeSpan.Zero, ct);
+        TimeSpan? echoWithin = null)
+    {
+        var dir = FleetDirectory(agent);
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, AgentHarness.AgentInstructionFile), InstructionFor(agent, message), ct)
+            .ConfigureAwait(false);
 
-    public Task NotifyAsync(AgentRecord owner, PaneId pane, string notice, CancellationToken ct = default) =>
-        TypeAsync(owner, pane, notice, TimeSpan.Zero, ct);
+        await PromptAsync(agent, pane, AgentHarness.AgentInstructionPrompt, echoWithin ?? TimeSpan.Zero, ct)
+            .ConfigureAwait(false);
+    }
 
-    private async Task TypeAsync(
-        AgentRecord agent, PaneId pane, string instruction, TimeSpan echoWithin, CancellationToken ct)
+    public async Task NotifyAsync(AgentRecord owner, PaneId pane, string notice, CancellationToken ct = default)
+    {
+        var dir = FleetDirectory(owner);
+        var line = $"{_clock.GetUtcNow().ToString("O", CultureInfo.InvariantCulture)} {notice.Trim()}{Environment.NewLine}";
+
+        await AppendAsync(Path.Combine(dir, AgentHarness.NoticesFile), Encoding.UTF8.GetBytes(line), ct)
+            .ConfigureAwait(false);
+
+        await PromptAsync(owner, pane, AgentHarness.NoticesPrompt, TimeSpan.Zero, ct).ConfigureAwait(false);
+    }
+
+    private async Task AppendAsync(string path, byte[] line, CancellationToken ct)
+    {
+        await AppendGate.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await using var file = new FileStream(
+                        path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.Asynchronous);
+                    file.Seek(0, SeekOrigin.End);
+                    await file.WriteAsync(line, ct).ConfigureAwait(false);
+
+                    return;
+                }
+                catch (IOException) when (attempt < AppendAttempts)
+                {
+                    await Task.Delay(AppendRetry, _clock, ct).ConfigureAwait(false);
+                }
+            }
+        }
+        finally
+        {
+            AppendGate.Release();
+        }
+    }
+
+    private static string FleetDirectory(AgentRecord agent)
     {
         var dir = Path.Combine(agent.Worktree, ".fleet");
         Directory.CreateDirectory(dir);
-        await File.WriteAllTextAsync(
-            Path.Combine(dir, AgentHarness.AgentInstructionFile), instruction, ct).ConfigureAwait(false);
 
+        return dir;
+    }
+
+    private async Task PromptAsync(
+        AgentRecord agent, PaneId pane, string prompt, TimeSpan echoWithin, CancellationToken ct)
+    {
         if (PumpedByNvim(agent))
         {
             return;
@@ -72,13 +128,12 @@ public sealed class TellAgentHandler(
         if (retry > TimeSpan.Zero && echoWithin > TimeSpan.Zero)
         {
             await TypedPrompt
-                .UntilEchoedAsync(
-                    mux, pane, AgentHarness.AgentInstructionPrompt, retry, echoWithin, _enterDelay, clock: _clock, ct: ct)
+                .UntilEchoedAsync(mux, pane, prompt, retry, echoWithin, _enterDelay, clock: _clock, ct: ct)
                 .ConfigureAwait(false);
         }
         else
         {
-            await mux.SendTextAsync(pane, AgentHarness.AgentInstructionPrompt, ct).ConfigureAwait(false);
+            await mux.SendTextAsync(pane, prompt, ct).ConfigureAwait(false);
             await Task.Delay(_enterDelay, _clock, ct).ConfigureAwait(false);
         }
 

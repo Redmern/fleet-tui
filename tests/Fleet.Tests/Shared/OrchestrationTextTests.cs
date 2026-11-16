@@ -54,7 +54,32 @@ public class OrchestrationTextTests
         var text = OrchestrationText.Instructions(Brief);
 
         Assert.Contains("wait_for_agent", text);
-        Assert.Contains("[fleet]", text);
+        Assert.Contains(".fleet/notices.md", text);
+        Assert.DoesNotContain("[fleet]", text);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_text_describes_the_notices_file_and_the_typed_read_prompt_not_a_typed_fleet_line(bool native)
+    {
+        var text = OrchestrationText.Instructions(Brief, nativeMessaging: native);
+
+        Assert.Contains("appends a line to .fleet/notices.md", text);
+        Assert.Contains("types a prompt", text);
+        Assert.DoesNotContain("[fleet]", text);
+        Assert.DoesNotContain("types a line", text);
+    }
+
+    [Fact]
+    public void The_reporting_section_asks_for_done_or_failed_at_the_end_and_working_at_each_human_gate()
+    {
+        var text = OrchestrationText.Instructions(Brief);
+        var reporting = text[text.IndexOf("## Reporting", StringComparison.Ordinal)..];
+
+        Assert.Contains("status \"done\" or \"failed\"", reporting);
+        Assert.Contains("status \"working\" and a summary such as \"waiting on user\"", reporting);
+        Assert.Contains("human gate", reporting);
     }
 
     [Fact]

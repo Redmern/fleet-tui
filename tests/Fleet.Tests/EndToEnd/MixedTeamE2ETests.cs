@@ -141,9 +141,9 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal("login fixed", _team.Record("api", "fix").Summary);
         Assert.Contains("agent:api/fix: done", _team.DesktopNotifications);
 
-        // orchestrator notification: a [fleet] line submitted in the sub's pane
-        Assert.Equal([profile.Kickoff, AgentHarness.AgentInstructionPrompt], sub.Submitted);
-        Assert.Equal($"[fleet] api/fix: done — login fixed{NoticeTail}", sub.Instruction);
+        // orchestrator notification: a line appended to notices.md and the read prompt submitted in the sub's pane
+        Assert.Equal([profile.Kickoff, AgentHarness.NoticesPrompt], sub.Submitted);
+        Assert.Equal($"[fleet] api/fix: done — login fixed{NoticeTail}", sub.LastNotice);
 
         // wait_for_agent returns the report
         var waited = await _team.CallAsync(sub.Caller!, HarnessTool.WaitForAgent, Agent("api", "fix"));
@@ -226,7 +226,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal("idle", (await _team.RefreshAsync(dashboard)).Single(a => a.Branch == "feat").Status);
         await MixedTeamRig.UntilAsync(() => sub.Submitted.Count == 2, "the idle notice was not typed into the owner");
         Assert.Equal(
-            $"[fleet] api/feat: idle — no pane output for 120s and no done report{NoticeTail}", sub.Instruction);
+            $"[fleet] api/feat: idle — no pane output for 120s and no done report{NoticeTail}", sub.LastNotice);
 
         var listed = await _team.CallAsync(lead, HarnessTool.ListAgents);
 
@@ -271,7 +271,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal("done", _team.Record("api", "feat").Status);
         Assert.Contains("agent:api/feat: done", _team.DesktopNotifications);
         Assert.Equal(3, sub.Submitted.Count);
-        Assert.Equal($"[fleet] api/feat: done — form built{NoticeTail}", sub.Instruction);
+        Assert.Equal($"[fleet] api/feat: done — form built{NoticeTail}", sub.LastNotice);
 
         var waited = await _team.CallAsync(lead, HarnessTool.WaitForAgent, Agent("api", "feat"));
 
@@ -283,5 +283,59 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Contains("SendMessage", native.Text);
         Assert.Contains("uds:lead", native.Text);
         Assert.Equal(3, sub.Submitted.Count);
+    }
+
+    // AC-3: notices append to notices.md; instruction.md stays what the sub was told.
+    [Fact]
+    public async Task Two_notices_in_a_row_are_both_readable_and_the_subs_instruction_is_unchanged()
+    {
+        var repository = await _team.AddRepositoryAsync("api");
+        var dispatched = await _team.DispatchAsync(Main, "fix the login bug", "opencode");
+        var sub = _team.Mux.HarnessIn(dispatched.Folder);
+        await sub.Started;
+        await _team.StartClaudeWorkerAsync(sub.Caller!, "api", repository, "fix");
+        var instruction = sub.Instruction;
+
+        await _team.CallAsync(McpCaller.ForAgent("api", "fix"), HarnessTool.Report, Status("done", "first"));
+        await _team.CallAsync(McpCaller.ForAgent("api", "fix"), HarnessTool.Report, Status("failed", "second"));
+
+        Assert.Equal(2, sub.Notices.Count);
+        Assert.EndsWith($"[fleet] api/fix: done — first{NoticeTail}", sub.Notices[0], StringComparison.Ordinal);
+        Assert.EndsWith($"[fleet] api/fix: failed — second{NoticeTail}", sub.Notices[1], StringComparison.Ordinal);
+        Assert.Equal(instruction, sub.Instruction);
+        Assert.Equal(AgentHarness.NoticesPrompt, sub.Submitted[^1]);
+    }
+
+    // AC-23: main's notices.md lives in the project root, the folder its pane runs in (MainPane.Find by root).
+    [Fact]
+    public async Task A_non_claude_top_level_subs_done_reaches_the_main_orchestrators_pane_and_notices_file()
+    {
+        _team.MainInNvim(false);
+        var main = await _team.Mux.SpawnAsync(new() { Cwd = _team.Root, NewWindow = true });
+        var dispatched = await _team.DispatchAsync(Main, "fix the login bug", "opencode");
+        var sub = _team.Mux.HarnessIn(dispatched.Folder);
+        await sub.Started;
+
+        var reported = await _team.CallAsync(sub.Caller!, HarnessTool.Report, Status("done", "all merged"));
+
+        Assert.False(reported.IsError, reported.Text);
+        Assert.Equal([AgentHarness.NoticesPrompt, "\r"], _team.Mux.Inner.SentTo(main));
+        var notices = File.ReadAllLines(Path.Combine(_team.Root, ".fleet", AgentHarness.NoticesFile));
+        Assert.EndsWith(
+            $"[fleet] {dispatched.Slug}: done — all merged{NoticeTail}", Assert.Single(notices), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_claude_top_level_subs_done_does_not_type_into_the_main_orchestrators_pane()
+    {
+        _team.MainInNvim(false);
+        var main = await _team.Mux.SpawnAsync(new() { Cwd = _team.Root, NewWindow = true });
+        var dispatched = await _team.DispatchAsync(Main, "fix the login bug", "claude");
+
+        var reported = await _team.CallAsync(dispatched.Slug, HarnessTool.Report, Status("done", "all merged"));
+
+        Assert.False(reported.IsError, reported.Text);
+        Assert.Empty(_team.Mux.Inner.SentTo(main));
+        Assert.False(File.Exists(Path.Combine(_team.Root, ".fleet", AgentHarness.NoticesFile)));
     }
 }

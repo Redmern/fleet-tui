@@ -280,6 +280,71 @@ public sealed class ReportStatusTests
         Assert.Equal(OrchestrationStatus.Done, Assert.Single(_store.Written).Status);
     }
 
+    [Theory]
+    [InlineData(OrchestrationStatus.Done)]
+    [InlineData(OrchestrationStatus.Failed)]
+    public async Task A_non_claude_top_level_sub_types_its_finish_into_the_main_orchestrator(string status)
+    {
+        var sub = Seed("upgrade");
+        _store.Saved[_store.Saved.IndexOf(sub)] = sub with { OrchestratorHarness = AgentHarness.Opencode };
+        var typed = new List<OwnerNotice>();
+        var inboxes = new FakeInboxes { [Root] = "uds:main" };
+
+        var result = await new ReportStatusHandler(_store, inboxes: inboxes, typeToOwner: Typing(typed))
+            .HandleAsync("techweb", Root, "upgrade", status, "shipped");
+
+        Assert.True(result.Succeeded, result.Error);
+        var notice = Assert.Single(typed);
+        Assert.Null(notice.Owner);
+        Assert.Equal(Root, notice.Folder);
+        Assert.Equal("techweb-main", notice.Name);
+        Assert.Contains($"upgrade: {status} — shipped", notice.Message);
+        Assert.Contains("typed this report into your orchestrator's pane (techweb-main)", result.Value);
+        Assert.DoesNotContain("SendMessage", result.Value);
+        Assert.Empty(inboxes.Asked);
+        Assert.Equal(status, Assert.Single(_store.Written).Status);
+    }
+
+    [Fact]
+    public async Task A_non_claude_top_level_sub_that_is_still_working_does_not_notify_the_main_orchestrator()
+    {
+        var sub = Seed("upgrade");
+        _store.Saved[_store.Saved.IndexOf(sub)] = sub with { OrchestratorHarness = AgentHarness.Opencode };
+        var typed = new List<OwnerNotice>();
+
+        var result = await new ReportStatusHandler(_store, typeToOwner: Typing(typed))
+            .HandleAsync("techweb", Root, "upgrade", OrchestrationStatus.Working, "waiting on user");
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Empty(typed);
+    }
+
+    [Fact]
+    public async Task A_claude_top_level_sub_does_not_type_its_finish_into_the_main_orchestrator()
+    {
+        Seed("upgrade");
+        var typed = new List<OwnerNotice>();
+        var inboxes = new FakeInboxes { [Root] = "uds:main" };
+
+        var result = await new ReportStatusHandler(
+                _store, inboxes: inboxes, typeToOwner: Typing(typed), mainHarness: AgentHarness.Opencode)
+            .HandleAsync("techweb", Root, "upgrade", OrchestrationStatus.Done, "shipped");
+
+        Assert.Equal("upgrade: done — shipped", result.Value);
+        Assert.Empty(typed);
+        Assert.Empty(inboxes.Asked);
+    }
+
+    [Fact]
+    public void An_idle_notice_is_never_built_for_a_top_level_sub_whatever_it_runs()
+    {
+        var sub = Seed("upgrade");
+        var opencode = sub with { OrchestratorHarness = AgentHarness.Opencode };
+
+        Assert.Null(Handler.NoticeFor("techweb", Root, sub, "upgrade: idle"));
+        Assert.Null(Handler.NoticeFor("techweb", Root, opencode, "upgrade: idle"));
+    }
+
     [Fact]
     public async Task An_owner_without_an_inbox_gets_no_message()
     {

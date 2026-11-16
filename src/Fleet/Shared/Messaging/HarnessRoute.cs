@@ -22,7 +22,7 @@ public static class HarnessRoute
         $"{NoticePrefix}{line.ReplaceLineEndings(" ").Trim()} "
         + "(check it with agent_status or list_agents, then review its work).";
 
-    private static bool LacksNative(string harness) =>
+    public static bool LacksNative(string harness) =>
         string.IsNullOrWhiteSpace(harness)
         || (HarnessRegistry.Find(harness) is { } profile && !profile.Has(HarnessCapabilities.NativeMessaging));
 }

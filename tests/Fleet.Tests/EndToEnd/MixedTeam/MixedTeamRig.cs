@@ -66,6 +66,9 @@ internal sealed class MixedTeamRig
     public void SubOrchestratorsInNvim(bool on) =>
         Adapters.Settings().Save(Project, SettingsConfig.Default.WithSubOrchestratorsInNvim(on));
 
+    public void MainInNvim(bool on) =>
+        Adapters.Settings().Save(Project, Adapters.Settings().Load(Project).WithMainOrchestratorInNvim(on));
+
     public string Project { get; } = $"mixed-{Guid.NewGuid():N}"[..14];
 
     public string Root { get; }
