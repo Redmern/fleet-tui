@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Fleet.Platform.Mcp;
@@ -561,6 +562,44 @@ public sealed class StdioMcpServerTests
 
         Assert.Equal(1, invoked);
         Assert.Contains("\"result\"", output.Lines[1]);
+    }
+
+    [Fact]
+    public async Task A_call_cancelled_while_it_waits_its_turn_is_never_invoked_even_if_handlers_ignore_the_token()
+    {
+        var input = new FedReader();
+        var output = new LineSink();
+        var invoked = new ConcurrentQueue<string>();
+        var holdingTheTurn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var serving = new McpServing("fleet", [], async (request, _) =>
+        {
+            invoked.Enqueue(request.Tool);
+            holdingTheTurn.TrySetResult();
+
+            await release.Task.WaitAsync(Patience, CancellationToken.None);
+
+            return McpResult.Ok("ok");
+        });
+
+        var run = new StdioMcpServer(input, output, _log, oneCallAtATime: true).RunAsync(serving);
+
+        input.Feed("""{"id":1,"method":"tools/call","params":{"name":"holds_the_turn"}}""");
+        await holdingTheTurn.Task.WaitAsync(Patience);
+
+        input.Feed("""{"id":2,"method":"tools/call","params":{"name":"waits_its_turn"}}""");
+        input.Feed("""{"method":"notifications/cancelled","params":{"requestId":2}}""");
+        input.Feed("""{"id":3,"method":"ping"}""");
+
+        Assert.Equal("3", IdOf(Assert.Single(await output.WaitForLines(1))));
+
+        release.SetResult();
+        input.End();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["holds_the_turn"], invoked);
+        Assert.Equal(["1", "3"], output.Lines.Select(IdOf).Order());
     }
 
     private static string Call(int id, string meta = "") =>
