@@ -4,6 +4,7 @@ using Fleet.Platform.Mcp;
 using Fleet.Ports;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Tests.Platform.Mcp.Support;
+using Fleet.Tests.Platform.Mux.Embedded;
 
 namespace Fleet.Tests.Platform.Mcp;
 
@@ -345,7 +346,7 @@ public sealed class StdioMcpServerTests
     [Fact]
     public async Task A_long_call_with_a_progress_token_reports_progress_until_it_completes()
     {
-        var clock = new ManualClock();
+        var clock = new SimulatedLinkClock();
         var output = new LineSink();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -379,7 +380,7 @@ public sealed class StdioMcpServerTests
     [Fact]
     public async Task A_numeric_progress_token_goes_back_as_a_number()
     {
-        var clock = new ManualClock();
+        var clock = new SimulatedLinkClock();
         var output = new LineSink();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -400,7 +401,7 @@ public sealed class StdioMcpServerTests
     [Fact]
     public async Task A_call_without_a_progress_token_reports_no_progress()
     {
-        var clock = new ManualClock();
+        var clock = new SimulatedLinkClock();
         var output = new LineSink();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -422,7 +423,7 @@ public sealed class StdioMcpServerTests
     [Fact]
     public async Task A_cancelled_call_stops_reporting_progress()
     {
-        var clock = new ManualClock();
+        var clock = new SimulatedLinkClock();
         var output = new LineSink();
         var transcript = string.Join('\n',
             Call(1, ""","_meta":{"progressToken":"tok-1"}"""),
@@ -468,7 +469,7 @@ public sealed class StdioMcpServerTests
     [Fact]
     public async Task A_progress_tick_that_waits_behind_the_result_is_dropped()
     {
-        var clock = new ManualClock();
+        var clock = new SimulatedLinkClock();
         var output = new LineSink();
         var letGo = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finishSlow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
