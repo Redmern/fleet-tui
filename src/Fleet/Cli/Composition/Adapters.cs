@@ -201,7 +201,7 @@ public static class Adapters
 
     public static IApprovalInbox ApprovalInbox() => new FileApprovalChannel();
 
-    public static IMcpServer McpServer(IFleetLog log)
+    public static IMcpServer McpServer(IFleetLog log, bool oneCallAtATime = false)
     {
         var stdout = new StreamWriter(
             Console.OpenStandardOutput(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
@@ -210,7 +210,7 @@ public static class Adapters
             NewLine = "\n",
         };
 
-        return new StdioMcpServer(Console.In, stdout, log);
+        return new StdioMcpServer(Console.In, stdout, log, oneCallAtATime);
     }
 
     public static (string Text, string? Cwd) ReadHookPayload(TextReader input)

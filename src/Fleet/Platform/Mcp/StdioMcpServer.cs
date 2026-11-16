@@ -5,38 +5,57 @@ using Fleet.Platform.Mcp.Models;
 
 namespace Fleet.Platform.Mcp;
 
-public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLog log) : IMcpServer
+public sealed class StdioMcpServer(
+    TextReader input, TextWriter output, IFleetLog log, bool oneCallAtATime = false) : IMcpServer
 {
     public const string ProtocolVersion = "2024-11-05";
 
     public const string Version = "0.1.0";
 
+    private readonly SemaphoreSlim _writing = new(1, 1);
+
     public async Task RunAsync(McpServing serving, CancellationToken ct = default)
     {
-        while (!ct.IsCancellationRequested)
+        var running = new HashSet<Task>();
+        var served = oneCallAtATime ? serving with { Invoke = InTurn(serving.Invoke) } : serving;
+
+        try
         {
-            var line = await input.ReadLineAsync(ct).ConfigureAwait(false);
-
-            if (line is null)
+            while (!ct.IsCancellationRequested)
             {
-                return;
-            }
+                var line = await input.ReadLineAsync(ct).ConfigureAwait(false);
 
-            if (!JsonRpcCodec.TryParse(line, out var call))
-            {
-                continue;
-            }
+                if (line is null)
+                {
+                    return;
+                }
 
-            var reply = await ReplyFor(call, serving, ct).ConfigureAwait(false);
+                if (!JsonRpcCodec.TryParse(line, out var call))
+                {
+                    continue;
+                }
 
-            if (reply is not null)
-            {
-                await Send(reply, ct).ConfigureAwait(false);
+                if (call.Method == "tools/call")
+                {
+                    running.RemoveWhere(task => task.IsCompleted);
+                    running.Add(Task.Run(() => RunCall(call, served, ct), CancellationToken.None));
+
+                    continue;
+                }
+
+                if (ReplyFor(call, serving) is { } reply)
+                {
+                    await Send(reply, ct).ConfigureAwait(false);
+                }
             }
+        }
+        finally
+        {
+            await Task.WhenAll(running).ConfigureAwait(false);
         }
     }
 
-    private async Task<string?> ReplyFor(RpcCall call, McpServing serving, CancellationToken ct)
+    private static string? ReplyFor(RpcCall call, McpServing serving)
     {
         switch (call.Method)
         {
@@ -48,9 +67,6 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
 
             case "tools/list":
                 return JsonRpcCodec.Result(call.Id, JsonRpcCodec.ToolList(serving.Tools));
-
-            case "tools/call":
-                return await CallReply(call, serving, ct).ConfigureAwait(false);
 
             case "ping":
                 return JsonRpcCodec.Result(call.Id, "{}");
@@ -66,7 +82,14 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
         }
     }
 
-    private async Task<string?> CallReply(RpcCall call, McpServing serving, CancellationToken ct)
+    private async Task RunCall(RpcCall call, McpServing serving, CancellationToken ct)
+    {
+        var reply = await CallReply(call, serving, ct).ConfigureAwait(false);
+
+        await Send(reply, ct).ConfigureAwait(false);
+    }
+
+    private async Task<string> CallReply(RpcCall call, McpServing serving, CancellationToken ct)
     {
         try
         {
@@ -87,8 +110,37 @@ public sealed class StdioMcpServer(TextReader input, TextWriter output, IFleetLo
 
     private async Task Send(string message, CancellationToken ct)
     {
-        await output.WriteAsync(message.AsMemory(), ct).ConfigureAwait(false);
-        await output.WriteAsync('\n').ConfigureAwait(false);
-        await output.FlushAsync(ct).ConfigureAwait(false);
+        await _writing.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            await output.WriteAsync(message.AsMemory(), ct).ConfigureAwait(false);
+            await output.WriteAsync('\n').ConfigureAwait(false);
+            await output.FlushAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _writing.Release();
+        }
+    }
+
+    private static Func<McpRequest, CancellationToken, Task<McpResult>> InTurn(
+        Func<McpRequest, CancellationToken, Task<McpResult>> invoke)
+    {
+        var turn = new SemaphoreSlim(1, 1);
+
+        return async (request, ct) =>
+        {
+            await turn.WaitAsync(ct).ConfigureAwait(false);
+
+            try
+            {
+                return await invoke(request, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                turn.Release();
+            }
+        };
     }
 }

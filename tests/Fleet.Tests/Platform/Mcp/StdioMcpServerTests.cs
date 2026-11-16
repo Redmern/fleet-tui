@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Fleet.Platform.Mcp;
 using Fleet.Ports;
 using Fleet.Ports.Mcp.Models;
@@ -92,7 +94,56 @@ public sealed class StdioMcpServerTests
     }
 
     [Fact]
-    public async Task A_whole_session_replies_in_order_and_skips_the_notification()
+    public async Task A_one_at_a_time_server_runs_its_calls_in_turn_and_still_answers_a_ping()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var running = 0;
+        var mostAtOnce = 0;
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            var now = Interlocked.Increment(ref running);
+            InterlockedMax(ref mostAtOnce, now);
+
+            await release.Task.WaitAsync(Patience);
+
+            Interlocked.Decrement(ref running);
+
+            return McpResult.Ok("ok");
+        });
+
+        var transcript = string.Join('\n',
+            Call(1),
+            Call(2),
+            Call(3),
+            """{"id":4,"method":"ping"}""") + "\n";
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log, oneCallAtATime: true)
+            .RunAsync(serving);
+
+        Assert.Equal("4", IdOf(Assert.Single(await output.WaitForLines(1))));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(1, mostAtOnce);
+        Assert.Equal(["1", "2", "3", "4"], output.Lines.Select(IdOf).Order());
+    }
+
+    private static void InterlockedMax(ref int most, int now)
+    {
+        int seen;
+
+        do
+        {
+            seen = Volatile.Read(ref most);
+        }
+        while (now > seen && Interlocked.CompareExchange(ref most, now, seen) != seen);
+    }
+
+    [Fact]
+    public async Task A_whole_session_answers_every_id_exactly_once_and_skips_the_notification()
     {
         var transcript = string.Join('\n',
             """{"id":0,"method":"initialize"}""",
@@ -103,9 +154,108 @@ public sealed class StdioMcpServerTests
         var replies = await Run(transcript, Serving(_ => McpResult.Ok("ok")));
 
         Assert.Equal(3, replies.Count);
-        Assert.Contains("serverInfo", replies[0]);
-        Assert.Contains("list_agents", replies[1]);
-        Assert.Contains("\"id\":2", replies[2]);
+        Assert.Contains("serverInfo", Assert.Single(replies, r => IdOf(r) == "0"));
+        Assert.Contains("list_agents", Assert.Single(replies, r => IdOf(r) == "1"));
+        Assert.Contains("\"text\":\"ok\"", Assert.Single(replies, r => IdOf(r) == "2"));
+    }
+
+    [Fact]
+    public async Task A_ping_is_answered_while_a_call_is_still_running()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+        var transcript = string.Join('\n',
+            Call(1),
+            """{"id":2,"method":"ping"}""") + "\n";
+
+        var run = new StdioMcpServer(new StringReader(transcript), output, _log)
+            .RunAsync(Blocking(release.Task));
+
+        var early = await output.WaitForLines(1);
+
+        Assert.Equal("2", IdOf(Assert.Single(early)));
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal(["2", "1"], output.Lines.Select(IdOf));
+    }
+
+    [Fact]
+    public async Task Two_calls_run_at_the_same_time()
+    {
+        var bothRunning = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var running = 0;
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            if (Interlocked.Increment(ref running) == 2)
+            {
+                bothRunning.SetResult();
+            }
+
+            await bothRunning.Task.WaitAsync(Patience);
+
+            return McpResult.Ok("ok");
+        });
+
+        var replies = await Run(Call(1) + "\n" + Call(2) + "\n", serving);
+
+        Assert.Equal(["1", "2"], replies.Select(IdOf).Order());
+    }
+
+    [Fact]
+    public async Task Replies_written_at_the_same_time_never_share_a_line()
+    {
+        var transcript = string.Concat(Enumerable.Range(0, 60).Select(id => Call(id) + "\n"));
+
+        var serving = new McpServing("fleet", [], async (_, _) =>
+        {
+            await Task.Yield();
+
+            return McpResult.Ok("ok");
+        });
+
+        var replies = await Run(transcript, serving);
+
+        Assert.Equal(
+            Enumerable.Range(0, 60).Select(id => id.ToString(CultureInfo.InvariantCulture)),
+            replies.Select(IdOf).OrderBy(int.Parse));
+    }
+
+    [Fact]
+    public async Task The_server_waits_for_running_calls_when_its_input_ends()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new LineSink();
+
+        var run = new StdioMcpServer(new StringReader(Call(1) + "\n"), output, _log)
+            .RunAsync(Blocking(release.Task));
+
+        Assert.False(run.IsCompleted);
+
+        release.SetResult();
+        await run.WaitAsync(Patience);
+
+        Assert.Equal("1", IdOf(Assert.Single(output.Lines)));
+    }
+
+    private static string Call(int id, string meta = "") =>
+        $"{{\"id\":{id},\"method\":\"tools/call\",\"params\":{{\"name\":\"list_agents\",\"arguments\":{{}}{meta}}}}}";
+
+    private static McpServing Blocking(Task release) => new("fleet", [], async (_, _) =>
+    {
+        await release.WaitAsync(Patience);
+
+        return McpResult.Ok("ok");
+    });
+
+    // Parsing fails the test when a line is not one whole JSON message.
+    private static string IdOf(string line)
+    {
+        using var message = JsonDocument.Parse(line);
+
+        return message.RootElement.TryGetProperty("id", out var id) ? id.GetRawText() : string.Empty;
     }
 
     private sealed class FakeLog : IFleetLog
