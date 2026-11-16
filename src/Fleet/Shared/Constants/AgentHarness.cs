@@ -20,13 +20,12 @@ public static class AgentHarness
         + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
         + "if c then vim.fn.chansend(c, o.args) "
         + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) end end end end, {nargs='+'}) "
-        + "local seenf='.fleet/" + InstructionSeenFile + "' "
         + "local readyf='.fleet/" + ClaudeReadyFile + "' local fleet_boot=os.time() "
+        + "local function fleet_seen_init(file,seenf) "
         + "if vim.fn.filereadable(seenf)==0 then pcall(vim.fn.mkdir,'.fleet','p') "
-        + "pcall(vim.fn.writefile,{tostring(math.max(0,"
-        + "vim.fn.getftime('.fleet/" + AgentInstructionFile + "')))},seenf) end "
-        + "local function fleet_pump() "
-        + "local m=vim.fn.getftime('.fleet/" + AgentInstructionFile + "') "
+        + "pcall(vim.fn.writefile,{tostring(math.max(0,vim.fn.getftime(file)))},seenf) end end "
+        + "local function fleet_pump(file,seenf,prompt) "
+        + "local m=vim.fn.getftime(file) "
         + "if m<=0 then return end "
         + "local seen=vim.fn.filereadable(seenf)==1 "
         + "and tonumber(vim.fn.readfile(seenf)[1]) or 0 "
@@ -36,11 +35,19 @@ public static class AgentHarness
         + "if vim.fn.getftime(readyf)<fleet_boot and age<" + ReadyFallbackSeconds + " then return end "
         + "for _,b in ipairs(vim.api.nvim_list_bufs()) do "
         + "if vim.bo[b].buftype=='terminal' then local c=vim.b[b].terminal_job_id "
-        + "if c then vim.fn.chansend(c, '" + AgentInstructionPrompt + "') "
+        + "if c then vim.fn.chansend(c, prompt) "
         + "vim.defer_fn(function() vim.fn.chansend(c, '\\r') end, 400) "
-        + "pcall(vim.fn.writefile,{tostring(m)},seenf) return end end end end "
+        + "pcall(vim.fn.writefile,{tostring(m)},seenf) return true end end end return false end "
+        + "local instructionf='.fleet/" + AgentInstructionFile + "' "
+        + "local instructionseenf='.fleet/" + InstructionSeenFile + "' "
+        + "local noticesf='.fleet/" + NoticesFile + "' "
+        + "local noticesseenf='.fleet/" + NoticesSeenFile + "' "
+        + "fleet_seen_init(instructionf,instructionseenf) fleet_seen_init(noticesf,noticesseenf) "
+        + "local function fleet_pumps() "
+        + "if not fleet_pump(instructionf,instructionseenf,'" + AgentInstructionPrompt + "') then "
+        + "fleet_pump(noticesf,noticesseenf,'" + NoticesPrompt + "') end end "
         + "local fleet_timer=(vim.uv or vim.loop).new_timer() "
-        + "fleet_timer:start(3000, 3000, vim.schedule_wrap(fleet_pump)) "
+        + "fleet_timer:start(3000, 3000, vim.schedule_wrap(fleet_pumps)) "
         + RemoteClipboard;
 
     public const string RemotePaneVariable = "FLEET_REMOTE_PANE";
@@ -225,6 +232,10 @@ public static class AgentHarness
 
     public const string InstructionSeenFile = "instruction.seen";
 
+    public const string NoticesFile = "notices.md";
+
+    public const string NoticesSeenFile = "notices.seen";
+
     public const string ClaudeReadyFile = "claude.ready";
 
     public const string InstructionSettleSeconds = "2";
@@ -233,6 +244,9 @@ public static class AgentHarness
 
     public const string AgentInstructionPrompt =
         "Read .fleet/instruction.md in this folder and do what it says.";
+
+    public const string NoticesPrompt =
+        "Read the new lines at the end of .fleet/notices.md in this folder.";
 
     public const string AgentReportRule =
         "Call the fleet report tool with status working when you start this task or follow-up. "
