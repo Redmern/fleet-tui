@@ -1,4 +1,5 @@
 using Fleet.Features.Mcp.ServeMcp.Models;
+using Fleet.Shared.Aidlc;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Settings;
@@ -178,6 +179,16 @@ public static class McpTools
                 "string",
                 "Optional Ai-DLC profile: express, bugfix, feature, refactor or research. A profile prefix in the message (e.g. \"feature: ...\") wins over this. Used only when Ai-DLC mode is on; in manual mode only a prefix applies Ai-DLC.",
                 false)),
+        Spec(
+            HarnessTool.SetProfile,
+            "Sub-orchestrators only: change this orchestration's Ai-DLC profile, only after the user agrees. "
+            + "fleet keeps the stages already started, regenerates the ones not started yet in state.json, logs "
+            + "ProfileSet in audit.jsonl and rewrites the Process section of your instruction file.",
+            new ToolParam(
+                ToolArguments.Profile,
+                "string",
+                "The new profile: " + string.Join(", ", ProfileCatalog.All.Select(p => Words.Of(p))) + ".",
+                true)),
         Spec(
             HarnessTool.ListSubs,
             "List every sub-orchestrator in this project with its status, last report and agents."),

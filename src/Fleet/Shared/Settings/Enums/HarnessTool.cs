@@ -37,4 +37,5 @@ public enum HarnessTool
     SyncToRemote,
     TodoAdd,
     CreateProject,
+    SetProfile,
 }

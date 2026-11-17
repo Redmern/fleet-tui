@@ -160,6 +160,21 @@ public sealed class McpToolsTests
     }
 
     [Fact]
+    public void Set_profile_takes_a_required_profile_naming_every_profile_fleet_defines()
+    {
+        var spec = McpTools.Find("set_profile")!;
+
+        Assert.Equal(HarnessTool.SetProfile, spec.Tool);
+        Assert.Contains("only after the user agrees", spec.Description, StringComparison.Ordinal);
+        var profile = Assert.Single(spec.Params);
+        Assert.Equal("profile", profile.Name);
+        Assert.True(profile.Required);
+        Assert.All(
+            Fleet.Shared.Aidlc.ProfileCatalog.All,
+            p => Assert.Contains(Fleet.Shared.Aidlc.Words.Of(p), profile.Description, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Todo_add_takes_a_required_title_and_an_optional_body_and_effort()
     {
         var spec = McpTools.Find("todo_add")!;

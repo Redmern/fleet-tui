@@ -1,7 +1,9 @@
 using System.Globalization;
+using Fleet.Cli.Composition;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
+using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Constants;
@@ -187,6 +189,29 @@ public sealed class McpActionsWiringTests : IDisposable
         Assert.Equal("build the form\n\n" + AgentHarness.AgentReportRule, _team.Mux.HarnessIn(feat.Worktree).Instruction);
         Assert.Empty(_team.Mux.HarnessIn(feat.Worktree).Submitted);
         Assert.Equal(2, _team.Mux.HarnessIn(feat.Worktree).LostTypings);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Set_profile_from_the_sub_changes_its_state_audit_and_instructions_and_an_agent_is_refused()
+    {
+        Adapters.Settings().Save(_team.Project, Adapters.Settings().Load(_team.Project).WithAidlcMode(AidlcMode.On));
+        var dispatched = await _team.DispatchAsync(string.Empty, "feature: fix the login bug", string.Empty);
+
+        var refused = await _team.CallAsync(
+            McpCaller.ForAgent("api", "feat"), HarnessTool.SetProfile, ("profile", "bugfix"));
+        var set = await _team.CallAsync(dispatched.Slug, HarnessTool.SetProfile, ("profile", "bugfix"));
+
+        Assert.True(refused.IsError);
+        Assert.Contains("only a sub-orchestrator", refused.Text);
+        Assert.False(set.IsError, set.Text);
+        Assert.Contains("profile set to bugfix (was feature)", set.Text);
+        Assert.Equal(Profile.Bugfix, Adapters.Intents().Load(dispatched.Folder)!.Profile);
+        Assert.Equal(AuditEvent.ProfileSet, Adapters.Intents().Audit(dispatched.Folder)[^1].Event);
+        Assert.Contains(
+            "**bugfix** profile",
+            File.ReadAllText(OrchestrationPaths.InstructionsFile(dispatched.Folder)));
 
         NothingLeftTheSandbox();
     }
