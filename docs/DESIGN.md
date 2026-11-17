@@ -4991,6 +4991,29 @@ the `## Research` section and the waiting text (`OrchestrationText.WithResearch`
 other sections stay as dispatch wrote them. A sub dispatched with `research: true` stays
 research. The same profile changes nothing.
 
+**Gate drift and overlap flags (`Features/Orchestrations/Flags`).** They only flag or
+notify. *After report*: for an agent whose status is `done`, `ReportDriftProbe` checks the
+HEAD its report recorded (`AgentRecord.Evidence.Head`) with `merge-base --is-ancestor`
+and counts `rev-list --count <head>..HEAD`; a head that is no ancestor, or no longer
+exists, reads `history rewritten since report`. The dashboard gets it through
+`BranchStates` in the same measure as ahead, behind and dirty (one measure per worktree
+per refresh window, re-measured when the reported head changes); `agent_status` uses the
+same cache and `list_agents` probes only its `done` agents. *Skeleton gate*: fleet writes
+no approval, so `SkeletonGate` counts the gate as approved when every skeleton unit in
+`state.json` is `done` or `skipped`, or the Build stage is. It speaks only when
+`state.json` lists units, the new agent's repository and branch match a non-skeleton unit,
+and a skeleton is still open; the notice goes to the sub that owns the new agent. Subs
+write `units.json` and fleet does not copy it into `state.json` yet, so in practice it is
+silent until something does. *Overlap*: on every `report` from an agent and every agent a
+caller starts, `OverlapWatch` takes the open agents with that owner, diffs each with
+`git diff --name-only <BaseRef>...HEAD` (committed work only), and pairs agents of the
+same repository that share a path. A pair is noticed when its shared set holds a file no
+earlier notice for it named; the files sent are appended to `.fleet/overlaps.txt` in the
+owner's folder (one `pair<TAB>file` line each, only after the notice was delivered), so
+the MCP processes of a team share it and it survives restarts. Agents without an owner
+(the main orchestrator's and the user's) are not compared. Notices go through
+`OwnerNotices.TypeAsync`, like report notices.
+
 **Gates are honour-system until M3.** There are no gate tools yet, so the process text
 tells the conductor to stop at each human gate, summarise the artifact, and wait for the
 user's reply. The engine cannot enforce that yet; M3 moves gates onto the dashboard's
