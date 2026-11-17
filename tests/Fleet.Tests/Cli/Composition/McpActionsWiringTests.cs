@@ -716,6 +716,91 @@ public sealed class McpActionsWiringTests : IDisposable
         NothingLeftTheSandbox();
     }
 
+    private static void UnitsInState(string folder, UnitState skeleton)
+    {
+        static Fleet.Shared.Aidlc.Models.UnitEntry Unit(string id, string branch, UnitState state, bool isSkeleton) =>
+            new(new Fleet.Shared.Aidlc.Models.WorkUnit(id, id, "api", branch, [], [], [], "dotnet test", isSkeleton), state);
+
+        Adapters.Intents().Save(
+            folder,
+            new Fleet.Shared.Aidlc.Models.IntentState(
+                "flow", Profile.Feature, Autonomy.Guided,
+                [new Fleet.Shared.Aidlc.Models.StagePlan(Stage.Build, true, StageState.Active)],
+                [Unit("u1", "feat/skeleton", skeleton, true), Unit("u2", "feat/second", UnitState.Blocked, false)],
+                "2026-11-17T00:00:00Z", "2026-11-17T00:00:00Z"));
+    }
+
+    // AC-18
+    [Fact]
+    public async Task A_sub_starting_a_unit_before_its_skeleton_is_settled_gets_a_notice_and_the_agent_still_starts()
+    {
+        await _team.AddRepositoryAsync("api");
+        var dispatched = await _team.DispatchAsync(string.Empty, "build the flow", "opencode");
+        await _team.Mux.HarnessIn(dispatched.Folder).Started;
+        UnitsInState(dispatched.Folder, UnitState.Building);
+        var notices = Path.Combine(dispatched.Folder, ".fleet", AgentHarness.NoticesFile);
+
+        var skeleton = await _team.CallAsync(
+            dispatched.Slug, HarnessTool.NewAgent, ("repository", "api"), ("branch", "feat/skeleton"), ("harness", "opencode"));
+
+        Assert.False(skeleton.IsError, skeleton.Text);
+        Assert.False(File.Exists(notices) && File.ReadAllText(notices).Contains("skeleton gate", StringComparison.Ordinal));
+
+        var second = await _team.CallAsync(
+            dispatched.Slug, HarnessTool.NewAgent, ("repository", "api"), ("branch", "feat/second"), ("harness", "opencode"));
+
+        Assert.False(second.IsError, second.Text);
+        Assert.Contains("started api/feat/second", second.Text);
+        Assert.Equal(dispatched.Slug, _team.Record("api", "feat/second").Owner);
+        var line = Assert.Single(File.ReadAllLines(notices), l => l.Contains("skeleton gate", StringComparison.Ordinal));
+        Assert.Contains("api/feat/second (unit u2): unit started before the skeleton gate was approved (skeleton u1 is building", line);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_state_file_with_broken_units_does_not_fail_new_agent()
+    {
+        await _team.AddRepositoryAsync("api");
+        var dispatched = await _team.DispatchAsync(string.Empty, "build the flow", "opencode");
+        await _team.Mux.HarnessIn(dispatched.Folder).Started;
+        await File.WriteAllTextAsync(
+            OrchestrationPaths.StateFile(dispatched.Folder),
+            """{"version":1,"slug":"flow","profile":"feature","autonomy":"guided","stages":[],"units":null,"created":"","updated":""}""");
+
+        var started = await _team.CallAsync(
+            dispatched.Slug, HarnessTool.NewAgent, ("repository", "api"), ("branch", "feat/b"), ("harness", "opencode"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.Contains("started api/feat/b", started.Text);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_unit_started_after_its_skeleton_is_done_or_by_the_main_orchestrator_gets_no_notice()
+    {
+        await _team.AddRepositoryAsync("api");
+        var dispatched = await _team.DispatchAsync(string.Empty, "build the flow", "opencode");
+        await _team.Mux.HarnessIn(dispatched.Folder).Started;
+        var notices = Path.Combine(dispatched.Folder, ".fleet", AgentHarness.NoticesFile);
+
+        UnitsInState(dispatched.Folder, UnitState.Done);
+        var afterGate = await _team.CallAsync(
+            dispatched.Slug, HarnessTool.NewAgent, ("repository", "api"), ("branch", "feat/second"), ("harness", "opencode"));
+        UnitsInState(dispatched.Folder, UnitState.Building);
+        var byMain = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent, ("repository", "api"), ("branch", "feat/third"), ("harness", "opencode"));
+
+        Assert.False(afterGate.IsError, afterGate.Text);
+        Assert.False(byMain.IsError, byMain.Text);
+        Assert.False(File.Exists(notices) && File.ReadAllText(notices).Contains("skeleton gate", StringComparison.Ordinal));
+        var mainNotices = Path.Combine(_team.Root, ".fleet", AgentHarness.NoticesFile);
+        Assert.False(File.Exists(mainNotices) && File.ReadAllText(mainNotices).Contains("skeleton gate", StringComparison.Ordinal));
+
+        NothingLeftTheSandbox();
+    }
+
     // A branch one commit ahead of main, made without a worktree. Returns its SHA.
     private static async Task<string> BranchAheadOfMainAsync(string container, string branch)
     {

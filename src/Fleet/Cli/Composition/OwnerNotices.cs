@@ -55,6 +55,24 @@ public sealed class OwnerNotices(
         return true;
     }
 
+    public async Task<bool> AboutAsync(AgentRecord agent, string line, CancellationToken ct = default)
+    {
+        if (new ReportStatusHandler(store).NoticeFor(project, root, agent, line) is not { } notice)
+        {
+            return false;
+        }
+
+        try
+        {
+            return await TypeAsync(notice, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            log.Write(LogTag.For(project, $"notice about {agent.Repository}/{agent.Branch} failed: {e.Message}"));
+            return false;
+        }
+    }
+
     public void WentIdle(AgentRecord agent, TimeSpan window)
     {
         var line = $"{agent.Repository}/{agent.Branch}: idle — no pane output for "

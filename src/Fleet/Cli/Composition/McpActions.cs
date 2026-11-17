@@ -365,7 +365,9 @@ public sealed class McpActions(
 
         if (owner.Trim().Length > 0)
         {
-            store.Save(project, agent with { Owner = owner });
+            agent = agent with { Owner = owner };
+            store.Save(project, agent);
+            await WarnStartedBeforeSkeletonAsync(agent, ct).ConfigureAwait(false);
         }
 
         claudeConfigs.For(agent.Harness)
@@ -566,6 +568,30 @@ public sealed class McpActions(
         {
             log.Write(LogTag.For(
                 project, $"tell_agent could not put back the record of {agent.Repository}/{agent.Branch}"));
+        }
+    }
+
+    private async Task WarnStartedBeforeSkeletonAsync(AgentRecord agent, CancellationToken ct)
+    {
+        try
+        {
+            await WarnIfSkeletonOpenAsync(agent, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NullReferenceException)
+        {
+            log.Write(LogTag.For(project, $"skeleton gate check for {agent.Repository}/{agent.Branch} failed: {e.Message}"));
+        }
+    }
+
+    private async Task WarnIfSkeletonOpenAsync(AgentRecord agent, CancellationToken ct)
+    {
+        var owner = store.List(project).FirstOrDefault(a =>
+            AgentHarness.IsOrchestrator(a.Harness) && string.Equals(a.Branch, agent.Owner.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (owner is not null
+            && SkeletonGate.EarlyStart(Adapters.Intents().Load(owner.Worktree), agent.Repository, agent.Branch) is { } line)
+        {
+            await Owners().AboutAsync(agent, line, ct).ConfigureAwait(false);
         }
     }
 
