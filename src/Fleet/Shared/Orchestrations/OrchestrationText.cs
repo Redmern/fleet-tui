@@ -92,6 +92,12 @@ public static class OrchestrationText
         the result in reports/.
         """;
 
+    private const string SectionBreak = "\n\n";
+
+    private const string ProcessHeading = "## Process\n";
+
+    private static readonly string[] SectionsAfterProcess = ["## Research\n", "## Subagents\n", "## How you work"];
+
     public static bool IsClassicAidlc(string text) =>
         string.Equals(Normalized(text), Normalized(ClassicAidlc), StringComparison.Ordinal);
 
@@ -140,7 +146,7 @@ public static class OrchestrationText
 
         if (!string.IsNullOrWhiteSpace(aidlc))
         {
-            sections.Add($"## Process\n{aidlc.Trim()}");
+            sections.Add($"{ProcessHeading}{aidlc.Trim()}");
         }
 
         if (research)
@@ -157,6 +163,32 @@ public static class OrchestrationText
 
         return string.Join("\n\n", sections);
     }
+
+    public static string WithProcess(string instructions, string process)
+    {
+        var section = $"{ProcessHeading}{process.Trim()}";
+        var start = instructions.IndexOf(SectionBreak + ProcessHeading, StringComparison.Ordinal);
+
+        if (start < 0)
+        {
+            var before = NextSection(instructions, 0);
+
+            return before < 0
+                ? instructions + SectionBreak + section
+                : instructions[..before] + SectionBreak + section + instructions[before..];
+        }
+
+        var end = NextSection(instructions, start + SectionBreak.Length);
+
+        return instructions[..start] + SectionBreak + section + (end < 0 ? string.Empty : instructions[end..]);
+    }
+
+    private static int NextSection(string instructions, int from) =>
+        SectionsAfterProcess
+            .Select(heading => instructions.IndexOf(SectionBreak + heading, from, StringComparison.Ordinal))
+            .Where(at => at >= 0)
+            .DefaultIfEmpty(-1)
+            .Min();
 
     private static string Normalized(string text) => text.ReplaceLineEndings("\n").Trim();
 
