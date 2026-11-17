@@ -1,3 +1,4 @@
+using Fleet.Shared.Aidlc;
 using Fleet.Shared.Orchestrations.Models;
 
 namespace Fleet.Shared.Orchestrations;
@@ -131,6 +132,8 @@ public static class OrchestrationText
             where you stop and wait for the user, call fleet_report with
             status "working" and a summary such as "waiting on user". Until you call
             done or failed, fleet shows this task as working.
+
+            {ProcessText.OnlyTheUserApproves} Ask the user.
             """;
 
         var sections = new List<string> { header };

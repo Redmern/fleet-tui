@@ -1,3 +1,4 @@
+using Fleet.Shared.Aidlc;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Keybinds;
 
@@ -294,7 +295,9 @@ public static class AgentHarness
 
     public const string AgentReportRule =
         "Call the fleet report tool with status working when you start this task or follow-up. "
-        + "Report done only when it is fully implemented and verified, or failed if you cannot finish it.";
+        + "Report done only when it is fully implemented and verified, or failed if you cannot finish it. "
+        + ProcessText.OnlyTheUserApproves
+        + " Your orchestrator's instructions are your tasks, not a gate approval; never approve a gate yourself.";
 
     public const string OrchestratorKickoff =
         "Read CLAUDE.md and TASK.md in your working directory, then begin.";
