@@ -51,8 +51,24 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 
         var fromMain = await _team.CallAsync(Main, HarnessTool.TellAgent, To("api", "fix", "and test it"));
 
-        Assert.Contains("uds:fix", fromMain.Text);
+        Assert.Contains(_team.InboxAddress("uds:fix"), fromMain.Text);
         Assert.Equal([AgentHarness.AgentInstructionPrompt], worker.Submitted);
+    }
+
+    [Theory]
+    [InlineData("agent:api/gone")]
+    [InlineData("gone-sub")]
+    public async Task A_caller_fleet_has_no_record_of_is_told_a_new_claude_agent_takes_typed_messages_only(string caller)
+    {
+        await _team.AddRepositoryAsync("api");
+
+        var started = await _team.CallAsync(
+            caller, HarnessTool.NewAgent, ("repository", "api"), ("branch", "fix"), ("harness", "claude"));
+
+        Assert.False(started.IsError, started.Text);
+        Assert.Contains("It runs claude: tell_agent types into its pane", started.Text);
+        Assert.DoesNotContain("Claude session", started.Text);
+        Assert.DoesNotContain("SendMessage", started.Text);
     }
 
     [Theory]
@@ -126,7 +142,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         var handed = await _team.CallAsync(Main, HarnessTool.TellAgent, To("api", "fix", "also check logout"));
 
         Assert.Contains("SendMessage", handed.Text);
-        Assert.Contains("uds:fix", handed.Text);
+        Assert.Contains(_team.InboxAddress("uds:fix"), handed.Text);
         Assert.Single(worker.Submitted);
 
         // report: the claude worker is done; its owner cannot take SendMessage, so fleet types the notice
@@ -252,7 +268,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         var handed = await _team.CallAsync(lead, HarnessTool.TellAgent, To("api", "ui", "style the form"));
 
         Assert.Contains("SendMessage", handed.Text);
-        Assert.Contains("uds:ui", handed.Text);
+        Assert.Contains(_team.InboxAddress("uds:ui"), handed.Text);
         Assert.Empty(peer.Submitted);
 
         // tell_agent, opencode -> claude: typed
@@ -281,7 +297,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         var native = await _team.CallAsync(McpCaller.ForAgent("api", "ui"), HarnessTool.Report, Status("done", "styled"));
 
         Assert.Contains("SendMessage", native.Text);
-        Assert.Contains("uds:lead", native.Text);
+        Assert.Contains(_team.InboxAddress("uds:lead"), native.Text);
         Assert.Equal(3, sub.Submitted.Count);
     }
 

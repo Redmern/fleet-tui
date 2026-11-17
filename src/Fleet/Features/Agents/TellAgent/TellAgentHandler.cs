@@ -3,6 +3,7 @@ using System.Text;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
@@ -51,7 +52,7 @@ public sealed class TellAgentHandler(
         return null;
     }
 
-    public async Task DeliverAsync(
+    public async Task<PromptDelivery> DeliverAsync(
         AgentRecord agent,
         PaneId pane,
         string message,
@@ -63,7 +64,7 @@ public sealed class TellAgentHandler(
             Path.Combine(dir, AgentHarness.AgentInstructionFile), InstructionFor(agent, message), ct)
             .ConfigureAwait(false);
 
-        await PromptAsync(agent, pane, AgentHarness.AgentInstructionPrompt, echoWithin ?? TimeSpan.Zero, ct)
+        return await PromptAsync(agent, pane, AgentHarness.AgentInstructionPrompt, echoWithin ?? TimeSpan.Zero, ct)
             .ConfigureAwait(false);
     }
 
@@ -75,7 +76,7 @@ public sealed class TellAgentHandler(
         await AppendAsync(Path.Combine(dir, AgentHarness.NoticesFile), Encoding.UTF8.GetBytes(line), ct)
             .ConfigureAwait(false);
 
-        await PromptAsync(owner, pane, AgentHarness.NoticesPrompt, TimeSpan.Zero, ct).ConfigureAwait(false);
+        _ = await PromptAsync(owner, pane, AgentHarness.NoticesPrompt, TimeSpan.Zero, ct).ConfigureAwait(false);
     }
 
     private async Task AppendAsync(string path, byte[] line, CancellationToken ct)
@@ -115,19 +116,22 @@ public sealed class TellAgentHandler(
         return dir;
     }
 
-    private async Task PromptAsync(
+    private async Task<PromptDelivery> PromptAsync(
         AgentRecord agent, PaneId pane, string prompt, TimeSpan echoWithin, CancellationToken ct)
     {
         if (PumpedByNvim(agent))
         {
-            return;
+            return PromptDelivery.Pumped;
         }
 
         var retry = HarnessRegistry.For(agent.RunningHarness).InputRetry;
 
-        if (retry > TimeSpan.Zero && echoWithin > TimeSpan.Zero)
+        var echo = PromptEcho.Echoed;
+        var checkedEcho = retry > TimeSpan.Zero && echoWithin > TimeSpan.Zero;
+
+        if (checkedEcho)
         {
-            await TypedPrompt
+            echo = await TypedPrompt
                 .UntilEchoedAsync(mux, pane, prompt, retry, echoWithin, _enterDelay, clock: _clock, ct: ct)
                 .ConfigureAwait(false);
         }
@@ -137,7 +141,12 @@ public sealed class TellAgentHandler(
             await Task.Delay(_enterDelay, _clock, ct).ConfigureAwait(false);
         }
 
-        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
+        if (echo != PromptEcho.Lost)
+        {
+            await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
+        }
+
+        return !checkedEcho ? PromptDelivery.Unchecked : TypedPrompt.DeliveryOf(echo);
     }
 
     public static string InstructionFor(AgentRecord agent, string message) =>

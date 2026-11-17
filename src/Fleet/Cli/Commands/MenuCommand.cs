@@ -1539,7 +1539,7 @@ public static class MenuCommand
             .ToList();
 
         await new RestoreSessionHandler(
-            mux, Adapters.SubOrchestratorsHostedInNvim(project.Name), Adapters.Agents(), Adapters.Models(project.Name), Adapters.AgentsInNvim(project.Name))
+            mux, Adapters.SubOrchestratorsHostedInNvim(project.Name), Adapters.Agents(), Adapters.Models(project.Name), Adapters.AgentsInNvim(project.Name), Adapters.StatusHooks(project.Name))
             .HandleAsync(project.Name, project.Root, runnable)
             .ConfigureAwait(false);
 

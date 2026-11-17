@@ -1,3 +1,4 @@
+using Fleet.Ports.Mux.Enums;
 using Fleet.Shared.Aidlc;
 using Fleet.Shared.Aidlc.Enums;
 
@@ -11,6 +12,26 @@ public static class DispatchNote
         $"fleet: dispatched sub-orchestrator '{slug}' (hidden"
         + (profile is { } p ? $", Ai-DLC {Words.Of(p)}" : string.Empty)
         + "). It has the fleet MCP tools and this project's permission settings. Open it from the dashboard's Subs tab.";
+
+    public static string KickoffNotConfirmed(PromptDelivery delivery) =>
+        $" Its first task is written to .fleet/instruction.md, but delivery was not confirmed ({Reason(delivery)}).";
+
+    public static bool Confirmed(PromptDelivery delivery) => delivery is PromptDelivery.Echoed or PromptDelivery.Pumped;
+
+    public static string Reason(PromptDelivery delivery) => delivery switch
+    {
+        PromptDelivery.Lost =>
+            "its pane never showed the typed prompt (a pane fleet cannot read looks the same), so fleet left it unsubmitted",
+        PromptDelivery.Deadline =>
+            "fleet stopped waiting for the prompt to show, before the caller's tool call would time out, and pressed Enter once",
+        PromptDelivery.PumpUnseen =>
+            "fleet stopped waiting for nvim to report it; nvim delivers it once the agent is ready",
+        PromptDelivery.PumpUnconfirmed =>
+            "nvim typed it twice, could not see it arrive, cleared the line and left it unsubmitted; send it again with tell_agent",
+        PromptDelivery.Unchecked =>
+            "its harness has no check for typed input and its MCP server never reported ready",
+        _ => string.Empty,
+    };
 
     public const string NoDirect =
         "fleet: this dispatch path can't start a repository agent directly; leave out the repository.";

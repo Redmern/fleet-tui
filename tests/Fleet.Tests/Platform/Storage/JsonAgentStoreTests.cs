@@ -473,3 +473,61 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
         Assert.Equal("opencode", sub.OrchestratorProfile.Name);
     }
 }
+
+public sealed class FindByWorktreeTests : ConfigHomeFixture
+{
+    private readonly JsonAgentStore _store = new();
+
+    private static AgentRecord Agent(string worktree) =>
+        new(worktree, "backend", "develop", "claude", "origin/main", true, Open: true);
+
+    [Fact]
+    public void An_agent_is_found_across_projects_with_the_project_that_holds_it()
+    {
+        var mine = Path.Combine(ConfigHome, "backend", "mine");
+        _store.Save("alpha", Agent(Path.Combine(ConfigHome, "backend", "other")));
+        _store.Save("beta", Agent(mine));
+
+        var found = _store.FindByWorktree(mine);
+
+        Assert.NotNull(found);
+        Assert.Equal("beta", found.SessionKey);
+        Assert.Equal(mine, found.Record.Worktree);
+    }
+
+    [Fact]
+    public void A_cwd_below_the_worktree_finds_it_and_the_deepest_match_wins()
+    {
+        var outer = Path.Combine(ConfigHome, "backend", "mine");
+        var inner = Path.Combine(outer, ".fleet", "orchestrations", "lead");
+        _store.Save("alpha", Agent(outer));
+        _store.Save("alpha", Agent(inner) with { Branch = "lead" });
+
+        Assert.Equal("develop", _store.FindByWorktree(Path.Combine(outer, "src", "deep"))!.Record.Branch);
+        Assert.Equal("lead", _store.FindByWorktree(Path.Combine(inner, "src"))!.Record.Branch);
+        Assert.Null(_store.FindByWorktree(Path.Combine(ConfigHome, "backend", "mine-other")));
+    }
+
+    [Fact]
+    public void The_session_key_is_the_sanitized_project_name_the_file_is_stored_under()
+    {
+        var mine = Path.Combine(ConfigHome, "backend", "mine");
+        _store.Save("my project!", Agent(mine));
+
+        Assert.Equal("myproject", _store.FindByWorktree(mine)!.SessionKey);
+    }
+
+    [Fact]
+    public void A_worktree_no_project_has_is_not_found()
+    {
+        _store.Save("alpha", Agent(Path.Combine(ConfigHome, "backend", "other")));
+
+        Assert.Null(_store.FindByWorktree(Path.Combine(ConfigHome, "backend", "missing")));
+    }
+
+    [Fact]
+    public void With_no_sessions_folder_nothing_is_found()
+    {
+        Assert.Null(_store.FindByWorktree(Path.Combine(ConfigHome, "backend", "mine")));
+    }
+}

@@ -1,10 +1,12 @@
+using Fleet.Ports.Mux.Enums;
 using Fleet.Ports.Mux.Models;
+using Fleet.Shared.Constants;
 
 namespace Fleet.Ports.Mux;
 
 public static class TypedPrompt
 {
-    public const int EchoLength = 16;
+    public const int EchoLength = AgentHarness.EchoProbeLength;
 
     public const string ClearLine = "\u0015";
 
@@ -12,7 +14,7 @@ public static class TypedPrompt
 
     private static readonly TimeSpan Shortest = TimeSpan.FromMilliseconds(1);
 
-    public static async Task<bool> UntilEchoedAsync(
+    public static async Task<PromptEcho> UntilEchoedAsync(
         IMuxDriver mux,
         PaneId pane,
         string prompt,
@@ -25,20 +27,13 @@ public static class TypedPrompt
         var time = clock ?? TimeProvider.System;
         var probe = prompt[..Math.Min(EchoLength, prompt.Length)];
         var pause = echoDelay is { } given && given > TimeSpan.Zero ? given : echoDelay is null ? EchoDelay : Shortest;
-        var waited = TimeSpan.Zero;
         var before = Occurrences(await mux.GetTextAsync(pane, ct).ConfigureAwait(false), probe);
-        var typedBefore = false;
+        var waited = TimeSpan.Zero;
 
-        while (true)
+        await mux.SendTextAsync(pane, prompt, ct).ConfigureAwait(false);
+
+        for (var typing = 1; typing <= 2; typing++)
         {
-            if (typedBefore)
-            {
-                await mux.SendTextAsync(pane, ClearLine, ct).ConfigureAwait(false);
-            }
-
-            await mux.SendTextAsync(pane, prompt, ct).ConfigureAwait(false);
-            typedBefore = true;
-
             var sinceTyped = TimeSpan.Zero;
 
             do
@@ -50,7 +45,7 @@ public static class TypedPrompt
 
                 if (Occurrences(shown, probe) > before)
                 {
-                    return true;
+                    return PromptEcho.Echoed;
                 }
             }
             while (waited + sinceTyped < within && sinceTyped < retry);
@@ -59,10 +54,29 @@ public static class TypedPrompt
 
             if (waited >= within)
             {
-                return false;
+                return PromptEcho.TimedOut;
             }
+
+            if (typing == 2)
+            {
+                break;
+            }
+
+            await mux.SendTextAsync(pane, ClearLine, ct).ConfigureAwait(false);
+            await mux.SendTextAsync(pane, prompt, ct).ConfigureAwait(false);
         }
+
+        await mux.SendTextAsync(pane, ClearLine, ct).ConfigureAwait(false);
+
+        return PromptEcho.Lost;
     }
+
+    public static PromptDelivery DeliveryOf(PromptEcho echo) => echo switch
+    {
+        PromptEcho.Echoed => PromptDelivery.Echoed,
+        PromptEcho.TimedOut => PromptDelivery.Deadline,
+        _ => PromptDelivery.Lost,
+    };
 
     private static int Occurrences(string text, string probe)
     {

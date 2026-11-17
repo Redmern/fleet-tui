@@ -11,6 +11,7 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Results;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -54,8 +55,8 @@ public sealed class RemoveSubTests : IDisposable
         new(new RemoveAgentHandler(new GitRunner(), _mux, _store, folderRetries: []), _store, _mux);
 
     private static RemoveSubCommand Command(
-        string slug = "upgrade", string caller = "", bool deleteFolder = false, bool removeAgents = false) =>
-        new(Project, slug, caller, deleteFolder, removeAgents);
+        string slug = "upgrade", string caller = "", bool deleteFolder = false, bool removeAgents = false, bool stop = false) =>
+        new(Project, slug, caller, deleteFolder, removeAgents, stop);
 
     private AgentRecord Sub(string slug = "upgrade", string status = OrchestrationStatus.Done)
     {
@@ -333,6 +334,56 @@ public sealed class RemoveSubTests : IDisposable
     }
 
     [Fact]
+    public async Task Stop_removes_a_working_sub_with_an_open_pane_in_one_call()
+    {
+        var sub = Sub(status: OrchestrationStatus.Working);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
+        var hooks = new RecordingHookState();
+
+        var result = await new RemoveSubHandler(
+                new RemoveAgentHandler(new GitRunner(), _mux, _store, folderRetries: [], hookState: hooks),
+                _store,
+                _mux,
+                (project, sub, ct) => new StopAgentHandler(_mux, _store, hooks).HandleAsync(project, sub, ct))
+            .HandleAsync(Command(stop: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Null(Stored(sub));
+        Assert.Empty(await _mux.ListPanesAsync());
+        Assert.Equal(sub.Worktree, Assert.Single(hooks.Forgotten.Distinct()));
+    }
+
+    [Fact]
+    public async Task A_stop_that_fails_is_reported_as_a_warning_and_the_sub_is_still_removed()
+    {
+        var sub = Sub(status: OrchestrationStatus.Working);
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = sub.Worktree });
+
+        var result = await new RemoveSubHandler(
+                new RemoveAgentHandler(new GitRunner(), _mux, _store, folderRetries: []),
+                _store,
+                _mux,
+                (_, _, _) => Task.FromResult(Result.Fail("record is locked")))
+            .HandleAsync(Command(stop: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Null(Stored(sub));
+        Assert.Contains("Stopping upgrade first failed (record is locked)", result.Value!.Warning, StringComparison.Ordinal);
+        Assert.Empty(await _mux.ListPanesAsync());
+    }
+
+    [Fact]
+    public async Task Stop_on_a_sub_that_is_not_running_just_removes_it()
+    {
+        var sub = Sub(status: OrchestrationStatus.Done);
+
+        var result = await Handler().HandleAsync(Command(stop: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Null(Stored(sub));
+    }
+
+    [Fact]
     public async Task A_sub_that_never_reported_counts_as_working()
     {
         var sub = Sub(status: string.Empty);
@@ -434,11 +485,42 @@ public sealed class RemoveSubTests : IDisposable
         Assert.True(result.Succeeded, result.Error);
     }
 
+    [Fact]
+    public async Task Releasing_an_agent_keeps_an_instruction_stamped_after_the_sub_was_read()
+    {
+        Sub();
+        var child = await ChildAsync("feature/login");
+        _store.OnRemove = () => _store.Save(Project, child with { InstructedAt = "2026-11-16T10:00:00.0000000+00:00" });
+
+        var result = await Handler().HandleAsync(Command());
+
+        Assert.True(result.Succeeded, result.Error);
+        var kept = Stored(child)!;
+        Assert.Equal(string.Empty, kept.Owner);
+        Assert.Equal("2026-11-16T10:00:00.0000000+00:00", kept.InstructedAt);
+    }
+
+    [Fact]
+    public async Task Keeping_an_agent_that_has_uncommitted_work_keeps_an_instruction_stamped_after_the_sub_was_read()
+    {
+        Sub();
+        var dirty = await ChildAsync("feature/dirty");
+        await File.WriteAllTextAsync(Path.Combine(dirty.Worktree, "wip.txt"), "x");
+        _store.OnRemove = () => _store.Save(Project, dirty with { InstructedAt = "2026-11-16T10:00:00.0000000+00:00" });
+
+        var result = await Handler().HandleAsync(Command(removeAgents: true));
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal("2026-11-16T10:00:00.0000000+00:00", Stored(dirty)!.InstructedAt);
+    }
+
     private sealed class MemoryStore : IAgentStore
     {
         private readonly List<AgentRecord> _agents = [];
 
         public bool RefuseRemove { get; set; }
+
+        public Action? OnRemove { get; set; }
 
         public void Save(string project, AgentRecord agent)
         {
@@ -469,6 +551,7 @@ public sealed class RemoveSubTests : IDisposable
                 return false;
             }
 
+            OnRemove?.Invoke();
             _agents.RemoveAll(a => PathKey.Same(a.Worktree, worktree));
             return true;
         }

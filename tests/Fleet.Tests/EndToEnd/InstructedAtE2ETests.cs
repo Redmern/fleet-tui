@@ -67,7 +67,7 @@ public sealed class InstructedAtE2ETests : ConfigHomeFixture
 
         var told = await _team.CallAsync(Main, HarnessTool.TellAgent, To("api", "fix", "try again"));
 
-        Assert.Contains("uds:fix", told.Text);
+        Assert.Contains(_team.InboxAddress("uds:fix"), told.Text);
         var after = _team.Record("api", "fix");
         Assert.Equal(OrchestrationStatus.Working, after.Status);
         Assert.Equal(at, after.InstructedAt);

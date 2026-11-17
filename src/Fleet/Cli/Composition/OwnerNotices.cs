@@ -8,6 +8,7 @@ using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
+using Fleet.Ports.Todos;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Status;
@@ -21,7 +22,8 @@ public sealed class OwnerNotices(
     IAgentStore store,
     IFleetLog log,
     Func<bool> mainInNvim,
-    TimeProvider? clock = null)
+    TimeProvider? clock = null,
+    ITicketStatusSink? tickets = null)
 {
     private readonly TellAgentHandler _teller = new(mux, clock: clock);
 
@@ -76,6 +78,32 @@ public sealed class OwnerNotices(
             }
         });
     }
+
+    public async Task SessionLostAsync(AgentRecord agent, CancellationToken ct = default) =>
+        await new ReportStatusHandler(store, (clock ?? TimeProvider.System).GetUtcNow, tickets: tickets, typeToOwner: TypeAsync)
+            .SessionEndedAsync(project, root, agent, ct)
+            .ConfigureAwait(false);
+
+    public PaneActivity Watch(Action<AgentRecord>? lost = null) =>
+        new(
+            mux,
+            WentIdle,
+            clock,
+            lost ?? SessionLost,
+            panes => panes.Count > 0 && (Adapters.DashPane(project) is not { } dashboard || panes.Any(p => p.Id.Value == dashboard)));
+
+    public void SessionLost(AgentRecord agent) =>
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SessionLostAsync(agent).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                log.Write(LogTag.For(project, $"lost-session notice for {agent.Repository}/{agent.Branch} failed: {e.Message}"));
+            }
+        });
 
     private AgentRecord MainRecord() =>
         new(root, string.Empty, string.Empty, AgentHarness.Orchestrator, string.Empty, false, InNvim: mainInNvim());

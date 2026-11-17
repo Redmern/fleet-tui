@@ -55,11 +55,89 @@ public sealed class FileAgentStateStoreTests : IDisposable
         await store.ReportAsync(Report(AgentState.Idle) with { Inbox = @"uds:\\.\pipe\LOCAL\cc-msg-1" });
         await store.ReportAsync(Report(AgentState.Idle, "s2", "C:/w/a/inner") with { Inbox = "uds:inner" });
 
-        var inboxes = new StatusFileInboxes(store);
+        var inboxes = new StatusFileInboxes(store, _ => true);
 
         Assert.Equal(@"uds:\\.\pipe\LOCAL\cc-msg-1", await inboxes.AddressAsync("C:/w/a"));
         Assert.Equal("uds:inner", await inboxes.AddressAsync("C:/w/a/inner"));
         Assert.Null(await inboxes.AddressAsync("C:/w/b"));
+    }
+
+    [Fact]
+    public async Task An_address_whose_socket_file_is_gone_is_not_handed_out()
+    {
+        var store = new FileAgentStateStore(_dir);
+        Directory.CreateDirectory(_dir);
+        var socket = Path.Combine(_dir, "live.sock");
+        File.WriteAllText(socket, string.Empty);
+        await store.ReportAsync(Report(AgentState.Idle) with { Inbox = "uds:" + socket });
+        var inboxes = new StatusFileInboxes(store);
+
+        Assert.Equal("uds:" + socket, await inboxes.AddressAsync("C:/w/a"));
+
+        File.Delete(socket);
+
+        Assert.Null(await inboxes.AddressAsync("C:/w/a"));
+    }
+
+    [Fact]
+    public async Task A_dead_newest_address_falls_back_to_the_next_newest_live_one()
+    {
+        var store = new FileAgentStateStore(_dir);
+        Directory.CreateDirectory(_dir);
+        var live = Path.Combine(_dir, "old.sock");
+        File.WriteAllText(live, string.Empty);
+        var now = DateTime.UtcNow;
+        await store.ReportAsync(Report(AgentState.Idle, "old", at: now.AddMinutes(-5)) with { Inbox = "uds:" + live });
+        await store.ReportAsync(Report(AgentState.Idle, "new", at: now) with { Inbox = "uds:" + Path.Combine(_dir, "dead.sock") });
+
+        Assert.Equal("uds:" + live, await new StatusFileInboxes(store).AddressAsync("C:/w/a"));
+    }
+
+    [Fact]
+    public async Task A_windows_named_pipe_address_is_handed_out_without_a_file_check()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var store = new FileAgentStateStore(_dir);
+        var pipe = @"uds:\\.\pipe\LOCAL\cc-msg-never-listed";
+        await store.ReportAsync(Report(AgentState.Idle) with { Inbox = pipe });
+
+        Assert.Equal(pipe, await new StatusFileInboxes(store).AddressAsync("C:/w/a"));
+    }
+
+    [Fact]
+    public async Task Forgetting_a_worktree_drops_every_session_of_it_and_no_other()
+    {
+        var store = new FileAgentStateStore(_dir);
+        await store.ReportAsync(Report(AgentState.Idle, "s1") with { Inbox = "uds:a" });
+        await store.ReportAsync(Report(AgentState.Working, "s2"));
+        await store.ReportAsync(Report(AgentState.Idle, "s3", "C:/w/b"));
+
+        await store.ForgetAsync("C:/w/a");
+
+        var left = Assert.Single((await store.GetSnapshotAsync()).Reports);
+        Assert.Equal("C:/w/b", left.Worktree);
+    }
+
+    [Fact]
+    public async Task Forgetting_a_worktree_also_drops_the_state_written_from_a_folder_below_it()
+    {
+        var store = new FileAgentStateStore(_dir);
+        await store.ReportAsync(Report(AgentState.Working, "s1", "C:/w/a/src/deep"));
+        await store.ReportAsync(Report(AgentState.Working, "s2", "C:/w/a-other"));
+
+        await store.ForgetAsync("C:/w/a");
+
+        Assert.Equal("C:/w/a-other", Assert.Single((await store.GetSnapshotAsync()).Reports).Worktree);
+    }
+
+    [Fact]
+    public async Task Forgetting_a_worktree_that_has_no_state_is_fine()
+    {
+        await new FileAgentStateStore(_dir).ForgetAsync("C:/w/a");
     }
 
     [Fact]

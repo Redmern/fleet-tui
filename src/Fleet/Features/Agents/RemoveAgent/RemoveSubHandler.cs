@@ -7,7 +7,11 @@ using Fleet.Shared.Results;
 
 namespace Fleet.Features.Agents.RemoveAgent;
 
-public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore store, IMuxDriver mux)
+public sealed class RemoveSubHandler(
+    RemoveAgentHandler remover,
+    IAgentStore store,
+    IMuxDriver mux,
+    Func<string, AgentRecord, CancellationToken, Task<Result>>? stopper = null)
 {
     public static AgentRecord? Find(IReadOnlyList<AgentRecord> agents, string slug) =>
         agents.FirstOrDefault(a => AgentHarness.IsOrchestrator(a.Harness)
@@ -32,12 +36,21 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 + "the orchestrator that dispatched you remove it.");
         }
 
+        string? stopNote = null;
+
         if (OrchestrationStatus.Normalize(sub.Status) == OrchestrationStatus.Working
             && await RunningAsync(sub, ct).ConfigureAwait(false))
         {
-            return Result<SubRemoval>.Fail(
-                $"{sub.Branch} is still working. Wait until it reports done or failed, stop it with "
-                + "stop_sub, or remove it from the dashboard's Subs tab.");
+            if (!command.Stop || stopper is null)
+            {
+                return Result<SubRemoval>.Fail(
+                    $"{sub.Branch} is still working. Wait until it reports done or failed, stop it with "
+                    + "stop_sub, remove it with stop set, or remove it from the dashboard's Subs tab.");
+            }
+
+            var stopped = await stopper(command.Project, sub, ct).ConfigureAwait(false);
+
+            stopNote = stopped.Succeeded ? null : $"Stopping {sub.Branch} first failed ({stopped.Error}); its panes were closed by the removal.";
         }
 
         var gone = await remover.RemoveAsync(command.Project, sub, command.DeleteFolder, ct)
@@ -58,7 +71,7 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
 
             if (!command.RemoveAgents)
             {
-                store.Replace(command.Project, SubChildren.Released(child));
+                store.Update(command.Project, child.Worktree, SubChildren.Released);
                 released.Add(label);
                 continue;
             }
@@ -71,7 +84,7 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 continue;
             }
 
-            store.Replace(command.Project, SubChildren.Released(child));
+            store.Update(command.Project, child.Worktree, SubChildren.Released);
             kept.Add($"{label} ({refusal})");
         }
 
@@ -84,7 +97,9 @@ public sealed class RemoveSubHandler(RemoveAgentHandler remover, IAgentStore sto
                 kept,
                 released,
                 gone.Warning ? null : gone.Problem,
-                gone.Warning ? gone.Problem : null));
+                string.Join(' ', new[] { stopNote, gone.Warning ? gone.Problem : null }.Where(w => w is not null)) is { Length: > 0 } notes
+                    ? notes
+                    : null));
     }
 
     private async Task<bool> RunningAsync(AgentRecord sub, CancellationToken ct)

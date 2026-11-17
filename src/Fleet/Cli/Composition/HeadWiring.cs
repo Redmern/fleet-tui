@@ -10,6 +10,7 @@ using Fleet.Platform.Claude;
 using Fleet.Platform.Mcp;
 using Fleet.Platform.Mux.Embedded.Pty;
 using Fleet.Platform.Storage;
+using Fleet.Ports.Agents;
 using Fleet.Ports.Claude.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
@@ -115,7 +116,7 @@ public static class HeadWiring
             CreateProject: creation => new CreateProjectHandler(Adapters.Projects())
                 .Create(new CreateProjectCommand(creation.Name, creation.Path, creation.CreateDirectory)),
             AddRepository: AddRepositoryAsync,
-            CloseProject: (project, ct) => CloseProjectAsync(mux, project, ct));
+            CloseProject: (project, ct) => CloseProjectAsync(mux, Adapters.Agents(), project, ct));
 
     private static async Task<Result> AddRepositoryAsync(Project project, string repository, CancellationToken ct)
     {
@@ -126,12 +127,15 @@ public static class HeadWiring
         return added.Succeeded ? Result.Ok() : Result.Fail(added.Error!);
     }
 
-    private static async Task<string?> CloseProjectAsync(IMuxDriver mux, Project project, CancellationToken ct)
+    public static async Task<string?> CloseProjectAsync(
+        IMuxDriver mux, IAgentStore agents, Project project, CancellationToken ct)
     {
         if (!mux.Caps.HasFlag(MuxCaps.Workspaces))
         {
             return "this terminal has no workspace to close it by";
         }
+
+        ClosingAgents.MarkProject(agents, project.Name);
 
         await mux.CloseWorkspaceAsync(project.Name, ct).ConfigureAwait(false);
         await mux.CloseWorkspaceAsync(FleetWorkspaces.HiddenFor(project.Name), ct).ConfigureAwait(false);

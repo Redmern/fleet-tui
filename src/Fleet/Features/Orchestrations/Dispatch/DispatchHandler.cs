@@ -15,6 +15,7 @@ using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Aidlc.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Harness;
+using Fleet.Shared.Harness.Enums;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Orchestrations.Enums;
 using Fleet.Shared.Orchestrations.Models;
@@ -88,6 +89,7 @@ public sealed class DispatchHandler(
             }
         }
 
+        var deadline = command.Within is { } within ? _clock.GetUtcNow() + within : (DateTimeOffset?)null;
         var route = DispatchRouting.Decide(
             trimmed, config.Aidlc.Mode, config.Aidlc.DefaultProfile, argument, command.Repository, command.Research);
         var (prompt, aidlc) = (route.Prompt, route.Aidlc);
@@ -99,7 +101,7 @@ public sealed class DispatchHandler(
 
         if (route.Target == DispatchTarget.RepoAgent)
         {
-            return await StartDirect(command, prompt, ct).ConfigureAwait(false);
+            return await StartDirect(command, prompt, deadline, ct).ConfigureAwait(false);
         }
 
         var existing = store.List(command.ProjectName)
@@ -214,12 +216,12 @@ public sealed class DispatchHandler(
             await mux.FocusPaneAsync(active.Id, ct).ConfigureAwait(false);
         }
 
-        if (!inNvim)
-        {
-            await TypeKickoff(folder, pane, runs, ct).ConfigureAwait(false);
-        }
+        var delivery = inNvim
+            ? await PumpKickoff(folder, deadline, ct).ConfigureAwait(false)
+            : await TypeKickoff(folder, pane, runs, deadline, ct).ConfigureAwait(false);
 
         var note = DispatchNote.Dispatched(slug, aidlc?.Profile)
+            + (DispatchNote.Confirmed(delivery) ? string.Empty : DispatchNote.KickoffNotConfirmed(delivery))
             + (string.IsNullOrWhiteSpace(command.Repository) ? string.Empty : DispatchNote.RepositoryLeftToSub(route.Research))
             + (written.Succeeded ? string.Empty : DispatchNote.ConfigNotWritten(runs.Name, written.Error!));
 
@@ -257,7 +259,7 @@ public sealed class DispatchHandler(
     }
 
     private async Task<Result<DispatchReply>> StartDirect(
-        DispatchCommand command, string prompt, CancellationToken ct)
+        DispatchCommand command, string prompt, DateTimeOffset? deadline, CancellationToken ct)
     {
         if (starter is null)
         {
@@ -276,7 +278,8 @@ public sealed class DispatchHandler(
                     repository,
                     branch,
                     prompt,
-                    command.Harness?.Trim() ?? string.Empty),
+                    command.Harness?.Trim() ?? string.Empty,
+                    deadline),
                 ct)
             .ConfigureAwait(false);
 
@@ -373,7 +376,11 @@ public sealed class DispatchHandler(
             .ConfigureAwait(false);
     }
 
-    private async Task TypeKickoff(string folder, PaneId pane, HarnessProfile runs, CancellationToken ct)
+    private TimeSpan Remaining(DateTimeOffset? deadline) =>
+        deadline is { } at ? TimeSpan.FromTicks(Math.Max(0, (at - _clock.GetUtcNow()).Ticks)) : TimeSpan.MaxValue;
+
+    private async Task<PromptDelivery> TypeKickoff(
+        string folder, PaneId pane, HarnessProfile runs, DateTimeOffset? deadline, CancellationToken ct)
     {
         var marker = OrchestrationPaths.ReadyMarker(folder);
 
@@ -381,15 +388,19 @@ public sealed class DispatchHandler(
             ? (int)Math.Ceiling(_readyTimeout / _pollInterval)
             : 0;
 
-        for (var i = 0; i < attempts && !File.Exists(marker); i++)
+        for (var i = 0; i < attempts && !File.Exists(marker) && Remaining(deadline) > TimeSpan.Zero; i++)
         {
             await Task.Delay(_pollInterval, _clock, ct).ConfigureAwait(false);
         }
 
-        if (runs.InputRetry > TimeSpan.Zero)
+        var echo = PromptEcho.Echoed;
+        var checkedEcho = runs.InputRetry > TimeSpan.Zero;
+
+        if (checkedEcho)
         {
-            await TypedPrompt
-                .UntilEchoedAsync(mux, pane, runs.Kickoff, runs.InputRetry, _readyTimeout, clock: _clock, ct: ct)
+            echo = await TypedPrompt
+                .UntilEchoedAsync(
+                    mux, pane, runs.Kickoff, runs.InputRetry, Min(_readyTimeout, Remaining(deadline)), clock: _clock, ct: ct)
                 .ConfigureAwait(false);
         }
         else
@@ -398,6 +409,34 @@ public sealed class DispatchHandler(
             await Task.Delay(TypedPrompt.EchoDelay, _clock, ct).ConfigureAwait(false);
         }
 
-        await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
+        if (echo != PromptEcho.Lost)
+        {
+            await mux.SendTextAsync(pane, "\r", ct).ConfigureAwait(false);
+        }
+
+        return checkedEcho
+            ? TypedPrompt.DeliveryOf(echo)
+            : File.Exists(marker) ? PromptDelivery.Echoed : PromptDelivery.Unchecked;
     }
+
+    private async Task<PromptDelivery> PumpKickoff(string folder, DateTimeOffset? deadline, CancellationToken ct)
+    {
+        if (deadline is null)
+        {
+            return PromptDelivery.Pumped;
+        }
+
+        var outcome = await PumpMarkers
+            .SeenAsync(folder, Min(_readyTimeout, Remaining(deadline)), _pollInterval, _clock, ct)
+            .ConfigureAwait(false);
+
+        return outcome switch
+        {
+            PumpOutcome.Seen => PromptDelivery.Pumped,
+            PumpOutcome.Unconfirmed => PromptDelivery.PumpUnconfirmed,
+            _ => PromptDelivery.PumpUnseen,
+        };
+    }
+
+    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a < b ? a : b;
 }

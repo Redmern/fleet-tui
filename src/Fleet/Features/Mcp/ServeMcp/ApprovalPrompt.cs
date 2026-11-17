@@ -50,6 +50,11 @@ public static class ApprovalPrompt
     {
         var also = new List<string>();
 
+        if (request.Flag(ToolArguments.Stop))
+        {
+            also.Add("stopping it first if it is running");
+        }
+
         if (request.Flag(ToolArguments.DeleteFolder))
         {
             also.Add("deleting its folder");

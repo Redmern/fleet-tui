@@ -1043,16 +1043,32 @@ that redraws while waiting never goes idle.
 **Typed input needs an echo check.** Found on the real opencode: it starts the fleet MCP
 server, which writes fleet's ready marker, seconds before its prompt takes keys, and the
 kickoff typed at the marker was lost. A fixed delay was not enough. So for a profile with
-`InputRetry` (opencode, codex, pi) `Ports/Mux/TypedPrompt.UntilEchoedAsync` types, reads
-the pane, and retypes until the first 16 characters show, then sends Enter. "Show" means
-one more occurrence than the pane had before the first typing, so the same prompt from an
-earlier message is not taken for the echo. Before each retyping it sends ctrl+u, so a
-slow harness that took every typing has one copy in its input line (ctrl+u was not tried
-on the real CLIs). Claude has
-`InputRetry` zero and keeps one typing. The nvim pump has no such check, which is why a
-sub on these profiles is first started outside nvim (on reopen it follows the setting,
-unit-tested only). If the echo never shows, Enter is still
-sent and the caller is told the task was given.
+`InputRetry` (opencode, codex, pi) `Ports/Mux/TypedPrompt.UntilEchoedAsync` types and reads
+the pane for the first 16 characters. "Show" means one more occurrence than the pane had
+before the typing, so the same prompt from an earlier message (scrollback) is not taken for
+the echo. If no new occurrence shows within the retry period it sends ctrl+u and types once
+more, so a slow harness that took the first typing has one copy in its input line (ctrl+u
+was not tried on the real CLIs). It never types a third time. A blank pane is a pane that
+has not shown the prompt yet: the port cannot tell a failed read from blank text, so it gets
+the same treatment. It answers `Echoed`; `Lost` (nothing new after the retype: it sends
+ctrl+u so nothing stays in the line, and callers do not send Enter); or `TimedOut` (the time
+given ran out: the line is left as it is and callers send Enter once). Claude has
+`InputRetry` zero and keeps one typing, counted as delivered when its MCP ready marker
+exists. The nvim pump (`NvimBoot` in `AgentHarness`) does the same on the terminal buffer: it
+marks `instruction.seen` only for an echoed prompt and otherwise writes
+`instruction.unconfirmed` with the file time, so the same instruction is never typed twice.
+
+`new_agent` and `dispatch` answer within one deadline: the caller's client tool limit
+(`ClientToolTimeout` of its harness, the strictest one for a caller fleet does not know) less
+ten seconds, counted from the moment the call reaches fleet and covering the approval prompt, the
+wait for an earlier change, the ready wait, the typing and the wait for nvim's pump together. They
+say "gave it its first task" only for an echoed typing, a Claude typing with its ready
+marker, or a pump that marked the file seen; otherwise they say the task is written to
+`.fleet/instruction.md` and delivery was not confirmed, with the reason (the pane never
+showed it, fleet stopped waiting, nvim could not see it arrive). Running out of time never
+fails the call and never retypes. A sub dispatched into nvim from the `,` hook or the
+dashboard has no deadline and does not wait for the pump. The MCP dispatch path passes the
+cancellation token, so a caller that gives up stops the wait.
 
 **Dispatch.** `DispatchCommand.Harness` goes through `Require`, then picks the profile's
 instruction file, kickoff (`Read AGENTS.md and TASK.md ...`), launch command and config
@@ -5278,12 +5294,38 @@ the pane or its process. The head is that float:
 Quitting a project while the head is shown in it closes the head with that workspace's
 panes. Its next start resumes the conversation.
 
+## Agents that die without reporting, 2026-11-16
+
+Status changes only through `report`, so a session that died stayed `working`. Two paths
+now fail it (`ReportStatusHandler.SessionEndedAsync`: `Update` to `failed`, summary
+"session ended without a report", then the owner notice typed, never handed back as an
+address):
+
+- `fleet hook` on a `SessionEnd` whose reason is not `clear` or `resume`. It finds the
+  record with `IAgentStore.FindByWorktree` (every project's session file, the deepest
+  worktree that contains the hook's `cwd`) and builds a mux driver only after it found a
+  `working`, non-closing record. That driver has no daemon starter and a 5 s deadline, so a
+  dying agent's hook never starts fleetd or outlives the hook timeout.
+- `PaneActivity`, for harnesses without hooks and for crashes: an open `working` record
+  whose pane was seen before and is missing on two distinct pane listings. An empty
+  listing, or one without the dashboard's own pane, is a failed listing and counts for
+  nothing; one cached listing counts once for each agent, however many agent sets the dashboard checks against it.
+
+Fleet kills panes on purpose too (`stop_agent`, quit project, the head's close project, `fleet daemon stop`,
+`open_agent` replacing a stale pane, remove). Each of those first writes
+`<worktree>/.fleet/closing` (`ClosingMark`). `SessionEndedAsync` returns without failing a
+closing agent, and `fleet hook` ignores every event from a closing folder or its
+subfolders, so a dying session can't write its inbox back after the forget. The mark clears
+on the next `SessionStart` of a Claude session, and when fleet itself spawns a harness
+without hooks or any agent while the "Live status via hooks" setting is off (`AgentTraces.Opened`
+takes the setting; no `SessionStart` would ever arrive to clear it).
+
 ## Managing sub-orchestrators over MCP, 2026-10-03
 
 Until now only the dashboard's Subs tab could stop or remove a sub: `list_agents`
 (`ToolText`) filters orchestrators out, so an orchestrator could neither see nor address
 one. Three tools close that gap: `list_subs`, `stop_sub(slug)` and
-`remove_sub(slug, delete_folder = false, remove_agents = false)`. They are `HarnessTool`
+`remove_sub(slug, delete_folder = false, remove_agents = false, stop = false)`. They are `HarnessTool`
 values like every other tool, so they get permission rows and Claude rules for free.
 `list_subs` is a read (allowed); the other two ask. They are not in the sub-autonomous
 set (`McpGate.SubAutonomous`): stopping or removing *another* sub is not routine work
@@ -5646,8 +5688,9 @@ never reported) falls back to `send-text`.
   its root, and nothing in the typed queue for it, gets the address back without the screen
   being read, as long as the main orchestrator's pane is listed. A project the head had to
   open is typed into as before. Its status folder may still hold the address of a session
-  that was killed without `SessionEnd`, and that address is only replaced when the new
-  session's `SessionStart` lands, which can be after the pane looks ready. The head has no
+  that was killed without `SessionEnd`. `StatusFileInboxes` hands out an address only while
+  its socket file exists (Windows named pipes are not checked), and stop and remove clear the
+  stored state, so a dead session's address is not returned. The head has no
   `typed` retry, so it doesn't take that risk. `tell` still asks through X's `tell_agent` rule. A relay becomes
   `PeerMessage.DispatchRequest`, which asks the orchestrator to call its `dispatch` tool,
   because a wrapped message can't trip the hook. So the head checks only that the `dispatch`

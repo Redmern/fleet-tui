@@ -42,6 +42,7 @@ public sealed class McpDispatcher(
     public async Task<McpResult> HandleAsync(McpRequest request, CancellationToken ct = default)
     {
         var arrived = _time.GetUtcNow();
+        request = request with { Arrived = arrived };
         var tool = HarnessToolIds.Parse(request.Tool);
 
         if (tool == HarnessTool.None)

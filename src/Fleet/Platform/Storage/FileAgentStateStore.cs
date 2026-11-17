@@ -106,6 +106,25 @@ public sealed class FileAgentStateStore(string? directory = null) : IAgentStateS
         return Task.FromResult(new AgentSnapshot(reports));
     }
 
+    public Task ForgetAsync(string worktree, CancellationToken ct = default)
+    {
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(_directory, "*.json"))
+            {
+                if (Read(file) is { } report && PathKey.Within(report.Worktree, worktree))
+                {
+                    Delete(file);
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return Task.CompletedTask;
+    }
+
     public static string NameFor(string worktree, string session)
     {
         var safe = new string([.. session.Where(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')]);

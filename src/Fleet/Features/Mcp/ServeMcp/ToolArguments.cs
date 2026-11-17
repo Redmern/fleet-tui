@@ -32,6 +32,8 @@ public static class ToolArguments
 
     public const string RemoveAgents = "remove_agents";
 
+    public const string Stop = "stop";
+
     public const string Lines = "lines";
 
     public const string Research = "research";

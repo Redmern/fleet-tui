@@ -13,7 +13,7 @@ namespace Fleet.Tests.EndToEnd.MixedTeam;
 //   `fleet mcp --caller x` does that in McpWiring.ReadySignal);
 // - it shows typed text on its screen, empties the input line on ctrl+u and submits it on Enter;
 // - a TUI without a ready hook (opencode, codex, pi) loses the first thing typed into it, as opencode 1.4.6 did
-//   in the u7 live proof.
+//   in the u7 live proof, or every typing when told to (a TUI that never takes input).
 // The "model turn" is played by the test: it reads Submitted and calls fleet tools as Caller.
 internal sealed partial class FakeHarness
 {
@@ -30,11 +30,13 @@ internal sealed partial class FakeHarness
     private readonly List<string> _screen = [];
     private readonly List<string> _submitted = [];
     private string _input = string.Empty;
+    private readonly bool _losesEveryTyping;
     private bool _losesNextTyping;
     private int _lost;
 
-    private FakeHarness(FakeMuxDriver mux, PaneId pane, HarnessProfile profile, string folder)
+    private FakeHarness(FakeMuxDriver mux, PaneId pane, HarnessProfile profile, string folder, bool losesEveryTyping)
     {
+        _losesEveryTyping = losesEveryTyping;
         _mux = mux;
         Pane = pane;
         Profile = profile;
@@ -98,9 +100,10 @@ internal sealed partial class FakeHarness
         }
     }
 
-    public static FakeHarness Start(FakeMuxDriver mux, PaneId pane, HarnessProfile profile, string folder)
+    public static FakeHarness Start(
+        FakeMuxDriver mux, PaneId pane, HarnessProfile profile, string folder, bool losesEveryTyping = false)
     {
-        var harness = new FakeHarness(mux, pane, profile, folder);
+        var harness = new FakeHarness(mux, pane, profile, folder, losesEveryTyping);
         harness.Render();
         if (McpConfigFiles.ContainsKey(profile.Name))
         {
@@ -131,7 +134,7 @@ internal sealed partial class FakeHarness
             {
                 _input = string.Empty;
             }
-            else if (_losesNextTyping)
+            else if (_losesNextTyping || _losesEveryTyping)
             {
                 _losesNextTyping = false;
                 _lost++;

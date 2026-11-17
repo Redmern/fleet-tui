@@ -41,7 +41,8 @@ public static class HookIo
             payload.AgentId ?? string.Empty,
             payload.NotificationType ?? string.Empty,
             payload.Source ?? string.Empty,
-            PeerAddress(messagingSocket));
+            PeerAddress(messagingSocket),
+            payload.Reason ?? string.Empty);
 
     public static string PeerAddress(string? messagingSocket) =>
         messagingSocket?.Trim() is { Length: > 0 } socket

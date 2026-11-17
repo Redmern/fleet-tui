@@ -123,6 +123,8 @@ public sealed class NewAgentHandler(
 
         var active = (await mux.ListPanesAsync(ct).ConfigureAwait(false)).FirstOrDefault(p => p.IsActive);
 
+        AgentTraces.Opened(agent, settings?.Load(command.ProjectName).StatusHooks ?? true);
+
         var pane = await mux.SpawnAsync(
             HiddenSpawn.Into(
                 mux,

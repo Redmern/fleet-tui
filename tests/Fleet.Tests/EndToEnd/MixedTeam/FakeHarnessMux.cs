@@ -26,6 +26,8 @@ internal sealed class FakeHarnessMux : IMuxDriver
 
     public FakeMuxDriver Inner { get; } = new();
 
+    public bool HarnessesLoseEveryTyping { get; set; }
+
     public string Name => Inner.Name;
 
     public MuxCaps Caps => Inner.Caps;
@@ -45,7 +47,7 @@ internal sealed class FakeHarnessMux : IMuxDriver
 
         if (HarnessRegistry.Running(options.Args) is { } profile && options.Cwd is { } folder)
         {
-            _harnesses[pane.Value] = FakeHarness.Start(Inner, pane, profile, folder);
+            _harnesses[pane.Value] = FakeHarness.Start(Inner, pane, profile, folder, HarnessesLoseEveryTyping);
         }
 
         return pane;

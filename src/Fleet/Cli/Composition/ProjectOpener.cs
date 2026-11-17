@@ -35,7 +35,7 @@ public static class ProjectOpener
             .ToList();
 
         await new RestoreSessionHandler(
-            mux, Adapters.SubOrchestratorsHostedInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name))
+            mux, Adapters.SubOrchestratorsHostedInNvim(chosen.Name), Adapters.Agents(), Adapters.Models(chosen.Name), Adapters.AgentsInNvim(chosen.Name), Adapters.StatusHooks(chosen.Name))
             .HandleAsync(chosen.Name, chosen.Root, runnable)
             .ConfigureAwait(false);
 

@@ -1051,10 +1051,12 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
 - *Instructions are typed.* fleet writes the task to `.fleet/instruction.md` and types
   "Read .fleet/instruction.md in this folder and do what it says." into the pane, then
   Enter. A TUI that is still starting can drop typed keys, so for the first prompt of an
-  opencode, codex or pi pane fleet types it, reads the pane, and types it again until the
-  pane shows it (for at most 60 seconds) before it sends Enter. A prompt that was already
-  on the screen from an earlier message does not count, and before fleet types again it
-  sends ctrl+u to empty the input line, so a slow harness does not get the prompt twice.
+  opencode, codex or pi pane fleet types it, reads the pane, and types it once more if the
+  pane does not show it, before it sends Enter. A prompt that was already on the screen from
+  an earlier message does not count, and before fleet types again it sends ctrl+u to empty the
+  input line, so a slow harness does not get the prompt twice. If the pane still does not show
+  it, fleet clears the line and leaves it unsubmitted, and `new_agent` says delivery was not
+  confirmed.
 - *`tell_agent` is typed* whenever the caller or the target is not Claude: there is no
   `SendMessage` address to hand out. Two Claude sessions keep using `SendMessage`. A
   caller fleet has no record of (an agent that was removed while its harness still runs)
@@ -1087,10 +1089,12 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   hook and the dashboard's New sub-orchestrator card: they always start a Claude sub. A
   sub on another harness comes from the `dispatch` tool's `harness` argument.
 - A sub-orchestrator on opencode, codex or pi is first started on its own in its pane,
-  also when **Sub-orchestrators in nvim** is on: the echo check for the first prompt
-  does not work through nvim. When it is reopened it follows that setting. An agent you start **In nvim** on one of these harnesses gets its
-  first task from nvim without that check; send it again with `tell_agent` if the harness
-  dropped it.
+  also when **Sub-orchestrators in nvim** is on: fleet types and checks its first prompt
+  itself there, and tells you when it could not confirm it. When it is reopened it follows
+  that setting. An agent you start **In nvim** on one of these harnesses gets its first task
+  from nvim, which checks the terminal for the prompt, retypes at most once and leaves
+  `.fleet/instruction.unconfirmed` when it could not confirm it; when `new_agent` or
+  `dispatch` says delivery was not confirmed, send it again with `tell_agent`.
 - Trust. codex and pi ignore a project's MCP config until the folder is trusted, and show
   a prompt that would swallow the typed task. fleet therefore adds one trust entry per
   worktree and orchestration folder to your codex and pi user config, under the folder's
@@ -1381,17 +1385,18 @@ MCP tools, each with its own row in the permissions screen:
 |---|---|---|
 | `list_subs` | every sub with its slug, status, whether its pane is open, its last report (time and summary) and its agents | allow |
 | `stop_sub(slug)` | closes the sub's pane; its record and folder stay | allow |
-| `remove_sub(slug, delete_folder, remove_agents)` | fleet forgets the sub; its folder stays unless `delete_folder` is true | allow |
+| `remove_sub(slug, delete_folder, remove_agents, stop)` | fleet forgets the sub; its folder stays unless `delete_folder` is true | allow |
 
-`remove_sub` refuses a sub that is still `working` (a sub that never reported counts as
-working; stop it and remove it from the Subs tab instead) and refuses the caller's own sub.
+`remove_sub` refuses a sub that is still `working` with an open pane (a sub that never
+reported counts as working) unless `stop` is true: then it stops the sub and removes it in
+one call. It also refuses the caller's own sub.
 It leaves the sub's agents alone unless `remove_agents` is true: they stay registered,
 keep running, and become top-level agents on the Agents tab. With `remove_agents`, each
 agent is removed with its worktree, except one with uncommitted changes or commits that
 are on no remote (and not on its base branch); that one is kept as a top-level agent and
 named in the result. Removing a sub from the Subs tab without throwing away its agents
 moves them to the Agents tab the same way. The approval prompt says when a `remove_sub`
-would delete the folder or the agents.
+would delete the folder or the agents, or stop a running sub first.
 
 **Ai-DLC.** A sub-orchestrator can run a structured process instead of free-form. Press
 `A` in the menu's Settings > Fleet config submenu to set it per project:
@@ -1500,6 +1505,21 @@ project's `dispatch` rule is checked on that call rather than by the head. `tell
 works the same way for an orchestrator's agents, and its `typed: true` falls back to typing
 when `SendMessage` can't reach the session. A project or agent whose Claude reported no
 inbox (an older Claude, status hooks off, a remote machine's head) is typed into as before.
+
+**An agent that dies without reporting is failed.** An agent or sub that is `working` (one
+that never reported counts as working) and whose Claude session ends for good (the
+`SessionEnd` hook, with any reason except `clear` and `resume`), or whose pane disappears
+for two pane listings in a row (for a harness without hooks, or a crash), is set to `failed`
+with the summary "session ended without a report", and its owner gets the same notice as
+for a reported `failed`, always typed into its pane. A listing that failed or came back
+empty is not counted, and neither is a pane fleet closed on purpose: `stop_agent`, quitting
+or closing the project, `fleet daemon stop` or a restart, and `open_agent` replacing a stale pane leave
+a `.fleet/closing` mark in the agent's folder first, and an agent with that mark is never
+failed. The mark clears when the agent opens again (a Claude session's `SessionStart`, or
+fleet opening a harness without hooks, or any agent while "Live status via hooks" is off). Stopping or removing an agent also clears its stored
+hook state, so no later call returns its old `SendMessage` address. An address is also only
+returned while its socket file exists; on Windows, named-pipe addresses are returned without
+that check, because a pipe is not a file.
 
 **Finished agents push.** A sub-orchestrator doesn't poll `list_agents` to learn that an agent
 finished: it subscribes to the agent's session with `SendMessage`'s `notify_when_idle`

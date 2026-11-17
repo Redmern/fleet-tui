@@ -1,6 +1,7 @@
 using Fleet.Cli.Composition;
 using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Agents.NewAgent.Models;
+using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Mcp.SyncClaudeConfig;
 using Fleet.Features.Orchestrations.Dispatch.Models;
 using Fleet.Features.Repositories.AddRepository;
@@ -15,6 +16,8 @@ using Fleet.Platform.Storage;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Approvals;
+using Fleet.Ports.Approvals.Models;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Shared.Harness;
@@ -143,6 +146,41 @@ internal sealed class MixedTeamRig
         return result;
     }
 
+    // The same call as CallAsync, but through McpDispatcher with an Ask rule on the tool: the approval takes
+    // `approval` of fake time before it is allowed, as a person answering the dashboard prompt would.
+    public async Task<McpResult> CallAskedAsync(
+        string caller, HarnessTool tool, TimeSpan approval, params (string Key, string Value)[] arguments)
+    {
+        var settings = Adapters.Settings();
+        settings.Save(Project, settings.Load(Project).With(tool, ActionPolicy.Ask));
+
+        var dispatcher = new McpDispatcher(
+            new McpCaller(Project, Root, caller),
+            settings,
+            new SlowApproval(Clock, approval),
+            Log,
+            Actions(caller).PerformAsync,
+            approvalTimeout: () => TimeSpan.FromSeconds(55),
+            time: Clock);
+
+        var result = await dispatcher.HandleAsync(
+            new McpRequest(HarnessToolIds.For(tool), arguments.ToDictionary(a => a.Key, a => a.Value)));
+
+        Clock.Advance(TimeSpan.FromMilliseconds(1));
+
+        return result;
+    }
+
+    private sealed class SlowApproval(SkippingClock clock, TimeSpan takes) : IApprovalChannel
+    {
+        public Task<ApprovalOutcome> AskAsync(ApprovalRequest request, CancellationToken ct = default)
+        {
+            clock.Advance(takes);
+
+            return Task.FromResult(ApprovalOutcome.Allow);
+        }
+    }
+
     public async Task<DispatchReply> DispatchAsync(string caller, string message, string harness)
     {
         var before = Store.List(Project).Select(a => a.Worktree).ToHashSet();
@@ -168,13 +206,23 @@ internal sealed class MixedTeamRig
     }
 
     // What claude's status hook does for a running session: it leaves the session's cross-session inbox address.
-    public Task ClaudeHookReportsInboxAsync(AgentRecord agent, string address) =>
-        Adapters.AgentStates().ReportAsync(
-            new AgentReport(agent.Worktree, "session-1", AgentState.Idle, DateTime.UtcNow, Inbox: address));
+    // The address is a real socket file under the project root, because fleet hands out only sockets that exist.
+    public Task ClaudeHookReportsInboxAsync(AgentRecord agent, string address)
+    {
+        var socket = InboxAddress(address);
+        Directory.CreateDirectory(Path.GetDirectoryName(socket["uds:".Length..])!);
+        File.WriteAllText(socket["uds:".Length..], string.Empty);
 
-    // The dashboard's status refresh (DashboardWiring: new PaneActivity(mux, new OwnerNotices(...).WentIdle)).
+        return Adapters.AgentStates().ReportAsync(
+            new AgentReport(agent.Worktree, "session-1", AgentState.Idle, DateTime.UtcNow, Inbox: socket));
+    }
+
+    public string InboxAddress(string address) =>
+        "uds:" + Path.Combine(Root, ".sockets", address.StartsWith("uds:", StringComparison.Ordinal) ? address[4..] : address);
+
+    // The dashboard's status refresh (DashboardWiring: new OwnerNotices(...).Watch()).
     public PaneActivity Dashboard() =>
-        new(Mux, new OwnerNotices(Project, Root, Mux, Store, Log, () => false, Clock).WentIdle, Clock);
+        new OwnerNotices(Project, Root, Mux, Store, Log, () => false, Clock).Watch();
 
     public async Task<IReadOnlyList<AgentRecord>> RefreshAsync(PaneActivity dashboard) =>
         dashboard.For(Store.List(Project), await Mux.ListPanesAsync(), _ => null);

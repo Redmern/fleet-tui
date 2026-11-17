@@ -119,6 +119,39 @@ public sealed class JsonAgentStore(TimeSpan lockPatience, TimeSpan busyPatience)
             .ToList();
     }
 
+    public AgentLocation? FindByWorktree(string path)
+    {
+        if (path.Length == 0 || !Directory.Exists(FleetPaths.Sessions))
+        {
+            return null;
+        }
+
+        AgentLocation? best = null;
+        var bestLength = -1;
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(FleetPaths.Sessions, "*.json"))
+            {
+                foreach (var entry in Read(file).Agents.Where(a => PathKey.Within(path, a.Worktree)))
+                {
+                    var length = PathKey.For(entry.Worktree).Length;
+
+                    if (length > bestLength)
+                    {
+                        best = new AgentLocation(Path.GetFileNameWithoutExtension(file), Record(entry));
+                        bestLength = length;
+                    }
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return best;
+    }
+
     private static AgentRecord Record(AgentEntry a)
     {
         var (harness, hostInNvim) = AgentRecord.Migrated(a.Harness, a.HostInNvim, a.Claude, a.Owner);

@@ -7,9 +7,12 @@ using Fleet.Platform.Git;
 using Fleet.Platform.Mux.Fake;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Git;
+using Fleet.Ports.Git.Models;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Status;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -358,11 +361,100 @@ public sealed class RemoveAgentTests : IDisposable
     {
         var agent = await AgentAsync();
         await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _store.Known.Add(agent with { Open = true });
 
         await new StopAgentHandler(_mux, _store)
             .HandleAsync("techweb", agent with { Open = true });
 
         Assert.False(Assert.Single(_store.Saved).Open);
+    }
+
+    [Fact]
+    public async Task Stopping_clears_the_agents_hook_state_and_its_pane_mark()
+    {
+        var agent = await AgentAsync();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var mark = Path.Combine(agent.Worktree, ".fleet", "pane.mark");
+        Directory.CreateDirectory(Path.GetDirectoryName(mark)!);
+        await File.WriteAllTextAsync(mark, "x");
+        var hooks = new RecordingHookState();
+
+        await new StopAgentHandler(_mux, _store, hooks).HandleAsync("techweb", agent with { Open = true });
+
+        Assert.Equal([agent.Worktree], hooks.Forgotten);
+        Assert.False(File.Exists(mark));
+    }
+
+    [Fact]
+    public async Task Removing_clears_the_agents_hook_state_and_its_pane_mark()
+    {
+        var agent = await AgentAsync();
+        var mark = Path.Combine(agent.Worktree, ".fleet", "pane.mark");
+        Directory.CreateDirectory(Path.GetDirectoryName(mark)!);
+        await File.WriteAllTextAsync(mark, "x");
+        var hooks = new RecordingHookState();
+
+        var result = await new RemoveAgentHandler(
+                new GitRunner(), _mux, _store, folderRetries: [], backoff: TimeSpan.FromMilliseconds(20), hookState: hooks)
+            .HandleAsync("techweb", agent, deleteWorktree: false);
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Equal([agent.Worktree], hooks.Forgotten);
+        Assert.False(File.Exists(mark));
+    }
+
+    [Fact]
+    public async Task A_refused_removal_leaves_the_hook_state_alone()
+    {
+        var agent = await AgentAsync();
+        _store.RefuseRemove = true;
+        var hooks = new RecordingHookState();
+
+        await new RemoveAgentHandler(
+                new GitRunner(), _mux, _store, folderRetries: [], backoff: TimeSpan.FromMilliseconds(20), hookState: hooks)
+            .HandleAsync("techweb", agent, deleteWorktree: false);
+
+        Assert.Empty(hooks.Forgotten);
+    }
+
+    [Fact]
+    public async Task Stopping_closes_the_record_and_marks_it_closing_before_the_pane_is_killed()
+    {
+        var agent = await AgentAsync();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        _store.Known.Add(agent with { Open = true });
+        var seen = new List<(int Panes, bool Open, bool Closing)>();
+        _store.OnSaved = saved =>
+            seen.Add((_mux.ListPanesAsync().GetAwaiter().GetResult().Count, saved.Open, ClosingMark.Exists(agent.Worktree)));
+
+        await new StopAgentHandler(_mux, _store).HandleAsync("techweb", agent with { Open = true });
+
+        Assert.Equal([(1, false, true)], seen);
+    }
+
+    [Fact]
+    public async Task A_stop_that_cannot_close_the_record_is_logged_and_the_agent_stays_marked_closing()
+    {
+        var agent = await AgentAsync();
+        await _mux.SpawnAsync(new SpawnOptions { Cwd = agent.Worktree });
+        var log = new LoggedLines();
+
+        var result = await new StopAgentHandler(_mux, _store, log: log)
+            .HandleAsync("techweb", agent with { Open = true });
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Contains(log.Lines, l => l.Contains("could not close the record", StringComparison.Ordinal));
+        Assert.True(ClosingMark.Exists(agent.Worktree));
+    }
+
+    [Fact]
+    public async Task Removing_an_agent_marks_it_closing_so_a_late_hook_cannot_bring_its_state_back()
+    {
+        var agent = await AgentAsync();
+
+        await Handler().HandleAsync("techweb", agent, deleteWorktree: false);
+
+        Assert.True(ClosingMark.Exists(agent.Worktree));
     }
 
     [Fact]
@@ -376,6 +468,43 @@ public sealed class RemoveAgentTests : IDisposable
         Assert.Contains("not running", result.Error);
     }
 
+    private sealed class LoggedLines : Fleet.Ports.IFleetLog
+    {
+        public List<string> Lines { get; } = [];
+
+        public void Swallowed(Exception e) => Lines.Add(e.Message);
+
+        public void Write(string line) => Lines.Add(line);
+
+        public IReadOnlyList<string> Tail(int lines) => Lines;
+    }
+
+    [Fact]
+    public async Task A_refused_worktree_removal_puts_back_the_record_as_it_was_stored_not_as_it_was_passed_in()
+    {
+        var agent = await AgentAsync();
+        _store.Known.Add(agent with { Open = true, Status = "working", Summary = "mid-flight", ReportedAt = "2026-11-16T10:00:00Z" });
+        var handler = new RemoveAgentHandler(new RefusingWorktreeRemoval(), _mux, _store, folderRetries: []);
+
+        var result = await handler.HandleAsync("techweb", agent with { Open = true }, deleteWorktree: true);
+
+        Assert.False(result.Succeeded);
+        var saved = Assert.Single(_store.Saved);
+        Assert.False(saved.Open);
+        Assert.Equal("working", saved.Status);
+        Assert.Equal("mid-flight", saved.Summary);
+        Assert.Equal("2026-11-16T10:00:00Z", saved.ReportedAt);
+    }
+
+    private sealed class RefusingWorktreeRemoval : IGitRunner
+    {
+        public Task<GitResult> RunAsync(
+            string workDir, IReadOnlyList<string> args, string? stdin = null, CancellationToken ct = default) =>
+            args is ["worktree", "remove", ..]
+                ? Task.FromResult(new GitResult(1, string.Empty, "fatal: refused"))
+                : new GitRunner().RunAsync(workDir, args, stdin, ct);
+    }
+
     private sealed class RecordingStore : IAgentStore
     {
         public List<string> Removed { get; } = [];
@@ -384,9 +513,17 @@ public sealed class RemoveAgentTests : IDisposable
 
         public bool RefuseRemove { get; set; }
 
-        public void Save(string project, AgentRecord agent) => Saved.Add(agent);
+        public Action<AgentRecord>? OnSaved { get; set; }
 
-        public IReadOnlyList<AgentRecord> List(string project) => [];
+        public void Save(string project, AgentRecord agent)
+        {
+            Saved.Add(agent);
+            OnSaved?.Invoke(agent);
+        }
+
+        public List<AgentRecord> Known { get; } = [];
+
+        public IReadOnlyList<AgentRecord> List(string project) => Known;
 
         public bool Replace(string project, AgentRecord agent)
         {
@@ -395,7 +532,7 @@ public sealed class RemoveAgentTests : IDisposable
         }
 
         public bool Update(string project, string worktree, Func<AgentRecord, AgentRecord> change) =>
-            List(project).FirstOrDefault(a => a.Worktree == worktree) is { } current && Replace(project, change(current));
+            Known.FirstOrDefault(a => a.Worktree == worktree) is { } current && Replace(project, change(current));
 
         public bool Remove(string project, string worktree)
         {

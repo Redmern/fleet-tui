@@ -9,6 +9,7 @@ using Fleet.Platform.Mcp;
 using Fleet.Platform.Logging;
 using Fleet.Platform.Mux;
 using Fleet.Platform.Mux.Constants;
+using Fleet.Platform.Mux.Embedded;
 using Fleet.Platform.Mux.Embedded.Daemon;
 using Fleet.Platform.Mux.Models;
 using Fleet.Features.Files.BrowseFiles;
@@ -128,6 +129,8 @@ public static class Adapters
 
     public static bool AgentsInNvim(string project) => Settings().Load(project).HostsInNvim;
 
+    public static bool StatusHooks(string project) => Settings().Load(project).StatusHooks;
+
     public static string Opens(string project, AgentRecord agent)
     {
         var settings = Settings().Load(project);
@@ -229,6 +232,28 @@ public static class Adapters
     public static int StopPrompt(string note, TextWriter output) => HookIo.Stop(note, output);
 
     public static IAgentStateStore AgentStates() => new FileAgentStateStore();
+
+    public static SessionEnds SessionEnds()
+    {
+        var log = Log();
+        var agents = Agents();
+
+        return new SessionEnds(
+            agents,
+            Projects(),
+            async (project, notice, ct) =>
+            {
+                using var driver = new EmbeddedDriver(Endpoint.Default());
+
+                return await new OwnerNotices(
+                        project.Name, project.Root, new FailSilentDriver(driver, log.Swallowed), agents, log,
+                        () => Settings().Load(project.Name).MainOrchestratorInNvim)
+                    .TypeAsync(notice, ct)
+                    .ConfigureAwait(false);
+            },
+            () => DateTimeOffset.UtcNow,
+            TicketStatus());
+    }
 
     public static IAgentInboxes AgentInboxes() => new StatusFileInboxes(AgentStates());
 

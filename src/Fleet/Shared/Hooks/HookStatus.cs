@@ -11,7 +11,8 @@ public sealed record HookEvent(
     string AgentId = "",
     string NotificationType = "",
     string Source = "",
-    string Inbox = "")
+    string Inbox = "",
+    string Reason = "")
 {
     public bool FromSubagent => AgentId.Length > 0;
 }
@@ -26,6 +27,10 @@ public static class HookStatus
 
     public const string CompactSource = "compact";
 
+    public const string SessionStartEvent = "SessionStart";
+
+    public const string SessionEndEvent = "SessionEnd";
+
     public static IReadOnlyList<string> Events { get; } =
     [
         "UserPromptSubmit",
@@ -37,6 +42,13 @@ public static class HookStatus
         "PermissionRequest",
         "Notification",
     ];
+
+    public static readonly IReadOnlyList<string> ContinuingReasons = ["clear", "resume"];
+
+    public static bool EndsForGood(HookEvent hook) =>
+        hook.Name == SessionEndEvent
+        && !hook.FromSubagent
+        && !ContinuingReasons.Contains(hook.Reason, StringComparer.Ordinal);
 
     public static AgentReport? ReportFor(HookEvent hook, DateTime now)
     {

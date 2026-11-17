@@ -8,6 +8,7 @@ using Fleet.Shared.Constants;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Messaging;
 using Fleet.Shared.Results;
+using Fleet.Shared.Status;
 
 namespace Fleet.Features.Orchestrations.ReportStatus;
 
@@ -19,6 +20,8 @@ public sealed class ReportStatusHandler(
     Func<OwnerNotice, CancellationToken, Task<bool>>? typeToOwner = null,
     string mainHarness = AgentHarness.Claude)
 {
+    public const string SessionEndedSummary = "session ended without a report";
+
     private readonly Func<DateTimeOffset> _now = clock ?? (() => DateTimeOffset.UtcNow);
 
     public Result<string> Handle(
@@ -56,6 +59,58 @@ public sealed class ReportStatusHandler(
         var told = await typeToOwner(notice, ct).ConfigureAwait(false);
 
         return Result<string>.Ok($"{recorded.Value}\n\n{PeerMessage.OwnerTyped(notice.Name, told)}");
+    }
+
+    public async Task<bool> SessionEndedAsync(
+        string project, string root, AgentRecord record, CancellationToken ct = default)
+    {
+        if (ClosingMark.Exists(record.Worktree))
+        {
+            return false;
+        }
+
+        var failedAt = _now().ToString("O", CultureInfo.InvariantCulture);
+        AgentRecord? failed = null;
+
+        var kept = record.Open && store.Update(project, record.Worktree, current =>
+        {
+            if (!current.Open || OrchestrationStatus.Normalize(current.Status) != OrchestrationStatus.Working)
+            {
+                return current;
+            }
+
+            failed = current;
+            return current with
+            {
+                Status = OrchestrationStatus.Failed,
+                Summary = SessionEndedSummary,
+                ReportedAt = failedAt,
+            };
+        });
+
+        if (!kept || failed is null)
+        {
+            return false;
+        }
+
+        var isAgent = !AgentHarness.IsOrchestrator(failed.Harness);
+
+        if (!isAgent && root.Trim().Length > 0)
+        {
+            tickets?.Reported(root, failed.Branch, OrchestrationStatus.Failed, SessionEndedSummary);
+        }
+
+        if ((IsTopLevelSub(failed) && HasNativeMessaging(failed)) || typeToOwner is null)
+        {
+            return true;
+        }
+
+        var slug = isAgent ? $"{failed.Repository}/{failed.Branch}" : failed.Branch;
+        var line = ReportNote.For(slug, OrchestrationStatus.Failed, SessionEndedSummary);
+
+        await typeToOwner(BuildNotice(project, root, failed, line), ct).ConfigureAwait(false);
+
+        return true;
     }
 
     public OwnerNotice? NoticeFor(string project, string root, AgentRecord reporter, string line)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
 using Fleet.Platform.Aidlc;
@@ -18,6 +19,7 @@ using Fleet.Shared.Results;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Enums;
 using Fleet.Shared.Settings.Models;
+using Fleet.Tests.EndToEnd.MixedTeam;
 
 namespace Fleet.Tests.Features.Orchestrations;
 
@@ -400,18 +402,79 @@ public sealed class DispatchTests : IDisposable
     }
 
     [Fact]
-    public async Task In_nvim_the_kickoff_is_left_before_the_spawn_and_marked_unseen_without_waiting_for_ready()
+    public async Task In_nvim_the_kickoff_is_left_before_the_spawn_and_the_reply_says_not_confirmed_when_the_pump_never_marks_it()
     {
+        var clock = new SkippingClock();
         var handler = new DispatchHandler(
-            _mux, _store, new NullHarnessConfig(), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50));
+            _mux, _store, new NullHarnessConfig(), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50), clock: clock);
 
-        var started = DateTime.UtcNow;
-        var reply = await handler.HandleAsync(Command("start work"), "t");
+        var reply = await handler.HandleAsync(Command("start work") with { Within = TimeSpan.FromMinutes(5) }, "t");
 
-        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
         var inbox = Path.Combine(reply.Value!.Folder, ".fleet");
         Assert.Equal("0", File.ReadAllText(Path.Combine(inbox, AgentHarness.InstructionSeenFile)));
         Assert.Equal(AgentHarness.OrchestratorKickoff, File.ReadAllText(Path.Combine(inbox, AgentHarness.AgentInstructionFile)));
+        Assert.Contains(
+            "delivery was not confirmed (fleet stopped waiting for nvim to report it; nvim delivers it once the agent is ready)",
+            reply.Value.Note);
+        Assert.Equal(600, clock.Delays.Count(d => d == TimeSpan.FromMilliseconds(50)));
+    }
+
+    [Fact]
+    public async Task In_nvim_a_dispatch_with_no_deadline_does_not_wait_for_the_pump_and_says_nothing_about_delivery()
+    {
+        var clock = new SkippingClock();
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50), clock: clock);
+
+        var reply = await handler.HandleAsync(Command("start work"), "t");
+
+        Assert.Empty(clock.Delays);
+        Assert.DoesNotContain("not confirmed", reply.Value!.Note);
+    }
+
+    [Fact]
+    public async Task In_nvim_the_reply_says_what_nvim_reported_when_the_pump_could_not_see_the_prompt_arrive()
+    {
+        var clock = new SkippingClock();
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50), clock: clock);
+        clock.Skipped += () =>
+        {
+            foreach (var file in Directory.GetFiles(_root, AgentHarness.AgentInstructionFile, SearchOption.AllDirectories))
+            {
+                var written = new DateTimeOffset(File.GetLastWriteTimeUtc(file)).ToUnixTimeSeconds();
+                File.WriteAllText(
+                    Path.Combine(Path.GetDirectoryName(file)!, AgentHarness.InstructionUnconfirmedFile),
+                    written.ToString(CultureInfo.InvariantCulture));
+            }
+        };
+
+        var reply = await handler.HandleAsync(Command("start work") with { Within = TimeSpan.FromMinutes(5) }, "t");
+
+        Assert.Contains("delivery was not confirmed (nvim typed it twice, could not see it arrive, cleared the line and left it unsubmitted; send it again with tell_agent)", reply.Value!.Note);
+        Assert.Single(clock.Delays);
+    }
+
+    [Fact]
+    public async Task In_nvim_the_reply_says_nothing_about_delivery_once_the_pump_marked_the_kickoff_seen()
+    {
+        var clock = new SkippingClock();
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(50), clock: clock);
+        clock.Skipped += () =>
+        {
+            foreach (var file in Directory.GetFiles(_root, AgentHarness.AgentInstructionFile, SearchOption.AllDirectories))
+            {
+                var written = new DateTimeOffset(File.GetLastWriteTimeUtc(file)).ToUnixTimeSeconds();
+                File.WriteAllText(
+                    Path.Combine(Path.GetDirectoryName(file)!, AgentHarness.InstructionSeenFile),
+                    written.ToString(CultureInfo.InvariantCulture));
+            }
+        };
+
+        var reply = await handler.HandleAsync(Command("start work") with { Within = TimeSpan.FromMinutes(5) }, "t");
+
+        Assert.DoesNotContain("not confirmed", reply.Value!.Note);
     }
 
     [Fact]
@@ -425,7 +488,7 @@ public sealed class DispatchTests : IDisposable
             $"if vim.fn.getftime(readyf)<fleet_boot and age<{AgentHarness.ReadyFallbackSeconds} then return end", boot);
         Assert.True(
             boot.IndexOf("local age=", StringComparison.Ordinal)
-            < boot.IndexOf("pcall(vim.fn.writefile,{tostring(m)},seenf)", StringComparison.Ordinal));
+            < boot.IndexOf("return fleet_send(b,c,prompt", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -653,6 +716,16 @@ public sealed class DispatchTests : IDisposable
         Assert.Equal([AgentHarness.OrchestratorKickoff, "\r"], _mux.SentTo(pane.Id));
     }
 
+    private sealed class SlowSlugNamer(TimeProvider clock, TimeSpan takes) : ISlugNamer
+    {
+        public async Task<string?> NameAsync(string prompt, CancellationToken ct = default)
+        {
+            await Task.Delay(takes, clock, ct);
+
+            return "fix-login";
+        }
+    }
+
     private readonly FakeStarter _starter = new();
 
     private DispatchHandler Direct(AidlcMode mode = AidlcMode.Off, ISlugNamer? namer = null) =>
@@ -667,6 +740,27 @@ public sealed class DispatchTests : IDisposable
     private DispatchCommand ForRepository(
         string prompt, string repository = "backend", string? branch = null, bool research = false) =>
         new("techweb", _root, prompt, "techweb-main", Repository: repository, Branch: branch, Research: research);
+
+    [Fact]
+    public async Task A_direct_dispatch_counts_the_time_it_spends_naming_the_branch_against_the_callers_deadline()
+    {
+        var clock = new SkippingClock();
+        var started = clock.GetUtcNow();
+        var handler = new DispatchHandler(
+            _mux, _store, new NullHarnessConfig(), TimeSpan.Zero, TimeSpan.Zero,
+            namer: new SlowSlugNamer(clock, TimeSpan.FromSeconds(8)),
+            settings: new FakeSettingsStore(SettingsConfig.Default),
+            intents: _intents,
+            starter: _starter,
+            clock: clock);
+
+        var reply = await handler.HandleAsync(
+            ForRepository("fix the login timeout") with { Within = TimeSpan.FromSeconds(50) }, "t");
+
+        Assert.True(reply.Succeeded, reply.Error);
+        Assert.Equal(started + TimeSpan.FromSeconds(50), Assert.Single(_starter.Started).By);
+        Assert.True(clock.GetUtcNow() - started >= TimeSpan.FromSeconds(8));
+    }
 
     [Fact]
     public async Task With_a_repository_it_starts_a_repo_agent_and_no_sub_orchestrator()

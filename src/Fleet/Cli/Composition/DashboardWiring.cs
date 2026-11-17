@@ -459,11 +459,10 @@ public static class DashboardWiring
 
         IReadOnlyList<Pane>? barPanes = null;
         var barPanesAt = DateTime.MinValue;
-        var activity = new PaneActivity(
-            mux,
-            new OwnerNotices(
-                project.Name, project.Root, mux, agents, log,
-                () => settings.Load(project.Name).MainOrchestratorInNvim).WentIdle);
+        var ownerNotices = new OwnerNotices(
+            project.Name, project.Root, mux, agents, log,
+            () => settings.Load(project.Name).MainOrchestratorInNvim, tickets: Adapters.TicketStatus());
+        var activity = ownerNotices.Watch();
         var paneTexts = activity.Texts;
 
         IReadOnlyList<AgentRecord> WithBarState(IReadOnlyList<AgentRecord> records)
@@ -515,8 +514,8 @@ public static class DashboardWiring
         var branches = new ListBranchesHandler(git);
         var fetcher = new FetchRemoteBranchesHandler(git);
         var harnesses = new ChangeHarnessHandler(agents);
-        var stopper = new StopAgentHandler(mux, agents);
-        var remover = new RemoveAgentHandler(git, mux, agents);
+        var stopper = new StopAgentHandler(mux, agents, Adapters.AgentStates(), log);
+        var remover = new RemoveAgentHandler(git, mux, agents, hookState: Adapters.AgentStates());
         var agentRenamer = new RenameAgentHandler(git, agents);
         var subRenamer = new RenameOrchestrationHandler(agents, mux);
         var repoRenamer = new RenameRepositoryHandler();
@@ -565,7 +564,7 @@ public static class DashboardWiring
 
             ClaudeWiring.TrustFolder(agent.Worktree);
 
-            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim, configs: HarnessRegistration.NonClaudeConfigs())
+            var outcome = await new OpenAgentHandler(mux, agents, inNvim, models: loaded.Models, agentsInNvim: loaded.HostsInNvim, configs: HarnessRegistration.NonClaudeConfigs(), statusHooks: loaded.StatusHooks)
                 .HandleAsync(project.Name, agent, project.Root)
                 .ConfigureAwait(false);
 

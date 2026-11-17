@@ -6,11 +6,17 @@ using Fleet.Ports.Mux;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Results;
+using Fleet.Shared.Status;
 
 namespace Fleet.Features.Agents.RemoveAgent;
 
 public sealed class RemoveAgentHandler(
-    IGitRunner git, IMuxDriver mux, IAgentStore store, IReadOnlyList<TimeSpan>? folderRetries = null, TimeSpan? backoff = null)
+    IGitRunner git,
+    IMuxDriver mux,
+    IAgentStore store,
+    IReadOnlyList<TimeSpan>? folderRetries = null,
+    TimeSpan? backoff = null,
+    IAgentStateStore? hookState = null)
 {
     private const int Attempts = 4;
 
@@ -86,13 +92,17 @@ public sealed class RemoveAgentHandler(
         bool deleteWorktree,
         CancellationToken ct = default)
     {
+        var current = store.List(project).FirstOrDefault(a => PathKey.Same(a.Worktree, agent.Worktree)) ?? agent;
+
         if (!store.Remove(project, agent.Worktree))
         {
             return AgentRemoval.Refused(
                 $"{agent.Branch} was not removed: fleet could not update its session file. Try again.");
         }
 
+        ClosingMark.Write(agent.Worktree);
         var unterminated = await StopAsync(agent, ct).ConfigureAwait(false);
+        await AgentTraces.ForgetAsync(hookState, agent.Worktree, ct).ConfigureAwait(false);
 
         if (!deleteWorktree)
         {
@@ -113,7 +123,7 @@ public sealed class RemoveAgentHandler(
             return Removed(unterminated);
         }
 
-        store.Save(project, agent with { Open = false });
+        store.Save(project, current with { Open = false });
 
         return AgentRemoval.Refused(Locked(failure, unterminated));
     }
