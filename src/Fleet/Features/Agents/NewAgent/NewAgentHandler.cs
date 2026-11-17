@@ -31,6 +31,16 @@ public sealed class NewAgentHandler(
     public async Task<Result<AgentRecord>> HandleAsync(
         NewAgentCommand command, CancellationToken ct = default)
     {
+        var started = await StartAsync(command, ct).ConfigureAwait(false);
+
+        return started.Succeeded
+            ? Result<AgentRecord>.Ok(started.Value.Agent)
+            : Result<AgentRecord>.Fail(started.Error!);
+    }
+
+    public async Task<Result<StartedAgent>> StartAsync(
+        NewAgentCommand command, CancellationToken ct = default)
+    {
         var (harness, hostInNvim) = AgentHarness.Hosted(
             command.Harness, command.HostInNvim, settings?.Load(command.ProjectName).HostsInNvim ?? true);
         command = command with { Harness = harness, HostInNvim = hostInNvim };
@@ -60,10 +70,11 @@ public sealed class NewAgentHandler(
             WorktreePlanner.LooksLikeWorktree);
 
         var baseRef = branch;
+        BranchStart start;
 
         if (plan.MustCreate)
         {
-            var resolved = await ResolveBaseRefAsync(plan.Anchor, planned.Value!.Base, ct)
+            var resolved = await ResolveBaseRefAsync(plan.Anchor, planned.Value!.Base, command.ExactBase, ct)
                 .ConfigureAwait(false);
 
             if (!resolved.Succeeded)
@@ -80,7 +91,13 @@ public sealed class NewAgentHandler(
                 return Fail(created.Error!);
             }
 
+            start = created.Value;
+
             await SeedSecretsAsync(command, plan.TargetDirectory, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            start = new BranchStart(await TipAsync(plan.TargetDirectory, "HEAD", ct).ConfigureAwait(false));
         }
 
         var roles = models?.Invoke(command.ProjectName) ?? SettingsDefaults.Models;
@@ -152,7 +169,7 @@ public sealed class NewAgentHandler(
 
         Remember(command);
 
-        return Result<AgentRecord>.Ok(agent);
+        return Result<StartedAgent>.Ok(new StartedAgent(agent, start.ExistingTip, start.Tracks));
     }
 
     private void Remember(NewAgentCommand command)
@@ -218,10 +235,34 @@ public sealed class NewAgentHandler(
             SecretsMirror.Root(projectRoot, command.RepositoryName, head.Out.Trim()), worktree);
     }
 
+    private async Task<Result<string>> ResolveExactBaseAsync(string anchor, string wanted, CancellationToken ct)
+    {
+        var remote = AgentBranch.IsRemote(wanted);
+
+        if (await ExistsAsync(anchor, $"refs/heads/{wanted}", ct).ConfigureAwait(false)
+            || (remote && await ExistsAsync(anchor, $"refs/remotes/{wanted}", ct).ConfigureAwait(false)))
+        {
+            return Result<string>.Ok(wanted);
+        }
+
+        var hint = remote
+            ? " Fetch it first if it is new on origin."
+            : await ExistsAsync(anchor, $"refs/remotes/origin/{wanted}", ct).ConfigureAwait(false)
+                ? $" It is on origin only: pass 'origin/{wanted}'."
+                : string.Empty;
+
+        return Result<string>.Fail($"base '{wanted}' is not a branch in this repository.{hint}");
+    }
+
     private async Task<Result<string>> ResolveBaseRefAsync(
-        string anchor, string requested, CancellationToken ct)
+        string anchor, string requested, bool exact, CancellationToken ct)
     {
         var wanted = requested.Trim();
+
+        if (exact && wanted.Length > 0)
+        {
+            return await ResolveExactBaseAsync(anchor, wanted, ct).ConfigureAwait(false);
+        }
 
         if (AgentBranch.IsRemote(wanted))
         {
@@ -275,24 +316,44 @@ public sealed class NewAgentHandler(
         return Result<string>.Ok(BaseRef.Choose(wanted, hasLocal, hasRemote, ahead));
     }
 
-    private async Task<Result> AddWorktreeAsync(
+    private async Task<Result<BranchStart>> AddWorktreeAsync(
         WorktreePlan plan, string branch, string baseRef, CancellationToken ct)
     {
-        var exists = await ExistsAsync(plan.Anchor, $"refs/heads/{branch}", ct)
-            .ConfigureAwait(false);
+        var local = $"refs/heads/{branch}";
+        var remote = $"origin/{branch}";
+        var start = new BranchStart();
+        string[] args = ["worktree", "add", "--no-track", "-b", branch, plan.TargetDirectory, baseRef];
 
-        string[] args = exists
-            ? ["worktree", "add", plan.TargetDirectory, branch]
-            : ["worktree", "add", "--no-track", "-b", branch, plan.TargetDirectory, baseRef];
+        if (await ExistsAsync(plan.Anchor, local, ct).ConfigureAwait(false))
+        {
+            start = new BranchStart(await TipAsync(plan.Anchor, local, ct).ConfigureAwait(false));
+            args = ["worktree", "add", plan.TargetDirectory, branch];
+        }
+        else if (await ExistsAsync(plan.Anchor, $"refs/remotes/{remote}", ct).ConfigureAwait(false))
+        {
+            start = new BranchStart(
+                await TipAsync(plan.Anchor, $"refs/remotes/{remote}", ct).ConfigureAwait(false), remote);
+            args = ["worktree", "add", "--track", "-b", branch, plan.TargetDirectory, remote];
+        }
 
         var added = await git.RunAsync(plan.Anchor, args, null, ct).ConfigureAwait(false);
 
-        return added.Ok ? Result.Ok() : Result.Fail($"git worktree add: {added.Message}");
+        return added.Ok
+            ? Result<BranchStart>.Ok(start)
+            : Result<BranchStart>.Fail($"git worktree add: {added.Message}");
+    }
+
+    private async Task<string> TipAsync(string directory, string reference, CancellationToken ct)
+    {
+        var tip = await git.RunAsync(directory, ["rev-parse", "--short", reference], null, ct)
+            .ConfigureAwait(false);
+
+        return tip.Ok && tip.Out.Trim().Length > 0 ? tip.Out.Trim() : "an unknown commit";
     }
 
     private async Task<bool> ExistsAsync(string anchor, string reference, CancellationToken ct) =>
         (await git.RunAsync(anchor, ["rev-parse", "--verify", "--quiet", reference], null, ct)
             .ConfigureAwait(false)).Ok;
 
-    private static Result<AgentRecord> Fail(string reason) => Result<AgentRecord>.Fail(reason);
+    private static Result<StartedAgent> Fail(string reason) => Result<StartedAgent>.Fail(reason);
 }
