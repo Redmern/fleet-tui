@@ -203,4 +203,20 @@ public sealed class McpToolsTests
         Assert.Equal(HarnessTool.StopSub, McpTools.Find("stop_sub")!.Tool);
         Assert.Equal(HarnessTool.RemoveSub, McpTools.Find("remove_sub")!.Tool);
     }
+
+    [Fact]
+    public void Open_pr_takes_a_repository_a_branch_a_title_and_a_body_file_and_an_optional_base()
+    {
+        var tool = McpTools.Find("open_pr")!;
+
+        Assert.Equal(HarnessTool.OpenPr, tool.Tool);
+        Assert.Equal(["repository", "branch", "title", "body_file", "base"], tool.Params.Select(p => p.Name));
+        Assert.All(tool.Params, p => Assert.Equal("string", p.Type));
+        Assert.All(tool.Params.Where(p => p.Name != "base"), p => Assert.True(p.Required));
+        Assert.False(tool.Params.Single(p => p.Name == "base").Required);
+        Assert.Contains("default branch", tool.Params.Single(p => p.Name == "base").Description);
+        Assert.Contains("asks the user every time", tool.Description);
+        Assert.Contains("never merges", tool.Description);
+        Assert.Contains(GitGates.PrGuidance, tool.Description);
+    }
 }

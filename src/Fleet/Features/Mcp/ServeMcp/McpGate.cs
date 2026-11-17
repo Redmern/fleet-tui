@@ -17,6 +17,8 @@ public static class McpGate
         HarnessTool.WaitForAgent,
     ];
 
+    private static readonly HashSet<HarnessTool> AlwaysAsked = [HarnessTool.OpenPr];
+
     public static IReadOnlyList<HarnessTool> Gated(HarnessTool tool, McpRequest request) =>
         tool == HarnessTool.Dispatch && ToolArguments.Text(request, ToolArguments.Repository).Length > 0
             ? [HarnessTool.Dispatch, HarnessTool.NewAgent]
@@ -30,6 +32,12 @@ public static class McpGate
         }
 
         var rule = settings.RuleFor(tool);
+
+        if (AlwaysAsked.Contains(tool))
+        {
+            return new GateDecision(
+                rule.Policy == ActionPolicy.Forbid ? ActionPolicy.Forbid : ActionPolicy.Ask, AskChannel.Both);
+        }
 
         if (isSub && rule.Policy == ActionPolicy.Ask && SubAutonomous.Contains(tool))
         {

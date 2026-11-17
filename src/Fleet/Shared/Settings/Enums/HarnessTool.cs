@@ -38,4 +38,5 @@ public enum HarnessTool
     TodoAdd,
     CreateProject,
     SetProfile,
+    OpenPr,
 }

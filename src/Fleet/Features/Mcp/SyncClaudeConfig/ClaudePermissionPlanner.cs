@@ -29,6 +29,13 @@ public static class ClaudePermissionPlanner
             var id = McpServerId.RuleId(tool);
             var rule = settings.RuleFor(tool);
 
+            if (iso && tool == HarnessTool.OpenPr)
+            {
+                deny.Add(id);
+
+                continue;
+            }
+
             switch (rule.Policy)
             {
                 case ActionPolicy.Forbid:

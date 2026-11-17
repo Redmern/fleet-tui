@@ -31,11 +31,16 @@ public class SettingsTests
     }
 
     [Fact]
-    public void Every_tool_but_removing_a_repository_is_allowed_by_default()
+    public void Every_tool_but_removing_a_repository_and_opening_a_pull_request_is_allowed_by_default()
     {
         foreach (var tool in HarnessToolIds.All)
         {
-            var expected = tool == HarnessTool.RemoveRepository ? ActionPolicy.Forbid : ActionPolicy.Allow;
+            var expected = tool switch
+            {
+                HarnessTool.RemoveRepository => ActionPolicy.Forbid,
+                HarnessTool.OpenPr => ActionPolicy.Ask,
+                _ => ActionPolicy.Allow,
+            };
 
             Assert.Equal(expected, SettingsDefaults.RuleFor(tool).Policy);
             Assert.Equal(AskChannel.Both, SettingsDefaults.RuleFor(tool).Channel);

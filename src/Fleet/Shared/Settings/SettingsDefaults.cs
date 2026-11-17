@@ -103,10 +103,15 @@ public static class SettingsDefaults
         HarnessTool.TodoAdd,
         HarnessTool.CreateProject,
         HarnessTool.SetProfile,
+        HarnessTool.OpenPr,
     ];
 
-    public static ToolRule RuleFor(HarnessTool tool) =>
-        tool == HarnessTool.RemoveRepository ? new ToolRule(ActionPolicy.Forbid, AskChannel.Both) : ToolRule.Allow;
+    public static ToolRule RuleFor(HarnessTool tool) => tool switch
+    {
+        HarnessTool.RemoveRepository => new ToolRule(ActionPolicy.Forbid, AskChannel.Both),
+        HarnessTool.OpenPr => new ToolRule(ActionPolicy.Ask, AskChannel.Both),
+        _ => ToolRule.Allow,
+    };
 
     public static bool ServedByProjectMcp(HarnessTool tool) =>
         tool is not (HarnessTool.DeleteWorktree or HarnessTool.CreateProject);
@@ -148,6 +153,7 @@ public static class SettingsDefaults
         HarnessTool.TodoAdd => "Add a todo ticket",
         HarnessTool.CreateProject => "Create a project",
         HarnessTool.SetProfile => "Change an orchestration's profile",
+        HarnessTool.OpenPr => "Push a branch and open a pull request",
         _ => tool.ToString(),
     };
 }

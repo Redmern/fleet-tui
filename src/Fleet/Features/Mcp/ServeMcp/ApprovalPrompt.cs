@@ -11,7 +11,7 @@ public static class ApprovalPrompt
     {
         var who = caller.Trim().Length == 0 ? "the main orchestrator" : SafeText.Clean(caller, 60);
 
-        var target = Target(request);
+        var target = tool == HarnessTool.OpenPr ? PullRequest(request) : Target(request);
         var message = SafeText.Clean(request.Value(ToolArguments.Message));
 
         if (tool == HarnessTool.Dispatch && message.Length > 0 && target != message)
@@ -25,6 +25,20 @@ public static class ApprovalPrompt
             ? $"{who} wants to: {action}"
             : $"{who} wants to: {action} — {target}";
     }
+
+    private static string PullRequest(McpRequest request)
+    {
+        var repository = SafeText.Clean(request.Value(ToolArguments.Repository), 60);
+        var branch = SafeText.Clean(request.Value(ToolArguments.Branch), 60);
+        var @base = SafeText.Clean(request.Value(ToolArguments.Base), 60);
+        var title = SafeText.Clean(request.Value(ToolArguments.Title));
+        var body = SafeText.Clean(request.Value(ToolArguments.BodyFile));
+
+        return $"repository {repository}, branch {branch}, base {(@base.Length == 0 ? DefaultBase : @base)}, "
+            + $"title \"{title}\", text from {body}";
+    }
+
+    public const string DefaultBase = "the default branch";
 
     private static string Target(McpRequest request)
     {

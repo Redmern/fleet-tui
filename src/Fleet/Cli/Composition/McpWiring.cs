@@ -1,6 +1,9 @@
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Mcp.ServeMcp.Models;
+using Fleet.Platform.Forge;
 using Fleet.Platform.Mcp;
+using Fleet.Platform.Storage;
+using Fleet.Ports.Forge;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Projects.Models;
 using Fleet.Shared.Constants;
@@ -29,7 +32,9 @@ public static class McpWiring
             Adapters.SlugNamer(),
             TimeProvider.System,
             ClaudeWiring.TrustFolder,
-            log);
+            log,
+            ForgeProbe(),
+            Processes());
 
         var harnesses = new CallerHarnesses(project.Name, caller, Adapters.Agents());
 
@@ -50,6 +55,11 @@ public static class McpWiring
 
         return 0;
     }
+
+    public static IForgeProbe ForgeProbe() =>
+        new CachedForgeProbe(new HttpForgeProbe(), () => FleetPaths.ForgeCacheFile);
+
+    public static IProcessRunner Processes() => new ProcessRunner();
 
     public static Func<TimeSpan?> ApprovalTimeout(CallerHarnesses harnesses) =>
         () => ApprovalDeadline.For(

@@ -44,6 +44,7 @@ public static class HarnessToolIds
         HarnessTool.TodoAdd => "todo_add",
         HarnessTool.CreateProject => "create_project",
         HarnessTool.SetProfile => "set_profile",
+        HarnessTool.OpenPr => "open_pr",
         _ => string.Empty,
     };
 

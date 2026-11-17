@@ -366,4 +366,31 @@ public sealed class McpHelpersTests
 
         Assert.EndsWith("— upgrade", prompt);
     }
+
+    [Fact]
+    public void The_prompt_for_a_pull_request_shows_repository_branch_base_title_and_the_file_the_text_comes_from()
+    {
+        var prompt = ApprovalPrompt.For(
+            HarnessTool.OpenPr,
+            Request(
+                "open_pr", ("repository", "backend"), ("branch", "feat/login"), ("base", "develop"),
+                ("title", "feat: log in\nwith a passkey"), ("body_file", "/tmp/pr.md")),
+            caller: "backend/feat/login");
+
+        Assert.Equal(
+            "backend/feat/login wants to: Push a branch and open a pull request — repository backend, "
+            + "branch feat/login, base develop, title \"feat: log in with a passkey\", text from /tmp/pr.md",
+            prompt);
+    }
+
+    [Fact]
+    public void A_pull_request_without_a_base_says_it_goes_into_the_default_branch()
+    {
+        var prompt = ApprovalPrompt.For(
+            HarnessTool.OpenPr,
+            Request("open_pr", ("repository", "backend"), ("branch", "feat/login"), ("title", "t")),
+            caller: "");
+
+        Assert.Contains("base the default branch,", prompt);
+    }
 }

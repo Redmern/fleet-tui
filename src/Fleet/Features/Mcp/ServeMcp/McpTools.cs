@@ -190,6 +190,25 @@ public static class McpTools
                 "The new profile: " + string.Join(", ", ProfileCatalog.All.Select(p => Words.Of(p))) + ".",
                 true)),
         Spec(
+            HarnessTool.OpenPr,
+            "Push a branch and open a pull request for it on the repository's forge (GitHub, Forgejo or Gitea), "
+            + "and return the pull request's URL. fleet asks the user every time before it pushes, and never "
+            + "merges. " + GitGates.PrGuidance,
+            Repository,
+            new ToolParam(ToolArguments.Branch, "string", "The local branch to push and open the pull request from.", true),
+            new ToolParam(ToolArguments.Title, "string", "The pull request's title, one line.", true),
+            new ToolParam(
+                ToolArguments.BodyFile,
+                "string",
+                "The path of the file holding the pull request's text (markdown), inside the project folder; "
+                + "absolute, or relative to the branch's worktree.",
+                true),
+            new ToolParam(
+                ToolArguments.Base,
+                "string",
+                "Optional: the branch the pull request merges into; defaults to the repository's default branch.",
+                false)),
+        Spec(
             HarnessTool.ListSubs,
             "List every sub-orchestrator in this project with its status, last report and agents."),
         Spec(
