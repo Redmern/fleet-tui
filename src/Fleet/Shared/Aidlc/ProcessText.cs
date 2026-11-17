@@ -8,6 +8,10 @@ public static class ProcessText
 {
     public const string ApprovalMark = "the user approves";
 
+    private const string FetchFirst =
+        "Run `git fetch` first, and use `origin/<default>` (or the unit's recorded base) as the base for "
+        + "reading and diffing, never local `<default>`, which can be stale.";
+
     public static string Render(EffectivePlan plan, string? extra = null)
     {
         var text = new StringBuilder();
@@ -86,7 +90,8 @@ public static class ProcessText
         Stage.Discover =>
             "read the repositories the task touches (list_repositories, each repository's CLAUDE.md and docs) "
             + "and write discover.md: which repositories are involved, how each is built and tested, and the "
-            + "files that matter.",
+            + "files that matter. "
+            + FetchFirst,
         Stage.Specify => Specify(plan.Profile),
         Stage.Plan => Plan(plan.Profile),
         Stage.Build => Build(plan),
@@ -100,7 +105,8 @@ public static class ProcessText
             + "correctness bugs, new code where existing code could be reused, files changed outside what the "
             + "unit owns, tests that would pass without the change, and the repository's own rules. Write "
             + "reviews/<unit>-<round>.md and send the findings back with tell_agent. After two rejected rounds, "
-            + "stop and ask the user.",
+            + "stop and ask the user. "
+            + FetchFirst,
         Stage.Deliver => Deliver(plan.Profile),
         Stage.Learn =>
             "write learnings.md: the corrections, surprises and rules worth keeping from this task, as a list. "
@@ -144,7 +150,8 @@ public static class ProcessText
             + "coherent PR, each with id, title, repository, branch, dependsOn, acceptance (AC ids), owns "
             + "(file globs), verify (the command that proves it) and skeleton. Every acceptance criterion "
             + "belongs to at least one unit; units that can run at the same time must not own the same "
-            + "files. Include the test strategy and the verify command for each repository.";
+            + "files. Include the test strategy and the verify command for each repository. "
+            + FetchFirst;
 
         return profile == Profile.Refactor
             ? plan + " Behaviour must not change: say how the tests will show that."
@@ -163,7 +170,8 @@ public static class ProcessText
             "Give each agent a self-contained brief: the goal, its acceptance criteria word for word, the "
             + "files it owns, what is not its job, and the definition of done (tests first, small conventional "
             + "commits, report done). Keep progress/<unit>.md with interpretations, deviations, trade-offs and "
-            + "open questions.");
+            + "open questions. "
+            + FetchFirst);
 
         if (plan.Profile == Profile.Bugfix)
         {

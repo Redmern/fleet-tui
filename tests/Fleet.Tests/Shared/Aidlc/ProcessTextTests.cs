@@ -145,4 +145,44 @@ public class ProcessTextTests
         Assert.Null(ProcessText.Skill(Stage.Plan, Profile.Feature));
         Assert.Null(ProcessText.Skill(Stage.Verify, Profile.Feature));
     }
+
+    private static string StageLine(string text, string stage)
+    {
+        var start = text.IndexOf($"**{stage}**", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"no {stage} stage in the text");
+
+        var next = text.IndexOf("\n", start, StringComparison.Ordinal);
+
+        return text[start..(next < 0 ? text.Length : next)];
+    }
+
+    [Theory]
+    [InlineData(Profile.Feature, "Discover")]
+    [InlineData(Profile.Feature, "Plan")]
+    [InlineData(Profile.Feature, "Build")]
+    [InlineData(Profile.Feature, "Review")]
+    [InlineData(Profile.Bugfix, "Discover")]
+    [InlineData(Profile.Bugfix, "Build")]
+    [InlineData(Profile.Bugfix, "Review")]
+    [InlineData(Profile.Express, "Build")]
+    public void A_stage_that_reads_or_diffs_code_says_to_fetch_and_use_origin_never_local_default(
+        Profile profile, string stage)
+    {
+        var line = StageLine(Render(profile), stage);
+
+        Assert.Contains("`git fetch`", line);
+        Assert.Contains("`origin/<default>`", line);
+        Assert.Contains("the unit's recorded base", line);
+        Assert.Contains("never local `<default>`", line);
+    }
+
+    [Fact]
+    public void Stages_that_do_not_read_or_diff_code_carry_no_fetch_text()
+    {
+        var text = Render(Profile.Feature);
+
+        Assert.DoesNotContain("git fetch", StageLine(text, "Specify"));
+        Assert.DoesNotContain("git fetch", StageLine(text, "Deliver"));
+        Assert.DoesNotContain("git fetch", StageLine(text, "Learn"));
+    }
 }
