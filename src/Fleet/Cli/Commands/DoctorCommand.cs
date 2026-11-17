@@ -75,6 +75,11 @@ public static class DoctorCommand
             Console.WriteLine($"  harness       {line}");
         }
 
+        foreach (var line in IncludeCheck.Lines(IncludeWiring.Facts([.. Adapters.HarnessesInUse().Keys])))
+        {
+            Console.WriteLine(line);
+        }
+
         var nvim = SetupHandler.Nvim(Adapters.InspectNvim(install: false));
         Console.WriteLine($"  nvim config   {(nvim.Ok ? string.Empty : "! ")}{nvim.Detail}");
         Console.WriteLine(
