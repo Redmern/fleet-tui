@@ -6,4 +6,5 @@ public sealed record AgentStart(
     string Branch,
     string Task,
     string Harness = "",
-    DateTimeOffset? By = null);
+    DateTimeOffset? By = null,
+    string Base = "");

@@ -43,6 +43,19 @@ public sealed class McpToolsTests
         }
     }
 
+    [Theory]
+    [InlineData("new_agent")]
+    [InlineData("dispatch")]
+    public void The_tools_that_start_a_repository_agent_take_an_optional_base(string tool)
+    {
+        var @base = McpTools.Find(tool)!.Params.Single(p => p.Name == "base");
+
+        Assert.False(@base.Required);
+        Assert.Equal("string", @base.Type);
+        Assert.Contains("origin/", @base.Description);
+        Assert.Contains("default branch", @base.Description);
+    }
+
     [Fact]
     public void No_tool_is_exposed_twice()
     {
