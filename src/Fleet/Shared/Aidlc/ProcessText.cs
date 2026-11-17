@@ -105,7 +105,9 @@ public static class ProcessText
             + "correctness bugs, new code where existing code could be reused, files changed outside what the "
             + "unit owns, tests that would pass without the change, and the repository's own rules. Write "
             + "reviews/<unit>-<round>.md and send the findings back with tell_agent. After two rejected rounds, "
-            + "stop and ask the user. "
+            + "stop and ask the user. When there is more than one unit, also review the combined stack (all "
+            + "units merged in dependency order) before Deliver, in addition to the per-unit reviews: it finds "
+            + "the defects that only show when the units meet. "
             + FetchFirst,
         Stage.Deliver => Deliver(plan.Profile),
         Stage.Learn =>

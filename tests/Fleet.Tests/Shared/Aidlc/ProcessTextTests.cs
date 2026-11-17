@@ -219,4 +219,20 @@ public class ProcessTextTests
         Assert.Contains("who writes the `RELEASE_NOTES.md` entry", line);
         Assert.Contains("record the answer in design.md", line);
     }
+
+    [Theory]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Refactor)]
+    [InlineData(Profile.Bugfix)]
+    [InlineData(Profile.Express)]
+    public void Review_requires_a_review_of_the_combined_stack_in_dependency_order_before_deliver(Profile profile)
+    {
+        var line = StageLine(Render(profile), "Review");
+
+        Assert.Contains("review each unit's actual diff", line);
+        Assert.Contains("combined stack", line);
+        Assert.Contains("all units merged in dependency order", line);
+        Assert.Contains("before Deliver", line);
+        Assert.Contains("in addition to the per-unit reviews", line);
+    }
 }
