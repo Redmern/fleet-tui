@@ -163,7 +163,9 @@ public static class ProcessText
         var text = new StringBuilder(
             plan.For(Stage.Plan) is { Runs: true }
                 ? "start one agent per unit with new_agent, in dependency order (independent units may run in "
-                  + "parallel). "
+                  + "parallel). For a unit that depends on another unit that is not merged yet, pass "
+                  + "`base: <parent unit's branch>` to new_agent, so its branch starts from the parent's work; "
+                  + "without `base` the branch starts from the repository default. "
                 : "start an agent with new_agent for the change, usually one repository and one branch. ");
 
         text.Append(
