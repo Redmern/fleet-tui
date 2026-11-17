@@ -56,6 +56,7 @@ using Fleet.Ports.Requests;
 using Fleet.Ports.Settings;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Evidence;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Keymap;
 using Fleet.Shared.Keymap.Enums;
@@ -90,7 +91,7 @@ public static class DashboardWiring
     ];
 
     private static Func<AgentRecord, BranchState> Peeked(BranchStates states) =>
-        agent => states.Peek(agent.Worktree, agent.BaseRef);
+        agent => states.Peek(agent.Worktree, agent.BaseRef, ReportDrift.HeadToCheck(agent.Status, agent.Evidence));
 
     private static AgentRecord? At(ListAgentsHandler lister, string project, int tab, int index)
     {
@@ -1437,7 +1438,7 @@ public static class DashboardWiring
                 return outcome.Succeeded ? null : outcome.Error;
             },
 
-            AgentState: agent => states.For(agent.Worktree, agent.BaseRef),
+            AgentState: agent => states.For(agent.Worktree, agent.BaseRef, ReportDrift.HeadToCheck(agent.Status, agent.Evidence)),
 
             RepositoryState: repository => states.Peek(
                 RepositoryWorktree.For(

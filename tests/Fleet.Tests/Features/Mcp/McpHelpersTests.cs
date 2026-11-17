@@ -284,6 +284,37 @@ public sealed class McpHelpersTests
         Assert.Contains("verify output (last lines):\nFailed: 1", text);
     }
 
+    // AC-17
+    [Fact]
+    public void Agent_status_flags_the_commits_after_the_done_report_on_its_first_line()
+    {
+        var agent = Agent("backend", "login") with { Status = "done", Evidence = Evidence(exit: 0) };
+
+        var text = ToolText.Agent(agent, new BranchState(3, 0, false, new Fleet.Shared.Evidence.ReportDrift(2, false)));
+        var rewritten = ToolText.Agent(agent, new BranchState(3, 0, false, Fleet.Shared.Evidence.ReportDrift.HistoryRewritten));
+
+        Assert.StartsWith("backend/login: open, base origin/main: 3 ahead; 2 commits after report\n", text);
+        Assert.StartsWith("backend/login: open, base origin/main: 3 ahead; history rewritten since report\n", rewritten);
+        Assert.DoesNotContain("after report", ToolText.Agent(agent, new BranchState(3, 0, false)));
+    }
+
+    [Fact]
+    public void Listing_agents_flags_the_commits_after_the_done_report_per_agent()
+    {
+        var agents = new[]
+        {
+            Agent("backend", "moved") with { Status = "done", Evidence = Evidence(exit: 0) },
+            Agent("backend", "still") with { Status = "done", Evidence = Evidence(exit: 0) },
+        };
+
+        var lines = ToolText.Agents(
+                agents, a => a.Branch == "moved" ? new Fleet.Shared.Evidence.ReportDrift(1, false) : null)
+            .Split('\n');
+
+        Assert.Equal("backend/moved — claude, open [done], HEAD 2222222, verify ok, 1 commit after report", lines[0]);
+        Assert.Equal("backend/still — claude, open [done], HEAD 2222222, verify ok", lines[1]);
+    }
+
     [Fact]
     public void Agent_status_for_a_clean_verified_report_says_so()
     {

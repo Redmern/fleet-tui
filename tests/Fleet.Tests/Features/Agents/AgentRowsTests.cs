@@ -145,4 +145,28 @@ public class AgentRowsTests
 
         Assert.Equal([Fleet.Ui.FleetHiddenMark.Visible], rows[0].Trailing!);
     }
+
+    // AC-17
+    [Fact]
+    public void A_done_agent_with_commits_after_its_report_is_flagged_in_its_row()
+    {
+        var agent = Agent("backend", "a") with { Status = "done", Evidence = Evidence(exit: 0) };
+
+        var spans = AgentRows.For([agent], _ => new Fleet.Shared.BranchState(1, 0, false, new ReportDrift(3, false)))[0].Spans;
+
+        Assert.Contains(spans, s => s.Text.Trim() == "3 commits after report" && s.Tone == FleetTones.Warn);
+    }
+
+    [Fact]
+    public void A_rewritten_history_is_flagged_plainly_and_no_drift_shows_nothing()
+    {
+        var agent = Agent("backend", "a") with { Status = "done", Evidence = Evidence(exit: 0) };
+
+        var rewritten = AgentRows.For([agent], _ => new Fleet.Shared.BranchState(0, 0, false, ReportDrift.HistoryRewritten))[0];
+        var level = AgentRows.For([agent], _ => new Fleet.Shared.BranchState(0, 0, false))[0];
+
+        Assert.Contains(rewritten.Spans, s => s.Text.Trim() == "history rewritten since report" && s.Tone == FleetTones.Warn);
+        Assert.DoesNotContain("after report", level.Text);
+        Assert.DoesNotContain("rewritten", level.Text);
+    }
 }

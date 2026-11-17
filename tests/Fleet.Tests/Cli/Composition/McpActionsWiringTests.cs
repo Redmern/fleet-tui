@@ -675,6 +675,47 @@ public sealed class McpActionsWiringTests : IDisposable
         NothingLeftTheSandbox();
     }
 
+    // AC-17
+    [Fact]
+    public async Task Commits_after_a_done_report_show_in_agent_status_and_list_agents_and_a_rewrite_says_so()
+    {
+        var (container, _) = await RepositoryWithOriginAsync("api");
+        var git = new Fleet.Platform.Git.GitRunner();
+        var agent = await _team.StartClaudeWorkerAsync(string.Empty, "api", container, "feat/a");
+
+        async Task CommitAsync(params string[] args)
+        {
+            var done = await git.RunAsync(agent.Worktree, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", .. args]);
+            Assert.True(done.Ok, done.Message);
+        }
+
+        await CommitAsync("--allow-empty", "-m", "work");
+        var reported = await _team.CallAsync(
+            McpCaller.ForAgent("api", "feat/a"), HarnessTool.Report, ("status", "done"), ("verify_exit_code", "0"));
+        Assert.False(reported.IsError, reported.Text);
+
+        var level = await _team.CallAsync(string.Empty, HarnessTool.AgentStatus, ("repository", "api"), ("branch", "feat/a"));
+        Assert.DoesNotContain("after report", level.Text);
+
+        await CommitAsync("--allow-empty", "-m", "late 1");
+        await CommitAsync("--allow-empty", "-m", "late 2");
+
+        var status = await _team.CallAsync(string.Empty, HarnessTool.AgentStatus, ("repository", "api"), ("branch", "feat/a"));
+        var listed = await _team.CallAsync(string.Empty, HarnessTool.ListAgents);
+
+        Assert.Contains("; 2 commits after report", status.Text);
+        Assert.Contains("verify ok, 2 commits after report", listed.Text);
+
+        Assert.True((await git.RunAsync(agent.Worktree, ["reset", "--hard", "HEAD~3"])).Ok);
+        await CommitAsync("--allow-empty", "-m", "redone");
+
+        var rewritten = await _team.CallAsync(string.Empty, HarnessTool.ListAgents);
+
+        Assert.Contains("history rewritten since report", rewritten.Text);
+
+        NothingLeftTheSandbox();
+    }
+
     // A branch one commit ahead of main, made without a worktree. Returns its SHA.
     private static async Task<string> BranchAheadOfMainAsync(string container, string branch)
     {
