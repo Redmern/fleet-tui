@@ -4975,6 +4975,29 @@ appends one compact JSON object per audit line. Then it renders CLAUDE.md's
 `progress/<unit>.md`, `reviews/<unit>-<round>.md`, `learnings.md`), and which stages wait
 for the user.
 
+**Opening a pull request (`open_pr`).** One tool replaces the old `gh pr create` guidance
+in the Deliver text, the `fl-pr` skill and `GitGates.PrGuidance`. `McpGate.Decide` forces
+`Ask` on the fleet channel for it whatever the settings say (only `Forbid` is kept, and a
+sub-orchestrator is asked too), so `McpDispatcher` raises the approval popup on every call;
+`ApprovalPrompt` shows repository, branch, base and title. The slice is
+`Features/Repositories/OpenPr`: `PushRemote` reads `git remote get-url --push` of `origin`
+(or the repository's `pushRemote`) and refuses an empty or `DISABLED` URL; `ForgeDecision`
+takes the per-repository `forge` override, then a `github.com` host, then `IForgeProbe`,
+and otherwise fails naming `repositories.<name>.forge`; `OpenPrHandler` pushes the plain
+branch first (AGit refs do not reach a mirror), then runs `gh pr create --repo <owner/name>
+--body-file` through `IProcessRunner`, or the AGit push (`AgitPush`: `topic`, `title`,
+`description`, the `{base64}` form for a multi-line text), and `PrUrl` reads the URL from
+the output; without one the result says so and invents nothing. `HttpForgeProbe` does an
+unauthenticated `GET /api/v1/version` with a 4 s limit: a 200 with a `version`, or the 401/403
+"Only signed in user is allowed to call APIs." answer of a sign-in-only Forgejo or Gitea,
+counts as one; a 404 or another 200 is "not a forge", and anything else (a redirect, a 5xx,
+no answer) is "unreachable". `CachedForgeProbe` keeps the first two per host in `forges.json`
+and never remembers "unreachable". Before the first push the handler has refused: a branch,
+base or remote that git could read as an option or a refspec, a body file outside the project
+folder (also through a link) or over the size a push option carries, a remote with several
+push URLs, and a missing `gh`. Each `git push` and `gh` call has a two-minute limit. The override lives in
+`SettingsConfig.Repositories` (`RepositorySettings`), stored in the project's settings file.
+
 **Changing the profile (`set_profile`).** Only a sub-orchestrator can call it; the caller
 is matched to its orchestrator record, and an agent or the main orchestrator is refused.
 An unknown name is refused with the list from `ProfileCatalog.All`. The handler
@@ -6611,7 +6634,8 @@ What the phases add up to:
   clients (off `IsoFilter`'s list), `SshSyncEgress` (which reads the same `IIsoMode`; the
   release's separate `machine.json` flag is gone, so `iso.json` is the one machine switch, and
   the per-project `Iso` setting still blocks sync for that project alone), the update check and release list, `FinishAgentHandler`'s
-  push, and the agent permission plan (push and merge forced to deny, `gh pr create` denied).
+  push, and the agent permission plan (push and merge forced to deny, `gh pr create` and the
+  `open_pr` tool denied; `open_pr` itself also refuses with the ISO text).
 - **Viewer forwards are served.** `viewer-forward` and `viewer-unforward` are on
   `IsoFilter`'s list (a user decision, pinned by `IsoDaemonTests`): **Open port** keeps
   working for a machine viewing an ISO machine. They carry a port number only, but a bridged
