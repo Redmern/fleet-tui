@@ -4,6 +4,11 @@ public static class PullOutcome
 {
     public const string AlreadyCurrent = "already up to date";
 
+    public static string Short(string sha) => sha.Length > 7 ? sha[..7] : sha;
+
+    public static string Commits(string count) =>
+        int.TryParse(count, out var n) && n > 0 ? $" ({n} commit{(n == 1 ? string.Empty : "s")})" : string.Empty;
+
     public static string Summarise(string output)
     {
         var text = output.Trim();
