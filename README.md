@@ -1074,10 +1074,27 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
   project folder, where the main orchestrator runs. A Claude top-level sub-orchestrator
   does not; see [The orchestrator](#the-orchestrator).
 - *Idle is a quiet pane.* A harness without hooks is `idle` in `list_agents` and on the
-  dashboard when its pane text has not changed for 120 seconds and it has not reported
-  `done` or `failed`. The running dashboard sends its owner a `[fleet] ...: idle` notice
-  the same way, once, when it sees the change. A top-level sub-orchestrator's idle notice
-  is not sent to the main orchestrator.
+  dashboard when its pane text has not changed for the idle window (120 seconds by
+  default) and it has not reported `done` or `failed`. The running dashboard sends its
+  owner a `[fleet] ...: idle` notice the same way, once, when it sees the change; the
+  notice names the window. A top-level sub-orchestrator's idle notice is not sent to the
+  main orchestrator.
+- *The idle window* is one setting for the whole machine. Put
+  `{"version":1,"idleWindowSeconds":300}` in `idle.json` in the fleet config folder; the
+  dashboard and `list_agents` read it on their next check, `wait_for_agent` on its next call. There is no
+  menu row for it. A harness profile can carry its own default window, which applies
+  only when you have not set one; no built-in profile does.
+- *What "not changed" ignores.* Before fleet compares the pane text it masks clocks
+  (`14:08`, `2:08 PM`), elapsed timers (`12s`, `10h`, `49m`, `1m30s`), token and cost
+  counters (`1.2k tokens`, `↑12 ↓340`, `$0.42`), spinner glyphs (braille and `| / - \` at
+  the start of a line) and opencode's progress bar, and drops a line with
+  `esc to interrupt`. Only the changing part of a line is masked, so a status bar that
+  also shows the model still counts when the model changes. A pane that shows nothing but
+  a running clock, countdown or spinner therefore goes idle after the window.
+- *A resize that only re-wraps the text* does not restart the idle window: fleet also
+  removes border lines, the border at the edge of a line and all whitespace before it
+  compares. Any other resize (text cut off, lines scrolled away, a sidebar, a lower pane)
+  restarts the window once, so idle can come late but not early.
 - *`wait_for_agent(repository, branch, timeout)`* returns when an agent reports `done` or
   `failed`, goes idle, or the timeout runs out (45 seconds by default, at most the calling
   harness's cap; call it again).
@@ -1112,10 +1129,13 @@ dashboard do not show it yet, and the agent then starts without the fleet tools.
 - fleet passes no model, effort or session name to opencode, codex or pi: each uses its
   own defaults, whatever fleet's model settings say. A start-up prompt of
   the harness itself (login, update notice) can swallow the typed task.
-- Idle is read from the pane text only: a pane whose text has not changed for 120 seconds
-  is idle. The 120 seconds are fixed, not a setting. A harness that redraws a clock,
-  spinner or cursor while it waits keeps changing the text, so it reads as working and
-  never goes idle. This was tested with fake panes only.
+- Idle is read from the pane text only. A counter fleet does not know (a percentage, a
+  bare number) still reads as output and restarts the idle window. A harness that shows
+  only a spinner or timer for longer than the window (a long test run, long thinking)
+  reads as idle; raise the window if that happens. A resize that is more than a re-wrap
+  restarts the window once, because fleet does not know the pane size. The check was
+  tested on recorded screens of claude, pi and opencode; codex was not logged in when
+  they were recorded, so codex has only the common patterns and no recorded screen.
 - `wait_for_agent` holds one MCP call open for 45 seconds by default. A longer timeout is
   clamped to the caller's cap, and the result says so: 55 seconds for codex, pi and
   opencode (they abort a tool call at 60 seconds by default), 300 seconds for Claude. A

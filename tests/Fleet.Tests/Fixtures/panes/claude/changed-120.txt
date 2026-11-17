@@ -1,0 +1,36 @@
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Model · Plan
+ ▝▝   ▝▝   /work/demo
+
+
+❯ Reply with the single word ok
+
+● ok
+
+✻ Sautéed for 1s · done 2:08 PM
+
+❯ Run the bash command sleep 30 and then reply with the single word ok
+
+  Ran 2 shell commands
+
+● Foreground sleep blocked. sleep 30 now run in background. Reply come when done.
+
+✻ Brewed for 5s · done 2:12 PM
+
+● Background command "Wait 30 seconds in background" completed (exit code 0)
+
+● ok
+
+✻ Crunched for 1s · done 2:13 PM
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 3 agents

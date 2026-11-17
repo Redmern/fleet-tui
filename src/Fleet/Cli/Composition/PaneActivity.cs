@@ -5,16 +5,21 @@ using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Mux.Models;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Harness;
+using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Status;
 using Fleet.Shared.Status.Models;
 
 namespace Fleet.Cli.Composition;
 
 public sealed class PaneActivity(
     IMuxDriver mux,
-    Action<AgentRecord>? wentIdle = null,
+    Action<AgentRecord, TimeSpan>? wentIdle = null,
     TimeProvider? clock = null,
     Action<AgentRecord>? lost = null,
-    Func<IReadOnlyList<Pane>, bool>? listingIsWhole = null)
+    Func<IReadOnlyList<Pane>, bool>? listingIsWhole = null,
+    Func<SettingsConfig>? settings = null,
+    Func<string, HarnessProfile?>? profiles = null)
 {
     private const int AtOnce = 6;
 
@@ -39,11 +44,14 @@ public sealed class PaneActivity(
     {
         var live = new AgentRecord[agents.Count];
         var countable = listingIsWhole?.Invoke(panes) ?? panes.Count > 0;
+        var config = agents.Any(AgentActivity.WatchedByPane) && settings is not null
+            ? settings()
+            : SettingsConfig.Default;
 
         Parallel.ForEachAsync(
                 Enumerable.Range(0, agents.Count),
                 new ParallelOptions { MaxDegreeOfParallelism = AtOnce },
-                async (i, ct) => live[i] = await WithActivityAsync(agents[i], panes, hooked, countable, ct).ConfigureAwait(false))
+                async (i, ct) => live[i] = await WithActivityAsync(agents[i], panes, hooked, countable, config, ct).ConfigureAwait(false))
             .GetAwaiter()
             .GetResult();
 
@@ -51,7 +59,8 @@ public sealed class PaneActivity(
     }
 
     private async Task<AgentRecord> WithActivityAsync(
-        AgentRecord agent, IReadOnlyList<Pane> panes, Func<AgentRecord, AgentReport?> hooked, bool countable, CancellationToken ct)
+        AgentRecord agent, IReadOnlyList<Pane> panes, Func<AgentRecord, AgentReport?> hooked, bool countable,
+        SettingsConfig config, CancellationToken ct)
     {
         var orchestrator = AgentHarness.IsOrchestrator(agent.Harness);
 
@@ -88,7 +97,7 @@ public sealed class PaneActivity(
 
         var text = await mux.GetTextAsync(pane.Id, ct).ConfigureAwait(false);
         _texts[agent.Worktree] = text;
-        var live = AgentActivity.WatchedByPane(agent) ? Quiet(agent, text) : AgentActivity.Classify(text);
+        var live = AgentActivity.WatchedByPane(agent) ? Quiet(agent, text, config) : AgentActivity.Classify(text);
 
         return WithLive(agent, live, orchestrator);
     }
@@ -114,15 +123,16 @@ public sealed class PaneActivity(
         }
     }
 
-    private string Quiet(AgentRecord agent, string text)
+    private string Quiet(AgentRecord agent, string text, SettingsConfig config)
     {
-        var live = AgentActivity.Quiet(agent.Worktree, text, _clock.GetUtcNow().UtcDateTime);
+        var rule = PaneIdleRule.For(config, (profiles ?? HarnessRegistry.Find)(agent.RunningHarness));
+        var live = AgentActivity.Quiet(agent.Worktree, text, _clock.GetUtcNow().UtcDateTime, rule);
         var before = _quiet.TryGetValue(agent.Worktree, out var seen) ? seen : string.Empty;
         _quiet[agent.Worktree] = live;
 
         if (before == AgentActivity.Working && live == AgentActivity.Idle && !Finished(agent))
         {
-            wentIdle?.Invoke(agent);
+            wentIdle?.Invoke(agent, rule.Window);
         }
 
         return live;

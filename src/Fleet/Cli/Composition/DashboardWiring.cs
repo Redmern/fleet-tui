@@ -579,10 +579,10 @@ public static class DashboardWiring
         var toldOpen = -1;
         var toldAt = DateTime.MinValue;
         var seenAlive = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var quiet = new Dictionary<string, (string Text, DateTime Since)>(StringComparer.OrdinalIgnoreCase);
+        var quiet = new StillPanes();
         var againstBase = new System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime At, int Behind, bool Conflicts)>(StringComparer.OrdinalIgnoreCase);
         var checking = new System.Collections.Concurrent.ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
-        var idleSeen = new Dictionary<string, (string Text, DateTime Since)>(StringComparer.OrdinalIgnoreCase);
+        var idleSeen = new StillPanes();
         var closingIdle = 0;
 
         (int Behind, bool Conflicts) AgainstBase(AgentRecord agent, DateTime now)
@@ -630,15 +630,11 @@ public static class DashboardWiring
                 }
 
                 var text = alive ? paneTexts.GetValueOrDefault(agent.Worktree, string.Empty) : string.Empty;
-                var settled = NoticeDetector.Settled(text);
-                if (!quiet.TryGetValue(agent.Worktree, out var still) || still.Text != settled)
-                {
-                    quiet[agent.Worktree] = still = (settled, now);
-                }
+                var stillSince = quiet.Since(agent, text, now);
 
                 var (behind, conflicts) = AgainstBase(agent, now);
                 return new AgentWatch(
-                    agent, alive, text, now - still.Since, behind, conflicts,
+                    agent, alive, text, now - stillSince, behind, conflicts,
                     PaneLost: !alive && seenAlive.Contains(agent.Worktree),
                     Hooked: Hooked(agent));
             }).ToList();
@@ -675,16 +671,12 @@ public static class DashboardWiring
 
                     if (owned.Count == 0)
                     {
-                        idleSeen.Remove(agent.Worktree);
+                        idleSeen.Forget(agent.Worktree);
                         continue;
                     }
 
                     var text = mux.GetTextAsync(owned[0].Id).GetAwaiter().GetResult();
-                    var settled = NoticeDetector.Settled(text);
-                    if (!idleSeen.TryGetValue(agent.Worktree, out var seen) || seen.Text != settled)
-                    {
-                        idleSeen[agent.Worktree] = seen = (settled, now);
-                    }
+                    var seenSince = idleSeen.Since(agent, text, now);
 
                     var live = AgentActivity.Classify(text);
                     var mine = notices.Where(n => n.Resolved is null && PathKey.Same(n.Worktree, agent.Worktree)).ToList();
@@ -701,7 +693,7 @@ public static class DashboardWiring
                         Working: live == AgentActivity.Working,
                         AsksTheUser: live == AgentActivity.Waiting
                             || mine.Any(n => n.Kind is NoticeKind.Permission or NoticeKind.NeedsInput),
-                        reported > seen.Since ? reported : seen.Since);
+                        reported > seenSince ? reported : seenSince);
 
                     if (!IdleAgents.ShouldClose(watch, config, project.Root, now))
                     {
@@ -709,7 +701,7 @@ public static class DashboardWiring
                     }
 
                     var stopped = stopper.HandleAsync(project.Name, agent).GetAwaiter().GetResult();
-                    idleSeen.Remove(agent.Worktree);
+                    idleSeen.Forget(agent.Worktree);
 
                     Note(log, project.Name, stopped.Succeeded
                         ? IdleAgents.Note(Label(agent), agent.Status, now - watch.LastActivity)

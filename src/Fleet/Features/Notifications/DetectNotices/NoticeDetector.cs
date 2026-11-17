@@ -110,10 +110,4 @@ public static class NoticeDetector
     public static bool IsQuestion(string text) =>
         text.Contains("do you want", StringComparison.OrdinalIgnoreCase)
         || text.Contains("waiting for your input", StringComparison.OrdinalIgnoreCase);
-
-    public static string Settled(string paneText) =>
-        string.Join('\n', paneText
-            .Split('\n')
-            .Where(l => !l.Contains("esc to interrupt", StringComparison.OrdinalIgnoreCase))
-            .Select(l => new string([.. l.Where(c => !char.IsDigit(c))]).TrimEnd()));
 }

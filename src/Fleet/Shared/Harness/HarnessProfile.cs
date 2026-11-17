@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Fleet.Shared.Harness;
 
 public sealed record HarnessProfile(
@@ -20,6 +22,10 @@ public sealed record HarnessProfile(
     public TimeSpan WaitCap { get; init; } = StrictestWaitCap;
 
     public TimeSpan? ClientToolTimeout { get; init; }
+
+    public TimeSpan? IdleWindow { get; init; }
+
+    public IReadOnlyList<Regex> VolatilePatterns { get; init; } = [];
 
     public bool Has(HarnessCapabilities capability) => (Capabilities & capability) == capability;
 

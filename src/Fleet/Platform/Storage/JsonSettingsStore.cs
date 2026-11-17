@@ -24,6 +24,7 @@ public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : I
             ButtonHints = LoadButtonHints(),
             Nvim = LoadNvim(),
             DefaultEditor = LoadDefaultEditor(),
+            IdleWindowSeconds = LoadIdleWindowSeconds(),
             InstalledEditor = installedEditor is null ? Editor.Nvim : installedEditor(),
         };
 
@@ -292,6 +293,25 @@ public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : I
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    public int? LoadIdleWindowSeconds()
+    {
+        try
+        {
+            if (File.Exists(FleetPaths.IdleSettingsFile)
+                && JsonSerializer.Deserialize(
+                    File.ReadAllText(FleetPaths.IdleSettingsFile), FleetJsonContext.Default.IdleSettingsFile)
+                    is { IdleWindowSeconds: > 0 and var seconds })
+            {
+                return seconds;
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        {
+        }
+
+        return null;
     }
 
     public Editor? LoadDefaultEditor()

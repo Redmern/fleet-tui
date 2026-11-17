@@ -940,8 +940,8 @@ not in main: pi has `InputRetry` like opencode and codex.
 
 Open and known: whether trusting a folder for pi (which lets pi load that repository's
 `.pi/extensions`) is acceptable is not decided; long
-`wait_for_agent` calls, the 120 second idle window and ctrl+u are untested on the real
-TUIs; no sub-orchestrator on opencode, codex or pi has run a real model turn.
+`wait_for_agent` calls and ctrl+u are untested on the real TUIs; the idle window is
+tested on recorded screens of claude, pi and opencode, not codex; no sub-orchestrator on opencode, codex or pi has run a real model turn.
 
 **The registry.** `Shared/Harness/HarnessProfile` is a record: name, binary, resume
 arguments, spawn env, instruction file, capability flags (`Mcp`, `Hooks`, `Skills`,
@@ -1035,10 +1035,75 @@ harness each, structured streams are out of scope).
 **Idle without hooks.** A profile without `Hooks` is watched by its pane
 (`AgentActivity.WatchedByPane`). `Shared/Status/PaneQuiet` keeps `<hash> <since>` in
 `<worktree>/.fleet/pane.mark`; the file is shared by the dashboard process and every
-`fleet mcp` process, so a first `list_agents` already sees a long quiet. Quiet for 120
-seconds without a `done`/`failed` report is `idle`; the dashboard's `PaneActivity` tells
-the owner once, on the change from working to idle. The check is on text, so a screen
-that redraws while waiting never goes idle.
+`fleet mcp` process, so a first `list_agents` already sees a long quiet. Quiet for the
+idle window without a `done`/`failed` report is `idle`; the dashboard's `PaneActivity`
+tells the owner once, on the change from working to idle.
+
+**The idle window.** `Shared/Status/IdleWindow.For(SettingsConfig, HarnessProfile?)` is
+the only place that picks it: the user's `idleWindowSeconds` (machine-wide, `idle.json`,
+merged in `JsonSettingsStore.WithShared` like `nvim.json`), else the running profile's
+`HarnessProfile.IdleWindow`, else `IdleWindow.Default` (120 s). The profile value replaces
+the default only, so an explicit setting always wins. No shipped profile sets
+`IdleWindow`: no recorded screen gave a reason. There is no `PaneQuiet.QuietAfter` any
+more.
+
+**One rule per agent.** `Shared/Status/PaneIdleRule` pairs the window with the running
+profile's `VolatilePatterns` (`PaneIdleRule.For(settings, agent.RunningHarness)`), and its
+`Quiet` reads and writes the mark. `PaneActivity` (dashboard), `McpActions.WithQuietPane`
+(`list_agents`) and `WaitForAgentHandler` all go through it, so no caller can take the
+window from one place and the patterns from another; the idle notice and the
+`wait_for_agent` answer print `rule.Window`. `PaneActivity` takes the profile lookup as a
+parameter so a test can give a profile its own window. The dashboard's stall check and
+auto-close ask `Cli/Composition/StillPanes` how long a pane has stood still; it uses
+`PaneIdleRule.Settled`, the same normal form with the same patterns.
+
+**What the pane hash ignores.** `Shared/Status/PaneSettled.Text` is the one normal form;
+`PaneQuiet.Hash` and `StillPanes` use it (the latter replaced `NoticeDetector.Settled`).
+In order: drop a line with `esc to interrupt` (claude's busy line, whose verb and glyph
+change too); mask the profile's `VolatilePatterns`; mask the common set (clock, elapsed
+timer, token count, `↑n ↓n`, `$cost`, braille spinner, ASCII spinner at line start);
+remove border lines and the border character at either edge of a line; remove all
+whitespace. All patterns are `[GeneratedRegex]`, also the profile's (`HarnessRegistry` is
+partial for that), so nothing compiles a regex at run time under AOT.
+- *Mask, not drop.* A pattern removes what it matches and keeps the rest of the line. pi
+  and opencode put the model and mode on the same line as cost and context, and dropping
+  the line would hide a model change.
+- *Known counters only.* The old `Settled` stripped every digit, which hid `exit code 1`
+  → `2`. Now only known counters go, and that changes the stall and auto-close watches
+  too: `45%` → `46%` or `12 files` → `13 files` restarts their timers, where before it
+  did not. Percentages are not masked, they are also progress.
+- *Narrow patterns.* A clock is not preceded by a word character, `.`, `:`, `/`, `\` or
+  `-`, so `app.ts:12:34` stays. An elapsed timer is seconds (`12s`, `1.2s`, `5ms`) or a
+  whole number of minutes or hours (`49m`, `10h`, `1m30s`) with nothing before it, so
+  `1.2m rows` stays. Borders go only as a whole line of box-drawing characters (plus the
+  half blocks `▀▄` opencode rules with) or as one `│┃║` at the edge of a line; block and
+  shade characters inside a line stay, so `████░░░░` → `██████░░` is output.
+- *All whitespace, not runs.* opencode hard-wraps mid-word at a narrow width
+  (`attem` / `#1]`), so collapsing runs was not enough.
+- *Resize is reflow only.* The normal form makes a pure reflow hash the same (claude
+  120 → 90 columns). The recorded screens showed resizes it cannot cover: claude and pi
+  cut a path with `…` at a width-dependent place, pi scrolls lines off the top, opencode
+  clips its status line at 90 columns and adds a sidebar at 150, and a lower pane shows
+  fewer rows. Those restart the window once: idle comes late, never early. A first
+  version kept the timer when an edge-to-edge rule changed length together with the
+  hash; it was dropped, because output that landed in the same poll as a resize, or a
+  rule in the output itself, kept an old start and could report idle a window early.
+  The follow-up is the pane size from the mux, which `Pane` does not carry.
+- *Busy is not working.* AC-18 asks that a pane with only a clock or spinner changing
+  goes idle, so a harness that thinks or runs one long command for longer than the window
+  with nothing but its spinner moving reads idle, and its owner is told. Before, the
+  spinner kept it working forever. The window setting is the lever.
+- *The mark file* is still `<hash> <since>`; extra fields are ignored. A mark from before
+  this change holds another hash, so the window restarts once. A `fleet mcp` from before
+  this change hashes the old way, so while it runs next to a new dashboard each restarts
+  the other's wait. It ends when the old process exits.
+- *Profile patterns.* opencode: `[⬝■]`, its progress bar, seen while it waited to retry
+  (`⬝⬝■■■■⬝⬝ … [retrying in 10h 49m attempt #1]`); the countdown falls to the common
+  elapsed pattern. claude and pi showed nothing volatile on an idle screen. codex has no
+  recorded screen (not logged in at the time) and only the common set.
+- *Fixtures.* `tests/Fleet.Tests/Fixtures/panes/<harness>/` holds `tmux capture-pane`
+  output of the real CLIs at 90, 120 and 150 columns (pi also at 30 rows), scrubbed of
+  paths and names. fleet's pane text has the same shape (screen rows).
 
 **Typed input needs an echo check.** Found on the real opencode: it starts the fleet MCP
 server, which writes fleet's ready marker, seconds before its prompt takes keys, and the
@@ -5004,7 +5069,7 @@ conhosts), and most of them sit finished. A per-project setting (`autoClose`,
 - **Activity is the later of two timestamps.** One is the start of the open
   `Done`/`Failed` notice: the dashboard stamps it within one tick of the report and
   persists it. The other is the last change in the pane's settled text
-  (`NoticeDetector.Settled`, the same normalisation the stall check uses), so a
+  (`StillPanes`, the same normalisation the stall check uses), so a
   user still talking to a finished agent keeps it open. Claude hooks would be a
   better signal, but fleet installs only the `UserPromptSubmit` dispatch hook,
   only for the main orchestrator. The text clock lives in memory, so restarting

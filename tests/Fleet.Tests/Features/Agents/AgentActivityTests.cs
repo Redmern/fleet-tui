@@ -2,7 +2,10 @@ using Fleet.Features.Agents.ListAgents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared.Constants;
 using Fleet.Shared.Hooks;
+using Fleet.Shared.Settings.Models;
+using Fleet.Shared.Status;
 using Fleet.Shared.Status.Enums;
+using Fleet.Tests.Support;
 
 namespace Fleet.Tests.Features.Agents;
 
@@ -36,7 +39,7 @@ public class AgentActivityTests
     {
         var folder = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
         var t0 = new DateTime(2026, 10, 28, 12, 0, 0, DateTimeKind.Utc);
-        var window = TimeSpan.FromMinutes(2);
+        var window = new PaneIdleRule(TimeSpan.FromMinutes(2), []);
 
         try
         {
@@ -135,5 +138,33 @@ public class AgentActivityTests
     public void Empty_text_stays_unclassified()
     {
         Assert.Equal(string.Empty, AgentActivity.Classify("  \n  "));
+    }
+
+    // claude reports through hooks, so the pane watch seldom decides for it; its recorded screens
+    // go through the same check here. claude at 90 columns is a pure reflow of 120.
+    [Theory]
+    [InlineData("claude", new[] { "idle-120-a", "idle-90" })]
+    [InlineData("opencode", new[] { "idle-120-a", "idle-120-b", "idle-120-c" })]
+    public void Recorded_idle_screens_shown_in_turn_go_idle_and_a_real_change_is_working(string harness, string[] captures)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "fleet-tests", Path.GetRandomFileName());
+        var t0 = new DateTime(2026, 10, 28, 12, 0, 0, DateTimeKind.Utc);
+        var rule = PaneIdleRule.For(SettingsConfig.Default, harness);
+        string At(int seconds, string text) => AgentActivity.Quiet(folder, text, t0.AddSeconds(seconds), rule);
+
+        try
+        {
+            var seen = Enumerable.Range(0, 13)
+                .Select(i => At(i * 10, PaneCaptures.Read(harness, captures[i % captures.Length])))
+                .ToList();
+
+            Assert.All(seen.Take(12), status => Assert.Equal(AgentActivity.Working, status));
+            Assert.Equal(AgentActivity.Idle, seen[12]);
+            Assert.Equal(AgentActivity.Working, At(130, PaneCaptures.Read(harness, captures[0]) + "\nnew output"));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 }

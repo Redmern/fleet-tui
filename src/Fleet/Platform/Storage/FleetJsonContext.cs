@@ -16,6 +16,7 @@ namespace Fleet.Platform.Storage;
 [JsonSerializable(typeof(MenuSettingsFile))]
 [JsonSerializable(typeof(NvimSettingsFile))]
 [JsonSerializable(typeof(EditorSettingsFile))]
+[JsonSerializable(typeof(IdleSettingsFile))]
 [JsonSerializable(typeof(AskFile))]
 [JsonSerializable(typeof(NoticeFile))]
 [JsonSerializable(typeof(NoticeSettingsFile))]
