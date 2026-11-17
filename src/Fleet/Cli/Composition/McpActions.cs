@@ -17,6 +17,7 @@ using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
 using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.ReportStatus;
+using Fleet.Features.Orchestrations.ReportStatus.Models;
 using Fleet.Features.Orchestrations.WaitForAgent;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
@@ -939,13 +940,31 @@ public sealed class McpActions(
             inboxes: Adapters.AgentInboxes(),
             tickets: Adapters.TicketStatus(),
             typeToOwner: Owners().TypeAsync,
-            mainHarness: MainHarness);
+            mainHarness: MainHarness,
+            git: git);
 
         var reported = await reporter
-            .HandleAsync(project, root, caller, status, ToolArguments.Text(request, ToolArguments.Summary), ct)
+            .HandleAsync(
+                project,
+                root,
+                caller,
+                status,
+                ToolArguments.Text(request, ToolArguments.Summary),
+                ct,
+                VerifyFrom(request))
             .ConfigureAwait(false);
 
         return reported.Succeeded ? Ok(reported.Value!) : McpResult.Error(reported.Error!);
+    }
+
+    private static VerifyReport? VerifyFrom(McpRequest request)
+    {
+        var verify = new VerifyReport(
+            ToolArguments.Text(request, ToolArguments.VerifyCommand),
+            ToolArguments.Integer(request, ToolArguments.VerifyExitCode),
+            request.Value(ToolArguments.VerifyOutput));
+
+        return verify.Given ? verify : null;
     }
 
     private McpResult TodoAdd(McpRequest request)

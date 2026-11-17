@@ -221,7 +221,7 @@ public sealed class ReportStatusTests
         Assert.Contains("SendMessage", result.Value);
         Assert.Contains(@"""uds:\\.\pipe\LOCAL\cc-msg-sub""", result.Value);
         Assert.Contains("techweb-sub-some-sub", result.Value);
-        Assert.Contains("\n\nbackend/feature/login: done — endpoint added\n\n", result.Value);
+        Assert.Contains("\n\nbackend/feature/login: done (unverified) — endpoint added\n\n", result.Value);
         Assert.Equal(OrchestrationStatus.Done, Assert.Single(_store.Written).Status);
     }
 
@@ -248,7 +248,7 @@ public sealed class ReportStatusTests
         var result = await new ReportStatusHandler(_store, inboxes: inboxes).HandleAsync(
             "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Done, "added\r\nthe endpoint");
 
-        Assert.Contains("\n\nbackend/feature/login: done — added the endpoint\n\n", result.Value);
+        Assert.Contains("\n\nbackend/feature/login: done (unverified) — added the endpoint\n\n", result.Value);
     }
 
     [Fact]
@@ -356,7 +356,7 @@ public sealed class ReportStatusTests
             "techweb", Root, "agent:backend/feature/login", OrchestrationStatus.Done, "endpoint added");
 
         Assert.True(result.Succeeded, result.Error);
-        Assert.Equal("backend/feature/login: done — endpoint added", result.Value);
+        Assert.Equal("backend/feature/login: done (unverified) — endpoint added", result.Value);
         Assert.Equal([sub.Worktree], inboxes.Asked);
     }
 
@@ -404,7 +404,7 @@ public sealed class ReportStatusTests
         var notice = Assert.Single(typed);
         Assert.Equal(sub.Worktree, notice.Owner!.Worktree);
         Assert.Equal(sub.Worktree, notice.Folder);
-        Assert.Contains("backend/feature/login: done — endpoint added", notice.Message);
+        Assert.Contains("backend/feature/login: done (unverified) — endpoint added", notice.Message);
         Assert.Empty(inboxes.Asked);
         Assert.Equal(OrchestrationStatus.Done, Assert.Single(_store.Written).Status);
     }

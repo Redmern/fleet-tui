@@ -18,6 +18,12 @@ public static class ToolArguments
 
     public const string Summary = "summary";
 
+    public const string VerifyCommand = "verify_command";
+
+    public const string VerifyExitCode = "verify_exit_code";
+
+    public const string VerifyOutput = "verify_output";
+
     public const string Profile = "profile";
 
     public const string Harness = "harness";
@@ -70,6 +76,9 @@ public static class ToolArguments
 
         return int.TryParse(raw, out var value) && value > 0 ? value : fallback;
     }
+
+    public static int? Integer(McpRequest request, string key) =>
+        int.TryParse(request.Value(key).Trim(), out var value) ? value : null;
 
     public static string? Missing(McpRequest request, params string[] required)
     {

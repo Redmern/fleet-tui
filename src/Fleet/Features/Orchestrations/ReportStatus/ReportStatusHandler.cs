@@ -2,9 +2,11 @@ using System.Globalization;
 using Fleet.Features.Orchestrations.ReportStatus.Models;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Git;
 using Fleet.Ports.Todos;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Evidence;
 using Fleet.Shared.Mcp;
 using Fleet.Shared.Messaging;
 using Fleet.Shared.Results;
@@ -18,7 +20,8 @@ public sealed class ReportStatusHandler(
     IAgentInboxes? inboxes = null,
     ITicketStatusSink? tickets = null,
     Func<OwnerNotice, CancellationToken, Task<bool>>? typeToOwner = null,
-    string mainHarness = AgentHarness.Claude)
+    string mainHarness = AgentHarness.Claude,
+    IGitRunner? git = null)
 {
     public const string SessionEndedSummary = "session ended without a report";
 
@@ -29,9 +32,16 @@ public sealed class ReportStatusHandler(
         Record(project, projectRoot, caller, status, summary, out _);
 
     public async Task<Result<string>> HandleAsync(
-        string project, string root, string caller, string status, string summary, CancellationToken ct = default)
+        string project,
+        string root,
+        string caller,
+        string status,
+        string summary,
+        CancellationToken ct = default,
+        VerifyReport? verify = null)
     {
-        var recorded = Record(project, root, caller, status, summary, out var reporter);
+        var evidence = await CaptureAsync(project, caller, status, verify, ct).ConfigureAwait(false);
+        var recorded = Record(project, root, caller, status, summary, out var reporter, evidence);
 
         if (!recorded.Succeeded
             || OrchestrationStatus.Normalize(status) is not (OrchestrationStatus.Done or OrchestrationStatus.Failed)
@@ -130,8 +140,29 @@ public sealed class ReportStatusHandler(
         return new OwnerNotice(owner, name, folder, HarnessRoute.OwnerNotice(line));
     }
 
+    private async Task<ReportEvidence?> CaptureAsync(
+        string project, string caller, string status, VerifyReport? verify, CancellationToken ct)
+    {
+        if (git is null || caller.Trim().Length == 0 || Find(project, caller) is not { } reporter)
+        {
+            return null;
+        }
+
+        var finished = OrchestrationStatus.Normalize(status) is OrchestrationStatus.Done or OrchestrationStatus.Failed;
+
+        return await new EvidenceCapture(git)
+            .CaptureAsync(reporter.Worktree, reporter.BaseRef, finished ? verify : null, ct)
+            .ConfigureAwait(false);
+    }
+
     private Result<string> Record(
-        string project, string root, string caller, string status, string summary, out AgentRecord? record)
+        string project,
+        string root,
+        string caller,
+        string status,
+        string summary,
+        out AgentRecord? record,
+        ReportEvidence? evidence = null)
     {
         record = null;
 
@@ -160,6 +191,7 @@ public sealed class ReportStatusHandler(
             Status = normalized,
             Summary = summary.Trim(),
             ReportedAt = reportedAt,
+            Evidence = evidence,
         });
 
         if (!kept)
@@ -174,7 +206,8 @@ public sealed class ReportStatusHandler(
             tickets?.Reported(root, record.Branch, normalized, summary.Trim());
         }
 
-        return Result<string>.Ok(ReportNote.For(id, normalized, summary));
+        return Result<string>.Ok(
+            ReportNote.For(id, normalized, summary, evidence, AgentHarness.IsOrchestrator(record.Harness)));
     }
 
     private AgentRecord? Find(string project, string caller)
