@@ -97,6 +97,7 @@ public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : I
                     ParseRole(stored.MainModel, stored.MainEffort, SettingsDefaults.MainModel),
                     ParseRole(stored.SubModel, stored.SubEffort, SettingsDefaults.SubModel),
                     ParseRole(stored.AgentModel, stored.AgentEffort, SettingsDefaults.AgentModel)),
+                Repositories = Repositories(stored.Repositories),
                 LastRepo = stored.LastRepo ?? string.Empty,
                 LastHarness = stored.LastHarness ?? string.Empty,
                 DefaultHarness = stored.DefaultHarness ?? string.Empty,
@@ -140,6 +141,7 @@ public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : I
             SubagentGuidance = config.SubagentGuidance == SettingsDefaults.SubagentGuidance ? null : config.SubagentGuidance,
             Iso = config.Iso == SettingsDefaults.Iso ? null : config.Iso,
             Jira = config.Jira is { } jira ? JiraFile(jira) : StoredJira(file),
+            Repositories = RepositoriesFile(config.Repositories),
             LastRepo = config.LastRepo.Length == 0 ? null : config.LastRepo,
             LastHarness = config.LastHarness.Length == 0 ? null : config.LastHarness,
             DefaultHarness = config.ChosenHarness.Length == 0 ? null : config.ChosenHarness,
@@ -167,6 +169,38 @@ public sealed class JsonSettingsStore(Func<Editor?>? installedEditor = null) : I
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+    }
+
+    private static Dictionary<string, RepositorySettings> Repositories(
+        Dictionary<string, RepositorySettingsFile>? stored)
+    {
+        var repositories = new Dictionary<string, RepositorySettings>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (name, entry) in stored ?? [])
+        {
+            if (name.Trim().Length > 0 && entry is not null)
+            {
+                repositories[name.Trim()] = RepositorySettings.From(entry.Forge, entry.PushRemote);
+            }
+        }
+
+        return repositories;
+    }
+
+    private static Dictionary<string, RepositorySettingsFile>? RepositoriesFile(
+        IReadOnlyDictionary<string, RepositorySettings> repositories)
+    {
+        var stored = repositories
+            .Where(r => !r.Value.IsDefault)
+            .ToDictionary(
+                r => r.Key,
+                r => new RepositorySettingsFile
+                {
+                    Forge = r.Value.Forge == ForgeKind.Auto ? null : RepositorySettings.Word(r.Value.Forge),
+                    PushRemote = r.Value.Remote == RepositorySettings.DefaultPushRemote ? null : r.Value.Remote,
+                });
+
+        return stored.Count == 0 ? null : stored;
     }
 
     public RoleModel LoadHead()
