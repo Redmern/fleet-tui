@@ -1,3 +1,5 @@
+using Fleet.Shared.Aidlc;
+using Fleet.Shared.Aidlc.Enums;
 using Fleet.Shared.Orchestrations;
 using Fleet.Shared.Orchestrations.Models;
 
@@ -223,5 +225,17 @@ public class OrchestrationTextTests
 
         Assert.Equal(OrchestrationText.Instructions(Brief, "Custom rules.", "The process.", to, subagents, native), after);
         Assert.Equal(to, OrchestrationText.HasResearch(after));
+    }
+
+    [Fact]
+    public void A_sub_orchestrators_instructions_tell_it_to_propose_a_better_profile_and_wait_for_the_user()
+    {
+        var process = ProcessText.Render(ProcessPlan.Resolve(Profile.Feature, Autonomy.Guided, AidlcPart.None));
+
+        var text = OrchestrationText.Instructions(Brief, aidlc: process);
+
+        Assert.Contains("If **feature** does not fit, name the profile that fits better at your first contact", text);
+        Assert.Contains("research (investigate and recommend, no code)", text);
+        Assert.Contains("set_profile only after the user agrees", text);
     }
 }

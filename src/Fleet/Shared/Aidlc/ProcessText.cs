@@ -58,7 +58,7 @@ public static class ProcessText
         text.AppendLine();
         text.Append(
             "A failure always stops the run and goes to the user, whatever the autonomy setting. "
-            + "If the profile looks wrong for this task, say so at the first point you talk to the user.");
+            + ProfileFit(plan.Profile));
 
         if (!string.IsNullOrWhiteSpace(extra))
         {
@@ -72,6 +72,13 @@ public static class ProcessText
     }
 
     public static string Title(Stage stage) => stage.ToString();
+
+    private static string ProfileFit(Profile current) =>
+        "fleet defines these profiles: "
+        + string.Join(", ", ProfileCatalog.All.Select(p => $"{Words.Of(p)} ({ProfileCatalog.Describe(p)})"))
+        + $". If **{Words.Of(current)}** does not fit, name the profile that fits better at your first contact "
+        + "with the user, and say why. Change it with set_profile only after the user agrees: it keeps the "
+        + "stages already started and rewrites the ones not started yet.";
 
     private static string Gates(EffectivePlan plan)
     {

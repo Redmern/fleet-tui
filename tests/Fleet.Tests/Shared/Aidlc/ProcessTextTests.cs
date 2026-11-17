@@ -235,4 +235,24 @@ public class ProcessTextTests
         Assert.Contains("before Deliver", line);
         Assert.Contains("in addition to the per-unit reviews", line);
     }
+
+    [Theory]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Express)]
+    [InlineData(Profile.Research)]
+    public void The_text_names_every_profile_and_says_to_propose_a_better_one_at_first_contact_and_change_it_only_once_the_user_agrees(
+        Profile profile)
+    {
+        var text = Render(profile);
+
+        foreach (var each in ProfileCatalog.All)
+        {
+            Assert.Contains($"{Words.Of(each)} ({ProfileCatalog.Describe(each)})", text);
+        }
+
+        Assert.Contains("first contact with the user", text);
+        Assert.Contains($"does not fit, name the profile that fits better", text);
+        Assert.Contains("only after the user agrees", text);
+        Assert.Contains("set_profile", text);
+    }
 }
