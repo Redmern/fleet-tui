@@ -3,6 +3,7 @@ using Fleet.Cli.Composition;
 using Fleet.Ports.Git;
 using Fleet.Ports.Git.Models;
 using Fleet.Shared;
+using Fleet.Shared.Evidence;
 
 namespace Fleet.Tests.Cli;
 
@@ -119,6 +120,55 @@ public sealed class BranchStatesTests : IDisposable
         Assert.InRange(git.MostAtOnce, 1, 6);
     }
 
+    // AC-17: the commits after a done report are counted in the same refresh as ahead, behind and dirty.
+    [Fact]
+    public void A_reported_head_is_measured_with_the_rest_of_the_state()
+    {
+        var git = new CountingGit();
+        var states = new BranchStates(git);
+        var tree = Worktree("api");
+
+        var reported = states.For(tree, "origin/main", "abc1234");
+        var again = states.For(tree, "origin/main", "abc1234");
+
+        Assert.Equal(new ReportDrift(4, false), reported.AfterReport);
+        Assert.Equal((2, 1, true), (reported.Ahead, reported.Behind, reported.Dirty));
+        Assert.Equal(reported, again);
+        Assert.Equal(1, git.StatusCalls(tree));
+    }
+
+    [Fact]
+    public void No_reported_head_measures_no_drift_and_a_changed_head_is_measured_again()
+    {
+        var git = new CountingGit();
+        var states = new BranchStates(git);
+        var tree = Worktree("api");
+
+        Assert.Null(states.For(tree, "origin/main").AfterReport);
+        Assert.NotNull(states.For(tree, "origin/main", "abc1234").AfterReport);
+        Assert.Equal(2, git.StatusCalls(tree));
+    }
+
+    [Fact]
+    public void Peeking_with_a_new_reported_head_keeps_the_pill_but_not_the_old_drift_until_measured()
+    {
+        var git = new CountingGit();
+        var states = new BranchStates(git);
+        var tree = Worktree("api");
+        var before = states.For(tree, "origin/main", "old0000");
+
+        git.Gate = new TaskCompletionSource();
+        var peeked = states.Peek(tree, "origin/main", "new0000");
+
+        Assert.Equal(before with { AfterReport = null }, peeked);
+
+        git.Gate.SetResult();
+
+        Assert.True(SpinWait.SpinUntil(
+            () => states.Peek(tree, "origin/main", "new0000").AfterReport is not null, TimeSpan.FromSeconds(10)));
+        Assert.Equal(2, git.StatusCalls(tree));
+    }
+
     private sealed class CountingGit : IGitRunner
     {
         private readonly ConcurrentDictionary<string, int> _status = new();
@@ -156,6 +206,11 @@ public sealed class BranchStatesTests : IDisposable
                 {
                     _status.AddOrUpdate(workDir, 1, (_, n) => n + 1);
                     return new GitResult(0, " M file.cs\n", string.Empty);
+                }
+
+                if (args is ["rev-list", "--count", _])
+                {
+                    return new GitResult(0, "4\n", string.Empty);
                 }
 
                 return new GitResult(0, "1\t2\n", string.Empty);

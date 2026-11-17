@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Fleet.Features.Agents.RemoveAgent;
+using Fleet.Features.Orchestrations.Flags;
 using Fleet.Ports.Git;
 using Fleet.Shared;
 
@@ -9,7 +10,7 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
 {
     private const int AtOnce = 6;
 
-    private readonly ConcurrentDictionary<string, (DateTime At, BranchState State)> _known =
+    private readonly ConcurrentDictionary<string, (DateTime At, string ReportedHead, BranchState State)> _known =
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly ConcurrentDictionary<string, byte> _measuring = new(StringComparer.OrdinalIgnoreCase);
@@ -18,25 +19,25 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
 
     private readonly TimeSpan _freshFor = freshFor ?? TimeSpan.FromSeconds(2);
 
-    public BranchState For(string worktree, string? fallback = null)
+    public BranchState For(string worktree, string? fallback = null, string reportedHead = "")
     {
         var key = $"{worktree}|{fallback}";
-        if (_known.TryGetValue(key, out var known) && DateTime.UtcNow - known.At < _freshFor)
+        if (_known.TryGetValue(key, out var known) && Fresh(known, reportedHead))
         {
             return known.State;
         }
 
-        var state = Measure(worktree, fallback);
-        _known[key] = (DateTime.UtcNow, state);
+        var state = Measure(worktree, fallback, reportedHead);
+        _known[key] = (DateTime.UtcNow, reportedHead, state);
         return state;
     }
 
-    public BranchState Peek(string worktree, string? fallback = null)
+    public BranchState Peek(string worktree, string? fallback = null, string reportedHead = "")
     {
         var key = $"{worktree}|{fallback}";
         var known = _known.TryGetValue(key, out var last);
 
-        if ((!known || DateTime.UtcNow - last.At >= _freshFor) && _measuring.TryAdd(key, 0))
+        if ((!known || !Fresh(last, reportedHead)) && _measuring.TryAdd(key, 0))
         {
             _ = Task.Run(async () =>
             {
@@ -44,7 +45,7 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
 
                 try
                 {
-                    _known[key] = (DateTime.UtcNow, Measure(worktree, fallback));
+                    _known[key] = (DateTime.UtcNow, reportedHead, Measure(worktree, fallback, reportedHead));
                 }
                 finally
                 {
@@ -54,7 +55,12 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
             });
         }
 
-        return known ? last.State : BranchState.Unknown;
+        if (!known)
+        {
+            return BranchState.Unknown;
+        }
+
+        return last.ReportedHead == reportedHead ? last.State : last.State with { AfterReport = null };
     }
 
     public void Warm(IEnumerable<(string Worktree, string? Fallback)> worktrees) =>
@@ -63,7 +69,10 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
             new ParallelOptions { MaxDegreeOfParallelism = AtOnce },
             w => For(w.Worktree, w.Fallback));
 
-    private BranchState Measure(string worktree, string? fallback)
+    private bool Fresh((DateTime At, string ReportedHead, BranchState State) known, string reportedHead) =>
+        DateTime.UtcNow - known.At < _freshFor && known.ReportedHead == reportedHead;
+
+    private BranchState Measure(string worktree, string? fallback, string reportedHead)
     {
         if (!Directory.Exists(worktree))
         {
@@ -77,8 +86,10 @@ public sealed class BranchStates(IGitRunner git, TimeSpan? freshFor = null)
             .GetAwaiter()
             .GetResult();
 
+        var drift = new ReportDriftProbe(git).MeasureAsync(worktree, reportedHead).GetAwaiter().GetResult();
+
         return new BranchState(
-            ahead, behind, status.Ok && WorktreeDirt.Parse(status.Out).Count > 0);
+            ahead, behind, status.Ok && WorktreeDirt.Parse(status.Out).Count > 0, drift);
     }
 
     private (int Behind, int Ahead) Distance(string worktree, string? fallback)
