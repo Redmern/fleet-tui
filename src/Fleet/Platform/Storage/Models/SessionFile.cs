@@ -54,4 +54,29 @@ public sealed class AgentEntry
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Effort { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public EvidenceEntry? Evidence { get; set; }
+}
+
+public sealed class EvidenceEntry
+{
+    public string Worktree { get; set; } = string.Empty;
+
+    public string BaseRef { get; set; } = string.Empty;
+
+    public string MergeBase { get; set; } = string.Empty;
+
+    public string Head { get; set; } = string.Empty;
+
+    public bool Dirty { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? VerifyCommand { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? VerifyExitCode { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? VerifyOutput { get; set; }
 }

@@ -3,6 +3,7 @@ using Fleet.Platform.Storage.Models;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared;
+using Fleet.Shared.Evidence;
 using Fleet.Shared.Settings;
 using Fleet.Shared.Settings.Models;
 
@@ -101,6 +102,20 @@ public sealed class JsonAgentStore(TimeSpan lockPatience, TimeSpan busyPatience)
             Effort = agent.Model?.Effort,
             OrchestratorHarness = agent.OrchestratorHarness.Length == 0 ? null : agent.OrchestratorHarness,
             InstructedAt = agent.InstructedAt.Length == 0 ? null : agent.InstructedAt,
+            Evidence = agent.Evidence is { } e ? EvidenceOf(e) : null,
+        };
+
+    private static EvidenceEntry EvidenceOf(ReportEvidence e) =>
+        new()
+        {
+            Worktree = HomePath.Contract(e.Worktree),
+            BaseRef = e.BaseRef,
+            MergeBase = e.MergeBase,
+            Head = e.Head,
+            Dirty = e.Dirty,
+            VerifyCommand = e.VerifyCommand.Length == 0 ? null : e.VerifyCommand,
+            VerifyExitCode = e.VerifyExitCode,
+            VerifyOutput = e.VerifyOutput.Length == 0 ? null : e.VerifyOutput,
         };
 
     public IReadOnlyList<AgentRecord> List(string project)
@@ -173,7 +188,18 @@ public sealed class JsonAgentStore(TimeSpan lockPatience, TimeSpan busyPatience)
             a.ReportedAt,
             a.Model is null ? null : new RoleModel(a.Model, a.Effort ?? ModelChoice.Inherit),
             a.OrchestratorHarness ?? string.Empty,
-            a.InstructedAt ?? string.Empty);
+            a.InstructedAt ?? string.Empty,
+            a.Evidence is { } e
+                ? new ReportEvidence(
+                    HomePath.Expand(e.Worktree),
+                    e.BaseRef,
+                    e.MergeBase,
+                    e.Head,
+                    e.Dirty,
+                    e.VerifyCommand ?? string.Empty,
+                    e.VerifyExitCode,
+                    e.VerifyOutput ?? string.Empty)
+                : null);
     }
 
     public bool Remove(string project, string worktree)
