@@ -66,6 +66,8 @@ public static class EmbeddedWiring
             return 1;
         }
 
+        IncludeWiring.OnDaemonStart(log);
+
         if (OperatingSystem.IsWindows() && WindowsConsole.ReleaseRedirectedStdHandles() > 0)
         {
             log.Write("fleetd: released redirected std handles so pane children use their pseudoconsole");
