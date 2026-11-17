@@ -23,8 +23,8 @@ public static class ToolText
     public static string Repositories(IReadOnlyList<string> names) =>
         names.Count == 0 ? "No repositories yet." : string.Join('\n', names);
 
-    public static string Agent(AgentRecord agent, BranchState state) =>
-        $"{AgentKey.Describe(agent.Repository, agent.Branch)}: {Where(agent)}, {Drift(state)}";
+    public static string Agent(AgentRecord agent, BranchState state, bool baseMeasured = true) =>
+        $"{AgentKey.Describe(agent.Repository, agent.Branch)}: {Where(agent)}, {Base(agent, baseMeasured)}{Drift(state)}";
 
     public static string NotFound(string repository, string branch) =>
         $"No agent {AgentKey.Describe(repository, branch)} in this project.";
@@ -36,6 +36,20 @@ public static class ToolText
 
         return $"{AgentKey.Describe(agent.Repository, agent.Branch)} — "
             + $"{AgentHarness.Describe(agent.Harness, agent.HostInNvim)}, {where}{status}";
+    }
+
+    private static string Base(AgentRecord agent, bool measured)
+    {
+        var baseRef = agent.BaseRef.Trim();
+
+        if (baseRef.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        return measured
+            ? $"base {baseRef}: "
+            : $"base {baseRef} (not found; counts are against its upstream): ";
     }
 
     private static string Where(AgentRecord agent) =>

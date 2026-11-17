@@ -567,6 +567,33 @@ public sealed class McpActionsWiringTests : IDisposable
         NothingLeftTheSandbox();
     }
 
+    [Fact]
+    public async Task Agent_status_names_the_base_ref_and_counts_the_commits_against_it_not_against_the_upstream()
+    {
+        var (container, _) = await RepositoryWithOriginAsync("api");
+        var git = new Fleet.Platform.Git.GitRunner();
+        var agent = await _team.StartClaudeWorkerAsync(string.Empty, "api", container, "feat/a");
+
+        for (var i = 0; i < 2; i++)
+        {
+            var committed = await git.RunAsync(
+                agent.Worktree,
+                ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", $"work {i}"]);
+
+            Assert.True(committed.Ok, committed.Message);
+        }
+
+        Assert.True((await git.RunAsync(agent.Worktree, ["push", "-u", "origin", "feat/a"])).Ok);
+
+        var status = await _team.CallAsync(string.Empty, HarnessTool.AgentStatus, ("repository", "api"), ("branch", "feat/a"));
+
+        Assert.False(status.IsError, status.Text);
+        Assert.Contains($"base {agent.BaseRef}: 2 ahead", status.Text);
+        Assert.DoesNotContain("in sync", status.Text);
+
+        NothingLeftTheSandbox();
+    }
+
     private void NothingLeftTheSandbox()
     {
         Assert.Empty(Directory.EnumerateFiles(_home, "*", SearchOption.AllDirectories));

@@ -181,6 +181,39 @@ public sealed class McpHelpersTests
     }
 
     [Fact]
+    public void Agent_status_names_the_base_ref_next_to_the_counts_measured_against_it()
+    {
+        var text = ToolText.Agent(Agent("backend", "login"), new BranchState(2, 1, false));
+
+        Assert.Equal("backend/login: open, base origin/main: 2 ahead, 1 behind", text);
+    }
+
+    [Fact]
+    public void An_agent_level_with_its_base_says_in_sync_after_the_base()
+    {
+        var text = ToolText.Agent(Agent("backend", "login"), new BranchState(0, 0, false));
+
+        Assert.Equal("backend/login: open, base origin/main: in sync", text);
+    }
+
+    [Fact]
+    public void A_base_that_could_not_be_measured_is_named_with_that_caveat()
+    {
+        var text = ToolText.Agent(Agent("backend", "login"), new BranchState(1, 0, false), baseMeasured: false);
+
+        Assert.Equal(
+            "backend/login: open, base origin/main (not found; counts are against its upstream): 1 ahead", text);
+    }
+
+    [Fact]
+    public void An_agent_with_no_recorded_base_names_none()
+    {
+        var text = ToolText.Agent(Agent("backend", "login") with { BaseRef = string.Empty }, new BranchState(1, 0, false));
+
+        Assert.DoesNotContain("base", text);
+    }
+
+    [Fact]
     public void The_approval_prompt_for_remove_sub_names_the_sub_and_what_it_deletes()
     {
         var prompt = ApprovalPrompt.For(

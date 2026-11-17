@@ -126,7 +126,7 @@ public sealed class McpActions(
             HarnessTool.ListAgents => Ok(ToolText.Agents(await WithQuietPanes(_agents.Handle(project), ct).ConfigureAwait(false))),
             HarnessTool.ListRepositories => await ListRepositories(ct).ConfigureAwait(false),
             HarnessTool.ListBranches => await ListBranches(request, ct).ConfigureAwait(false),
-            HarnessTool.AgentStatus => AgentStatus(request),
+            HarnessTool.AgentStatus => await AgentStatus(request, ct).ConfigureAwait(false),
             HarnessTool.RepositoryStatus => await RepositoryStatus(request, ct).ConfigureAwait(false),
             HarnessTool.LogTail => LogTail(request),
             HarnessTool.NewAgent => await NewAgent(request, ct).ConfigureAwait(false),
@@ -200,7 +200,7 @@ public sealed class McpActions(
             : string.Join('\n', branches.Select(b => b.Reference)));
     }
 
-    private McpResult AgentStatus(McpRequest request)
+    private async Task<McpResult> AgentStatus(McpRequest request, CancellationToken ct)
     {
         if (Missing(request, ToolArguments.Repository, ToolArguments.Branch) is { } error)
         {
@@ -209,9 +209,38 @@ public sealed class McpActions(
 
         var agent = Find(request);
 
-        return agent is null
-            ? McpResult.Error(ToolText.NotFound(Repo(request), Branch(request)))
-            : Ok(ToolText.Agent(agent, _states.For(agent.Worktree, agent.BaseRef)));
+        if (agent is null)
+        {
+            return McpResult.Error(ToolText.NotFound(Repo(request), Branch(request)));
+        }
+
+        var state = _states.For(agent.Worktree, agent.BaseRef);
+        var against = await DistanceFromBaseAsync(agent, ct).ConfigureAwait(false);
+
+        return Ok(against is { } measured
+            ? ToolText.Agent(agent, new BranchState(measured.Ahead, measured.Behind, state.Dirty))
+            : ToolText.Agent(agent, state, baseMeasured: false));
+    }
+
+    private async Task<(int Ahead, int Behind)?> DistanceFromBaseAsync(AgentRecord agent, CancellationToken ct)
+    {
+        if (agent.BaseRef.Trim().Length == 0 || !Directory.Exists(agent.Worktree))
+        {
+            return null;
+        }
+
+        var counts = await git
+            .RunAsync(agent.Worktree, ["rev-list", "--left-right", "--count", $"{agent.BaseRef}...HEAD"], null, ct)
+            .ConfigureAwait(false);
+
+        if (!counts.Ok)
+        {
+            return null;
+        }
+
+        var (behind, ahead) = Tally.Parse(counts.Out);
+
+        return (ahead, behind);
     }
 
     private async Task<McpResult> RepositoryStatus(McpRequest request, CancellationToken ct)
