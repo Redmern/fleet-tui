@@ -2,11 +2,13 @@ using Fleet.Features.Agents;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.TellAgent;
 using Fleet.Features.Head.ServeHead;
+using Fleet.Features.Orchestrations.Flags;
 using Fleet.Features.Orchestrations.ReportStatus;
 using Fleet.Features.Orchestrations.ReportStatus.Models;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Git;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Todos;
 using Fleet.Shared;
@@ -72,6 +74,9 @@ public sealed class OwnerNotices(
             return false;
         }
     }
+
+    public OverlapWatch Overlaps(IGitRunner git) =>
+        new(store, git, agent => new ReportStatusHandler(store).NoticeFor(project, root, agent, string.Empty)?.Folder, AboutAsync);
 
     public void WentIdle(AgentRecord agent, TimeSpan window)
     {

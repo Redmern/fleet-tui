@@ -368,6 +368,7 @@ public sealed class McpActions(
             agent = agent with { Owner = owner };
             store.Save(project, agent);
             await WarnStartedBeforeSkeletonAsync(agent, ct).ConfigureAwait(false);
+            await CheckOverlapsAsync(owner, ct).ConfigureAwait(false);
         }
 
         claudeConfigs.For(agent.Harness)
@@ -592,6 +593,22 @@ public sealed class McpActions(
             && SkeletonGate.EarlyStart(Adapters.Intents().Load(owner.Worktree), agent.Repository, agent.Branch) is { } line)
         {
             await Owners().AboutAsync(agent, line, ct).ConfigureAwait(false);
+        }
+    }
+
+    private AgentRecord? CallerAgent() =>
+        store.List(project).FirstOrDefault(a => !AgentHarness.IsOrchestrator(a.Harness)
+            && string.Equals(McpCaller.ForAgent(a.Repository, a.Branch), caller, StringComparison.OrdinalIgnoreCase));
+
+    private async Task CheckOverlapsAsync(string owner, CancellationToken ct)
+    {
+        try
+        {
+            await Owners().Overlaps(git).CheckAsync(project, owner, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.Write(LogTag.For(project, $"overlap check for {owner} failed: {e.Message}"));
         }
     }
 
@@ -1002,6 +1019,11 @@ public sealed class McpActions(
                 ct,
                 VerifyFrom(request))
             .ConfigureAwait(false);
+
+        if (reported.Succeeded && CallerAgent() is { } reportedBy)
+        {
+            await CheckOverlapsAsync(reportedBy.Owner, ct).ConfigureAwait(false);
+        }
 
         return reported.Succeeded ? Ok(reported.Value!) : McpResult.Error(reported.Error!);
     }

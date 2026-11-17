@@ -801,6 +801,82 @@ public sealed class McpActionsWiringTests : IDisposable
         NothingLeftTheSandbox();
     }
 
+    // AC-19
+    [Fact]
+    public async Task Two_agents_of_a_sub_that_change_the_same_file_send_it_one_overlap_notice_until_the_set_grows()
+    {
+        await _team.AddRepositoryAsync("api");
+        var dispatched = await _team.DispatchAsync(string.Empty, "build the flow", "opencode");
+        await _team.Mux.HarnessIn(dispatched.Folder).Started;
+        var git = new Fleet.Platform.Git.GitRunner();
+        var notices = Path.Combine(dispatched.Folder, ".fleet", AgentHarness.NoticesFile);
+
+        foreach (var branch in new[] { "feat/a", "feat/b" })
+        {
+            var started = await _team.CallAsync(
+                dispatched.Slug, HarnessTool.NewAgent, ("repository", "api"), ("branch", branch), ("harness", "opencode"));
+            Assert.False(started.IsError, started.Text);
+        }
+
+        async Task ChangeAsync(string branch, string file)
+        {
+            var worktree = _team.Record("api", branch).Worktree;
+            await File.WriteAllTextAsync(Path.Combine(worktree, file), $"{branch} {Guid.NewGuid()}");
+            Assert.True((await git.RunAsync(worktree, ["add", file])).Ok);
+            var committed = await git.RunAsync(worktree, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", file]);
+            Assert.True(committed.Ok, committed.Message);
+        }
+
+        string[] OverlapLines() => File.Exists(notices)
+            ? [.. File.ReadAllLines(notices).Where(l => l.Contains("changed the same", StringComparison.Ordinal))]
+            : [];
+
+        await ChangeAsync("feat/a", "shared.cs");
+        await ChangeAsync("feat/b", "shared.cs");
+        await _team.CallAsync(McpCaller.ForAgent("api", "feat/a"), HarnessTool.Report, ("status", "working"));
+        await _team.CallAsync(McpCaller.ForAgent("api", "feat/b"), HarnessTool.Report, ("status", "working"));
+
+        var first = Assert.Single(OverlapLines());
+        Assert.Contains("api/feat/a and api/feat/b changed the same 1 file(s) against their bases: shared.cs.", first);
+
+        await ChangeAsync("feat/a", "more.cs");
+        await ChangeAsync("feat/b", "more.cs");
+        await _team.CallAsync(McpCaller.ForAgent("api", "feat/b"), HarnessTool.Report, ("status", "done"));
+
+        Assert.Equal(2, OverlapLines().Length);
+        Assert.Contains("the same 2 file(s) against their bases: more.cs, shared.cs.", OverlapLines()[1]);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Starting_an_agent_on_a_branch_that_already_shares_files_with_a_sibling_sends_the_overlap_notice()
+    {
+        await _team.AddRepositoryAsync("api");
+        var dispatched = await _team.DispatchAsync(string.Empty, "build the flow", "opencode");
+        await _team.Mux.HarnessIn(dispatched.Folder).Started;
+        var git = new Fleet.Platform.Git.GitRunner();
+        var notices = Path.Combine(dispatched.Folder, ".fleet", AgentHarness.NoticesFile);
+        var first = await _team.CallAsync(
+            dispatched.Slug, HarnessTool.NewAgent, ("repository", "api"), ("branch", "feat/a"), ("harness", "opencode"));
+        Assert.False(first.IsError, first.Text);
+        var worktree = _team.Record("api", "feat/a").Worktree;
+        await File.WriteAllTextAsync(Path.Combine(worktree, "shared.cs"), "a");
+        Assert.True((await git.RunAsync(worktree, ["add", "shared.cs"])).Ok);
+        Assert.True((await git.RunAsync(worktree, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "a"])).Ok);
+        Assert.True((await git.RunAsync(worktree, ["branch", "feat/b", "HEAD"])).Ok);
+
+        var second = await _team.CallAsync(
+            dispatched.Slug, HarnessTool.NewAgent, ("repository", "api"), ("branch", "feat/b"), ("harness", "opencode"));
+
+        Assert.False(second.IsError, second.Text);
+        Assert.Contains(
+            File.ReadAllLines(notices),
+            l => l.Contains("api/feat/a and api/feat/b changed the same 1 file(s) against their bases: shared.cs.", StringComparison.Ordinal));
+
+        NothingLeftTheSandbox();
+    }
+
     // A branch one commit ahead of main, made without a worktree. Returns its SHA.
     private static async Task<string> BranchAheadOfMainAsync(string container, string branch)
     {
