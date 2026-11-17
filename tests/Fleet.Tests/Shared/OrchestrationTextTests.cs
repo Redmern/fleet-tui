@@ -206,4 +206,22 @@ public class OrchestrationTextTests
 
         Assert.Equal(OrchestrationText.Instructions(Brief, "Custom rules.", "New process."), after);
     }
+
+    [Theory]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, false, false, true)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, false, false, false)]
+    public void With_research_turns_the_brief_into_what_dispatch_writes_for_that_research_flag(
+        bool from, bool to, bool subagents, bool native)
+    {
+        var before = OrchestrationText.Instructions(Brief, "Custom rules.", "The process.", from, subagents, native);
+
+        var after = OrchestrationText.WithResearch(before, to, native);
+
+        Assert.Equal(OrchestrationText.Instructions(Brief, "Custom rules.", "The process.", to, subagents, native), after);
+        Assert.Equal(to, OrchestrationText.HasResearch(after));
+    }
 }
