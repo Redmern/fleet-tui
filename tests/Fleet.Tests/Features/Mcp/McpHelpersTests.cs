@@ -213,6 +213,109 @@ public sealed class McpHelpersTests
         Assert.DoesNotContain("base", text);
     }
 
+    private static Fleet.Shared.Evidence.ReportEvidence Evidence(int? exit = null, bool dirty = false) =>
+        new(
+            "/work/backend/login", "origin/main", "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", dirty, exit is null ? string.Empty : "dotnet test", exit,
+            exit is null ? string.Empty : "Failed: 1");
+
+    [Fact]
+    public void Listing_agents_shows_one_line_each_with_the_short_head_and_the_verify_result()
+    {
+        var agents = new[]
+        {
+            Agent("backend", "ok") with { Status = "done", Evidence = Evidence(exit: 0) },
+            Agent("backend", "bad") with { Status = "done", Evidence = Evidence(exit: 1) },
+            Agent("backend", "none") with { Status = "done", Evidence = Evidence() },
+            Agent("backend", "failed") with { Status = "failed", Evidence = Evidence(exit: 1) },
+            Agent("backend", "busy") with { Status = "working", Evidence = Evidence() },
+        };
+
+        var lines = ToolText.Agents(agents).Split('\n');
+
+        Assert.Equal(5, lines.Length);
+        Assert.Equal("backend/ok — claude, open [done], HEAD 2222222, verify ok", lines[0]);
+        Assert.Equal("backend/bad — claude, open [done (verify failed)], HEAD 2222222, verify failed", lines[1]);
+        Assert.Equal("backend/none — claude, open [done (unverified)], HEAD 2222222, verify unverified", lines[2]);
+        Assert.Equal("backend/failed — claude, open [failed], HEAD 2222222, verify failed", lines[3]);
+        Assert.Equal("backend/busy — claude, open [working], HEAD 2222222", lines[4]);
+    }
+
+    [Fact]
+    public void Listing_an_agent_that_reported_done_before_evidence_existed_calls_it_unverified()
+    {
+        var text = ToolText.Agents([Agent("backend", "old") with { Status = "done" }]);
+
+        Assert.Equal("backend/old — claude, open [done (unverified)], verify unverified", text);
+    }
+
+    [Fact]
+    public void Listing_shows_every_flag_that_applies()
+    {
+        var text = ToolText.Agents([Agent("backend", "x") with { Status = "done", Evidence = Evidence(dirty: true) }]);
+
+        Assert.Contains("[done (unverified) (dirty)]", text);
+    }
+
+    [Fact]
+    public void Agent_status_shows_all_the_evidence_fields()
+    {
+        var agent = Agent("backend", "login") with
+        {
+            Status = "done",
+            Summary = "endpoint added",
+            ReportedAt = "2026-11-17T10:00:00.0000000+00:00",
+            Evidence = Evidence(exit: 1, dirty: true),
+        };
+
+        var text = ToolText.Agent(agent, new BranchState(2, 0, false));
+
+        Assert.StartsWith("backend/login: open, base origin/main: 2 ahead", text);
+        Assert.Contains("report: done (verify failed) (dirty) at 2026-11-17T10:00:00.0000000+00:00", text);
+        Assert.Contains("summary: endpoint added", text);
+        Assert.Contains("worktree: /work/backend/login", text);
+        Assert.Contains("base ref: origin/main", text);
+        Assert.Contains("merge-base: 1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", text);
+        Assert.Contains("HEAD: 2222222bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", text);
+        Assert.Contains("worktree dirty: yes", text);
+        Assert.Contains("verify: failed", text);
+        Assert.Contains("verify command: dotnet test", text);
+        Assert.Contains("verify exit code: 1", text);
+        Assert.Contains("verify output (last lines):\nFailed: 1", text);
+    }
+
+    [Fact]
+    public void Agent_status_for_a_clean_verified_report_says_so()
+    {
+        var agent = Agent("backend", "login") with { Status = "done", Evidence = Evidence(exit: 0) };
+
+        var text = ToolText.Agent(agent, new BranchState(0, 0, false));
+
+        Assert.Contains("report: done", text);
+        Assert.DoesNotContain("report: done (", text);
+        Assert.Contains("worktree dirty: no", text);
+        Assert.Contains("verify: ok", text);
+    }
+
+    [Fact]
+    public void Agent_status_for_an_old_record_says_no_evidence_was_captured()
+    {
+        var text = ToolText.Agent(Agent("backend", "login") with { Status = "done" }, new BranchState(0, 0, false));
+
+        Assert.Contains("report: done (unverified)", text);
+        Assert.Contains("evidence: none recorded", text);
+        Assert.Contains("verify: unverified", text);
+    }
+
+    [Fact]
+    public void Agent_status_for_an_agent_that_never_reported_shows_no_report_lines()
+    {
+        var text = ToolText.Agent(Agent("backend", "login"), new BranchState(0, 0, false));
+
+        Assert.DoesNotContain("report:", text);
+        Assert.DoesNotContain("HEAD:", text);
+    }
+
     [Fact]
     public void The_approval_prompt_for_remove_sub_names_the_sub_and_what_it_deletes()
     {

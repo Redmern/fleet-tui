@@ -1,6 +1,7 @@
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Evidence;
 
 namespace Fleet.Features.Mcp.ServeMcp;
 
@@ -24,7 +25,7 @@ public static class ToolText
         names.Count == 0 ? "No repositories yet." : string.Join('\n', names);
 
     public static string Agent(AgentRecord agent, BranchState state, bool baseMeasured = true) =>
-        $"{AgentKey.Describe(agent.Repository, agent.Branch)}: {Where(agent)}, {Base(agent, baseMeasured)}{Drift(state)}";
+        $"{AgentKey.Describe(agent.Repository, agent.Branch)}: {Where(agent)}, {Base(agent, baseMeasured)}{Drift(state)}{Reported(agent)}";
 
     public static string NotFound(string repository, string branch) =>
         $"No agent {AgentKey.Describe(repository, branch)} in this project.";
@@ -32,11 +33,89 @@ public static class ToolText
     private static string Line(AgentRecord agent)
     {
         var where = agent.Hidden ? "hidden" : agent.Open ? "open" : "closed";
-        var status = agent.Status.Trim().Length == 0 ? string.Empty : $" [{agent.Status.Trim()}]";
+        var status = agent.Status.Trim().Length == 0 ? string.Empty : $" [{agent.ReportLabel}]";
 
         return $"{AgentKey.Describe(agent.Repository, agent.Branch)} — "
-            + $"{AgentHarness.Describe(agent.Harness, agent.HostInNvim)}, {where}{status}";
+            + $"{AgentHarness.Describe(agent.Harness, agent.HostInNvim)}, {where}{status}{Evidence(agent)}";
     }
+
+    private static string Evidence(AgentRecord agent)
+    {
+        var parts = new List<string>();
+
+        if (agent.Evidence is { ShortHead.Length: > 0 } evidence)
+        {
+            parts.Add($"HEAD {evidence.ShortHead}");
+        }
+
+        if (Finished(agent))
+        {
+            parts.Add($"verify {ReportFlags.Verify(agent.Evidence)}");
+        }
+
+        return parts.Count == 0 ? string.Empty : $", {string.Join(", ", parts)}";
+    }
+
+    private static bool Finished(AgentRecord agent) =>
+        OrchestrationStatus.Normalize(agent.Status) is OrchestrationStatus.Done or OrchestrationStatus.Failed
+        && agent.Status.Trim().Length > 0;
+
+    private static string Reported(AgentRecord agent)
+    {
+        if (agent.Status.Trim().Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var lines = new List<string> { $"\nreport: {agent.ReportLabel}" };
+
+        if (agent.ReportedAt.Length > 0)
+        {
+            lines[0] += $" at {agent.ReportedAt}";
+        }
+
+        if (agent.Summary.Length > 0)
+        {
+            lines.Add($"summary: {agent.Summary}");
+        }
+
+        if (agent.Evidence is { } e)
+        {
+            lines.Add($"worktree: {e.Worktree}");
+            lines.Add($"base ref: {Shown(e.BaseRef)}");
+            lines.Add($"merge-base: {Shown(e.MergeBase)}");
+            lines.Add($"HEAD: {Shown(e.Head)}");
+            lines.Add($"worktree dirty: {(e.Dirty ? "yes" : "no")}");
+        }
+        else
+        {
+            lines.Add("evidence: none recorded (no git state was captured with this report)");
+        }
+
+        if (Finished(agent))
+        {
+            lines.Add($"verify: {ReportFlags.Verify(agent.Evidence)}");
+
+            if (agent.Evidence is { VerifyCommand.Length: > 0 } c)
+            {
+                lines.Add($"verify command: {c.VerifyCommand}");
+            }
+
+            if (agent.Evidence is { VerifyExitCode: { } code })
+            {
+                lines.Add($"verify exit code: {code}");
+            }
+
+            if (agent.Evidence is { VerifyOutput.Length: > 0 } o)
+            {
+                lines.Add($"verify output (last lines):\n{o.VerifyOutput}");
+            }
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    private static string Shown(string value) => value.Length == 0 ? "(unknown)" : value;
 
     private static string Base(AgentRecord agent, bool measured)
     {
