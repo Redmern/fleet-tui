@@ -255,4 +255,22 @@ public class ProcessTextTests
         Assert.Contains("only after the user agrees", text);
         Assert.Contains("set_profile", text);
     }
+
+    // AC-26: the Deliver stage sends agents to open_pr, not to a forge command line.
+    [Theory]
+    [InlineData(Profile.Express)]
+    [InlineData(Profile.Bugfix)]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Refactor)]
+    public void Deliver_tells_agents_to_open_the_pr_with_the_open_pr_tool_and_never_names_gh(Profile profile)
+    {
+        var text = Render(profile);
+
+        Assert.Contains("open the PR with the open_pr tool", text);
+        Assert.Contains("write its PR text with fl-pr", text);
+        Assert.Contains("fleet asks the user", text);
+        Assert.Contains("Never merge", text);
+        Assert.DoesNotContain("gh pr create", text);
+        Assert.DoesNotContain("gh pr", text);
+    }
 }

@@ -224,11 +224,13 @@ public static class ProcessText
             "write the final report: REPORT.md with the findings and the recommendation, longer material in "
             + "reports/.",
         Profile.Feature =>
-            "have each repository's agent push its branch and open a PR (gh pr create), with spec.md copied "
-            + "into the repository as docs/specs/<this folder's name>.md. Never merge: merging is the user's. "
+            "have each repository's agent write its PR text with fl-pr and open the PR with the open_pr tool "
+            + "(fleet asks the user, pushes the branch and opens the PR on the repository's forge), with spec.md "
+            + "copied into the repository as docs/specs/<this folder's name>.md. Never merge: merging is the user's. "
             + "Finish REPORT.md with what shipped, the PR links, and what did not ship.",
         _ =>
-            "have each repository's agent push its branch and open a PR (gh pr create). Never merge: merging "
-            + "is the user's. Finish REPORT.md with what shipped, the PR links, and what did not ship.",
+            "have each repository's agent write its PR text with fl-pr and open the PR with the open_pr tool "
+            + "(fleet asks the user, pushes the branch and opens the PR on the repository's forge). Never merge: "
+            + "merging is the user's. Finish REPORT.md with what shipped, the PR links, and what did not ship.",
     };
 }
