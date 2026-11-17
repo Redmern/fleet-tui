@@ -97,6 +97,8 @@ public sealed class McpActions(
 
     private readonly PullRepositoryHandler _puller = new(git);
 
+    private readonly DefaultBranchLag _defaultLag = new(git);
+
     private readonly RemoveRepositoryHandler _repoRemover = new(git);
 
     private readonly SetDefaultBranchHandler _defaults = new(git);
@@ -225,10 +227,11 @@ public sealed class McpActions(
 
         var worktrees = state.Worktrees.Count;
         var unpushed = state.Unpushed.Count;
+        var lag = await _defaultLag.DescribeAsync(repo.Path, repo.DefaultBranch, ct).ConfigureAwait(false);
 
         return Ok(
             $"{repo.Name} (default {repo.DefaultBranch}): {worktrees} worktree(s), "
-            + $"{unpushed} branch(es) not pushed.");
+            + $"{unpushed} branch(es) not pushed; {lag}.");
     }
 
     private async Task<McpResult> NewAgent(McpRequest request, CancellationToken ct)
