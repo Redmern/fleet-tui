@@ -1480,6 +1480,29 @@ a file it was not told about joins the set. Two limits: the skeleton notice need
 silent for now; and agents without an owner (started by the main orchestrator or by you)
 are not compared.
 
+**Your global orchestrator instructions.** fleet writes its own orchestrator
+instructions (the fleet tools, delegate first, waiting without polling, finishing work,
+pull requests through `open_pr`, only you approve a gate) to
+`~/.config/fleet/ORCHESTRATOR.md` (fleet's config folder: `%APPDATA%\fleet` on Windows, and
+`FLEET_CONFIG_HOME` moves it). It owns that file and overwrites it on `fleet setup`, `fleet update` (the newly
+installed binary writes it) and when fleetd starts, so it never drifts from the build you
+run. It never touches your own `~/CLAUDE.md` or `~/AGENTS.md`: import the file yourself
+with one line in `~/CLAUDE.md` (or `~/.claude/CLAUDE.md`):
+
+```
+@~/.config/fleet/ORCHESTRATOR.md
+```
+
+`fleet doctor` says whether the import is there and, when it is not, prints the exact
+line for your machine. An import inside a code block does not count: Claude does not
+expand it.
+Repository agents read the file too when it sits in `~/CLAUDE.md`; its first lines tell
+them to ignore it. Of the other harnesses only opencode can load an extra file: when an
+opencode agent is in use, doctor prints the entry to add to the `instructions` array of
+`~/.config/opencode/opencode.json` (an entry in the `OPENCODE_CONFIG_DIR` config counts too). codex and pi read their `AGENTS.md` as plain text with
+no import and have no setting that adds a file, so doctor says the include cannot reach
+them.
+
 ## The head orchestrator
 
 Every project has its own orchestrator. The **head** is one Claude above all of them:
