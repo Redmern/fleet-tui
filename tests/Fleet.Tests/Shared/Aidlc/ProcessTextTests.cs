@@ -204,4 +204,19 @@ public class ProcessTextTests
         Assert.DoesNotContain("git fetch", StageLine(text, "Deliver"));
         Assert.DoesNotContain("git fetch", StageLine(text, "Learn"));
     }
+
+    [Theory]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Refactor)]
+    public void Plan_asks_before_its_gate_about_the_release_the_version_and_the_release_notes_author_and_records_it(
+        Profile profile)
+    {
+        var line = StageLine(Render(profile), "Plan");
+
+        Assert.Contains("before the plan gate", line);
+        Assert.Contains("ships in a release", line);
+        Assert.Contains("which version", line);
+        Assert.Contains("who writes the `RELEASE_NOTES.md` entry", line);
+        Assert.Contains("record the answer in design.md", line);
+    }
 }

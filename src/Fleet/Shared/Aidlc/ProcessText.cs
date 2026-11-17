@@ -151,6 +151,9 @@ public static class ProcessText
             + "(file globs), verify (the command that proves it) and skeleton. Every acceptance criterion "
             + "belongs to at least one unit; units that can run at the same time must not own the same "
             + "files. Include the test strategy and the verify command for each repository. "
+            + "Ask the user, before the plan gate (or before Build when Plan has no gate), whether the work "
+            + "ships in a release, which version, and who writes the `RELEASE_NOTES.md` entry, and record the "
+            + "answer in design.md. "
             + FetchFirst;
 
         return profile == Profile.Refactor
