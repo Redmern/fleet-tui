@@ -7,7 +7,7 @@ namespace Fleet.Features.Mcp.ServeMcp;
 
 public static class ToolText
 {
-    public static string Agents(IReadOnlyList<AgentRecord> agents)
+    public static string Agents(IReadOnlyList<AgentRecord> agents, Func<AgentRecord, ReportDrift?>? afterReport = null)
     {
         var visible = agents
             .Where(a => !AgentHarness.IsOrchestrator(a.Harness))
@@ -18,17 +18,20 @@ public static class ToolText
             return "No agents yet.";
         }
 
-        return string.Join('\n', visible.Select(Line));
+        return string.Join('\n', visible.Select(a => Line(a) + AfterReport(afterReport?.Invoke(a), ", ")));
     }
 
     public static string Repositories(IReadOnlyList<string> names) =>
         names.Count == 0 ? "No repositories yet." : string.Join('\n', names);
 
     public static string Agent(AgentRecord agent, BranchState state, bool baseMeasured = true) =>
-        $"{AgentKey.Describe(agent.Repository, agent.Branch)}: {Where(agent)}, {Base(agent, baseMeasured)}{Drift(state)}{Reported(agent)}";
+        $"{AgentKey.Describe(agent.Repository, agent.Branch)}: {Where(agent)}, {Base(agent, baseMeasured)}{Drift(state)}{AfterReport(state.AfterReport, "; ")}{Reported(agent)}";
 
     public static string NotFound(string repository, string branch) =>
         $"No agent {AgentKey.Describe(repository, branch)} in this project.";
+
+    private static string AfterReport(ReportDrift? drift, string separator) =>
+        drift is null ? string.Empty : $"{separator}{drift.Label}";
 
     private static string Line(AgentRecord agent)
     {

@@ -23,10 +23,11 @@ public static class AgentRows
             return [FleetRow.Plain(EmptyHint)];
         }
 
-        var pills = agents.Select(a => BranchStatus.Pill(a.Branch, state(a))).ToList();
+        var states = agents.Select(state).ToList();
+        var pills = agents.Select((a, i) => BranchStatus.Pill(a.Branch, states[i])).ToList();
         var pillWidth = pills.Max(p => p.Sum(s => s.Text.Length));
 
-        return [.. agents.Select((a, i) => Row(a, pills[i], pillWidth))];
+        return [.. agents.Select((a, i) => Row(a, pills[i], pillWidth, states[i].AfterReport))];
     }
 
     private static IEnumerable<FleetSpan> Evidence(AgentRecord agent)
@@ -56,8 +57,16 @@ public static class AgentRows
         }
     }
 
+    private static IEnumerable<FleetSpan> AfterReport(ReportDrift? drift)
+    {
+        if (drift is not null)
+        {
+            yield return new FleetSpan($"  {drift.Label}", FleetTones.Warn);
+        }
+    }
+
     private static FleetRow Row(
-        AgentRecord agent, IReadOnlyList<FleetSpan> pill, int pillWidth)
+        AgentRecord agent, IReadOnlyList<FleetSpan> pill, int pillWidth, ReportDrift? drift)
     {
         var gap = pillWidth - pill.Sum(s => s.Text.Length);
 
@@ -67,6 +76,7 @@ public static class AgentRows
             FleetSpan.Plain(new string(' ', gap + 3)),
             FleetSpan.Muted(agent.Repository),
             .. Evidence(agent),
+            .. AfterReport(drift),
         ];
 
         List<FleetSpan> trailing = [];

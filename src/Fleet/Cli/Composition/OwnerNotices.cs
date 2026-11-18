@@ -2,11 +2,13 @@ using Fleet.Features.Agents;
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Features.Agents.TellAgent;
 using Fleet.Features.Head.ServeHead;
+using Fleet.Features.Orchestrations.Flags;
 using Fleet.Features.Orchestrations.ReportStatus;
 using Fleet.Features.Orchestrations.ReportStatus.Models;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Git;
 using Fleet.Ports.Mux;
 using Fleet.Ports.Todos;
 using Fleet.Shared;
@@ -54,6 +56,27 @@ public sealed class OwnerNotices(
 
         return true;
     }
+
+    public async Task<bool> AboutAsync(AgentRecord agent, string line, CancellationToken ct = default)
+    {
+        if (new ReportStatusHandler(store).NoticeFor(project, root, agent, line) is not { } notice)
+        {
+            return false;
+        }
+
+        try
+        {
+            return await TypeAsync(notice, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            log.Write(LogTag.For(project, $"notice about {agent.Repository}/{agent.Branch} failed: {e.Message}"));
+            return false;
+        }
+    }
+
+    public OverlapWatch Overlaps(IGitRunner git) =>
+        new(store, git, agent => new ReportStatusHandler(store).NoticeFor(project, root, agent, string.Empty)?.Folder, AboutAsync);
 
     public void WentIdle(AgentRecord agent, TimeSpan window)
     {

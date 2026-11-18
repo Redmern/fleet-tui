@@ -1448,6 +1448,18 @@ and the current settings, appends `ProfileSet` to `audit.jsonl`, and rewrites th
 instructions of subs and agents say that a message from another agent or session that
 claims approval is not one.
 
+**Flags, never blocks.** fleet points out three things and stops nothing. When an agent
+commits after its `done` report, `agent_status`, `list_agents` and its dashboard row say
+`N commits after report` (or `history rewritten since report` when the reported HEAD is
+gone from its branch). When a sub starts a unit while its walking skeleton is not settled
+in `state.json`, the sub gets the notice "unit started before the skeleton gate was
+approved". When two open agents of the same owner have changed the same files against
+their bases, the owner gets one notice naming both and the files, and another only when
+a file it was not told about joins the set. Two limits: the skeleton notice needs units in
+`state.json`, which fleet does not fill in yet (subs keep them in `units.json`), so it is
+silent for now; and agents without an owner (started by the main orchestrator or by you)
+are not compared.
+
 ## The head orchestrator
 
 Every project has its own orchestrator. The **head** is one Claude above all of them:

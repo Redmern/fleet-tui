@@ -15,6 +15,7 @@ using Fleet.Features.Forwards.ForwardPorts.Enums;
 using Fleet.Features.Mcp.ServeMcp;
 using Fleet.Features.Orchestrations.Dispatch;
 using Fleet.Features.Orchestrations.Dispatch.Models;
+using Fleet.Features.Orchestrations.Flags;
 using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.ReportStatus;
 using Fleet.Features.Orchestrations.ReportStatus.Models;
@@ -41,6 +42,7 @@ using Fleet.Ports.Mux.Models;
 using Fleet.Ports.Orchestrations;
 using Fleet.Shared;
 using Fleet.Shared.Constants;
+using Fleet.Shared.Evidence;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Harness.Enums;
 using Fleet.Shared.Mcp;
@@ -125,7 +127,7 @@ public sealed class McpActions(
 
         return tool switch
         {
-            HarnessTool.ListAgents => Ok(ToolText.Agents(await WithQuietPanes(_agents.Handle(project), ct).ConfigureAwait(false))),
+            HarnessTool.ListAgents => await ListAgents(ct).ConfigureAwait(false),
             HarnessTool.ListRepositories => await ListRepositories(ct).ConfigureAwait(false),
             HarnessTool.ListBranches => await ListBranches(request, ct).ConfigureAwait(false),
             HarnessTool.AgentStatus => await AgentStatus(request, ct).ConfigureAwait(false),
@@ -180,6 +182,25 @@ public sealed class McpActions(
         return Ok(lines.Count == 0 ? "The log is empty." : string.Join('\n', lines));
     }
 
+    private async Task<McpResult> ListAgents(CancellationToken ct)
+    {
+        var agents = await WithQuietPanes(_agents.Handle(project), ct).ConfigureAwait(false);
+        var drifts = new Dictionary<string, ReportDrift>(StringComparer.Ordinal);
+        var probe = new ReportDriftProbe(git);
+
+        foreach (var agent in agents.Where(a => !AgentHarness.IsOrchestrator(a.Harness)))
+        {
+            var head = ReportDrift.HeadToCheck(agent.Status, agent.Evidence);
+
+            if (head.Length > 0 && await probe.MeasureAsync(agent.Worktree, head, ct).ConfigureAwait(false) is { } drift)
+            {
+                drifts[agent.Worktree] = drift;
+            }
+        }
+
+        return Ok(ToolText.Agents(agents, a => drifts.GetValueOrDefault(a.Worktree)));
+    }
+
     private async Task<McpResult> ListRepositories(CancellationToken ct)
     {
         var summaries = await _repos.HandleAsync(root, ct).ConfigureAwait(false);
@@ -217,11 +238,11 @@ public sealed class McpActions(
             return McpResult.Error(ToolText.NotFound(Repo(request), Branch(request)));
         }
 
-        var state = _states.For(agent.Worktree, agent.BaseRef);
+        var state = _states.For(agent.Worktree, agent.BaseRef, ReportDrift.HeadToCheck(agent.Status, agent.Evidence));
         var against = await DistanceFromBaseAsync(agent, ct).ConfigureAwait(false);
 
         return Ok(against is { } measured
-            ? ToolText.Agent(agent, new BranchState(measured.Ahead, measured.Behind, state.Dirty))
+            ? ToolText.Agent(agent, new BranchState(measured.Ahead, measured.Behind, state.Dirty, state.AfterReport))
             : ToolText.Agent(agent, state, baseMeasured: false));
     }
 
@@ -344,7 +365,10 @@ public sealed class McpActions(
 
         if (owner.Trim().Length > 0)
         {
-            store.Save(project, agent with { Owner = owner });
+            agent = agent with { Owner = owner };
+            store.Save(project, agent);
+            await WarnStartedBeforeSkeletonAsync(agent, ct).ConfigureAwait(false);
+            await CheckOverlapsAsync(owner, ct).ConfigureAwait(false);
         }
 
         claudeConfigs.For(agent.Harness)
@@ -545,6 +569,46 @@ public sealed class McpActions(
         {
             log.Write(LogTag.For(
                 project, $"tell_agent could not put back the record of {agent.Repository}/{agent.Branch}"));
+        }
+    }
+
+    private async Task WarnStartedBeforeSkeletonAsync(AgentRecord agent, CancellationToken ct)
+    {
+        try
+        {
+            await WarnIfSkeletonOpenAsync(agent, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NullReferenceException)
+        {
+            log.Write(LogTag.For(project, $"skeleton gate check for {agent.Repository}/{agent.Branch} failed: {e.Message}"));
+        }
+    }
+
+    private async Task WarnIfSkeletonOpenAsync(AgentRecord agent, CancellationToken ct)
+    {
+        var owner = store.List(project).FirstOrDefault(a =>
+            AgentHarness.IsOrchestrator(a.Harness) && string.Equals(a.Branch, agent.Owner.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (owner is not null
+            && SkeletonGate.EarlyStart(Adapters.Intents().Load(owner.Worktree), agent.Repository, agent.Branch) is { } line)
+        {
+            await Owners().AboutAsync(agent, line, ct).ConfigureAwait(false);
+        }
+    }
+
+    private AgentRecord? CallerAgent() =>
+        store.List(project).FirstOrDefault(a => !AgentHarness.IsOrchestrator(a.Harness)
+            && string.Equals(McpCaller.ForAgent(a.Repository, a.Branch), caller, StringComparison.OrdinalIgnoreCase));
+
+    private async Task CheckOverlapsAsync(string owner, CancellationToken ct)
+    {
+        try
+        {
+            await Owners().Overlaps(git).CheckAsync(project, owner, ct).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            log.Write(LogTag.For(project, $"overlap check for {owner} failed: {e.Message}"));
         }
     }
 
@@ -955,6 +1019,11 @@ public sealed class McpActions(
                 ct,
                 VerifyFrom(request))
             .ConfigureAwait(false);
+
+        if (reported.Succeeded && CallerAgent() is { } reportedBy)
+        {
+            await CheckOverlapsAsync(reportedBy.Owner, ct).ConfigureAwait(false);
+        }
 
         return reported.Succeeded ? Ok(reported.Value!) : McpResult.Error(reported.Error!);
     }
