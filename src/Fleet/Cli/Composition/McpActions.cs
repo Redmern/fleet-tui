@@ -18,6 +18,7 @@ using Fleet.Features.Orchestrations.Dispatch.Models;
 using Fleet.Features.Orchestrations.ListSubs;
 using Fleet.Features.Orchestrations.ReportStatus;
 using Fleet.Features.Orchestrations.ReportStatus.Models;
+using Fleet.Features.Orchestrations.SetProfile;
 using Fleet.Features.Orchestrations.WaitForAgent;
 using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
@@ -155,6 +156,7 @@ public sealed class McpActions(
             HarnessTool.StartStack => await Forward(request, ForwardVerb.Start, ct).ConfigureAwait(false),
             HarnessTool.StopStack => await Forward(request, ForwardVerb.Stop, ct).ConfigureAwait(false),
             HarnessTool.TodoAdd => TodoAdd(request),
+            HarnessTool.SetProfile => SetProfile(request),
             _ => McpResult.Error($"{request.Tool} is not available."),
         };
     }
@@ -989,6 +991,14 @@ public sealed class McpActions(
         log.Write(LogTag.For(project, $"{caller} added todo {added.Value.Id}"));
 
         return Ok($"added todo {added.Value.Id} ({TodoPaths.File(root, added.Value.Id)}).");
+    }
+
+    private McpResult SetProfile(McpRequest request)
+    {
+        var set = new SetProfileHandler(store, Adapters.Intents(), Adapters.Settings()).Handle(
+            project, root, caller, ToolArguments.Text(request, ToolArguments.Profile), clock.GetUtcNow().ToString("O"));
+
+        return set.Succeeded ? Ok(set.Value!) : McpResult.Error(set.Error!);
     }
 
     private Task<RepositorySummary?> Resolve(McpRequest request, CancellationToken ct) =>

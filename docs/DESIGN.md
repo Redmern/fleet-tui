@@ -4975,6 +4975,22 @@ appends one compact JSON object per audit line. Then it renders CLAUDE.md's
 `progress/<unit>.md`, `reviews/<unit>-<round>.md`, `learnings.md`), and which stages wait
 for the user.
 
+**Changing the profile (`set_profile`).** Only a sub-orchestrator can call it; the caller
+is matched to its orchestrator record, and an agent or the main orchestrator is refused.
+An unknown name is refused with the list from `ProfileCatalog.All`. The handler
+(`Features/Orchestrations/SetProfile`) re-reads the `off` parts from settings, resolves the
+new plan with `ProcessPlan.Resolve`, keeps every stage that has started (any state but
+`pending`, or `skipped` for a reason other than "off in settings"), even if the new
+profile does not have it, takes the new plan's stages for the rest, and orders them by
+`Stage`. Nothing moves a stage past `pending` yet (gates are honour-system), so the reply
+tells the sub to carry on from the stage it is in. It saves `state.json` (a write error
+is a refusal), appends `ProfileSet` with `<new> (was <old>)` as the `conductor`, and in
+the folder's instruction file swaps the `## Process` section
+(`OrchestrationText.WithProcess`) and, when the switch crosses `research`, adds or drops
+the `## Research` section and the waiting text (`OrchestrationText.WithResearch`); the
+other sections stay as dispatch wrote them. A sub dispatched with `research: true` stays
+research. The same profile changes nothing.
+
 **Gates are honour-system until M3.** There are no gate tools yet, so the process text
 tells the conductor to stop at each human gate, summarise the artifact, and wait for the
 user's reply. The engine cannot enforce that yet; M3 moves gates onto the dashboard's

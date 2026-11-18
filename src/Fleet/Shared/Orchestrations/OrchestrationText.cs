@@ -1,3 +1,4 @@
+using Fleet.Shared.Aidlc;
 using Fleet.Shared.Orchestrations.Models;
 
 namespace Fleet.Shared.Orchestrations;
@@ -91,6 +92,18 @@ public static class OrchestrationText
         the result in reports/.
         """;
 
+    private const string SectionBreak = "\n\n";
+
+    private const string ProcessHeading = "## Process\n";
+
+    private const string ResearchHeading = "## Research\n";
+
+    private const string HowYouWorkHeading = "## How you work";
+
+    private const string ReportingHeading = "## Reporting";
+
+    private static readonly string[] SectionsAfterProcess = [ResearchHeading, "## Subagents\n", HowYouWorkHeading];
+
     public static bool IsClassicAidlc(string text) =>
         string.Equals(Normalized(text), Normalized(ClassicAidlc), StringComparison.Ordinal);
 
@@ -116,7 +129,7 @@ public static class OrchestrationText
             use the fl-map skill first.
             """;
 
-        var waiting = research ? string.Empty : $"\n## Waiting for agents\n{WaitingFor(nativeMessaging)}\n";
+        var waiting = research ? string.Empty : WaitingSection(nativeMessaging);
 
         var footer =
             $"""
@@ -131,18 +144,20 @@ public static class OrchestrationText
             where you stop and wait for the user, call fleet_report with
             status "working" and a summary such as "waiting on user". Until you call
             done or failed, fleet shows this task as working.
+
+            {ProcessText.OnlyTheUserApproves} Ask the user.
             """;
 
         var sections = new List<string> { header };
 
         if (!string.IsNullOrWhiteSpace(aidlc))
         {
-            sections.Add($"## Process\n{aidlc.Trim()}");
+            sections.Add($"{ProcessHeading}{aidlc.Trim()}");
         }
 
         if (research)
         {
-            sections.Add($"## Research\n{Research.Trim()}");
+            sections.Add(ResearchSection);
         }
 
         if (subagents)
@@ -154,6 +169,83 @@ public static class OrchestrationText
 
         return string.Join("\n\n", sections);
     }
+
+    public static string WithProcess(string instructions, string process)
+    {
+        var section = $"{ProcessHeading}{process.Trim()}";
+        var start = instructions.IndexOf(SectionBreak + ProcessHeading, StringComparison.Ordinal);
+
+        if (start < 0)
+        {
+            var before = NextSection(instructions, 0);
+
+            return before < 0
+                ? instructions + SectionBreak + section
+                : instructions[..before] + SectionBreak + section + instructions[before..];
+        }
+
+        var end = NextSection(instructions, start + SectionBreak.Length);
+
+        return instructions[..start] + SectionBreak + section + (end < 0 ? string.Empty : instructions[end..]);
+    }
+
+    public static bool HasResearch(string instructions) =>
+        instructions.Contains(SectionBreak + ResearchSection, StringComparison.Ordinal);
+
+    public static string WithResearch(string instructions, bool research, bool nativeMessaging)
+    {
+        if (research == HasResearch(instructions))
+        {
+            return instructions;
+        }
+
+        return research
+            ? WithoutWaiting(AddResearch(instructions))
+            : WithWaiting(instructions.Replace(SectionBreak + ResearchSection, string.Empty, StringComparison.Ordinal), nativeMessaging);
+    }
+
+    private static string ResearchSection => $"## Research\n{Research.Trim()}";
+
+    private static string WaitingSection(bool nativeMessaging) =>
+        $"\n## Waiting for agents\n{WaitingFor(nativeMessaging)}\n";
+
+    private static string AddResearch(string instructions)
+    {
+        var before = NextSection(instructions, 0, skipResearch: true);
+
+        return before < 0
+            ? instructions + SectionBreak + ResearchSection
+            : instructions[..before] + SectionBreak + ResearchSection + instructions[before..];
+    }
+
+    private static string WithoutWaiting(string instructions) =>
+        instructions
+            .Replace(WaitingSection(nativeMessaging: true), string.Empty, StringComparison.Ordinal)
+            .Replace(WaitingSection(nativeMessaging: false), string.Empty, StringComparison.Ordinal);
+
+    private static string WithWaiting(string instructions, bool nativeMessaging)
+    {
+        var howYouWork = instructions.IndexOf(SectionBreak + HowYouWorkHeading, StringComparison.Ordinal);
+        var reporting = instructions.IndexOf(ReportingHeading, Math.Max(0, howYouWork), StringComparison.Ordinal);
+
+        if (howYouWork < 0 || reporting < 0)
+        {
+            return instructions;
+        }
+
+        var newline = reporting >= 2 && instructions[reporting - 2] == '\r' ? 2 : 1;
+        var at = reporting - newline;
+
+        return instructions[..at] + WaitingSection(nativeMessaging) + instructions[at..];
+    }
+
+    private static int NextSection(string instructions, int from, bool skipResearch = false) =>
+        SectionsAfterProcess
+            .Where(heading => !skipResearch || heading != ResearchHeading)
+            .Select(heading => instructions.IndexOf(SectionBreak + heading, from, StringComparison.Ordinal))
+            .Where(at => at >= 0)
+            .DefaultIfEmpty(-1)
+            .Min();
 
     private static string Normalized(string text) => text.ReplaceLineEndings("\n").Trim();
 

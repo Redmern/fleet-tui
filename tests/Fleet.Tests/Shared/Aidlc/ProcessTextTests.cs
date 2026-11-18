@@ -204,4 +204,55 @@ public class ProcessTextTests
         Assert.DoesNotContain("git fetch", StageLine(text, "Deliver"));
         Assert.DoesNotContain("git fetch", StageLine(text, "Learn"));
     }
+
+    [Theory]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Refactor)]
+    public void Plan_asks_before_its_gate_about_the_release_the_version_and_the_release_notes_author_and_records_it(
+        Profile profile)
+    {
+        var line = StageLine(Render(profile), "Plan");
+
+        Assert.Contains("before the plan gate", line);
+        Assert.Contains("ships in a release", line);
+        Assert.Contains("which version", line);
+        Assert.Contains("who writes the `RELEASE_NOTES.md` entry", line);
+        Assert.Contains("record the answer in design.md", line);
+    }
+
+    [Theory]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Refactor)]
+    [InlineData(Profile.Bugfix)]
+    [InlineData(Profile.Express)]
+    public void Review_requires_a_review_of_the_combined_stack_in_dependency_order_before_deliver(Profile profile)
+    {
+        var line = StageLine(Render(profile), "Review");
+
+        Assert.Contains("review each unit's actual diff", line);
+        Assert.Contains("combined stack", line);
+        Assert.Contains("all units merged in dependency order", line);
+        Assert.Contains("before Deliver", line);
+        Assert.Contains("in addition to the per-unit reviews", line);
+    }
+
+    [Theory]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Express)]
+    [InlineData(Profile.Research)]
+    public void The_text_names_every_profile_and_says_to_propose_a_better_one_at_first_contact_and_change_it_only_once_the_user_agrees(
+        Profile profile)
+    {
+        var text = Render(profile);
+
+        foreach (var each in ProfileCatalog.All)
+        {
+            Assert.Contains($"{Words.Of(each)} ({ProfileCatalog.Describe(each)})", text);
+        }
+
+        Assert.Contains("first contact with the user", text);
+        Assert.Contains($"does not fit, name the profile that fits better", text);
+        Assert.Contains("only after the user agrees", text);
+        Assert.Contains("set_profile", text);
+    }
 }

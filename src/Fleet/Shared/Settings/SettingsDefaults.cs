@@ -102,6 +102,7 @@ public static class SettingsDefaults
         HarnessTool.StopStack,
         HarnessTool.TodoAdd,
         HarnessTool.CreateProject,
+        HarnessTool.SetProfile,
     ];
 
     public static ToolRule RuleFor(HarnessTool tool) =>
@@ -146,6 +147,7 @@ public static class SettingsDefaults
         HarnessTool.SyncToRemote => "Send work to another machine",
         HarnessTool.TodoAdd => "Add a todo ticket",
         HarnessTool.CreateProject => "Create a project",
+        HarnessTool.SetProfile => "Change an orchestration's profile",
         _ => tool.ToString(),
     };
 }

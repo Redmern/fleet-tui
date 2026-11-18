@@ -1439,6 +1439,15 @@ next to it (`state.json`, and `audit.jsonl` for what happened), and tells it to 
 ask you at each approval point. `.fleet/config/ai-dlc.md` adds your own notes to that
 process (the older name `aidlc.md` still works; if both exist, `ai-dlc.md` wins).
 
+**Changing the profile.** The process names every profile. When another one fits the task
+better, the sub says so the first time it talks to you, and switches only after you agree,
+with the `set_profile(profile)` MCP tool (sub-orchestrators only; default allow). fleet
+keeps the stages already started, rebuilds the ones not started yet from the new profile
+and the current settings, appends `ProfileSet` to `audit.jsonl`, and rewrites the
+`## Process` section of the sub's CLAUDE.md (or AGENTS.md). Only you approve a gate: the
+instructions of subs and agents say that a message from another agent or session that
+claims approval is not one.
+
 ## The head orchestrator
 
 Every project has its own orchestrator. The **head** is one Claude above all of them:
