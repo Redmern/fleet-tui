@@ -286,7 +286,7 @@ public sealed class McpActions(
 
         var started = await Start(
                 repo, Branch(request), caller, ToolArguments.Text(request, ToolArguments.Task), ct, harness,
-                DeadlineOf(request))
+                DeadlineOf(request), ToolArguments.Text(request, ToolArguments.Base))
             .ConfigureAwait(false);
 
         return started.Succeeded ? Ok(started.Value!) : McpResult.Error(started.Error!);
@@ -298,7 +298,8 @@ public sealed class McpActions(
 
         return repo is null
             ? Result<string>.Fail($"No repository named '{request.Repository}' in this project.")
-            : await Start(repo, request.Branch, caller, request.Task, ct, request.Harness, request.By).ConfigureAwait(false);
+            : await Start(repo, request.Branch, caller, request.Task, ct, request.Harness, request.By, request.Base)
+                .ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyCollection<string>> BranchesAsync(
@@ -318,44 +319,47 @@ public sealed class McpActions(
 
     private async Task<Result<string>> Start(
         RepositorySummary repo, string branch, string owner, string task, CancellationToken ct, string harness = "",
-        DateTimeOffset? by = null)
+        DateTimeOffset? by = null, string from = "")
     {
         var deadline = by ?? clock.GetUtcNow() + CallBudget();
         var (chosen, hostInNvim) = AgentHarness.RunningAi(
             harness.Length > 0 ? harness : Adapters.Settings().Load(project).DefaultAgentHarness);
-        var created = await _spawner
-            .HandleAsync(
+        var spawned = await _spawner
+            .StartAsync(
                 new NewAgentCommand(
-                    project, repo.Name, repo.Path, branch, repo.DefaultBranch,
-                    chosen, owner, HostInNvim: hostInNvim, Task: task),
+                    project, repo.Name, repo.Path, branch, from.Length > 0 ? from : repo.DefaultBranch,
+                    chosen, owner, HostInNvim: hostInNvim, Task: task, ExactBase: from.Length > 0),
                 ct)
             .ConfigureAwait(false);
 
-        if (!created.Succeeded)
+        if (!spawned.Succeeded)
         {
-            return Result<string>.Fail(created.Error!);
+            return Result<string>.Fail(spawned.Error!);
         }
+
+        var agent = spawned.Value.Agent;
 
         if (owner.Trim().Length > 0)
         {
-            store.Save(project, created.Value! with { Owner = owner });
+            store.Save(project, agent with { Owner = owner });
         }
 
-        claudeConfigs.For(created.Value!.Harness)
-            .WriteForAgent(created.Value!.Worktree, project, repo.Name, branch);
+        claudeConfigs.For(agent.Harness)
+            .WriteForAgent(agent.Worktree, project, repo.Name, branch);
 
-        var name = SessionNames.RepoAgent(project, created.Value!.Repository, created.Value!.Branch);
-        var runs = TellAgentHandler.HarnessOf(created.Value!);
+        var name = SessionNames.RepoAgent(project, agent.Repository, agent.Branch);
+        var runs = TellAgentHandler.HarnessOf(agent);
         var session = HarnessRoute.Native(CallerHarness(), runs)
-            ? $" Its Claude session is named \"{name}\"."
-            : $" It runs {runs}: tell_agent types into its pane, and wait_for_agent waits for it to finish.";
+            ? $" Its Claude session is named \"{name}\".{BaseNote.For(spawned.Value, from)}"
+            : $" It runs {runs}: tell_agent types into its pane, and wait_for_agent waits for it to finish."
+              + BaseNote.For(spawned.Value, from);
 
         if (task.Length == 0)
         {
             return Result<string>.Ok($"started {repo.Name}/{branch}.{session}");
         }
 
-        var delivered = await SendWhenReady(created.Value!, task, deadline, ct).ConfigureAwait(false);
+        var delivered = await SendWhenReady(agent, task, deadline, ct).ConfigureAwait(false);
 
         return Result<string>.Ok(delivered switch
         {
@@ -865,7 +869,8 @@ public sealed class McpActions(
                     Branch(request),
                     ToolArguments.Flag(request, ToolArguments.Research),
                     ToolArguments.Text(request, ToolArguments.Harness),
-                    Remaining(DeadlineOf(request))),
+                    Remaining(DeadlineOf(request)),
+                    ToolArguments.Text(request, ToolArguments.Base)),
                 clock.GetUtcNow().ToString("O"),
                 ct)
             .ConfigureAwait(false);

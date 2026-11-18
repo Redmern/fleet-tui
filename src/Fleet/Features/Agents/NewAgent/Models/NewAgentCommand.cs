@@ -9,4 +9,5 @@ public sealed record NewAgentCommand(
     string Harness,
     string Owner = "",
     bool HostInNvim = false,
-    string Task = "");
+    string Task = "",
+    bool ExactBase = false);

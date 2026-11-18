@@ -279,7 +279,8 @@ public sealed class DispatchHandler(
                     branch,
                     prompt,
                     command.Harness?.Trim() ?? string.Empty,
-                    deadline),
+                    deadline,
+                    command.Base?.Trim() ?? string.Empty),
                 ct)
             .ConfigureAwait(false);
 

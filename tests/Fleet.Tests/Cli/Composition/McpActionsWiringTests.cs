@@ -594,6 +594,100 @@ public sealed class McpActionsWiringTests : IDisposable
         NothingLeftTheSandbox();
     }
 
+    // A branch one commit ahead of main, made without a worktree. Returns its SHA.
+    private static async Task<string> BranchAheadOfMainAsync(string container, string branch)
+    {
+        var git = new Fleet.Platform.Git.GitRunner();
+        var commit = await git.RunAsync(
+            container,
+            ["-c", "user.name=t", "-c", "user.email=t@t", "commit-tree", "main^{tree}", "-p", "main", "-m", $"work on {branch}"]);
+
+        Assert.True(commit.Ok, commit.Message);
+        Assert.True((await git.RunAsync(container, ["branch", "--no-track", branch, commit.Out.Trim()])).Ok);
+
+        return commit.Out.Trim();
+    }
+
+    private static async Task<string> TipAsync(string container, string reference)
+    {
+        var tip = await new Fleet.Platform.Git.GitRunner().RunAsync(container, ["rev-parse", reference]);
+
+        Assert.True(tip.Ok, tip.Message);
+
+        return tip.Out.Trim();
+    }
+
+    [Fact]
+    public async Task New_agent_with_a_base_cuts_the_new_branch_from_that_base_and_records_it()
+    {
+        var container = await _team.AddRepositoryAsync("api");
+        var parent = await BranchAheadOfMainAsync(container, "feat/parent");
+
+        var reply = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat/child"), ("base", "feat/parent"), ("harness", "opencode"));
+
+        Assert.False(reply.IsError, reply.Text);
+        Assert.Contains("started api/feat/child", reply.Text);
+        Assert.DoesNotContain("ignored", reply.Text);
+        Assert.Equal(parent, await TipAsync(container, "feat/child"));
+        Assert.Equal("feat/parent", _team.Record("api", "feat/child").BaseRef);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task New_agent_with_a_base_for_a_branch_that_exists_says_the_base_was_ignored_and_names_the_tip()
+    {
+        var container = await _team.AddRepositoryAsync("api");
+        await BranchAheadOfMainAsync(container, "feat/parent");
+        var existing = await BranchAheadOfMainAsync(container, "feat/child");
+
+        var reply = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat/child"), ("base", "feat/parent"), ("harness", "opencode"));
+
+        Assert.False(reply.IsError, reply.Text);
+        Assert.Contains($"base 'feat/parent' was ignored: feat/child already exists at {existing[..7]}", reply.Text);
+        Assert.Equal(existing, await TipAsync(container, "feat/child"));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task New_agent_with_a_base_that_does_not_resolve_is_an_error_naming_it_and_starts_nothing()
+    {
+        var container = await _team.AddRepositoryAsync("api");
+
+        var reply = await _team.CallAsync(
+            string.Empty, HarnessTool.NewAgent,
+            ("repository", "api"), ("branch", "feat/child"), ("base", "feat/nowhere"), ("harness", "opencode"));
+
+        Assert.True(reply.IsError, reply.Text);
+        Assert.Contains("base 'feat/nowhere'", reply.Text);
+        Assert.False(Directory.Exists(Path.Combine(container, "feat_child")));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Dispatch_straight_to_a_repository_agent_with_a_base_cuts_the_new_branch_from_that_base()
+    {
+        var container = await _team.AddRepositoryAsync("api");
+        var parent = await BranchAheadOfMainAsync(container, "feat/parent");
+
+        var reply = await _team.CallAsync(
+            string.Empty, HarnessTool.Dispatch,
+            ("message", "build the form"), ("repository", "api"), ("branch", "feat/child"), ("base", "feat/parent"),
+            ("harness", "opencode"));
+
+        Assert.False(reply.IsError, reply.Text);
+        Assert.Contains("started a repository agent on api/feat/child", reply.Text);
+        Assert.Equal(parent, await TipAsync(container, "feat/child"));
+
+        NothingLeftTheSandbox();
+    }
+
     private void NothingLeftTheSandbox()
     {
         Assert.Empty(Directory.EnumerateFiles(_home, "*", SearchOption.AllDirectories));

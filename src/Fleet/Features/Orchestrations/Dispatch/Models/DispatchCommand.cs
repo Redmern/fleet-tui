@@ -10,4 +10,5 @@ public sealed record DispatchCommand(
     string? Branch = null,
     bool Research = false,
     string? Harness = null,
-    TimeSpan? Within = null);
+    TimeSpan? Within = null,
+    string? Base = null);

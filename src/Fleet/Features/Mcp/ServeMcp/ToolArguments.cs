@@ -8,6 +8,8 @@ public static class ToolArguments
 
     public const string Branch = "branch";
 
+    public const string Base = "base";
+
     public const string Message = "message";
 
     public const string Task = "task";

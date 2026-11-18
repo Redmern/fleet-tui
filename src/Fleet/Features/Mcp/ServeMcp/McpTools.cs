@@ -16,6 +16,15 @@ public static class McpTools
     private static readonly ToolParam Branch =
         new(ToolArguments.Branch, "string", "The agent's branch.", true);
 
+    private static readonly ToolParam Base =
+        new(
+            ToolArguments.Base,
+            "string",
+            "Optional: the ref a new branch starts from, a local branch or origin/<branch> as last fetched (fleet "
+            + "does not fetch); defaults to the repository's default branch. Pass the parent unit's branch for "
+            + "stacked work. Ignored, and the result says so, when the branch already exists.",
+            false);
+
     private static readonly ToolParam Slug =
         new(ToolArguments.Slug, "string", "The sub-orchestrator's slug, as list_subs shows it.", true);
 
@@ -73,7 +82,12 @@ public static class McpTools
             HarnessTool.NewAgent,
             "Start a new agent on a branch of a repository, optionally with a first task.",
             Repository,
-            new ToolParam(ToolArguments.Branch, "string", "The branch to create or reuse.", true),
+            new ToolParam(
+                ToolArguments.Branch,
+                "string",
+                "The branch to create or reuse. A branch that is only on origin becomes a local branch tracking it.",
+                true),
+            Base,
             new ToolParam(
                 ToolArguments.Task, "string", "An optional first instruction to send the agent.", false),
             new ToolParam(
@@ -146,6 +160,7 @@ public static class McpTools
                 "string",
                 "Optional, with repository: the branch to create or reuse; otherwise named from the task.",
                 false),
+            Base,
             new ToolParam(
                 ToolArguments.Research,
                 "boolean",

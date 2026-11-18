@@ -176,6 +176,25 @@ public class ProcessTextTests
         Assert.Contains("never local `<default>`", line);
     }
 
+    [Theory]
+    [InlineData(Profile.Feature)]
+    [InlineData(Profile.Refactor)]
+    public void Build_with_units_says_to_pass_the_parent_units_branch_as_base_for_a_unit_that_depends_on_an_unmerged_one(
+        Profile profile)
+    {
+        var line = StageLine(Render(profile), "Build");
+
+        Assert.Contains("`base: <parent unit's branch>`", line);
+        Assert.Contains("depends on another unit that is not merged yet", line);
+        Assert.Contains("new_agent", line);
+    }
+
+    [Fact]
+    public void Build_without_units_says_nothing_about_a_base()
+    {
+        Assert.DoesNotContain("base:", StageLine(Render(Profile.Express), "Build"));
+    }
+
     [Fact]
     public void Stages_that_do_not_read_or_diff_code_carry_no_fetch_text()
     {
