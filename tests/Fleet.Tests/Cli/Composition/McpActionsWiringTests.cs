@@ -509,6 +509,91 @@ public sealed class McpActionsWiringTests : IDisposable
     // does and only the check of the real files counts.
     // The real home may be in use by live harness sessions, so sizes and write times prove nothing there. Every
     // folder a test makes has the sandbox's random name in its path: a real file that names it was written by fleet.
+    private async Task<(string Container, string Seed)> RepositoryWithOriginAsync(string name)
+    {
+        var container = await _team.AddRepositoryAsync(name);
+        var git = new Fleet.Platform.Git.GitRunner();
+        var upstream = Path.Combine(_sandbox, name + "-upstream.git");
+        var seed = Path.Combine(_sandbox, name + "-seed");
+
+        Assert.True((await git.RunAsync(_sandbox, ["init", "--bare", "-b", "main", upstream])).Ok);
+        Assert.True((await git.RunAsync(container, ["remote", "add", "origin", upstream])).Ok);
+        Assert.True((await git.RunAsync(container, ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"])).Ok);
+        Assert.True((await git.RunAsync(container, ["push", "origin", "main"])).Ok);
+        Assert.True((await git.RunAsync(_sandbox, ["clone", upstream, seed])).Ok);
+
+        return (container, seed);
+    }
+
+    private static async Task CommitUpstreamAsync(string seed, int count)
+    {
+        var git = new Fleet.Platform.Git.GitRunner();
+
+        for (var i = 0; i < count; i++)
+        {
+            var committed = await git.RunAsync(
+                seed, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", $"upstream {i}"]);
+
+            Assert.True(committed.Ok, committed.Message);
+        }
+
+        Assert.True((await git.RunAsync(seed, ["push", "origin", "HEAD:main"])).Ok);
+    }
+
+    [Fact]
+    public async Task Pull_repository_without_a_default_worktree_moves_the_stale_local_default_and_repository_status_shows_the_lag()
+    {
+        var (container, seed) = await RepositoryWithOriginAsync("api");
+        var git = new Fleet.Platform.Git.GitRunner();
+        Assert.True((await git.RunAsync(container, ["worktree", "remove", "--force", Path.Combine(container, "main")])).Ok);
+        await CommitUpstreamAsync(seed, 2);
+        Assert.True((await git.RunAsync(container, ["fetch", "origin"])).Ok);
+
+        var before = await _team.CallAsync(string.Empty, HarnessTool.RepositoryStatus, ("repository", "api"));
+
+        Assert.False(before.IsError, before.Text);
+        Assert.Contains("local main is 2 behind and 0 ahead of origin/main", before.Text);
+
+        var pulled = await _team.CallAsync(string.Empty, HarnessTool.PullRepository, ("repository", "api"));
+
+        Assert.False(pulled.IsError, pulled.Text);
+        Assert.Contains("moved main", pulled.Text);
+        Assert.Contains("2 commits", pulled.Text);
+
+        var after = await _team.CallAsync(string.Empty, HarnessTool.RepositoryStatus, ("repository", "api"));
+
+        Assert.Contains("local main is level with origin/main", after.Text);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Agent_status_names_the_base_ref_and_counts_the_commits_against_it_not_against_the_upstream()
+    {
+        var (container, _) = await RepositoryWithOriginAsync("api");
+        var git = new Fleet.Platform.Git.GitRunner();
+        var agent = await _team.StartClaudeWorkerAsync(string.Empty, "api", container, "feat/a");
+
+        for (var i = 0; i < 2; i++)
+        {
+            var committed = await git.RunAsync(
+                agent.Worktree,
+                ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", $"work {i}"]);
+
+            Assert.True(committed.Ok, committed.Message);
+        }
+
+        Assert.True((await git.RunAsync(agent.Worktree, ["push", "-u", "origin", "feat/a"])).Ok);
+
+        var status = await _team.CallAsync(string.Empty, HarnessTool.AgentStatus, ("repository", "api"), ("branch", "feat/a"));
+
+        Assert.False(status.IsError, status.Text);
+        Assert.Contains($"base {agent.BaseRef}: 2 ahead", status.Text);
+        Assert.DoesNotContain("in sync", status.Text);
+
+        NothingLeftTheSandbox();
+    }
+
     private void NothingLeftTheSandbox()
     {
         Assert.Empty(Directory.EnumerateFiles(_home, "*", SearchOption.AllDirectories));
