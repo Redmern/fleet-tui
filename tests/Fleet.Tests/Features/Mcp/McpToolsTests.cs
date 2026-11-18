@@ -57,6 +57,19 @@ public sealed class McpToolsTests
     }
 
     [Fact]
+    public void Report_takes_optional_verify_fields_and_says_fleet_captures_the_git_state()
+    {
+        var report = McpTools.Find("report")!;
+
+        Assert.Equal("string", report.Params.Single(p => p.Name == "verify_command").Type);
+        Assert.Equal("integer", report.Params.Single(p => p.Name == "verify_exit_code").Type);
+        Assert.Equal("string", report.Params.Single(p => p.Name == "verify_output").Type);
+        Assert.All(report.Params.Where(p => p.Name.StartsWith("verify_")), p => Assert.False(p.Required));
+        Assert.Contains("40 lines", report.Params.Single(p => p.Name == "verify_output").Description);
+        Assert.Contains("HEAD SHA", report.Description);
+    }
+
+    [Fact]
     public void No_tool_is_exposed_twice()
     {
         Assert.Equal(McpTools.All.Count, McpTools.All.Select(s => s.Tool).Distinct().Count());

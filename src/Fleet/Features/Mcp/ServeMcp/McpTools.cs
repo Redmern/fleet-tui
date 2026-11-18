@@ -210,9 +210,24 @@ public static class McpTools
         Spec(
             HarnessTool.Report,
             "Report your own status back to fleet (working, done, failed). Report working when you start "
-            + "a new task or follow-up, done only when it is fully implemented and verified, failed if you cannot finish it.",
+            + "a new task or follow-up, done only when it is fully implemented and verified, failed if you cannot finish it. Fleet records your worktree path, base ref, merge-base, HEAD SHA and whether the worktree is dirty with every report, so do not repeat them.",
             new ToolParam(ToolArguments.Status, "string", "working, done, or failed.", true),
-            new ToolParam(ToolArguments.Summary, "string", "A one-line summary.", false)),
+            new ToolParam(ToolArguments.Summary, "string", "A one-line summary.", false),
+            new ToolParam(
+                ToolArguments.VerifyCommand,
+                "string",
+                "With done or failed: the verify command you ran, such as the build and test command.",
+                false),
+            new ToolParam(
+                ToolArguments.VerifyExitCode,
+                "integer",
+                "With done or failed: that command's exit code. 0 counts as verified; leave it out and fleet shows the report as unverified.",
+                false),
+            new ToolParam(
+                ToolArguments.VerifyOutput,
+                "string",
+                "With done or failed: the command's output. Fleet keeps the last 40 lines, at most 4 KB.",
+                false)),
         Spec(
             HarnessTool.WaitForAgent,
             "Wait until an agent reports done or failed, or goes idle (no pane output for a while), then say which. "

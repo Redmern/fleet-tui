@@ -17,6 +17,10 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 {
     private const string Main = "";
 
+    private static string Notice(string line) =>
+        $"{System.Text.RegularExpressions.Regex.Escape($"[fleet] {line}")} \\[HEAD [0-9a-f]{{7}}, verify unverified\\]"
+        + $"{System.Text.RegularExpressions.Regex.Escape(NoticeTail)}$";
+
     private const string NoticeTail = " (check it with agent_status or list_agents, then review its work).";
 
     private readonly MixedTeamRig _team;
@@ -150,7 +154,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
             McpCaller.ForAgent("api", "fix"), HarnessTool.Report, Status("done", "login fixed"));
 
         Assert.False(reported.IsError, reported.Text);
-        Assert.Contains("api/fix: done — login fixed", reported.Text);
+        Assert.Contains("api/fix: done (unverified) — login fixed", reported.Text);
         Assert.Contains("Fleet typed this report into your orchestrator's pane", reported.Text);
         Assert.DoesNotContain("SendMessage", reported.Text);
         Assert.Equal("done", _team.Record("api", "fix").Status);
@@ -159,7 +163,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
 
         // orchestrator notification: a line appended to notices.md and the read prompt submitted in the sub's pane
         Assert.Equal([profile.Kickoff, AgentHarness.NoticesPrompt], sub.Submitted);
-        Assert.Equal($"[fleet] api/fix: done — login fixed{NoticeTail}", sub.LastNotice);
+        Assert.Matches(Notice("api/fix: done (unverified) — login fixed"), sub.LastNotice);
 
         // wait_for_agent returns the report
         var waited = await _team.CallAsync(sub.Caller!, HarnessTool.WaitForAgent, Agent("api", "fix"));
@@ -287,7 +291,7 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         Assert.Equal("done", _team.Record("api", "feat").Status);
         Assert.Empty(_team.DesktopNotifications);
         Assert.Equal(3, sub.Submitted.Count);
-        Assert.Equal($"[fleet] api/feat: done — form built{NoticeTail}", sub.LastNotice);
+        Assert.Matches(Notice("api/feat: done (unverified) (dirty) — form built"), sub.LastNotice);
 
         var waited = await _team.CallAsync(lead, HarnessTool.WaitForAgent, Agent("api", "feat"));
 
@@ -316,8 +320,8 @@ public sealed class MixedTeamE2ETests : ConfigHomeFixture
         await _team.CallAsync(McpCaller.ForAgent("api", "fix"), HarnessTool.Report, Status("failed", "second"));
 
         Assert.Equal(2, sub.Notices.Count);
-        Assert.EndsWith($"[fleet] api/fix: done — first{NoticeTail}", sub.Notices[0], StringComparison.Ordinal);
-        Assert.EndsWith($"[fleet] api/fix: failed — second{NoticeTail}", sub.Notices[1], StringComparison.Ordinal);
+        Assert.Matches(Notice("api/fix: done (unverified) — first"), sub.Notices[0]);
+        Assert.Matches(Notice("api/fix: failed — second"), sub.Notices[1]);
         Assert.Equal(instruction, sub.Instruction);
         Assert.Equal(AgentHarness.NoticesPrompt, sub.Submitted[^1]);
     }

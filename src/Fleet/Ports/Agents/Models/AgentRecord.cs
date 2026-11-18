@@ -1,4 +1,5 @@
 using Fleet.Shared.Constants;
+using Fleet.Shared.Evidence;
 using Fleet.Shared.Harness;
 using Fleet.Shared.Messaging;
 using Fleet.Shared.Settings;
@@ -23,9 +24,12 @@ public sealed record AgentRecord(
     string ReportedAt = "",
     RoleModel? Model = null,
     string OrchestratorHarness = "",
-    string InstructedAt = "")
+    string InstructedAt = "",
+    ReportEvidence? Evidence = null)
 {
     public HarnessProfile OrchestratorProfile => HarnessRegistry.For(OrchestratorHarness);
+
+    public string ReportLabel => ReportFlags.Label(Status, AgentHarness.IsOrchestrator(Harness), Evidence);
 
     public string RunningHarness => HarnessRoute.Of(Harness, OrchestratorProfile.Name);
 

@@ -1,5 +1,6 @@
 using Fleet.Platform.Storage;
 using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Evidence;
 using Fleet.Shared.Settings.Models;
 
 namespace Fleet.Tests.Platform.Storage;
@@ -78,6 +79,88 @@ public sealed class JsonAgentStoreTests : ConfigHomeFixture
 
         Assert.Equal(string.Empty, agent.Owner);
         Assert.Equal(string.Empty, agent.Status);
+    }
+
+    [Fact]
+    public void The_evidence_of_a_report_survives_the_round_trip()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+        var evidence = new ReportEvidence(
+            worktree, "origin/main", "1111111111111111111111111111111111111111",
+            "2222222222222222222222222222222222222222", true, "dotnet test", 3, "1 failed\nline 2");
+
+        _store.Save("techweb", Agent(worktree) with { Status = "done", Evidence = evidence });
+
+        Assert.Equal(evidence, Assert.Single(_store.List("techweb")).Evidence);
+    }
+
+    [Fact]
+    public void Evidence_without_verify_fields_round_trips_with_them_empty()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+        var evidence = new ReportEvidence(worktree, "main", "aaa", "bbb", false);
+
+        _store.Save("techweb", Agent(worktree) with { Evidence = evidence });
+
+        var loaded = Assert.Single(_store.List("techweb")).Evidence!;
+        Assert.Equal(evidence, loaded);
+        Assert.Null(loaded.VerifyExitCode);
+        Assert.Equal(Verification.Unverified, loaded.Verification);
+    }
+
+    [Fact]
+    public void A_zero_exit_code_is_kept_and_is_not_mistaken_for_none()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+
+        _store.Save("techweb", Agent(worktree) with { Evidence = new ReportEvidence(worktree, "main", "a", "b", false, "t", 0) });
+
+        Assert.Equal(0, Assert.Single(_store.List("techweb")).Evidence!.VerifyExitCode);
+    }
+
+    [Fact]
+    public void The_worktree_inside_the_evidence_is_stored_with_the_home_contracted_like_the_agents_own()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+
+        _store.Save("techweb", Agent(worktree) with { Evidence = new ReportEvidence(worktree, "main", "a", "b", false) });
+
+        Assert.Equal(worktree, Assert.Single(_store.List("techweb")).Evidence!.Worktree);
+    }
+
+    [Fact]
+    public void A_session_written_before_evidence_existed_loads_with_none()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Sessions, "techweb.json"),
+            """{"version":1,"agents":[{"worktree":"~/x","repository":"backend","branch":"dev","harness":"claude","status":"done","summary":"s","reportedAt":"2026-11-15T10:00:00.0000000+00:00"}]}""");
+
+        var agent = Assert.Single(_store.List("techweb"));
+
+        Assert.Null(agent.Evidence);
+        Assert.Equal("done", agent.Status);
+        Assert.Equal("done (unverified)", agent.ReportLabel);
+    }
+
+    [Fact]
+    public void An_agent_that_never_reported_leaves_no_evidence_in_the_file()
+    {
+        _store.Save("techweb", Agent(Path.Combine(ConfigHome, "backend", "develop")));
+
+        Assert.DoesNotContain("evidence", File.ReadAllText(Path.Combine(FleetPaths.Sessions, "techweb.json")));
+    }
+
+    [Fact]
+    public void Updating_an_agent_keeps_its_evidence()
+    {
+        var worktree = Path.Combine(ConfigHome, "backend", "develop");
+        var evidence = new ReportEvidence(worktree, "main", "a", "b", false, "t", 0, "ok");
+        _store.Save("techweb", Agent(worktree) with { Evidence = evidence });
+
+        _store.Update("techweb", worktree, a => a with { Hidden = true });
+
+        Assert.Equal(evidence, Assert.Single(_store.List("techweb")).Evidence);
     }
 
     [Fact]

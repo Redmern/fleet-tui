@@ -594,6 +594,62 @@ public sealed class McpActionsWiringTests : IDisposable
         NothingLeftTheSandbox();
     }
 
+    [Fact]
+    public async Task A_report_with_verify_fields_records_the_git_state_and_shows_in_agent_status_list_agents_and_the_owner_notice()
+    {
+        var (container, _) = await RepositoryWithOriginAsync("api");
+        var git = new Fleet.Platform.Git.GitRunner();
+        var agent = await _team.StartClaudeWorkerAsync(string.Empty, "api", container, "feat/a");
+        var committed = await git.RunAsync(
+            agent.Worktree, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "work"]);
+        Assert.True(committed.Ok, committed.Message);
+        var head = (await git.RunAsync(agent.Worktree, ["rev-parse", "HEAD"])).Out.Trim();
+        var mergeBase = (await git.RunAsync(agent.Worktree, ["merge-base", "HEAD", agent.BaseRef])).Out.Trim();
+
+        var reported = await _team.CallAsync(
+            McpCaller.ForAgent("api", "feat/a"), HarnessTool.Report,
+            ("status", "done"), ("summary", "built"), ("verify_command", "dotnet test"),
+            ("verify_exit_code", "0"), ("verify_output", "Passed! 10"));
+
+        Assert.False(reported.IsError, reported.Text);
+        Assert.Contains($"api/feat/a: done — built [HEAD {head[..7]}, verify ok]", reported.Text);
+        var evidence = _team.Record("api", "feat/a").Evidence!;
+        Assert.Equal(head, evidence.Head);
+        Assert.Equal(mergeBase, evidence.MergeBase);
+        Assert.Equal(agent.BaseRef, evidence.BaseRef);
+        Assert.False(evidence.Dirty);
+        Assert.Equal("Passed! 10", evidence.VerifyOutput);
+
+        var status = await _team.CallAsync(string.Empty, HarnessTool.AgentStatus, ("repository", "api"), ("branch", "feat/a"));
+
+        Assert.Contains($"HEAD: {head}", status.Text);
+        Assert.Contains($"merge-base: {mergeBase}", status.Text);
+        Assert.Contains("verify command: dotnet test", status.Text);
+
+        var listed = await _team.CallAsync(string.Empty, HarnessTool.ListAgents);
+
+        Assert.Contains($"[done], HEAD {head[..7]}, verify ok", listed.Text);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_report_with_a_failing_verify_and_no_output_is_accepted_and_flagged()
+    {
+        var (container, _) = await RepositoryWithOriginAsync("api");
+        await _team.StartClaudeWorkerAsync(string.Empty, "api", container, "feat/a");
+
+        var reported = await _team.CallAsync(
+            McpCaller.ForAgent("api", "feat/a"), HarnessTool.Report,
+            ("status", "done"), ("verify_exit_code", "2"));
+
+        Assert.False(reported.IsError, reported.Text);
+        Assert.Contains("api/feat/a: done (verify failed)", reported.Text);
+        Assert.Equal(2, _team.Record("api", "feat/a").Evidence!.VerifyExitCode);
+
+        NothingLeftTheSandbox();
+    }
+
     // A branch one commit ahead of main, made without a worktree. Returns its SHA.
     private static async Task<string> BranchAheadOfMainAsync(string container, string branch)
     {

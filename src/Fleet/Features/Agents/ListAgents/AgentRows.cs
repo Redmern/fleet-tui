@@ -1,5 +1,7 @@
 using Fleet.Ports.Agents.Models;
 using Fleet.Shared;
+using Fleet.Shared.Constants;
+using Fleet.Shared.Evidence;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
@@ -27,6 +29,33 @@ public static class AgentRows
         return [.. agents.Select((a, i) => Row(a, pills[i], pillWidth))];
     }
 
+    private static IEnumerable<FleetSpan> Evidence(AgentRecord agent)
+    {
+        if (agent.Evidence is { ShortHead.Length: > 0 } evidence)
+        {
+            yield return FleetSpan.Muted($"  {evidence.ShortHead}");
+        }
+
+        if (OrchestrationStatus.Normalize(agent.Status) is not (OrchestrationStatus.Done or OrchestrationStatus.Failed)
+            || agent.Status.Trim().Length == 0)
+        {
+            yield break;
+        }
+
+        var (text, tone) = agent.Evidence?.Verification switch
+        {
+            Verification.Ok => ("verified", FleetTones.Good),
+            Verification.Failed => ("verify failed", FleetTones.Bad),
+            _ when AgentHarness.IsOrchestrator(agent.Harness) => (string.Empty, FleetTones.Normal),
+            _ => ("unverified", FleetTones.Warn),
+        };
+
+        if (text.Length > 0)
+        {
+            yield return new FleetSpan($"  {text}", tone);
+        }
+    }
+
     private static FleetRow Row(
         AgentRecord agent, IReadOnlyList<FleetSpan> pill, int pillWidth)
     {
@@ -37,6 +66,7 @@ public static class AgentRows
             .. pill,
             FleetSpan.Plain(new string(' ', gap + 3)),
             FleetSpan.Muted(agent.Repository),
+            .. Evidence(agent),
         ];
 
         List<FleetSpan> trailing = [];

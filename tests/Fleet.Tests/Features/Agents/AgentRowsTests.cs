@@ -1,5 +1,6 @@
 using Fleet.Features.Agents.ListAgents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Shared.Evidence;
 using Fleet.Ui.Constants;
 using Fleet.Ui.Models;
 
@@ -25,6 +26,63 @@ public class AgentRowsTests
     }
 
     private static int Width(IEnumerable<FleetSpan> spans) => spans.Sum(s => s.Text.EnumerateRunes().Count());
+
+    private static ReportEvidence Evidence(int? exit = null) =>
+        new("/w", "main", "aaaaaaaaaa", "bbbbbbbcccccccc", false, exit is null ? string.Empty : "t", exit);
+
+    private static IReadOnlyList<FleetSpan> Spans(AgentRecord agent) =>
+        AgentRows.For([agent])[0].Spans;
+
+    [Fact]
+    public void A_done_agent_shows_its_short_head_and_a_verified_badge()
+    {
+        var spans = Spans(Agent("backend", "a") with { Status = "done", Evidence = Evidence(exit: 0) });
+
+        Assert.Contains(spans, s => s.Text.Trim() == "bbbbbbb");
+        Assert.Contains(spans, s => s.Text.Trim() == "verified" && s.Tone == FleetTones.Good);
+    }
+
+    [Fact]
+    public void A_done_agent_with_a_failing_verify_shows_a_failed_badge()
+    {
+        var spans = Spans(Agent("backend", "a") with { Status = "done", Evidence = Evidence(exit: 1) });
+
+        Assert.Contains(spans, s => s.Text.Trim() == "verify failed" && s.Tone == FleetTones.Bad);
+    }
+
+    [Fact]
+    public void A_done_agent_without_verify_fields_shows_an_unverified_badge()
+    {
+        var spans = Spans(Agent("backend", "a") with { Status = "done", Evidence = Evidence() });
+
+        Assert.Contains(spans, s => s.Text.Trim() == "unverified" && s.Tone == FleetTones.Warn);
+    }
+
+    [Fact]
+    public void A_done_agent_from_before_evidence_existed_is_unverified_with_no_head()
+    {
+        var spans = Spans(Agent("backend", "a") with { Status = "done" });
+
+        Assert.Contains(spans, s => s.Text.Trim() == "unverified");
+        Assert.DoesNotContain(spans, s => s.Text.Trim().Length == 7 && s.Text.Trim().All(char.IsAsciiHexDigit));
+    }
+
+    [Fact]
+    public void A_working_agent_shows_its_head_but_no_verify_badge()
+    {
+        var spans = Spans(Agent("backend", "a") with { Status = "working", Evidence = Evidence() });
+
+        Assert.Contains(spans, s => s.Text.Trim() == "bbbbbbb");
+        Assert.DoesNotContain(spans, s => s.Text.Contains("verif"));
+    }
+
+    [Fact]
+    public void A_sub_orchestrator_row_is_not_badged_unverified()
+    {
+        var spans = Spans(Agent("", "upgrade") with { Harness = "orchestrator", Status = "done" });
+
+        Assert.DoesNotContain(spans, s => s.Text.Contains("unverified"));
+    }
 
     [Fact]
     public void No_agents_shows_how_to_start_one()
