@@ -44,6 +44,36 @@ public sealed record SettingsConfig(
 
     public JiraSettings? Jira { get; init; }
 
+    public IReadOnlyDictionary<string, RepositorySettings> Repositories { get; init; } =
+        new Dictionary<string, RepositorySettings>();
+
+    public RepositorySettings RepositoryFor(string name)
+    {
+        foreach (var (repository, settings) in Repositories)
+        {
+            if (string.Equals(repository.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return settings;
+            }
+        }
+
+        return RepositorySettings.Default;
+    }
+
+    public SettingsConfig WithRepository(string name, RepositorySettings settings)
+    {
+        var repositories = Repositories
+            .Where(r => !string.Equals(r.Key.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(r => r.Key, r => r.Value);
+
+        if (!settings.IsDefault)
+        {
+            repositories[name.Trim()] = settings;
+        }
+
+        return this with { Repositories = repositories };
+    }
+
     public string LastRepo { get; init; } = string.Empty;
 
     public string LastHarness { get; init; } = string.Empty;
@@ -182,6 +212,7 @@ public sealed record SettingsConfig(
             ButtonHints = ButtonHints,
             Models = new RoleModels(Models.Main.Normalized, Models.Sub.Normalized, Models.Agent.Normalized),
             Jira = Jira,
+            Repositories = Repositories,
             LastRepo = LastRepo,
             LastHarness = LastHarness,
             Editor = Editor,

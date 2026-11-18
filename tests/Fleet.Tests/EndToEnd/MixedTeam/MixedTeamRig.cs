@@ -1,3 +1,6 @@
+using Fleet.Ports.Forge;
+using Fleet.Ports.Forge.Enums;
+using Fleet.Ports.Forge.Models;
 using Fleet.Cli.Composition;
 using Fleet.Features.Agents.NewAgent;
 using Fleet.Features.Agents.NewAgent.Models;
@@ -133,7 +136,27 @@ internal sealed class MixedTeamRig
         Namer,
         Clock,
         Trust,
-        Log);
+        Log,
+        ForgeProbe,
+        Processes);
+
+    // Stand-ins for the network and for gh, so no test of open_pr leaves the machine.
+    public IForgeProbe ForgeProbe { get; set; } = new RefusingForgeProbe();
+
+    public IProcessRunner Processes { get; set; } = new RefusingProcessRunner();
+
+    private sealed class RefusingForgeProbe : IForgeProbe
+    {
+        public Task<ForgeProbeResult> ProbeAsync(string host, CancellationToken ct = default) =>
+            throw new InvalidOperationException($"a test probed {host} without a fake probe");
+    }
+
+    private sealed class RefusingProcessRunner : IProcessRunner
+    {
+        public Task<ProcessResult> RunAsync(
+            string executable, IReadOnlyList<string> args, string workDir, CancellationToken ct = default) =>
+            throw new InvalidOperationException($"a test ran {executable} without a fake runner");
+    }
 
     public async Task<McpResult> CallAsync(string caller, HarnessTool tool, params (string Key, string Value)[] arguments)
     {

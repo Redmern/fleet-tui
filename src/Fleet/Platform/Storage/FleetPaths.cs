@@ -24,6 +24,8 @@ public static class FleetPaths
 
     public static string UpdateCheckFile => Path.Combine(Config, "update-check.json");
 
+    public static string ForgeCacheFile => Path.Combine(Config, "forges.json");
+
     public static string Settings => Path.Combine(Config, "settings");
 
     public static string HeadSettingsFile => Path.Combine(Config, "head.json");

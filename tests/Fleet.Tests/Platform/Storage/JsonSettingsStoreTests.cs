@@ -792,4 +792,70 @@ public sealed class JsonSettingsStoreTests : ConfigHomeFixture
 
         Assert.Null(Store.Load("techweb").IdleWindowSeconds);
     }
+
+    [Fact]
+    public void A_repository_forge_and_push_remote_round_trip_and_survive_another_save()
+    {
+        Store.Save(
+            "techweb",
+            SettingsConfig.Default
+                .WithRepository("backend", RepositorySettings.From("forgejo", "upstream"))
+                .WithRepository("frontend", RepositorySettings.From("github", null)));
+
+        Store.Save("techweb", Store.Load("techweb").WithTrigger(";"));
+
+        var loaded = Store.Load("techweb");
+
+        Assert.Equal(new RepositorySettings(ForgeKind.Forgejo, "upstream"), loaded.RepositoryFor("Backend"));
+        Assert.Equal(new RepositorySettings(ForgeKind.GitHub, "origin"), loaded.RepositoryFor("frontend"));
+        Assert.Equal(RepositorySettings.Default, loaded.RepositoryFor("docs"));
+
+        var file = File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json"));
+
+        Assert.Contains("\"repositories\"", file);
+        Assert.Contains("\"forge\": \"forgejo\"", file);
+        Assert.Contains("\"pushRemote\": \"upstream\"", file);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(file, "pushRemote"));
+    }
+
+    [Fact]
+    public void The_repository_settings_are_read_from_a_file_written_by_hand_under_the_keys_the_error_names()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{"version":1,"repositories":{"fleet-tui":{"forge":"Forgejo"},"api":{"pushRemote":"fork"},"odd":{"forge":"gitlab"},"none":null}}""");
+
+        var loaded = Store.Load("techweb");
+
+        Assert.Equal(new RepositorySettings(ForgeKind.Forgejo, "origin"), loaded.RepositoryFor("fleet-tui"));
+        Assert.Equal(new RepositorySettings(ForgeKind.Auto, "fork"), loaded.RepositoryFor("api"));
+        Assert.Equal(RepositorySettings.Default, loaded.RepositoryFor("odd"));
+        Assert.Equal(RepositorySettings.Default, loaded.RepositoryFor("none"));
+        Assert.Equal("repositories.fleet-tui.forge", RepositorySettings.ForgeSetting("fleet-tui"));
+        Assert.Equal("repositories.api.pushRemote", RepositorySettings.PushRemoteSetting("api"));
+    }
+
+    [Fact]
+    public void A_project_without_repository_settings_writes_none()
+    {
+        Store.Save("techweb", SettingsConfig.Default.WithRepository("backend", RepositorySettings.Default));
+
+        Assert.DoesNotContain("repositories", File.ReadAllText(Path.Combine(FleetPaths.Settings, "techweb.json")));
+    }
+
+    [Fact]
+    public void Two_spellings_of_one_repository_in_the_file_do_not_break_loading()
+    {
+        FleetPaths.EnsureDirs();
+        File.WriteAllText(
+            Path.Combine(FleetPaths.Settings, "techweb.json"),
+            """{"version":1,"trigger":";","repositories":{"api":{"forge":"github"},"api ":{"forge":"gitea"},"API":{"forge":"forgejo"}}}""");
+
+        var loaded = Store.Load("techweb");
+
+        Assert.Equal(";", loaded.Trigger);
+        Assert.Equal(ForgeKind.Forgejo, loaded.RepositoryFor("api").Forge);
+        Assert.Single(loaded.Repositories);
+    }
 }

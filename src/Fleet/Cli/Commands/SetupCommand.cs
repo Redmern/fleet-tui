@@ -1,8 +1,11 @@
 using Fleet.Cli.Composition;
+using Fleet.Cli.Models;
 using Fleet.Features.Setup.RunSetup;
 using Fleet.Features.Setup.RunSetup.Models;
+using Fleet.Features.Setup.WriteInclude.Enums;
 using Fleet.Ports.Keybinds.Enums;
 using Fleet.Ports.Keybinds.Models;
+using Fleet.Shared.Results;
 using Fleet.Ui;
 using Fleet.Ui.Constants;
 
@@ -10,8 +13,13 @@ namespace Fleet.Cli.Commands;
 
 public static class SetupCommand
 {
-    public static int Run()
+    public static int Run(Invocation invocation)
     {
+        if (invocation.Arguments?.Contains(IncludeWiring.IncludeOnlyFlag) == true)
+        {
+            return IncludeOnly();
+        }
+
         var keymap = new Keymap(Adapters.Keymaps().Load());
 
         var report = new SetupHandler(Adapters.OnPathOrEditor)
@@ -22,13 +30,32 @@ public static class SetupCommand
                 [.. Adapters.HarnessesInUse().Keys]);
 
         var keybinds = KeybindWiring.ApplyAll();
+        var include = IncludeWiring.Write();
 
-        Print(report, keymap, keybinds);
+        Print(report, keymap, keybinds, include);
 
         return report.Blocked ? 1 : 0;
     }
 
-    private static void Print(SetupReport report, Keymap keymap, IReadOnlyList<KeybindApplied> keybinds)
+    private static int IncludeOnly()
+    {
+        var include = IncludeWiring.Write();
+
+        Console.WriteLine($"fleet: {IncludeLine(include)}");
+
+        return include.Succeeded ? 0 : 1;
+    }
+
+    private static string IncludeLine(Result<IncludeWrite> include) =>
+        include switch
+        {
+            { Succeeded: false } => include.Error!,
+            { Value: IncludeWrite.Written } => $"wrote {IncludeWiring.IncludePath}; fleet doctor says how to import it",
+            _ => $"{IncludeWiring.IncludePath} is current; fleet doctor says how to import it",
+        };
+
+    private static void Print(
+        SetupReport report, Keymap keymap, IReadOnlyList<KeybindApplied> keybinds, Result<IncludeWrite> include)
     {
         Console.WriteLine("fleet setup");
 
@@ -42,6 +69,8 @@ public static class SetupCommand
             var ok = applied.Outcome is not KeybindOutcome.Failed;
             Console.WriteLine($"  {(ok ? "ok  " : "--  ")}{"keybinds",-15}{applied.Line}");
         }
+
+        Console.WriteLine($"  {(include.Succeeded ? "ok  " : "--  ")}{"orchestrator",-15}{IncludeLine(include)}");
 
         Console.WriteLine();
         Console.WriteLine($"  prefix chord   {keymap.PrefixDisplay}");

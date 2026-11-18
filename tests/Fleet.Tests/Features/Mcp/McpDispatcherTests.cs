@@ -611,4 +611,72 @@ public sealed class McpDispatcherTests
         Assert.Equal("not today", result.Text);
         Assert.Equal(0, _performed);
     }
+
+    private static McpRequest OpenPr() =>
+        new(
+            "open_pr",
+            new Dictionary<string, string>
+            {
+                ["repository"] = "backend",
+                ["branch"] = "feat/login",
+                ["base"] = "develop",
+                ["title"] = "feat: log in with a passkey",
+                ["body_file"] = ".fleet/pr.md",
+            });
+
+    // AC-22: asked every time. The settings cannot switch the popup off.
+    [Theory]
+    [InlineData(ActionPolicy.Allow)]
+    [InlineData(ActionPolicy.Ask)]
+    public async Task Opening_a_pull_request_is_asked_on_every_call_even_when_the_project_allows_it(ActionPolicy policy)
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.OpenPr, policy).With(HarnessTool.OpenPr, AskChannel.ClaudePermission);
+
+        Assert.False((await Dispatcher().HandleAsync(OpenPr())).IsError);
+        Assert.False((await Dispatcher("upgrade").HandleAsync(OpenPr())).IsError);
+
+        Assert.Equal(2, _approvals.Asked.Count);
+        Assert.Equal(2, _performed);
+        Assert.All(_approvals.Asked, a => Assert.Equal("open_pr", a.Tool));
+    }
+
+    [Fact]
+    public async Task The_popup_for_a_pull_request_shows_the_repository_the_branch_the_base_and_the_title()
+    {
+        await Dispatcher("upgrade").HandleAsync(OpenPr());
+
+        var prompt = Assert.Single(_approvals.Asked).Summary;
+
+        Assert.Contains("upgrade wants to: Push a branch and open a pull request", prompt);
+        Assert.Contains("repository backend", prompt);
+        Assert.Contains("branch feat/login", prompt);
+        Assert.Contains("base develop", prompt);
+        Assert.Contains("title \"feat: log in with a passkey\"", prompt);
+        Assert.Contains("text from .fleet/pr.md", prompt);
+    }
+
+    [Fact]
+    public async Task A_denied_pull_request_never_reaches_the_handler_so_nothing_is_pushed_or_run()
+    {
+        _approvals.Answer = ApprovalOutcome.Deny("not yet");
+
+        var result = await Dispatcher().HandleAsync(OpenPr());
+
+        Assert.True(result.IsError);
+        Assert.Equal("not yet", result.Text);
+        Assert.Equal(0, _performed);
+    }
+
+    [Fact]
+    public async Task A_forbidden_pull_request_is_refused_without_asking()
+    {
+        _settings.Config = SettingsConfig.Default.With(HarnessTool.OpenPr, ActionPolicy.Forbid);
+
+        var result = await Dispatcher().HandleAsync(OpenPr());
+
+        Assert.True(result.IsError);
+        Assert.Contains("does not allow open_pr", result.Text);
+        Assert.Empty(_approvals.Asked);
+        Assert.Equal(0, _performed);
+    }
 }

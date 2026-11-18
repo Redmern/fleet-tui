@@ -1,5 +1,11 @@
 using System.Globalization;
 using Fleet.Cli.Composition;
+using Fleet.Features.Mcp.ServeMcp;
+using Fleet.Ports.Approvals;
+using Fleet.Ports.Approvals.Models;
+using Fleet.Ports.Forge.Enums;
+using Fleet.Shared.Settings.Models;
+using Fleet.Tests.Features.Repositories.OpenPr;
 using Fleet.Ports.Agents.Models;
 using Fleet.Ports.Mcp.Models;
 using Fleet.Ports.Mux;
@@ -971,6 +977,163 @@ public sealed class McpActionsWiringTests : IDisposable
         NothingLeftTheSandbox();
     }
 
+    // AC-22..25 through the real McpActions and McpDispatcher: a temp git "forge" for origin, fakes for the probe
+    // and for gh, no network.
+    private async Task<(string Container, string Upstream, string BodyFile)> RepositoryForAPullRequestAsync()
+    {
+        var (container, _) = await RepositoryWithOriginAsync("api");
+        var upstream = Path.Combine(_sandbox, "api-upstream.git");
+        var git = new Fleet.Platform.Git.GitRunner();
+        var body = Path.Combine(_team.Root, "pr-body.md");
+
+        Assert.True((await git.RunAsync(upstream, ["config", "receive.advertisePushOptions", "true"])).Ok);
+        Assert.True((await git.RunAsync(container, ["branch", "feat/pr", "main"])).Ok);
+        File.WriteAllText(body, "## Summary\nOpens pull requests.\n");
+
+        return (container, upstream, body);
+    }
+
+    private static async Task<bool> HasRefAsync(string repository, string reference) =>
+        (await new Fleet.Platform.Git.GitRunner().RunAsync(repository, ["rev-parse", "--verify", "--quiet", reference])).Ok;
+
+    private void SetForge(string repository, string forge) =>
+        Adapters.Settings().Save(
+            _team.Project,
+            Adapters.Settings().Load(_team.Project).WithRepository(repository, RepositorySettings.From(forge, null)));
+
+    [Fact]
+    public async Task Open_pr_asks_first_then_pushes_the_branch_and_the_agit_ref_into_the_default_branch()
+    {
+        var (_, upstream, body) = await RepositoryForAPullRequestAsync();
+        var probe = new FakeForgeProbe();
+        var gh = new FakeProcessRunner();
+
+        _team.ForgeProbe = probe;
+        _team.Processes = gh;
+        SetForge("api", "forgejo");
+        Adapters.Settings().Save(
+            _team.Project, Adapters.Settings().Load(_team.Project).With(HarnessTool.OpenPr, ActionPolicy.Allow));
+
+        var asked = new RecordingApproval(ApprovalOutcome.Allow);
+
+        var opened = await OpenPrThroughTheDispatcherAsync(asked, body);
+
+        Assert.False(opened.IsError, opened.Text);
+        Assert.Contains("Pushed feat/pr to origin", opened.Text);
+        Assert.Contains("pull request into main", opened.Text);
+        Assert.Contains("could not read its URL", opened.Text);
+        Assert.Contains(
+            $"repository api, branch feat/pr, base the default branch, title \"feat: a pull request\", text from {body}",
+            Assert.Single(asked.Asked).Summary);
+        Assert.True(await HasRefAsync(upstream, "refs/heads/feat/pr"));
+        Assert.True(await HasRefAsync(upstream, "refs/for/main"));
+        Assert.Empty(probe.Hosts);
+        Assert.Empty(gh.Runs);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task A_denied_open_pr_pushes_nothing_and_runs_nothing()
+    {
+        var (_, upstream, body) = await RepositoryForAPullRequestAsync();
+        var gh = new FakeProcessRunner();
+
+        _team.Processes = gh;
+        SetForge("api", "forgejo");
+
+        var opened = await OpenPrThroughTheDispatcherAsync(new RecordingApproval(ApprovalOutcome.Deny("not yet")), body);
+
+        Assert.True(opened.IsError);
+        Assert.Equal("not yet", opened.Text);
+        Assert.False(await HasRefAsync(upstream, "refs/heads/feat/pr"));
+        Assert.False(await HasRefAsync(upstream, "refs/for/main"));
+        Assert.Empty(gh.Runs);
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Open_pr_on_a_repository_whose_forge_fleet_cannot_tell_names_the_setting_and_pushes_nothing()
+    {
+        var (container, upstream, body) = await RepositoryForAPullRequestAsync();
+        var git = new Fleet.Platform.Git.GitRunner();
+        var probe = new FakeForgeProbe(ForgeProbeResult.NotAForge);
+
+        _team.ForgeProbe = probe;
+        Assert.True((await git.RunAsync(
+            container, ["remote", "set-url", "--push", "origin", "https://git.example.test/acme/api.git"])).Ok);
+
+        var opened = await _team.CallAsync(
+            string.Empty, HarnessTool.OpenPr,
+            ("repository", "api"), ("branch", "feat/pr"), ("title", "feat: a pull request"), ("body_file", body));
+
+        Assert.True(opened.IsError);
+        Assert.Contains("repositories.api.forge", opened.Text);
+        Assert.Equal(["git.example.test"], probe.Hosts);
+        Assert.False(await HasRefAsync(upstream, "refs/heads/feat/pr"));
+        Assert.False(File.Exists(Path.Combine(_sandbox, "config", "forges.json")));
+
+        NothingLeftTheSandbox();
+    }
+
+    [Fact]
+    public async Task Open_pr_is_refused_in_iso_mode_and_when_an_argument_is_missing()
+    {
+        var (_, upstream, body) = await RepositoryForAPullRequestAsync();
+
+        SetForge("api", "forgejo");
+
+        var untitled = await _team.CallAsync(
+            string.Empty, HarnessTool.OpenPr, ("repository", "api"), ("branch", "feat/pr"), ("body_file", body));
+
+        Assert.True(untitled.IsError);
+        Assert.Contains("'title' is required", untitled.Text);
+
+        Adapters.Settings().Save(_team.Project, Adapters.Settings().Load(_team.Project).WithIso(true));
+
+        var isolated = await _team.CallAsync(
+            string.Empty, HarnessTool.OpenPr,
+            ("repository", "api"), ("branch", "feat/pr"), ("title", "feat: a pull request"), ("body_file", body));
+
+        Assert.True(isolated.IsError);
+        Assert.Contains("ISO mode is on", isolated.Text);
+        Assert.False(await HasRefAsync(upstream, "refs/heads/feat/pr"));
+
+        NothingLeftTheSandbox();
+    }
+
+    private Task<McpResult> OpenPrThroughTheDispatcherAsync(RecordingApproval approval, string body) =>
+        new McpDispatcher(
+            new McpCaller(_team.Project, _team.Root, string.Empty),
+            Adapters.Settings(),
+            approval,
+            _team.Log,
+            _team.Actions(string.Empty).PerformAsync,
+            approvalTimeout: () => TimeSpan.FromSeconds(55),
+            time: _team.Clock).HandleAsync(
+            new McpRequest(
+                "open_pr",
+                new Dictionary<string, string>
+                {
+                    ["repository"] = "api",
+                    ["branch"] = "feat/pr",
+                    ["title"] = "feat: a pull request",
+                    ["body_file"] = body,
+                }));
+
+    private sealed class RecordingApproval(ApprovalOutcome answer) : IApprovalChannel
+    {
+        public List<ApprovalRequest> Asked { get; } = [];
+
+        public Task<ApprovalOutcome> AskAsync(ApprovalRequest request, CancellationToken ct = default)
+        {
+            Asked.Add(request);
+
+            return Task.FromResult(answer);
+        }
+    }
+
     private void NothingLeftTheSandbox()
     {
         Assert.Empty(Directory.EnumerateFiles(_home, "*", SearchOption.AllDirectories));
@@ -984,5 +1147,23 @@ public sealed class McpActionsWiringTests : IDisposable
                 Assert.DoesNotContain(Path.GetFileName(_sandbox), File.ReadAllText(file));
             }
         }
+    }
+
+    [Fact]
+    public async Task Open_pr_takes_its_text_only_from_a_file_inside_the_project()
+    {
+        var (_, upstream, _) = await RepositoryForAPullRequestAsync();
+        var outside = Path.Combine(_sandbox, "outside.md");
+
+        File.WriteAllText(outside, "not the project's");
+        SetForge("api", "forgejo");
+
+        var opened = await _team.CallAsync(
+            string.Empty, HarnessTool.OpenPr,
+            ("repository", "api"), ("branch", "feat/pr"), ("title", "feat: a pull request"), ("body_file", outside));
+
+        Assert.True(opened.IsError);
+        Assert.Contains("outside the project folder", opened.Text);
+        Assert.False(await HasRefAsync(upstream, "refs/heads/feat/pr"));
     }
 }

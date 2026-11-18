@@ -25,6 +25,8 @@ using Fleet.Features.Repositories.AddRepository;
 using Fleet.Features.Repositories.AddRepository.Models;
 using Fleet.Features.Repositories.ListRepositories;
 using Fleet.Features.Repositories.ListRepositories.Models;
+using Fleet.Features.Repositories.OpenPr;
+using Fleet.Features.Repositories.OpenPr.Models;
 using Fleet.Features.Repositories.PullRepository;
 using Fleet.Features.Repositories.RemoveRepository;
 using Fleet.Features.Repositories.Secrets;
@@ -33,6 +35,7 @@ using Fleet.Features.Todos.AddTodo;
 using Fleet.Ports;
 using Fleet.Ports.Agents;
 using Fleet.Ports.Agents.Models;
+using Fleet.Ports.Forge;
 using Fleet.Ports.Git;
 using Fleet.Ports.Harness;
 using Fleet.Ports.Mcp.Models;
@@ -69,8 +72,13 @@ public sealed class McpActions(
     ISlugNamer namer,
     TimeProvider clock,
     Action<string> trustFolder,
-    IFleetLog log) : IAgentStarter
+    IFleetLog log,
+    IForgeProbe? forgeProbe = null,
+    IProcessRunner? processes = null) : IAgentStarter
 {
+    private readonly OpenPrHandler _prOpener = new(
+        git, processes ?? McpWiring.Processes(), forgeProbe ?? McpWiring.ForgeProbe());
+
     private readonly ListAgentsHandler _agents = new(store);
 
     private readonly CallerHarnesses _callers = new(project, caller, store);
@@ -142,6 +150,7 @@ public sealed class McpActions(
             HarnessTool.ChangeHarness => ChangeHarness(request),
             HarnessTool.AddRepository => await AddRepository(request, ct).ConfigureAwait(false),
             HarnessTool.PullRepository => await PullRepository(request, ct).ConfigureAwait(false),
+            HarnessTool.OpenPr => await OpenPr(request, ct).ConfigureAwait(false),
             HarnessTool.RemoveRepository => await RemoveRepository(request, ct).ConfigureAwait(false),
             HarnessTool.SetDefaultBranch => await SetDefaultBranch(request, ct).ConfigureAwait(false),
             HarnessTool.DistributeSecrets => await DistributeSecrets(request, ct).ConfigureAwait(false),
@@ -852,6 +861,48 @@ public sealed class McpActions(
         var pulled = await _puller.HandleAsync(repo.Path, repo.DefaultBranch, ct).ConfigureAwait(false);
 
         return pulled.Succeeded ? Ok(pulled.Value!) : McpResult.Error(pulled.Error!);
+    }
+
+    private async Task<McpResult> OpenPr(McpRequest request, CancellationToken ct)
+    {
+        if (Missing(
+                request, ToolArguments.Repository, ToolArguments.Branch, ToolArguments.Title, ToolArguments.BodyFile)
+            is { } error)
+        {
+            return error;
+        }
+
+        var settings = Adapters.Settings().Load(project);
+
+        if (SyncIso.Refused(project, Adapters.Iso().Load().On, settings) is { } isolated)
+        {
+            return McpResult.Error(isolated);
+        }
+
+        var repo = await Resolve(request, ct).ConfigureAwait(false);
+
+        if (repo is null)
+        {
+            return NoRepository(request);
+        }
+
+        var @base = ToolArguments.Text(request, ToolArguments.Base);
+
+        var opened = await _prOpener
+            .HandleAsync(
+                new OpenPrCommand(
+                    repo.Name,
+                    repo.Path,
+                    Branch(request),
+                    @base.Length > 0 ? @base : repo.DefaultBranch,
+                    ToolArguments.Text(request, ToolArguments.Title),
+                    ToolArguments.Text(request, ToolArguments.BodyFile),
+                    settings.RepositoryFor(repo.Name),
+                    root),
+                ct)
+            .ConfigureAwait(false);
+
+        return opened.Succeeded ? Ok(opened.Value) : McpResult.Error(opened.Error!);
     }
 
     private async Task<McpResult> RemoveRepository(McpRequest request, CancellationToken ct)

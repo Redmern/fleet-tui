@@ -4,6 +4,15 @@ What changed in each fleet release, newest first. fleet shows this file under Se
 release workflow uses the entry for a tag as the GitHub release text. Every release needs an entry here:
 `## <version> (<yyyy-mm-dd>)` followed by 2-6 short `- ` bullets.
 
+## 0.7.31 (2026-11-17)
+
+- **No more stale `main`**: stage text says to fetch and diff against `origin/<default>`, `pull_repository` fast-forwards the local default branch of a bare repository, `repository_status` shows how far it lags, and `agent_status` names each agent's base.
+- **`new_agent` and `dispatch` take a `base`**, so a stacked unit starts from its parent's branch; a branch that exists only on origin is tracked instead of cut fresh.
+- **Reports carry evidence**: fleet records the worktree, base, merge-base, HEAD and dirt on every `report`, and `done`/`failed` take the verify command, exit code and output tail. `list_agents`, `agent_status`, the owner notice and the dashboard row flag `unverified`, `verify failed`, `dirty` and commits made after the report.
+- **Owner guidance**: a sub names a better-fitting profile at first contact and switches with the new `set_profile` tool after you agree; Plan asks about the release before its gate; Review covers the combined stack; only you approve a gate. fleet notices when a unit starts before the skeleton gate or two agents change the same files.
+- **`open_pr`** pushes a branch and opens its pull request on GitHub or Forgejo/Gitea after you approve it; fleet never merges.
+- **fleet owns `~/.config/fleet/ORCHESTRATOR.md`**, the orchestrator instructions it rewrites on setup, update and fleetd start. Import it from `~/CLAUDE.md`; `fleet doctor` prints the line to add.
+
 ## 0.7.30 (2026-11-12)
 
 - **Agents and sub-orchestrators can run opencode, codex or pi**, mixed with Claude in one project. Pick one in the New agent card (**Opens**), with `m` on the dashboard, as the project default (fleet menu > settings > fleet config > **Agent harness**, `O`), or with the new `harness` argument of `new_agent` and `dispatch`. An unknown name is refused with the valid list.

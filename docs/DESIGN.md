@@ -4975,6 +4975,29 @@ appends one compact JSON object per audit line. Then it renders CLAUDE.md's
 `progress/<unit>.md`, `reviews/<unit>-<round>.md`, `learnings.md`), and which stages wait
 for the user.
 
+**Opening a pull request (`open_pr`).** One tool replaces the old `gh pr create` guidance
+in the Deliver text, the `fl-pr` skill and `GitGates.PrGuidance`. `McpGate.Decide` forces
+`Ask` on the fleet channel for it whatever the settings say (only `Forbid` is kept, and a
+sub-orchestrator is asked too), so `McpDispatcher` raises the approval popup on every call;
+`ApprovalPrompt` shows repository, branch, base and title. The slice is
+`Features/Repositories/OpenPr`: `PushRemote` reads `git remote get-url --push` of `origin`
+(or the repository's `pushRemote`) and refuses an empty or `DISABLED` URL; `ForgeDecision`
+takes the per-repository `forge` override, then a `github.com` host, then `IForgeProbe`,
+and otherwise fails naming `repositories.<name>.forge`; `OpenPrHandler` pushes the plain
+branch first (AGit refs do not reach a mirror), then runs `gh pr create --repo <owner/name>
+--body-file` through `IProcessRunner`, or the AGit push (`AgitPush`: `topic`, `title`,
+`description`, the `{base64}` form for a multi-line text), and `PrUrl` reads the URL from
+the output; without one the result says so and invents nothing. `HttpForgeProbe` does an
+unauthenticated `GET /api/v1/version` with a 4 s limit: a 200 with a `version`, or the 401/403
+"Only signed in user is allowed to call APIs." answer of a sign-in-only Forgejo or Gitea,
+counts as one; a 404 or another 200 is "not a forge", and anything else (a redirect, a 5xx,
+no answer) is "unreachable". `CachedForgeProbe` keeps the first two per host in `forges.json`
+and never remembers "unreachable". Before the first push the handler has refused: a branch,
+base or remote that git could read as an option or a refspec, a body file outside the project
+folder (also through a link) or over the size a push option carries, a remote with several
+push URLs, and a missing `gh`. Each `git push` and `gh` call has a two-minute limit. The override lives in
+`SettingsConfig.Repositories` (`RepositorySettings`), stored in the project's settings file.
+
 **Changing the profile (`set_profile`).** Only a sub-orchestrator can call it; the caller
 is matched to its orchestrator record, and an agent or the main orchestrator is refused.
 An unknown name is refused with the list from `ProfileCatalog.All`. The handler
@@ -5013,6 +5036,40 @@ owner's folder (one `pair<TAB>file` line each, only after the notice was deliver
 the MCP processes of a team share it and it survives restarts. Agents without an owner
 (the main orchestrator's and the user's) are not compared. Notices go through
 `OwnerNotices.TypeAsync`, like report notices.
+
+**The global orchestrator include (`ORCHESTRATOR.md`).** The user's own orchestrator
+rules used to be hand-copied into `~/CLAUDE.md` and drifted from fleet. Now one
+agent-neutral text (`Shared/Orchestrations/OrchestratorInclude.Text`; it carries
+`ProcessText.OnlyTheUserApproves` by reference) is written to
+`<fleet config home>/ORCHESTRATOR.md` by `Features/Setup/WriteInclude/IncludeWriter`:
+only when the bytes differ (no needless mtime change), through a temporary file and a
+move. Three callers, all through `Cli/Composition/IncludeWiring`: `fleet setup`;
+`fleetd` start (`EmbeddedWiring.RunDaemonAsync`, so a binary swapped by other means
+converges); and `fleet update`, which runs the freshly installed binary as
+`fleet setup --include-only` because the old process holds the old text, and only when
+that fails writes its own text with a note (`Features/Updates/RunUpdate/IncludeRefresh`).
+A downgrade never runs the older binary (one from before this change has no
+`--include-only` and would run a full setup); the file is left as it is.
+fleet never writes `~/CLAUDE.md`, `~/AGENTS.md` or a user-global harness config.
+`fleet doctor` (read-only; `Features/Diagnostics/RunDoctor/IncludeCheck`) checks for an
+`@` import of the file in `~/CLAUDE.md` and in `$CLAUDE_CONFIG_DIR/CLAUDE.md`
+(default `~/.claude/CLAUDE.md`, Claude's real user memory; `~/CLAUDE.md` only loads
+through the parent-folder walk, so for a working folder under the home folder) and
+prints `add to ~/CLAUDE.md:  @~/.config/fleet/ORCHESTRATOR.md` when neither has it. An
+`@` inside a fenced block or a code span does not count, as Claude does not expand it.
+Doctor itself writes nothing, but its mux probe can start fleetd, and fleetd start writes
+the file when it differs.
+Verified per harness (2026-11-17): only Claude expands `@` imports. opencode reads
+`AGENTS.md` raw but loads extra files from the `instructions` array of its config, so
+doctor checks the global config (`$XDG_CONFIG_HOME/opencode`, default
+`~/.config/opencode`, and the extra `OPENCODE_CONFIG_DIR` folder; `opencode.json`,
+`opencode.jsonc` or `config.json`) and prints the entry to add to the first; fleet does not write it, since
+that is user-global config. codex (`$CODEX_HOME/AGENTS.md`) and pi
+(`$PI_CODING_AGENT_DIR/AGENTS.md`) read plain text and have no setting that adds a file
+(codex `model_instructions_file` replaces the base prompt; pi `APPEND_SYSTEM.md` is a
+file, not a reference), so doctor says the include cannot reach them. The text opens by
+telling a repository agent to ignore it, because `~/CLAUDE.md` loads into every Claude
+session under the home folder.
 
 **Gates are honour-system until M3.** There are no gate tools yet, so the process text
 tells the conductor to stop at each human gate, summarise the artifact, and wait for the
@@ -6611,7 +6668,8 @@ What the phases add up to:
   clients (off `IsoFilter`'s list), `SshSyncEgress` (which reads the same `IIsoMode`; the
   release's separate `machine.json` flag is gone, so `iso.json` is the one machine switch, and
   the per-project `Iso` setting still blocks sync for that project alone), the update check and release list, `FinishAgentHandler`'s
-  push, and the agent permission plan (push and merge forced to deny, `gh pr create` denied).
+  push, and the agent permission plan (push and merge forced to deny, `gh pr create` and the
+  `open_pr` tool denied; `open_pr` itself also refuses with the ISO text).
 - **Viewer forwards are served.** `viewer-forward` and `viewer-unforward` are on
   `IsoFilter`'s list (a user decision, pinned by `IsoDaemonTests`): **Open port** keeps
   working for a machine viewing an ISO machine. They carry a port number only, but a bridged

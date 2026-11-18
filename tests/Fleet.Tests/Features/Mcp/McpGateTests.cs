@@ -154,4 +154,32 @@ public sealed class McpGateTests
 
         Assert.Equal([HarnessTool.TellAgent], McpGate.Gated(HarnessTool.TellAgent, request));
     }
+
+    // AC-22: open_pr asks in fleet's popup every time, whatever the project set, and for a sub too.
+    [Theory]
+    [InlineData(ActionPolicy.Allow, AskChannel.Both, false)]
+    [InlineData(ActionPolicy.Allow, AskChannel.ClaudePermission, false)]
+    [InlineData(ActionPolicy.Ask, AskChannel.ClaudePermission, false)]
+    [InlineData(ActionPolicy.Ask, AskChannel.FleetDialog, true)]
+    [InlineData(ActionPolicy.Allow, AskChannel.Both, true)]
+    public void Opening_a_pull_request_always_asks_in_the_fleet_popup(ActionPolicy policy, AskChannel channel, bool isSub)
+    {
+        var decision = McpGate.Decide(HarnessTool.OpenPr, With(HarnessTool.OpenPr, policy, channel), isSub);
+
+        Assert.True(decision.AsksFleet);
+        Assert.False(decision.Allowed);
+        Assert.False(decision.Forbidden);
+    }
+
+    [Fact]
+    public void Opening_a_pull_request_asks_by_default_and_can_still_be_forbidden()
+    {
+        Assert.True(McpGate.Decide(HarnessTool.OpenPr, SettingsConfig.Default).AsksFleet);
+        Assert.True(McpGate.Decide(HarnessTool.OpenPr, SettingsConfig.Default.MergedOverDefaults(), isSub: true).AsksFleet);
+
+        var forbidden = With(HarnessTool.OpenPr, ActionPolicy.Forbid, AskChannel.Both);
+
+        Assert.True(McpGate.Decide(HarnessTool.OpenPr, forbidden).Forbidden);
+        Assert.False(McpGate.Decide(HarnessTool.OpenPr, forbidden).AsksFleet);
+    }
 }

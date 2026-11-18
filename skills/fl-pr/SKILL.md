@@ -1,12 +1,12 @@
 ---
 name: fl-pr
-description: Write the pull request text with evidence and a Merge Danger section, and a short retro for the Learn stage. Use in the Ai-DLC Deliver stage, before gh pr create, or when asked to write a PR or retro.
+description: Write the pull request text with evidence and a Merge Danger section, and a short retro for the Learn stage. Use in the Ai-DLC Deliver stage, before you open the PR with the open_pr tool, or when asked to write a PR or retro.
 ---
 
-Write the PR for a reviewer who has not seen the work. Open the PR only if the repo has a remote, with `gh pr create` or the repository's own PR flow. Never merge.
+Write the PR for a reviewer who has not seen the work. Open the PR only if the repo has a remote, with the `open_pr` tool: it asks the user, pushes the branch and opens the PR on the repository's forge, and returns the PR's URL. Do not push for a PR or run a forge command line yourself. If there is no `open_pr` tool, follow the repository's own PR flow. Never merge.
 
 ## PR body
-Write it to a file in the worktree's `.fleet` folder (not committed) and pass it to the PR command (`gh pr create --body-file`, or the repository's equivalent). Do not use heredocs.
+Write it to a file in the worktree's `.fleet` folder (not committed) and pass its path to the `open_pr` tool as `body_file`, with the title as `title`. Do not use heredocs.
 
 ```
 ## Summary

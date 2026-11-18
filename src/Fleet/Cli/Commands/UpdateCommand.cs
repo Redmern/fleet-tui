@@ -23,13 +23,15 @@ public static class UpdateCommand
             ? $"fleet: checking github.com/{repo}/releases for an update..."
             : $"fleet: checking github.com/{repo}/releases for {invocation.Version}...");
 
+        var command = new RunUpdateCommand(
+            repo,
+            FleetVersion.Current,
+            ReleaseAssetNames.ForCurrentPlatform(),
+            Adapters.Executable,
+            invocation.Version);
+
         var result = await new RunUpdateHandler(Adapters.Releases(), Adapters.Installer())
-            .HandleAsync(new RunUpdateCommand(
-                repo,
-                FleetVersion.Current,
-                ReleaseAssetNames.ForCurrentPlatform(),
-                Adapters.Executable,
-                invocation.Version))
+            .HandleAsync(command)
             .ConfigureAwait(false);
 
         if (!result.Succeeded)
@@ -39,6 +41,12 @@ public static class UpdateCommand
         }
 
         Console.WriteLine($"fleet: {result.Value.Message}");
+
+        if (IncludeRefresh.After(command, result.Value, IncludeWiring.InstalledWrites, IncludeWiring.WriteHere) is { } note)
+        {
+            Console.WriteLine($"fleet: {note}");
+        }
+
         return 0;
     }
 

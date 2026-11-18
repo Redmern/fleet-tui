@@ -146,4 +146,26 @@ public sealed class ClaudePermissionPlannerTests
         Assert.Contains(GitGates.MergePowerShellRule, asked.Ask);
         Assert.DoesNotContain(GitGates.MergeRule, asked.Allow);
     }
+
+    [Fact]
+    public void Open_pr_is_left_to_the_fleet_popup_unless_the_project_forbids_it_or_asks_claude_too()
+    {
+        var id = "mcp__fleet__open_pr";
+
+        Assert.Contains(id, ClaudePermissionPlanner.Plan(SettingsConfig.Default).Allow);
+        Assert.Contains(id, ClaudePermissionPlanner.Plan(SettingsConfig.Default.With(HarnessTool.OpenPr, ActionPolicy.Forbid)).Deny);
+        Assert.Contains(
+            id,
+            ClaudePermissionPlanner.Plan(SettingsConfig.Default.With(HarnessTool.OpenPr, AskChannel.ClaudePermission)).Ask);
+    }
+
+    [Fact]
+    public void In_iso_mode_open_pr_is_denied_with_the_other_ways_to_send_work_out()
+    {
+        var plan = ClaudePermissionPlanner.Plan(SettingsConfig.Default, iso: true);
+
+        Assert.Contains("mcp__fleet__open_pr", plan.Deny);
+        Assert.DoesNotContain("mcp__fleet__open_pr", plan.Allow);
+        Assert.Contains(GitGates.PrCreateRule, plan.Deny);
+    }
 }

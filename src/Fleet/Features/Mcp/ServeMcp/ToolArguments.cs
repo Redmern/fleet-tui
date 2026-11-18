@@ -64,6 +64,8 @@ public static class ToolArguments
 
     public const string Body = "body";
 
+    public const string BodyFile = "body_file";
+
     public const string Effort = "effort";
 
     public static string Text(McpRequest request, string key) => request.Value(key).Trim();

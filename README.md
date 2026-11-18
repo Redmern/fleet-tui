@@ -690,7 +690,7 @@ machine are never restricted.
 **Outbound.** With ISO mode on, fleet on this machine opens no ssh connection to another
 machine, does not forward head tools to one, starts no port forward or stack on one, skips
 the update check, and merges finished agents without pushing. `sync_to_remote` is refused too;
-it is also refused for a single project whose own ISO setting is on. Agents get `git push`, `gh pr merge` and `gh pr create` denied, whatever
+it is also refused for a single project whose own ISO setting is on. Agents get `git push`, `gh pr merge`, `gh pr create` and the `open_pr` tool denied, whatever
 the project allows; running agents get this when their Claude settings next resync. `fleet
 update`, which you run yourself, still downloads from GitHub. `git fetch` and clone
 still work, because data only comes in. Remote links that were open before you turned ISO mode
@@ -1357,7 +1357,7 @@ trust in `~/.claude.json` for every folder it opens, so there is no `/mcp` step.
 
 **Permissions.** Press `s`, `c`, then `p` in the menu (Settings, Fleet config, then Permissions) to say, per project and per tool, whether the
 orchestrator may do the action, must ask, or can't. Every tool is allowed by default
-except `remove_repository`, which is forbidden. An "ask" can prompt in the fleet
+except `remove_repository`, which is forbidden, and `open_pr`, which always asks. An "ask" can prompt in the fleet
 dashboard, in Claude's own permission prompt, or both. When the prompt lives in the dashboard, the running dashboard shows
 an Allow/Deny dialog — even though the MCP call is a separate process — and the
 answer travels back over the filesystem. If no dashboard is running, the tool fails
@@ -1367,6 +1367,26 @@ The same screen has three git gates that fleet writes as Claude permission rules
 every orchestrator and agent folder: **Agents commit changes** (`git commit`), **Agents
 push changes** (`git push`) and **Agents merge pull requests** (`gh pr merge`, in Bash and
 PowerShell). Each is `auto`, `ask` or `no`, and all three are `auto` by default.
+
+**Pull requests (`open_pr`).** Agents open a pull request with one tool,
+`open_pr(repository, branch, title, body_file, base?)`. fleet asks you in the approval popup
+every time (it shows the repository, branch, base, title and the file the text comes from, which
+must be inside the project folder; setting the tool to allow does
+not skip the popup, setting it to forbid refuses it), then pushes the branch to the push
+remote, opens the pull request and returns its URL. It never merges, force-pushes or deletes
+a branch, and reads no token: it runs `git` and `gh` as you set them up. The push remote is
+`origin`; fleet refuses a remote whose push URL is empty or `DISABLED`, such as a fetch-only
+mirror, and one with several push URLs. A pull request text over 20 KB is refused for an AGit
+push (60 KB for GitHub), and a push or `gh` that does not finish in two minutes is stopped. The forge is GitHub when the push URL's host is `github.com` (`gh pr create` with
+the body file). Otherwise fleet asks `https://<host>/api/v1/version` once and remembers the
+answer per host in `forges.json` in fleet's config folder (a host that does not answer, or
+answers with a redirect or a server error, is not remembered and is asked again); Forgejo and Gitea get an AGit push
+(`<branch>:refs/for/<base>` with `topic`, `title` and `description`) after the plain branch
+push. When fleet cannot tell, for example for an ssh remote on a bare IP address, `open_pr`
+fails and names the setting. Set both per repository by hand in the project's settings file
+(`settings/<project>.json` in fleet's config folder):
+`"repositories": { "<repository>": { "forge": "github" | "forgejo" | "gitea", "pushRemote": "<remote>" } }`.
+With ISO mode on, `open_pr` is refused.
 
 **Dispatch.** Type a prompt in the main pane beginning with the dispatch trigger — a
 comma by default, configurable in the permissions screen — and instead of answering,
@@ -1459,6 +1479,29 @@ a file it was not told about joins the set. Two limits: the skeleton notice need
 `state.json`, which fleet does not fill in yet (subs keep them in `units.json`), so it is
 silent for now; and agents without an owner (started by the main orchestrator or by you)
 are not compared.
+
+**Your global orchestrator instructions.** fleet writes its own orchestrator
+instructions (the fleet tools, delegate first, waiting without polling, finishing work,
+pull requests through `open_pr`, only you approve a gate) to
+`~/.config/fleet/ORCHESTRATOR.md` (fleet's config folder: `%APPDATA%\fleet` on Windows, and
+`FLEET_CONFIG_HOME` moves it). It owns that file and overwrites it on `fleet setup`, `fleet update` (the newly
+installed binary writes it) and when fleetd starts, so it never drifts from the build you
+run. It never touches your own `~/CLAUDE.md` or `~/AGENTS.md`: import the file yourself
+with one line in `~/CLAUDE.md` (or `~/.claude/CLAUDE.md`):
+
+```
+@~/.config/fleet/ORCHESTRATOR.md
+```
+
+`fleet doctor` says whether the import is there and, when it is not, prints the exact
+line for your machine. An import inside a code block does not count: Claude does not
+expand it.
+Repository agents read the file too when it sits in `~/CLAUDE.md`; its first lines tell
+them to ignore it. Of the other harnesses only opencode can load an extra file: when an
+opencode agent is in use, doctor prints the entry to add to the `instructions` array of
+`~/.config/opencode/opencode.json` (an entry in the `OPENCODE_CONFIG_DIR` config counts too). codex and pi read their `AGENTS.md` as plain text with
+no import and have no setting that adds a file, so doctor says the include cannot reach
+them.
 
 ## The head orchestrator
 
